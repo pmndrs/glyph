@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:a79c32c44c09be60e4643a1a6c500bb0748901f89e4745e9ebe7cc262a9617c2'
+source_digest: 'sha256:5f930e6e6458e184cc932a772b91113765a245c0c139ed771bd902d594076d3d'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -388,8 +388,9 @@ The retained frame shell gives each engine session one 16-byte-aligned request a
 arenas. Cold creation and reservation may resize them; a warm update reads the already-pinned request and returns the
 selected result pointer in that single call. The compiler-derived request header is 120 bytes. Its section offsets cover
 text/style mutations, constraints, regions, exclusions, inline objects, and policy parameters; Stage 1 accepts only the
-canonical empty transaction and rejects a nonempty section until its Rust consumer exists. The 128-byte aligned result
-header already fixes revisions, base requirements, capacity watermarks, output slot and generation, plus semantic,
+canonical empty transaction and rejects a nonempty section until its Rust consumer exists. The 144-byte aligned result
+header fixes revisions, base requirements, capacity watermarks, output slot and generation, policy handle, capability
+set, policy fingerprint, plus semantic,
 resource, physical-buffer, patch, primitive, draw, retirement, and diagnostic table locations. Successful publication
 alternates A/B slots; a failed parse or revision check writes the inactive slot without advancing or modifying the active
 publication. The real optimized-Wasm test proves that a warm update preserves `memory.buffer`, while an 8 MiB cold
@@ -403,6 +404,17 @@ conformance scenarios, and 172,156-byte packed-consumer proof
 (`af7bfb85f04a6a63c6462735a6e8ec6d739576adb354c07ca51e744814db2f7b`). The aggregate benchmark script still stops
 at its deliberately stale checked package-size snapshot; this stage records the actual measured size without rewriting
 that unrelated historical evidence.
+
+The render-plan wire layer now gives those result tables concrete compiler-mapped records: semantic 44 bytes, resource
+40, physical buffer 36, patch 36, primitive 64, draw 48, retirement 24, and diagnostic 24. Resource kind is independent
+from create/update/retain action, and ordered-direct versus stable-indirect allocation is a dedicated buffer strategy.
+Patch payload bytes live inside the same immutable publication and write records carry absolute rebased spans; allocate/
+resize, fill, copy, and retire records do not carry a payload address. Serialization is allocation-free, canonical
+little-endian, and explicitly field-wise rather than a raw Rust-struct copy. Validation proves finite geometry, known
+tags, bounded table ranges, and exact payload spans before touching the inactive arena. The result header publishes the
+registered policy fingerprint with the plan, while failure headers expose neither that identity nor partial table state.
+The current shipping update still emits an empty plan until retained semantic compilation lands; these records prove the
+wire and publication contract, not incremental-layout performance.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

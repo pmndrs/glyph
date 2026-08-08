@@ -165,6 +165,7 @@ pub struct PolicyDescriptor {
 pub struct ValidatedPolicy {
     programs: Vec<ProgramDescriptor>,
     execution: Vec<ExecutableProgram>,
+    fingerprint: u64,
 }
 
 impl ValidatedPolicy {
@@ -178,6 +179,7 @@ impl ValidatedPolicy {
             execution.push(ExecutableProgram::new(program)?);
         }
         Ok(Self {
+            fingerprint: policy_fingerprint(&descriptor),
             programs: descriptor.programs,
             execution,
         })
@@ -185,6 +187,10 @@ impl ValidatedPolicy {
 
     pub fn programs(&self) -> &[ProgramDescriptor] {
         &self.programs
+    }
+
+    pub fn fingerprint(&self) -> u64 {
+        self.fingerprint
     }
 
     pub fn program(&self, technique: TechniqueId, variant: u16) -> Option<&ProgramDescriptor> {
@@ -215,6 +221,107 @@ impl ValidatedPolicy {
             .get(program_index)
             .ok_or(PolicyExecutionError::ProgramMissing)?;
         execute_program(program, execution, inputs, output_start, outputs)
+    }
+}
+
+fn policy_fingerprint(descriptor: &PolicyDescriptor) -> u64 {
+    let mut fingerprint = 0xcbf2_9ce4_8422_2325_u64;
+    mix_u32(&mut fingerprint, descriptor.programs.len() as u32);
+    for program in &descriptor.programs {
+        mix_u32(&mut fingerprint, program.technique.0);
+        mix_u32(&mut fingerprint, program.id.0);
+        mix_u32(&mut fingerprint, u32::from(program.variant));
+        mix_u32(&mut fingerprint, u32::from(program.f32_input_count));
+        mix_u32(&mut fingerprint, u32::from(program.u32_input_count));
+        mix_u32(&mut fingerprint, program.capabilities.paint);
+        mix_u32(&mut fingerprint, program.capabilities.compositing);
+        mix_u32(&mut fingerprint, program.buffers.len() as u32);
+        for buffer in &program.buffers {
+            mix_u32(&mut fingerprint, u32::from(buffer.id.0));
+            mix_u32(&mut fingerprint, buffer.scalar as u32);
+            mix_u32(&mut fingerprint, u32::from(buffer.vector_width));
+        }
+        mix_u32(&mut fingerprint, program.operations.len() as u32);
+        for operation in &program.operations {
+            fingerprint_operation(&mut fingerprint, operation);
+        }
+    }
+    fingerprint
+}
+
+fn fingerprint_operation(fingerprint: &mut u64, operation: &Operation) {
+    let (opcode, target, operand0, operand1, immediate0, immediate1, immediate2) = match *operation
+    {
+        Operation::LoadF32 { target, field } => (OP_LOAD_F32, target, field, 0, 0, 0, 0),
+        Operation::LoadU32 { target, field } => (OP_LOAD_U32, target, field, 0, 0, 0, 0),
+        Operation::ConstantF32 { target, bits } => (OP_CONSTANT_F32, target, 0, 0, bits, 0, 0),
+        Operation::ConstantU32 { target, value } => (OP_CONSTANT_U32, target, 0, 0, value, 0, 0),
+        Operation::AddF32 {
+            target,
+            left,
+            right,
+        } => (OP_ADD_F32, target, left, right, 0, 0, 0),
+        Operation::SubtractF32 {
+            target,
+            left,
+            right,
+        } => (OP_SUBTRACT_F32, target, left, right, 0, 0, 0),
+        Operation::MultiplyF32 {
+            target,
+            left,
+            right,
+        } => (OP_MULTIPLY_F32, target, left, right, 0, 0, 0),
+        Operation::LessThanF32 {
+            target,
+            left,
+            right,
+        } => (OP_LESS_THAN_F32, target, left, right, 0, 0, 0),
+        Operation::SelectF32 {
+            target,
+            condition,
+            when_true,
+            when_false,
+        } => (
+            OP_SELECT_F32,
+            target,
+            condition,
+            when_true,
+            u32::from(when_false),
+            0,
+            0,
+        ),
+        Operation::ConvertU32ToF32 { target, source } => {
+            (OP_CONVERT_U32_TO_F32, target, source, 0, 0, 0, 0)
+        }
+        Operation::StoreF32 {
+            source,
+            buffer,
+            lane,
+        } => (OP_STORE_F32, 0, source, lane, u32::from(buffer.0), 0, 0),
+        Operation::StoreU32 {
+            source,
+            buffer,
+            lane,
+        } => (OP_STORE_U32, 0, source, lane, u32::from(buffer.0), 0, 0),
+        Operation::StoreU16 {
+            source,
+            buffer,
+            lane,
+        } => (OP_STORE_U16, 0, source, lane, u32::from(buffer.0), 0, 0),
+    };
+    mix_u32(
+        fingerprint,
+        u32::from_le_bytes([opcode, target, operand0, operand1]),
+    );
+    mix_u32(fingerprint, immediate0);
+    mix_u32(fingerprint, immediate1);
+    mix_u32(fingerprint, immediate2);
+}
+
+fn mix_u32(fingerprint: &mut u64, value: u32) {
+    for byte in value.to_le_bytes() {
+        *fingerprint ^= u64::from(byte);
+        *fingerprint = fingerprint.wrapping_mul(0x0000_0100_0000_01b3);
     }
 }
 
@@ -924,6 +1031,26 @@ mod tests {
             Some(PROGRAM)
         );
         assert_eq!(policy.program(BITMAP, 1), None);
+    }
+
+    #[test]
+    fn fingerprints_exact_validated_policy_content() {
+        let first = ValidatedPolicy::new(PolicyDescriptor {
+            programs: vec![valid_program()],
+        })
+        .unwrap();
+        let same = ValidatedPolicy::new(PolicyDescriptor {
+            programs: vec![valid_program()],
+        })
+        .unwrap();
+        let mut changed_program = valid_program();
+        changed_program.technique = TechniqueId(2);
+        let changed = ValidatedPolicy::new(PolicyDescriptor {
+            programs: vec![changed_program],
+        })
+        .unwrap();
+        assert_eq!(first.fingerprint(), same.fingerprint());
+        assert_ne!(first.fingerprint(), changed.fingerprint());
     }
 
     #[test]

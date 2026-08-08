@@ -8,6 +8,15 @@ use crate::engine::policy::{
     OP_LOAD_F32, OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16,
     OP_STORE_U32, OP_SUBTRACT_F32, ScalarType,
 };
+use crate::engine::render_plan::{
+    BUFFER_ORDERED_DIRECT, BUFFER_STABLE_INDIRECT, BufferRecord, DiagnosticRecord, DrawRecord,
+    PATCH_ALLOCATE_OR_RESIZE, PATCH_COPY, PATCH_FILL, PATCH_RETIRE, PATCH_WRITE, PRIMITIVE_CLIP,
+    PRIMITIVE_DECORATION, PRIMITIVE_GLYPH, PRIMITIVE_INLINE_OBJECT, PRIMITIVE_POLICY, PatchRecord,
+    PrimitiveRecord, RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE,
+    RETIRE_BUFFER, RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, ResourceRecord,
+    RetirementRecord, SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT, SEMANTIC_INSERTED_GLYPH,
+    SEMANTIC_LINE, SEMANTIC_RUN, SEMANTIC_SELECTION, SemanticRecord,
+};
 
 pub const ABI_VERSION: u32 = 0;
 pub const SHAPER_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -138,6 +147,10 @@ struct EngineResultHeader {
     required_request_capacity: u32,
     result_capacity: u32,
     required_result_capacity: u32,
+    policy_handle: u32,
+    capability_set: u32,
+    policy_fingerprint_low: u32,
+    policy_fingerprint_high: u32,
     semantics_offset: u32,
     semantics_count: u32,
     resources_offset: u32,
@@ -270,6 +283,34 @@ layout!(
     ENGINE_RESULT_HEADER_SIZE,
     ENGINE_RESULT_HEADER_ALIGNMENT,
     EngineResultHeader
+);
+layout!(
+    SEMANTIC_RECORD_SIZE,
+    SEMANTIC_RECORD_ALIGNMENT,
+    SemanticRecord
+);
+layout!(
+    RESOURCE_RECORD_SIZE,
+    RESOURCE_RECORD_ALIGNMENT,
+    ResourceRecord
+);
+layout!(BUFFER_RECORD_SIZE, BUFFER_RECORD_ALIGNMENT, BufferRecord);
+layout!(PATCH_RECORD_SIZE, PATCH_RECORD_ALIGNMENT, PatchRecord);
+layout!(
+    PRIMITIVE_RECORD_SIZE,
+    PRIMITIVE_RECORD_ALIGNMENT,
+    PrimitiveRecord
+);
+layout!(DRAW_RECORD_SIZE, DRAW_RECORD_ALIGNMENT, DrawRecord);
+layout!(
+    RETIREMENT_RECORD_SIZE,
+    RETIREMENT_RECORD_ALIGNMENT,
+    RetirementRecord
+);
+layout!(
+    DIAGNOSTIC_RECORD_SIZE,
+    DIAGNOSTIC_RECORD_ALIGNMENT,
+    DiagnosticRecord
 );
 layout!(FEATURE_RECORD_SIZE, FEATURE_RECORD_ALIGNMENT, FeatureRecord);
 layout!(RUN_RECORD_SIZE, RUN_RECORD_ALIGNMENT, RunRecord);
@@ -579,6 +620,26 @@ field_offset!(
     required_result_capacity
 );
 field_offset!(
+    ENGINE_RESULT_POLICY_HANDLE,
+    EngineResultHeader,
+    policy_handle
+);
+field_offset!(
+    ENGINE_RESULT_CAPABILITY_SET,
+    EngineResultHeader,
+    capability_set
+);
+field_offset!(
+    ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
+    EngineResultHeader,
+    policy_fingerprint_low
+);
+field_offset!(
+    ENGINE_RESULT_POLICY_FINGERPRINT_HIGH,
+    EngineResultHeader,
+    policy_fingerprint_high
+);
+field_offset!(
     ENGINE_RESULT_SEMANTICS_OFFSET,
     EngineResultHeader,
     semantics_offset
@@ -641,6 +702,113 @@ field_offset!(
     ENGINE_RESULT_DIAGNOSTIC_COUNT,
     EngineResultHeader,
     diagnostic_count
+);
+field_offset!(SEMANTIC_ID, SemanticRecord, id);
+field_offset!(SEMANTIC_KIND, SemanticRecord, kind);
+field_offset!(SEMANTIC_FLAGS, SemanticRecord, flags);
+field_offset!(SEMANTIC_PARENT_ID, SemanticRecord, parent_id);
+field_offset!(SEMANTIC_TEXT_START, SemanticRecord, text_start);
+field_offset!(SEMANTIC_TEXT_END, SemanticRecord, text_end);
+field_offset!(SEMANTIC_ITEM_START, SemanticRecord, item_start);
+field_offset!(SEMANTIC_ITEM_COUNT, SemanticRecord, item_count);
+field_offset!(SEMANTIC_INLINE_START, SemanticRecord, inline_start);
+field_offset!(SEMANTIC_BLOCK_START, SemanticRecord, block_start);
+field_offset!(SEMANTIC_INLINE_EXTENT, SemanticRecord, inline_extent);
+field_offset!(SEMANTIC_BLOCK_EXTENT, SemanticRecord, block_extent);
+field_offset!(RESOURCE_ID, ResourceRecord, id);
+field_offset!(RESOURCE_GENERATION, ResourceRecord, generation);
+field_offset!(RESOURCE_TECHNIQUE_ID, ResourceRecord, technique_id);
+field_offset!(RESOURCE_KIND, ResourceRecord, resource_kind);
+field_offset!(RESOURCE_ACTION, ResourceRecord, action);
+field_offset!(RESOURCE_FLAGS, ResourceRecord, flags);
+field_offset!(RESOURCE_REFERENCE_ID, ResourceRecord, reference_id);
+field_offset!(RESOURCE_LOWER_BOUND, ResourceRecord, lower_bound);
+field_offset!(RESOURCE_UPPER_BOUND, ResourceRecord, upper_bound);
+field_offset!(RESOURCE_AUXILIARY0, ResourceRecord, auxiliary0);
+field_offset!(RESOURCE_AUXILIARY1, ResourceRecord, auxiliary1);
+field_offset!(BUFFER_ID, BufferRecord, id);
+field_offset!(BUFFER_GENERATION, BufferRecord, generation);
+field_offset!(BUFFER_PROGRAM_ID, BufferRecord, program_id);
+field_offset!(BUFFER_POLICY_BUFFER_ID, BufferRecord, policy_buffer_id);
+field_offset!(BUFFER_SCALAR_TYPE, BufferRecord, scalar_type);
+field_offset!(BUFFER_VECTOR_WIDTH, BufferRecord, vector_width);
+field_offset!(BUFFER_STRATEGY, BufferRecord, strategy);
+field_offset!(BUFFER_FLAGS, BufferRecord, flags);
+field_offset!(BUFFER_LIVE_RECORDS, BufferRecord, live_records);
+field_offset!(BUFFER_CAPACITY_RECORDS, BufferRecord, capacity_records);
+field_offset!(BUFFER_BYTE_LENGTH, BufferRecord, byte_length);
+field_offset!(BUFFER_ORDER_BUFFER_ID, BufferRecord, order_buffer_id);
+field_offset!(PATCH_OPCODE, PatchRecord, opcode);
+field_offset!(PATCH_FLAGS, PatchRecord, flags);
+field_offset!(PATCH_BUFFER_ID, PatchRecord, buffer_id);
+field_offset!(PATCH_BUFFER_GENERATION, PatchRecord, buffer_generation);
+field_offset!(PATCH_DESTINATION_OFFSET, PatchRecord, destination_offset);
+field_offset!(PATCH_BYTE_LENGTH, PatchRecord, byte_length);
+field_offset!(PATCH_PAYLOAD_OFFSET, PatchRecord, payload_start);
+field_offset!(PATCH_SOURCE_BUFFER_ID, PatchRecord, source_buffer_id);
+field_offset!(PATCH_SOURCE_OFFSET, PatchRecord, source_offset);
+field_offset!(PATCH_FILL_VALUE, PatchRecord, fill_value);
+field_offset!(PRIMITIVE_ID, PrimitiveRecord, id);
+field_offset!(PRIMITIVE_KIND, PrimitiveRecord, kind);
+field_offset!(PRIMITIVE_FLAGS, PrimitiveRecord, flags);
+field_offset!(PRIMITIVE_TECHNIQUE_ID, PrimitiveRecord, technique_id);
+field_offset!(PRIMITIVE_RESOURCE_ID, PrimitiveRecord, resource_id);
+field_offset!(
+    PRIMITIVE_RESOURCE_GENERATION,
+    PrimitiveRecord,
+    resource_generation
+);
+field_offset!(PRIMITIVE_PROGRAM_ID, PrimitiveRecord, program_id);
+field_offset!(PRIMITIVE_VARIANT, PrimitiveRecord, variant);
+field_offset!(PRIMITIVE_RESERVED, PrimitiveRecord, reserved);
+field_offset!(PRIMITIVE_BUFFER_ID, PrimitiveRecord, buffer_id);
+field_offset!(PRIMITIVE_RECORD_INDEX, PrimitiveRecord, record_index);
+field_offset!(PRIMITIVE_LOGICAL_ORDER, PrimitiveRecord, logical_order);
+field_offset!(PRIMITIVE_CLIP_ID, PrimitiveRecord, clip_id);
+field_offset!(PRIMITIVE_SEMANTIC_ID, PrimitiveRecord, semantic_id);
+field_offset!(PRIMITIVE_INLINE_START, PrimitiveRecord, inline_start);
+field_offset!(PRIMITIVE_BLOCK_START, PrimitiveRecord, block_start);
+field_offset!(PRIMITIVE_INLINE_EXTENT, PrimitiveRecord, inline_extent);
+field_offset!(PRIMITIVE_BLOCK_EXTENT, PrimitiveRecord, block_extent);
+field_offset!(DRAW_ID, DrawRecord, id);
+field_offset!(DRAW_PROGRAM_ID, DrawRecord, program_id);
+field_offset!(DRAW_VARIANT, DrawRecord, variant);
+field_offset!(DRAW_FLAGS, DrawRecord, flags);
+field_offset!(DRAW_PRIMITIVE_START, DrawRecord, primitive_start);
+field_offset!(DRAW_PRIMITIVE_COUNT, DrawRecord, primitive_count);
+field_offset!(DRAW_BUFFER_START, DrawRecord, buffer_start);
+field_offset!(DRAW_BUFFER_COUNT, DrawRecord, buffer_count);
+field_offset!(DRAW_RESOURCE_START, DrawRecord, resource_start);
+field_offset!(DRAW_RESOURCE_COUNT, DrawRecord, resource_count);
+field_offset!(DRAW_ORDER_TOKEN, DrawRecord, order_token);
+field_offset!(DRAW_INDIRECT_BUFFER_ID, DrawRecord, indirect_buffer_id);
+field_offset!(DRAW_INDIRECT_OFFSET, DrawRecord, indirect_offset);
+field_offset!(RETIREMENT_KIND, RetirementRecord, kind);
+field_offset!(RETIREMENT_FLAGS, RetirementRecord, flags);
+field_offset!(RETIREMENT_ID, RetirementRecord, id);
+field_offset!(RETIREMENT_GENERATION, RetirementRecord, generation);
+field_offset!(
+    RETIREMENT_AFTER_PUBLICATION_GENERATION,
+    RetirementRecord,
+    after_publication_generation
+);
+field_offset!(RETIREMENT_BYTE_OFFSET, RetirementRecord, byte_offset);
+field_offset!(RETIREMENT_BYTE_LENGTH, RetirementRecord, byte_length);
+field_offset!(DIAGNOSTIC_CODE, DiagnosticRecord, code);
+field_offset!(DIAGNOSTIC_SEVERITY, DiagnosticRecord, severity);
+field_offset!(DIAGNOSTIC_PHASE, DiagnosticRecord, phase);
+field_offset!(DIAGNOSTIC_SUBJECT_ID, DiagnosticRecord, subject_id);
+field_offset!(DIAGNOSTIC_VALUE0, DiagnosticRecord, value0);
+field_offset!(DIAGNOSTIC_VALUE1, DiagnosticRecord, value1);
+field_offset!(
+    DIAGNOSTIC_DURATION_NANOS_LOW,
+    DiagnosticRecord,
+    duration_nanos_low
+);
+field_offset!(
+    DIAGNOSTIC_DURATION_NANOS_HIGH,
+    DiagnosticRecord,
+    duration_nanos_high
 );
 field_offset!(FEATURE_TAG, FeatureRecord, tag);
 field_offset!(FEATURE_VALUE, FeatureRecord, value);
@@ -879,6 +1047,10 @@ pub fn json() -> String {
                 "requiredRequestCapacity": ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
                 "resultCapacity": ENGINE_RESULT_RESULT_CAPACITY,
                 "requiredResultCapacity": ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
+                "policyHandle": ENGINE_RESULT_POLICY_HANDLE,
+                "capabilitySet": ENGINE_RESULT_CAPABILITY_SET,
+                "policyFingerprintLow": ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
+                "policyFingerprintHigh": ENGINE_RESULT_POLICY_FINGERPRINT_HIGH,
                 "semanticsOffset": ENGINE_RESULT_SEMANTICS_OFFSET,
                 "semanticsCount": ENGINE_RESULT_SEMANTICS_COUNT,
                 "resourcesOffset": ENGINE_RESULT_RESOURCES_OFFSET,
@@ -895,6 +1067,129 @@ pub fn json() -> String {
                 "retirementCount": ENGINE_RESULT_RETIREMENT_COUNT,
                 "diagnosticsOffset": ENGINE_RESULT_DIAGNOSTICS_OFFSET,
                 "diagnosticCount": ENGINE_RESULT_DIAGNOSTIC_COUNT
+            },
+            "engineSemantic": {
+                "size": SEMANTIC_RECORD_SIZE,
+                "alignment": SEMANTIC_RECORD_ALIGNMENT,
+                "id": SEMANTIC_ID,
+                "kind": SEMANTIC_KIND,
+                "flags": SEMANTIC_FLAGS,
+                "parentId": SEMANTIC_PARENT_ID,
+                "textStart": SEMANTIC_TEXT_START,
+                "textEnd": SEMANTIC_TEXT_END,
+                "itemStart": SEMANTIC_ITEM_START,
+                "itemCount": SEMANTIC_ITEM_COUNT,
+                "inlineStart": SEMANTIC_INLINE_START,
+                "blockStart": SEMANTIC_BLOCK_START,
+                "inlineExtent": SEMANTIC_INLINE_EXTENT,
+                "blockExtent": SEMANTIC_BLOCK_EXTENT
+            },
+            "engineResource": {
+                "size": RESOURCE_RECORD_SIZE,
+                "alignment": RESOURCE_RECORD_ALIGNMENT,
+                "id": RESOURCE_ID,
+                "generation": RESOURCE_GENERATION,
+                "techniqueId": RESOURCE_TECHNIQUE_ID,
+                "resourceKind": RESOURCE_KIND,
+                "action": RESOURCE_ACTION,
+                "flags": RESOURCE_FLAGS,
+                "referenceId": RESOURCE_REFERENCE_ID,
+                "lowerBound": RESOURCE_LOWER_BOUND,
+                "upperBound": RESOURCE_UPPER_BOUND,
+                "auxiliary0": RESOURCE_AUXILIARY0,
+                "auxiliary1": RESOURCE_AUXILIARY1
+            },
+            "engineBuffer": {
+                "size": BUFFER_RECORD_SIZE,
+                "alignment": BUFFER_RECORD_ALIGNMENT,
+                "id": BUFFER_ID,
+                "generation": BUFFER_GENERATION,
+                "programId": BUFFER_PROGRAM_ID,
+                "policyBufferId": BUFFER_POLICY_BUFFER_ID,
+                "scalarType": BUFFER_SCALAR_TYPE,
+                "vectorWidth": BUFFER_VECTOR_WIDTH,
+                "strategy": BUFFER_STRATEGY,
+                "flags": BUFFER_FLAGS,
+                "liveRecords": BUFFER_LIVE_RECORDS,
+                "capacityRecords": BUFFER_CAPACITY_RECORDS,
+                "byteLength": BUFFER_BYTE_LENGTH,
+                "orderBufferId": BUFFER_ORDER_BUFFER_ID
+            },
+            "enginePatch": {
+                "size": PATCH_RECORD_SIZE,
+                "alignment": PATCH_RECORD_ALIGNMENT,
+                "opcode": PATCH_OPCODE,
+                "flags": PATCH_FLAGS,
+                "bufferId": PATCH_BUFFER_ID,
+                "bufferGeneration": PATCH_BUFFER_GENERATION,
+                "destinationOffset": PATCH_DESTINATION_OFFSET,
+                "byteLength": PATCH_BYTE_LENGTH,
+                "payloadOffset": PATCH_PAYLOAD_OFFSET,
+                "sourceBufferId": PATCH_SOURCE_BUFFER_ID,
+                "sourceOffset": PATCH_SOURCE_OFFSET,
+                "fillValue": PATCH_FILL_VALUE
+            },
+            "enginePrimitive": {
+                "size": PRIMITIVE_RECORD_SIZE,
+                "alignment": PRIMITIVE_RECORD_ALIGNMENT,
+                "id": PRIMITIVE_ID,
+                "kind": PRIMITIVE_KIND,
+                "flags": PRIMITIVE_FLAGS,
+                "techniqueId": PRIMITIVE_TECHNIQUE_ID,
+                "resourceId": PRIMITIVE_RESOURCE_ID,
+                "resourceGeneration": PRIMITIVE_RESOURCE_GENERATION,
+                "programId": PRIMITIVE_PROGRAM_ID,
+                "variant": PRIMITIVE_VARIANT,
+                "reserved": PRIMITIVE_RESERVED,
+                "bufferId": PRIMITIVE_BUFFER_ID,
+                "recordIndex": PRIMITIVE_RECORD_INDEX,
+                "logicalOrder": PRIMITIVE_LOGICAL_ORDER,
+                "clipId": PRIMITIVE_CLIP_ID,
+                "semanticId": PRIMITIVE_SEMANTIC_ID,
+                "inlineStart": PRIMITIVE_INLINE_START,
+                "blockStart": PRIMITIVE_BLOCK_START,
+                "inlineExtent": PRIMITIVE_INLINE_EXTENT,
+                "blockExtent": PRIMITIVE_BLOCK_EXTENT
+            },
+            "engineDraw": {
+                "size": DRAW_RECORD_SIZE,
+                "alignment": DRAW_RECORD_ALIGNMENT,
+                "id": DRAW_ID,
+                "programId": DRAW_PROGRAM_ID,
+                "variant": DRAW_VARIANT,
+                "flags": DRAW_FLAGS,
+                "primitiveStart": DRAW_PRIMITIVE_START,
+                "primitiveCount": DRAW_PRIMITIVE_COUNT,
+                "bufferStart": DRAW_BUFFER_START,
+                "bufferCount": DRAW_BUFFER_COUNT,
+                "resourceStart": DRAW_RESOURCE_START,
+                "resourceCount": DRAW_RESOURCE_COUNT,
+                "orderToken": DRAW_ORDER_TOKEN,
+                "indirectBufferId": DRAW_INDIRECT_BUFFER_ID,
+                "indirectOffset": DRAW_INDIRECT_OFFSET
+            },
+            "engineRetirement": {
+                "size": RETIREMENT_RECORD_SIZE,
+                "alignment": RETIREMENT_RECORD_ALIGNMENT,
+                "kind": RETIREMENT_KIND,
+                "flags": RETIREMENT_FLAGS,
+                "id": RETIREMENT_ID,
+                "generation": RETIREMENT_GENERATION,
+                "afterPublicationGeneration": RETIREMENT_AFTER_PUBLICATION_GENERATION,
+                "byteOffset": RETIREMENT_BYTE_OFFSET,
+                "byteLength": RETIREMENT_BYTE_LENGTH
+            },
+            "engineDiagnostic": {
+                "size": DIAGNOSTIC_RECORD_SIZE,
+                "alignment": DIAGNOSTIC_RECORD_ALIGNMENT,
+                "code": DIAGNOSTIC_CODE,
+                "severity": DIAGNOSTIC_SEVERITY,
+                "phase": DIAGNOSTIC_PHASE,
+                "subjectId": DIAGNOSTIC_SUBJECT_ID,
+                "value0": DIAGNOSTIC_VALUE0,
+                "value1": DIAGNOSTIC_VALUE1,
+                "durationNanosLow": DIAGNOSTIC_DURATION_NANOS_LOW,
+                "durationNanosHigh": DIAGNOSTIC_DURATION_NANOS_HIGH
             },
             "feature": {
                 "size": FEATURE_RECORD_SIZE,
@@ -995,6 +1290,44 @@ pub fn json() -> String {
         "engine": {
             "resultFlags": {
                 "checkpoint": RESULT_FLAG_CHECKPOINT
+            },
+            "semanticKinds": {
+                "line": SEMANTIC_LINE,
+                "fragment": SEMANTIC_FRAGMENT,
+                "run": SEMANTIC_RUN,
+                "cluster": SEMANTIC_CLUSTER,
+                "caret": SEMANTIC_CARET,
+                "selection": SEMANTIC_SELECTION,
+                "insertedGlyph": SEMANTIC_INSERTED_GLYPH
+            },
+            "resourceActions": {
+                "create": RESOURCE_ACTION_CREATE,
+                "update": RESOURCE_ACTION_UPDATE,
+                "retain": RESOURCE_ACTION_RETAIN
+            },
+            "bufferStrategies": {
+                "orderedDirect": BUFFER_ORDERED_DIRECT,
+                "stableIndirect": BUFFER_STABLE_INDIRECT
+            },
+            "patchOpcodes": {
+                "allocateOrResize": PATCH_ALLOCATE_OR_RESIZE,
+                "write": PATCH_WRITE,
+                "fill": PATCH_FILL,
+                "copy": PATCH_COPY,
+                "retire": PATCH_RETIRE
+            },
+            "primitiveKinds": {
+                "glyph": PRIMITIVE_GLYPH,
+                "decoration": PRIMITIVE_DECORATION,
+                "inlineObject": PRIMITIVE_INLINE_OBJECT,
+                "clip": PRIMITIVE_CLIP,
+                "policy": PRIMITIVE_POLICY
+            },
+            "retirementKinds": {
+                "resource": RETIRE_RESOURCE,
+                "buffer": RETIRE_BUFFER,
+                "slotRange": RETIRE_SLOT_RANGE,
+                "outputBytes": RETIRE_OUTPUT_BYTES
             }
         },
         "status": {

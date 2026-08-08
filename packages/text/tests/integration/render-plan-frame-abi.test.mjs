@@ -25,8 +25,11 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
 
   const requestLayout = abi.layouts.engineUpdateRequest;
   const resultLayout = abi.layouts.engineResult;
-  assert.equal(resultLayout.size, 128);
+  assert.equal(resultLayout.size, 144);
   assert.equal(resultLayout.alignment, 16);
+  assert.equal(abi.layouts.engineBuffer.size, 36);
+  assert.equal(abi.layouts.enginePatch.size, 36);
+  assert.equal(abi.layouts.enginePrimitive.size, 64);
   assert.equal(fn.createSession(sessionId, requestLayout.size, resultLayout.size), abi.status.ok);
   assert.equal(fn.sessionCount(), 1);
   let requestPointer = fn.requestPointer(sessionId);
@@ -141,6 +144,19 @@ function assertResult(memory, pointer, abi, expected) {
   assert.equal(view.getUint32(layout.sessionId, true), sessionId);
   for (const [field, value] of Object.entries(expected)) {
     assert.equal(view.getUint32(layout[field], true), value, field);
+  }
+  if (expected.status === abi.status.ok) {
+    assert.equal(view.getUint32(layout.policyHandle, true), policyHandle);
+    assert.equal(view.getUint32(layout.capabilitySet, true), 0);
+    assert.notEqual(
+      view.getUint32(layout.policyFingerprintLow, true) | view.getUint32(layout.policyFingerprintHigh, true),
+      0,
+      'a successful plan identifies its validated policy bytes',
+    );
+  } else {
+    assert.equal(view.getUint32(layout.policyHandle, true), 0);
+    assert.equal(view.getUint32(layout.policyFingerprintLow, true), 0);
+    assert.equal(view.getUint32(layout.policyFingerprintHigh, true), 0);
   }
   for (const field of [
     'semanticsCount',
