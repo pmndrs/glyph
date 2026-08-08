@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:3e73bcdbe8c884a3fae45b6883ee7d4df14c03f24e7dbccf8157d41ca873d030'
+source_digest: 'sha256:70d65d4c875fd84363587eccb3b66af48ceb138755ca79c362a2ad335724861e'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -509,6 +509,17 @@ root. A real-font compiled-Wasm transaction proves the first combined text/root 
 not grow memory after session creation. Reachability changes optimized Wasm from 856,831 / 319,003 / 252,236 to
 888,423 / 332,740 / 262,748 raw/gzip/Brotli bytes (+31,592 / +13,737 / +10,512). Plans remain empty, so this is retained
 state evidence, not a shaping/layout latency result.
+
+Retained styles now resolve inside the same transaction into maximal flat segments. The resolver consumes the validated
+containment order once, keeps inherited values in a pre-reserved scope stack, applies each stated field once when its
+scope opens, restores its parent when it closes, and coalesces adjacent semantically equal results. The root must state
+a font stack, logical font size, and raster density; line height may remain absent so later layout can use natural font
+metrics, matching the existing public API. Language and feature results reference compact retained style storage rather
+than copying payload per segment. A nested/equal-range Rust proof resolves five exact segments with per-property
+inheritance and authored same-range precedence. Host and SIMD Clippy plus real compiled-Wasm lifecycle tests pass.
+Reachability changes the optimized module from 888,423 / 332,740 / 262,748 to 895,593 / 335,396 / 264,355
+raw/gzip/Brotli bytes (+7,170 / +2,656 / +1,607). The next open connection is Unicode/script/bidi run intersection and
+HarfRust shaping; plan output is still empty.
 
 The frame decoder now borrows ordered UTF-16 replacement records and their offset-addressed payloads directly from the
 pinned request. It validates canonical empty offsets, opcode/encoding, reserved fields, bounds, alignment, arithmetic,
