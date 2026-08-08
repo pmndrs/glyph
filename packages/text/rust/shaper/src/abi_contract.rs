@@ -2,6 +2,7 @@ use alloc::string::{String, ToString};
 use core::mem::{align_of, offset_of, size_of};
 use serde_json::json;
 
+use crate::engine::frame::RESULT_FLAG_CHECKPOINT;
 use crate::engine::policy::{
     OP_ADD_F32, OP_CONSTANT_F32, OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32,
     OP_LOAD_F32, OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16,
@@ -85,6 +86,74 @@ struct PolicyOperationRecord {
     immediate0: u32,
     immediate1: u32,
     immediate2: u32,
+}
+
+#[repr(C)]
+struct EngineUpdateRequestHeader {
+    abi_version: u32,
+    byte_length: u32,
+    session_id: u32,
+    expected_engine_revision: u32,
+    consumed_plan_revision: u32,
+    policy_handle: u32,
+    capability_set: u32,
+    flags: u32,
+    semantic_view_mask: u32,
+    max_clusters: u32,
+    max_lines: u32,
+    max_regions: u32,
+    max_exclusions: u32,
+    max_inline_objects: u32,
+    max_slots_per_band: u32,
+    max_output_bytes: u32,
+    text_mutations_offset: u32,
+    text_mutation_count: u32,
+    style_mutations_offset: u32,
+    style_mutation_count: u32,
+    constraints_offset: u32,
+    constraint_count: u32,
+    regions_offset: u32,
+    region_count: u32,
+    exclusions_offset: u32,
+    exclusion_count: u32,
+    inline_objects_offset: u32,
+    inline_object_count: u32,
+    policy_parameters_offset: u32,
+    policy_parameters_length: u32,
+}
+
+#[repr(C, align(16))]
+struct EngineResultHeader {
+    abi_version: u32,
+    byte_length: u32,
+    status: u32,
+    flags: u32,
+    session_id: u32,
+    engine_revision: u32,
+    plan_revision: u32,
+    required_base_revision: u32,
+    publication_generation: u32,
+    output_slot: u32,
+    request_capacity: u32,
+    required_request_capacity: u32,
+    result_capacity: u32,
+    required_result_capacity: u32,
+    semantics_offset: u32,
+    semantics_count: u32,
+    resources_offset: u32,
+    resource_count: u32,
+    buffers_offset: u32,
+    buffer_count: u32,
+    patches_offset: u32,
+    patch_count: u32,
+    primitives_offset: u32,
+    primitive_count: u32,
+    draws_offset: u32,
+    draw_count: u32,
+    retirements_offset: u32,
+    retirement_count: u32,
+    diagnostics_offset: u32,
+    diagnostic_count: u32,
 }
 
 #[repr(C)]
@@ -191,6 +260,16 @@ layout!(
     POLICY_OPERATION_RECORD_SIZE,
     POLICY_OPERATION_RECORD_ALIGNMENT,
     PolicyOperationRecord
+);
+layout!(
+    ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+    ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
+    EngineUpdateRequestHeader
+);
+layout!(
+    ENGINE_RESULT_HEADER_SIZE,
+    ENGINE_RESULT_HEADER_ALIGNMENT,
+    EngineResultHeader
 );
 layout!(FEATURE_RECORD_SIZE, FEATURE_RECORD_ALIGNMENT, FeatureRecord);
 layout!(RUN_RECORD_SIZE, RUN_RECORD_ALIGNMENT, RunRecord);
@@ -307,6 +386,262 @@ field_offset!(
     PolicyOperationRecord,
     immediate2
 );
+field_offset!(
+    ENGINE_UPDATE_ABI_VERSION,
+    EngineUpdateRequestHeader,
+    abi_version
+);
+field_offset!(
+    ENGINE_UPDATE_BYTE_LENGTH,
+    EngineUpdateRequestHeader,
+    byte_length
+);
+field_offset!(
+    ENGINE_UPDATE_SESSION_ID,
+    EngineUpdateRequestHeader,
+    session_id
+);
+field_offset!(
+    ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
+    EngineUpdateRequestHeader,
+    expected_engine_revision
+);
+field_offset!(
+    ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
+    EngineUpdateRequestHeader,
+    consumed_plan_revision
+);
+field_offset!(
+    ENGINE_UPDATE_POLICY_HANDLE,
+    EngineUpdateRequestHeader,
+    policy_handle
+);
+field_offset!(
+    ENGINE_UPDATE_CAPABILITY_SET,
+    EngineUpdateRequestHeader,
+    capability_set
+);
+field_offset!(ENGINE_UPDATE_FLAGS, EngineUpdateRequestHeader, flags);
+field_offset!(
+    ENGINE_UPDATE_SEMANTIC_VIEW_MASK,
+    EngineUpdateRequestHeader,
+    semantic_view_mask
+);
+field_offset!(
+    ENGINE_UPDATE_MAX_CLUSTERS,
+    EngineUpdateRequestHeader,
+    max_clusters
+);
+field_offset!(
+    ENGINE_UPDATE_MAX_LINES,
+    EngineUpdateRequestHeader,
+    max_lines
+);
+field_offset!(
+    ENGINE_UPDATE_MAX_REGIONS,
+    EngineUpdateRequestHeader,
+    max_regions
+);
+field_offset!(
+    ENGINE_UPDATE_MAX_EXCLUSIONS,
+    EngineUpdateRequestHeader,
+    max_exclusions
+);
+field_offset!(
+    ENGINE_UPDATE_MAX_INLINE_OBJECTS,
+    EngineUpdateRequestHeader,
+    max_inline_objects
+);
+field_offset!(
+    ENGINE_UPDATE_MAX_SLOTS_PER_BAND,
+    EngineUpdateRequestHeader,
+    max_slots_per_band
+);
+field_offset!(
+    ENGINE_UPDATE_MAX_OUTPUT_BYTES,
+    EngineUpdateRequestHeader,
+    max_output_bytes
+);
+field_offset!(
+    ENGINE_UPDATE_TEXT_MUTATIONS_OFFSET,
+    EngineUpdateRequestHeader,
+    text_mutations_offset
+);
+field_offset!(
+    ENGINE_UPDATE_TEXT_MUTATION_COUNT,
+    EngineUpdateRequestHeader,
+    text_mutation_count
+);
+field_offset!(
+    ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET,
+    EngineUpdateRequestHeader,
+    style_mutations_offset
+);
+field_offset!(
+    ENGINE_UPDATE_STYLE_MUTATION_COUNT,
+    EngineUpdateRequestHeader,
+    style_mutation_count
+);
+field_offset!(
+    ENGINE_UPDATE_CONSTRAINTS_OFFSET,
+    EngineUpdateRequestHeader,
+    constraints_offset
+);
+field_offset!(
+    ENGINE_UPDATE_CONSTRAINT_COUNT,
+    EngineUpdateRequestHeader,
+    constraint_count
+);
+field_offset!(
+    ENGINE_UPDATE_REGIONS_OFFSET,
+    EngineUpdateRequestHeader,
+    regions_offset
+);
+field_offset!(
+    ENGINE_UPDATE_REGION_COUNT,
+    EngineUpdateRequestHeader,
+    region_count
+);
+field_offset!(
+    ENGINE_UPDATE_EXCLUSIONS_OFFSET,
+    EngineUpdateRequestHeader,
+    exclusions_offset
+);
+field_offset!(
+    ENGINE_UPDATE_EXCLUSION_COUNT,
+    EngineUpdateRequestHeader,
+    exclusion_count
+);
+field_offset!(
+    ENGINE_UPDATE_INLINE_OBJECTS_OFFSET,
+    EngineUpdateRequestHeader,
+    inline_objects_offset
+);
+field_offset!(
+    ENGINE_UPDATE_INLINE_OBJECT_COUNT,
+    EngineUpdateRequestHeader,
+    inline_object_count
+);
+field_offset!(
+    ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
+    EngineUpdateRequestHeader,
+    policy_parameters_offset
+);
+field_offset!(
+    ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH,
+    EngineUpdateRequestHeader,
+    policy_parameters_length
+);
+field_offset!(ENGINE_RESULT_ABI_VERSION, EngineResultHeader, abi_version);
+field_offset!(ENGINE_RESULT_BYTE_LENGTH, EngineResultHeader, byte_length);
+field_offset!(ENGINE_RESULT_STATUS, EngineResultHeader, status);
+field_offset!(ENGINE_RESULT_FLAGS, EngineResultHeader, flags);
+field_offset!(ENGINE_RESULT_SESSION_ID, EngineResultHeader, session_id);
+field_offset!(
+    ENGINE_RESULT_ENGINE_REVISION,
+    EngineResultHeader,
+    engine_revision
+);
+field_offset!(
+    ENGINE_RESULT_PLAN_REVISION,
+    EngineResultHeader,
+    plan_revision
+);
+field_offset!(
+    ENGINE_RESULT_REQUIRED_BASE_REVISION,
+    EngineResultHeader,
+    required_base_revision
+);
+field_offset!(
+    ENGINE_RESULT_PUBLICATION_GENERATION,
+    EngineResultHeader,
+    publication_generation
+);
+field_offset!(ENGINE_RESULT_OUTPUT_SLOT, EngineResultHeader, output_slot);
+field_offset!(
+    ENGINE_RESULT_REQUEST_CAPACITY,
+    EngineResultHeader,
+    request_capacity
+);
+field_offset!(
+    ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
+    EngineResultHeader,
+    required_request_capacity
+);
+field_offset!(
+    ENGINE_RESULT_RESULT_CAPACITY,
+    EngineResultHeader,
+    result_capacity
+);
+field_offset!(
+    ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
+    EngineResultHeader,
+    required_result_capacity
+);
+field_offset!(
+    ENGINE_RESULT_SEMANTICS_OFFSET,
+    EngineResultHeader,
+    semantics_offset
+);
+field_offset!(
+    ENGINE_RESULT_SEMANTICS_COUNT,
+    EngineResultHeader,
+    semantics_count
+);
+field_offset!(
+    ENGINE_RESULT_RESOURCES_OFFSET,
+    EngineResultHeader,
+    resources_offset
+);
+field_offset!(
+    ENGINE_RESULT_RESOURCE_COUNT,
+    EngineResultHeader,
+    resource_count
+);
+field_offset!(
+    ENGINE_RESULT_BUFFERS_OFFSET,
+    EngineResultHeader,
+    buffers_offset
+);
+field_offset!(ENGINE_RESULT_BUFFER_COUNT, EngineResultHeader, buffer_count);
+field_offset!(
+    ENGINE_RESULT_PATCHES_OFFSET,
+    EngineResultHeader,
+    patches_offset
+);
+field_offset!(ENGINE_RESULT_PATCH_COUNT, EngineResultHeader, patch_count);
+field_offset!(
+    ENGINE_RESULT_PRIMITIVES_OFFSET,
+    EngineResultHeader,
+    primitives_offset
+);
+field_offset!(
+    ENGINE_RESULT_PRIMITIVE_COUNT,
+    EngineResultHeader,
+    primitive_count
+);
+field_offset!(ENGINE_RESULT_DRAWS_OFFSET, EngineResultHeader, draws_offset);
+field_offset!(ENGINE_RESULT_DRAW_COUNT, EngineResultHeader, draw_count);
+field_offset!(
+    ENGINE_RESULT_RETIREMENTS_OFFSET,
+    EngineResultHeader,
+    retirements_offset
+);
+field_offset!(
+    ENGINE_RESULT_RETIREMENT_COUNT,
+    EngineResultHeader,
+    retirement_count
+);
+field_offset!(
+    ENGINE_RESULT_DIAGNOSTICS_OFFSET,
+    EngineResultHeader,
+    diagnostics_offset
+);
+field_offset!(
+    ENGINE_RESULT_DIAGNOSTIC_COUNT,
+    EngineResultHeader,
+    diagnostic_count
+);
 field_offset!(FEATURE_TAG, FeatureRecord, tag);
 field_offset!(FEATURE_VALUE, FeatureRecord, value);
 field_offset!(FEATURE_START, FeatureRecord, start);
@@ -408,6 +743,13 @@ pub fn json() -> String {
             "registerPolicy": "pmndrs_text_engine_register_policy",
             "disposePolicy": "pmndrs_text_engine_dispose_policy",
             "policyCount": "pmndrs_text_engine_policy_count",
+            "createSession": "pmndrs_text_engine_create_session",
+            "reserveSession": "pmndrs_text_engine_reserve_session",
+            "disposeSession": "pmndrs_text_engine_dispose_session",
+            "sessionCount": "pmndrs_text_engine_session_count",
+            "requestPointer": "pmndrs_text_engine_request_ptr",
+            "requestCapacity": "pmndrs_text_engine_request_capacity",
+            "textUpdate": "pmndrs_text_engine_update",
             "shapeBatch": "pmndrs_text_shaper_shape_batch",
             "reshapeRanges": "pmndrs_text_shaper_reshape_ranges",
             "analyzeBidi": "pmndrs_text_shaper_analyze_bidi",
@@ -485,6 +827,74 @@ pub fn json() -> String {
                 "immediate0": POLICY_OPERATION_IMMEDIATE0,
                 "immediate1": POLICY_OPERATION_IMMEDIATE1,
                 "immediate2": POLICY_OPERATION_IMMEDIATE2
+            },
+            "engineUpdateRequest": {
+                "size": ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                "alignment": ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
+                "abiVersion": ENGINE_UPDATE_ABI_VERSION,
+                "byteLength": ENGINE_UPDATE_BYTE_LENGTH,
+                "sessionId": ENGINE_UPDATE_SESSION_ID,
+                "expectedEngineRevision": ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
+                "consumedPlanRevision": ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
+                "policyHandle": ENGINE_UPDATE_POLICY_HANDLE,
+                "capabilitySet": ENGINE_UPDATE_CAPABILITY_SET,
+                "flags": ENGINE_UPDATE_FLAGS,
+                "semanticViewMask": ENGINE_UPDATE_SEMANTIC_VIEW_MASK,
+                "maxClusters": ENGINE_UPDATE_MAX_CLUSTERS,
+                "maxLines": ENGINE_UPDATE_MAX_LINES,
+                "maxRegions": ENGINE_UPDATE_MAX_REGIONS,
+                "maxExclusions": ENGINE_UPDATE_MAX_EXCLUSIONS,
+                "maxInlineObjects": ENGINE_UPDATE_MAX_INLINE_OBJECTS,
+                "maxSlotsPerBand": ENGINE_UPDATE_MAX_SLOTS_PER_BAND,
+                "maxOutputBytes": ENGINE_UPDATE_MAX_OUTPUT_BYTES,
+                "textMutationsOffset": ENGINE_UPDATE_TEXT_MUTATIONS_OFFSET,
+                "textMutationCount": ENGINE_UPDATE_TEXT_MUTATION_COUNT,
+                "styleMutationsOffset": ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET,
+                "styleMutationCount": ENGINE_UPDATE_STYLE_MUTATION_COUNT,
+                "constraintsOffset": ENGINE_UPDATE_CONSTRAINTS_OFFSET,
+                "constraintCount": ENGINE_UPDATE_CONSTRAINT_COUNT,
+                "regionsOffset": ENGINE_UPDATE_REGIONS_OFFSET,
+                "regionCount": ENGINE_UPDATE_REGION_COUNT,
+                "exclusionsOffset": ENGINE_UPDATE_EXCLUSIONS_OFFSET,
+                "exclusionCount": ENGINE_UPDATE_EXCLUSION_COUNT,
+                "inlineObjectsOffset": ENGINE_UPDATE_INLINE_OBJECTS_OFFSET,
+                "inlineObjectCount": ENGINE_UPDATE_INLINE_OBJECT_COUNT,
+                "policyParametersOffset": ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
+                "policyParametersLength": ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH
+            },
+            "engineResult": {
+                "size": ENGINE_RESULT_HEADER_SIZE,
+                "alignment": ENGINE_RESULT_HEADER_ALIGNMENT,
+                "abiVersion": ENGINE_RESULT_ABI_VERSION,
+                "byteLength": ENGINE_RESULT_BYTE_LENGTH,
+                "status": ENGINE_RESULT_STATUS,
+                "flags": ENGINE_RESULT_FLAGS,
+                "sessionId": ENGINE_RESULT_SESSION_ID,
+                "engineRevision": ENGINE_RESULT_ENGINE_REVISION,
+                "planRevision": ENGINE_RESULT_PLAN_REVISION,
+                "requiredBaseRevision": ENGINE_RESULT_REQUIRED_BASE_REVISION,
+                "publicationGeneration": ENGINE_RESULT_PUBLICATION_GENERATION,
+                "outputSlot": ENGINE_RESULT_OUTPUT_SLOT,
+                "requestCapacity": ENGINE_RESULT_REQUEST_CAPACITY,
+                "requiredRequestCapacity": ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY,
+                "resultCapacity": ENGINE_RESULT_RESULT_CAPACITY,
+                "requiredResultCapacity": ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
+                "semanticsOffset": ENGINE_RESULT_SEMANTICS_OFFSET,
+                "semanticsCount": ENGINE_RESULT_SEMANTICS_COUNT,
+                "resourcesOffset": ENGINE_RESULT_RESOURCES_OFFSET,
+                "resourceCount": ENGINE_RESULT_RESOURCE_COUNT,
+                "buffersOffset": ENGINE_RESULT_BUFFERS_OFFSET,
+                "bufferCount": ENGINE_RESULT_BUFFER_COUNT,
+                "patchesOffset": ENGINE_RESULT_PATCHES_OFFSET,
+                "patchCount": ENGINE_RESULT_PATCH_COUNT,
+                "primitivesOffset": ENGINE_RESULT_PRIMITIVES_OFFSET,
+                "primitiveCount": ENGINE_RESULT_PRIMITIVE_COUNT,
+                "drawsOffset": ENGINE_RESULT_DRAWS_OFFSET,
+                "drawCount": ENGINE_RESULT_DRAW_COUNT,
+                "retirementsOffset": ENGINE_RESULT_RETIREMENTS_OFFSET,
+                "retirementCount": ENGINE_RESULT_RETIREMENT_COUNT,
+                "diagnosticsOffset": ENGINE_RESULT_DIAGNOSTICS_OFFSET,
+                "diagnosticCount": ENGINE_RESULT_DIAGNOSTIC_COUNT
             },
             "feature": {
                 "size": FEATURE_RECORD_SIZE,
@@ -582,6 +992,11 @@ pub fn json() -> String {
                 "storeU16": OP_STORE_U16
             }
         },
+        "engine": {
+            "resultFlags": {
+                "checkpoint": RESULT_FLAG_CHECKPOINT
+            }
+        },
         "status": {
             "ok": 0,
             "invalidHandle": 1,
@@ -592,7 +1007,10 @@ pub fn json() -> String {
             "invalidRequest": 6,
             "resultTooLarge": 7,
             "policyConflict": 8,
-            "policyMissing": 9
+            "policyMissing": 9,
+            "sessionConflict": 10,
+            "sessionMissing": 11,
+            "revisionConflict": 12
         }
     })
     .to_string()
