@@ -9,26 +9,40 @@ use alloc::vec::Vec;
 use crate::{
     STATUS_INVALID_REQUEST,
     abi_contract::{
-        POLICY_BUFFER_COUNT, POLICY_BUFFER_ID, POLICY_BUFFER_RECORD_ALIGNMENT,
-        POLICY_BUFFER_RECORD_SIZE, POLICY_BUFFER_SCALAR, POLICY_BUFFER_VECTOR_WIDTH,
-        POLICY_BUFFERS_OFFSET, POLICY_BYTE_LENGTH, POLICY_OPERATION_COUNT,
-        POLICY_OPERATION_IMMEDIATE0, POLICY_OPERATION_IMMEDIATE1, POLICY_OPERATION_IMMEDIATE2,
-        POLICY_OPERATION_OPCODE, POLICY_OPERATION_OPERAND0, POLICY_OPERATION_OPERAND1,
-        POLICY_OPERATION_RECORD_ALIGNMENT, POLICY_OPERATION_RECORD_SIZE, POLICY_OPERATION_TARGET,
-        POLICY_OPERATIONS_OFFSET, POLICY_PROGRAM_BUFFER_COUNT, POLICY_PROGRAM_BUFFER_START,
-        POLICY_PROGRAM_COMPOSITING_CAPABILITIES, POLICY_PROGRAM_COUNT,
-        POLICY_PROGRAM_F32_INPUT_COUNT, POLICY_PROGRAM_ID, POLICY_PROGRAM_OPERATION_COUNT,
-        POLICY_PROGRAM_OPERATION_START, POLICY_PROGRAM_PAINT_CAPABILITIES,
-        POLICY_PROGRAM_RECORD_ALIGNMENT, POLICY_PROGRAM_RECORD_SIZE, POLICY_PROGRAM_RESERVED0,
-        POLICY_PROGRAM_RESERVED1, POLICY_PROGRAM_TECHNIQUE_ID, POLICY_PROGRAM_U32_INPUT_COUNT,
-        POLICY_PROGRAM_VARIANT, POLICY_PROGRAMS_OFFSET, POLICY_REQUEST_HEADER_SIZE,
+        POLICY_BUFFER_ALIGNMENT, POLICY_BUFFER_CAPACITY_CLASS, POLICY_BUFFER_COUNT,
+        POLICY_BUFFER_ID, POLICY_BUFFER_RECORD_ALIGNMENT, POLICY_BUFFER_RECORD_SIZE,
+        POLICY_BUFFER_RESERVED0, POLICY_BUFFER_SCALAR, POLICY_BUFFER_STRIDE, POLICY_BUFFER_USAGE,
+        POLICY_BUFFER_VECTOR_WIDTH, POLICY_BUFFERS_OFFSET, POLICY_BYTE_LENGTH,
+        POLICY_CAPABILITY_SET_COALESCE_GAP_BYTES, POLICY_CAPABILITY_SET_COUNT,
+        POLICY_CAPABILITY_SET_FLAGS, POLICY_CAPABILITY_SET_FRAGMENTATION_BUDGET,
+        POLICY_CAPABILITY_SET_ID, POLICY_CAPABILITY_SET_MAX_BUFFER_BYTES,
+        POLICY_CAPABILITY_SET_MAX_BUFFERS_PER_DRAW, POLICY_CAPABILITY_SET_MAX_INDIRECT_DRAWS,
+        POLICY_CAPABILITY_SET_MAX_RESOURCES_PER_DRAW,
+        POLICY_CAPABILITY_SET_RANGE_CALL_PENALTY_BYTES, POLICY_CAPABILITY_SET_RECORD_ALIGNMENT,
+        POLICY_CAPABILITY_SET_RECORD_SIZE, POLICY_CAPABILITY_SET_RESERVED,
+        POLICY_CAPABILITY_SET_UPDATE_ALIGNMENT,
+        POLICY_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS, POLICY_CAPABILITY_SETS_OFFSET,
+        POLICY_OPERATION_COUNT, POLICY_OPERATION_IMMEDIATE0, POLICY_OPERATION_IMMEDIATE1,
+        POLICY_OPERATION_IMMEDIATE2, POLICY_OPERATION_OPCODE, POLICY_OPERATION_OPERAND0,
+        POLICY_OPERATION_OPERAND1, POLICY_OPERATION_RECORD_ALIGNMENT, POLICY_OPERATION_RECORD_SIZE,
+        POLICY_OPERATION_TARGET, POLICY_OPERATIONS_OFFSET, POLICY_PROGRAM_ALLOCATION_STRATEGY,
+        POLICY_PROGRAM_BATCH_KEY_MASK, POLICY_PROGRAM_BUFFER_COUNT, POLICY_PROGRAM_BUFFER_START,
+        POLICY_PROGRAM_CAPABILITY_SET_ID, POLICY_PROGRAM_COMPOSITING_CAPABILITIES,
+        POLICY_PROGRAM_COUNT, POLICY_PROGRAM_F32_INPUT_COUNT, POLICY_PROGRAM_ID,
+        POLICY_PROGRAM_OPERATION_COUNT, POLICY_PROGRAM_OPERATION_START,
+        POLICY_PROGRAM_PAINT_CAPABILITIES, POLICY_PROGRAM_RECORD_ALIGNMENT,
+        POLICY_PROGRAM_RECORD_SIZE, POLICY_PROGRAM_RESERVED0, POLICY_PROGRAM_RESERVED1,
+        POLICY_PROGRAM_RESOURCE_KIND_MASK, POLICY_PROGRAM_SEMANTIC_VIEW_MASK,
+        POLICY_PROGRAM_TECHNIQUE_ID, POLICY_PROGRAM_U32_INPUT_COUNT, POLICY_PROGRAM_VARIANT,
+        POLICY_PROGRAMS_OFFSET, POLICY_REQUEST_HEADER_SIZE,
     },
     engine::policy::{
-        BufferId, BufferSchema, MAX_BUFFERS_PER_PROGRAM, MAX_OPERATIONS_PER_PROGRAM, MAX_PROGRAMS,
-        OP_ADD_F32, OP_CONSTANT_F32, OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32,
-        OP_LOAD_F32, OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16,
-        OP_STORE_U32, OP_SUBTRACT_F32, Operation, PolicyDescriptor, ProgramCapabilities,
-        ProgramDescriptor, ProgramId, ScalarType, TechniqueId, ValidatedPolicy,
+        BufferId, BufferSchema, CapabilitySet, CapabilitySetId, MAX_BUFFERS_PER_PROGRAM,
+        MAX_CAPABILITY_SETS, MAX_OPERATIONS_PER_PROGRAM, MAX_PROGRAMS, OP_ADD_F32, OP_CONSTANT_F32,
+        OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32, OP_LOAD_U32,
+        OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32, OP_SUBTRACT_F32,
+        Operation, PolicyDescriptor, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType,
+        TechniqueId, ValidatedPolicy,
     },
     wire::{array, read_u16, read_u32},
 };
@@ -41,10 +55,13 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
         return Err(STATUS_INVALID_REQUEST);
     }
 
+    let capability_set_count = read_u32(bytes, POLICY_CAPABILITY_SET_COUNT)?;
     let program_count = read_u32(bytes, POLICY_PROGRAM_COUNT)?;
     let buffer_count = read_u32(bytes, POLICY_BUFFER_COUNT)?;
     let operation_count = read_u32(bytes, POLICY_OPERATION_COUNT)?;
-    if usize::try_from(program_count).map_err(|_| STATUS_INVALID_REQUEST)? > MAX_PROGRAMS
+    if usize::try_from(capability_set_count).map_err(|_| STATUS_INVALID_REQUEST)?
+        > MAX_CAPABILITY_SETS
+        || usize::try_from(program_count).map_err(|_| STATUS_INVALID_REQUEST)? > MAX_PROGRAMS
         || usize::try_from(buffer_count).map_err(|_| STATUS_INVALID_REQUEST)?
             > MAX_PROGRAMS * MAX_BUFFERS_PER_PROGRAM
         || usize::try_from(operation_count).map_err(|_| STATUS_INVALID_REQUEST)?
@@ -53,6 +70,13 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
         return Err(STATUS_INVALID_REQUEST);
     }
 
+    let capability_sets = table(
+        bytes,
+        read_u32(bytes, POLICY_CAPABILITY_SETS_OFFSET)?,
+        capability_set_count,
+        POLICY_CAPABILITY_SET_RECORD_SIZE,
+        POLICY_CAPABILITY_SET_RECORD_ALIGNMENT,
+    )?;
     let programs = table(
         bytes,
         read_u32(bytes, POLICY_PROGRAMS_OFFSET)?,
@@ -76,7 +100,9 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
         POLICY_OPERATION_RECORD_SIZE,
         POLICY_OPERATION_RECORD_ALIGNMENT,
     )?;
-    reject_overlaps(bytes, programs, buffers, operations)?;
+    reject_overlaps(bytes, capability_sets, programs, buffers, operations)?;
+
+    let capability_sets = decode_capability_sets(capability_sets)?;
 
     let mut decoded = Vec::new();
     decoded
@@ -84,7 +110,7 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in programs.chunks_exact(POLICY_PROGRAM_RECORD_SIZE as usize) {
         if read_u16(record, POLICY_PROGRAM_RESERVED0)? != 0
-            || read_u16(record, POLICY_PROGRAM_RESERVED1)? != 0
+            || read_u32(record, POLICY_PROGRAM_RESERVED1)? != 0
         {
             return Err(STATUS_INVALID_REQUEST);
         }
@@ -104,6 +130,11 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
             technique: TechniqueId(read_u32(record, POLICY_PROGRAM_TECHNIQUE_ID)?),
             variant: read_u16(record, POLICY_PROGRAM_VARIANT)?,
             id: ProgramId(read_u32(record, POLICY_PROGRAM_ID)?),
+            capability_set: CapabilitySetId(read_u32(record, POLICY_PROGRAM_CAPABILITY_SET_ID)?),
+            resource_kind_mask: read_u32(record, POLICY_PROGRAM_RESOURCE_KIND_MASK)?,
+            semantic_view_mask: read_u32(record, POLICY_PROGRAM_SEMANTIC_VIEW_MASK)?,
+            batch_key_mask: read_u32(record, POLICY_PROGRAM_BATCH_KEY_MASK)?,
+            allocation_strategy: read_u16(record, POLICY_PROGRAM_ALLOCATION_STRATEGY)?,
             f32_input_count: byte(record, POLICY_PROGRAM_F32_INPUT_COUNT)?,
             u32_input_count: byte(record, POLICY_PROGRAM_U32_INPUT_COUNT)?,
             capabilities: ProgramCapabilities {
@@ -114,7 +145,11 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
             operations: decode_operations(selected_operations)?,
         });
     }
-    ValidatedPolicy::new(PolicyDescriptor { programs: decoded }).map_err(|_| STATUS_INVALID_REQUEST)
+    ValidatedPolicy::new(PolicyDescriptor {
+        capability_sets,
+        programs: decoded,
+    })
+    .map_err(|_| STATUS_INVALID_REQUEST)
 }
 
 fn table(bytes: &[u8], offset: u32, count: u32, stride: u32, alignment: u32) -> Result<&[u8], u32> {
@@ -126,11 +161,13 @@ fn table(bytes: &[u8], offset: u32, count: u32, stride: u32, alignment: u32) -> 
 
 fn reject_overlaps(
     bytes: &[u8],
+    capability_sets: &[u8],
     programs: &[u8],
     buffers: &[u8],
     operations: &[u8],
 ) -> Result<(), u32> {
     let ranges = [
+        relative_range(bytes, capability_sets)?,
         relative_range(bytes, programs)?,
         relative_range(bytes, buffers)?,
         relative_range(bytes, operations)?,
@@ -144,6 +181,41 @@ fn reject_overlaps(
         }
     }
     Ok(())
+}
+
+fn decode_capability_sets(records: &[u8]) -> Result<Vec<CapabilitySet>, u32> {
+    let mut capability_sets = Vec::new();
+    capability_sets
+        .try_reserve_exact(records.len() / POLICY_CAPABILITY_SET_RECORD_SIZE as usize)
+        .map_err(|_| STATUS_INVALID_REQUEST)?;
+    for record in records.chunks_exact(POLICY_CAPABILITY_SET_RECORD_SIZE as usize) {
+        if read_u16(record, POLICY_CAPABILITY_SET_RESERVED)? != 0
+            || read_u16(record, POLICY_CAPABILITY_SET_RESERVED + 2)? != 0
+            || read_u16(record, POLICY_CAPABILITY_SET_RESERVED + 4)? != 0
+        {
+            return Err(STATUS_INVALID_REQUEST);
+        }
+        capability_sets.push(CapabilitySet {
+            id: CapabilitySetId(read_u32(record, POLICY_CAPABILITY_SET_ID)?),
+            flags: read_u32(record, POLICY_CAPABILITY_SET_FLAGS)?,
+            max_buffer_bytes: read_u32(record, POLICY_CAPABILITY_SET_MAX_BUFFER_BYTES)?,
+            update_alignment: read_u32(record, POLICY_CAPABILITY_SET_UPDATE_ALIGNMENT)?,
+            coalesce_gap_bytes: read_u32(record, POLICY_CAPABILITY_SET_COALESCE_GAP_BYTES)?,
+            range_call_penalty_bytes: read_u32(
+                record,
+                POLICY_CAPABILITY_SET_RANGE_CALL_PENALTY_BYTES,
+            )?,
+            max_buffers_per_draw: read_u16(record, POLICY_CAPABILITY_SET_MAX_BUFFERS_PER_DRAW)?,
+            max_resources_per_draw: read_u16(record, POLICY_CAPABILITY_SET_MAX_RESOURCES_PER_DRAW)?,
+            max_indirect_draws: read_u16(record, POLICY_CAPABILITY_SET_MAX_INDIRECT_DRAWS)?,
+            fragmentation_budget: read_u16(record, POLICY_CAPABILITY_SET_FRAGMENTATION_BUDGET)?,
+            whole_buffer_threshold_basis_points: read_u16(
+                record,
+                POLICY_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS,
+            )?,
+        });
+    }
+    Ok(capability_sets)
 }
 
 #[derive(Clone, Copy)]
@@ -175,6 +247,9 @@ fn decode_buffers(records: &[u8]) -> Result<Vec<BufferSchema>, u32> {
         .try_reserve_exact(records.len() / POLICY_BUFFER_RECORD_SIZE as usize)
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in records.chunks_exact(POLICY_BUFFER_RECORD_SIZE as usize) {
+        if read_u16(record, POLICY_BUFFER_RESERVED0)? != 0 {
+            return Err(STATUS_INVALID_REQUEST);
+        }
         let scalar = match byte(record, POLICY_BUFFER_SCALAR)? {
             value if value == ScalarType::F32 as u8 => ScalarType::F32,
             value if value == ScalarType::U32 as u8 => ScalarType::U32,
@@ -185,6 +260,10 @@ fn decode_buffers(records: &[u8]) -> Result<Vec<BufferSchema>, u32> {
             id: BufferId(read_u16(record, POLICY_BUFFER_ID)?),
             scalar,
             vector_width: byte(record, POLICY_BUFFER_VECTOR_WIDTH)?,
+            alignment: read_u16(record, POLICY_BUFFER_ALIGNMENT)?,
+            stride: read_u16(record, POLICY_BUFFER_STRIDE)?,
+            usage: read_u32(record, POLICY_BUFFER_USAGE)?,
+            capacity_class: read_u16(record, POLICY_BUFFER_CAPACITY_CLASS)?,
         });
     }
     Ok(buffers)
@@ -330,7 +409,9 @@ mod tests {
     use super::*;
     use alloc::vec;
 
-    const PROGRAMS_OFFSET: usize = POLICY_REQUEST_HEADER_SIZE as usize;
+    const CAPABILITY_SETS_OFFSET: usize = POLICY_REQUEST_HEADER_SIZE as usize;
+    const PROGRAMS_OFFSET: usize =
+        CAPABILITY_SETS_OFFSET + POLICY_CAPABILITY_SET_RECORD_SIZE as usize;
     const BUFFERS_OFFSET: usize = PROGRAMS_OFFSET + POLICY_PROGRAM_RECORD_SIZE as usize;
     const OPERATIONS_OFFSET: usize = BUFFERS_OFFSET + POLICY_BUFFER_RECORD_SIZE as usize;
     const OPERATION_COUNT: usize = 4;
@@ -341,7 +422,9 @@ mod tests {
     fn decodes_compiler_mapped_policy_records() {
         let bytes = valid_policy_bytes();
         let policy = parse_policy(&bytes).unwrap();
-        let program = policy.program(TechniqueId(1), 0).unwrap();
+        let program = policy
+            .program(CapabilitySetId(1), TechniqueId(1), 0)
+            .unwrap();
         assert_eq!(program.id, ProgramId(2));
         assert_eq!(program.buffers[0].stride(), 8);
         assert_eq!(program.operations.len(), OPERATION_COUNT);
@@ -384,6 +467,12 @@ mod tests {
     fn valid_policy_bytes() -> Vec<u8> {
         let mut bytes = vec![0; BYTE_LENGTH];
         put_u32(&mut bytes, POLICY_BYTE_LENGTH, BYTE_LENGTH as u32);
+        put_u32(
+            &mut bytes,
+            POLICY_CAPABILITY_SETS_OFFSET,
+            CAPABILITY_SETS_OFFSET as u32,
+        );
+        put_u32(&mut bytes, POLICY_CAPABILITY_SET_COUNT, 1);
         put_u32(&mut bytes, POLICY_PROGRAMS_OFFSET, PROGRAMS_OFFSET as u32);
         put_u32(&mut bytes, POLICY_PROGRAM_COUNT, 1);
         put_u32(&mut bytes, POLICY_BUFFERS_OFFSET, BUFFERS_OFFSET as u32);
@@ -395,9 +484,38 @@ mod tests {
         );
         put_u32(&mut bytes, POLICY_OPERATION_COUNT, OPERATION_COUNT as u32);
 
+        let capability = &mut bytes[CAPABILITY_SETS_OFFSET..PROGRAMS_OFFSET];
+        put_u32(capability, POLICY_CAPABILITY_SET_ID, 1);
+        put_u32(
+            capability,
+            POLICY_CAPABILITY_SET_FLAGS,
+            crate::engine::policy::CAP_ORDERED_DIRECT,
+        );
+        put_u32(capability, POLICY_CAPABILITY_SET_MAX_BUFFER_BYTES, 1024);
+        put_u32(capability, POLICY_CAPABILITY_SET_UPDATE_ALIGNMENT, 4);
+        put_u16(capability, POLICY_CAPABILITY_SET_MAX_BUFFERS_PER_DRAW, 1);
+        put_u16(capability, POLICY_CAPABILITY_SET_MAX_RESOURCES_PER_DRAW, 1);
+        put_u16(capability, POLICY_CAPABILITY_SET_FRAGMENTATION_BUDGET, 1);
+        put_u16(
+            capability,
+            POLICY_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS,
+            10_000,
+        );
+
         let program = &mut bytes[PROGRAMS_OFFSET..BUFFERS_OFFSET];
         put_u32(program, POLICY_PROGRAM_TECHNIQUE_ID, 1);
         put_u32(program, POLICY_PROGRAM_ID, 2);
+        put_u32(program, POLICY_PROGRAM_RESOURCE_KIND_MASK, 1);
+        put_u32(
+            program,
+            POLICY_PROGRAM_BATCH_KEY_MASK,
+            crate::engine::policy::BATCH_PROGRAM,
+        );
+        put_u16(
+            program,
+            POLICY_PROGRAM_ALLOCATION_STRATEGY,
+            crate::engine::policy::ALLOCATION_ORDERED_DIRECT,
+        );
         program[POLICY_PROGRAM_F32_INPUT_COUNT] = 2;
         put_u16(program, POLICY_PROGRAM_BUFFER_COUNT, 1);
         put_u16(
@@ -410,6 +528,14 @@ mod tests {
         put_u16(buffer, POLICY_BUFFER_ID, 1);
         buffer[POLICY_BUFFER_SCALAR] = ScalarType::F32 as u8;
         buffer[POLICY_BUFFER_VECTOR_WIDTH] = 2;
+        put_u16(buffer, POLICY_BUFFER_ALIGNMENT, 4);
+        put_u16(buffer, POLICY_BUFFER_STRIDE, 8);
+        put_u32(
+            buffer,
+            POLICY_BUFFER_USAGE,
+            crate::engine::policy::BUFFER_USAGE_COPY_DST,
+        );
+        put_u16(buffer, POLICY_BUFFER_CAPACITY_CLASS, 1);
 
         write_operation(&mut bytes, 0, OP_LOAD_F32, 0, 0, 0, 0);
         write_operation(&mut bytes, 1, OP_LOAD_F32, 1, 1, 0, 0);

@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:5f930e6e6458e184cc932a772b91113765a245c0c139ed771bd902d594076d3d'
+source_digest: 'sha256:750181db8d897681d0bbfb490bb164f20ecd209d4ee3d16a88c9b26d14728715'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -415,6 +415,17 @@ tags, bounded table ranges, and exact payload spans before touching the inactive
 registered policy fingerprint with the plan, while failure headers expose neither that identity nor partial table state.
 The current shipping update still emits an empty plan until retained semantic compilation lands; these records prove the
 wire and publication contract, not incremental-layout performance.
+
+Policy registration now supplies the missing inputs to that compiler through the same compiler-mapped direct-memory
+contract. Its 36-byte header addresses fixed 40-byte capability-set, 56-byte program, 16-byte buffer, and 16-byte
+operation tables; registration decodes those bytes once into retained typed Rust state. Capability-set-specific lookup
+validates backend flags, binding and draw limits, integer upload costs, resource-kind and batch-key masks, allocation
+strategy, and aligned padded buffer strides before a session revision can advance. The executor honors declared stride
+without touching padding. Physical outputs remain disjoint independently bindable vector streams; policy operations
+pack wider records instead of introducing aliased mutable interleaved fields. Thirty-six Rust unit tests and the focused
+Node registration/frame tests pass. The optimized SIMD artifact is 739,647 raw / 272,532 gzip / 214,186 Brotli bytes,
+14,075 / 3,272 / 3,173 bytes above the preceding executor artifact; this is registration/planner metadata, not a warm
+layout performance result.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

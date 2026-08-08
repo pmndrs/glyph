@@ -324,11 +324,31 @@ export const textShaperAbi = {
       "value": 4
     },
     "policyBuffer": {
-      "alignment": 2,
+      "alignment": 4,
+      "capacityClass": 12,
       "id": 0,
+      "reserved0": 14,
       "scalar": 2,
-      "size": 4,
+      "size": 16,
+      "stride": 6,
+      "usage": 8,
       "vectorWidth": 3
+    },
+    "policyCapabilitySet": {
+      "alignment": 4,
+      "coalesceGapBytes": 16,
+      "flags": 4,
+      "fragmentationBudget": 30,
+      "id": 0,
+      "maxBufferBytes": 8,
+      "maxBuffersPerDraw": 24,
+      "maxIndirectDraws": 28,
+      "maxResourcesPerDraw": 26,
+      "rangeCallPenaltyBytes": 20,
+      "reserved": 34,
+      "size": 40,
+      "updateAlignment": 12,
+      "wholeBufferThresholdBasisPoints": 32
     },
     "policyOperation": {
       "alignment": 4,
@@ -343,31 +363,38 @@ export const textShaperAbi = {
     },
     "policyProgram": {
       "alignment": 4,
-      "bufferCount": 24,
-      "bufferStart": 20,
-      "compositingCapabilities": 16,
-      "f32InputCount": 10,
-      "operationCount": 32,
-      "operationStart": 28,
-      "paintCapabilities": 12,
+      "allocationStrategy": 46,
+      "batchKeyMask": 20,
+      "bufferCount": 42,
+      "bufferStart": 32,
+      "capabilitySetId": 8,
+      "compositingCapabilities": 28,
+      "f32InputCount": 48,
+      "operationCount": 44,
+      "operationStart": 36,
+      "paintCapabilities": 24,
       "programId": 4,
-      "reserved0": 26,
-      "reserved1": 34,
-      "size": 36,
+      "reserved0": 50,
+      "reserved1": 52,
+      "resourceKindMask": 12,
+      "semanticViewMask": 16,
+      "size": 56,
       "techniqueId": 0,
-      "u32InputCount": 11,
-      "variant": 8
+      "u32InputCount": 49,
+      "variant": 40
     },
     "policyRequest": {
       "alignment": 4,
-      "bufferCount": 16,
-      "buffersOffset": 12,
+      "bufferCount": 24,
+      "buffersOffset": 20,
       "byteLength": 0,
-      "operationCount": 24,
-      "operationsOffset": 20,
-      "programCount": 8,
-      "programsOffset": 4,
-      "size": 28
+      "capabilitySetCount": 8,
+      "capabilitySetsOffset": 4,
+      "operationCount": 32,
+      "operationsOffset": 28,
+      "programCount": 16,
+      "programsOffset": 12,
+      "size": 36
     },
     "reshapeRange": {
       "alignment": 4,
@@ -435,6 +462,32 @@ export const textShaperAbi = {
   "name": "pmndrs-text-shaper",
   "pointerWidth": 32,
   "policy": {
+    "allocationStrategies": {
+      "orderedDirect": 1,
+      "stableIndirect": 2
+    },
+    "batchFields": {
+      "clip": 16,
+      "depth": 32,
+      "material": 8,
+      "order": 64,
+      "program": 4,
+      "resource": 2,
+      "technique": 1
+    },
+    "bufferUsage": {
+      "copyDst": 4,
+      "storage": 2,
+      "vertex": 1
+    },
+    "capabilityFlags": {
+      "aliasVec2": 4,
+      "aliasVec4": 8,
+      "indirectDraws": 2,
+      "orderedDirect": 16,
+      "stableIndirect": 32,
+      "storageBuffers": 1
+    },
     "opcodes": {
       "addF32": 5,
       "constantF32": 3,

@@ -2,7 +2,7 @@ use alloc::collections::BTreeMap;
 
 use super::{
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
-    policy::ValidatedPolicy,
+    policy::{CapabilitySetId, ValidatedPolicy},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,7 +103,13 @@ impl TextEngine {
             .sessions
             .get(&request.session_id)
             .ok_or(EngineError::SessionMissing)?;
-        self.policy(request.policy_handle)?;
+        let policy = self.policy(request.policy_handle)?;
+        if policy
+            .capability_set(CapabilitySetId(request.capability_set))
+            .is_none()
+        {
+            return Err(EngineError::InvalidRequest);
+        }
         if request.expected_engine_revision != session.revision.engine
             || request.consumed_plan_revision > session.revision.plan
         {
@@ -157,8 +163,10 @@ impl TextEngine {
 mod tests {
     use super::*;
     use crate::engine::policy::{
-        BufferId, BufferSchema, Operation, PolicyDescriptor, ProgramCapabilities,
-        ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
+        ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE,
+        BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CAP_ORDERED_DIRECT,
+        CapabilitySet, Operation, PolicyDescriptor, ProgramCapabilities, ProgramDescriptor,
+        ProgramId, ScalarType, TechniqueId,
     };
     use alloc::vec;
 
@@ -226,20 +234,59 @@ mod tests {
         assert_eq!(engine.dispose_session(4), Err(EngineError::SessionMissing));
     }
 
+    #[test]
+    fn update_rejects_a_capability_set_outside_the_registered_policy() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        let mut request = update(0, 0);
+        request.capability_set = 2;
+        assert_eq!(
+            engine.prepare_update(request),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            engine.session_revision(4).unwrap(),
+            SessionRevision::default()
+        );
+    }
+
     fn validated_policy(technique: TechniqueId) -> ValidatedPolicy {
         ValidatedPolicy::new(PolicyDescriptor {
+            capability_sets: vec![CapabilitySet {
+                id: CapabilitySetId(1),
+                flags: CAP_ORDERED_DIRECT,
+                max_buffer_bytes: 1024,
+                update_alignment: 4,
+                coalesce_gap_bytes: 0,
+                range_call_penalty_bytes: 0,
+                max_buffers_per_draw: 1,
+                max_resources_per_draw: 1,
+                max_indirect_draws: 0,
+                fragmentation_budget: 1,
+                whole_buffer_threshold_basis_points: 10_000,
+            }],
             programs: vec![ProgramDescriptor {
                 technique,
                 variant: 0,
                 id: ProgramId(1),
+                capability_set: CapabilitySetId(0),
+                resource_kind_mask: 1,
+                semantic_view_mask: 0,
+                batch_key_mask: BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+                allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,
                 capabilities: ProgramCapabilities::default(),
-                buffers: vec![BufferSchema {
-                    id: BufferId(1),
-                    scalar: ScalarType::F32,
-                    vector_width: 1,
-                }],
+                buffers: vec![BufferSchema::packed(
+                    BufferId(1),
+                    ScalarType::F32,
+                    1,
+                    BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                    1,
+                )],
                 operations: vec![
                     Operation::LoadF32 {
                         target: 0,
@@ -262,6 +309,7 @@ mod tests {
             expected_engine_revision,
             consumed_plan_revision,
             policy_handle: 9,
+            capability_set: 1,
             limits: super::super::frame::UpdateLimits {
                 max_clusters: 1,
                 max_lines: 1,

@@ -35,7 +35,6 @@ pub(crate) fn parse_update_request(bytes: &[u8], session_id: u32) -> Result<Upda
         || read_u32(bytes, ENGINE_UPDATE_SESSION_ID)? != session_id
         || read_u32(bytes, ENGINE_UPDATE_BYTE_LENGTH)?
             != u32::try_from(bytes.len()).map_err(|_| STATUS_INVALID_REQUEST)?
-        || read_u32(bytes, ENGINE_UPDATE_CAPABILITY_SET)? != 0
         || read_u32(bytes, ENGINE_UPDATE_FLAGS)? != 0
         || read_u32(bytes, ENGINE_UPDATE_SEMANTIC_VIEW_MASK)? != 0
     {
@@ -97,6 +96,7 @@ pub(crate) fn parse_update_request(bytes: &[u8], session_id: u32) -> Result<Upda
         expected_engine_revision: read_u32(bytes, ENGINE_UPDATE_EXPECTED_ENGINE_REVISION)?,
         consumed_plan_revision: read_u32(bytes, ENGINE_UPDATE_CONSUMED_PLAN_REVISION)?,
         policy_handle: read_u32(bytes, ENGINE_UPDATE_POLICY_HANDLE)?,
+        capability_set: positive(bytes, ENGINE_UPDATE_CAPABILITY_SET)?,
         limits,
     })
 }
@@ -150,6 +150,7 @@ mod tests {
         );
         write_u32(&mut bytes, ENGINE_UPDATE_SESSION_ID, 4);
         write_u32(&mut bytes, ENGINE_UPDATE_POLICY_HANDLE, 9);
+        write_u32(&mut bytes, ENGINE_UPDATE_CAPABILITY_SET, 1);
         for offset in [
             ENGINE_UPDATE_MAX_CLUSTERS,
             ENGINE_UPDATE_MAX_LINES,

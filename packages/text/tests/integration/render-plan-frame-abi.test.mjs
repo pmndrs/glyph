@@ -147,7 +147,7 @@ function assertResult(memory, pointer, abi, expected) {
   }
   if (expected.status === abi.status.ok) {
     assert.equal(view.getUint32(layout.policyHandle, true), policyHandle);
-    assert.equal(view.getUint32(layout.capabilitySet, true), 0);
+    assert.equal(view.getUint32(layout.capabilitySet, true), 1);
     assert.notEqual(
       view.getUint32(layout.policyFingerprintLow, true) | view.getUint32(layout.policyFingerprintHigh, true),
       0,

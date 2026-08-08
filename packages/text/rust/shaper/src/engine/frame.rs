@@ -6,6 +6,7 @@ pub(crate) struct UpdateRequest {
     pub expected_engine_revision: u32,
     pub consumed_plan_revision: u32,
     pub policy_handle: u32,
+    pub capability_set: u32,
     pub limits: UpdateLimits,
 }
 

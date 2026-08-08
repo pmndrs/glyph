@@ -7,8 +7,8 @@ use core::{mem, slice};
 use crate::STATUS_INVALID_REQUEST;
 #[cfg(target_arch = "wasm32")]
 use crate::engine::policy::{
-    BufferId, BufferSchema, PhysicalBufferMut, ScalarType, SemanticInputBatch, TechniqueId,
-    ValidatedPolicy,
+    BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CapabilitySetId,
+    PhysicalBufferMut, ScalarType, SemanticInputBatch, TechniqueId, ValidatedPolicy,
 };
 
 const MAX_RECORDS: usize = 1_000_000;
@@ -409,32 +409,39 @@ pub(crate) unsafe fn exported_policy(
         let u32_inputs = [typed_slice(u32_input0_pointer, count)];
         let mut outputs = [
             PhysicalBufferMut {
-                schema: BufferSchema {
-                    id: BufferId(1),
-                    scalar: ScalarType::F32,
-                    vector_width: 4,
-                },
+                schema: BufferSchema::packed(
+                    BufferId(1),
+                    ScalarType::F32,
+                    4,
+                    BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                    1,
+                ),
                 bytes: byte_slice_mut(f32_output_pointer, f32_output_count * mem::size_of::<f32>()),
             },
             PhysicalBufferMut {
-                schema: BufferSchema {
-                    id: BufferId(2),
-                    scalar: ScalarType::U32,
-                    vector_width: 1,
-                },
+                schema: BufferSchema::packed(
+                    BufferId(2),
+                    ScalarType::U32,
+                    1,
+                    BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                    1,
+                ),
                 bytes: byte_slice_mut(u32_output_pointer, count * mem::size_of::<u32>()),
             },
             PhysicalBufferMut {
-                schema: BufferSchema {
-                    id: BufferId(3),
-                    scalar: ScalarType::U16,
-                    vector_width: 1,
-                },
+                schema: BufferSchema::packed(
+                    BufferId(3),
+                    ScalarType::U16,
+                    1,
+                    BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                    1,
+                ),
                 bytes: byte_slice_mut(u16_output_pointer, count * mem::size_of::<u16>()),
             },
         ];
         policy
             .execute(
+                CapabilitySetId(1),
                 TechniqueId(technique),
                 variant,
                 SemanticInputBatch {
