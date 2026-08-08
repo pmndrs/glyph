@@ -16,7 +16,7 @@
   "type": "module",
   "sideEffects": [
     "./dist/three/bitmap.js",
-    "./dist/three/mtsdf.js",
+    "./dist/three/msdf.js",
     "./dist/three/slug.js"
   ],
   "exports": {
@@ -32,9 +32,9 @@
       "types": "./dist/three/bitmap.d.ts",
       "import": "./dist/three/bitmap.js"
     },
-    "./three/mtsdf": {
-      "types": "./dist/three/mtsdf.d.ts",
-      "import": "./dist/three/mtsdf.js"
+    "./three/msdf": {
+      "types": "./dist/three/msdf.d.ts",
+      "import": "./dist/three/msdf.js"
     },
     "./three/slug": {
       "types": "./dist/three/slug.d.ts",
@@ -52,9 +52,9 @@
       "types": "./dist/raster/bitmap-technique.d.ts",
       "import": "./dist/raster/bitmap-technique.js"
     },
-    "./raster/mtsdf": {
-      "types": "./dist/raster/mtsdf.d.ts",
-      "import": "./dist/raster/mtsdf.js"
+    "./raster/msdf": {
+      "types": "./dist/raster/msdf.d.ts",
+      "import": "./dist/raster/msdf.js"
     },
     "./raster/slug": {
       "types": "./dist/raster/slug-technique.d.ts",

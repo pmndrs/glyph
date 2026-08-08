@@ -1,5 +1,5 @@
 import { defineRasterResourceId, type ParagraphLayout } from '@pmndrs/text';
-import type { MtsdfData } from '@pmndrs/text/raster/mtsdf';
+import type { MsdfData as MtsdfData } from '@pmndrs/text/raster/msdf';
 import { describe, expect, it } from 'vitest';
 
 import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from './mtsdf-cpu-reference';

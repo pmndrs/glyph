@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { createRuntimeShaper, createTextRuntime, defineRasterTechnique, FontRegistry } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
-import { bitmapShader, mtsdfShader, registerThreeRasterProgram, slugShader, Text } from '@pmndrs/text/three';
+import { bitmapShader, msdfShader, registerThreeRasterProgram, slugShader, Text } from '@pmndrs/text/three';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
@@ -12,7 +12,7 @@ const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bi
 
 test('the canonical technique shaders are exported as callable node builders', () => {
   assert.equal(typeof bitmapShader, 'function');
-  assert.equal(typeof mtsdfShader, 'function');
+  assert.equal(typeof msdfShader, 'function');
   assert.equal(typeof slugShader, 'function');
 });
 

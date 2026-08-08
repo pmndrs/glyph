@@ -5,7 +5,7 @@ import test from 'node:test';
 import bitmapBaker from '@pmndrs/text/bakers/bitmap';
 import msdfBaker from '@pmndrs/text/bakers/msdf';
 import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
-import { mtsdf, mtsdfDescriptor, mtsdfRasterKey } from '@pmndrs/text/raster/mtsdf';
+import { msdf, msdfDescriptor, msdfRasterKey } from '@pmndrs/text/raster/msdf';
 import { normalizeBitmapOptions } from '../../dist/internal/bitmap-contract.js';
 import { normalizeMsdfOptions } from '../../dist/internal/msdf-contract.js';
 import { startRasterBakeWorker } from '../../dist/internal/raster-bake-worker-entry.js';
@@ -98,7 +98,7 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
     rasterKey,
     options: { strikes: [16], coverage: { glyphIds: [3, 1] } },
   });
-  const runtimeMsdfBaker = await mtsdf.runtimeBaker();
+  const runtimeMsdfBaker = await msdf.runtimeBaker();
   const msdfResult = await runtimeMsdfBaker.default.bake({
     source,
     font,
@@ -287,7 +287,7 @@ test('the raster Worker entry frees its baker result before transferring exact a
   assert.deepEqual(posted.transfer, [bakerBytes.buffer]);
 });
 
-test('Node and serial Worker entry produce identical bounded Bitmap and MTSDF artifacts', async (t) => {
+test('Node and serial Worker entry produce identical bounded Bitmap and MSDF artifacts', async (t) => {
   const source = new Uint8Array(await readFile(interUrl));
   const font = { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash: interShapingHash };
   for (const fixture of [
@@ -302,8 +302,8 @@ test('Node and serial Worker entry produce identical bounded Bitmap and MTSDF ar
       baker: msdfBaker,
       normalize: normalizeMsdfOptions,
       options: { coverage: { glyphIds: [43, 44] } },
-      descriptor: mtsdfDescriptor({ coverage: { glyphIds: [43, 44] } }),
-      rasterKey: await mtsdfRasterKey({ coverage: { glyphIds: [43, 44] } }),
+      descriptor: msdfDescriptor({ coverage: { glyphIds: [43, 44] } }),
+      rasterKey: await msdfRasterKey({ coverage: { glyphIds: [43, 44] } }),
     },
   ]) {
     const direct = await fixture.baker.bake({

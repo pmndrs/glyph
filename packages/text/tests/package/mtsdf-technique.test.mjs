@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { defineRasterResourceId } from '@pmndrs/text';
-import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import { msdf } from '@pmndrs/text/raster/msdf';
 
 const binding = Object.freeze({ width: 32, height: 32, layers: 1 });
 const records = new Uint8Array(40);
@@ -19,7 +19,7 @@ view.setUint16(34, 18, true);
 view.setUint16(36, 0, true);
 
 const data = {
-  resource: defineRasterResourceId('test/mtsdf/font/atlas'),
+  resource: defineRasterResourceId('test/msdf/font/atlas'),
   binding,
   emSize: 16,
   pixelRange: 8,
@@ -46,18 +46,18 @@ function glyph(glyphId) {
   };
 }
 
-test('portable MTSDF selection omits absent records and retains one atlas binding', () => {
-  assert.equal(mtsdf.select(glyph(0)), undefined);
-  assert.deepEqual(mtsdf.select(glyph(1)), {
+test('portable MSDF selection omits absent records and retains one atlas binding', () => {
+  assert.equal(msdf.select(glyph(0)), undefined);
+  assert.deepEqual(msdf.select(glyph(1)), {
     resource: data.resource,
     pipelineVariant: 0,
     binding,
   });
 });
 
-test('portable MTSDF storage packs positive-down paragraph origins without renderer objects', () => {
-  const storage = mtsdf.createStorage(2);
-  mtsdf.writeStorage(storage, { start: 1, count: 1 }, { data, binding, glyphs: [glyph(1)] });
+test('portable MSDF storage packs positive-down paragraph origins without renderer objects', () => {
+  const storage = msdf.createStorage(2);
+  msdf.writeStorage(storage, { start: 1, count: 1 }, { data, binding, glyphs: [glyph(1)] });
 
   assert.deepEqual([...storage.origins], [0, 0, 98, 40]);
   assert.deepEqual([...storage.sizes], [0, 0, 12, 16]);
@@ -69,14 +69,14 @@ test('portable MTSDF storage packs positive-down paragraph origins without rende
   assert.equal(storage.pageIndices[1], 0);
 });
 
-test('portable MTSDF storage rejects mismatched bindings and invalid ranges', () => {
-  const storage = mtsdf.createStorage(1);
+test('portable MSDF storage rejects mismatched bindings and invalid ranges', () => {
+  const storage = msdf.createStorage(1);
   assert.throws(
-    () => mtsdf.writeStorage(storage, { start: 0, count: 1 }, { data, binding: { ...binding }, glyphs: [glyph(1)] }),
+    () => msdf.writeStorage(storage, { start: 0, count: 1 }, { data, binding: { ...binding }, glyphs: [glyph(1)] }),
     /binding does not belong/,
   );
   assert.throws(
-    () => mtsdf.writeStorage(storage, { start: 1, count: 1 }, { data, binding, glyphs: [glyph(1)] }),
+    () => msdf.writeStorage(storage, { start: 1, count: 1 }, { data, binding, glyphs: [glyph(1)] }),
     /outside its capacity/,
   );
 });

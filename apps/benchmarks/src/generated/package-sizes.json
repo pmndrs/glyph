@@ -84,14 +84,14 @@
     },
     {
       "id": "mtsdf-runtime-js",
-      "label": "MTSDF runtime JS graph",
+      "label": "MSDF runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "sha256": "ea0991433818bbeee11138f130858abefde15d0b27e016c2d28d1a0aa694b7cd",
-      "rawBytes": 94145,
-      "minifiedBytes": 63256,
-      "gzipBytes": 16777,
-      "brotliBytes": 14857
+      "sha256": "c194d5f368e7224b83a351098a7ebaa2e5daac9d6b4e853e01b490cf9b580ea2",
+      "rawBytes": 94082,
+      "minifiedBytes": 63216,
+      "gzipBytes": 16774,
+      "brotliBytes": 14807
     },
     {
       "id": "slug-runtime-js",
@@ -128,7 +128,7 @@
     },
     {
       "id": "mtsdf-generator-js",
-      "label": "MTSDF generator host JS",
+      "label": "MSDF generator host JS",
       "status": "measured",
       "format": "javascript",
       "sha256": "996b884783be8b708e186ae2fe4a062b856a6e48f30b7044f3c07939b2aacdf0",
@@ -139,7 +139,7 @@
     },
     {
       "id": "mtsdf-generator-wasm",
-      "label": "MTSDF admitted generator kernel",
+      "label": "MSDF admitted generator kernel",
       "status": "measured",
       "format": "wasm",
       "sha256": "f2bf6ac11a7c1ac235bf03c3759aa44998a3a3464cc7f4ef6b067bf0b87ce43a",
@@ -150,7 +150,7 @@
     },
     {
       "id": "mtsdf-baker-wasm",
-      "label": "MTSDF fixed baker Wasm",
+      "label": "MSDF fixed baker Wasm",
       "status": "measured",
       "format": "wasm",
       "sha256": "ec6eb1640d587ba8ce9b614aa334c7a93b4a5c36a6c12ee1dba725d7adce7de8",
@@ -161,14 +161,14 @@
     },
     {
       "id": "mtsdf-baker-js",
-      "label": "MTSDF fixed baker host JS",
+      "label": "MSDF fixed baker host JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "dbfcac1fcf1335124938efe1d6526b2521c1b238eb18a640658bd9013492c865",
-      "rawBytes": 26940,
-      "minifiedBytes": 19117,
-      "gzipBytes": 5530,
-      "brotliBytes": 4908
+      "sha256": "fd2140ee7f48c10e41be0f132e01712b2f3b44186f0561c41cbe013fb763b5ae",
+      "rawBytes": 26924,
+      "minifiedBytes": 19112,
+      "gzipBytes": 5531,
+      "brotliBytes": 4907
     },
     {
       "id": "slug-baker-wasm",

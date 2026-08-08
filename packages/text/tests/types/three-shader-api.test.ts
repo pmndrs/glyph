@@ -4,25 +4,25 @@ import type { Node } from 'three/webgpu';
 
 import {
   bitmapShader,
-  mtsdfShader,
+  msdfShader,
   slugShader,
   type ThreeBitmapInstanceNodes,
   type ThreeBitmapShaderResources,
-  type ThreeMtsdfInstanceNodes,
-  type ThreeMtsdfShaderResources,
+  type ThreeMsdfInstanceNodes,
+  type ThreeMsdfShaderResources,
   type ThreeSlugInstanceNodes,
   type ThreeSlugShaderResources,
 } from '../../src/three.js';
 
 declare const bitmapInstance: ThreeBitmapInstanceNodes;
 declare const bitmapResources: ThreeBitmapShaderResources;
-declare const mtsdfInstance: ThreeMtsdfInstanceNodes;
-declare const mtsdfResources: ThreeMtsdfShaderResources;
+declare const mtsdfInstance: ThreeMsdfInstanceNodes;
+declare const mtsdfResources: ThreeMsdfShaderResources;
 declare const slugInstance: ThreeSlugInstanceNodes;
 declare const slugResources: ThreeSlugShaderResources;
 
 const bitmapOutput = bitmapShader(bitmapInstance, bitmapResources);
-const mtsdfOutput = mtsdfShader(mtsdfInstance, mtsdfResources);
+const mtsdfOutput = msdfShader(mtsdfInstance, mtsdfResources);
 const slugOutput = slugShader(slugInstance, slugResources);
 
 // Each technique publishes its coverage as a float a custom program may weight or threshold itself.

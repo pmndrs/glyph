@@ -1,6 +1,6 @@
 import type { BakeProgressListener, FontRegistry, LoadedFont } from '@pmndrs/text';
 import type { bitmap as bitmapTechnique } from '@pmndrs/text/raster/bitmap';
-import type { mtsdf as mtsdfTechnique } from '@pmndrs/text/raster/mtsdf';
+import type { msdf as mtsdfTechnique } from '@pmndrs/text/raster/msdf';
 import type { slug as slugTechnique } from '@pmndrs/text/raster/slug';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';

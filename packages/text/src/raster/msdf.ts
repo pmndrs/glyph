@@ -11,8 +11,8 @@ import {
   MSDF_EXTENSION,
   MSDF_FORMAT_VERSION,
   MSDF_KIND,
-  MTSDF_MAX_EM_SIZE,
-  MTSDF_MAX_PIXEL_RANGE,
+  MSDF_MAX_EM_SIZE,
+  MSDF_MAX_PIXEL_RANGE,
   msdfDescriptor,
   msdfRasterKey,
   type MsdfDescriptorV0,
@@ -44,51 +44,51 @@ import {
 } from '../raster-technique.js';
 
 export {
-  MSDF_EXTENSION as MTSDF_EXTENSION,
-  MSDF_FORMAT_VERSION as MTSDF_FORMAT_VERSION,
-  MSDF_GENERATOR_VERSION as MTSDF_GENERATOR_VERSION,
-  MSDF_KIND as MTSDF_KIND,
-  MTSDF_EM_SIZE,
-  MTSDF_MAX_EM_SIZE,
-  MTSDF_MAX_OUTLINE_ATLAS_PIXELS,
-  MTSDF_MAX_PIXEL_RANGE,
-  MTSDF_PIXEL_RANGE,
-  MTSDF_PLANE_UNITS_PER_EM,
-  msdfDescriptor as mtsdfDescriptor,
-  msdfDescriptorRasterKey as mtsdfDescriptorRasterKey,
-  msdfRasterKey as mtsdfRasterKey,
-  type MsdfConfiguration as MtsdfConfiguration,
-  type MsdfDescriptorV0 as MtsdfDescriptorV0,
-  type MsdfOptions as MtsdfOptions,
+  MSDF_EXTENSION as MSDF_EXTENSION,
+  MSDF_FORMAT_VERSION as MSDF_FORMAT_VERSION,
+  MSDF_GENERATOR_VERSION as MSDF_GENERATOR_VERSION,
+  MSDF_KIND as MSDF_KIND,
+  MSDF_EM_SIZE,
+  MSDF_MAX_EM_SIZE,
+  MSDF_MAX_OUTLINE_ATLAS_PIXELS,
+  MSDF_MAX_PIXEL_RANGE,
+  MSDF_PIXEL_RANGE,
+  MSDF_PLANE_UNITS_PER_EM,
+  msdfDescriptor as msdfDescriptor,
+  msdfDescriptorRasterKey as msdfDescriptorRasterKey,
+  msdfRasterKey as msdfRasterKey,
+  type MsdfConfiguration as MsdfConfiguration,
+  type MsdfDescriptorV0 as MsdfDescriptorV0,
+  type MsdfOptions as MsdfOptions,
 } from '../internal/msdf-contract.js';
-export { DENSE_GLYPH_RECORD_STRIDE as MTSDF_GLYPH_RECORD_STRIDE } from '../internal/raster-atlas.js';
+export { DENSE_GLYPH_RECORD_STRIDE as MSDF_GLYPH_RECORD_STRIDE } from '../internal/raster-atlas.js';
 
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;
 const ABSENT_PAGE = ABSENT_GLYPH_PAGE;
 const MAX_RUNTIME_TEXTURE_BYTES = 256 * 1024 * 1024;
 
-export interface MtsdfPageData extends RasterAtlasPage {
+export interface MsdfPageData extends RasterAtlasPage {
   readonly format: 'rgba8unorm';
 }
 
-export interface MtsdfBinding {
+export interface MsdfBinding {
   readonly width: number;
   readonly height: number;
   readonly layers: number;
 }
 
-export interface MtsdfData {
+export interface MsdfData {
   readonly resource: RasterResourceId;
-  readonly binding: MtsdfBinding;
+  readonly binding: MsdfBinding;
   readonly emSize: number;
   readonly pixelRange: number;
   readonly planeUnitsPerEm: number;
   readonly records: Uint8Array;
   readonly coverage?: Uint8Array;
-  readonly pages: readonly MtsdfPageData[];
+  readonly pages: readonly MsdfPageData[];
 }
 
-export interface MtsdfGlyphBatchStorage {
+export interface MsdfGlyphBatchStorage {
   readonly origins: Float32Array;
   readonly sizes: Float32Array;
   readonly uvOrigins: Float32Array;
@@ -102,17 +102,17 @@ export interface MtsdfGlyphBatchStorage {
   readonly pageIndices: Uint16Array;
 }
 
-/** Renderer-neutral MTSDF decoding, physical selection, and canonical instance packing. */
-export const mtsdf: RasterTechnique<
-  RasterTechniqueId & 'pmndrs.mtsdf',
+/** Renderer-neutral MSDF decoding, physical selection, and canonical instance packing. */
+export const msdf: RasterTechnique<
+  RasterTechniqueId & 'pmndrs.msdf',
   typeof MSDF_KIND,
   MsdfOptions | undefined,
   MsdfDescriptorV0,
-  MtsdfData,
-  MtsdfBinding,
-  MtsdfGlyphBatchStorage
+  MsdfData,
+  MsdfBinding,
+  MsdfGlyphBatchStorage
 > = defineRasterTechnique({
-  id: 'pmndrs.mtsdf',
+  id: 'pmndrs.msdf',
   kind: MSDF_KIND,
   extension: MSDF_EXTENSION,
   version: MSDF_FORMAT_VERSION,
@@ -120,22 +120,22 @@ export const mtsdf: RasterTechnique<
   descriptor(options: MsdfOptions | undefined): MsdfDescriptorV0 {
     return msdfDescriptor(options);
   },
-  async decode(font, raster, signal): Promise<MtsdfData> {
+  async decode(font, raster, signal): Promise<MsdfData> {
     signal?.throwIfAborted();
-    const data = await decodeMtsdfData(font, raster);
+    const data = await decodeMsdfData(font, raster);
     signal?.throwIfAborted();
     return data;
   },
-  select(input: RasterGlyphInput<MtsdfData>) {
+  select(input: RasterGlyphInput<MsdfData>) {
     const { data, glyphId } = input;
     assertGlyphId(data, glyphId);
     assertCoverage(data, glyphId);
     const pageIndex = recordView(data).getUint16(glyphId * RECORD_STRIDE + 16, true);
     if (pageIndex === ABSENT_PAGE) return undefined;
-    if (data.pages[pageIndex] === undefined) throw new TypeError('MTSDF glyph references a missing page');
+    if (data.pages[pageIndex] === undefined) throw new TypeError('MSDF glyph references a missing page');
     return { resource: data.resource, pipelineVariant: 0, binding: data.binding };
   },
-  createStorage(capacity: number): MtsdfGlyphBatchStorage {
+  createStorage(capacity: number): MsdfGlyphBatchStorage {
     assertCapacity(capacity);
     return {
       origins: new Float32Array(capacity * 2),
@@ -152,26 +152,26 @@ export const mtsdf: RasterTechnique<
     };
   },
   writeStorage(
-    storage: MtsdfGlyphBatchStorage,
+    storage: MsdfGlyphBatchStorage,
     range: GlyphRange,
-    input: RasterGlyphWriteInput<MtsdfData, MtsdfBinding>,
+    input: RasterGlyphWriteInput<MsdfData, MsdfBinding>,
   ): void {
-    writeMtsdfStorage(storage, range, input);
+    writeMsdfStorage(storage, range, input);
   },
-  validatePaint: assertMtsdfPaint,
+  validatePaint: assertMsdfPaint,
   dispose() {},
 });
 
-async function decodeMtsdfData(font: RegisteredFont, raster: RegisteredRaster): Promise<MtsdfData> {
+async function decodeMsdfData(font: RegisteredFont, raster: RegisteredRaster): Promise<MsdfData> {
   if (
     raster.font !== font.handle ||
     raster.kind !== MSDF_KIND ||
     raster.extension !== MSDF_EXTENSION ||
     raster.version !== MSDF_FORMAT_VERSION
   ) {
-    throw new TypeError('MTSDF raster is not bound to the supplied font');
+    throw new TypeError('MSDF raster is not bound to the supplied font');
   }
-  const extension = jsonObject(raster.extensionData, 'MTSDF extension');
+  const extension = jsonObject(raster.extensionData, 'MSDF extension');
   if (
     extension.version !== MSDF_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
@@ -181,13 +181,13 @@ async function decodeMtsdfData(font: RegisteredFont, raster: RegisteredRaster): 
     extension.encoding !== 'mtsdf' ||
     extension.recordStride !== RECORD_STRIDE
   ) {
-    throw new TypeError('MTSDF extension does not match the runtime contract');
+    throw new TypeError('MSDF extension does not match the runtime contract');
   }
-  const emSize = configuredInteger(extension.emSize, 'MTSDF emSize', MTSDF_MAX_EM_SIZE);
-  const pixelRange = configuredInteger(extension.pixelRange, 'MTSDF pixelRange', MTSDF_MAX_PIXEL_RANGE);
-  const planeUnitsPerEm = configuredInteger(extension.planeUnitsPerEm, 'MTSDF planeUnitsPerEm', MTSDF_MAX_EM_SIZE);
-  if (planeUnitsPerEm !== emSize) throw new TypeError('MTSDF planeUnitsPerEm must equal emSize');
-  const coverage = decodeRasterCoverage(extension, font.glyphCount, (view) => raster.view(view), 'MTSDF');
+  const emSize = configuredInteger(extension.emSize, 'MSDF emSize', MSDF_MAX_EM_SIZE);
+  const pixelRange = configuredInteger(extension.pixelRange, 'MSDF pixelRange', MSDF_MAX_PIXEL_RANGE);
+  const planeUnitsPerEm = configuredInteger(extension.planeUnitsPerEm, 'MSDF planeUnitsPerEm', MSDF_MAX_EM_SIZE);
+  if (planeUnitsPerEm !== emSize) throw new TypeError('MSDF planeUnitsPerEm must equal emSize');
+  const coverage = decodeRasterCoverage(extension, font.glyphCount, (view) => raster.view(view), 'MSDF');
   if (
     raster.rasterKey !==
     (await msdfRasterKey({
@@ -196,19 +196,19 @@ async function decodeMtsdfData(font: RegisteredFont, raster: RegisteredRaster): 
       ...(coverage === undefined ? {} : { coverage: coverage.descriptor }),
     }))
   ) {
-    throw new TypeError('MTSDF raster key does not match its generation policy');
+    throw new TypeError('MSDF raster key does not match its generation policy');
   }
-  const records = raster.view(nonnegativeSafeInteger(extension.recordBufferView, 'MTSDF recordBufferView'));
+  const records = raster.view(nonnegativeSafeInteger(extension.recordBufferView, 'MSDF recordBufferView'));
   if (records.byteLength !== font.glyphCount * RECORD_STRIDE) {
-    throw new TypeError('MTSDF record table does not match the registered glyph count');
+    throw new TypeError('MSDF record table does not match the registered glyph count');
   }
-  const pageValues = jsonArray(extension.pages, 'MTSDF pages');
-  if (pageValues.length === 0) throw new TypeError('MTSDF raster must contain at least one page');
-  if (pageValues.length > 65_535) throw new RangeError('MTSDF raster contains too many pages');
-  const pages: MtsdfPageData[] = [];
+  const pageValues = jsonArray(extension.pages, 'MSDF pages');
+  if (pageValues.length === 0) throw new TypeError('MSDF raster must contain at least one page');
+  if (pageValues.length > 65_535) throw new RangeError('MSDF raster contains too many pages');
+  const pages: MsdfPageData[] = [];
   for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
-    validateMtsdfPageDirectory(pageValues[pageIndex]!, pageIndex);
-    const page = decodeEmbeddedLosslessAtlasPage(raster, pageValues[pageIndex]!, `MTSDF page ${pageIndex}`, {
+    validateMsdfPageDirectory(pageValues[pageIndex]!, pageIndex);
+    const page = decodeEmbeddedLosslessAtlasPage(raster, pageValues[pageIndex]!, `MSDF page ${pageIndex}`, {
       gpuFormat: 'rgba8unorm',
       vkFormat: VK_FORMAT_R8G8B8A8_UNORM,
       blockWidth: 1,
@@ -223,16 +223,16 @@ async function decodeMtsdfData(font: RegisteredFont, raster: RegisteredRaster): 
     });
     pages.push({ ...page, format: 'rgba8unorm' });
   }
-  validateDenseGlyphRecords(records, pages, 'MTSDF', true);
+  validateDenseGlyphRecords(records, pages, 'MSDF', true);
   const width = Math.max(...pages.map((page) => page.width));
   const height = Math.max(...pages.map((page) => page.height));
   const paddedBytes = width * height * pages.length * 4;
   if (!Number.isSafeInteger(paddedBytes) || paddedBytes > MAX_RUNTIME_TEXTURE_BYTES) {
-    throw new RangeError('MTSDF pages exceed the runtime texture-memory limit');
+    throw new RangeError('MSDF pages exceed the runtime texture-memory limit');
   }
   const binding = Object.freeze({ width, height, layers: pages.length });
   return {
-    resource: defineRasterResourceId(`pmndrs.mtsdf/${font.shapingHash}/${raster.rasterKey}`),
+    resource: defineRasterResourceId(`pmndrs.msdf/${font.shapingHash}/${raster.rasterKey}`),
     binding,
     emSize,
     pixelRange,
@@ -243,33 +243,33 @@ async function decodeMtsdfData(font: RegisteredFont, raster: RegisteredRaster): 
   };
 }
 
-function writeMtsdfStorage(
-  storage: MtsdfGlyphBatchStorage,
+function writeMsdfStorage(
+  storage: MsdfGlyphBatchStorage,
   range: GlyphRange,
-  input: RasterGlyphWriteInput<MtsdfData, MtsdfBinding>,
+  input: RasterGlyphWriteInput<MsdfData, MsdfBinding>,
 ): void {
   assertWriteRange(storage, range, input.glyphs.length);
-  if (input.binding !== input.data.binding) throw new TypeError('MTSDF write binding does not belong to its data');
+  if (input.binding !== input.data.binding) throw new TypeError('MSDF write binding does not belong to its data');
   const records = recordView(input.data);
   for (let index = 0; index < input.glyphs.length; index += 1) {
-    writeMtsdfGlyph(storage, range.start + index, input.data, records, input.glyphs[index]!);
+    writeMsdfGlyph(storage, range.start + index, input.data, records, input.glyphs[index]!);
   }
 }
 
-function writeMtsdfGlyph(
-  storage: MtsdfGlyphBatchStorage,
+function writeMsdfGlyph(
+  storage: MsdfGlyphBatchStorage,
   instance: number,
-  data: MtsdfData,
+  data: MsdfData,
   records: DataView,
-  glyph: RasterGlyphInput<MtsdfData>,
+  glyph: RasterGlyphInput<MsdfData>,
 ): void {
   assertGlyphId(data, glyph.glyphId);
   assertCoverage(data, glyph.glyphId);
   if (!Number.isFinite(glyph.fontSize) || glyph.fontSize <= 0) {
-    throw new TypeError('MTSDF glyph font sizes must be positive finite values');
+    throw new TypeError('MSDF glyph font sizes must be positive finite values');
   }
   if (!Number.isFinite(glyph.originX) || !Number.isFinite(glyph.originY)) {
-    throw new TypeError('MTSDF glyph origins must be finite values');
+    throw new TypeError('MSDF glyph origins must be finite values');
   }
   assertResolvedPaint(glyph.paint);
   const record = glyph.glyphId * RECORD_STRIDE;
@@ -283,7 +283,7 @@ function writeMtsdfGlyph(
   const atlasBottom = records.getUint16(record + 14, true);
   const pageIndex = records.getUint16(record + 16, true);
   if (pageIndex === ABSENT_PAGE || data.pages[pageIndex] === undefined) {
-    throw new TypeError('MTSDF storage write requires a selected renderable glyph');
+    throw new TypeError('MSDF storage write requires a selected renderable glyph');
   }
   const scale = glyph.fontSize / data.planeUnitsPerEm;
   const baseOriginX = glyph.originX + planeLeft * scale;
@@ -325,32 +325,32 @@ function writeMtsdfGlyph(
   storage.pageIndices[instance] = pageIndex;
 }
 
-function recordView(data: MtsdfData): DataView {
+function recordView(data: MsdfData): DataView {
   return new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
 }
 
-function assertGlyphId(data: MtsdfData, glyphId: number): void {
+function assertGlyphId(data: MsdfData, glyphId: number): void {
   if (!Number.isSafeInteger(glyphId) || glyphId < 0 || glyphId >= data.records.byteLength / RECORD_STRIDE) {
-    throw new TypeError('MTSDF glyph is outside the registered font');
+    throw new TypeError('MSDF glyph is outside the registered font');
   }
 }
 
-function assertCoverage(data: MtsdfData, glyphId: number): void {
+function assertCoverage(data: MsdfData, glyphId: number): void {
   if (data.coverage !== undefined && (data.coverage[glyphId >> 3]! & (1 << (glyphId & 7))) === 0) {
     throw new RasterCoverageError(MSDF_KIND, [glyphId]);
   }
 }
 
-function resolveOutlineDistance(data: MtsdfData, fontSize: number, outlineWidth: number): number {
+function resolveOutlineDistance(data: MsdfData, fontSize: number, outlineWidth: number): number {
   const atlasPixels = outlineWidth / (fontSize / data.planeUnitsPerEm);
   const maximum = data.pixelRange / 2;
   if (atlasPixels > maximum) {
-    throw new RangeError(`MTSDF outline width exceeds the ${maximum}-atlas-pixel field limit`);
+    throw new RangeError(`MSDF outline width exceeds the ${maximum}-atlas-pixel field limit`);
   }
   return atlasPixels / data.pixelRange;
 }
 
-function assertWriteRange(storage: MtsdfGlyphBatchStorage, range: GlyphRange, glyphCount: number): void {
+function assertWriteRange(storage: MsdfGlyphBatchStorage, range: GlyphRange, glyphCount: number): void {
   const capacity = storage.pageIndices.length;
   if (
     !Number.isSafeInteger(range.start) ||
@@ -360,13 +360,13 @@ function assertWriteRange(storage: MtsdfGlyphBatchStorage, range: GlyphRange, gl
     range.count !== glyphCount ||
     range.start > capacity - range.count
   ) {
-    throw new RangeError('MTSDF storage write range is outside its capacity');
+    throw new RangeError('MSDF storage write range is outside its capacity');
   }
 }
 
 function assertCapacity(capacity: number): void {
   if (!Number.isSafeInteger(capacity) || capacity < 0) {
-    throw new RangeError('MTSDF storage capacity must be a non-negative safe integer');
+    throw new RangeError('MSDF storage capacity must be a non-negative safe integer');
   }
 }
 
@@ -377,32 +377,32 @@ function configuredInteger(value: unknown, label: string, maximum: number): numb
   return value;
 }
 
-function validateMtsdfPageDirectory(value: JsonValue, pageIndex: number): void {
-  const page = jsonObject(value, `MTSDF page ${pageIndex}`);
-  const variants = jsonArray(page.variants, `MTSDF page ${pageIndex} variants`);
-  if (variants.length !== 1) throw new TypeError('MTSDF V0 pages must contain exactly one lossless RGBA8 variant');
-  const variant = jsonObject(variants[0], `MTSDF page ${pageIndex} variant`);
+function validateMsdfPageDirectory(value: JsonValue, pageIndex: number): void {
+  const page = jsonObject(value, `MSDF page ${pageIndex}`);
+  const variants = jsonArray(page.variants, `MSDF page ${pageIndex} variants`);
+  if (variants.length !== 1) throw new TypeError('MSDF V0 pages must contain exactly one lossless RGBA8 variant');
+  const variant = jsonObject(variants[0], `MSDF page ${pageIndex} variant`);
   if (variant.gpuFormat !== 'rgba8unorm') {
-    throw new TypeError('MTSDF V0 pages accept only the lossless rgba8unorm baseline');
+    throw new TypeError('MSDF V0 pages accept only the lossless rgba8unorm baseline');
   }
 }
 
-function assertMtsdfPaint(paint: GlyphPaint): void {
+function assertMsdfPaint(paint: GlyphPaint): void {
   for (const entry of paint.palette) assertResolvedPaint(entry);
 }
 
 function assertResolvedPaint(paint: ResolvedPaint): void {
-  assertLinearColor(paint.color, 'MTSDF fill');
+  assertLinearColor(paint.color, 'MSDF fill');
   if (paint.outline !== undefined) {
-    assertLinearColor(paint.outline.color, 'MTSDF outline');
+    assertLinearColor(paint.outline.color, 'MSDF outline');
     if (!Number.isFinite(paint.outline.width) || paint.outline.width < 0) {
-      throw new TypeError('MTSDF outline width must be a non-negative finite value');
+      throw new TypeError('MSDF outline width must be a non-negative finite value');
     }
   }
   if (paint.shadow !== undefined) {
-    assertLinearColor(paint.shadow.color, 'MTSDF shadow');
+    assertLinearColor(paint.shadow.color, 'MSDF shadow');
     if (paint.shadow.offset.some((value) => !Number.isFinite(value))) {
-      throw new TypeError('MTSDF shadow offsets must be finite values');
+      throw new TypeError('MSDF shadow offsets must be finite values');
     }
   }
 }

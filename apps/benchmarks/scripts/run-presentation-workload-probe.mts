@@ -315,7 +315,7 @@ async function assertCanvasHandoff(page: Page, label: string, expectedBackend: P
 function presentationTechnique(value: string | undefined): 'bitmap' | 'mtsdf' | 'slug' {
   if (value === undefined || value === 'mtsdf') return 'mtsdf';
   if (value === 'bitmap' || value === 'slug') return value;
-  throw new RangeError(`PRESENTATION_TECHNIQUE must be bitmap, mtsdf, or slug; received ${value}`);
+  throw new RangeError(`PRESENTATION_TECHNIQUE must be bitmap, msdf, or slug; received ${value}`);
 }
 
 function presentationBackend(value: string | undefined): PresentationBackend {

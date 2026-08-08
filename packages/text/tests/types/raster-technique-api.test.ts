@@ -34,8 +34,8 @@ interface TestStorage {
 const page = defineRasterResourceId('test/page/0');
 
 const technique = defineRasterTechnique({
-  id: 'test.mtsdf',
-  kind: 'test-mtsdf',
+  id: 'test.msdf',
+  kind: 'test-msdf',
   extension: 'TEST_font_mtsdf',
   version: 0,
   descriptor(options: { readonly quality: 'small' | 'large' }) {
@@ -57,7 +57,7 @@ const technique = defineRasterTechnique({
   dispose() {},
 });
 
-type _TechniqueId = Expect<Equal<typeof technique.id, RasterTechniqueId & 'test.mtsdf'>>;
+type _TechniqueId = Expect<Equal<typeof technique.id, RasterTechniqueId & 'test.msdf'>>;
 type _Options = Expect<Equal<RasterOptionsOf<typeof technique>, { readonly quality: 'small' | 'large' }>>;
 type _Descriptor = Expect<
   Equal<RasterTechniqueDescriptorOf<typeof technique>, { readonly quality: 'small' | 'large' }>

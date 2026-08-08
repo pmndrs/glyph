@@ -38,7 +38,7 @@ try {
   });
   page.on('pageerror', (error) => consoleProblems.push(`pageerror: ${error.message}`));
   await page.goto(
-    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=mtsdf&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=off-axis-3d`,
+    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=msdf&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=off-axis-3d`,
     { waitUntil: 'domcontentloaded' },
   );
 
