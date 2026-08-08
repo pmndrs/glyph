@@ -2,6 +2,14 @@
 
 ## 2026-08-08
 
+- **Proved worker-owned frame transfer and return** — Added a test-only, byte-opaque transfer state machine around raw
+  Wasm publication bytes. One copy enters a bounded capacity-classed worker buffer; transfer to root detaches it and
+  charges its actual capacity to explicit count/byte backpressure limits. Retirement transfers the same storage back,
+  where a valid token/capacity pair either re-enters the bounded best-fit pool or becomes unreachable for worker-side
+  collection. Four focused tests prove exact bytes, two-way detachment, reuse, missing-return backpressure, forged and
+  duplicate return rejection, failed-send recovery, oversize rejection, and over-limit worker-side discard. The module
+  does not decode the compiler-defined frame ABI and remains unwired from the shipping TypeScript layout path.
+
 - **Proved the retained A/B frame transaction in the optimized Wasm** — Added session lifecycle, cold reservation, one
   retained 16-byte-aligned request arena, two retained 16-byte-aligned result arenas, explicit engine/plan/publication
   revisions, base-revision checkpoints, and a compiler-derived 120-byte request plus 128-byte result header. The result
