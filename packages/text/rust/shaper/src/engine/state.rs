@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    cluster_state::ClusterArena,
+    cluster_state::{ClusterArena, ClusterBuildInput},
     flow_composition::FlowLayoutArena,
     flow_geometry::FlowGeometryArena,
     font_binding::FontRenderBinding,
@@ -81,6 +81,10 @@ struct EngineSession {
     plan: RenderPlanCompiler,
     text: Vec<u16>,
     pending_text: Vec<u16>,
+    text_unit_ids: Vec<u32>,
+    pending_text_unit_ids: Vec<u32>,
+    next_text_unit_id: u32,
+    pending_next_text_unit_id: u32,
     text_prepared: bool,
     styles: StyleArena,
     pending_styles: StyleArena,
@@ -337,6 +341,8 @@ impl TextEngine {
             .ok_or(EngineError::SessionMissing)?;
         reserve_text_buffer(&mut session.text, capacity)?;
         reserve_text_buffer(&mut session.pending_text, capacity)?;
+        reserve_vec(&mut session.text_unit_ids, capacity)?;
+        reserve_vec(&mut session.pending_text_unit_ids, capacity)?;
         session.unicode.reserve(capacity).map_err(unicode_error)?;
         session
             .pending_unicode
@@ -700,7 +706,17 @@ impl EngineSession {
         if self.pending_text.try_reserve(self.text.len()).is_err() {
             return Err(EngineError::ResultTooLarge);
         }
+        if self
+            .pending_text_unit_ids
+            .try_reserve(self.text_unit_ids.len())
+            .is_err()
+        {
+            return Err(EngineError::ResultTooLarge);
+        }
         self.pending_text.extend_from_slice(&self.text);
+        self.pending_text_unit_ids
+            .extend_from_slice(&self.text_unit_ids);
+        self.pending_next_text_unit_id = self.next_text_unit_id.max(1);
         for index in 0..mutations.len() {
             let Some(mutation) = mutations.get(index) else {
                 self.abort_text();
@@ -713,6 +729,18 @@ impl EngineSession {
                     TextMutationError::Allocation => EngineError::ResultTooLarge,
                 });
             }
+            if let Err(error) = apply_text_identity_mutation(
+                &mut self.pending_text_unit_ids,
+                &mut self.pending_next_text_unit_id,
+                mutation,
+            ) {
+                self.abort_text();
+                return Err(error);
+            }
+        }
+        if self.pending_text.len() != self.pending_text_unit_ids.len() {
+            self.abort_text();
+            return Err(EngineError::InvalidRequest);
         }
         self.text_prepared = true;
         Ok(())
@@ -720,6 +748,8 @@ impl EngineSession {
 
     fn abort_text(&mut self) {
         self.pending_text.clear();
+        self.pending_text_unit_ids.clear();
+        self.pending_next_text_unit_id = 0;
         self.text_prepared = false;
     }
 
@@ -796,6 +826,8 @@ impl EngineSession {
     fn commit_text(&mut self) {
         if self.text_prepared {
             core::mem::swap(&mut self.text, &mut self.pending_text);
+            core::mem::swap(&mut self.text_unit_ids, &mut self.pending_text_unit_ids);
+            self.next_text_unit_id = self.pending_next_text_unit_id;
         }
         self.abort_text();
     }
@@ -1092,6 +1124,11 @@ impl EngineSession {
         } else {
             self.text.as_slice()
         };
+        let text_unit_ids = if self.text_prepared {
+            self.pending_text_unit_ids.as_slice()
+        } else {
+            self.text_unit_ids.as_slice()
+        };
         let unicode = if self.unicode_prepared {
             &self.pending_unicode
         } else {
@@ -1113,11 +1150,14 @@ impl EngineSession {
             return Ok(());
         }
         self.pending_clusters.build(
-            text,
-            unicode,
-            styles,
-            runs,
-            &self.pending_shape,
+            ClusterBuildInput {
+                text,
+                text_unit_ids,
+                unicode,
+                styles,
+                runs,
+                shape: &self.pending_shape,
+            },
             |handle| shaper.font_metrics(handle),
         )?;
         self.clusters_prepared = true;
@@ -1260,6 +1300,48 @@ fn apply_text_mutation(
         .zip(mutation.insert_utf16_le.chunks_exact(2))
     {
         *unit = u16::from_le_bytes([bytes[0], bytes[1]]);
+    }
+    Ok(())
+}
+
+fn apply_text_identity_mutation(
+    identities: &mut Vec<u32>,
+    next_identity: &mut u32,
+    mutation: super::semantic_wire::TextMutation<'_>,
+) -> Result<(), EngineError> {
+    let start = usize::try_from(mutation.text_start).map_err(|_| EngineError::InvalidRequest)?;
+    let delete_count =
+        usize::try_from(mutation.delete_count).map_err(|_| EngineError::InvalidRequest)?;
+    let delete_end = start
+        .checked_add(delete_count)
+        .ok_or(EngineError::InvalidRequest)?;
+    let insert_count = mutation.insert_utf16_le.len() / 2;
+    let old_len = identities.len();
+    let new_len = old_len
+        .checked_sub(delete_count)
+        .and_then(|length| length.checked_add(insert_count))
+        .ok_or(EngineError::InvalidRequest)?;
+    if delete_end > old_len {
+        return Err(EngineError::InvalidRequest);
+    }
+    if new_len > old_len {
+        identities
+            .try_reserve(new_len - old_len)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        identities.resize(new_len, 0);
+    }
+    identities.copy_within(delete_end..old_len, start + insert_count);
+    if new_len < old_len {
+        identities.truncate(new_len);
+    }
+    for identity in &mut identities[start..start + insert_count] {
+        if *next_identity == 0 {
+            return Err(EngineError::RevisionExhausted);
+        }
+        *identity = *next_identity;
+        *next_identity = next_identity
+            .checked_add(1)
+            .ok_or(EngineError::RevisionExhausted)?;
     }
     Ok(())
 }
@@ -1692,6 +1774,7 @@ mod tests {
         assert!(engine.session_text(4).unwrap().is_empty());
         engine.commit_update(prepared).unwrap();
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        assert_eq!(engine.sessions.get(&4).unwrap().text_unit_ids, [1, 2, 3, 4]);
         assert_eq!(
             engine
                 .sessions
@@ -1702,7 +1785,7 @@ mod tests {
             &[0, 1, 2, 3, 4]
         );
 
-        let edit_bytes = text_mutation_bytes(&[(1, 2, &[0x58, 0x59]), (4, 0, &[0x21])]);
+        let edit_bytes = text_mutation_bytes(&[(1, 1, &[0x58, 0x59]), (5, 0, &[0x21])]);
         let edit_batch =
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
         let mut edit = update(1, 1, 1);
@@ -1710,12 +1793,19 @@ mod tests {
         let prepared = engine.prepare_update(edit, 2).unwrap();
         engine.abort_update(prepared).unwrap();
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        let session = engine.sessions.get(&4).unwrap();
+        assert_eq!(session.text_unit_ids, [1, 2, 3, 4]);
+        assert_eq!(session.next_text_unit_id, 5);
 
         let retry = engine.prepare_update(edit, 2).unwrap();
         engine.commit_update(retry).unwrap();
         assert_eq!(
             engine.session_text(4).unwrap(),
-            &[0x61, 0x58, 0x59, 0x64, 0x21]
+            &[0x61, 0x58, 0x59, 0x63, 0x64, 0x21]
+        );
+        assert_eq!(
+            engine.sessions.get(&4).unwrap().text_unit_ids,
+            [1, 5, 6, 3, 4, 7]
         );
 
         let settled_capacities = {
@@ -1730,6 +1820,7 @@ mod tests {
         let prepared = engine.prepare_update(warm, 3).unwrap();
         engine.commit_update(prepared).unwrap();
         let session = engine.sessions.get(&4).unwrap();
+        assert_eq!(session.text_unit_ids, [8, 5, 6, 3, 4, 7]);
         assert_eq!(
             [session.pending_text.capacity(), session.text.capacity()],
             settled_capacities

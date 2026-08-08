@@ -941,6 +941,15 @@ retry 10 px text to a 20 px mixed-style line with 16 px baseline, and continue f
 Wasm is 1,039,404 / 392,671 / 303,705 raw/gzip/Brotli bytes (+22,684 / +8,078 / +6,656). Vertical flow, positioning,
 boundary reshaping, semantic/glyph gather, nonempty plan output, and complete-path timing remain open.
 
+Stable render identity now begins at retained text rather than mutable offsets. Parallel A/B UTF-16 unit-ID arrays apply
+the exact ordered replacement operations as text, allocate nonzero monotonic IDs only for inserted units, and commit or
+abort their allocator transactionally. Grapheme clusters inherit the first unit ID, so unchanged clusters retain
+identity when earlier edits shift every following UTF-16 offset; edits within a cluster retain identity while later
+content revision can change. An exact abort/retry fixture keeps `[1,2,3,4]`, then an offset-growing edit produces
+`[1,5,6,3,4,7]`, proving shifted suffix preservation and deterministic retry. Optimized Wasm is 1,041,582 / 393,214 /
+304,815 raw/gzip/Brotli bytes (+2,178 / +543 / +1,110). Per-cluster glyph ranges, glyph identity/revision, positioning,
+and nonempty plans remain open.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a

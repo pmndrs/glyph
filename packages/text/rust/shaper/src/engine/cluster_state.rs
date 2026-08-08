@@ -25,9 +25,19 @@ pub(crate) struct ClusterArena {
     pub style_indexes: Vec<u32>,
     pub source_runs: Vec<u32>,
     pub font_handles: Vec<u32>,
+    pub stable_ids: Vec<u32>,
     pub index_at: Vec<u32>,
     pub(super) shaped: Vec<u8>,
     pub(super) unsafe_before: Vec<u8>,
+}
+
+pub(crate) struct ClusterBuildInput<'a> {
+    pub text: &'a [u16],
+    pub text_unit_ids: &'a [u32],
+    pub unicode: &'a UnicodeAnalysis,
+    pub styles: &'a [StyleSegment],
+    pub runs: &'a [ShapingRun],
+    pub shape: &'a ShapeArena,
 }
 
 impl ClusterArena {
@@ -39,6 +49,7 @@ impl ClusterArena {
         reserve(&mut self.style_indexes, capacity)?;
         reserve(&mut self.source_runs, capacity)?;
         reserve(&mut self.font_handles, capacity)?;
+        reserve(&mut self.stable_ids, capacity)?;
         reserve(&mut self.index_at, capacity.saturating_add(1))?;
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)
@@ -46,14 +57,21 @@ impl ClusterArena {
 
     pub(crate) fn build(
         &mut self,
-        text: &[u16],
-        unicode: &UnicodeAnalysis,
-        styles: &[StyleSegment],
-        runs: &[ShapingRun],
-        shape: &ShapeArena,
+        input: ClusterBuildInput<'_>,
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
     ) -> Result<(), EngineError> {
+        let ClusterBuildInput {
+            text,
+            text_unit_ids,
+            unicode,
+            styles,
+            runs,
+            shape,
+        } = input;
         self.clear();
+        if text.len() != text_unit_ids.len() || text_unit_ids.contains(&0) {
+            return Err(EngineError::InvalidRequest);
+        }
         let boundaries = unicode.grapheme_boundaries();
         let count = boundaries.len().saturating_sub(1);
         self.reserve(text.len().max(count))?;
@@ -90,6 +108,11 @@ impl ClusterArena {
                 .push(u32::try_from(style_index).map_err(|_| EngineError::ResultTooLarge)?);
             self.source_runs.push(NO_SOURCE_RUN);
             self.font_handles.push(0);
+            self.stable_ids.push(
+                *text_unit_ids
+                    .get(usize::try_from(start).map_err(|_| EngineError::InvalidRequest)?)
+                    .ok_or(EngineError::InvalidRequest)?,
+            );
             self.shaped.push(0);
             self.unsafe_before.push(0);
         }
@@ -107,6 +130,7 @@ impl ClusterArena {
         self.style_indexes.clear();
         self.source_runs.clear();
         self.font_handles.clear();
+        self.stable_ids.clear();
         self.index_at.clear();
         self.shaped.clear();
         self.unsafe_before.clear();
@@ -306,7 +330,17 @@ mod tests {
         };
         let mut clusters = ClusterArena::default();
         clusters
-            .build(&text, &unicode, &styles, &runs, &shape, metrics)
+            .build(
+                ClusterBuildInput {
+                    text: &text,
+                    text_unit_ids: &[1, 2, 3, 4],
+                    unicode: &unicode,
+                    styles: &styles,
+                    runs: &runs,
+                    shape: &shape,
+                },
+                metrics,
+            )
             .unwrap();
         assert_eq!(clusters.starts, [0, 1, 2, 3]);
         assert_eq!(clusters.ends, [1, 2, 3, 4]);
@@ -314,6 +348,7 @@ mod tests {
         assert_eq!(clusters.style_indexes, [0; 4]);
         assert_eq!(clusters.source_runs, [0, 0, 0, NO_SOURCE_RUN]);
         assert_eq!(clusters.font_handles, [9, 9, 9, 0]);
+        assert_eq!(clusters.stable_ids, [1, 2, 3, 4]);
         assert_eq!(clusters.index_at, [0, 1, 2, 3, 4]);
         assert_eq!(clusters.flags[0], CLUSTER_SAFE_BEFORE);
         assert_eq!(
@@ -334,7 +369,17 @@ mod tests {
         );
         shape.glyph_flags[2] = GLYPH_UNSAFE_TO_BREAK;
         clusters
-            .build(&text, &unicode, &styles, &runs, &shape, metrics)
+            .build(
+                ClusterBuildInput {
+                    text: &text,
+                    text_unit_ids: &[1, 2, 3, 4],
+                    unicode: &unicode,
+                    styles: &styles,
+                    runs: &runs,
+                    shape: &shape,
+                },
+                metrics,
+            )
             .unwrap();
         assert_eq!(
             capacities,
