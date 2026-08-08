@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:0a4159ba082bac6e36ede27796435413d5baac4e15930500b51df468f575fbf3'
+source_digest: 'sha256:4eeac6683ea12cc696436df84aa88ebb803aff998185177230d47e838bfae5e3'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -509,8 +509,9 @@ accepts an explicit text capacity for known large paragraphs. This removes the o
 without giving every text object the 25K-glyph benchmark footprint. Production analysis/shaping/layout scratch will be
 one synchronous engine-global 32,768-record workspace, reserved once when those arrays land and shared by every session.
 The compiler-published `initialize()` export is invoked by the standard host immediately after Wasm instantiation, so
-module-owned state no longer allocates behind the first operational export. This checkpoint does not yet reserve the
-unimplemented shaping lanes and therefore makes no first-shape allocation or latency claim.
+module-owned state and the first concrete plan-glyph arena no longer allocate behind the first operational export.
+Policy-specific gather lanes settle during cold registration. HarfRust/Unicode/layout lanes remain unimplemented, so
+this still makes no first-shape allocation or latency claim.
 
 Ordered font stacks now have cold Rust lifecycle operations independent from frame updates. A stack is nonempty,
 duplicate-free, idempotent only for the same ordered handles, and retains its already registered shaping fonts until
@@ -536,6 +537,17 @@ real baked Inter glyph count to prove owned/idempotent registration, conflict, s
 optimized module is 838,060 raw / 312,606 gzip / 246,732 Brotli bytes, +8,154 / +2,960 / +1,942 from the preceding
 policy-source checkpoint. Policy-directed gather and frame use remain open, so this is a size/ownership result rather
 than a layout-latency claim.
+
+The policy gather now resolves each glyph's program-specific recipe across semantic, font-wide glyph, selected-strike,
+and selected-resource fields into shared field slots, then lends those lanes directly to the existing plan compiler.
+F32/U32 lanes use 16-byte-aligned four-record blocks with scalar tails; programs with fewer fields receive zeroes only
+in unused shared slots, avoiding a built-in-technique union. `initialize()` reserves the policy-independent 32,768 ×
+60-byte `PlanGlyph` arena: compiled Wasm memory moves from 1,245,184 to 3,342,336 bytes once and a repeated initializer
+does not grow. Registering the one-F32-field integration policy then settles its exact lane from 3,342,336 to 3,538,944
+bytes; identical registration does not grow. Rust gathers all four source scopes through a nonempty ordered plan and
+pins exact payload bytes without changing capacity. The production frame invokes the same gather but still supplies no
+layout glyphs. The optimized artifact is 845,580 raw / 315,285 gzip / 249,221 Brotli bytes, +7,520 / +2,679 / +2,489
+from the binding checkpoint. Nonempty frame latency remains unclaimed.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

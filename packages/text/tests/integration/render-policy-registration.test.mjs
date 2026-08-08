@@ -12,12 +12,19 @@ test('registers compiler-mapped render policies as retained typed Wasm state', a
   const module = await WebAssembly.compile(wasm);
   const instance = await WebAssembly.instantiate(module, {});
   const memory = instance.exports[abi.memory];
+  const initialize = instance.exports[abi.functions.initialize];
   const allocate = instance.exports[abi.functions.allocate];
   const deallocate = instance.exports[abi.functions.deallocate];
   const register = instance.exports[abi.functions.registerPolicy];
   const dispose = instance.exports[abi.functions.disposePolicy];
   const count = instance.exports[abi.functions.policyCount];
   assert.ok(memory instanceof WebAssembly.Memory);
+  const initialMemoryBytes = memory.buffer.byteLength;
+  assert.equal(initialize(), abi.status.ok);
+  const initializedMemoryBytes = memory.buffer.byteLength;
+  assert.ok(initializedMemoryBytes > initialMemoryBytes, 'initialization must prewarm the shared record workspace');
+  assert.equal(initialize(), abi.status.ok);
+  assert.equal(memory.buffer.byteLength, initializedMemoryBytes, 'repeated initialization must not grow memory');
   assert.equal(typeof allocate, 'function');
   assert.equal(typeof deallocate, 'function');
   assert.equal(typeof register, 'function');
@@ -32,10 +39,14 @@ test('registers compiler-mapped render policies as retained typed Wasm state', a
   const pointer = allocate(bytes.byteLength);
   assert.notEqual(pointer, 0);
   new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+  const beforePolicyMemoryBytes = memory.buffer.byteLength;
 
   assert.equal(count(), 0);
   assert.equal(register(7, pointer, bytes.byteLength), abi.status.ok);
+  const registeredPolicyMemoryBytes = memory.buffer.byteLength;
+  assert.ok(registeredPolicyMemoryBytes > beforePolicyMemoryBytes, 'policy registration must prewarm its exact lanes');
   assert.equal(register(7, pointer, bytes.byteLength), abi.status.ok, 'identical registration is idempotent');
+  assert.equal(memory.buffer.byteLength, registeredPolicyMemoryBytes, 'idempotent registration must not grow memory');
   assert.equal(count(), 1);
 
   const request = abi.layouts.policyRequest;
