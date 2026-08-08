@@ -1,6 +1,8 @@
 use alloc::{string::String, vec::Vec};
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::line_break::{LineBreak, LineBreakAnalysis};
+
 mod generated {
     include!("generated/script_data.rs");
 }
@@ -27,6 +29,7 @@ pub struct ScriptItem {
 #[derive(Default)]
 pub struct UnicodeAnalysis {
     utf8: String,
+    line_breaks: LineBreakAnalysis,
     grapheme_boundaries: Vec<u32>,
     grapheme_scripts: Vec<u32>,
     candidate_offsets: Vec<u32>,
@@ -48,6 +51,7 @@ impl UnicodeAnalysis {
         )?;
         reserve(&mut self.candidate_tags, utf16_capacity)?;
         reserve(&mut self.script_items, utf16_capacity)?;
+        self.line_breaks.reserve(utf16_capacity)?;
         self.utf8
             .try_reserve(utf16_capacity.saturating_mul(3))
             .map_err(|_| UnicodeError::ResultTooLarge)
@@ -57,6 +61,7 @@ impl UnicodeAnalysis {
         self.clear();
         self.reserve(text.len())?;
         encode_utf16(text, &mut self.utf8)?;
+        self.line_breaks.analyze(text)?;
         self.segment_graphemes()?;
         self.resolve_grapheme_scripts(text)?;
         self.resolve_neutral_scripts();
@@ -70,6 +75,10 @@ impl UnicodeAnalysis {
 
     pub fn script_items(&self) -> &[ScriptItem] {
         &self.script_items
+    }
+
+    pub fn line_breaks(&self) -> &[LineBreak] {
+        self.line_breaks.breaks()
     }
 
     fn clear(&mut self) {

@@ -43,10 +43,12 @@ export async function runUnicode(arguments_: readonly string[]): Promise<void> {
     case 'generate-data':
       await runNode('scripts/generate-unicode-script-data.mjs', rest);
       await runNode('scripts/generate-unicode-bidi-data.mjs', rest);
+      await runNode('scripts/generate-unicode-line-break-data.mjs', rest);
       return;
     case 'check-data':
       await runNode('scripts/generate-unicode-script-data.mjs', ['--check', ...rest]);
       await runNode('scripts/generate-unicode-bidi-data.mjs', ['--check', ...rest]);
+      await runNode('scripts/generate-unicode-line-break-data.mjs', ['--check', ...rest]);
       return;
     case 'sync-tests':
       await runNode('scripts/sync-unicode-test-data.mjs', rest);
