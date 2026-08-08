@@ -370,12 +370,14 @@ excess buffers become unreachable and are collected on the worker. Failure to re
 not permission to grow an unbounded pool. GPU staging belts and submission fences remain backend responsibilities.
 [^staging][^worker-transfer]
 
-Cold capacity separates per-session retained state from shared synchronous work. Session creation prewarms both UTF-16
-transaction buffers to 1,024 units unless the caller supplies a larger text capacity; cold reserve can grow both before
-the request view is pinned. The analysis/shaping/layout arrays are one engine-global workspace reused by synchronous
-updates, not one 25K-glyph allocation per paragraph. Those production arrays prewarm once to 32,768 clusters/glyphs when
-they land, covering the 25,515-glyph target fixture, and expose explicit cold growth beyond that envelope. A warm update
-inside declared capacities may not lazily settle another allocation.
+Cold capacity separates retained per-session state from shared synchronous scratch. Session creation prewarms both
+UTF-16 transaction buffers and the active/pending Unicode, bidi, shaping-run, shaped-glyph, and fallback arrays to 1,024
+UTF-16 units unless the caller supplies a larger text capacity; shaped-glyph capacity begins at twice that value. Cold
+reserve can grow them before the request view is pinned, and committed high-water capacity is reused. Retained A/B state
+cannot be one engine-global workspace because more than one live session must preserve its committed result. HarfRust's
+consumed-and-returned shaping buffer and policy gather are module-global scratch reused by synchronous updates; those
+scratch arrays prewarm once to 32,768 entries, covering the 25,515-glyph target fixture. A warm update inside declared
+capacities may not lazily settle another allocation.
 
 Module initialization is explicit rather than an incidental side effect of the first operational export. The generated
 ABI publishes `initialize()`, and the standard host calls it immediately after `WebAssembly.instantiate`; this eagerly
@@ -387,8 +389,9 @@ after every successful segment and every fallible setup path instead of construc
 Initialization grows the optimized module from 1,245,184 to 4,980,736 linear-memory bytes (57 pages), of which 25 pages
 are the HarfRust/context addition, and repeated initialization preserves byte length and `memory.buffer` identity.
 Policy-specific aligned field lanes settle at cold policy registration. The legacy exported batch-result vectors still
-settle independently and are not evidence for the new frame path; Unicode bidi, clusters, lines, and geometry arrays
-remain unimplemented and therefore are not yet included in the zero-allocation frame claim.
+settle independently and are not evidence for the new frame path. Retained Unicode, bidi, shaping-run, shaped-glyph, and
+fallback arrays now settle at session creation/reservation; line composition and geometry-output arrays have not landed
+and are not included in the zero-allocation frame claim.
 
 ## Rust layout pipeline
 
@@ -604,14 +607,17 @@ fallback mechanism. It removes the old raster-homogeneity restriction: every mem
 but each loaded font carries its own technique and resource binding. Fallback remains a shaping decision about glyph
 availability, not a renderer eligibility decision.
 
-The Rust engine now cold-registers stack identity as a nonempty, duplicate-free ordered list of already registered
+The Rust engine cold-registers stack identity as a nonempty, duplicate-free ordered list of already registered
 shaping-font handles. Equivalent registration is idempotent; conflicting order fails, and a member font cannot be
-disposed while any registered stack retains it. Technique/resource data is deliberately not duplicated in the stack:
-the next cold binding layer attaches those tables once to the loaded font. A real-font compiled-Wasm test proves the
-registration and disposal lifecycle; fallback shaping itself has not yet moved into the update transaction. Because
-stack lifecycle is cold and cardinality is normally small, the selected registry uses a compact vector. A generic tree
-map measured 837,865 raw / 312,057 gzip / 246,478 Brotli bytes; removing that monomorphization reduced the artifact to
-828,401 / 309,252 / 244,402 without changing the ABI or lookup result.
+disposed while any registered stack retains it. Technique/resource data is deliberately not duplicated in the stack.
+During `text_update`, HarfRust output is collapsed to logical cluster records; only clusters containing an actual glyph
+zero advance to the next registered font. Flat source-ordered spans are reshaped at most once per stack depth and then
+retained with the final shaped SoA. Sorting by source-run/cluster restores logical order for RTL output before one linear
+span merge. A compiled Inter-to-Noto-Devanagari test observes two plan constructions in the same update, proving the
+primary `.notdef` pass and fallback pass both ran. Stack lifecycle is cold and cardinality is normally small, so the
+selected registry uses a compact vector. A generic tree map measured 837,865 raw / 312,057 gzip / 246,478 Brotli bytes;
+removing that monomorphization reduced the artifact to 828,401 / 309,252 / 244,402 without changing the ABI or lookup
+result.
 
 RGBA8 costs four GPU bytes per texel versus one for the grayscale R8 bitmap path; selected coverage and independently
 resident pages are therefore mandatory, and the payload report keeps color pages separate.[^renderer-capabilities]
@@ -873,6 +879,15 @@ and source-run/font records append directly into a pre-reserved A/B shape arena 
 after an aborted update. Optimized Wasm is 973,367 / 364,517 / 287,942 raw/gzip/Brotli bytes (+5,281 / +1,853 /
 +1,504). Ordered fallback is not yet applied, and layout/gather still receive no glyphs, so nonempty plan output and
 complete-path timing remain open.
+
+Ordered fallback now consumes the actual shaped result rather than consulting `cmap` or raster coverage. Reusable flat
+span and logical-cluster arrays preserve the source run, UTF-16 range, selected stack index, and concrete font. Each pass
+shapes current spans, marks a cluster missing when any constituent glyph is zero, restores logical order across RTL
+output, and advances only that range to the next font. The pass count is bounded by stack depth; the final spans and
+glyph SoA commit together, while any later frame failure discards both pending values. A compiled Inter-to-Noto
+Devanagari update constructs exactly two HarfRust plans. Optimized Wasm is 982,356 / 368,183 / 290,439 raw/gzip/Brotli
+bytes (+8,989 / +3,666 / +2,497). Layout/gather still receive no glyphs, so nonempty plan output and complete-path timing
+remain open.
 
 ## Performance contract
 
