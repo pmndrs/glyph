@@ -2,6 +2,18 @@
 
 ## 2026-08-08
 
+- **Retained ordered UTF-16 edits transactionally inside Rust sessions** — The frame decoder now borrows and validates
+  replacement records/payloads without allocating mutation objects. Sessions apply sequential edits to retained scratch
+  and swap only on commit; abort or an invalid later replacement preserves committed text. Compiled Wasm proves cold
+  reserve/re-pin, retained follow-up edit, invalid rollback, A/B preservation, and no same-capacity memory growth. Styles,
+  shaping, layout, and nonempty plans remain open, so this adds no end-to-end timing claim. The reachable slice adds
+  2,829 / 1,528 / 616 raw/gzip/Brotli bytes.
+
+- **Prewarmed retained text capacity without multiplying shaping scratch per session** — Session creation now reserves
+  both UTF-16 transaction buffers to 1,024 units by default, while cold create/reserve accepts an explicit text capacity.
+  The production 32,768-record analysis/shaping/layout workspace is fixed as one engine-global synchronous allocation
+  when those arrays land, covering the 25,515-glyph target without assigning that footprint to every paragraph.
+
 - **Fixed the semantic update record grammar in the compiler-derived ABI** — Added exact UTF-16 text replacement,
   stable style, constraint, flow-vertex, region, exclusion, and inline-object layouts. Rectangle and bounded-polygon
   geometry resolve inside the same request; style records carry shaping, spacing, material/color, and decoration data.

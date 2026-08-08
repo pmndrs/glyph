@@ -1,4 +1,4 @@
-use alloc::collections::BTreeMap;
+use alloc::{collections::BTreeMap, vec::Vec};
 
 use super::{
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
@@ -33,6 +33,9 @@ struct EngineSession {
     acknowledged_publication_generation: u32,
     policy_binding: Option<PolicyBinding>,
     plan: RenderPlanCompiler,
+    text: Vec<u16>,
+    pending_text: Vec<u16>,
+    text_prepared: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,10 +97,29 @@ impl TextEngine {
             .ok_or(EngineError::SessionMissing)
     }
 
+    pub fn reserve_session_text(&mut self, handle: u32, capacity: u32) -> Result<(), EngineError> {
+        let capacity = usize::try_from(capacity).map_err(|_| EngineError::ResultTooLarge)?;
+        let session = self
+            .sessions
+            .get_mut(&handle)
+            .ok_or(EngineError::SessionMissing)?;
+        reserve_text_buffer(&mut session.text, capacity)?;
+        reserve_text_buffer(&mut session.pending_text, capacity)?;
+        Ok(())
+    }
+
     pub(crate) fn session_revision(&self, handle: u32) -> Result<SessionRevision, EngineError> {
         self.sessions
             .get(&handle)
             .map(|session| session.revision)
+            .ok_or(EngineError::SessionMissing)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn session_text(&self, handle: u32) -> Result<&[u16], EngineError> {
+        self.sessions
+            .get(&handle)
+            .map(|session| session.text.as_slice())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -107,7 +129,7 @@ impl TextEngine {
 
     pub(crate) fn prepare_update(
         &mut self,
-        request: UpdateRequest,
+        request: UpdateRequest<'_>,
         publication_generation: u32,
     ) -> Result<PreparedUpdate, EngineError> {
         if !request.limits.all_nonzero() {
@@ -159,21 +181,22 @@ impl TextEngine {
         // A completed renderer fence is external monotonic state. It remains accepted even if
         // plan preparation or publication later aborts.
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
-        session
-            .plan
-            .prepare(
-                policy,
-                CapabilitySetId(request.capability_set),
-                PlanInput {
-                    glyphs: &[],
-                    f32_fields: &[],
-                    u32_fields: &[],
-                },
-                checkpoint,
-                publication_generation,
-                request.acknowledged_publication_generation,
-            )
-            .map_err(plan_error)?;
+        session.prepare_text(request.text_mutations)?;
+        if let Err(error) = session.plan.prepare(
+            policy,
+            CapabilitySetId(request.capability_set),
+            PlanInput {
+                glyphs: &[],
+                f32_fields: &[],
+                u32_fields: &[],
+            },
+            checkpoint,
+            publication_generation,
+            request.acknowledged_publication_generation,
+        ) {
+            session.abort_text();
+            return Err(plan_error(error));
+        }
         Ok(PreparedUpdate {
             session_id: request.session_id,
             previous: session.revision,
@@ -216,6 +239,7 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         session.plan.abort();
+        session.abort_text();
         Ok(())
     }
 
@@ -231,6 +255,7 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         session.plan.commit().map_err(plan_error)?;
+        session.commit_text();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
@@ -245,6 +270,103 @@ impl TextEngine {
     }
 }
 
+impl EngineSession {
+    fn prepare_text(
+        &mut self,
+        mutations: super::semantic_wire::TextMutationBatch<'_>,
+    ) -> Result<(), EngineError> {
+        self.abort_text();
+        if mutations.len() == 0 {
+            return Ok(());
+        }
+        if self.pending_text.try_reserve(self.text.len()).is_err() {
+            return Err(EngineError::ResultTooLarge);
+        }
+        self.pending_text.extend_from_slice(&self.text);
+        for index in 0..mutations.len() {
+            let Some(mutation) = mutations.get(index) else {
+                self.abort_text();
+                return Err(EngineError::InvalidRequest);
+            };
+            if let Err(error) = apply_text_mutation(&mut self.pending_text, mutation) {
+                self.abort_text();
+                return Err(match error {
+                    TextMutationError::Invalid => EngineError::InvalidRequest,
+                    TextMutationError::Allocation => EngineError::ResultTooLarge,
+                });
+            }
+        }
+        self.text_prepared = true;
+        Ok(())
+    }
+
+    fn abort_text(&mut self) {
+        self.pending_text.clear();
+        self.text_prepared = false;
+    }
+
+    fn commit_text(&mut self) {
+        if self.text_prepared {
+            core::mem::swap(&mut self.text, &mut self.pending_text);
+        }
+        self.abort_text();
+    }
+}
+
+fn apply_text_mutation(
+    text: &mut Vec<u16>,
+    mutation: super::semantic_wire::TextMutation<'_>,
+) -> Result<(), TextMutationError> {
+    let start = usize::try_from(mutation.text_start).map_err(|_| TextMutationError::Invalid)?;
+    let delete_count =
+        usize::try_from(mutation.delete_count).map_err(|_| TextMutationError::Invalid)?;
+    let delete_end = start
+        .checked_add(delete_count)
+        .ok_or(TextMutationError::Invalid)?;
+    if delete_end > text.len() || !mutation.insert_utf16_le.len().is_multiple_of(2) {
+        return Err(TextMutationError::Invalid);
+    }
+    let insert_count = mutation.insert_utf16_le.len() / 2;
+    let old_len = text.len();
+    let new_len = old_len
+        .checked_sub(delete_count)
+        .and_then(|length| length.checked_add(insert_count))
+        .ok_or(TextMutationError::Invalid)?;
+    if u32::try_from(new_len).is_err() {
+        return Err(TextMutationError::Invalid);
+    }
+    if new_len > old_len {
+        text.try_reserve(new_len - old_len)
+            .map_err(|_| TextMutationError::Allocation)?;
+        text.resize(new_len, 0);
+    }
+    text.copy_within(delete_end..old_len, start + insert_count);
+    if new_len < old_len {
+        text.truncate(new_len);
+    }
+    for (unit, bytes) in text[start..start + insert_count]
+        .iter_mut()
+        .zip(mutation.insert_utf16_le.chunks_exact(2))
+    {
+        *unit = u16::from_le_bytes([bytes[0], bytes[1]]);
+    }
+    Ok(())
+}
+
+fn reserve_text_buffer(text: &mut Vec<u16>, capacity: usize) -> Result<(), EngineError> {
+    if text.capacity() < capacity {
+        text.try_reserve_exact(capacity.saturating_sub(text.len()))
+            .map_err(|_| EngineError::ResultTooLarge)?;
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TextMutationError {
+    Invalid,
+    Allocation,
+}
+
 fn plan_error(error: RenderPlanCompilerError) -> EngineError {
     if error.is_result_too_large() {
         EngineError::ResultTooLarge
@@ -256,11 +378,24 @@ fn plan_error(error: RenderPlanCompilerError) -> EngineError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::policy::{
-        ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE,
-        BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CAP_ORDERED_DIRECT,
-        CapabilitySet, Operation, PolicyDescriptor, ProgramCapabilities, ProgramDescriptor,
-        ProgramId, ScalarType, TechniqueId,
+    use crate::{
+        abi_contract::{
+            ENGINE_TEXT_MUTATION_DELETE_COUNT, ENGINE_TEXT_MUTATION_ENCODING,
+            ENGINE_TEXT_MUTATION_INSERT_COUNT, ENGINE_TEXT_MUTATION_INSERT_OFFSET,
+            ENGINE_TEXT_MUTATION_OPCODE, ENGINE_TEXT_MUTATION_RECORD_SIZE,
+            ENGINE_TEXT_MUTATION_TEXT_START, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+        },
+        engine::{
+            frame::{TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16},
+            policy::{
+                ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE,
+                BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId,
+                BufferSchema, CAP_ORDERED_DIRECT, CapabilitySet, Operation, PolicyDescriptor,
+                ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
+            },
+            semantic_wire::parse_text_mutations,
+        },
+        wire::write_u32,
     };
     use alloc::vec;
 
@@ -407,6 +542,77 @@ mod tests {
     }
 
     #[test]
+    fn ordered_utf16_replacements_commit_and_abort_with_the_session_transaction() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        engine.reserve_session_text(4, 8).unwrap();
+
+        let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63, 0x64])]);
+        let initial_batch =
+            parse_text_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let mut initial = update(0, 0, 0);
+        initial.text_mutations = initial_batch;
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        assert!(engine.session_text(4).unwrap().is_empty());
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+
+        let edit_bytes = text_mutation_bytes(&[(1, 2, &[0x58, 0x59]), (4, 0, &[0x21])]);
+        let edit_batch =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let mut edit = update(1, 1, 1);
+        edit.text_mutations = edit_batch;
+        let prepared = engine.prepare_update(edit, 2).unwrap();
+        engine.abort_update(prepared).unwrap();
+        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+
+        let retry = engine.prepare_update(edit, 2).unwrap();
+        engine.commit_update(retry).unwrap();
+        assert_eq!(
+            engine.session_text(4).unwrap(),
+            &[0x61, 0x58, 0x59, 0x64, 0x21]
+        );
+
+        let settled_capacities = {
+            let session = engine.sessions.get(&4).unwrap();
+            [session.text.capacity(), session.pending_text.capacity()]
+        };
+        let warm_bytes = text_mutation_bytes(&[(0, 1, &[0x7a])]);
+        let warm_batch =
+            parse_text_mutations(&warm_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let mut warm = update(2, 2, 2);
+        warm.text_mutations = warm_batch;
+        let prepared = engine.prepare_update(warm, 3).unwrap();
+        engine.commit_update(prepared).unwrap();
+        let session = engine.sessions.get(&4).unwrap();
+        assert_eq!(
+            [session.pending_text.capacity(), session.text.capacity()],
+            settled_capacities
+        );
+    }
+
+    #[test]
+    fn an_invalid_later_replacement_cannot_partially_mutate_committed_text() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        let bytes = text_mutation_bytes(&[(0, 0, &[0x61]), (9, 0, &[0x62])]);
+        let batch = parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let mut request = update(0, 0, 0);
+        request.text_mutations = batch;
+        assert_eq!(
+            engine.prepare_update(request, 1),
+            Err(EngineError::InvalidRequest)
+        );
+        assert!(engine.session_text(4).unwrap().is_empty());
+    }
+
+    #[test]
     fn a_committed_session_rejects_rebinding_its_policy_identity() {
         let mut engine = TextEngine::default();
         engine
@@ -496,7 +702,7 @@ mod tests {
         expected_engine_revision: u32,
         consumed_plan_revision: u32,
         acknowledged_publication_generation: u32,
-    ) -> UpdateRequest {
+    ) -> UpdateRequest<'static> {
         UpdateRequest {
             session_id: 4,
             expected_engine_revision,
@@ -513,6 +719,44 @@ mod tests {
                 max_slots_per_band: 1,
                 max_output_bytes: 128,
             },
+            text_mutations: super::super::semantic_wire::TextMutationBatch::empty(),
         }
+    }
+
+    fn text_mutation_bytes(records: &[(u32, u32, &[u16])]) -> Vec<u8> {
+        let record_offset = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let records_length = records.len() * ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
+        let payload_length = records
+            .iter()
+            .map(|(_, _, insert)| insert.len() * 2)
+            .sum::<usize>();
+        let mut bytes = vec![0; record_offset + records_length + payload_length];
+        let mut payload_offset = record_offset + records_length;
+        for (index, &(text_start, delete_count, insert)) in records.iter().enumerate() {
+            let start = record_offset + index * ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
+            let end = start + ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
+            let record = &mut bytes[start..end];
+            record[ENGINE_TEXT_MUTATION_OPCODE] = TEXT_MUTATION_REPLACE_UTF16;
+            record[ENGINE_TEXT_MUTATION_ENCODING] = TEXT_ENCODING_UTF16_LE;
+            write_u32(record, ENGINE_TEXT_MUTATION_TEXT_START, text_start);
+            write_u32(record, ENGINE_TEXT_MUTATION_DELETE_COUNT, delete_count);
+            if !insert.is_empty() {
+                write_u32(
+                    record,
+                    ENGINE_TEXT_MUTATION_INSERT_OFFSET,
+                    u32::try_from(payload_offset).unwrap(),
+                );
+                write_u32(
+                    record,
+                    ENGINE_TEXT_MUTATION_INSERT_COUNT,
+                    u32::try_from(insert.len()).unwrap(),
+                );
+                for &unit in insert {
+                    bytes[payload_offset..payload_offset + 2].copy_from_slice(&unit.to_le_bytes());
+                    payload_offset += 2;
+                }
+            }
+        }
+        bytes
     }
 }

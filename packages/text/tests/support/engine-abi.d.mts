@@ -4,6 +4,11 @@ export interface EngineUpdateFields {
   readonly expectedEngineRevision: number;
   readonly consumedPlanRevision: number;
   readonly acknowledgedPublicationGeneration?: number;
+  readonly textMutations?: readonly {
+    readonly start: number;
+    readonly deleteCount: number;
+    readonly insert: readonly number[];
+  }[];
 }
 
 export function renderPolicyBytes(abi: object): Uint8Array;

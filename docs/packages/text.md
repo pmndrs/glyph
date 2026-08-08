@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:1f44b1ea6bb9e562a7a941e0f8a5cc3e224ba6273230a4c0afdcdd3dc958a1c4'
+source_digest: 'sha256:1bc7cd639c991441bb0dae6ed543b101bbf472ca6221ac80a5e5944c0b709eee'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -482,7 +482,8 @@ abort/retry, capability-set changes, and policy identity. A post-prepare Wasm ab
 semantic input exists, so that exact ordering remains an explicit test gap. The now-reachable planners increase the
 optimized artifact from 739,909 / 272,624 / 214,395 to
 822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. This is a measured shared-runtime cost and a pending optimization
-target. Nonempty mutation sections remain rejected, so sessions currently publish an empty Rust plan; there is no Rust
+target. Ordered UTF-16 replacements are now retained transactionally, while style and geometry sections remain rejected.
+Sessions still publish an empty Rust plan because retained text is not yet shaped or laid out; there is no Rust
 shaping/layout performance result yet, and the TypeScript layout table above remains baseline-only.
 
 The semantic request now has compiler-derived record layouts without a handwritten TypeScript mirror: 24-byte UTF-16
@@ -490,8 +491,23 @@ text replacements, 80-byte stable style mutations, 52-byte constraints, 8-byte f
 exclusions, and 56-byte inline objects. Region/exclusion rectangles use inline bounds, while bounded polygons reference
 vertices inside the same request. Styles include current shaping fields plus word spacing, material/color, and
 decoration inputs. The generated ABI and compiled-Wasm test pin every size, tag, and the inline-object
-`baselineAlignment` offset; the semantic decoder still rejects nonempty sections, so this checkpoint changes no runtime
-layout behavior and has no performance result.
+`baselineAlignment` offset. The following text-retention checkpoint admits only the text record; the remaining sections
+still fail closed.
+
+The frame decoder now borrows ordered UTF-16 replacement records and their offset-addressed payloads directly from the
+pinned request. It validates canonical empty offsets, opcode/encoding, reserved fields, bounds, alignment, arithmetic,
+and record/payload non-overlap before the session transaction. Rust applies sequential replacements into retained
+scratch, swaps them into committed text only after plan commit, and clears scratch on abort or a malformed later edit.
+The compiled-Wasm test performs a cold reserve/re-pin, inserts text, edits a position that is valid only if the first
+update was retained, rejects an out-of-bounds edit without changing the active A/B publication, and observes no memory
+growth on the same-capacity edit. This is real Rust text retention, not shaping or layout; plan tables remain empty and no
+latency result is claimed. Reachability changes optimized Wasm from 822,469 / 306,502 / 242,707 to
+825,298 / 308,030 / 243,323 raw/gzip/Brotli bytes (+2,829 / +1,528 / +616 shared-runtime bytes).
+
+Session creation also prewarms both retained UTF-16 buffers to 1,024 units by default, and the cold create/reserve ABI
+accepts an explicit text capacity for known large paragraphs. This removes the observed second-buffer lazy allocation
+without giving every text object the 25K-glyph benchmark footprint. Production analysis/shaping/layout scratch will be
+one synchronous engine-global 32,768-record workspace, reserved once when those arrays land and shared by every session.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

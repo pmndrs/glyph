@@ -298,7 +298,12 @@ JavaScript cannot write an oversized request before calling the function that wo
 therefore has an explicit cold lifecycle operation:
 
 ```text
-text_reserve(session_id: u32, request_capacity: u32, result_capacity: u32) -> u32
+text_reserve(
+  session_id: u32,
+  request_capacity: u32,
+  result_capacity: u32,
+  text_capacity: u32
+) -> u32
 ```
 
 The host computes the exact encoded request length before pinning. It calls `text_reserve` only when that length exceeds
@@ -325,6 +330,13 @@ transferred-to-worker`—and are never accessed while detached. A bounded worker
 excess buffers become unreachable and are collected on the worker. Failure to return a buffer is observable backpressure,
 not permission to grow an unbounded pool. GPU staging belts and submission fences remain backend responsibilities.
 [^staging][^worker-transfer]
+
+Cold capacity separates per-session retained state from shared synchronous work. Session creation prewarms both UTF-16
+transaction buffers to 1,024 units unless the caller supplies a larger text capacity; cold reserve can grow both before
+the request view is pinned. The analysis/shaping/layout arrays are one engine-global workspace reused by synchronous
+updates, not one 25K-glyph allocation per paragraph. Those production arrays prewarm once to 32,768 clusters/glyphs when
+they land, covering the 25,515-glyph target fixture, and expose explicit cold growth beyond that envelope. A warm update
+inside declared capacities may not lazily settle another allocation.
 
 ## Rust layout pipeline
 
@@ -757,15 +769,21 @@ The Wasm update prepares the Rust plan, validates and serializes it into the ina
 state only after staging succeeds, and aborts preparation on every intervening failure. The acknowledgment itself
 survives an aborted publication because it reports an already-completed renderer fence. Compiled-Wasm tests exercise
 accepted and future acknowledgments plus A/B preservation. Host tests exercise compiler abort/retry directly. A
-post-prepare Wasm failure is not constructible while semantic input is empty and the encoded plan is the minimum-size
-header; that ABI ordering requires a regression test once nonempty Rust semantic input can exceed a request limit.
+post-prepare Wasm failure is not constructible while the encoded plan is the minimum-size header; that ABI ordering
+requires a regression test once Rust shaping/layout can produce nonempty plan output that exceeds a request limit.
 
 This makes the full retained plan compiler reachable: the optimized artifact changes from 739,909 / 272,624 / 214,395
 to 822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. The 82,534 raw / 35,409 gzip / 28,052 Brotli increase is shared
-runtime code, not font-local shaping data, and is now an explicit size-optimization target. Mutation sections still reject
-nonempty data and the session currently supplies an empty semantic input, so the Wasm path emits an empty Rust plan.
-Rust shaping/layout → nonempty plan connection and its 25,515-glyph end-to-end timing remain open; the TypeScript layout
-benchmark is baseline evidence only.
+runtime code, not font-local shaping data, and is now an explicit size-optimization target. Ordered UTF-16 text
+replacements now decode as borrowed records and commit into retained session scratch transactionally; style and geometry
+sections remain rejected. Because retained text is not yet analyzed, shaped, or laid out, the Wasm path still emits an
+empty Rust plan. Rust shaping/layout → nonempty plan connection and its 25,515-glyph end-to-end timing remain open; the
+TypeScript layout benchmark is baseline evidence only.
+
+The retained-text decoder, transaction buffers, and cold capacity control change the optimized artifact from
+822,469 / 306,502 / 242,707 to 825,298 / 308,030 / 243,323 raw/gzip/Brotli bytes, a shared-runtime delta of
+2,829 / 1,528 / 616 bytes. The per-session 1,024-unit default is runtime memory rather than binary payload. This size
+checkpoint does not time shaping or layout because neither stage consumes the retained text yet.
 
 ## Performance contract
 

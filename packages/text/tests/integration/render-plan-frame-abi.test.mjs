@@ -46,11 +46,13 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.equal(abi.layouts.engineInlineObject.alignment, 4);
   assert.equal(abi.layouts.engineInlineObject.baselineAlignment, 52);
   assert.equal(abi.engine.textMutationOpcodes.replaceUtf16, 1);
+  assert.equal(abi.engine.textEncodings.utf16Le, 1);
   assert.equal(abi.engine.styleMutationOpcodes.upsert, 1);
   assert.equal(abi.engine.styleMutationOpcodes.remove, 2);
   assert.deepEqual(abi.engine.flowShapeKinds, { polygon: 2, rectangle: 1 });
   assert.deepEqual(abi.engine.writingModes, { horizontalTb: 1, verticalLr: 3, verticalRl: 2 });
-  assert.equal(fn.createSession(sessionId, requestLayout.size, resultLayout.size), abi.status.ok);
+  assert.equal(abi.engine.defaultSessionTextCapacity, 1024);
+  assert.equal(fn.createSession(sessionId, requestLayout.size, resultLayout.size, 0), abi.status.ok);
   assert.equal(fn.sessionCount(), 1);
   let requestPointer = fn.requestPointer(sessionId);
   assert.notEqual(requestPointer, 0);
@@ -129,23 +131,74 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   });
   const checkpointHeader = resultBytes(memory, checkpointPointer, resultLayout).slice();
 
-  writeRequest(memory, requestPointer, abi, 3, 3, 3);
-  new DataView(memory.buffer, requestPointer, requestLayout.size).setUint32(requestLayout.regionCount, 1, true);
-  const unsupportedPointer = fn.textUpdate(sessionId, requestPointer, requestLayout.size);
-  assertResult(memory, unsupportedPointer, abi, {
-    status: abi.status.invalidRequest,
-    engineRevision: 3,
-    planRevision: 3,
+  assert.equal(fn.reserveSession(sessionId, 256, resultLayout.size, 8), abi.status.ok);
+  requestPointer = fn.requestPointer(sessionId);
+  assert.ok(fn.requestCapacity(sessionId) >= 256);
+  const textWarmBuffer = memory.buffer;
+  const insertLength = writeRequest(memory, requestPointer, abi, 3, 3, 3, [
+    { start: 0, deleteCount: 0, insert: [0x61, 0x62, 0x63] },
+  ]);
+  const insertedPointer = fn.textUpdate(sessionId, requestPointer, insertLength);
+  assert.strictEqual(memory.buffer, textWarmBuffer);
+  assertResult(memory, insertedPointer, abi, {
+    status: abi.status.ok,
+    engineRevision: 4,
+    planRevision: 4,
     requiredBaseRevision: 3,
-    publicationGeneration: 3,
+    publicationGeneration: 4,
     outputSlot: 1,
     flags: 0,
   });
   assert.deepEqual(resultBytes(memory, checkpointPointer, resultLayout), checkpointHeader);
 
+  const retainedEditLength = writeRequest(memory, requestPointer, abi, 4, 4, 4, [
+    { start: 1, deleteCount: 1, insert: [0x58] },
+  ]);
+  const retainedEditPointer = fn.textUpdate(sessionId, requestPointer, retainedEditLength);
+  assert.strictEqual(memory.buffer, textWarmBuffer);
+  assertResult(memory, retainedEditPointer, abi, {
+    status: abi.status.ok,
+    engineRevision: 5,
+    planRevision: 5,
+    requiredBaseRevision: 4,
+    publicationGeneration: 5,
+    outputSlot: 0,
+    flags: 0,
+  });
+  const retainedHeader = resultBytes(memory, retainedEditPointer, resultLayout).slice();
+
+  const invalidEditLength = writeRequest(memory, requestPointer, abi, 5, 5, 5, [
+    { start: 9, deleteCount: 0, insert: [0x21] },
+  ]);
+  const invalidEditPointer = fn.textUpdate(sessionId, requestPointer, invalidEditLength);
+  assertResult(memory, invalidEditPointer, abi, {
+    status: abi.status.invalidRequest,
+    engineRevision: 5,
+    planRevision: 5,
+    requiredBaseRevision: 5,
+    publicationGeneration: 5,
+    outputSlot: 1,
+    flags: 0,
+  });
+  assert.deepEqual(resultBytes(memory, retainedEditPointer, resultLayout), retainedHeader);
+
+  writeRequest(memory, requestPointer, abi, 5, 5, 5);
+  new DataView(memory.buffer, requestPointer, requestLayout.size).setUint32(requestLayout.regionCount, 1, true);
+  const unsupportedPointer = fn.textUpdate(sessionId, requestPointer, requestLayout.size);
+  assertResult(memory, unsupportedPointer, abi, {
+    status: abi.status.invalidRequest,
+    engineRevision: 5,
+    planRevision: 5,
+    requiredBaseRevision: 5,
+    publicationGeneration: 5,
+    outputSlot: 1,
+    flags: 0,
+  });
+  assert.deepEqual(resultBytes(memory, retainedEditPointer, resultLayout), retainedHeader);
+
   const oldBuffer = memory.buffer;
   const grownCapacity = 8 * 1024 * 1024;
-  assert.equal(fn.reserveSession(sessionId, grownCapacity, grownCapacity), abi.status.ok);
+  assert.equal(fn.reserveSession(sessionId, grownCapacity, grownCapacity, 0), abi.status.ok);
   assert.notStrictEqual(memory.buffer, oldBuffer);
   assert.equal(oldBuffer.byteLength, 0, 'memory.grow must detach fixed-length views in the pinned runtime');
   requestPointer = fn.requestPointer(sessionId);
@@ -166,6 +219,7 @@ function writeRequest(
   expectedEngineRevision,
   consumedPlanRevision,
   acknowledgedPublicationGeneration = 0,
+  textMutations = [],
 ) {
   const bytes = engineUpdateBytes(abi, {
     sessionId,
@@ -173,8 +227,10 @@ function writeRequest(
     expectedEngineRevision,
     consumedPlanRevision,
     acknowledgedPublicationGeneration,
+    textMutations,
   });
   new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+  return bytes.byteLength;
 }
 
 function assertResult(memory, pointer, abi, expected) {

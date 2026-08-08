@@ -3,9 +3,9 @@ use core::mem::{align_of, offset_of, size_of};
 use serde_json::json;
 
 use crate::engine::frame::{
-    RESULT_FLAG_CHECKPOINT, SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_MUTATION_REMOVE,
-    STYLE_MUTATION_UPSERT, TEXT_MUTATION_REPLACE_UTF16, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR,
-    WRITING_VERTICAL_RL,
+    DEFAULT_SESSION_TEXT_CAPACITY, RESULT_FLAG_CHECKPOINT, SHAPE_POLYGON, SHAPE_RECTANGLE,
+    STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
+    TEXT_MUTATION_REPLACE_UTF16, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
 };
 use crate::engine::policy::{
     ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
@@ -2205,8 +2205,12 @@ pub fn json() -> String {
             }
         },
         "engine": {
+            "defaultSessionTextCapacity": DEFAULT_SESSION_TEXT_CAPACITY,
             "textMutationOpcodes": {
                 "replaceUtf16": TEXT_MUTATION_REPLACE_UTF16
+            },
+            "textEncodings": {
+                "utf16Le": TEXT_ENCODING_UTF16_LE
             },
             "styleMutationOpcodes": {
                 "upsert": STYLE_MUTATION_UPSERT,
