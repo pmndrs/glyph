@@ -166,11 +166,13 @@ function medianPhases(samples: readonly Sample[]): readonly (readonly [TextProfi
 }
 
 function applyChange(name: CaseName, paragraph: ParagraphHandle, repetition: number, text: string): void {
-  // Each repetition applies a distinct value, so a retained per-constraint cache can never answer a measured update.
-  if (name === 'font-size') paragraph.style = { fontSize: 18 + (repetition % 16) };
+  // Every repetition applies a value no earlier repetition used, so a retained per-constraint cache can never answer a
+  // measured update. A repeating cycle would let the cache serve part of the run and report a median that no drag,
+  // resize, or edit ever experiences.
+  if (name === 'font-size') paragraph.style = { fontSize: 12 + repetition * 0.5 };
   else if (name === 'layout-width') {
-    paragraph.contentBox = { width: { mode: 'exact', size: 480 + (repetition % 16) * 12 }, wrap: 'word' };
-  } else paragraph.text = `${text.slice(0, text.length - (repetition % 16))}`;
+    paragraph.contentBox = { width: { mode: 'exact', size: 420 + repetition * 7 }, wrap: 'word' };
+  } else paragraph.text = `${text.slice(0, text.length - repetition)}`;
 }
 
 type TextRuntimeHandle = Awaited<ReturnType<typeof createTextRuntime>>;
