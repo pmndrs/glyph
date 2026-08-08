@@ -23,6 +23,8 @@ export type TextProfilePhase =
   | 'layout.line-break'
   | 'layout.measure'
   | 'layout.positioning'
+  | 'layout.fragments'
+  | 'layout.reshape'
   | 'layout.position'
   | 'batch.pack';
 
