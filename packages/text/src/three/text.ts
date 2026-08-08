@@ -450,9 +450,7 @@ interface ThreeTargetAttachment {
   dispose(): void;
 }
 
-class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant>
-  implements ThreeRasterTargetOwner
-{
+class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant> implements ThreeRasterTargetOwner {
   readonly #runtime: TextRuntime;
   readonly #group: TextGroup<Technique, Variant> | undefined;
   readonly #batch: ParagraphBatch<Technique, Variant>;
