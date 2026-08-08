@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:97f077c8663f40e97f739b0df797e7d59b5e800506919b07b412b58c82ee0937'
+source_digest: 'sha256:6bc6e04ce21fd514d8d8966dc5047b26dd84ee0f6a97c85243ce83c7d8ec7f35'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -172,7 +172,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-08T04:20:00Z'
+  at: '2026-08-08T06:30:00Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -440,7 +440,7 @@ The five-line, 120-glyph text above is the bounded conformance specimen. The sep
 
 Paragraph layout is tiered by what each product depends on, so a change enters at its own tier instead of rebuilding the paragraph. Text analysis follows the text and its base direction, shaping adds the fonts, spans, and style topology, metrics add font size and spacing, the line plan adds the content box, and geometry adds alignment. A retained layout session holds the prepared paragraph across updates, so a content-box change never enters preparation and reuses the caches the paragraph already keeps, while font fallback reads shaped glyph identity rather than laying the paragraph out to locate `.notdef`. Positioning writes its output into typed arrays sized from the shaped runs and resolves a text offset to a cluster through a table built once per preparation, replacing a lower-bound search that ran twice at every cluster boundary of every glyph. Both position axes accumulate in double precision and narrow once, because alignment and justification read an axis back after storing it.
 
-`pnpm scripts run text:layout-benchmark` measures that path. It reports a median of warmed repetitions for each invalidation class separately, with the relative standard deviation beside it and the phase attribution below it, because the classes invalidate different tiers and an average across them hides whichever one is slow. Optional phase spans carry the attribution; installing no profiler costs one comparison per phase, and `userTimingProfiler()` forwards the same spans to the User Timing timeline for a browser profile. At 25,515 glyphs every class previously measured within noise of 131 ms, which is what a paragraph rebuilt per update costs; a resize now measures 33.72 ms and a reflow 27.98 ms with layout output unchanged. Boundary reshaping and per-item allocation are the remaining costs, at roughly a fifth of a resize each.
+`pnpm scripts run text:layout-benchmark` measures that path. It reports a median of warmed repetitions for each invalidation class separately, with the relative standard deviation beside it, because the classes invalidate different tiers and an average across them hides whichever one is slow. Boundary reshaping is gone: it requested the whole run as shaping context, which is the context the retained shape was produced with, so it returned the glyphs it already held on roughly every line of every layout. Measured on an identical workload against the pre-tiering commit at 25,515 glyphs, a reflow lays out in 8.12 ms against 110.40 ms, a resize in 11.98 ms against 103.54 ms, and a text edit in 31.85 ms against 109.66 ms, with the pinned layout hashes unchanged. Phase attribution came from opt-in spans that have since been removed once their evidence was recorded; reinstating them is a diagnostic change, not a shipped feature.
 
 ## Package scripts
 

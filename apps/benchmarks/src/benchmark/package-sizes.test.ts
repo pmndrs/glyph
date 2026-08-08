@@ -78,11 +78,11 @@ describe('independent package-size report', () => {
       // opt-in phase profiler that measures all of it. A resize went from 130.78ms to 33.72ms at 25,515 glyphs, so this
       // is bytes traded for time rather than new surface, and the raised ceiling keeps the same one-or-two-feature gap.
       //
-      // Raised once more, raw only, for the structure-of-arrays cluster measurement and the pooled instance packing: a
-      // reflow now lays out in 8.12ms at 25,515 glyphs against a 110.40ms pre-optimization baseline, inside the 120Hz
-      // budget. Raw has now moved twice in one workstream, which is the signal to reclaim rather than raise again --
-      // the opt-in layout profiler is the identified candidate, and moving it behind a subpath or a build-time define
-      // should come with lowering these numbers by whatever it returns.
+      // Raised again for the structure-of-arrays cluster measurement and the pooled instance packing, then lowered
+      // when the layout profiler came out once its evidence was recorded: that returned 3,026 raw and 253 Brotli,
+      // mostly from its call sites rather than the module. A reflow lays out in 8.12ms at 25,515 glyphs against a
+      // 110.40ms pre-optimization baseline, inside the 120Hz budget. The ceiling tracks what the tree actually
+      // measures, so the next feature meets resistance rather than inherited slack.
       //
       // The three runtime baselines are re-derived against the tree with merged-v0 deleted, which shed roughly 215 KB
       // from each graph, so growth is once again measured from something that exists. browser-core keeps its original
@@ -90,7 +90,7 @@ describe('independent package-size report', () => {
       // the root. Each ceiling leaves roughly one or two features of room and no more, so it starts pushing back soon
       // rather than quietly absorbing whatever lands next.
       'browser-core': {
-        rawBytes: { baseline: 324_269, maximumGrowth: 70_000 },
+        rawBytes: { baseline: 324_269, maximumGrowth: 64_000 },
         minifiedBytes: { baseline: 247_205, maximumGrowth: 38_000 },
         gzipBytes: { baseline: 72_108, maximumGrowth: 10_500 },
         brotliBytes: { baseline: 55_251, maximumGrowth: 8_500 },

@@ -8,8 +8,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 
-import { createRuntimeShaper, createTextRuntime, FontRegistry, setTextProfiler } from '../dist/index.js';
-import type { TextProfilePhase } from '../dist/index.js';
+import { createRuntimeShaper, createTextRuntime, FontRegistry } from '../dist/index.js';
 import { bitmap } from '../dist/raster/bitmap-technique.js';
 
 /**
@@ -47,7 +46,6 @@ type CaseName = 'cold' | 'font-size' | 'layout-width' | 'text';
 interface Sample {
   readonly durationMs: number;
   readonly glyphs: number;
-  readonly phases: ReadonlyMap<TextProfilePhase, number>;
 }
 
 interface CaseReport {
@@ -61,7 +59,6 @@ interface CaseReport {
   readonly rsdPercent: number;
   readonly perGlyphUs: number;
   readonly bytesPerUpdate: number;
-  readonly phases: readonly (readonly [TextProfilePhase, number])[];
 }
 
 const options = parseArguments(process.argv.slice(2));
@@ -100,16 +97,6 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
 
   for (let repetition = 0; repetition < total; repetition += 1) {
     const recording = repetition >= options.warmup;
-    const phases = new Map<TextProfilePhase, number>();
-    // Warmup installs a profiler too. Warming with instrumentation disabled and recording with it enabled would let
-    // the compiler specialize a branch that the measured repetitions never take.
-    setTextProfiler(
-      recording
-        ? (phase, startedMs, endedMs) => {
-            phases.set(phase, (phases.get(phase) ?? 0) + (endedMs - startedMs));
-          }
-        : discardPhase,
-    );
 
     const created = name === 'cold' ? createParagraph(runtime, text, 600) : undefined;
     if (warm !== undefined) applyChange(name, warm.paragraph, repetition, text);
@@ -121,12 +108,11 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
     const durationMs = performance.now() - started;
     const heapAfter = process.memoryUsage().heapUsed;
 
-    setTextProfiler(undefined);
     const glyphs = glyphCount(created?.batch ?? warm!.batch);
     created?.batch.dispose();
 
     if (recording) {
-      samples.push({ durationMs, glyphs, phases });
+      samples.push({ durationMs, glyphs });
       heapDeltas.push(Math.max(0, heapAfter - heapBefore));
     }
   }
@@ -150,26 +136,7 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
     rsdPercent: mean === 0 ? 0 : (Math.sqrt(variance) / mean) * 100,
     perGlyphUs: glyphs === 0 ? 0 : (median * 1000) / glyphs,
     bytesPerUpdate: bytes,
-    phases: medianPhases(samples),
   };
-}
-
-/** Warmup records into nothing, so the instrumented branch is the one the compiler optimizes. */
-function discardPhase(): void {}
-
-/**
- * Attributes the case median across phases. Each phase is reduced independently by median rather than by summing one
- * representative repetition, so a single slow repetition cannot dominate the attribution.
- */
-function medianPhases(samples: readonly Sample[]): readonly (readonly [TextProfilePhase, number])[] {
-  const names = new Set<TextProfilePhase>();
-  for (const sample of samples) for (const phase of sample.phases.keys()) names.add(phase);
-  const totals: (readonly [TextProfilePhase, number])[] = [];
-  for (const phase of names) {
-    const values = samples.map((sample) => sample.phases.get(phase) ?? 0).sort((left, right) => left - right);
-    totals.push([phase, values[Math.floor(values.length / 2)] ?? 0]);
-  }
-  return totals.sort((left, right) => right[1] - left[1]);
 }
 
 function applyChange(name: CaseName, paragraph: ParagraphHandle, repetition: number, text: string): void {
@@ -238,14 +205,6 @@ function printReport(rows: readonly CaseReport[]): void {
     console.log(
       `${row.name.padEnd(13)}${String(row.glyphs).padStart(8)}${`${row.medianMs.toFixed(2)}ms`.padStart(10)}${`${row.p95Ms.toFixed(2)}ms`.padStart(10)}${`${row.minMs.toFixed(2)}ms`.padStart(9)}${`${row.rsdPercent.toFixed(1)}%`.padStart(7)}${row.perGlyphUs.toFixed(3).padStart(10)}${(row.bytesPerUpdate / Math.max(1, row.glyphs)).toFixed(0).padStart(9)}  ${over <= 1 ? 'within 120Hz' : `${over.toFixed(1)}x over 120Hz`}`,
     );
-  }
-  for (const row of rows) {
-    console.log(`\n${row.name} · ${row.glyphs} glyphs · median ${row.medianMs.toFixed(2)}ms`);
-    for (const [phase, ms] of row.phases) {
-      if (ms < row.medianMs / 1000) continue;
-      const share = (ms / row.medianMs) * 100;
-      console.log(`  ${phase.padEnd(24)}${`${ms.toFixed(2)}ms`.padStart(9)}${`${share.toFixed(1)}%`.padStart(8)}`);
-    }
   }
 }
 

@@ -105,8 +105,6 @@ export type { IdentifiedSpanRange, SpanRange } from './internal/span-cascade.js'
 export { SpanNestingError } from './internal/span-cascade.js';
 
 export type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
-export { setTextProfiler, userTimingProfiler } from './profiler.js';
-export type { TextProfilePhase, TextProfiler } from './profiler.js';
 
 export type {
   ParagraphConstraints,
