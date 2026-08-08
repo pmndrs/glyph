@@ -599,7 +599,7 @@ program cannot implement fails preparation before publication.
 
 The descriptor includes:
 
-- named physical buffer schemas: scalar type, vector width, alignment, stride, interleaving/SoA layout, capacity class,
+- named independently bindable physical vector streams: scalar type, vector width, alignment, stride, capacity class,
   and usage intent;
 - a technique capability table mapping stable technique IDs to program IDs, accepted resource kinds, supported paint and
   compositing features, and physical schemas;
@@ -618,6 +618,20 @@ callback, backward branch, data-dependent loop, memory allocation, arbitrary add
 engine iterates the validated program over four-record SIMD lanes and executes scalar tails. Built-in Bitmap, MSDF, and
 Slug policies use the same bytecode and verifier as external policies; a native builder emits that bytecode rather than
 bypassing it with a second Rust policy trait.
+
+The compiler-mapped V0 registration ABI uses a 36-byte request header followed by 40-byte capability-set, 56-byte
+program, 16-byte physical-buffer, and 16-byte operation records. Capability-set selection is part of program lookup:
+an exact set-specific program wins over a set-agnostic program, and an update naming an undeclared set fails before its
+revision changes. Capability sets own storage/indirect/aliasing flags, maximum binding and draw limits, update alignment,
+and the integer upload-cost model. Programs own the resource-kind mask, semantic-view request, batch-key mask, and one
+of the two allocation strategies. Physical streams own explicit alignment, padded stride, usage, and capacity class.
+All reserved bits and fields are zero and unknown flags fail registration.
+
+V0 does not alias several logical stores into one mutable interleaved byte span. Augmentation instead combines semantic
+fields into independently bindable `vec2`/`vec4` or integer-vector records, including the existing MSDF and Slug
+WebGL-compatible packing. This keeps executor borrows disjoint, avoids another aliasing grammar in the native ABI, and
+still lets a policy trade buffer count against record width. Adding interleaved field offsets would require a new ABI
+version and measured binding-pressure evidence; it is not a latent V0 implementation choice.
 
 Augmentation examples include packing `origin + size` into `vec4`, adding atlas/material indices, emitting selection or
 object IDs, quantizing fields, or requesting per-glyph bounds. It may not choose line breaks, mutate cluster order, or

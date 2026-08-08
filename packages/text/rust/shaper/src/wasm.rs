@@ -407,7 +407,7 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
         };
         let plan = RenderPlanView {
             policy_handle: request.policy_handle,
-            capability_set: 0,
+            capability_set: request.capability_set,
             policy_fingerprint,
             ..RenderPlanView::default()
         };

@@ -2,6 +2,14 @@
 
 ## 2026-08-08
 
+- **Completed the capability-shaped policy ABI** — Extended the compiler-mapped registration transaction with exact
+  capability-set, program-planning, and physical-buffer metadata: backend limits and upload costs, capability-specific
+  program selection, technique/resource and batch-key masks, ordered-direct versus stable-indirect allocation, and
+  aligned padded strides. Unknown capabilities and unsupported combinations fail before revision change; the executor
+  proves padding-safe writes. V0 keeps independently bindable vector streams and uses policy bytecode to pack `vec2`/
+  `vec4` records instead of adding aliased mutable interleaving. The focused Rust and Node gates pass; the optimized SIMD
+  artifact measures 739,647 raw / 272,532 gzip / 214,186 Brotli bytes. Retained diff compilation remains the next proof.
+
 - **Fixed the compiler-mapped render-plan wire grammar** — Extended the aligned result header from 128 to 144 bytes to
   carry policy handle, capability set, and a deterministic validated-policy fingerprint. Added exact semantic, resource,
   buffer, patch, primitive, draw, retirement, and diagnostic records plus tagged actions and allocation strategies.

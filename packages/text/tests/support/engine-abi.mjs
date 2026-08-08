@@ -60,6 +60,7 @@ export function engineUpdateBytes(abi, { sessionId, policyHandle, expectedEngine
   view.setUint32(layout.expectedEngineRevision, expectedEngineRevision, true);
   view.setUint32(layout.consumedPlanRevision, consumedPlanRevision, true);
   view.setUint32(layout.policyHandle, policyHandle, true);
+  view.setUint32(layout.capabilitySet, 1, true);
   for (const field of [
     'maxClusters',
     'maxLines',
@@ -87,23 +88,68 @@ function align(value, alignment) {
 
 function policyBytes(abi, programs) {
   const requestLayout = abi.layouts.policyRequest;
+  const capabilityLayout = abi.layouts.policyCapabilitySet;
   const programLayout = abi.layouts.policyProgram;
   const bufferLayout = abi.layouts.policyBuffer;
   const operationLayout = abi.layouts.policyOperation;
   const bufferCount = programs.reduce((total, program) => total + program.buffers.length, 0);
   const operationCount = programs.reduce((total, program) => total + program.operations.length, 0);
-  const programsOffset = align(requestLayout.size, programLayout.alignment);
+  const capabilities = [
+    {
+      id: 1,
+      flags:
+        abi.policy.capabilityFlags.storageBuffers |
+        abi.policy.capabilityFlags.orderedDirect |
+        abi.policy.capabilityFlags.stableIndirect,
+      maxBufferBytes: 64 * 1024 * 1024,
+      updateAlignment: 4,
+      coalesceGapBytes: 128,
+      rangeCallPenaltyBytes: 256,
+      maxBuffersPerDraw: 16,
+      maxResourcesPerDraw: 16,
+      maxIndirectDraws: 0,
+      fragmentationBudget: 8,
+      wholeBufferThresholdBasisPoints: 7_500,
+    },
+  ];
+  const capabilitiesOffset = align(requestLayout.size, capabilityLayout.alignment);
+  const programsOffset = align(
+    capabilitiesOffset + capabilityLayout.size * capabilities.length,
+    programLayout.alignment,
+  );
   const buffersOffset = align(programsOffset + programLayout.size * programs.length, bufferLayout.alignment);
   const operationsOffset = align(buffersOffset + bufferLayout.size * bufferCount, operationLayout.alignment);
   const bytes = new Uint8Array(operationsOffset + operationLayout.size * operationCount);
   const view = new DataView(bytes.buffer);
   view.setUint32(requestLayout.byteLength, bytes.byteLength, true);
+  view.setUint32(requestLayout.capabilitySetsOffset, capabilitiesOffset, true);
+  view.setUint32(requestLayout.capabilitySetCount, capabilities.length, true);
   view.setUint32(requestLayout.programsOffset, programsOffset, true);
   view.setUint32(requestLayout.programCount, programs.length, true);
   view.setUint32(requestLayout.buffersOffset, buffersOffset, true);
   view.setUint32(requestLayout.bufferCount, bufferCount, true);
   view.setUint32(requestLayout.operationsOffset, operationsOffset, true);
   view.setUint32(requestLayout.operationCount, operationCount, true);
+
+  for (let index = 0; index < capabilities.length; index += 1) {
+    const descriptor = capabilities[index];
+    const offset = capabilitiesOffset + index * capabilityLayout.size;
+    view.setUint32(offset + capabilityLayout.id, descriptor.id, true);
+    view.setUint32(offset + capabilityLayout.flags, descriptor.flags, true);
+    view.setUint32(offset + capabilityLayout.maxBufferBytes, descriptor.maxBufferBytes, true);
+    view.setUint32(offset + capabilityLayout.updateAlignment, descriptor.updateAlignment, true);
+    view.setUint32(offset + capabilityLayout.coalesceGapBytes, descriptor.coalesceGapBytes, true);
+    view.setUint32(offset + capabilityLayout.rangeCallPenaltyBytes, descriptor.rangeCallPenaltyBytes, true);
+    view.setUint16(offset + capabilityLayout.maxBuffersPerDraw, descriptor.maxBuffersPerDraw, true);
+    view.setUint16(offset + capabilityLayout.maxResourcesPerDraw, descriptor.maxResourcesPerDraw, true);
+    view.setUint16(offset + capabilityLayout.maxIndirectDraws, descriptor.maxIndirectDraws, true);
+    view.setUint16(offset + capabilityLayout.fragmentationBudget, descriptor.fragmentationBudget, true);
+    view.setUint16(
+      offset + capabilityLayout.wholeBufferThresholdBasisPoints,
+      descriptor.wholeBufferThresholdBasisPoints,
+      true,
+    );
+  }
 
   let bufferStart = 0;
   let operationStart = 0;
@@ -112,6 +158,15 @@ function policyBytes(abi, programs) {
     const offset = programsOffset + index * programLayout.size;
     view.setUint32(offset + programLayout.techniqueId, descriptor.techniqueId, true);
     view.setUint32(offset + programLayout.programId, descriptor.programId, true);
+    view.setUint32(offset + programLayout.capabilitySetId, descriptor.capabilitySetId ?? 0, true);
+    view.setUint32(offset + programLayout.resourceKindMask, descriptor.resourceKindMask ?? 1, true);
+    view.setUint32(offset + programLayout.semanticViewMask, descriptor.semanticViewMask ?? 0, true);
+    view.setUint32(
+      offset + programLayout.batchKeyMask,
+      descriptor.batchKeyMask ??
+        (abi.policy.batchFields.program | abi.policy.batchFields.resource | abi.policy.batchFields.order),
+      true,
+    );
     view.setUint16(offset + programLayout.variant, descriptor.variant ?? 0, true);
     view.setUint8(offset + programLayout.f32InputCount, descriptor.f32InputCount);
     view.setUint8(offset + programLayout.u32InputCount, descriptor.u32InputCount);
@@ -121,6 +176,11 @@ function policyBytes(abi, programs) {
     view.setUint16(offset + programLayout.bufferCount, descriptor.buffers.length, true);
     view.setUint32(offset + programLayout.operationStart, operationStart, true);
     view.setUint16(offset + programLayout.operationCount, descriptor.operations.length, true);
+    view.setUint16(
+      offset + programLayout.allocationStrategy,
+      descriptor.allocationStrategy ?? abi.policy.allocationStrategies.orderedDirect,
+      true,
+    );
     bufferStart += descriptor.buffers.length;
     operationStart += descriptor.operations.length;
   }
@@ -132,6 +192,15 @@ function policyBytes(abi, programs) {
       view.setUint16(offset + bufferLayout.id, buffer.id, true);
       view.setUint8(offset + bufferLayout.scalar, buffer.scalar);
       view.setUint8(offset + bufferLayout.vectorWidth, buffer.vectorWidth);
+      const scalarBytes = buffer.scalar === abi.policy.scalarTypes.u16 ? 2 : 4;
+      view.setUint16(offset + bufferLayout.alignment, buffer.alignment ?? scalarBytes, true);
+      view.setUint16(offset + bufferLayout.stride, buffer.stride ?? scalarBytes * buffer.vectorWidth, true);
+      view.setUint32(
+        offset + bufferLayout.usage,
+        buffer.usage ?? (abi.policy.bufferUsage.storage | abi.policy.bufferUsage.copyDst),
+        true,
+      );
+      view.setUint16(offset + bufferLayout.capacityClass, buffer.capacityClass ?? 1, true);
       bufferIndex += 1;
     }
     for (const operation of descriptor.operations) {

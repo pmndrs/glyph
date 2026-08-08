@@ -4,9 +4,13 @@ use serde_json::json;
 
 use crate::engine::frame::RESULT_FLAG_CHECKPOINT;
 use crate::engine::policy::{
-    OP_ADD_F32, OP_CONSTANT_F32, OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32,
-    OP_LOAD_F32, OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16,
-    OP_STORE_U32, OP_SUBTRACT_F32, ScalarType,
+    ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
+    BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
+    BUFFER_USAGE_STORAGE, BUFFER_USAGE_VERTEX, CAP_ALIAS_VEC2, CAP_ALIAS_VEC4, CAP_INDIRECT_DRAWS,
+    CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT, CAP_STORAGE_BUFFERS, OP_ADD_F32, OP_CONSTANT_F32,
+    OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32, OP_LOAD_U32,
+    OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32, OP_SUBTRACT_F32,
+    ScalarType,
 };
 use crate::engine::render_plan::{
     BUFFER_ORDERED_DIRECT, BUFFER_STABLE_INDIRECT, BufferRecord, DiagnosticRecord, DrawRecord,
@@ -54,6 +58,8 @@ struct BidiRequestHeader {
 #[repr(C)]
 struct PolicyRequestHeader {
     byte_length: u32,
+    capability_sets_offset: u32,
+    capability_set_count: u32,
     programs_offset: u32,
     program_count: u32,
     buffers_offset: u32,
@@ -63,20 +69,41 @@ struct PolicyRequestHeader {
 }
 
 #[repr(C)]
+struct PolicyCapabilitySetRecord {
+    id: u32,
+    flags: u32,
+    max_buffer_bytes: u32,
+    update_alignment: u32,
+    coalesce_gap_bytes: u32,
+    range_call_penalty_bytes: u32,
+    max_buffers_per_draw: u16,
+    max_resources_per_draw: u16,
+    max_indirect_draws: u16,
+    fragmentation_budget: u16,
+    whole_buffer_threshold_basis_points: u16,
+    reserved: [u16; 3],
+}
+
+#[repr(C)]
 struct PolicyProgramRecord {
     technique_id: u32,
     program_id: u32,
-    variant: u16,
-    f32_input_count: u8,
-    u32_input_count: u8,
+    capability_set_id: u32,
+    resource_kind_mask: u32,
+    semantic_view_mask: u32,
+    batch_key_mask: u32,
     paint_capabilities: u32,
     compositing_capabilities: u32,
     buffer_start: u32,
-    buffer_count: u16,
-    reserved0: u16,
     operation_start: u32,
+    variant: u16,
+    buffer_count: u16,
     operation_count: u16,
-    reserved1: u16,
+    allocation_strategy: u16,
+    f32_input_count: u8,
+    u32_input_count: u8,
+    reserved0: u16,
+    reserved1: u32,
 }
 
 #[repr(C)]
@@ -84,6 +111,11 @@ struct PolicyBufferRecord {
     id: u16,
     scalar: u8,
     vector_width: u8,
+    alignment: u16,
+    stride: u16,
+    usage: u32,
+    capacity_class: u16,
+    reserved0: u16,
 }
 
 #[repr(C)]
@@ -260,6 +292,11 @@ layout!(
     PolicyRequestHeader
 );
 layout!(
+    POLICY_CAPABILITY_SET_RECORD_SIZE,
+    POLICY_CAPABILITY_SET_RECORD_ALIGNMENT,
+    PolicyCapabilitySetRecord
+);
+layout!(
     POLICY_PROGRAM_RECORD_SIZE,
     POLICY_PROGRAM_RECORD_ALIGNMENT,
     PolicyProgramRecord
@@ -346,6 +383,16 @@ field_offset!(BIDI_TEXT_OFFSET, BidiRequestHeader, text_offset);
 field_offset!(BIDI_TEXT_LENGTH, BidiRequestHeader, text_length);
 field_offset!(BIDI_DIRECTION, BidiRequestHeader, direction);
 field_offset!(POLICY_BYTE_LENGTH, PolicyRequestHeader, byte_length);
+field_offset!(
+    POLICY_CAPABILITY_SETS_OFFSET,
+    PolicyRequestHeader,
+    capability_sets_offset
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_COUNT,
+    PolicyRequestHeader,
+    capability_set_count
+);
 field_offset!(POLICY_PROGRAMS_OFFSET, PolicyRequestHeader, programs_offset);
 field_offset!(POLICY_PROGRAM_COUNT, PolicyRequestHeader, program_count);
 field_offset!(POLICY_BUFFERS_OFFSET, PolicyRequestHeader, buffers_offset);
@@ -356,12 +403,88 @@ field_offset!(
     operations_offset
 );
 field_offset!(POLICY_OPERATION_COUNT, PolicyRequestHeader, operation_count);
+field_offset!(POLICY_CAPABILITY_SET_ID, PolicyCapabilitySetRecord, id);
+field_offset!(
+    POLICY_CAPABILITY_SET_FLAGS,
+    PolicyCapabilitySetRecord,
+    flags
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_MAX_BUFFER_BYTES,
+    PolicyCapabilitySetRecord,
+    max_buffer_bytes
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_UPDATE_ALIGNMENT,
+    PolicyCapabilitySetRecord,
+    update_alignment
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_COALESCE_GAP_BYTES,
+    PolicyCapabilitySetRecord,
+    coalesce_gap_bytes
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_RANGE_CALL_PENALTY_BYTES,
+    PolicyCapabilitySetRecord,
+    range_call_penalty_bytes
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_MAX_BUFFERS_PER_DRAW,
+    PolicyCapabilitySetRecord,
+    max_buffers_per_draw
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_MAX_RESOURCES_PER_DRAW,
+    PolicyCapabilitySetRecord,
+    max_resources_per_draw
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_MAX_INDIRECT_DRAWS,
+    PolicyCapabilitySetRecord,
+    max_indirect_draws
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_FRAGMENTATION_BUDGET,
+    PolicyCapabilitySetRecord,
+    fragmentation_budget
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS,
+    PolicyCapabilitySetRecord,
+    whole_buffer_threshold_basis_points
+);
+field_offset!(
+    POLICY_CAPABILITY_SET_RESERVED,
+    PolicyCapabilitySetRecord,
+    reserved
+);
 field_offset!(
     POLICY_PROGRAM_TECHNIQUE_ID,
     PolicyProgramRecord,
     technique_id
 );
 field_offset!(POLICY_PROGRAM_ID, PolicyProgramRecord, program_id);
+field_offset!(
+    POLICY_PROGRAM_CAPABILITY_SET_ID,
+    PolicyProgramRecord,
+    capability_set_id
+);
+field_offset!(
+    POLICY_PROGRAM_RESOURCE_KIND_MASK,
+    PolicyProgramRecord,
+    resource_kind_mask
+);
+field_offset!(
+    POLICY_PROGRAM_SEMANTIC_VIEW_MASK,
+    PolicyProgramRecord,
+    semantic_view_mask
+);
+field_offset!(
+    POLICY_PROGRAM_BATCH_KEY_MASK,
+    PolicyProgramRecord,
+    batch_key_mask
+);
 field_offset!(POLICY_PROGRAM_VARIANT, PolicyProgramRecord, variant);
 field_offset!(
     POLICY_PROGRAM_F32_INPUT_COUNT,
@@ -404,10 +527,24 @@ field_offset!(
     PolicyProgramRecord,
     operation_count
 );
+field_offset!(
+    POLICY_PROGRAM_ALLOCATION_STRATEGY,
+    PolicyProgramRecord,
+    allocation_strategy
+);
 field_offset!(POLICY_PROGRAM_RESERVED1, PolicyProgramRecord, reserved1);
 field_offset!(POLICY_BUFFER_ID, PolicyBufferRecord, id);
 field_offset!(POLICY_BUFFER_SCALAR, PolicyBufferRecord, scalar);
 field_offset!(POLICY_BUFFER_VECTOR_WIDTH, PolicyBufferRecord, vector_width);
+field_offset!(POLICY_BUFFER_ALIGNMENT, PolicyBufferRecord, alignment);
+field_offset!(POLICY_BUFFER_STRIDE, PolicyBufferRecord, stride);
+field_offset!(POLICY_BUFFER_USAGE, PolicyBufferRecord, usage);
+field_offset!(
+    POLICY_BUFFER_CAPACITY_CLASS,
+    PolicyBufferRecord,
+    capacity_class
+);
+field_offset!(POLICY_BUFFER_RESERVED0, PolicyBufferRecord, reserved0);
 field_offset!(POLICY_OPERATION_OPCODE, PolicyOperationRecord, opcode);
 field_offset!(POLICY_OPERATION_TARGET, PolicyOperationRecord, target);
 field_offset!(POLICY_OPERATION_OPERAND0, PolicyOperationRecord, operand0);
@@ -954,6 +1091,8 @@ pub fn json() -> String {
                 "size": POLICY_REQUEST_HEADER_SIZE,
                 "alignment": POLICY_REQUEST_HEADER_ALIGNMENT,
                 "byteLength": POLICY_BYTE_LENGTH,
+                "capabilitySetsOffset": POLICY_CAPABILITY_SETS_OFFSET,
+                "capabilitySetCount": POLICY_CAPABILITY_SET_COUNT,
                 "programsOffset": POLICY_PROGRAMS_OFFSET,
                 "programCount": POLICY_PROGRAM_COUNT,
                 "buffersOffset": POLICY_BUFFERS_OFFSET,
@@ -961,11 +1100,31 @@ pub fn json() -> String {
                 "operationsOffset": POLICY_OPERATIONS_OFFSET,
                 "operationCount": POLICY_OPERATION_COUNT
             },
+            "policyCapabilitySet": {
+                "size": POLICY_CAPABILITY_SET_RECORD_SIZE,
+                "alignment": POLICY_CAPABILITY_SET_RECORD_ALIGNMENT,
+                "id": POLICY_CAPABILITY_SET_ID,
+                "flags": POLICY_CAPABILITY_SET_FLAGS,
+                "maxBufferBytes": POLICY_CAPABILITY_SET_MAX_BUFFER_BYTES,
+                "updateAlignment": POLICY_CAPABILITY_SET_UPDATE_ALIGNMENT,
+                "coalesceGapBytes": POLICY_CAPABILITY_SET_COALESCE_GAP_BYTES,
+                "rangeCallPenaltyBytes": POLICY_CAPABILITY_SET_RANGE_CALL_PENALTY_BYTES,
+                "maxBuffersPerDraw": POLICY_CAPABILITY_SET_MAX_BUFFERS_PER_DRAW,
+                "maxResourcesPerDraw": POLICY_CAPABILITY_SET_MAX_RESOURCES_PER_DRAW,
+                "maxIndirectDraws": POLICY_CAPABILITY_SET_MAX_INDIRECT_DRAWS,
+                "fragmentationBudget": POLICY_CAPABILITY_SET_FRAGMENTATION_BUDGET,
+                "wholeBufferThresholdBasisPoints": POLICY_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS,
+                "reserved": POLICY_CAPABILITY_SET_RESERVED
+            },
             "policyProgram": {
                 "size": POLICY_PROGRAM_RECORD_SIZE,
                 "alignment": POLICY_PROGRAM_RECORD_ALIGNMENT,
                 "techniqueId": POLICY_PROGRAM_TECHNIQUE_ID,
                 "programId": POLICY_PROGRAM_ID,
+                "capabilitySetId": POLICY_PROGRAM_CAPABILITY_SET_ID,
+                "resourceKindMask": POLICY_PROGRAM_RESOURCE_KIND_MASK,
+                "semanticViewMask": POLICY_PROGRAM_SEMANTIC_VIEW_MASK,
+                "batchKeyMask": POLICY_PROGRAM_BATCH_KEY_MASK,
                 "variant": POLICY_PROGRAM_VARIANT,
                 "f32InputCount": POLICY_PROGRAM_F32_INPUT_COUNT,
                 "u32InputCount": POLICY_PROGRAM_U32_INPUT_COUNT,
@@ -976,6 +1135,7 @@ pub fn json() -> String {
                 "reserved0": POLICY_PROGRAM_RESERVED0,
                 "operationStart": POLICY_PROGRAM_OPERATION_START,
                 "operationCount": POLICY_PROGRAM_OPERATION_COUNT,
+                "allocationStrategy": POLICY_PROGRAM_ALLOCATION_STRATEGY,
                 "reserved1": POLICY_PROGRAM_RESERVED1
             },
             "policyBuffer": {
@@ -983,7 +1143,12 @@ pub fn json() -> String {
                 "alignment": POLICY_BUFFER_RECORD_ALIGNMENT,
                 "id": POLICY_BUFFER_ID,
                 "scalar": POLICY_BUFFER_SCALAR,
-                "vectorWidth": POLICY_BUFFER_VECTOR_WIDTH
+                "vectorWidth": POLICY_BUFFER_VECTOR_WIDTH,
+                "alignment": POLICY_BUFFER_ALIGNMENT,
+                "stride": POLICY_BUFFER_STRIDE,
+                "usage": POLICY_BUFFER_USAGE,
+                "capacityClass": POLICY_BUFFER_CAPACITY_CLASS,
+                "reserved0": POLICY_BUFFER_RESERVED0
             },
             "policyOperation": {
                 "size": POLICY_OPERATION_RECORD_SIZE,
@@ -1266,6 +1431,32 @@ pub fn json() -> String {
             }
         },
         "policy": {
+            "capabilityFlags": {
+                "storageBuffers": CAP_STORAGE_BUFFERS,
+                "indirectDraws": CAP_INDIRECT_DRAWS,
+                "aliasVec2": CAP_ALIAS_VEC2,
+                "aliasVec4": CAP_ALIAS_VEC4,
+                "orderedDirect": CAP_ORDERED_DIRECT,
+                "stableIndirect": CAP_STABLE_INDIRECT
+            },
+            "batchFields": {
+                "technique": BATCH_TECHNIQUE,
+                "resource": BATCH_RESOURCE,
+                "program": BATCH_PROGRAM,
+                "material": BATCH_MATERIAL,
+                "clip": BATCH_CLIP,
+                "depth": BATCH_DEPTH,
+                "order": BATCH_ORDER
+            },
+            "bufferUsage": {
+                "vertex": BUFFER_USAGE_VERTEX,
+                "storage": BUFFER_USAGE_STORAGE,
+                "copyDst": BUFFER_USAGE_COPY_DST
+            },
+            "allocationStrategies": {
+                "orderedDirect": ALLOCATION_ORDERED_DIRECT,
+                "stableIndirect": ALLOCATION_STABLE_INDIRECT
+            },
             "scalarTypes": {
                 "f32": ScalarType::F32 as u8,
                 "u32": ScalarType::U32 as u8,
