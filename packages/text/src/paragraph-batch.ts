@@ -301,6 +301,7 @@ class ParagraphBatchImpl<Technique extends AnyRasterTechnique, Variant>
   readonly #paragraphs = new Set<ParagraphImpl<Technique, Variant>>();
   readonly #observers = new Set<ParagraphBatchObserver<Technique, Variant>>();
   readonly #spareStorage = new Map<GlyphBatchKey, GlyphBatchStorageOf<Technique>>();
+  readonly #glyphInputs: MutableGlyphInput<LoadedFont<Technique>['data']>[] = [];
   #capacity: GlyphBufferCapacity;
   #rasterPixelRatio: number;
   #renderVariant: Variant | undefined;
@@ -530,6 +531,14 @@ class ParagraphBatchImpl<Technique extends AnyRasterTechnique, Variant>
     }
     return packingOperations(this.technique).createStorage(capacity);
   }
+  /**
+   * Packing rewrites one input per glyph on every update and no prepared batch
+   * retains them, so the batch keeps the objects and overwrites them in place
+   * rather than handing the collector a glyph-sized set of corpses each update.
+   */
+  glyphInputs(): MutableGlyphInput<LoadedFont<Technique>['data']>[] {
+    return this.#glyphInputs;
+  }
 
   dispose(): void {
     if (this.#disposed) return;
@@ -539,6 +548,7 @@ class ParagraphBatchImpl<Technique extends AnyRasterTechnique, Variant>
     for (const observer of this.#observers) observer.complete();
     this.#observers.clear();
     this.#spareStorage.clear();
+    this.#glyphInputs.length = 0;
     this.#host.remove(this);
   }
 
@@ -573,6 +583,14 @@ interface CapturedParagraph<Technique extends AnyRasterTechnique, Variant> {
   readonly needsShape: boolean;
   readonly topology: number;
   readonly hasDensity: boolean;
+}
+
+/** A pooled glyph input while core still owns it, before the technique observes it. */
+type MutableGlyphInput<Data> = { -readonly [Field in keyof RasterGlyphInput<Data>]: RasterGlyphInput<Data>[Field] };
+
+/** Shares one hidden class across the pool by stating every field up front. */
+function blankGlyphInput<Data>(data: Data, paint: ResolvedPaint): MutableGlyphInput<Data> {
+  return { data, glyphId: 0, fontSize: 0, originX: 0, originY: 0, rasterPixelRatio: 0, paint };
 }
 
 /**
@@ -866,6 +884,9 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
   const entries = new Map<RasterResourceId, Map<number, Entry>>();
   const orderedEntries: Entry[] = [];
   const orderedRuns: LogicalRun[] = [];
+  const pool = batch.glyphInputs();
+  /** Advances only past an input a selection accepted, so a skip reuses the slot. */
+  let pooled = 0;
   let previousRun: LogicalRun | undefined;
   let cachedResource: RasterResourceId | undefined;
   let cachedPipelineVariant = -1;
@@ -876,17 +897,18 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
       const handle = layout.fontHandles[layout.glyphFontSlots[index]!]!;
       const font = value.fonts.get(handle);
       if (font === undefined) throw new Error('paragraph layout referenced an unresolved loaded font');
-      const input = {
-        data: font.data,
-        glyphId: layout.glyphIds[index]!,
-        fontSize: layout.glyphFontSizes[index]!,
-        originX: value.displayedX[index]!,
-        originY: value.displayedY[index]!,
-        rasterPixelRatio: value.rasterPixelRatio,
-        paint: attribution.kind === 'uniform' ? attribution.paint : attribution.paints[index]!,
-      };
+      const paint = attribution.kind === 'uniform' ? attribution.paint : attribution.paints[index]!;
+      const input = (pool[pooled] ??= blankGlyphInput(font.data, paint));
+      input.data = font.data;
+      input.glyphId = layout.glyphIds[index]!;
+      input.fontSize = layout.glyphFontSizes[index]!;
+      input.originX = value.displayedX[index]!;
+      input.originY = value.displayedY[index]!;
+      input.rasterPixelRatio = value.rasterPixelRatio;
+      input.paint = paint;
       const selection = technique.select(input);
       if (selection === undefined) continue;
+      pooled += 1;
       /** Consecutive glyphs almost always reselect the same batch. */
       let entry: Entry;
       if (
