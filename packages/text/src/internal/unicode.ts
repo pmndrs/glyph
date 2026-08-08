@@ -30,66 +30,95 @@ export interface UnicodeTextAnalysis {
   readonly scriptItems: readonly ScriptItem[];
 }
 
-interface GraphemeScript {
-  readonly start: number;
-  readonly end: number;
-  script: number;
-  readonly candidates: readonly number[];
+/**
+ * Grapheme scripts in a structure of arrays, with candidate script extensions in one flat run per grapheme addressed by
+ * `candidateOffsets`. An object per grapheme carrying its own candidate array allocated three times per grapheme of the
+ * paragraph, which is the dominant cost of analysing text that has changed.
+ */
+interface GraphemeScripts {
+  readonly count: number;
+  /** Grapheme `index` spans `[boundaries[index], boundaries[index + 1])`. */
+  readonly boundaries: Uint32Array;
+  readonly scripts: Uint32Array;
+  readonly candidateOffsets: Uint32Array;
+  readonly candidateTags: Uint32Array;
 }
 
 const lineBreakRules = new Rules();
 
 export function analyzeUnicodeText(text: string): UnicodeTextAnalysis {
   assertWellFormed(text);
-
+  // One segmentation pass. Grapheme boundaries and script itemization both walk the same segmenter, and walking it
+  // twice segments the whole paragraph twice for two views of one answer.
+  const boundaries = segmentGraphemes(text);
   return {
-    graphemeBoundaries: findGraphemeBoundaries(text),
+    graphemeBoundaries: boundaries,
     lineBreaks: findLineBreaks(text),
-    scriptItems: itemizeScripts(text),
+    scriptItems: itemizeSegmentedScripts(text, boundaries),
   };
 }
 
 export function findGraphemeBoundaries(text: string): Uint32Array {
   assertWellFormed(text);
-  const boundaries = [0];
-  for (const segment of graphemeSegments(text)) boundaries.push(segment.index + segment.segment.length);
-  return Uint32Array.from(boundaries);
+  return segmentGraphemes(text);
 }
 
 export function findLineBreaks(text: string): readonly UnicodeBreak[] {
   assertWellFormed(text);
-  return [...lineBreakRules.breaks(text)].map((entry) => ({
-    position: entry.position,
-    required: entry.required,
-  }));
+  // One pass. Spreading the iterator and mapping it built the whole break list twice to narrow each entry to two
+  // fields.
+  const breaks: UnicodeBreak[] = [];
+  for (const entry of lineBreakRules.breaks(text)) breaks.push({ position: entry.position, required: entry.required });
+  return breaks;
 }
 
 export function itemizeScripts(text: string): readonly ScriptItem[] {
   assertWellFormed(text);
+  return itemizeSegmentedScripts(text, segmentGraphemes(text));
+}
 
-  const graphemes: GraphemeScript[] = [];
+function segmentGraphemes(text: string): Uint32Array {
+  // A grapheme is never shorter than one code unit, so the text length bounds the boundary count and the result is
+  // sliced to what was written. Accumulating into a plain array and converting copied every boundary twice.
+  let boundaries = new Uint32Array(text.length + 1);
+  let count = 1;
   for (const segment of graphemeSegments(text)) {
-    const end = segment.index + segment.segment.length;
-    const resolved = resolveGraphemeScript(segment.segment);
-    graphemes.push({
-      start: segment.index,
-      end,
-      ...resolved,
-    });
-  }
-  resolveNeutralScripts(graphemes);
-
-  const scriptItems: ScriptItem[] = [];
-  for (const grapheme of graphemes) {
-    const previous = scriptItems.at(-1);
-    const script = uint32ToTag(grapheme.script);
-    if (previous !== undefined && previous.end === grapheme.start && previous.script === script) {
-      scriptItems[scriptItems.length - 1] = { ...previous, end: grapheme.end };
-    } else {
-      scriptItems.push({ start: grapheme.start, end: grapheme.end, script });
+    if (count === boundaries.length) {
+      const grown = new Uint32Array(boundaries.length * 2);
+      grown.set(boundaries);
+      boundaries = grown;
     }
+    boundaries[count] = segment.index + segment.segment.length;
+    count += 1;
   }
+  return boundaries.subarray(0, count);
+}
 
+function itemizeSegmentedScripts(text: string, boundaries: Uint32Array): readonly ScriptItem[] {
+  const graphemes = resolveGraphemeScripts(text, boundaries);
+  resolveNeutralScripts(graphemes);
+  const scriptItems: ScriptItem[] = [];
+  let itemStart = 0;
+  let itemEnd = 0;
+  let itemScript = 0;
+  let open = false;
+  for (let index = 0; index < graphemes.count; index += 1) {
+    const start = boundaries[index] ?? 0;
+    const end = boundaries[index + 1] ?? 0;
+    const script = graphemes.scripts[index] ?? commonScript;
+    // Merging compares the script as its numeric identity, so the tag string is built once per item instead of once
+    // per grapheme purely to be compared and discarded.
+    if (open && itemEnd === start && itemScript === script) {
+      itemEnd = end;
+      continue;
+    }
+    if (open) scriptItems.push({ start: itemStart, end: itemEnd, script: uint32ToTag(itemScript) });
+    itemStart = start;
+    itemEnd = end;
+    itemScript = script;
+    open = true;
+  }
+  if (open) scriptItems.push({ start: itemStart, end: itemEnd, script: uint32ToTag(itemScript) });
   return scriptItems;
 }
 
@@ -113,50 +142,110 @@ export function scriptsForCodePoint(codePoint: number): readonly string[] {
   return scripts;
 }
 
-function resolveGraphemeScript(text: string): {
-  readonly script: number;
-  readonly candidates: readonly number[];
-} {
-  let candidates: number[] | undefined;
-  let preferred = commonScript;
-  for (const scalar of text) {
-    const codePoint = scalar.codePointAt(0);
-    if (codePoint === undefined) continue;
-    const primary = lookupTriple(scriptRanges, codePoint);
-    if (!isNeutralScript(primary) && preferred === commonScript) preferred = primary;
-    const extensions = extensionSet(codePoint).filter((script) => !isNeutralScript(script));
-    if (extensions.length === 0) continue;
-    candidates = candidates === undefined ? extensions : candidates.filter((script) => extensions.includes(script));
+/**
+ * Resolves one script per grapheme, plus the candidate extensions a neutral grapheme may adopt from its neighbours.
+ *
+ * The previous form received a fresh substring per grapheme, iterated it as strings so every scalar allocated another,
+ * and materialized an array for every code point's script extensions and again for the non-neutral filter. This reads
+ * the source text by index and intersects candidates in one reused scratch buffer, so an ASCII grapheme — the common
+ * case by a wide margin — allocates nothing at all.
+ */
+function resolveGraphemeScripts(text: string, boundaries: Uint32Array): GraphemeScripts {
+  const count = Math.max(0, boundaries.length - 1);
+  const scripts = new Uint32Array(count);
+  const candidateOffsets = new Uint32Array(count + 1);
+  const collected: number[] = [];
+  for (let grapheme = 0; grapheme < count; grapheme += 1) {
+    const start = boundaries[grapheme] ?? 0;
+    const end = boundaries[grapheme + 1] ?? 0;
+    let preferred = commonScript;
+    let intersected = false;
+    let candidateLength = 0;
+    for (let index = start; index < end; ) {
+      const codePoint = text.codePointAt(index);
+      if (codePoint === undefined) break;
+      index += codePoint > 0xffff ? 2 : 1;
+      const primary = lookupTriple(scriptRanges, codePoint);
+      if (!isNeutralScript(primary) && preferred === commonScript) preferred = primary;
+      const setIndex = lookupTriple(scriptExtensionRanges, codePoint);
+      const extensionStart = scriptExtensionOffsets[setIndex];
+      const extensionEnd = scriptExtensionOffsets[setIndex + 1];
+      if (extensionStart === undefined || extensionEnd === undefined) {
+        throw new Error('invalid generated script set');
+      }
+      let extensions = 0;
+      for (let entry = extensionStart; entry < extensionEnd; entry += 1) {
+        if (!isNeutralScript(scriptExtensionTags[entry] ?? unknownScript)) extensions += 1;
+      }
+      if (extensions === 0) continue;
+      if (!intersected) {
+        intersected = true;
+        for (let entry = extensionStart; entry < extensionEnd; entry += 1) {
+          const tag = scriptExtensionTags[entry] ?? unknownScript;
+          if (!isNeutralScript(tag)) scratchCandidates[candidateLength++] = tag;
+        }
+        continue;
+      }
+      let retained = 0;
+      for (let candidate = 0; candidate < candidateLength; candidate += 1) {
+        const tag = scratchCandidates[candidate] ?? unknownScript;
+        if (extensionsInclude(extensionStart, extensionEnd, tag)) scratchCandidates[retained++] = tag;
+      }
+      candidateLength = retained;
+    }
+    scripts[grapheme] = preferred;
+    // A grapheme whose candidates already admit its own script needs none recorded, matching the previous empty result.
+    if (intersected && candidateLength > 0 && !includesCandidate(scratchCandidates, candidateLength, preferred)) {
+      for (let candidate = 0; candidate < candidateLength; candidate += 1) {
+        collected.push(scratchCandidates[candidate] ?? unknownScript);
+      }
+    }
+    candidateOffsets[grapheme + 1] = collected.length;
   }
-  if (candidates === undefined || candidates.length === 0 || candidates.includes(preferred)) {
-    return { script: preferred, candidates: [] };
-  }
-  return { script: preferred, candidates };
+  return { count, boundaries, scripts, candidateOffsets, candidateTags: Uint32Array.from(collected) };
 }
 
-function resolveNeutralScripts(graphemes: GraphemeScript[]): void {
+/** Reused across graphemes; bounded by the largest generated script-extension set, and never escapes this module. */
+const scratchCandidates: number[] = [];
+
+function extensionsInclude(start: number, end: number, tag: number): boolean {
+  for (let entry = start; entry < end; entry += 1) if (scriptExtensionTags[entry] === tag) return true;
+  return false;
+}
+
+function includesCandidate(candidates: readonly number[], length: number, tag: number): boolean {
+  for (let index = 0; index < length; index += 1) if (candidates[index] === tag) return true;
+  return false;
+}
+
+function resolveNeutralScripts(graphemes: GraphemeScripts): void {
   let previous = commonScript;
-  for (const grapheme of graphemes) {
-    if (isNeutralScript(grapheme.script)) {
-      if (acceptsContext(grapheme, previous)) grapheme.script = previous;
+  for (let index = 0; index < graphemes.count; index += 1) {
+    const script = graphemes.scripts[index] ?? commonScript;
+    if (isNeutralScript(script)) {
+      if (acceptsContext(graphemes, index, previous)) graphemes.scripts[index] = previous;
     } else {
-      previous = grapheme.script;
+      previous = script;
     }
   }
   let next = commonScript;
-  for (let index = graphemes.length - 1; index >= 0; index -= 1) {
-    const grapheme = graphemes[index];
-    if (grapheme === undefined) continue;
-    if (isNeutralScript(grapheme.script)) {
-      if (acceptsContext(grapheme, next)) grapheme.script = next;
+  for (let index = graphemes.count - 1; index >= 0; index -= 1) {
+    const script = graphemes.scripts[index] ?? commonScript;
+    if (isNeutralScript(script)) {
+      if (acceptsContext(graphemes, index, next)) graphemes.scripts[index] = next;
     } else {
-      next = grapheme.script;
+      next = script;
     }
   }
 }
 
-function acceptsContext(grapheme: GraphemeScript, script: number): boolean {
-  return !isNeutralScript(script) && (grapheme.candidates.length === 0 || grapheme.candidates.includes(script));
+function acceptsContext(graphemes: GraphemeScripts, index: number, script: number): boolean {
+  if (isNeutralScript(script)) return false;
+  const start = graphemes.candidateOffsets[index] ?? 0;
+  const end = graphemes.candidateOffsets[index + 1] ?? 0;
+  if (end === start) return true;
+  for (let entry = start; entry < end; entry += 1) if (graphemes.candidateTags[entry] === script) return true;
+  return false;
 }
 
 function extensionSet(codePoint: number): number[] {
