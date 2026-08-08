@@ -575,6 +575,22 @@ interface CapturedParagraph<Technique extends AnyRasterTechnique, Variant> {
   readonly hasDensity: boolean;
 }
 
+/**
+ * Cascade-resolved paint and render variant for one prepared revision. A
+ * paragraph whose cascade states a single segment attributes every glyph
+ * identically, so it carries one value instead of two arrays as long as the
+ * glyph count.
+ */
+type GlyphAttribution<Variant> =
+  | { readonly kind: 'uniform'; readonly paint: ResolvedPaint; readonly variant: Variant | undefined }
+  | {
+      readonly kind: 'per-glyph';
+      /** Parallel to `layout.glyphIds`. */
+      readonly paints: readonly ResolvedPaint[];
+      /** Parallel to `layout.glyphIds`. */
+      readonly variants: readonly (Variant | undefined)[];
+    };
+
 interface PreparedOwnedParagraph<Technique extends AnyRasterTechnique, Variant> {
   readonly owner: ParagraphImpl<Technique, Variant>;
   readonly capture: CapturedParagraph<Technique, Variant>;
@@ -586,10 +602,7 @@ interface PreparedOwnedParagraph<Technique extends AnyRasterTechnique, Variant> 
   readonly displayedY: Float32Array;
   readonly rasterPixelRatio: number;
   readonly batchRenderVariant: Variant | undefined;
-  /** Cascade-resolved paint per glyph, parallel to `layout.glyphIds`. */
-  readonly glyphPaints: readonly ResolvedPaint[];
-  /** Cascade-resolved render variant per glyph, parallel to `layout.glyphIds`. */
-  readonly glyphVariants: readonly (Variant | undefined)[];
+  readonly attribution: GlyphAttribution<Variant>;
 }
 
 class ParagraphImpl<Technique extends AnyRasterTechnique, Variant> implements Paragraph<Technique, Variant> {
@@ -794,7 +807,7 @@ class ParagraphImpl<Technique extends AnyRasterTechnique, Variant> implements Pa
       displayedY: capture.origins?.y ?? layout.y,
       rasterPixelRatio: capture.hasDensity ? capture.state.rasterPixelRatio : batchRasterPixelRatio,
       batchRenderVariant,
-      ...resolveGlyphAttribution(capture.state, layout, batchRenderVariant),
+      attribution: resolveGlyphAttribution(capture.state, layout, batchRenderVariant),
       publicParagraph: Object.freeze({ id: this.id, layout, topology }),
     };
   }
@@ -858,7 +871,7 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
   let cachedPipelineVariant = -1;
   let cachedEntry: Entry | undefined;
   for (const value of prepared) {
-    const { layout, owner } = value;
+    const { layout, owner, attribution } = value;
     for (let index = 0; index < layout.glyphIds.length; index += 1) {
       const handle = layout.fontHandles[layout.glyphFontSlots[index]!]!;
       const font = value.fonts.get(handle);
@@ -870,7 +883,7 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
         originX: value.displayedX[index]!,
         originY: value.displayedY[index]!,
         rasterPixelRatio: value.rasterPixelRatio,
-        paint: value.glyphPaints[index]!,
+        paint: attribution.kind === 'uniform' ? attribution.paint : attribution.paints[index]!,
       };
       const selection = technique.select(input);
       if (selection === undefined) continue;
@@ -899,7 +912,7 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
         cachedPipelineVariant = selection.pipelineVariant;
         cachedEntry = existing;
       }
-      const variant = value.glyphVariants[index];
+      const variant = attribution.kind === 'uniform' ? attribution.variant : attribution.variants[index];
       if (
         previousRun !== undefined &&
         previousRun.entry === entry &&
@@ -1459,27 +1472,31 @@ function resolveGlyphAttribution<Technique extends AnyRasterTechnique, Variant>(
   state: ParagraphSnapshot<Technique, Variant>,
   layout: ParagraphLayout,
   batchRenderVariant: Variant | undefined,
-): {
-  readonly glyphPaints: readonly ResolvedPaint[];
-  readonly glyphVariants: readonly (Variant | undefined)[];
-} {
+): GlyphAttribution<Variant> {
   const cascade = paragraphCascade(state);
   const rootPaint = resolvePaint(state.paint);
   const rootVariant = state.renderVariant ?? batchRenderVariant;
-  const starts = Uint32Array.from(cascade, (segment) => segment.start);
+  // An empty cascade states nothing, so every glyph inherits the paragraph root.
+  if (cascade.length === 0) return { kind: 'uniform', paint: rootPaint, variant: rootVariant };
   const paints = cascade.map((segment) => {
     const paint = paintOf(state.paint, segment.properties);
     return paint === undefined ? rootPaint : resolvePaint(paint);
   });
   const variants = cascade.map((segment) => segment.properties.renderVariant ?? rootVariant);
-  const glyphPaints: ResolvedPaint[] = [];
-  const glyphVariants: (Variant | undefined)[] = [];
-  for (let index = 0; index < layout.glyphIds.length; index += 1) {
-    const segment = segmentIndexAt(starts, layout.clusters[index]!);
-    glyphPaints.push(segment === -1 ? rootPaint : paints[segment]!);
-    glyphVariants.push(segment === -1 ? rootVariant : variants[segment]);
+  // One segment covering the text from its start attributes every cluster alike.
+  if (cascade.length === 1 && cascade[0]!.start === 0) {
+    return { kind: 'uniform', paint: paints[0]!, variant: variants[0] };
   }
-  return { glyphPaints, glyphVariants };
+  const starts = Uint32Array.from(cascade, (segment) => segment.start);
+  const glyphCount = layout.glyphIds.length;
+  const glyphPaints = new Array<ResolvedPaint>(glyphCount);
+  const glyphVariants = new Array<Variant | undefined>(glyphCount);
+  for (let index = 0; index < glyphCount; index += 1) {
+    const segment = segmentIndexAt(starts, layout.clusters[index]!);
+    glyphPaints[index] = segment === -1 ? rootPaint : paints[segment]!;
+    glyphVariants[index] = segment === -1 ? rootVariant : variants[segment];
+  }
+  return { kind: 'per-glyph', paints: glyphPaints, variants: glyphVariants };
 }
 
 function segmentIndexAt(starts: Uint32Array, offset: number): number {
