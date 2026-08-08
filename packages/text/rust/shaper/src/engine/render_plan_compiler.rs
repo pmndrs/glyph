@@ -10,7 +10,8 @@ use super::{
     ordered_plan::{OrderedPlanCompiler, OrderedPlanError},
     plan_input::{PlanInput, PlanInputError, validate_input},
     policy::{
-        ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, CapabilitySetId, ValidatedPolicy,
+        ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, CapabilitySetId,
+        PolicyExecutionError, ValidatedPolicy,
     },
     render_plan::{
         BufferRecord, DrawRecord, PATCH_WRITE, PatchRecord, PrimitiveRecord,
@@ -59,6 +60,31 @@ impl From<OrderedPlanError> for RenderPlanCompilerError {
 impl From<StablePlanError> for RenderPlanCompilerError {
     fn from(error: StablePlanError) -> Self {
         Self::Stable(error)
+    }
+}
+
+impl RenderPlanCompilerError {
+    pub(crate) fn is_result_too_large(self) -> bool {
+        match self {
+            Self::AllocationFailed | Self::ArithmeticOverflow => true,
+            Self::Ordered(error) => matches!(
+                error,
+                OrderedPlanError::AllocationFailed
+                    | OrderedPlanError::CapacityExceeded
+                    | OrderedPlanError::IdentifierExhausted
+                    | OrderedPlanError::ArithmeticOverflow
+                    | OrderedPlanError::PolicyExecution(PolicyExecutionError::OutputCapacity)
+            ),
+            Self::Stable(error) => matches!(
+                error,
+                StablePlanError::AllocationFailed
+                    | StablePlanError::CapacityExceeded
+                    | StablePlanError::IdentifierExhausted
+                    | StablePlanError::ArithmeticOverflow
+                    | StablePlanError::PolicyExecution(PolicyExecutionError::OutputCapacity)
+            ),
+            _ => false,
+        }
     }
 }
 

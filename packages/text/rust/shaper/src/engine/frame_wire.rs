@@ -8,7 +8,8 @@ use crate::{
     STATUS_INVALID_REQUEST,
     abi_contract::{
         ABI_VERSION, ENGINE_RESULT_HEADER_SIZE, ENGINE_UPDATE_ABI_VERSION,
-        ENGINE_UPDATE_BYTE_LENGTH, ENGINE_UPDATE_CAPABILITY_SET, ENGINE_UPDATE_CONSTRAINT_COUNT,
+        ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION, ENGINE_UPDATE_BYTE_LENGTH,
+        ENGINE_UPDATE_CAPABILITY_SET, ENGINE_UPDATE_CONSTRAINT_COUNT,
         ENGINE_UPDATE_CONSTRAINTS_OFFSET, ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
         ENGINE_UPDATE_EXCLUSION_COUNT, ENGINE_UPDATE_EXCLUSIONS_OFFSET,
         ENGINE_UPDATE_EXPECTED_ENGINE_REVISION, ENGINE_UPDATE_FLAGS,
@@ -95,6 +96,10 @@ pub(crate) fn parse_update_request(bytes: &[u8], session_id: u32) -> Result<Upda
         session_id,
         expected_engine_revision: read_u32(bytes, ENGINE_UPDATE_EXPECTED_ENGINE_REVISION)?,
         consumed_plan_revision: read_u32(bytes, ENGINE_UPDATE_CONSUMED_PLAN_REVISION)?,
+        acknowledged_publication_generation: read_u32(
+            bytes,
+            ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION,
+        )?,
         policy_handle: read_u32(bytes, ENGINE_UPDATE_POLICY_HANDLE)?,
         capability_set: positive(bytes, ENGINE_UPDATE_CAPABILITY_SET)?,
         limits,

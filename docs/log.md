@@ -2,6 +2,15 @@
 
 ## 2026-08-08
 
+- **Made Rust render-plan state session-owned and fence-safe** — The 124-byte compiler-derived update request now carries
+  a monotonic renderer-fence acknowledgment distinct from consumed plan revision. Each session owns the Rust mixed-plan
+  dispatcher and pins its committed policy identity. Wasm prepares, validates, stages, and only then commits planner and
+  revision state; failure aborts the planner while preserving a valid already-completed fence acknowledgment. Host and
+  compiled-Wasm tests cover future/stale fences, abort/retry, policy replacement, and A/B preservation. Reachability
+  raises optimized Wasm from 739,909 / 272,624 / 214,395 to 822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. Mutation
+  sections still reject nonempty semantic input, so this publishes an empty Rust plan and makes no shaping/layout
+  latency claim; the shared-runtime size increase is now a measured optimization target.
+
 - **Compiled mixed allocation strategies without semantic partitions** — Added a retained dispatcher that keeps the
   homogeneous ordered-direct or stable-indirect path as one compiler and one direct plan view. A heterogeneous frame
   lets both compilers filter the same borrowed glyph/field slices, then merges only resource, buffer, patch, primitive,

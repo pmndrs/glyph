@@ -3,6 +3,7 @@ export interface EngineUpdateFields {
   readonly policyHandle: number;
   readonly expectedEngineRevision: number;
   readonly consumedPlanRevision: number;
+  readonly acknowledgedPublicationGeneration?: number;
 }
 
 export function renderPolicyBytes(abi: object): Uint8Array;
