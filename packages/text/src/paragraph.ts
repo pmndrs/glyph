@@ -1469,7 +1469,9 @@ function preparePositioning(
   prepared: PreparedParagraph,
   lines: readonly LinePlan[],
 ): PreparedPositioning {
+  const fragmenting = profileBegin();
   const fragments = collectLineFragments(prepared, lines);
+  profileEnd('layout.fragments', fragmenting);
   const ranges: ReshapeRange[] = [];
   for (const fragment of fragments) {
     if (!fragment.reshape) continue;
@@ -1484,7 +1486,9 @@ function preparePositioning(
       flags: fragment.flags,
     });
   }
+  const reshaping = profileBegin();
   const reshaped = ranges.length === 0 ? undefined : ownShape(shaper.reshapeRanges({ ...prepared.request, ranges }));
+  profileEnd('layout.reshape', reshaping);
   return { fragments, ...(reshaped === undefined ? {} : { reshaped }) };
 }
 
