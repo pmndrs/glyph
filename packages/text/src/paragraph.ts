@@ -284,6 +284,10 @@ const CLUSTER_SAFE_BEFORE = 0x01;
 const CLUSTER_REQUIRED_BREAK = 0x02;
 /** The cluster is a hard line separator rather than drawable text. */
 const CLUSTER_HARD_BREAK = 0x04;
+/** A text offset that shaping treated as a run or cluster boundary. */
+const OFFSET_SHAPED_BOUNDARY = 0x01;
+/** A text offset that shaping marked unsafe to break at. */
+const OFFSET_UNSAFE_TO_BREAK = 0x02;
 const BIDI_BN = 9;
 const BIDI_B = 10;
 const BIDI_S = 11;
@@ -856,9 +860,12 @@ function measureClusters(
   shape: OwnedShape,
   previous?: PreparedParagraph,
 ): MeasuredClusters {
-  const advances = new Map<number, number>();
-  const unsafe = new Set<number>();
-  const shapedBoundaries = new Set<number>();
+  // Shaping results are gathered by text offset rather than into a map and two sets keyed by offset. Every glyph of the
+  // paragraph touched all three, so the hash entries were themselves a per-glyph allocation. Advances still accumulate
+  // in the shaped order and in double precision, so the totals are unchanged.
+  const offsets = text.length + 1;
+  const offsetAdvances = new Float64Array(offsets);
+  const offsetFlags = new Uint8Array(offsets);
   for (let runIndex = 0; runIndex < runs.length; runIndex += 1) {
     const run = runs[runIndex];
     const glyphStart = shape.runGlyphStarts[runIndex];
@@ -868,8 +875,8 @@ function measureClusters(
     }
     const font = requireFont(shaper, run.style.font);
     const scale = run.style.fontSize / font.metrics.unitsPerEm;
-    shapedBoundaries.add(run.start);
-    shapedBoundaries.add(run.end);
+    offsetFlags[run.start] = (offsetFlags[run.start] ?? 0) | OFFSET_SHAPED_BOUNDARY;
+    offsetFlags[run.end] = (offsetFlags[run.end] ?? 0) | OFFSET_SHAPED_BOUNDARY;
     for (let glyph = glyphStart; glyph < glyphStart + glyphCount; glyph += 1) {
       const cluster = shape.clusters[glyph];
       const advance = shape.xAdvances[glyph];
@@ -877,13 +884,16 @@ function measureClusters(
       if (cluster === undefined || advance === undefined || flags === undefined) {
         throw new Error('shaper returned an incomplete glyph table');
       }
-      shapedBoundaries.add(cluster);
-      advances.set(cluster, (advances.get(cluster) ?? 0) + Math.abs(advance) * scale);
-      if ((flags & GLYPH_UNSAFE_TO_BREAK) !== 0) unsafe.add(cluster);
+      offsetAdvances[cluster] = (offsetAdvances[cluster] ?? 0) + Math.abs(advance) * scale;
+      offsetFlags[cluster] =
+        (offsetFlags[cluster] ?? 0) |
+        OFFSET_SHAPED_BOUNDARY |
+        ((flags & GLYPH_UNSAFE_TO_BREAK) !== 0 ? OFFSET_UNSAFE_TO_BREAK : 0);
     }
   }
+  const requiredBreaks = new Uint8Array(offsets);
+  for (const entry of unicode.lineBreaks) requiredBreaks[entry.position] = entry.required ? 1 : 0;
 
-  const lineBreaks = new Map(unicode.lineBreaks.map((entry) => [entry.position, entry.required]));
   const count = Math.max(0, unicode.graphemeBoundaries.length - 1);
   const retained = previous?.clusters;
   const starts = reuseTypedArray(retained?.starts, count, (capacity) => new Uint32Array(capacity).subarray(0, count));
@@ -905,13 +915,16 @@ function measureClusters(
       throw new Error(`paragraph offset ${start} has no resolved style`);
     }
     const hardBreak = isHardBreak(text, start);
+    const boundary = offsetFlags[start] ?? 0;
     starts[index] = start;
     ends[index] = end;
-    clusterAdvances[index] = (advances.get(start) ?? 0) + (hardBreak ? 0 : styleSegment.style.letterSpacing);
+    clusterAdvances[index] = (offsetAdvances[start] ?? 0) + (hardBreak ? 0 : styleSegment.style.letterSpacing);
     styleIndexes[index] = styleIndex;
     flags[index] =
-      (shapedBoundaries.has(start) && !unsafe.has(start) ? CLUSTER_SAFE_BEFORE : 0) |
-      (lineBreaks.get(end) === true ? CLUSTER_REQUIRED_BREAK : 0) |
+      ((boundary & (OFFSET_SHAPED_BOUNDARY | OFFSET_UNSAFE_TO_BREAK)) === OFFSET_SHAPED_BOUNDARY
+        ? CLUSTER_SAFE_BEFORE
+        : 0) |
+      (requiredBreaks[end] === 1 ? CLUSTER_REQUIRED_BREAK : 0) |
       (hardBreak ? CLUSTER_HARD_BREAK : 0);
   }
   return { count, starts, ends, advances: clusterAdvances, flags, styleIndexes };
