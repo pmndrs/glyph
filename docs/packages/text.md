@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:4a7b8185e1e12f32e155d92f7cac830930a2f72d666df8fcaefe2a13b891de96'
+source_digest: 'sha256:873a7dc286bbcc2c3527a566ffcfd47701c63e42588f7962ce975583acda0407'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -172,7 +172,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-07T17:05:00Z'
+  at: '2026-08-08T02:45:00Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -434,6 +434,10 @@ Roadmap item 7.2 adds an optional presentation seam to this bitmap subpath witho
 The canonical composed Inter fixture proves GLB → registry → public `Text` → HarfRust → paragraph layout → bitmap decode → GPU upload → instanced draw in the benchmark product. The five-lane benchmark ipsum produces 120 visible glyphs, zero missing glyphs, and one draw on both backends. Density fixtures carry 16 and 32 ppem strikes; exact-strike rendering keeps public geometry at 16 CSS px while selecting 16 device pixels at 1× and 32 device pixels at 2×. A record-level Rust invariant proves atlas and native plane dimensions are identical. The benchmark independently CPU-composes decoded atlas texels at snapped placements and requires every normalized GPU byte to match for both the full frame and a resized, intentionally clipped frame; WebGPU and WebGL2 produce the same full-frame hash at each DPR. Bitmap accepts fill and opacity but rejects outline and shadow through the optional raster paint-validation seam instead of silently discarding them. Hinted grayscale and four-phase coverage packing remain measured research, while LCD/ClearType rendering is an explicit non-goal. The [roadmap](../roadmap/roadmap.md) remains the only completion ledger.
 
 The five-line, 120-glyph text above is the bounded conformance specimen. The separate live benchmark ipsum exceeds 1,000 characters and renders 1,150 glyphs through the same one-draw public `Text` path.
+
+Paragraph layout is tiered by what each product depends on, so a change enters at its own tier instead of rebuilding the paragraph. Text analysis follows the text and its base direction, shaping adds the fonts, spans, and style topology, metrics add font size and spacing, the line plan adds the content box, and geometry adds alignment. A retained layout session holds the prepared paragraph across updates, so a content-box change never enters preparation and reuses the caches the paragraph already keeps, while font fallback reads shaped glyph identity rather than laying the paragraph out to locate `.notdef`. Positioning writes its output into typed arrays sized from the shaped runs and resolves a text offset to a cluster through a table built once per preparation, replacing a lower-bound search that ran twice at every cluster boundary of every glyph. Both position axes accumulate in double precision and narrow once, because alignment and justification read an axis back after storing it.
+
+`pnpm scripts run text:layout-benchmark` measures that path. It reports a median of warmed repetitions for each invalidation class separately, with the relative standard deviation beside it and the phase attribution below it, because the classes invalidate different tiers and an average across them hides whichever one is slow. Optional phase spans carry the attribution; installing no profiler costs one comparison per phase, and `userTimingProfiler()` forwards the same spans to the User Timing timeline for a browser profile. At 25,515 glyphs every class previously measured within noise of 131 ms, which is what a paragraph rebuilt per update costs; a resize now measures 33.72 ms and a reflow 27.98 ms with layout output unchanged. Boundary reshaping and per-item allocation are the remaining costs, at roughly a fifth of a resize each.
 
 ## Package scripts
 
