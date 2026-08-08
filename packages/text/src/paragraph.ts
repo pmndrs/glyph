@@ -194,6 +194,12 @@ interface PreparedParagraph {
   readonly ellipses: readonly PreparedEllipsis[];
   readonly clusters: readonly MeasuredCluster[];
   readonly clusterStarts: Uint32Array;
+  /**
+   * Cluster index for every text offset, so resolving an offset to a cluster is a load rather than a binary search.
+   * Positioning resolves two offsets at every cluster boundary of every glyph, which made that search the hottest leaf
+   * in a browser profile of the layout path.
+   */
+  readonly clusterIndexAt: Uint32Array;
   readonly letterSpacingPrefix: Float64Array;
   readonly spacePrefix: Uint32Array;
 }
@@ -903,7 +909,7 @@ function indexClusters(
   text: string,
   clusters: readonly MeasuredCluster[],
   previous?: PreparedParagraph,
-): Pick<PreparedParagraph, 'clusterStarts' | 'letterSpacingPrefix' | 'spacePrefix'> {
+): Pick<PreparedParagraph, 'clusterStarts' | 'clusterIndexAt' | 'letterSpacingPrefix' | 'spacePrefix'> {
   const clusterStarts = reuseTypedArray(previous?.clusterStarts, clusters.length, (capacity) =>
     new Uint32Array(capacity).subarray(0, clusters.length),
   );
@@ -913,6 +919,9 @@ function indexClusters(
   const spacePrefix = reuseTypedArray(previous?.spacePrefix, clusters.length + 1, (capacity) =>
     new Uint32Array(capacity).subarray(0, clusters.length + 1),
   );
+  const clusterIndexAt = reuseTypedArray(previous?.clusterIndexAt, text.length + 1, (capacity) =>
+    new Uint32Array(capacity).subarray(0, text.length + 1),
+  );
   for (let index = 0; index < clusters.length; index += 1) {
     const cluster = clusters[index];
     if (cluster === undefined) continue;
@@ -921,7 +930,13 @@ function indexClusters(
       (letterSpacingPrefix[index] ?? 0) + (cluster.hardBreak ? 0 : cluster.style.letterSpacing);
     spacePrefix[index + 1] = (spacePrefix[index] ?? 0) + (text.charCodeAt(cluster.start) === 0x20 ? 1 : 0);
   }
-  return { clusterStarts, letterSpacingPrefix, spacePrefix };
+  // The same answer a lower-bound search over `clusterStarts` gives, resolved once for every offset in one pass.
+  let cluster = 0;
+  for (let offset = 0; offset <= text.length; offset += 1) {
+    while (cluster < clusters.length && (clusterStarts[cluster] ?? 0) < offset) cluster += 1;
+    clusterIndexAt[offset] = cluster;
+  }
+  return { clusterStarts, clusterIndexAt, letterSpacingPrefix, spacePrefix };
 }
 
 function planLines(
@@ -1284,25 +1299,51 @@ function positionPrepared(
 
   const fontHandles: number[] = [];
   const fontSlots = new Map<FontHandle, number>();
-  const glyphFontSlots: number[] = [];
-  const glyphIds: number[] = [];
-  const clusters: number[] = [];
-  const glyphFontSizes: number[] = [];
-  const x: number[] = [];
-  const y: number[] = [];
-  const glyphFlags: number[] = [];
-  const lineTextStarts: number[] = [];
-  const lineTextEnds: number[] = [];
-  const lineGlyphStarts: number[] = [];
-  const lineGlyphCounts: number[] = [];
-  const lineBaselines: number[] = [];
-  const lineAdvances: number[] = [];
+  // Every output glyph comes from one source glyph, so the shaped runs bound the output. The arrays are written in
+  // place and sliced to the final count, which removes both the per-glyph push and the copy that `TypedArray.from`
+  // made out of every accumulator.
+  let capacity = prepared.shape.glyphIds.length + (reshaped?.glyphIds.length ?? 0);
+  let glyphFontSlots = new Uint16Array(capacity);
+  let glyphIds = new Uint16Array(capacity);
+  let clusters = new Uint32Array(capacity);
+  let glyphFontSizes = new Float32Array(capacity);
+  // Both axes accumulate in double precision and narrow once, when the geometry is handed out. Alignment and
+  // justification already read `x` back and add to it, and single precision would round at the store and again at the
+  // adjustment and drift from the golden layout. The same becomes true of `y` the moment vertical alignment or a
+  // vertical writing mode lands, so the rule is the axis, not today's caller.
+  let x = new Float64Array(capacity);
+  let y = new Float64Array(capacity);
+  let glyphFlags = new Uint16Array(capacity);
+  const justifying = constraints.align === 'justify';
+  let justificationCounts = justifying ? new Uint32Array(capacity) : undefined;
+  const lineTextStarts = new Uint32Array(lines.length);
+  const lineTextEnds = new Uint32Array(lines.length);
+  const lineGlyphStarts = new Uint32Array(lines.length);
+  const lineGlyphCounts = new Uint32Array(lines.length);
+  const lineBaselines = new Float32Array(lines.length);
+  const lineAdvances = new Float32Array(lines.length);
+  let count = 0;
   let blockOffset = 0;
   let fragmentIndex = 0;
 
-  for (const [lineIndex, line] of lines.entries()) {
-    const lineGlyphStart = glyphIds.length;
-    const justificationCounts: number[] = [];
+  const reserve = (needed: number): void => {
+    if (needed <= capacity) return;
+    let next = Math.max(capacity * 2, 64);
+    while (next < needed) next *= 2;
+    capacity = next;
+    glyphFontSlots = grownTypedArray(glyphFontSlots, next);
+    glyphIds = grownTypedArray(glyphIds, next);
+    clusters = grownTypedArray(clusters, next);
+    glyphFontSizes = grownTypedArray(glyphFontSizes, next);
+    x = grownTypedArray(x, next);
+    y = grownTypedArray(y, next);
+    glyphFlags = grownTypedArray(glyphFlags, next);
+    if (justificationCounts !== undefined) justificationCounts = grownTypedArray(justificationCounts, next);
+  };
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex]!;
+    const lineGlyphStart = count;
     let passedSpaces = 0;
     let cursor = 0;
     const baseline = blockOffset + line.baseline;
@@ -1330,9 +1371,10 @@ function positionPrepared(
       const scale = run.style.fontSize / font.metrics.unitsPerEm;
       const selectedStart = fragment.ellipsis?.textStart ?? fragment.start;
       const selectedEnd = fragment.ellipsis?.textEnd ?? fragment.end;
-      const selected = glyphIndexes(source, glyphStart, glyphCount, selectedStart, selectedEnd);
+      const selected = glyphRange(source, glyphStart, glyphCount, selectedStart, selectedEnd);
+      reserve(count + (selected.end - selected.start));
       let clusterBoundary = run.direction === 'ltr' ? fragment.start : fragment.end;
-      for (const [selectedIndex, glyph] of selected.entries()) {
+      for (let glyph = selected.start; glyph < selected.end; glyph += 1) {
         const cluster = source.clusters[glyph];
         const glyphId = source.glyphIds[glyph];
         const xAdvance = source.xAdvances[glyph];
@@ -1349,17 +1391,17 @@ function positionPrepared(
         ) {
           throw new Error('shaper returned an incomplete positioned glyph');
         }
-        glyphFontSlots.push(slot);
-        glyphIds.push(glyphId);
-        clusters.push(fragment.ellipsis?.cluster ?? cluster);
-        glyphFontSizes.push(run.style.fontSize);
-        justificationCounts.push(passedSpaces);
-        x.push(cursor + xOffset * scale);
-        y.push(baseline - yOffset * scale);
-        glyphFlags.push(flags);
+        glyphFontSlots[count] = slot;
+        glyphIds[count] = glyphId;
+        clusters[count] = fragment.ellipsis?.cluster ?? cluster;
+        glyphFontSizes[count] = run.style.fontSize;
+        if (justificationCounts !== undefined) justificationCounts[count] = passedSpaces;
+        x[count] = cursor + xOffset * scale;
+        y[count] = baseline - yOffset * scale;
+        glyphFlags[count] = flags;
+        count += 1;
         cursor += Math.abs(xAdvance) * scale;
-        const nextGlyph = selected[selectedIndex + 1];
-        const nextCluster = nextGlyph === undefined ? selectedEnd : source.clusters[nextGlyph];
+        const nextCluster = glyph + 1 < selected.end ? source.clusters[glyph + 1] : selectedEnd;
         if (nextCluster !== cluster && fragment.ellipsis === undefined) {
           const rangeStart = run.direction === 'ltr' ? cluster : Math.min(cluster, clusterBoundary);
           const rangeEnd = run.direction === 'ltr' ? (nextCluster ?? fragment.end) : Math.max(cluster, clusterBoundary);
@@ -1371,46 +1413,55 @@ function positionPrepared(
       fragmentIndex += 1;
     }
     const available = Math.max(0, boxWidth - cursor);
-    if (constraints.align === 'justify' && !line.hardBreak && lineIndex < lines.length - 1 && passedSpaces > 0) {
+    if (justifying && !line.hardBreak && lineIndex < lines.length - 1 && passedSpaces > 0) {
       const perSpace = available / passedSpaces;
-      for (let glyph = lineGlyphStart; glyph < glyphIds.length; glyph += 1) {
-        x[glyph] = (x[glyph] ?? 0) + (justificationCounts[glyph - lineGlyphStart] ?? 0) * perSpace;
+      for (let glyph = lineGlyphStart; glyph < count; glyph += 1) {
+        x[glyph] = (x[glyph] ?? 0) + (justificationCounts?.[glyph] ?? 0) * perSpace;
       }
       cursor += available;
     } else {
       const paragraphDirection = directionForLevel(paragraphLevelAt(prepared.bidi, line.textStart));
       const offset = alignmentOffset(constraints.align, paragraphDirection, available);
       if (offset !== 0) {
-        for (let glyph = lineGlyphStart; glyph < glyphIds.length; glyph += 1) {
+        for (let glyph = lineGlyphStart; glyph < count; glyph += 1) {
           x[glyph] = (x[glyph] ?? 0) + offset;
         }
       }
     }
-    lineTextStarts.push(line.textStart);
-    lineTextEnds.push(line.textEnd);
-    lineGlyphStarts.push(lineGlyphStart);
-    lineGlyphCounts.push(glyphIds.length - lineGlyphStart);
-    lineBaselines.push(baseline);
-    lineAdvances.push(cursor);
+    lineTextStarts[lineIndex] = line.textStart;
+    lineTextEnds[lineIndex] = line.textEnd;
+    lineGlyphStarts[lineIndex] = lineGlyphStart;
+    lineGlyphCounts[lineIndex] = count - lineGlyphStart;
+    lineBaselines[lineIndex] = baseline;
+    lineAdvances[lineIndex] = cursor;
     blockOffset += line.height;
   }
 
   return {
     fontHandles: Uint32Array.from(fontHandles),
-    glyphFontSlots: Uint16Array.from(glyphFontSlots),
-    glyphIds: Uint16Array.from(glyphIds),
-    clusters: Uint32Array.from(clusters),
-    glyphFontSizes: Float32Array.from(glyphFontSizes),
-    x: Float32Array.from(x),
-    y: Float32Array.from(y),
-    glyphFlags: Uint16Array.from(glyphFlags),
-    lineTextStarts: Uint32Array.from(lineTextStarts),
-    lineTextEnds: Uint32Array.from(lineTextEnds),
-    lineGlyphStarts: Uint32Array.from(lineGlyphStarts),
-    lineGlyphCounts: Uint32Array.from(lineGlyphCounts),
-    lineBaselines: Float32Array.from(lineBaselines),
-    lineAdvances: Float32Array.from(lineAdvances),
+    glyphFontSlots: glyphFontSlots.subarray(0, count),
+    glyphIds: glyphIds.subarray(0, count),
+    clusters: clusters.subarray(0, count),
+    glyphFontSizes: glyphFontSizes.subarray(0, count),
+    x: new Float32Array(x.subarray(0, count)),
+    y: new Float32Array(y.subarray(0, count)),
+    glyphFlags: glyphFlags.subarray(0, count),
+    lineTextStarts,
+    lineTextEnds,
+    lineGlyphStarts,
+    lineGlyphCounts,
+    lineBaselines,
+    lineAdvances,
   };
+}
+
+function grownTypedArray<T extends Uint16Array | Uint32Array | Float32Array | Float64Array>(
+  array: T,
+  capacity: number,
+): T {
+  const next = new (array.constructor as new (length: number) => T)(capacity);
+  next.set(array as unknown as ArrayLike<number> & ArrayBufferView as never);
+  return next;
 }
 
 function preparePositioning(
@@ -1449,7 +1500,7 @@ function justificationSpaces(prepared: PreparedParagraph, line: LinePlan, start:
   while (trimmedEnd > line.textStart && prepared.input.text.charCodeAt(trimmedEnd - 1) === 0x20) {
     trimmedEnd -= 1;
   }
-  return clusterRangeSum(prepared.clusterStarts, prepared.spacePrefix, start, Math.min(end, trimmedEnd));
+  return clusterRangeSum(prepared, prepared.spacePrefix, start, Math.min(end, trimmedEnd));
 }
 
 function collectLineFragments(prepared: PreparedParagraph, lines: readonly LinePlan[]): readonly LineFragment[] {
@@ -1608,9 +1659,9 @@ function fragmentHasFlag(
   const glyphStart = prepared.shape.runGlyphStarts[runIndex];
   const glyphCount = prepared.shape.runGlyphCounts[runIndex];
   if (glyphStart === undefined || glyphCount === undefined) return true;
-  const selected = glyphIndexes(prepared.shape, glyphStart, glyphCount, start, end);
-  const first = selected[0];
-  const last = selected.at(-1);
+  const selected = glyphRange(prepared.shape, glyphStart, glyphCount, start, end);
+  const first = selected.end > selected.start ? selected.start : undefined;
+  const last = selected.end > selected.start ? selected.end - 1 : undefined;
   return (
     first === undefined ||
     last === undefined ||
@@ -1619,14 +1670,18 @@ function fragmentHasFlag(
   );
 }
 
-function glyphIndexes(
+/**
+ * The selected glyphs of a run are always one contiguous ascending span, so the selection is two indices. Materializing
+ * it as an array allocated one entry per glyph to describe a range that two integers already describe.
+ */
+function glyphRange(
   shape: OwnedShape,
   glyphStart: number,
   glyphCount: number,
   textStart: number,
   textEnd: number,
-): number[] {
-  if (glyphCount === 0 || textEnd <= textStart) return [];
+): { readonly start: number; readonly end: number } {
+  if (glyphCount === 0 || textEnd <= textStart) return EMPTY_GLYPH_RANGE;
   const firstCluster = shape.clusters[glyphStart];
   const lastCluster = shape.clusters[glyphStart + glyphCount - 1];
   if (firstCluster === undefined || lastCluster === undefined) {
@@ -1639,10 +1694,10 @@ function glyphIndexes(
   const selectedEnd = ascending
     ? glyphLowerBound(shape.clusters, glyphStart, glyphCount, textEnd)
     : glyphBelow(shape.clusters, glyphStart, glyphCount, textStart);
-  const indexes: number[] = [];
-  for (let glyph = selectedStart; glyph < selectedEnd; glyph += 1) indexes.push(glyph);
-  return indexes;
+  return { start: selectedStart, end: selectedEnd };
 }
+
+const EMPTY_GLYPH_RANGE = { start: 0, end: 0 } as const;
 
 function glyphLowerBound(clusters: Uint32Array, glyphStart: number, glyphCount: number, target: number): number {
   let low = glyphStart;
@@ -1667,25 +1722,20 @@ function glyphBelow(clusters: Uint32Array, glyphStart: number, glyphCount: numbe
 }
 
 function spacingBetween(prepared: PreparedParagraph, start: number, end: number): number {
-  return clusterRangeSum(prepared.clusterStarts, prepared.letterSpacingPrefix, start, end);
+  return clusterRangeSum(prepared, prepared.letterSpacingPrefix, start, end);
 }
 
-function clusterRangeSum(starts: Uint32Array, prefix: Uint32Array | Float64Array, start: number, end: number): number {
+function clusterRangeSum(
+  prepared: PreparedParagraph,
+  prefix: Uint32Array | Float64Array,
+  start: number,
+  end: number,
+): number {
   if (end <= start) return 0;
-  const first = lowerBound(starts, start);
-  const afterLast = lowerBound(starts, end);
+  const index = prepared.clusterIndexAt;
+  const first = index[start] ?? 0;
+  const afterLast = index[end] ?? 0;
   return (prefix[afterLast] ?? 0) - (prefix[first] ?? 0);
-}
-
-function lowerBound(values: Uint32Array, target: number): number {
-  let low = 0;
-  let high = values.length;
-  while (low < high) {
-    const middle = low + Math.floor((high - low) / 2);
-    if ((values[middle] ?? 0) < target) low = middle + 1;
-    else high = middle;
-  }
-  return low;
 }
 
 function measurementForGeometry(
