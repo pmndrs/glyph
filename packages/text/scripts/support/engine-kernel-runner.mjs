@@ -8,6 +8,7 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
   if (exports.pmndrs_text_kernel_lab_backend() !== expectedBackend) {
     throw new Error(`${name} artifact selected the wrong compile-time kernel backend`);
   }
+  registerPolicy(exports, input.policy);
   const aligned = createMemoryFixture(exports, input, 0);
   const unaligned = createMemoryFixture(exports, input, 4);
   const memoryBefore = exports.memory.buffer;
@@ -31,6 +32,7 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
       iterations * 4,
       options,
     ),
+    policy: measure(() => checkedCall(() => callPolicy(exports, aligned, false)), iterations, options),
     chunk32: measure(() => checkedCall(() => callSummaries(exports, aligned, 32)), iterations * 2, options),
     chunk64: measure(() => checkedCall(() => callSummaries(exports, aligned, 64)), iterations * 2, options),
     chunk128: measure(() => checkedCall(() => callSummaries(exports, aligned, 128)), iterations * 2, options),
@@ -51,7 +53,7 @@ export async function benchmarkKernelArtifact(wasm, name, input, options) {
 }
 
 function createMemoryFixture(exports, input, skew) {
-  const allocationLength = input.glyphs * 64 + 4_096;
+  const allocationLength = input.glyphs * 96 + 4_096;
   const allocationPointer = exports.pmndrs_text_shaper_alloc(allocationLength);
   if (allocationPointer === 0) throw new Error('kernel-lab allocation failed');
   let cursor = alignWithSkew(allocationPointer, 16, skew);
@@ -81,6 +83,9 @@ function createMemoryFixture(exports, input, skew) {
   const summaryCapacity = Math.ceil(count / 32);
   const advanceSums = reserve(summaryCapacity, 8, 8);
   const breakCounts = reserve(summaryCapacity, 4, 4);
+  const policyF32 = reserve(count * 4, 4, 4);
+  const policyU32 = reserve(count, 4, 4);
+  const policyU16 = reserve(count, 2, 2);
   if (cursor > allocationPointer + allocationLength) throw new Error('kernel-lab memory layout exceeds its allocation');
 
   new Float32Array(exports.memory.buffer, x, count).set(input.x);
@@ -113,6 +118,9 @@ function createMemoryFixture(exports, input, skew) {
     bidiMasks,
     advanceSums,
     breakCounts,
+    policyF32,
+    policyU32,
+    policyU16,
     summaryCapacity,
     memory: exports.memory,
   };
@@ -122,11 +130,15 @@ async function executeAndHash(exports, fixture, vertical) {
   checkedCall(() => callPack(exports, fixture, vertical));
   checkedCall(() => exports.pmndrs_text_kernel_lab_break_masks(fixture.count, fixture.flags, fixture.breakMasks));
   checkedCall(() => exports.pmndrs_text_kernel_lab_bidi_masks(fixture.count, fixture.levels, fixture.bidiMasks));
+  checkedCall(() => callPolicy(exports, fixture, vertical));
   const parts = [
     bytes(fixture, fixture.origins, fixture.count * 2 * 4),
     bytes(fixture, fixture.sizes, fixture.count * 2 * 4),
     bytes(fixture, fixture.breakMasks, Math.ceil(fixture.count / 16) * 2),
     bytes(fixture, fixture.bidiMasks, Math.ceil(fixture.count / 16) * 2),
+    bytes(fixture, fixture.policyF32, fixture.count * 4 * 4),
+    bytes(fixture, fixture.policyU32, fixture.count * 4),
+    bytes(fixture, fixture.policyU16, fixture.count * 2),
   ];
   for (const chunkSize of CHUNK_SIZES) {
     checkedCall(() => callSummaries(exports, fixture, chunkSize));
@@ -161,6 +173,23 @@ function callSummaries(exports, fixture, chunkSize) {
     fixture.flags,
     fixture.advanceSums,
     fixture.breakCounts,
+  );
+}
+
+function callPolicy(exports, fixture, vertical) {
+  return exports.pmndrs_text_kernel_lab_policy(
+    1,
+    1,
+    0,
+    fixture.count,
+    vertical ? fixture.y : fixture.x,
+    vertical ? fixture.x : fixture.y,
+    fixture.fontSize,
+    fixture.planeLeft,
+    fixture.advances,
+    fixture.policyF32,
+    fixture.policyU32,
+    fixture.policyU16,
   );
 }
 
@@ -209,4 +238,12 @@ function percentile(sorted, quantile) {
 
 function alignWithSkew(value, alignment, skew) {
   return Math.ceil((value - skew) / alignment) * alignment + skew;
+}
+
+function registerPolicy(exports, policy) {
+  const pointer = exports.pmndrs_text_shaper_alloc(policy.byteLength);
+  if (pointer === 0) throw new Error('kernel-lab policy allocation failed');
+  new Uint8Array(exports.memory.buffer, pointer, policy.byteLength).set(policy);
+  checkedCall(() => exports.pmndrs_text_engine_register_policy(1, pointer, policy.byteLength));
+  exports.pmndrs_text_shaper_dealloc(pointer, policy.byteLength);
 }

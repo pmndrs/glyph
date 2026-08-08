@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:bf341bec67c931df02db97003cf7c5e433364f399ec2d750dfa16395e651c5de'
+source_digest: 'sha256:a79c32c44c09be60e4643a1a6c500bb0748901f89e4745e9ebe7cc262a9617c2'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -420,13 +420,19 @@ compiler-vectorized, and selected hybrid artifacts through one direct-pointer in
 produce identical horizontal, vertical, partial-tail, and four-byte-aligned hashes with no warm allocation path or
 memory growth. Compiler-vectorized straight-line source owns record packing because hand-written shuffle packing did not
 beat it. Explicit `i8x16` break/bidi masks and integer-exact `i64x2` summaries pass the 20% phase threshold; the large
-workload selects ABI-private 64-cluster, 16-byte-aligned SoA chunks over 32 and 128. Binaryen output contains the intended
-vector instructions. The selected lab artifact adds 1,652 raw / 1,158 Brotli bytes over scalar. More importantly, the
-standard production `+simd128` artifact measures 725,013 raw / 266,615 gzip / 210,841 Brotli bytes, 289 / 550 / 26 bytes
-smaller than the same-ABI scalar build. SIMD is the default build with no runtime dispatch;
-`PMNDRS_TEXT_SHAPER_SIMD=0` produces the scalar release valve, whose disassembly contains no SIMD instructions and whose
-34 focused shaping/layout/frame tests pass unchanged. Policy execution, boundary search, native SIMD, and the complete
-hot-update contribution remain explicit open measurements until those engine stages exist.
+workload selects ABI-private 64-cluster, 16-byte-aligned SoA chunks over 32 and 128. The production policy executor
+retains the validated program, resolves store-buffer indices once at registration, rejects structurally invalid calls
+before writes, and executes four records per explicit SIMD bytecode dispatch with scalar tails. The representative
+17-operation program over 25,515 glyphs measures 1.174→0.428 ms p95 in Node and 1.113→0.438 ms in Chromium; the 100,602-
+glyph comparison measures 4.499→1.698 ms and 4.350→1.750 ms. Compiler auto-vectorization did not improve policy
+execution. All compared artifacts preserve exact output bytes and warm memory identity. Direct regions must belong to a
+live host allocation before the executor can borrow retained engine state. Binaryen output contains the intended vector
+instructions. The selected lab artifact adds 4,185 raw / 1,096 Brotli bytes over scalar. The standard production
+`+simd128` artifact measures 725,572 raw / 269,260 gzip / 211,013 Brotli bytes: 530 raw and 633 gzip bytes smaller, but
+62 Brotli bytes larger, than the 726,102 / 269,893 / 210,951 scalar build. SIMD is the default build with no runtime
+dispatch; `PMNDRS_TEXT_SHAPER_SIMD=0` produces the scalar release valve, whose disassembly contains no SIMD instructions.
+Boundary search, native SIMD, and the complete hot-update contribution remain explicit open measurements until those
+engine stages exist.
 
 Item 8.3 promotes `@pmndrs/text/raster/msdf` from an identity-only contract to the browser module and adds the isolated `@pmndrs/text/bakers/msdf/validate` entry. The standalone path layers the pinned Khronos validator, byte-identical Draft-04 schema, and semantic checks for reciprocal identity, descriptor-authenticated generation values, `planeUnitsPerEm = emSize`, view ownership, exact dense records, page bounds, embedded/external length and SHA-256 authentication, single-level linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and a 256 MiB padded-base-array residency ceiling. Canonical Inter's ten legacy-default pages round-trip through both packaging forms; field deletion, record/page mutations, KTX2 and DFD corruption, missing/tampered external pages, and budget failures are named negative controls.
 

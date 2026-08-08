@@ -5,6 +5,11 @@ use core::{mem, slice};
 
 #[cfg(target_arch = "wasm32")]
 use crate::STATUS_INVALID_REQUEST;
+#[cfg(target_arch = "wasm32")]
+use crate::engine::policy::{
+    BufferId, BufferSchema, PhysicalBufferMut, ScalarType, SemanticInputBatch, TechniqueId,
+    ValidatedPolicy,
+};
 
 const MAX_RECORDS: usize = 1_000_000;
 const VALID_CHUNK_SIZES: [usize; 3] = [32, 64, 128];
@@ -356,6 +361,95 @@ pub(crate) unsafe fn exported_chunk_summaries(
 }
 
 #[cfg(target_arch = "wasm32")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) unsafe fn exported_policy(
+    policy: &ValidatedPolicy,
+    technique: u32,
+    variant: u32,
+    count: u32,
+    f32_input0_pointer: u32,
+    f32_input1_pointer: u32,
+    f32_input2_pointer: u32,
+    f32_input3_pointer: u32,
+    u32_input0_pointer: u32,
+    f32_output_pointer: u32,
+    u32_output_pointer: u32,
+    u16_output_pointer: u32,
+) -> u32 {
+    let Some(count) = bounded_count(count) else {
+        return STATUS_INVALID_REQUEST;
+    };
+    let Ok(variant) = u16::try_from(variant) else {
+        return STATUS_INVALID_REQUEST;
+    };
+    let Some(f32_output_count) = count.checked_mul(4) else {
+        return STATUS_INVALID_REQUEST;
+    };
+    let regions = [
+        region::<f32>(f32_input0_pointer, count),
+        region::<f32>(f32_input1_pointer, count),
+        region::<f32>(f32_input2_pointer, count),
+        region::<f32>(f32_input3_pointer, count),
+        region::<u32>(u32_input0_pointer, count),
+        region::<f32>(f32_output_pointer, f32_output_count),
+        region::<u32>(u32_output_pointer, count),
+        region::<u16>(u16_output_pointer, count),
+    ];
+    if !valid_disjoint_regions(&regions) {
+        return STATUS_INVALID_REQUEST;
+    }
+    // SAFETY: all input and output regions are aligned, in linear memory, and pairwise disjoint.
+    unsafe {
+        let f32_inputs = [
+            typed_slice(f32_input0_pointer, count),
+            typed_slice(f32_input1_pointer, count),
+            typed_slice(f32_input2_pointer, count),
+            typed_slice(f32_input3_pointer, count),
+        ];
+        let u32_inputs = [typed_slice(u32_input0_pointer, count)];
+        let mut outputs = [
+            PhysicalBufferMut {
+                schema: BufferSchema {
+                    id: BufferId(1),
+                    scalar: ScalarType::F32,
+                    vector_width: 4,
+                },
+                bytes: byte_slice_mut(f32_output_pointer, f32_output_count * mem::size_of::<f32>()),
+            },
+            PhysicalBufferMut {
+                schema: BufferSchema {
+                    id: BufferId(2),
+                    scalar: ScalarType::U32,
+                    vector_width: 1,
+                },
+                bytes: byte_slice_mut(u32_output_pointer, count * mem::size_of::<u32>()),
+            },
+            PhysicalBufferMut {
+                schema: BufferSchema {
+                    id: BufferId(3),
+                    scalar: ScalarType::U16,
+                    vector_width: 1,
+                },
+                bytes: byte_slice_mut(u16_output_pointer, count * mem::size_of::<u16>()),
+            },
+        ];
+        policy
+            .execute(
+                TechniqueId(technique),
+                variant,
+                SemanticInputBatch {
+                    f32_fields: &f32_inputs,
+                    u32_fields: &u32_inputs,
+                    record_count: count,
+                },
+                0,
+                &mut outputs,
+            )
+            .map_or(STATUS_INVALID_REQUEST, |()| 0)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 #[derive(Clone, Copy)]
 struct MemoryRegion {
     start: usize,
@@ -403,6 +497,12 @@ unsafe fn typed_slice<Value>(pointer: u32, count: usize) -> &'static [Value] {
 unsafe fn typed_slice_mut<Value>(pointer: u32, count: usize) -> &'static mut [Value] {
     // SAFETY: exported entry points validate alignment, memory bounds, and non-overlap first.
     unsafe { slice::from_raw_parts_mut(pointer as *mut Value, count) }
+}
+
+#[cfg(target_arch = "wasm32")]
+unsafe fn byte_slice_mut(pointer: u32, count: usize) -> &'static mut [u8] {
+    // SAFETY: exported entry points validate the corresponding typed region and non-overlap first.
+    unsafe { slice::from_raw_parts_mut(pointer as *mut u8, count) }
 }
 
 fn bounded_count(count: u32) -> Option<usize> {

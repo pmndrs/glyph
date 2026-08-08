@@ -80,6 +80,7 @@ try {
             advances: new Int32Array(decode(input.advances).buffer),
             flags: decode(input.flags),
             levels: decode(input.levels),
+            policy: decode(input.policy),
           };
           return module.benchmarkKernelArtifact(decode(wasmBase64), artifactName, typedInput, {
             warmup: benchmarkWarmup,
@@ -146,6 +147,7 @@ function encodeInput(input: (typeof workloads)[number]) {
     advances: encode(input.advances),
     flags: encode(input.flags),
     levels: encode(input.levels),
+    policy: encode(input.policy),
   };
 }
 

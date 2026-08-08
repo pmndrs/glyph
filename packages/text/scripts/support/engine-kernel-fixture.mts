@@ -1,8 +1,11 @@
+import { readFile } from 'node:fs/promises';
+
 import {
   createBenchmarkParagraph,
   loadParagraphBenchmarkFixture,
   paragraphTextForGlyphs,
 } from './paragraph-benchmark-fixture.mts';
+import { kernelPolicyBytes } from '../../tests/support/engine-abi.mjs';
 
 export interface CapturedKernelInput {
   readonly label: string;
@@ -17,12 +20,17 @@ export interface CapturedKernelInput {
   readonly advances: Int32Array;
   readonly flags: Uint8Array;
   readonly levels: Uint8Array;
+  readonly policy: Uint8Array;
 }
 
 export async function captureKernelWorkloads(targets: readonly number[]): Promise<readonly CapturedKernelInput[]> {
-  const fixture = await loadParagraphBenchmarkFixture();
+  const [fixture, abi] = await Promise.all([
+    loadParagraphBenchmarkFixture(),
+    readFile(new URL('../../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8').then(JSON.parse),
+  ]);
+  const policy = kernelPolicyBytes(abi);
   try {
-    return targets.map((target) => captureWorkload(fixture, target));
+    return targets.map((target) => captureWorkload(fixture, target, policy));
   } finally {
     fixture.runtime.dispose();
     fixture.loaded.dispose();
@@ -32,6 +40,7 @@ export async function captureKernelWorkloads(targets: readonly number[]): Promis
 function captureWorkload(
   fixture: Awaited<ReturnType<typeof loadParagraphBenchmarkFixture>>,
   targetGlyphs: number,
+  policy: Uint8Array,
 ): CapturedKernelInput {
   const text = paragraphTextForGlyphs(targetGlyphs);
   const created = createBenchmarkParagraph(fixture, text, 600);
@@ -78,6 +87,7 @@ function captureWorkload(
     advances,
     flags,
     levels,
+    policy,
   };
   created.batch.dispose();
   return captured;

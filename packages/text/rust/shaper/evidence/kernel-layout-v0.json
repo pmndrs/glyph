@@ -12,11 +12,11 @@
   "workloads": [
     {
       "glyphs": 25515,
-      "outputSha256": "84ba1678f750f7fc35ff5e665aa5cb07585734aa12357ab55ee499208b2e3e5e"
+      "outputSha256": "e79081ca22e1b77d1efa89722e62219f1d956e10086f44c81f4bdf0374f4e2de"
     },
     {
       "glyphs": 100602,
-      "outputSha256": "42e3c29bf66c1f18caea36ec2156ee32a38d09e797bc8cea453433c02f8ff84e"
+      "outputSha256": "221b06997b4c0ded29a8bd21d42745111400910c95f5baf625a2210db93417f5"
     }
   ],
   "correctness": {
@@ -29,19 +29,19 @@
   },
   "artifactBytes": {
     "kernelLab": {
-      "scalar": { "raw": 728860, "brotli": 211729 },
-      "auto": { "raw": 729828, "brotli": 212390 },
-      "selectedHybrid": { "raw": 730512, "brotli": 212887 }
+      "scalar": { "raw": 734374, "brotli": 213921 },
+      "auto": { "raw": 735101, "brotli": 214366 },
+      "selectedHybrid": { "raw": 738559, "brotli": 215017 }
     },
     "production": {
-      "scalar": { "raw": 725302, "gzip": 267165, "brotli": 210867 },
-      "simd128": { "raw": 725013, "gzip": 266615, "brotli": 210841 }
+      "scalar": { "raw": 726102, "gzip": 269893, "brotli": 210951 },
+      "simd128": { "raw": 725572, "gzip": 269260, "brotli": 211013 }
     }
   },
   "optimizedSelectedInstructions": {
-    "v128Loads": 649,
-    "v128Stores": 723,
-    "f32x4Operations": 18,
+    "v128Loads": 698,
+    "v128Stores": 767,
+    "f32x4Operations": 26,
     "i8x16Bitmasks": 3,
     "i8x16Shuffles": 35,
     "i64x2Operations": 28
@@ -49,26 +49,80 @@
   "p95Milliseconds": {
     "node": {
       "25515": {
-        "scalar": { "pack": 0.043445, "breakMasks": 0.013195, "bidiMasks": 0.010682, "chunk64": 0.015655 },
-        "auto": { "pack": 0.013099, "breakMasks": 0.01123, "bidiMasks": 0.01386, "chunk64": 0.008819 },
-        "selectedHybrid": { "pack": 0.01306, "breakMasks": 0.001452, "bidiMasks": 0.002551, "chunk64": 0.004156 }
+        "scalar": {
+          "pack": 0.043354,
+          "breakMasks": 0.01269,
+          "bidiMasks": 0.010704,
+          "policy": 1.174357,
+          "chunk64": 0.015559
+        },
+        "auto": {
+          "pack": 0.013313,
+          "breakMasks": 0.011764,
+          "bidiMasks": 0.012434,
+          "policy": 1.187443,
+          "chunk64": 0.008818
+        },
+        "selectedHybrid": {
+          "pack": 0.013273,
+          "breakMasks": 0.001506,
+          "bidiMasks": 0.002633,
+          "policy": 0.427859,
+          "chunk64": 0.003832
+        }
       },
       "100602": {
-        "scalar": { "pack": 0.177563, "breakMasks": 0.04904, "bidiMasks": 0.041621, "chunk64": 0.05982 },
-        "auto": { "pack": 0.058224, "breakMasks": 0.045216, "bidiMasks": 0.053385, "chunk64": 0.033901 },
-        "selectedHybrid": { "pack": 0.062641, "breakMasks": 0.005815, "bidiMasks": 0.010034, "chunk64": 0.014711 }
+        "scalar": {
+          "pack": 0.169114,
+          "breakMasks": 0.049176,
+          "bidiMasks": 0.04191,
+          "policy": 4.498917,
+          "chunk64": 0.064013
+        },
+        "auto": {
+          "pack": 0.061651,
+          "breakMasks": 0.047813,
+          "bidiMasks": 0.05031,
+          "policy": 4.622422,
+          "chunk64": 0.034167
+        },
+        "selectedHybrid": {
+          "pack": 0.059286,
+          "breakMasks": 0.005646,
+          "bidiMasks": 0.010376,
+          "policy": 1.698078,
+          "chunk64": 0.014919
+        }
       }
     },
     "chromium": {
       "25515": {
-        "scalar": { "pack": 0.04375, "breakMasks": 0.014063, "bidiMasks": 0.010938, "chunk64": 0.01875 },
-        "auto": { "pack": 0.01875, "breakMasks": 0.010938, "bidiMasks": 0.0125, "chunk64": 0.0125 },
-        "selectedHybrid": { "pack": 0.01875, "breakMasks": 0.003125, "bidiMasks": 0.003125, "chunk64": 0.00625 }
+        "scalar": {
+          "pack": 0.04375,
+          "breakMasks": 0.014063,
+          "bidiMasks": 0.010938,
+          "policy": 1.1125,
+          "chunk64": 0.01875
+        },
+        "auto": { "pack": 0.01875, "breakMasks": 0.0125, "bidiMasks": 0.014063, "policy": 1.075, "chunk64": 0.009375 },
+        "selectedHybrid": {
+          "pack": 0.01875,
+          "breakMasks": 0.003125,
+          "bidiMasks": 0.003125,
+          "policy": 0.4375,
+          "chunk64": 0.00625
+        }
       },
       "100602": {
-        "scalar": { "pack": 0.175, "breakMasks": 0.053125, "bidiMasks": 0.046875, "chunk64": 0.06875 },
-        "auto": { "pack": 0.075, "breakMasks": 0.04375, "bidiMasks": 0.05, "chunk64": 0.0375 },
-        "selectedHybrid": { "pack": 0.0625, "breakMasks": 0.009375, "bidiMasks": 0.0125, "chunk64": 0.01875 }
+        "scalar": { "pack": 0.175, "breakMasks": 0.053125, "bidiMasks": 0.04375, "policy": 4.35, "chunk64": 0.0625 },
+        "auto": { "pack": 0.0625, "breakMasks": 0.04375, "bidiMasks": 0.05, "policy": 4.3, "chunk64": 0.0375 },
+        "selectedHybrid": {
+          "pack": 0.075,
+          "breakMasks": 0.009375,
+          "bidiMasks": 0.0125,
+          "policy": 1.75,
+          "chunk64": 0.01875
+        }
       }
     }
   },
@@ -90,16 +144,17 @@
     "packing": "compiler-vectorizable straight-line scalar source compiled with +simd128",
     "breakAndBidiMasks": "explicit simd128 with scalar tails",
     "chunkSummaries": "explicit simd128 integer sums and masks with scalar tails",
+    "policyExecution": "validated straight-line bytecode dispatched once over four-record simd128 lanes with scalar tails and registration-time output-buffer resolution",
     "standardArtifact": "simd128",
     "compatibilityDefine": "PMNDRS_TEXT_SHAPER_SIMD=0",
     "runtimeDispatch": false,
     "rejected": [
       "hand-written four-record packing, because it did not beat compiler vectorization and regressed the 100k Node result",
+      "compiler auto-vectorization for policy execution, because it remained within scalar variance",
       "32-cluster chunks, because their large-workload summary time exceeded 64",
       "128-cluster chunks, because their large-workload summary time exceeded 64"
     ],
     "remainingPacket": [
-      "policy-execution kernels after the scalar render-plan executor exists",
       "boundary search after retained line cursors and summaries exist",
       "representative native SIMD implementation and measurement",
       "end-to-end hot-update contribution after the Rust semantic pipeline is wired"
