@@ -845,8 +845,18 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
     start: number;
     count: number;
   };
-  const entries = new Map<string, Entry>();
+  /**
+   * A batching key is the resource/pipeline-variant pair, so it is looked up
+   * through nested maps rather than a per-glyph composite string. `orderedEntries`
+   * preserves the first-seen order that batch identity and run offsets depend on.
+   */
+  const entries = new Map<RasterResourceId, Map<number, Entry>>();
+  const orderedEntries: Entry[] = [];
   const orderedRuns: LogicalRun[] = [];
+  let previousRun: LogicalRun | undefined;
+  let cachedResource: RasterResourceId | undefined;
+  let cachedPipelineVariant = -1;
+  let cachedEntry: Entry | undefined;
   for (const value of prepared) {
     const { layout, owner } = value;
     for (let index = 0; index < layout.glyphIds.length; index += 1) {
@@ -864,14 +874,32 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
       };
       const selection = technique.select(input);
       if (selection === undefined) continue;
-      const key = `${selection.resource}\0${selection.pipelineVariant}`;
-      let entry = entries.get(key);
-      if (entry === undefined) {
-        entry = { font, selection, glyphs: [] };
-        entries.set(key, entry);
+      /** Consecutive glyphs almost always reselect the same batch. */
+      let entry: Entry;
+      if (
+        cachedEntry !== undefined &&
+        selection.resource === cachedResource &&
+        selection.pipelineVariant === cachedPipelineVariant
+      ) {
+        entry = cachedEntry;
+      } else {
+        let variants = entries.get(selection.resource);
+        if (variants === undefined) {
+          variants = new Map<number, Entry>();
+          entries.set(selection.resource, variants);
+        }
+        let existing = variants.get(selection.pipelineVariant);
+        if (existing === undefined) {
+          existing = { font, selection, glyphs: [] };
+          variants.set(selection.pipelineVariant, existing);
+          orderedEntries.push(existing);
+        }
+        entry = existing;
+        cachedResource = selection.resource;
+        cachedPipelineVariant = selection.pipelineVariant;
+        cachedEntry = existing;
       }
       const variant = value.glyphVariants[index];
-      const previousRun = orderedRuns.at(-1);
       if (
         previousRun !== undefined &&
         previousRun.entry === entry &&
@@ -880,15 +908,18 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
         previousRun.start + previousRun.count === entry.glyphs.length
       )
         previousRun.count += 1;
-      else orderedRuns.push({ entry, paragraph: owner, variant, start: entry.glyphs.length, count: 1 });
+      else {
+        previousRun = { entry, paragraph: owner, variant, start: entry.glyphs.length, count: 1 };
+        orderedRuns.push(previousRun);
+      }
       entry.glyphs.push(input);
     }
   }
   const batches: PreparedGlyphBatch<Technique>[] = [];
-  const runLookup = new Map<Entry, { key: GlyphBatchKey; offset: number }[]>();
+  const runLookup = new Map<Entry, { key: GlyphBatchKey; offset: number; capacity: number }[]>();
   if (capacity.policy === 'fixed') {
     const overflows: GlyphCapacityOverflow[] = [];
-    for (const entry of entries.values()) {
+    for (const entry of orderedEntries) {
       if (entry.glyphs.length <= capacity.size) continue;
       overflows.push({
         resourceKey: Object.freeze({
@@ -903,7 +934,7 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
     }
     if (overflows.length !== 0) throw new CapacityOverflow(overflows);
   }
-  for (const entry of entries.values()) {
+  for (const entry of orderedEntries) {
     const required = entry.glyphs.length;
     const prior = matchingBatch(previous, entry.selection.resource, entry.selection.pipelineVariant, 0);
     const chunkSize =
@@ -913,7 +944,7 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
           : grownCapacity(forceReplacement ? capacity.size : (prior?.capacity ?? capacity.size), required)
         : capacity.size;
     const chunks = Math.max(1, Math.ceil(required / chunkSize));
-    const keys: { key: GlyphBatchKey; offset: number }[] = [];
+    const keys: { key: GlyphBatchKey; offset: number; capacity: number }[] = [];
     for (let chunk = 0; chunk < chunks; chunk += 1) {
       const start = chunk * chunkSize;
       const count = Math.min(chunkSize, required - start);
@@ -929,10 +960,13 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
             chunk,
           });
       const storage = batch.storage(key, chunkSize);
+      /** A single chunk already spans the whole entry, so it needs no copy. */
+      const glyphs =
+        start === 0 && count === entry.glyphs.length ? entry.glyphs : entry.glyphs.slice(start, start + count);
       technique.writeStorage(
         storage,
         { start: 0, count },
-        { data: entry.font.data, binding: entry.selection.binding, glyphs: entry.glyphs.slice(start, start + count) },
+        { data: entry.font.data, binding: entry.selection.binding, glyphs },
       );
       batches.push(
         Object.freeze({
@@ -946,7 +980,7 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
           dirtyRanges: Object.freeze(storageDirtyRanges(reusable ? old.storage : undefined, storage, count, chunkSize)),
         }),
       );
-      keys.push({ key, offset: start });
+      keys.push({ key, offset: start, capacity: chunkSize });
     }
     runLookup.set(entry, keys);
   }
@@ -959,7 +993,7 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
       const chunk = capacity.policy === 'grow' ? 0 : Math.floor(cursor / capacity.size);
       const target = runLookup.get(entry)![chunk]!;
       const local = cursor - target.offset;
-      const count = Math.min(remaining, batches.find((item) => item.key === target.key)!.capacity - local);
+      const count = Math.min(remaining, target.capacity - local);
       runs.push(
         Object.freeze({
           batch: target.key,
