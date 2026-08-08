@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:3185896663acc3394d719ec4eddf94c2c038a9386b7119e67d4bfd10eac30d88'
+source_digest: 'sha256:d618b88fc753aa8e14d913555e6332bee03d2033e23264b0c42d9437eb738297'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -490,9 +490,12 @@ artifacts in the project-pinned Chromium from a trustworthy loopback origin. It 
 100,602-glyph typed arrays as the Node workflow and fails before timing unless every artifact reproduces the scalar
 horizontal, vertical, partial-tail, and unaligned hashes. The current Chromium 149 run executed the SIMD artifact,
 observed no warm memory growth, and supports the 64-cluster choice: at 100,602 glyphs its selected-hybrid p95 was 0.01875
-ms versus 0.06875 ms scalar for chunk summaries, 0.009375 versus 0.053125 ms for break masks, and 0.0125 versus 0.046875
-ms for bidi masks. Browser timer quantization is visible in those figures, so Node retains the finer candidate ranking
-while Chromium supplies the independent engine-admission check.
+ms versus 0.0625 ms scalar for chunk summaries, 0.009375 versus 0.053125 ms for break masks, and 0.0125 versus 0.04375
+ms for bidi masks. The same run executes the production validated-policy interpreter over a representative 17-operation
+program and includes its F32×4, U32, and U16 buffers in the scalar/auto/SIMD byte-identity gate. At 25,515 glyphs,
+explicit SIMD measures 0.438 ms p95 versus 1.113 ms scalar; at 100,602 it measures 1.750 versus 4.350 ms. Browser timer
+quantization is visible in those figures, so Node retains the finer candidate ranking while Chromium supplies the
+independent engine-admission check.
 
 The bake-host report separates the consumer phases without timing conformance work. Each offline sample creates a fresh Wasm baker and records initialization plus first bake as cold, then records a second bake on that instance as warm. Each isolated Chromium context queues two requests onto one Worker: first completion contains Worker/Wasm startup plus its bake, while the interval to second completion is the warm reused-instance bake. Three captured arm64/Chromium 149 samples preserve complete artifact parity; medians were 4.16 ms cold / 2.94 ms warm offline and 21.70 ms cold / 3.50 ms warm in the Worker. These are observations, not cross-host thresholds.
 

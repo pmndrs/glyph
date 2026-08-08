@@ -806,11 +806,16 @@ arrays, scalar, compiler-vectorized, and selected hybrid artifacts produced iden
 and four-byte-aligned output hashes in Node 24.18.0 and Chromium 149 without warm allocation or memory growth. Compiler
 vectorization, not hand-written shuffles, owns straight-line record packing. Explicit `i8x16` break/bidi masks and
 integer-exact `i64x2` summaries exceeded the 20% phase threshold; 64-cluster summaries won the large workload against
-32 and 128. The selected lab artifact adds 1,652 raw / 1,158 Brotli bytes over scalar, while the standard production
-`+simd128` build is 289 raw / 26 Brotli bytes smaller than its same-ABI scalar release-valve build. The optimized
-disassembly contains the intended vector loads, stores, bitmasks, shuffles, and integer lanes. Policy execution,
-boundary search, representative native SIMD, and end-to-end contribution remain open parts of the packet because their
-production stages do not exist yet; they are not inferred from these admitted kernels.
+32 and 128. The production policy executor resolves output-buffer indices at registration, preflights all semantic SoA
+inputs and physical outputs before writing, and dispatches validated straight-line bytecode over four records per SIMD
+iteration with scalar tails. Its representative 17-operation program over 25,515 glyphs measured 1.174→0.428 ms p95
+in Node and 1.113→0.438 ms in Chromium; compiler auto-vectorization remained within scalar variance. All three artifacts
+produced the same output bytes. The selected lab artifact now adds 4,185 raw / 1,096 Brotli bytes over scalar, while the
+standard production `+simd128` build is 530 raw bytes smaller and 62 Brotli bytes larger than its same-ABI scalar
+release-valve build. The optimized disassembly contains the intended vector loads, stores, arithmetic, comparisons,
+bitmasks, shuffles, and integer lanes. Boundary search, representative native SIMD, and end-to-end contribution remain
+open parts of the packet because their production stages do not exist yet; they are not inferred from these admitted
+kernels.
 
 ## Implementation stack
 

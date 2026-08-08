@@ -297,6 +297,75 @@ pub unsafe extern "C" fn pmndrs_text_kernel_lab_chunk_summaries(
     }
 }
 
+#[cfg(feature = "kernel-lab")]
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn pmndrs_text_kernel_lab_policy(
+    policy_handle: u32,
+    technique: u32,
+    variant: u32,
+    count: u32,
+    f32_input0_pointer: u32,
+    f32_input1_pointer: u32,
+    f32_input2_pointer: u32,
+    f32_input3_pointer: u32,
+    u32_input0_pointer: u32,
+    f32_output_pointer: u32,
+    u32_output_pointer: u32,
+    u16_output_pointer: u32,
+) -> u32 {
+    let Some(f32_bytes) = count.checked_mul(core::mem::size_of::<f32>() as u32) else {
+        return STATUS_INVALID_REQUEST;
+    };
+    let Some(f32_output_bytes) = f32_bytes.checked_mul(4) else {
+        return STATUS_INVALID_REQUEST;
+    };
+    let Some(u16_bytes) = count.checked_mul(core::mem::size_of::<u16>() as u32) else {
+        return STATUS_INVALID_REQUEST;
+    };
+    with_state(|state| {
+        let regions = [
+            (f32_input0_pointer, f32_bytes),
+            (f32_input1_pointer, f32_bytes),
+            (f32_input2_pointer, f32_bytes),
+            (f32_input3_pointer, f32_bytes),
+            (u32_input0_pointer, f32_bytes),
+            (f32_output_pointer, f32_output_bytes),
+            (u32_output_pointer, f32_bytes),
+            (u16_output_pointer, u16_bytes),
+        ];
+        if !regions
+            .iter()
+            .all(|&(pointer, length)| owns_region(&state.allocations, pointer, length))
+        {
+            return STATUS_INVALID_REQUEST;
+        }
+        let policy = match state.engine.policy(policy_handle) {
+            Ok(policy) => policy,
+            Err(_) => return STATUS_POLICY_MISSING,
+        };
+        // SAFETY: every direct-memory region belongs to a live caller allocation, so it cannot
+        // alias engine-owned state. The kernel validates alignment, bounds, and pairwise
+        // disjointness before creating slices, and this state borrow remains synchronous.
+        unsafe {
+            crate::engine::kernel_lab::exported_policy(
+                policy,
+                technique,
+                variant,
+                count,
+                f32_input0_pointer,
+                f32_input1_pointer,
+                f32_input2_pointer,
+                f32_input3_pointer,
+                u32_input0_pointer,
+                f32_output_pointer,
+                u32_output_pointer,
+                u16_output_pointer,
+            )
+        }
+    })
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_text_engine_update(
     session_id: u32,
@@ -505,6 +574,20 @@ fn owned_bytes(allocations: &[Allocation], pointer: u32, length: u32) -> Option<
         .iter()
         .find(|entry| entry.pointer == pointer && entry.requested_length == length)
         .map(|entry| entry.bytes.as_slice())
+}
+
+#[cfg(feature = "kernel-lab")]
+fn owns_region(allocations: &[Allocation], pointer: u32, length: u32) -> bool {
+    let Some(end) = pointer.checked_add(length) else {
+        return false;
+    };
+    length != 0
+        && allocations.iter().any(|entry| {
+            entry
+                .pointer
+                .checked_add(entry.requested_length)
+                .is_some_and(|allocation_end| pointer >= entry.pointer && end <= allocation_end)
+        })
 }
 
 fn store_result(registry: &mut ShaperRegistry, result: Vec<u8>) -> u32 {
