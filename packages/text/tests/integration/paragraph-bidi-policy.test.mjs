@@ -82,16 +82,20 @@ test('applies exact alignment, clipping, max-lines, and ellipsis policies withou
   });
   assert.equal(calls.shape, 1, 'text and every per-run ellipsis are prepared in one batch');
 
+  // Boundary reshaping requests the whole run as context, which is the context the retained paragraph shape already
+  // used, so it can only return the glyphs it already returned. These counts therefore assert that no policy reaches
+  // the shaper again: every layout below is produced from the one retained shape. A future narrowed context — a
+  // truncated line taking final forms, or a line shaped in isolation — is what should raise them again.
   const expectedCrossings = {
-    start: 1,
-    center: 1,
-    end: 1,
-    justify: 1,
-    clip: 1,
-    maxLines: 2,
-    ellipsisOne: 3,
-    ellipsisHeightOne: 3,
-    ellipsisHeightTwo: 4,
+    start: 0,
+    center: 0,
+    end: 0,
+    justify: 0,
+    clip: 0,
+    maxLines: 0,
+    ellipsisOne: 0,
+    ellipsisHeightOne: 0,
+    ellipsisHeightTwo: 0,
   };
   const layouts = {};
   for (const [id, fixture] of Object.entries(contract.policies.cases)) {
@@ -130,7 +134,8 @@ test('applies exact alignment, clipping, max-lines, and ellipsis policies withou
   }
   assert.deepEqual(
     requests.filter(({ ranges }) => ranges !== undefined).map(({ ranges }) => ranges.length),
-    [4, 2, 1, 2],
+    [],
+    'no policy issues a reshape request while the shaping context is the whole run',
   );
 
   shaper.dispose();
