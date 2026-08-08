@@ -26,8 +26,8 @@ pub(crate) struct ClusterArena {
     pub source_runs: Vec<u32>,
     pub font_handles: Vec<u32>,
     pub index_at: Vec<u32>,
-    shaped: Vec<u8>,
-    unsafe_before: Vec<u8>,
+    pub(super) shaped: Vec<u8>,
+    pub(super) unsafe_before: Vec<u8>,
 }
 
 impl ClusterArena {
