@@ -12,6 +12,15 @@ const tsc = fileURLToPath(
   new URL(process.platform === 'win32' ? '../node_modules/.bin/tsc.CMD' : '../node_modules/.bin/tsc', import.meta.url),
 );
 const rustEnvironment = reproducibleRustEnvironment(workspaceRoot);
+const shaperSimdSetting = process.env.PMNDRS_TEXT_SHAPER_SIMD;
+if (shaperSimdSetting !== undefined && shaperSimdSetting !== '0' && shaperSimdSetting !== '1') {
+  throw new Error('PMNDRS_TEXT_SHAPER_SIMD must be 0 or 1');
+}
+const shaperSimd = shaperSimdSetting !== '0';
+const shaperRustEnvironment = {
+  ...rustEnvironment,
+  CARGO_ENCODED_RUSTFLAGS: `${rustEnvironment.CARGO_ENCODED_RUSTFLAGS}\u001f-C\u001ftarget-feature=${shaperSimd ? '+simd128' : '-simd128'}`,
+};
 const executable = process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt';
 const wasmOpt = fileURLToPath(new URL(`../node_modules/.bin/${executable}`, import.meta.url));
 const rustWasm = fileURLToPath(
@@ -153,8 +162,9 @@ await run(
     '--release',
     '--locked',
     '--no-default-features',
+    ...(shaperSimd ? ['--features', 'simd128'] : []),
   ],
-  rustEnvironment,
+  shaperRustEnvironment,
 );
 await run(tsc, ['-p', 'tsconfig.build.json']);
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
@@ -172,6 +182,7 @@ await run(wasmOpt, [
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',
+  ...(shaperSimd ? ['--enable-simd'] : []),
   '-Oz',
   shaperWasm,
   '-o',

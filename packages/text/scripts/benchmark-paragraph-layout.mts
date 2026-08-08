@@ -4,12 +4,15 @@
   "requirements": "Built package: pnpm --filter @pmndrs/text build. Accepts --glyphs, --reps, --warmup, --case, --json.",
   "writes": "stdout only, or the JSON report path passed to --json"
 } */
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 
-import { createRuntimeShaper, createTextRuntime, FontRegistry } from '../dist/index.js';
-import { bitmap } from '../dist/raster/bitmap-technique.js';
+import {
+  createBenchmarkParagraph,
+  loadParagraphBenchmarkFixture,
+  paragraphTextForGlyphs,
+} from './support/paragraph-benchmark-fixture.mts';
 
 /**
  * Answers one question: how long does a paragraph batch take to reach uploadable instance data, per glyph, at the sizes
@@ -35,12 +38,6 @@ const DEFAULT_REPETITIONS = 31;
 /** Glyph counts to sweep. The largest is past four columns of six thousand, which is the stated worst case. */
 const DEFAULT_SCALES = [5_500, 11_000, 22_000, 33_000] as const;
 
-const paragraphSource = [
-  'Typography is a moving system. AVATAR To Wa Yo repeat familiar kerning pairs while a responsive panel changes the space around them. The quick visual check is useful, but the benchmark records the cost of shaping, layout, upload, and every rendered frame.',
-  'A practical interface mixes prose with 0123456789, prices such as 24.50, ranges from 8-512 px, and punctuation-"quotes", (parentheses), brackets, commas, and semicolons. Repeated office, affine, difficult, and shuffle words retain ff, fi, fl, ffi, and ffl candidates.',
-  'Scientific copy adds x2+y2~z2, 0<=a<=1, and pi. Arrows point both ways. These symbols expose missing coverage, uneven baselines, bad advances, and atlas placement errors that plain alphabet samples can hide.',
-].join('\n');
-
 type CaseName = 'cold' | 'font-size' | 'layout-width' | 'text';
 
 interface Sample {
@@ -64,12 +61,11 @@ interface CaseReport {
 const options = parseArguments(process.argv.slice(2));
 const collectGarbage = exposeGarbageCollection();
 
-const root = new URL('../../../', import.meta.url);
-const font = await loadFont();
+const font = await loadParagraphBenchmarkFixture();
 const reports: CaseReport[] = [];
 
 for (const targetGlyphs of options.scales) {
-  const text = textForGlyphs(targetGlyphs);
+  const text = paragraphTextForGlyphs(targetGlyphs);
   for (const name of options.cases) {
     reports.push(await measureCase(name, text));
   }
@@ -92,13 +88,13 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
   // A cold case must build a fresh batch every repetition; the others measure an update to a warm one, which is what a
   // frame actually does. Both still run the same warmup discipline.
   const heapDeltas: number[] = [];
-  const warm = name === 'cold' ? undefined : createParagraph(runtime, text, 600);
+  const warm = name === 'cold' ? undefined : createBenchmarkParagraph(font, text, 600);
   if (warm !== undefined) runtime.update();
 
   for (let repetition = 0; repetition < total; repetition += 1) {
     const recording = repetition >= options.warmup;
 
-    const created = name === 'cold' ? createParagraph(runtime, text, 600) : undefined;
+    const created = name === 'cold' ? createBenchmarkParagraph(font, text, 600) : undefined;
     if (warm !== undefined) applyChange(name, warm.paragraph, repetition, text);
 
     collectGarbage();
@@ -149,48 +145,14 @@ function applyChange(name: CaseName, paragraph: ParagraphHandle, repetition: num
   } else paragraph.text = `${text.slice(0, text.length - repetition)}`;
 }
 
-type TextRuntimeHandle = Awaited<ReturnType<typeof createTextRuntime>>;
+type TextRuntimeHandle = (typeof font)['runtime'];
 type ParagraphBatchHandle = ReturnType<TextRuntimeHandle['createParagraphBatch']>;
 type ParagraphHandle = ReturnType<ParagraphBatchHandle['add']>;
-
-function createParagraph(runtime: TextRuntimeHandle, text: string, width: number) {
-  const batch = runtime.createParagraphBatch({ technique: bitmap });
-  const paragraph = batch.add({
-    font: font.loaded,
-    text,
-    contentBox: { width: { mode: 'exact', size: width }, wrap: 'word' },
-    style: { fontSize: 24 },
-  });
-  return { batch, paragraph };
-}
 
 function glyphCount(batch: ParagraphBatchHandle): number {
   let total = 0;
   for (const paragraph of batch.current.paragraphs) total += paragraph.layout.glyphIds.length;
   return total;
-}
-
-function textForGlyphs(target: number): string {
-  // The source paragraph is measured once, then repeated to reach the target. Repetition keeps the shaping work
-  // representative while making the scale exact enough to compare per-glyph costs across rows.
-  const perCopy = paragraphSource.replaceAll(/\s/gu, '').length;
-  const copies = Math.max(1, Math.round(target / perCopy));
-  return Array.from({ length: copies }, () => paragraphSource).join('\n');
-}
-
-async function loadFont() {
-  const registry = new FontRegistry();
-  const shaper = await createRuntimeShaper({
-    registry,
-    wasm: await readFile(new URL('packages/text/dist/text_shaper.wasm', root)),
-  });
-  const runtime = await createTextRuntime({ registry, shaper });
-  const bytes = await readFile(new URL('apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', root));
-  const loaded = await runtime.loadFont({
-    input: { baked: `data:application/octet-stream;base64,${bytes.toString('base64')}` },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
-  return { runtime, loaded };
 }
 
 function printReport(rows: readonly CaseReport[]): void {

@@ -186,12 +186,12 @@ That evidence changes several claims in the earlier draft:
 
 On the current branch, the pinned `text:layout-benchmark -- --glyphs 22000` workload renders 25,515 glyphs and measured:
 
-| Invalidation | Median | p95 | Relative to 8.33 ms |
-| --- | ---: | ---: | ---: |
-| cold | 53.78 ms | 73.83 ms | 6.5× median |
-| font size | 12.50 ms | 17.75 ms | 1.5× median |
-| layout width | 9.38 ms | 13.69 ms | 1.1× median |
-| text edit | 39.11 ms | 41.72 ms | 4.7× median |
+| Invalidation |   Median |      p95 | Relative to 8.33 ms |
+| ------------ | -------: | -------: | ------------------: |
+| cold         | 53.78 ms | 73.83 ms |         6.5× median |
+| font size    | 12.50 ms | 17.75 ms |         1.5× median |
+| layout width |  9.38 ms | 13.69 ms |         1.1× median |
+| text edit    | 39.11 ms | 41.72 ms |         4.7× median |
 
 The warm lanes showed 12.7–15.4% relative standard deviation in that run. These are a local baseline, not a universal
 forecast, but they establish that the present full-paragraph warm path does not synchronously meet 120 Hz.
@@ -447,21 +447,21 @@ The engine API should expose explicit typed values rather than cloning CSS strin
 need a published reference. The initial contract is organized as capabilities so unsupported combinations fail or
 report a fallback instead of silently approximating them.
 
-| Area | Required engine behavior |
-| --- | --- |
-| Fonts and runs | language and script, fallback, OpenType features, horizontal and vertical metrics, baselines; static fonts only |
-| Span positioning | explicit baseline shift, superscript/subscript positioning, and OpenType `sups`/`subs` features without a second text stream |
-| Spacing | letter spacing, word spacing, line height, paragraph space before/after, first-line and hanging indents, spacing in logical axes |
-| Tabs | authored left/right/center/decimal stops and bounded leader glyphs; the decimal alignment character is explicit rather than supplied by a locale database |
-| Breaking | word/character/no-wrap, whitespace handling, explicit soft hyphen and inserted-hyphen provenance |
-| Alignment | logical start/end/center, script-aware justification opportunities, hanging punctuation |
-| Writing modes | horizontal and both vertical progressions, mixed/upright/sideways orientation, vertical substitutions and origins |
-| Decorations | underline, overline, and line-through; color, thickness, offset, solid/double/dotted/dashed/wavy style, skip spaces, and bounded ink-box skipping |
-| Editorial flow | multiple regions and sequential columns, exclusions with multiple slots per band, inline objects, drop caps, forced breaks |
-| Pagination | explicit page/column breaks and resume tokens; no balancing or widow/orphan/keep solver |
-| CJK emphasis | emphasis marks and short horizontal runs in vertical text; ruby and warichu are out of scope |
-| Emoji | Unicode 17 grapheme, variation-selector, modifier, flag, tag, and ZWJ behavior through the ordinary font-fallback and shaping path; optional color art remains a raster resource |
-| Interaction | logical/visual ranges, cluster maps, caret stops, hit testing, selection geometry, accessibility reading order |
+| Area             | Required engine behavior                                                                                                                                                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fonts and runs   | language and script, fallback, OpenType features, horizontal and vertical metrics, baselines; static fonts only                                                                  |
+| Span positioning | explicit baseline shift, superscript/subscript positioning, and OpenType `sups`/`subs` features without a second text stream                                                     |
+| Spacing          | letter spacing, word spacing, line height, paragraph space before/after, first-line and hanging indents, spacing in logical axes                                                 |
+| Tabs             | authored left/right/center/decimal stops and bounded leader glyphs; the decimal alignment character is explicit rather than supplied by a locale database                        |
+| Breaking         | word/character/no-wrap, whitespace handling, explicit soft hyphen and inserted-hyphen provenance                                                                                 |
+| Alignment        | logical start/end/center, script-aware justification opportunities, hanging punctuation                                                                                          |
+| Writing modes    | horizontal and both vertical progressions, mixed/upright/sideways orientation, vertical substitutions and origins                                                                |
+| Decorations      | underline, overline, and line-through; color, thickness, offset, solid/double/dotted/dashed/wavy style, skip spaces, and bounded ink-box skipping                                |
+| Editorial flow   | multiple regions and sequential columns, exclusions with multiple slots per band, inline objects, drop caps, forced breaks                                                       |
+| Pagination       | explicit page/column breaks and resume tokens; no balancing or widow/orphan/keep solver                                                                                          |
+| CJK emphasis     | emphasis marks and short horizontal runs in vertical text; ruby and warichu are out of scope                                                                                     |
+| Emoji            | Unicode 17 grapheme, variation-selector, modifier, flag, tag, and ZWJ behavior through the ordinary font-fallback and shaping path; optional color art remains a raster resource |
+| Interaction      | logical/visual ranges, cluster maps, caret stops, hit testing, selection geometry, accessibility reading order                                                                   |
 
 Word spacing applies to identified word separators, while letter spacing operates between typographic character units
 after shaping and bidi ordering; nonzero letter spacing also interacts with optional ligatures. Justification cannot be
@@ -483,16 +483,16 @@ horizontal metrics, dense glyph extents, and optional `BASE`, `VORG`, `vhea`, an
 
 Measured source-table sizes for the repository fixtures establish the relevant bound:
 
-| Capability | Per-font shaping-data effect |
-| --- | --- |
-| Word/letter spacing, breaking, regions, exclusions, and sequential flow | zero bytes |
-| Tate-chu-yoko | zero bytes; uses existing glyphs and existing GSUB width features when available |
-| Emphasis marks | zero bytes; uses an ordinary shaped/cached mark glyph |
-| Underline and strike | at most four extracted `i16` metrics, eight raw numeric bytes before container overhead |
-| Bounded ink-box skipping | zero bytes; reuses the existing eight-byte dense extent record per glyph |
-| Vertical shaping, Inter and Amiri fixtures | zero bytes; source fonts have no vertical tables and use the declared fallback |
-| Vertical shaping, Noto Sans CJK JP | `vmtx` 261,386 + `vhea` 36 + `VORG` 920 = 262,342 raw bytes, about 36.8 KiB when the three source tables are Brotli-compressed independently; already retained today |
-| `BASE` in Noto Sans CJK JP | 240 raw bytes; already retained and not exclusively vertical |
+| Capability                                                              | Per-font shaping-data effect                                                                                                                                         |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Word/letter spacing, breaking, regions, exclusions, and sequential flow | zero bytes                                                                                                                                                           |
+| Tate-chu-yoko                                                           | zero bytes; uses existing glyphs and existing GSUB width features when available                                                                                     |
+| Emphasis marks                                                          | zero bytes; uses an ordinary shaped/cached mark glyph                                                                                                                |
+| Underline and strike                                                    | at most four extracted `i16` metrics, eight raw numeric bytes before container overhead                                                                              |
+| Bounded ink-box skipping                                                | zero bytes; reuses the existing eight-byte dense extent record per glyph                                                                                             |
+| Vertical shaping, Inter and Amiri fixtures                              | zero bytes; source fonts have no vertical tables and use the declared fallback                                                                                       |
+| Vertical shaping, Noto Sans CJK JP                                      | `vmtx` 261,386 + `vhea` 36 + `VORG` 920 = 262,342 raw bytes, about 36.8 KiB when the three source tables are Brotli-compressed independently; already retained today |
+| `BASE` in Noto Sans CJK JP                                              | 240 raw bytes; already retained and not exclusively vertical                                                                                                         |
 
 Vertical layout therefore adds no new per-font bytes to the current artifact contract; it begins consuming data already
 preserved. Underline metrics must be extracted from `post`, not retained by adding the whole table: Inter's source
@@ -568,20 +568,20 @@ reshapes and fits a tagged short run as one vertical inline atom. Both belong in
 
 The product scope is therefore:
 
-| Capability | When it is used | Initial scope | Cost control |
-| --- | --- | --- | --- |
-| Japanese line-start/end restrictions and tailoring | ordinary Japanese horizontal and vertical prose | include | compact rule/table delta; same line-break vectors plus tailored cases |
-| Tate-chu-yoko | short dates, counters, page numbers, and occasional Latin inside vertical text | include | bounded tagged runs; no general nested layout |
-| Emphasis marks | CJK emphasis where italics are inappropriate | include with decorations | cached mark shape; one extra primitive only where applied |
-| Ruby | educational text, names, pronunciation guides, translations, manga, and specialist CJK publishing | cut | no base/annotation model or nested shaping stream |
-| Warichu | compact Japanese parenthetical notes set as two small lines inside one line | cut | no nested inline line-layout model |
-| Automatic language hyphenation | narrow justified columns in language-aware publishing | cut | no dictionaries, data-pack ABI, or language hyphenation algorithm; explicit soft hyphens remain |
-| Balanced columns | final newspaper, magazine, and page composition | cut | columns fill sequentially; applications may choose region geometry externally |
-| Widow/orphan and keep constraints | page/column finalization | cut | explicit page/column breaks and resume tokens remain |
-| Automatic footnotes and sidenotes | page-coupled notes and scholarly annotations | cut | applications manually compose note text in independent regions; no second text channel or coupled page solver enters the engine |
-| OpenType math layout | formulas, stretchy operators, fractions, scripts, and equation structure | cut | the `MATH` table is not a complete math-layout specification and would require a separate recursive box engine |
-| Text on a path | labels following arbitrary curves | cut | no arc-length mapping, tangent placement, curve-aware interaction, or path-decoration system in the core |
-| OpenType-SVG glyph paint | SVG-authored color glyphs and icons | cut | no XML/SVG parser, DOM, scripting, animation, filter, or external-resource runtime; color emoji uses the bounded bitmap companion |
+| Capability                                         | When it is used                                                                                   | Initial scope            | Cost control                                                                                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Japanese line-start/end restrictions and tailoring | ordinary Japanese horizontal and vertical prose                                                   | include                  | compact rule/table delta; same line-break vectors plus tailored cases                                                             |
+| Tate-chu-yoko                                      | short dates, counters, page numbers, and occasional Latin inside vertical text                    | include                  | bounded tagged runs; no general nested layout                                                                                     |
+| Emphasis marks                                     | CJK emphasis where italics are inappropriate                                                      | include with decorations | cached mark shape; one extra primitive only where applied                                                                         |
+| Ruby                                               | educational text, names, pronunciation guides, translations, manga, and specialist CJK publishing | cut                      | no base/annotation model or nested shaping stream                                                                                 |
+| Warichu                                            | compact Japanese parenthetical notes set as two small lines inside one line                       | cut                      | no nested inline line-layout model                                                                                                |
+| Automatic language hyphenation                     | narrow justified columns in language-aware publishing                                             | cut                      | no dictionaries, data-pack ABI, or language hyphenation algorithm; explicit soft hyphens remain                                   |
+| Balanced columns                                   | final newspaper, magazine, and page composition                                                   | cut                      | columns fill sequentially; applications may choose region geometry externally                                                     |
+| Widow/orphan and keep constraints                  | page/column finalization                                                                          | cut                      | explicit page/column breaks and resume tokens remain                                                                              |
+| Automatic footnotes and sidenotes                  | page-coupled notes and scholarly annotations                                                      | cut                      | applications manually compose note text in independent regions; no second text channel or coupled page solver enters the engine   |
+| OpenType math layout                               | formulas, stretchy operators, fractions, scripts, and equation structure                          | cut                      | the `MATH` table is not a complete math-layout specification and would require a separate recursive box engine                    |
+| Text on a path                                     | labels following arbitrary curves                                                                 | cut                      | no arc-length mapping, tangent placement, curve-aware interaction, or path-decoration system in the core                          |
+| OpenType-SVG glyph paint                           | SVG-authored color glyphs and icons                                                               | cut                      | no XML/SVG parser, DOM, scripting, animation, filter, or external-resource runtime; color emoji uses the bounded bitmap companion |
 
 The cut features reserve no runtime tables, optional dictionaries, policy opcodes, semantic records, or implementation
 stages. More generally, the core never automatically lays out a second authored text channel beside the selected prose.
@@ -754,16 +754,16 @@ milestone.
 
 ### Kernel map
 
-| Kernel | Lane shape | Planned treatment |
-| --- | --- | --- |
-| Built-in Bitmap/MSDF/Slug packing | four independent `f32`/`u32` records | explicit four-lane load/transform/store; strongest first admission candidate |
-| Declarative policy transforms | four independent semantic records | vector bytecode/graph execution so dispatch is amortized across four records |
-| Bidi-level transitions | sixteen `u8` levels | compare shifted contiguous levels and extract a bitmask |
-| Break and cluster flags | sixteen `u8` flags | vector masks plus `bitmask`/trailing-zero candidate selection |
-| Patch verification/coalescing | sixteen bytes or four words | `v128` compare on already invalidated spans; never scan the whole live buffer as the primary algorithm |
-| Glyph-to-cluster aggregation | repeated cluster IDs and scatter writes | reshape once into cluster-contiguous runs; core Wasm SIMD has no gather/scatter instruction |
-| Line-width search | chunk summaries plus ordered boundary scan | skip summary blocks; preserve scalar addition order at the exact width boundary |
-| Decoration bounds/packing | four independent segments | vectorize bounds and physical packing after line fragmentation is fixed |
+| Kernel                            | Lane shape                                 | Planned treatment                                                                                      |
+| --------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Built-in Bitmap/MSDF/Slug packing | four independent `f32`/`u32` records       | explicit four-lane load/transform/store; strongest first admission candidate                           |
+| Declarative policy transforms     | four independent semantic records          | vector bytecode/graph execution so dispatch is amortized across four records                           |
+| Bidi-level transitions            | sixteen `u8` levels                        | compare shifted contiguous levels and extract a bitmask                                                |
+| Break and cluster flags           | sixteen `u8` flags                         | vector masks plus `bitmask`/trailing-zero candidate selection                                          |
+| Patch verification/coalescing     | sixteen bytes or four words                | `v128` compare on already invalidated spans; never scan the whole live buffer as the primary algorithm |
+| Glyph-to-cluster aggregation      | repeated cluster IDs and scatter writes    | reshape once into cluster-contiguous runs; core Wasm SIMD has no gather/scatter instruction            |
+| Line-width search                 | chunk summaries plus ordered boundary scan | skip summary blocks; preserve scalar addition order at the exact width boundary                        |
+| Decoration bounds/packing         | four independent segments                  | vectorize bounds and physical packing after line fragmentation is fixed                                |
 
 Line-breaking correctness forbids changing floating-point association. Core WebAssembly SIMD provides deterministic
 `v128` integer and float operations, but relaxed-SIMD operations permit implementation-dependent results and are not
@@ -800,6 +800,17 @@ least 5% or removes enough latency/allocations to meet the 1/4 ms budgets, witho
 by more than 2%. Its production Brotli delta is capped at the smaller of 12 KiB or 5% of the engine module unless a
 separate decision records stronger end-to-end evidence. These thresholds intentionally reject the repository's prior
 MTSDF pattern of double-digit code growth for low-single-digit bounded gains.
+
+The first packet checkpoint selects 64-cluster, 16-byte-aligned SoA storage. Across real 25,515- and 100,602-glyph
+arrays, scalar, compiler-vectorized, and selected hybrid artifacts produced identical horizontal, vertical, partial-tail,
+and four-byte-aligned output hashes in Node 24.18.0 and Chromium 149 without warm allocation or memory growth. Compiler
+vectorization, not hand-written shuffles, owns straight-line record packing. Explicit `i8x16` break/bidi masks and
+integer-exact `i64x2` summaries exceeded the 20% phase threshold; 64-cluster summaries won the large workload against
+32 and 128. The selected lab artifact adds 1,652 raw / 1,158 Brotli bytes over scalar, while the standard production
+`+simd128` build is 289 raw / 26 Brotli bytes smaller than its same-ABI scalar release-valve build. The optimized
+disassembly contains the intended vector loads, stores, bitmasks, shuffles, and integer lanes. Policy execution,
+boundary search, representative native SIMD, and end-to-end contribution remain open parts of the packet because their
+production stages do not exist yet; they are not inferred from these admitted kernels.
 
 ## Implementation stack
 
@@ -924,53 +935,70 @@ pipeline before adding new publishing features. The single ABI is its final cuto
   interface. It is retained as a release valve and published only when an actual consumer requires the older browser
   tail; SIMD remains the default build and package.
 
-[^css-text]: [CSS Text Level 4](https://www.w3.org/TR/css-text-4/) defines the relevant spacing, hanging-punctuation,
+[^css-text]:
+    [CSS Text Level 4](https://www.w3.org/TR/css-text-4/) defines the relevant spacing, hanging-punctuation,
     and justification concepts. The engine API need not duplicate CSS syntax.
 
-[^harfbuzz]: [HarfBuzz buffer flags](https://harfbuzz.github.io/harfbuzz-hb-buffer.html) define safe-to-insert and
+[^harfbuzz]:
+    [HarfBuzz buffer flags](https://harfbuzz.github.io/harfbuzz-hb-buffer.html) define safe-to-insert and
     unsafe-to-concatenate boundaries used for narrowed reshaping.
 
-[^safari-simd]: [WebKit's Safari 16.4 release notes](https://webkit.org/blog/13966/webkit-features-in-safari-16-4/)
+[^safari-simd]:
+    [WebKit's Safari 16.4 release notes](https://webkit.org/blog/13966/webkit-features-in-safari-16-4/)
     record the addition of WebAssembly 128-bit SIMD.
 
-[^chrome-simd]: [The Chromium 91 release announcement](https://blog.chromium.org/2021/04/chrome-91-handwriting-recognition-webxr.html)
+[^chrome-simd]:
+    [The Chromium 91 release announcement](https://blog.chromium.org/2021/04/chrome-91-handwriting-recognition-webxr.html)
     records WebAssembly SIMD becoming enabled by default.
 
-[^firefox-simd]: [Mozilla's WebAssembly SIMD shipping record](https://bugzilla.mozilla.org/show_bug.cgi?id=1625130)
+[^firefox-simd]:
+    [Mozilla's WebAssembly SIMD shipping record](https://bugzilla.mozilla.org/show_bug.cgi?id=1625130)
     records Firefox 89 for x86/x64, Firefox 90 for arm64, and no planned arm32 or mips64 implementation.
 
-[^icu4x]: [`icu_segmenter` documentation](https://docs.rs/icu_segmenter/latest/icu_segmenter/) currently documents
+[^icu4x]:
+    [`icu_segmenter` documentation](https://docs.rs/icu_segmenter/latest/icu_segmenter/) currently documents
     Unicode 15.1 line-break data, so it cannot replace this repository's Unicode 17 gate without new evidence.
 
-[^jlreq]: [JLREQ](https://www.w3.org/TR/jlreq/) documents Japanese vertical composition, punctuation, ruby, emphasis,
+[^jlreq]:
+    [JLREQ](https://www.w3.org/TR/jlreq/) documents Japanese vertical composition, punctuation, ruby, emphasis,
     and line-start/end restrictions.
 
-[^parley]: [Parley layout](https://docs.rs/parley/latest/parley/layout/) demonstrates retained rich-text layout,
+[^parley]:
+    [Parley layout](https://docs.rs/parley/latest/parley/layout/) demonstrates retained rich-text layout,
     decorations, cursor/selection data, and line-breaking iteration in a current Rust implementation.
 
-[^pretext]: [Pretext](https://github.com/chenglou/pretext) demonstrates a prepared text object advanced by a cursor and
+[^pretext]:
+    [Pretext](https://github.com/chenglou/pretext) demonstrates a prepared text object advanced by a cursor and
     a different width for each line; its Canvas measurement model is not adopted here.
 
-[^ruby]: [CSS Ruby Annotation Layout Level 1](https://www.w3.org/TR/css-ruby-1/) defines base/annotation pairing,
+[^ruby]:
+    [CSS Ruby Annotation Layout Level 1](https://www.w3.org/TR/css-ruby-1/) defines base/annotation pairing,
     levels, positioning, merging, and distribution that make ruby a coupled second layout stream.
 
-[^rust-simd]: [Rust's stable `wasm32` architecture documentation](https://doc.rust-lang.org/core/arch/wasm32/index.html)
+[^rust-simd]:
+    [Rust's stable `wasm32` architecture documentation](https://doc.rust-lang.org/core/arch/wasm32/index.html)
     documents `simd128` intrinsics, compilation requirements, and the lack of in-module runtime feature detection.
 
-[^staging]: [`wgpu::util::StagingBelt`](https://docs.rs/wgpu/latest/wgpu/util/struct.StagingBelt.html) is an example of
+[^staging]:
+    [`wgpu::util::StagingBelt`](https://docs.rs/wgpu/latest/wgpu/util/struct.StagingBelt.html) is an example of
     renderer-owned reuse for many buffer writes; it is separate from Wasm result publication.
 
-[^text-decoration]: [CSS Text Decoration Level 4](https://www.w3.org/TR/css-text-decor-4/) defines the decoration
+[^text-decoration]:
+    [CSS Text Decoration Level 4](https://www.w3.org/TR/css-text-decor-4/) defines the decoration
     dimensions and skip behavior used as the semantic reference.
 
-[^webrender]: [Firefox's rendering overview](https://firefox-source-docs.mozilla.org/gfx/RenderingOverview.html)
+[^webrender]:
+    [Firefox's rendering overview](https://firefox-source-docs.mozilla.org/gfx/RenderingOverview.html)
     separates retained display-list intent from renderer-specific scene building and submission.
 
-[^wasm-simd]: [The WebAssembly core specification](https://webassembly.github.io/spec/core/) defines fixed-width
+[^wasm-simd]:
+    [The WebAssembly core specification](https://webassembly.github.io/spec/core/) defines fixed-width
     `v128` operations and records that relaxed operations may have implementation-dependent results.
 
-[^worker-transfer]: [The HTML Worker model](https://html.spec.whatwg.org/multipage/workers.html) defines worker
+[^worker-transfer]:
+    [The HTML Worker model](https://html.spec.whatwg.org/multipage/workers.html) defines worker
     `postMessage` transfer lists used to move `ArrayBuffer` ownership between worker and root.
 
-[^writing-modes]: [CSS Writing Modes Level 4](https://www.w3.org/TR/css-writing-modes-4/) defines logical inline/block
+[^writing-modes]:
+    [CSS Writing Modes Level 4](https://www.w3.org/TR/css-writing-modes-4/) defines logical inline/block
     directions and distinguishes writing mode from glyph orientation.

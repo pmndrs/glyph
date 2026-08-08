@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 0,
+  "generatedBy": "text:kernel-lab + text:kernel-lab-browser",
+  "recordedAt": "2026-08-08",
+  "target": {
+    "machine": "Apple M2 Pro, 10 cores, 32 GiB",
+    "node": "24.18.0",
+    "chromium": "149.0.7827.55",
+    "rust": "1.97.1",
+    "wasmOptimizer": "binaryen 129.0.0"
+  },
+  "workloads": [
+    {
+      "glyphs": 25515,
+      "outputSha256": "84ba1678f750f7fc35ff5e665aa5cb07585734aa12357ab55ee499208b2e3e5e"
+    },
+    {
+      "glyphs": 100602,
+      "outputSha256": "42e3c29bf66c1f18caea36ec2156ee32a38d09e797bc8cea453433c02f8ff84e"
+    }
+  ],
+  "correctness": {
+    "scalarAutoAndSelectedHashesEqual": true,
+    "horizontalVerticalAndPartialChunksCovered": true,
+    "alignedAndFourByteAlignedOutputsEqual": true,
+    "warmMemoryGrowth": false,
+    "warmAllocationCalls": 0,
+    "allocationEvidence": "The measured kernel entry points create only borrowed slices over caller-owned memory and contain no allocation path; the warm memory buffer identity also remains unchanged."
+  },
+  "artifactBytes": {
+    "kernelLab": {
+      "scalar": { "raw": 728860, "brotli": 211729 },
+      "auto": { "raw": 729828, "brotli": 212390 },
+      "selectedHybrid": { "raw": 730512, "brotli": 212887 }
+    },
+    "production": {
+      "scalar": { "raw": 725302, "gzip": 267165, "brotli": 210867 },
+      "simd128": { "raw": 725013, "gzip": 266615, "brotli": 210841 }
+    }
+  },
+  "optimizedSelectedInstructions": {
+    "v128Loads": 649,
+    "v128Stores": 723,
+    "f32x4Operations": 18,
+    "i8x16Bitmasks": 3,
+    "i8x16Shuffles": 35,
+    "i64x2Operations": 28
+  },
+  "p95Milliseconds": {
+    "node": {
+      "25515": {
+        "scalar": { "pack": 0.043445, "breakMasks": 0.013195, "bidiMasks": 0.010682, "chunk64": 0.015655 },
+        "auto": { "pack": 0.013099, "breakMasks": 0.01123, "bidiMasks": 0.01386, "chunk64": 0.008819 },
+        "selectedHybrid": { "pack": 0.01306, "breakMasks": 0.001452, "bidiMasks": 0.002551, "chunk64": 0.004156 }
+      },
+      "100602": {
+        "scalar": { "pack": 0.177563, "breakMasks": 0.04904, "bidiMasks": 0.041621, "chunk64": 0.05982 },
+        "auto": { "pack": 0.058224, "breakMasks": 0.045216, "bidiMasks": 0.053385, "chunk64": 0.033901 },
+        "selectedHybrid": { "pack": 0.062641, "breakMasks": 0.005815, "bidiMasks": 0.010034, "chunk64": 0.014711 }
+      }
+    },
+    "chromium": {
+      "25515": {
+        "scalar": { "pack": 0.04375, "breakMasks": 0.014063, "bidiMasks": 0.010938, "chunk64": 0.01875 },
+        "auto": { "pack": 0.01875, "breakMasks": 0.010938, "bidiMasks": 0.0125, "chunk64": 0.0125 },
+        "selectedHybrid": { "pack": 0.01875, "breakMasks": 0.003125, "bidiMasks": 0.003125, "chunk64": 0.00625 }
+      },
+      "100602": {
+        "scalar": { "pack": 0.175, "breakMasks": 0.053125, "bidiMasks": 0.046875, "chunk64": 0.06875 },
+        "auto": { "pack": 0.075, "breakMasks": 0.04375, "bidiMasks": 0.05, "chunk64": 0.0375 },
+        "selectedHybrid": { "pack": 0.0625, "breakMasks": 0.009375, "bidiMasks": 0.0125, "chunk64": 0.01875 }
+      }
+    }
+  },
+  "endToEndCheckpoint": {
+    "command": "pnpm scripts run text:layout-benchmark -- --glyphs 22000",
+    "warmup": 8,
+    "samples": 31,
+    "newKernelsWired": false,
+    "cases": {
+      "cold": { "glyphs": 25515, "medianMs": 55.05, "p95Ms": 69.71 },
+      "fontSize": { "glyphs": 25515, "medianMs": 12.1, "p95Ms": 14.82 },
+      "layoutWidth": { "glyphs": 25515, "medianMs": 8.3, "p95Ms": 11.08 },
+      "text": { "glyphs": 25507, "medianMs": 38.59, "p95Ms": 41.28 }
+    },
+    "interpretation": "This remains the TypeScript layout pipeline, so the admitted kernels make no end-to-end performance claim yet."
+  },
+  "selection": {
+    "retainedChunkClusters": 64,
+    "packing": "compiler-vectorizable straight-line scalar source compiled with +simd128",
+    "breakAndBidiMasks": "explicit simd128 with scalar tails",
+    "chunkSummaries": "explicit simd128 integer sums and masks with scalar tails",
+    "standardArtifact": "simd128",
+    "compatibilityDefine": "PMNDRS_TEXT_SHAPER_SIMD=0",
+    "runtimeDispatch": false,
+    "rejected": [
+      "hand-written four-record packing, because it did not beat compiler vectorization and regressed the 100k Node result",
+      "32-cluster chunks, because their large-workload summary time exceeded 64",
+      "128-cluster chunks, because their large-workload summary time exceeded 64"
+    ],
+    "remainingPacket": [
+      "policy-execution kernels after the scalar render-plan executor exists",
+      "boundary search after retained line cursors and summaries exist",
+      "representative native SIMD implementation and measurement",
+      "end-to-end hot-update contribution after the Rust semantic pipeline is wired"
+    ]
+  }
+}

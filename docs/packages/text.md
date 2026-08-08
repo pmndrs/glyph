@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:e240ef80a048b85b175a32bd66ce824f91c217da5c51b727dc45b1fa9c2a05ec'
+source_digest: 'sha256:bf341bec67c931df02db97003cf7c5e433364f399ec2d750dfa16395e651c5de'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -171,8 +171,8 @@ sources:
     resource: ../../packages/text/src/internal/unicode.ts
     title: Unicode analysis implementation
 generated:
-  by: anthropic-claude/opus-5
-  at: '2026-08-08T08:15:00Z'
+  by: openai-codex/gpt-5
+  at: '2026-08-08T10:15:42Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -413,6 +413,20 @@ and an over-limit return becomes unreachable on the worker for worker-side colle
 directions, exact bytes, reuse, missing returns, forged and duplicate returns, failed sends, oversize rejection, and
 worker-side discard. The transport never decodes the compiler-defined frame layout, and it remains unwired from the
 shipping asynchronous TypeScript path until the Rust semantic tables exist.
+
+The retained-engine kernel lab now fixes the first storage choices before semantic chunks land. It captures the real
+25,515- and 100,602-glyph paragraph arrays, derives deterministic metric/advance lanes, and compares scalar,
+compiler-vectorized, and selected hybrid artifacts through one direct-pointer interface. Node 24 and Chromium 149
+produce identical horizontal, vertical, partial-tail, and four-byte-aligned hashes with no warm allocation path or
+memory growth. Compiler-vectorized straight-line source owns record packing because hand-written shuffle packing did not
+beat it. Explicit `i8x16` break/bidi masks and integer-exact `i64x2` summaries pass the 20% phase threshold; the large
+workload selects ABI-private 64-cluster, 16-byte-aligned SoA chunks over 32 and 128. Binaryen output contains the intended
+vector instructions. The selected lab artifact adds 1,652 raw / 1,158 Brotli bytes over scalar. More importantly, the
+standard production `+simd128` artifact measures 725,013 raw / 266,615 gzip / 210,841 Brotli bytes, 289 / 550 / 26 bytes
+smaller than the same-ABI scalar build. SIMD is the default build with no runtime dispatch;
+`PMNDRS_TEXT_SHAPER_SIMD=0` produces the scalar release valve, whose disassembly contains no SIMD instructions and whose
+34 focused shaping/layout/frame tests pass unchanged. Policy execution, boundary search, native SIMD, and the complete
+hot-update contribution remain explicit open measurements until those engine stages exist.
 
 Item 8.3 promotes `@pmndrs/text/raster/msdf` from an identity-only contract to the browser module and adds the isolated `@pmndrs/text/bakers/msdf/validate` entry. The standalone path layers the pinned Khronos validator, byte-identical Draft-04 schema, and semantic checks for reciprocal identity, descriptor-authenticated generation values, `planeUnitsPerEm = emSize`, view ownership, exact dense records, page bounds, embedded/external length and SHA-256 authentication, single-level linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and a 256 MiB padded-base-array residency ceiling. Canonical Inter's ten legacy-default pages round-trip through both packaging forms; field deletion, record/page mutations, KTX2 and DFD corruption, missing/tampered external pages, and budget failures are named negative controls.
 

@@ -212,6 +212,91 @@ pub extern "C" fn pmndrs_text_engine_request_capacity(handle: u32) -> u32 {
     })
 }
 
+#[cfg(feature = "kernel-lab")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_kernel_lab_backend() -> u32 {
+    crate::engine::kernel_lab::BACKEND
+}
+
+#[cfg(feature = "kernel-lab")]
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn pmndrs_text_kernel_lab_pack(
+    count: u32,
+    x_pointer: u32,
+    y_pointer: u32,
+    font_size_pointer: u32,
+    plane_left_pointer: u32,
+    plane_bottom_pointer: u32,
+    plane_right_pointer: u32,
+    plane_top_pointer: u32,
+    inverse_units_per_em: f32,
+    origins_pointer: u32,
+    sizes_pointer: u32,
+) -> u32 {
+    // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
+    unsafe {
+        crate::engine::kernel_lab::exported_pack(
+            count,
+            x_pointer,
+            y_pointer,
+            font_size_pointer,
+            plane_left_pointer,
+            plane_bottom_pointer,
+            plane_right_pointer,
+            plane_top_pointer,
+            inverse_units_per_em,
+            origins_pointer,
+            sizes_pointer,
+        )
+    }
+}
+
+#[cfg(feature = "kernel-lab")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_text_kernel_lab_break_masks(
+    count: u32,
+    flags_pointer: u32,
+    output_pointer: u32,
+) -> u32 {
+    // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
+    unsafe { crate::engine::kernel_lab::exported_break_masks(count, flags_pointer, output_pointer) }
+}
+
+#[cfg(feature = "kernel-lab")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_text_kernel_lab_bidi_masks(
+    count: u32,
+    levels_pointer: u32,
+    output_pointer: u32,
+) -> u32 {
+    // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
+    unsafe { crate::engine::kernel_lab::exported_bidi_masks(count, levels_pointer, output_pointer) }
+}
+
+#[cfg(feature = "kernel-lab")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_text_kernel_lab_chunk_summaries(
+    count: u32,
+    chunk_size: u32,
+    advances_pointer: u32,
+    flags_pointer: u32,
+    advance_sums_pointer: u32,
+    break_counts_pointer: u32,
+) -> u32 {
+    // SAFETY: the test-only kernel validates every direct-memory region before creating slices.
+    unsafe {
+        crate::engine::kernel_lab::exported_chunk_summaries(
+            count,
+            chunk_size,
+            advances_pointer,
+            flags_pointer,
+            advance_sums_pointer,
+            break_counts_pointer,
+        )
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_text_engine_update(
     session_id: u32,
