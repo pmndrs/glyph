@@ -14,7 +14,6 @@ import {
   type ParagraphEngine,
   type ParagraphStyle,
 } from './paragraph.js';
-import { profileBegin, profileEnd } from './profiler.js';
 import type { ResolvedPaint } from './paint.js';
 import type {
   AnyRasterTechnique,
@@ -464,9 +463,7 @@ class ParagraphBatchImpl<Technique extends AnyRasterTechnique, Variant>
           layouts?.get(paragraph.owner.id),
         ),
       );
-      const packing = profileBegin();
       const packed = pack<Technique, Variant>(this, prepared, snapshot.capacity, previous, snapshot.capacityChanged);
-      profileEnd('batch.pack', packing);
       const revision = Object.freeze({
         paragraphBatch: this,
         revision: this.#revision + 1,

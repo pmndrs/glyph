@@ -667,7 +667,7 @@ async function createComparisonWorkloadRuntime(
     await commit(configuration);
     signal?.throwIfAborted();
     let requestedConfiguration = configuration;
-    let pendingUpdate: PendingConfigurationUpdate | undefined;
+    const pendingUpdates: PendingConfigurationUpdate[] = [];
     let updateDrain: Promise<void> | undefined;
 
     async function applyConfiguration(next: ComparisonWorkloadConfiguration, viewportChanged: boolean): Promise<void> {
@@ -750,21 +750,20 @@ async function createComparisonWorkloadRuntime(
     function startUpdateDrain(): void {
       if (updateDrain !== undefined) return;
       updateDrain = (async () => {
-        while (pendingUpdate !== undefined) {
+        while (pendingUpdates.length > 0) {
           if (closing || disposed) break;
-          const current = pendingUpdate;
-          pendingUpdate = undefined;
+          const current = pendingUpdates.shift()!;
           try {
             await applyConfiguration(current.configuration, current.viewportChanged);
             for (const waiter of current.waiters) waiter.resolve();
           } catch (error) {
             for (const waiter of current.waiters) waiter.reject(error);
-            if (pendingUpdate === undefined) requestedConfiguration = configuration;
+            if (pendingUpdates.length === 0) requestedConfiguration = configuration;
           }
         }
       })().finally(() => {
         updateDrain = undefined;
-        if (pendingUpdate !== undefined && !closing && !disposed) {
+        if (pendingUpdates.length > 0 && !closing && !disposed) {
           startUpdateDrain();
           return;
         }
@@ -784,14 +783,11 @@ async function createComparisonWorkloadRuntime(
       ) {
         iconGridInstance?.suspend();
       }
+      // Queued, never merged. Collapsing a superseded configuration into its successor made a dragged control report
+      // the cost of the two updates that survived rather than of the twenty it requested, which is a measurement of
+      // the queue and not of the workload. Callers debounce their own input; whatever arrives here is applied.
       return new Promise<void>((resolve, reject) => {
-        if (pendingUpdate === undefined) {
-          pendingUpdate = { configuration: next, viewportChanged, waiters: [{ resolve, reject }] };
-        } else {
-          pendingUpdate.configuration = next;
-          pendingUpdate.viewportChanged ||= viewportChanged;
-          pendingUpdate.waiters.push({ resolve, reject });
-        }
+        pendingUpdates.push({ configuration: next, viewportChanged, waiters: [{ resolve, reject }] });
         startUpdateDrain();
       });
     }
@@ -1053,8 +1049,8 @@ async function createComparisonWorkloadRuntime(
         closing = true;
         revision += 1;
         const disposalReason = new DOMException('The comparison workload scene is disposed', 'AbortError');
-        for (const waiter of pendingUpdate?.waiters ?? []) waiter.reject(disposalReason);
-        pendingUpdate = undefined;
+        for (const update of pendingUpdates) for (const waiter of update.waiters) waiter.reject(disposalReason);
+        pendingUpdates.length = 0;
         disposal = (async () => {
           await updateDrain;
           disposed = true;
