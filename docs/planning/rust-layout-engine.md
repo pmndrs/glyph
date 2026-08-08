@@ -308,6 +308,12 @@ inactive arena, so replacing a style cannot accumulate dead language or feature 
 for bitmap strike selection but rejected on non-root spans. Commit is an arena swap and abort does not touch committed
 styles.
 
+Resolution is a separate derived A/B arena. One sweep of the validated containment order keeps the fully resolved parent
+on a pre-reserved stack, applies only the fields stated by each opening scope, emits maximal segments at start/end
+boundaries, and coalesces equal neighbors. Language and OpenType-feature values remain references into the compact
+retained style arena. A root states font stack, logical size, and target density; absent line height deliberately means
+natural font metrics rather than a fabricated multiplier.
+
 All offsets and lengths are range-checked before use. Enum tags, alignment, multiplication, and revision relationships
 are validated at the Wasm boundary. Failure returns a typed result without exposing partially mutated state.
 

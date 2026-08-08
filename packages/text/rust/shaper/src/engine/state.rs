@@ -9,7 +9,9 @@ use super::{
     },
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
-    style_state::{DEFAULT_STYLE_CAPACITY, MutationKey, StyleArena},
+    style_state::{
+        DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
+    },
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,9 +58,12 @@ struct EngineSession {
     text_prepared: bool,
     styles: StyleArena,
     pending_styles: StyleArena,
+    resolved_styles: ResolvedStyleArena,
+    pending_resolved_styles: ResolvedStyleArena,
     style_mutation_scratch: Vec<MutationKey>,
     style_order_scratch: Vec<usize>,
     style_nesting_scratch: Vec<u32>,
+    style_resolution_scratch: Vec<ResolutionScope>,
     styles_prepared: bool,
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
@@ -244,6 +249,8 @@ impl TextEngine {
         let mut session = EngineSession::default();
         session.styles.reserve_default()?;
         session.pending_styles.reserve_default()?;
+        session.resolved_styles.reserve_default()?;
+        session.pending_resolved_styles.reserve_default()?;
         session
             .style_mutation_scratch
             .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
@@ -254,6 +261,10 @@ impl TextEngine {
             .map_err(|_| EngineError::ResultTooLarge)?;
         session
             .style_nesting_scratch
+            .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        session
+            .style_resolution_scratch
             .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.sessions.insert(handle, session);
@@ -298,6 +309,14 @@ impl TextEngine {
         self.sessions
             .get(&handle)
             .map(|session| session.styles.len())
+            .ok_or(EngineError::SessionMissing)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn session_style_segment_count(&self, handle: u32) -> Result<usize, EngineError> {
+        self.sessions
+            .get(&handle)
+            .map(|session| session.resolved_styles.segments().len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -562,21 +581,32 @@ impl EngineSession {
             self.abort_styles();
             return Err(error);
         }
+        if let Err(error) = self.pending_styles.resolve(
+            &self.style_order_scratch,
+            &mut self.pending_resolved_styles,
+            &mut self.style_resolution_scratch,
+        ) {
+            self.abort_styles();
+            return Err(error);
+        }
         self.styles_prepared = true;
         Ok(())
     }
 
     fn abort_styles(&mut self) {
         self.pending_styles.clear();
+        self.pending_resolved_styles.clear();
         self.style_mutation_scratch.clear();
         self.style_order_scratch.clear();
         self.style_nesting_scratch.clear();
+        self.style_resolution_scratch.clear();
         self.styles_prepared = false;
     }
 
     fn commit_styles(&mut self) {
         if self.styles_prepared {
             core::mem::swap(&mut self.styles, &mut self.pending_styles);
+            core::mem::swap(&mut self.resolved_styles, &mut self.pending_resolved_styles);
         }
         self.abort_styles();
     }
@@ -992,8 +1022,10 @@ mod tests {
             parse_style_mutations(&root_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         let prepared = engine.prepare_update(root, 2).unwrap();
         assert_eq!(engine.session_style_count(4), Ok(0));
+        assert_eq!(engine.session_style_segment_count(4), Ok(0));
         engine.commit_update(prepared).unwrap();
         assert_eq!(engine.session_style_count(4), Ok(1));
+        assert_eq!(engine.session_style_segment_count(4), Ok(1));
 
         let remove_bytes = remove_style_bytes(1);
         let mut remove = update(2, 2, 2);

@@ -6,8 +6,11 @@ use crate::{
     FeatureRecord,
     engine::{
         frame::{
-            STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_LINE_HEIGHT,
-            STYLE_FIELD_RASTER_PIXEL_RATIO,
+            DECORATION_NONE, STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION,
+            STYLE_FIELD_DIRECTION, STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE,
+            STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE,
+            STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MATERIAL,
+            STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING,
         },
         semantic_wire::{StyleMutation, StyleMutationBatch, StyleValue},
     },
@@ -16,13 +19,12 @@ use crate::{
 
 use super::EngineError;
 
-const ROOT_REQUIRED_FIELDS: u32 = STYLE_FIELD_FONT_STACK
-    | STYLE_FIELD_FONT_SIZE
-    | STYLE_FIELD_LINE_HEIGHT
-    | STYLE_FIELD_RASTER_PIXEL_RATIO;
+const ROOT_REQUIRED_FIELDS: u32 =
+    STYLE_FIELD_FONT_STACK | STYLE_FIELD_FONT_SIZE | STYLE_FIELD_RASTER_PIXEL_RATIO;
 pub(crate) const DEFAULT_STYLE_CAPACITY: usize = 64;
 const DEFAULT_LANGUAGE_CAPACITY: usize = 512;
 const DEFAULT_FEATURE_CAPACITY: usize = 128;
+const NO_STYLE_SOURCE: u32 = u32::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct RetainedStyle {
@@ -64,6 +66,88 @@ pub(crate) struct StyleArena {
 pub(crate) struct MutationKey {
     style_id: u32,
     request_index: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResolvedStyle {
+    pub font_stack_handle: u32,
+    pub material_id: u32,
+    pub font_size: f32,
+    pub line_height: f32,
+    pub letter_spacing: f32,
+    pub word_spacing: f32,
+    pub baseline_shift: f32,
+    pub raster_pixel_ratio: f32,
+    pub direction: u8,
+    pub foreground_rgba: u32,
+    pub decoration_rgba: u32,
+    pub decoration_flags: u32,
+    pub decoration_style: u8,
+    pub decoration_thickness: f32,
+    pub decoration_offset: f32,
+    language_source: u32,
+    features_source: u32,
+    pub has_line_height: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct StyleSegment {
+    pub text_start: u32,
+    pub text_end: u32,
+    pub style: ResolvedStyle,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ResolutionScope {
+    end: u32,
+    style: ResolvedStyle,
+}
+
+#[derive(Default)]
+pub(crate) struct ResolvedStyleArena {
+    segments: Vec<StyleSegment>,
+}
+
+impl Default for ResolvedStyle {
+    fn default() -> Self {
+        Self {
+            font_stack_handle: 0,
+            material_id: 0,
+            font_size: 16.0,
+            line_height: 0.0,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            baseline_shift: 0.0,
+            raster_pixel_ratio: 1.0,
+            direction: 0,
+            foreground_rgba: u32::MAX,
+            decoration_rgba: 0,
+            decoration_flags: 0,
+            decoration_style: DECORATION_NONE,
+            decoration_thickness: 0.0,
+            decoration_offset: 0.0,
+            language_source: NO_STYLE_SOURCE,
+            features_source: NO_STYLE_SOURCE,
+            has_line_height: false,
+        }
+    }
+}
+
+impl ResolvedStyleArena {
+    pub(crate) fn reserve_default(&mut self) -> Result<(), EngineError> {
+        self.segments
+            .try_reserve_exact(DEFAULT_STYLE_CAPACITY.saturating_mul(2))
+            .map_err(|_| EngineError::ResultTooLarge)
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.segments.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn segments(&self) -> &[StyleSegment] {
+        &self.segments
+    }
 }
 
 impl StyleArena {
@@ -213,6 +297,7 @@ impl StyleArena {
             (
                 style.text_start,
                 core::cmp::Reverse(style.text_end),
+                !style.root,
                 style.cascade_order,
             )
         });
@@ -246,6 +331,123 @@ impl StyleArena {
             nesting_scratch.push(style.text_end);
         }
         Ok(())
+    }
+
+    pub(crate) fn resolve(
+        &self,
+        containment_order: &[usize],
+        output: &mut ResolvedStyleArena,
+        scope_scratch: &mut Vec<ResolutionScope>,
+    ) -> Result<(), EngineError> {
+        output.clear();
+        scope_scratch.clear();
+        output
+            .segments
+            .try_reserve(self.records.len().saturating_mul(2))
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        scope_scratch
+            .try_reserve(self.records.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        let root = containment_order
+            .first()
+            .and_then(|index| self.records.get(*index))
+            .filter(|style| style.root)
+            .ok_or(EngineError::InvalidRequest)?;
+        if root.text_end == 0 {
+            output.segments.push(StyleSegment {
+                text_start: 0,
+                text_end: 0,
+                style: apply_style(ResolvedStyle::default(), *root, containment_order[0]),
+            });
+            return Ok(());
+        }
+
+        let mut current = 0;
+        let mut opening = 0;
+        while current < root.text_end {
+            while scope_scratch
+                .last()
+                .is_some_and(|scope| scope.end <= current)
+            {
+                scope_scratch.pop();
+            }
+            while let Some(index) = containment_order.get(opening).copied() {
+                let style = self.records[index];
+                if style.text_start != current {
+                    break;
+                }
+                let inherited = scope_scratch
+                    .last()
+                    .map_or_else(ResolvedStyle::default, |scope| scope.style);
+                scope_scratch.push(ResolutionScope {
+                    end: style.text_end,
+                    style: apply_style(inherited, style, index),
+                });
+                opening += 1;
+            }
+            let scope = scope_scratch
+                .last()
+                .copied()
+                .ok_or(EngineError::InvalidRequest)?;
+            let next_open = containment_order
+                .get(opening)
+                .map_or(root.text_end, |index| self.records[*index].text_start);
+            let next = scope.end.min(next_open);
+            if next <= current {
+                return Err(EngineError::InvalidRequest);
+            }
+            if output.segments.last().is_some_and(|previous| {
+                previous.text_end == current && self.same_resolved(previous.style, scope.style)
+            }) {
+                output
+                    .segments
+                    .last_mut()
+                    .ok_or(EngineError::InvalidRequest)?
+                    .text_end = next;
+            } else {
+                output.segments.push(StyleSegment {
+                    text_start: current,
+                    text_end: next,
+                    style: scope.style,
+                });
+            }
+            current = next;
+        }
+        if opening != containment_order.len()
+            || !scope_scratch.iter().all(|scope| scope.end == root.text_end)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn resolved_language(&self, style: ResolvedStyle) -> Option<&[u8]> {
+        let index = usize::try_from(style.language_source).ok()?;
+        self.records.get(index).map(|source| self.language(*source))
+    }
+
+    pub(crate) fn resolved_features(&self, style: ResolvedStyle) -> &[FeatureRecord] {
+        let Ok(index) = usize::try_from(style.features_source) else {
+            return &[];
+        };
+        self.records
+            .get(index)
+            .map_or(&[], |source| self.features(*source))
+    }
+
+    fn same_resolved(&self, left: ResolvedStyle, right: ResolvedStyle) -> bool {
+        let same_scalars = ResolvedStyle {
+            language_source: NO_STYLE_SOURCE,
+            features_source: NO_STYLE_SOURCE,
+            ..left
+        } == ResolvedStyle {
+            language_source: NO_STYLE_SOURCE,
+            features_source: NO_STYLE_SOURCE,
+            ..right
+        };
+        same_scalars
+            && self.resolved_language(left) == self.resolved_language(right)
+            && self.resolved_features(left) == self.resolved_features(right)
     }
 
     fn push_retained(&mut self, source: &Self, index: usize) -> Result<(), EngineError> {
@@ -296,6 +498,55 @@ impl StyleArena {
         let start = style.feature_start as usize;
         &self.features[start..start + usize::from(style.feature_count)]
     }
+}
+
+fn apply_style(mut resolved: ResolvedStyle, style: RetainedStyle, source: usize) -> ResolvedStyle {
+    let fields = style.field_mask;
+    if fields & STYLE_FIELD_FONT_STACK != 0 {
+        resolved.font_stack_handle = style.font_stack_handle;
+    }
+    if fields & STYLE_FIELD_MATERIAL != 0 {
+        resolved.material_id = style.material_id;
+    }
+    if fields & STYLE_FIELD_LANGUAGE != 0 {
+        resolved.language_source = u32::try_from(source).unwrap_or(NO_STYLE_SOURCE);
+    }
+    if fields & STYLE_FIELD_FEATURES != 0 {
+        resolved.features_source = u32::try_from(source).unwrap_or(NO_STYLE_SOURCE);
+    }
+    if fields & STYLE_FIELD_FONT_SIZE != 0 {
+        resolved.font_size = style.font_size;
+    }
+    if fields & STYLE_FIELD_LINE_HEIGHT != 0 {
+        resolved.line_height = style.line_height;
+        resolved.has_line_height = true;
+    }
+    if fields & STYLE_FIELD_LETTER_SPACING != 0 {
+        resolved.letter_spacing = style.letter_spacing;
+    }
+    if fields & STYLE_FIELD_WORD_SPACING != 0 {
+        resolved.word_spacing = style.word_spacing;
+    }
+    if fields & STYLE_FIELD_BASELINE_SHIFT != 0 {
+        resolved.baseline_shift = style.baseline_shift;
+    }
+    if fields & STYLE_FIELD_RASTER_PIXEL_RATIO != 0 {
+        resolved.raster_pixel_ratio = style.raster_pixel_ratio;
+    }
+    if fields & STYLE_FIELD_DIRECTION != 0 {
+        resolved.direction = style.direction;
+    }
+    if fields & STYLE_FIELD_FOREGROUND != 0 {
+        resolved.foreground_rgba = style.foreground_rgba;
+    }
+    if fields & STYLE_FIELD_DECORATION != 0 {
+        resolved.decoration_rgba = style.decoration_rgba;
+        resolved.decoration_flags = style.decoration_flags;
+        resolved.decoration_style = style.decoration_style;
+        resolved.decoration_thickness = style.decoration_thickness;
+        resolved.decoration_offset = style.decoration_offset;
+    }
+    resolved
 }
 
 fn collapse_to_last_mutation(scratch: &mut Vec<MutationKey>) {
@@ -386,5 +637,140 @@ fn retained(value: StyleValue<'_>) -> RetainedStyle {
         decoration_thickness: value.decoration_thickness,
         decoration_offset: value.decoration_offset,
         root: value.root,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::frame::{
+        STYLE_FIELD_FEATURES, STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE,
+        STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_MATERIAL, STYLE_FIELD_WORD_SPACING,
+    };
+    use alloc::vec;
+
+    #[test]
+    fn resolves_nested_and_equal_range_styles_once_per_boundary() {
+        let root_fields = ROOT_REQUIRED_FIELDS
+            | STYLE_FIELD_LANGUAGE
+            | STYLE_FIELD_FEATURES
+            | STYLE_FIELD_FOREGROUND;
+        let arena = StyleArena {
+            records: vec![
+                style(10, 0, 0, 8, root_fields, true),
+                RetainedStyle {
+                    font_size: 20.0,
+                    foreground_rgba: 0xff00_00ff,
+                    ..style(
+                        20,
+                        1,
+                        2,
+                        6,
+                        STYLE_FIELD_FONT_SIZE | STYLE_FIELD_FOREGROUND,
+                        false,
+                    )
+                },
+                RetainedStyle {
+                    letter_spacing: 1.5,
+                    word_spacing: 2.0,
+                    ..style(
+                        30,
+                        2,
+                        3,
+                        5,
+                        STYLE_FIELD_LETTER_SPACING | STYLE_FIELD_WORD_SPACING,
+                        false,
+                    )
+                },
+                RetainedStyle {
+                    material_id: 9,
+                    ..style(40, 3, 3, 5, STYLE_FIELD_MATERIAL, false)
+                },
+            ],
+            languages: b"en".to_vec(),
+            features: vec![FeatureRecord {
+                tag: u32::from_be_bytes(*b"kern"),
+                value: 1,
+                start: 0,
+                end: 8,
+            }],
+        };
+        let mut order = Vec::new();
+        let mut nesting = Vec::new();
+        arena
+            .validate(&[0x61; 8], |handle| handle == 7, &mut order, &mut nesting)
+            .unwrap();
+        let mut resolved = ResolvedStyleArena::default();
+        let mut scopes = Vec::new();
+        arena.resolve(&order, &mut resolved, &mut scopes).unwrap();
+
+        assert_eq!(
+            resolved
+                .segments()
+                .iter()
+                .map(|segment| (segment.text_start, segment.text_end))
+                .collect::<Vec<_>>(),
+            [(0, 2), (2, 3), (3, 5), (5, 6), (6, 8)],
+        );
+        let deepest = resolved.segments()[2].style;
+        assert_eq!(deepest.font_stack_handle, 7);
+        assert_eq!(deepest.font_size, 20.0);
+        assert_eq!(deepest.letter_spacing, 1.5);
+        assert_eq!(deepest.word_spacing, 2.0);
+        assert_eq!(deepest.material_id, 9);
+        assert_eq!(deepest.foreground_rgba, 0xff00_00ff);
+        assert_eq!(arena.resolved_language(deepest), Some(&b"en"[..]));
+        assert_eq!(arena.resolved_features(deepest), arena.features.as_slice());
+        assert!(!deepest.has_line_height);
+        assert_eq!(resolved.segments()[3].style.material_id, 0);
+    }
+
+    fn style(
+        style_id: u32,
+        cascade_order: u32,
+        text_start: u32,
+        text_end: u32,
+        field_mask: u32,
+        root: bool,
+    ) -> RetainedStyle {
+        RetainedStyle {
+            style_id,
+            cascade_order,
+            field_mask,
+            text_start,
+            text_end,
+            font_stack_handle: if field_mask & STYLE_FIELD_FONT_STACK != 0 {
+                7
+            } else {
+                0
+            },
+            material_id: 0,
+            language_start: 0,
+            language_length: if field_mask & STYLE_FIELD_LANGUAGE != 0 {
+                2
+            } else {
+                0
+            },
+            feature_start: 0,
+            feature_count: if field_mask & STYLE_FIELD_FEATURES != 0 {
+                1
+            } else {
+                0
+            },
+            font_size: 16.0,
+            line_height: 1.2,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            baseline_shift: 0.0,
+            raster_pixel_ratio: 1.0,
+            direction: 0,
+            foreground_rgba: u32::MAX,
+            decoration_rgba: 0,
+            decoration_flags: 0,
+            decoration_style: DECORATION_NONE,
+            decoration_thickness: 0.0,
+            decoration_offset: 0.0,
+            root,
+        }
     }
 }
