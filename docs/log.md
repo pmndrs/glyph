@@ -2,6 +2,13 @@
 
 ## 2026-08-08
 
+- **Promoted the retained frame ABI into a production host** — `RuntimeShaper` now exposes one package-internal,
+  ownership-checked view of its existing Wasm instance to a typed text-engine host. The host owns cold policy,
+  font-binding, font-stack, and session registration; reserves before pinning; writes requests into the retained arena;
+  and returns the published A/B slot as borrowed bytes without copying. An integration test publishes slots A and B
+  through the compiled module and proves B does not mutate A. Three still consumes the legacy paragraph batch in this
+  checkpoint; request/policy compilation and render-plan lowering are the next cutover slices.
+
 - **Made policy work dependency-directed from gather through execution** — Policy registration now compiles both
   input-to-buffer and operation-to-buffer reachability. A positioned update gathers only source lanes reaching a
   semantically changed output and the scalar/SIMD executors skip operations reaching no active output; checkpoints,

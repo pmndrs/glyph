@@ -108,6 +108,13 @@ export function registerRuntimeShaperFontData(shaper: RuntimeShaper, data: Runti
   shaper._registerFontData(data);
 }
 
+/** @internal Shared direct-memory access for the retained text-engine host. */
+export function runtimeShaperEngineExports(shaper: RuntimeShaper): ShaperExports {
+  if (!(shaper instanceof RuntimeShaperImpl)) throw new TypeError('runtime shaper was not created by this package');
+  shaper._assertEngineAccess();
+  return shaper._engineExports();
+}
+
 interface LayoutBase {
   readonly size: number;
   readonly alignment: number;
@@ -227,6 +234,27 @@ interface ShaperExports {
   readonly analyzeBidi: (pointer: number, length: number) => number;
   readonly resultPointer: () => number;
   readonly resultLength: () => number;
+  readonly registerFontBinding: (fontHandle: number, pointer: number, length: number) => number;
+  readonly registerFontStack: (handle: number, pointer: number, count: number) => number;
+  readonly disposeFontStack: (handle: number) => number;
+  readonly registerPolicy: (handle: number, pointer: number, length: number) => number;
+  readonly disposePolicy: (handle: number) => number;
+  readonly createSession: (
+    handle: number,
+    requestCapacity: number,
+    resultCapacity: number,
+    textCapacity: number,
+  ) => number;
+  readonly reserveSession: (
+    handle: number,
+    requestCapacity: number,
+    resultCapacity: number,
+    textCapacity: number,
+  ) => number;
+  readonly disposeSession: (handle: number) => number;
+  readonly requestPointer: (handle: number) => number;
+  readonly requestCapacity: (handle: number) => number;
+  readonly textUpdate: (handle: number, pointer: number, length: number) => number;
 }
 
 interface ShaperModule {
@@ -361,6 +389,16 @@ class RuntimeShaperImpl implements RuntimeShaper {
     this.#disposed = true;
   }
 
+  /** @internal */
+  _engineExports(): ShaperExports {
+    return this.#exports;
+  }
+
+  /** @internal */
+  _assertEngineAccess(): void {
+    this.#assertActive();
+  }
+
   #call(request: ShapeBatchRequest, ranges: readonly ReshapeRange[] | undefined): ShapedBatchViews {
     const bytes = packRequest(this.#layouts, request, ranges);
     const allocation = copyIntoWasm(this.#exports, bytes);
@@ -427,6 +465,17 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       analyzeBidi: exportedFunction(instance, functions.analyzeBidi),
       resultPointer: exportedFunction(instance, functions.resultPointer),
       resultLength: exportedFunction(instance, functions.resultLength),
+      registerFontBinding: exportedFunction(instance, functions.registerFontBinding),
+      registerFontStack: exportedFunction(instance, functions.registerFontStack),
+      disposeFontStack: exportedFunction(instance, functions.disposeFontStack),
+      registerPolicy: exportedFunction(instance, functions.registerPolicy),
+      disposePolicy: exportedFunction(instance, functions.disposePolicy),
+      createSession: exportedFunction(instance, functions.createSession),
+      reserveSession: exportedFunction(instance, functions.reserveSession),
+      disposeSession: exportedFunction(instance, functions.disposeSession),
+      requestPointer: exportedFunction(instance, functions.requestPointer),
+      requestCapacity: exportedFunction(instance, functions.requestCapacity),
+      textUpdate: exportedFunction(instance, functions.textUpdate),
     },
     layouts: textShaperAbi.layouts,
   };

@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:5219712d1fc2859a65b1018bead1334d25c58850f351c7408983a97e2149f17b'
+source_digest: 'sha256:ae50b899148c1413445945b56f61b230046f081ac4a724a9001389db0f4c57f4'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -711,6 +711,14 @@ measured 5.027/5.685/6.443 ms for Bitmap/MTSDF/Slug resize, and operation livene
 3.981 and 4.120 ms in two canonical full-sequence runs, MTSDF at 4.646 ms, and Slug at 5.622 ms. A case-isolated
 Bitmap run measured 4.799 ms, exposing material Node/Wasm tiering sensitivity, so the sub-4 ms target is approached but
 not reproducibly closed. Final optimized size is 1,069,973 raw / 405,888 gzip / 319,558 Brotli bytes.
+
+The production `RuntimeShaper` and retained text engine now share the same initialized Wasm module and registered-font
+state. A package-internal host owns policy, font-binding, font-stack, and session lifecycles, performs cold reservation
+before pinning, copies only request bytes into the retained staging arena, and exposes each A/B render-plan publication
+as a borrowed direct-memory view. The host does not decode typography or copy plan payloads. A compiled-Wasm integration
+test publishes alternating slots and proves the preceding slot remains byte-stable. This is the production ABI seam;
+the public runtime and Three adapter still use the legacy paragraph-batch path until request/policy compilation and GPU
+plan lowering are connected.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

@@ -1187,6 +1187,14 @@ Slug. A separate case-isolated Bitmap process measured 4.799 ms, so process/JIT 
 3.981 ms result as closure of the sub-4 ms gate. Optimized Wasm is 1,069,973 raw / 405,888 gzip / 319,558 Brotli
 bytes, an increase of 14,116 raw / 2,363 gzip / 1,421 Brotli bytes over D-202.
 
+The first production cutover slice now shares the already initialized `RuntimeShaper` Wasm instance with a typed
+text-engine host. The host owns raw policy/font-binding/font-stack registration and session disposal, invokes cold
+reservation before pinning when the exact request outgrows its arena, writes directly into retained request memory, and
+returns a borrowed view over the published A/B slot. It performs no layout, shaping, or render-plan interpretation in
+TypeScript and does not create a second module instance. A compiled-Wasm integration test observes revisions 1/2 and
+slots A/B while proving publication B leaves A byte-stable. The Three adapter is not switched by this slice; production
+request/policy compilation and plan lowering remain open and are not claimed by the host proof.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement
