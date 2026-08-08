@@ -2,9 +2,10 @@ use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
-    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_OK, STATUS_POLICY_CONFLICT,
-    STATUS_POLICY_MISSING, STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT,
-    STATUS_SESSION_CONFLICT, STATUS_SESSION_MISSING, ShaperRegistry, bidi,
+    STATUS_FONT_IN_USE, STATUS_FONT_STACK_MISSING, STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST,
+    STATUS_OK, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING, STATUS_RESULT_TOO_LARGE,
+    STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT, STATUS_SESSION_MISSING, ShaperRegistry,
+    bidi,
     engine::{
         EngineError, TextEngine, frame::SessionRevision, frame_wire::parse_update_request,
         render_plan_wire::plan_layout, transport::FrameTransport, wire::parse_policy,
@@ -76,7 +77,13 @@ pub unsafe extern "C" fn pmndrs_text_shaper_register_font(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_text_shaper_dispose_font(handle: u32) -> u32 {
-    with_state(|state| state.registry.dispose_font(handle))
+    with_state(|state| {
+        if state.engine.references_font(handle) {
+            STATUS_FONT_IN_USE
+        } else {
+            state.registry.dispose_font(handle)
+        }
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -92,6 +99,50 @@ pub extern "C" fn pmndrs_text_shaper_retained_font_bytes() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_text_shaper_plan_count() -> u32 {
     with_state(|state| state.registry.plan_count())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_text_engine_register_font_stack(
+    handle: u32,
+    pointer: u32,
+    count: u32,
+) -> u32 {
+    with_state(|state| {
+        let Some(length) = count.checked_mul(4) else {
+            return STATUS_INVALID_REQUEST;
+        };
+        let Some(bytes) = owned_bytes(&state.allocations, pointer, length) else {
+            return STATUS_INVALID_REQUEST;
+        };
+        let mut fonts = Vec::new();
+        if fonts.try_reserve_exact(count as usize).is_err() {
+            return STATUS_RESULT_TOO_LARGE;
+        }
+        for bytes in bytes.chunks_exact(4) {
+            let font = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+            if !state.registry.contains_font(font) {
+                return crate::STATUS_FONT_MISSING;
+            }
+            fonts.push(font);
+        }
+        match state.engine.register_font_stack(handle, &fonts) {
+            Ok(()) => STATUS_OK,
+            Err(error) => engine_status(error),
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_engine_dispose_font_stack(handle: u32) -> u32 {
+    with_state(|state| match state.engine.dispose_font_stack(handle) {
+        Ok(()) => STATUS_OK,
+        Err(error) => engine_status(error),
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_engine_font_stack_count() -> u32 {
+    with_state(|state| state.engine.font_stack_count())
 }
 
 #[unsafe(no_mangle)]
@@ -679,6 +730,7 @@ fn engine_status(error: EngineError) -> u32 {
         EngineError::InvalidHandle => STATUS_INVALID_HANDLE,
         EngineError::HandleConflict => STATUS_POLICY_CONFLICT,
         EngineError::PolicyMissing => STATUS_POLICY_MISSING,
+        EngineError::FontStackMissing => STATUS_FONT_STACK_MISSING,
         EngineError::SessionConflict => STATUS_SESSION_CONFLICT,
         EngineError::SessionMissing => STATUS_SESSION_MISSING,
         EngineError::RevisionConflict => STATUS_REVISION_CONFLICT,

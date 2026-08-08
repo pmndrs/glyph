@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:a251ffc58d3779c03b32a7fac04d6773d5f54b4ba10115465aca6d32e1976e25'
+source_digest: 'sha256:67818f68ec35bc04acd514ee699833fa69718d7f52710f63c1b2e08f28a0a5dd'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -511,6 +511,14 @@ one synchronous engine-global 32,768-record workspace, reserved once when those 
 The compiler-published `initialize()` export is invoked by the standard host immediately after Wasm instantiation, so
 module-owned state no longer allocates behind the first operational export. This checkpoint does not yet reserve the
 unimplemented shaping lanes and therefore makes no first-shape allocation or latency claim.
+
+Ordered font stacks now have cold Rust lifecycle operations independent from frame updates. A stack is nonempty,
+duplicate-free, idempotent only for the same ordered handles, and retains its already registered shaping fonts until
+stack disposal. A compiled-Wasm integration test uses the real baked Inter shaping payload to prove that a retained
+member cannot be disposed and becomes disposable after the stack is released. Per-font technique/resource binding and
+fallback shaping remain the next slices; this registry alone makes no layout or timing claim. The selected compact
+vector registry produces an optimized 828,401 raw / 309,252 gzip / 244,402 Brotli-byte Wasm. A rejected generic tree-map
+version measured 837,865 / 312,057 / 246,478, so cold linear lookup avoids 9,464 raw and 2,076 Brotli bytes.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

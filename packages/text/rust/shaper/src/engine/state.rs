@@ -13,6 +13,7 @@ pub enum EngineError {
     InvalidHandle,
     HandleConflict,
     PolicyMissing,
+    FontStackMissing,
     SessionConflict,
     SessionMissing,
     RevisionConflict,
@@ -24,7 +25,13 @@ pub enum EngineError {
 #[derive(Default)]
 pub struct TextEngine {
     policies: BTreeMap<u32, ValidatedPolicy>,
+    font_stacks: Vec<RegisteredFontStack>,
     sessions: BTreeMap<u32, EngineSession>,
+}
+
+struct RegisteredFontStack {
+    handle: u32,
+    fonts: Vec<u32>,
 }
 
 #[derive(Default)]
@@ -45,6 +52,68 @@ struct PolicyBinding {
 }
 
 impl TextEngine {
+    pub fn register_font_stack(&mut self, handle: u32, fonts: &[u32]) -> Result<(), EngineError> {
+        if handle == 0
+            || fonts.is_empty()
+            || fonts.len() > usize::from(u16::MAX)
+            || fonts.contains(&0)
+            || fonts
+                .iter()
+                .enumerate()
+                .any(|(index, font)| fonts[..index].contains(font))
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        if let Some(existing) = self.font_stacks.iter().find(|stack| stack.handle == handle) {
+            return if existing.fonts == fonts {
+                Ok(())
+            } else {
+                Err(EngineError::HandleConflict)
+            };
+        }
+        let mut retained = Vec::new();
+        retained
+            .try_reserve_exact(fonts.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        retained.extend_from_slice(fonts);
+        self.font_stacks
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.font_stacks.push(RegisteredFontStack {
+            handle,
+            fonts: retained,
+        });
+        Ok(())
+    }
+
+    pub fn dispose_font_stack(&mut self, handle: u32) -> Result<(), EngineError> {
+        let index = self
+            .font_stacks
+            .iter()
+            .position(|stack| stack.handle == handle)
+            .ok_or(EngineError::FontStackMissing)?;
+        self.font_stacks.swap_remove(index);
+        Ok(())
+    }
+
+    pub fn font_stack(&self, handle: u32) -> Result<&[u32], EngineError> {
+        self.font_stacks
+            .iter()
+            .find(|stack| stack.handle == handle)
+            .map(|stack| stack.fonts.as_slice())
+            .ok_or(EngineError::FontStackMissing)
+    }
+
+    pub fn font_stack_count(&self) -> u32 {
+        self.font_stacks.len().try_into().unwrap_or(u32::MAX)
+    }
+
+    pub fn references_font(&self, handle: u32) -> bool {
+        self.font_stacks
+            .iter()
+            .any(|stack| stack.fonts.contains(&handle))
+    }
+
     pub fn register_policy(
         &mut self,
         handle: u32,
@@ -413,6 +482,38 @@ mod tests {
         assert_eq!(
             engine.policy(1).unwrap().programs()[0].technique,
             TechniqueId(1)
+        );
+    }
+
+    #[test]
+    fn font_stacks_retain_exact_order_and_reject_ambiguous_identity() {
+        let mut engine = TextEngine::default();
+        assert_eq!(
+            engine.register_font_stack(0, &[1]),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            engine.register_font_stack(1, &[]),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            engine.register_font_stack(1, &[1, 1]),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.register_font_stack(7, &[9, 4, 12]), Ok(()));
+        assert_eq!(engine.register_font_stack(7, &[9, 4, 12]), Ok(()));
+        assert_eq!(engine.font_stack(7), Ok(&[9, 4, 12][..]));
+        assert!(engine.references_font(4));
+        assert_eq!(engine.font_stack_count(), 1);
+        assert_eq!(
+            engine.register_font_stack(7, &[9, 12]),
+            Err(EngineError::HandleConflict)
+        );
+        assert_eq!(engine.dispose_font_stack(7), Ok(()));
+        assert!(!engine.references_font(4));
+        assert_eq!(
+            engine.dispose_font_stack(7),
+            Err(EngineError::FontStackMissing)
         );
     }
 

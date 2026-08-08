@@ -558,6 +558,15 @@ fallback mechanism. It removes the old raster-homogeneity restriction: every mem
 but each loaded font carries its own technique and resource binding. Fallback remains a shaping decision about glyph
 availability, not a renderer eligibility decision.
 
+The Rust engine now cold-registers stack identity as a nonempty, duplicate-free ordered list of already registered
+shaping-font handles. Equivalent registration is idempotent; conflicting order fails, and a member font cannot be
+disposed while any registered stack retains it. Technique/resource data is deliberately not duplicated in the stack:
+the next cold binding layer attaches those tables once to the loaded font. A real-font compiled-Wasm test proves the
+registration and disposal lifecycle; fallback shaping itself has not yet moved into the update transaction. Because
+stack lifecycle is cold and cardinality is normally small, the selected registry uses a compact vector. A generic tree
+map measured 837,865 raw / 312,057 gzip / 246,478 Brotli bytes; removing that monomorphization reduced the artifact to
+828,401 / 309,252 / 244,402 without changing the ABI or lookup result.
+
 RGBA8 costs four GPU bytes per texel versus one for the grayscale R8 bitmap path; selected coverage and independently
 resident pages are therefore mandatory, and the payload report keeps color pages separate.[^renderer-capabilities]
 [^payload-budget] Slug color-paint compilation is not required to ship emoji in this stack; Bitmap is the required color

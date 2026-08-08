@@ -1637,6 +1637,9 @@ pub fn json() -> String {
             "fontCount": "pmndrs_text_shaper_font_count",
             "retainedFontBytes": "pmndrs_text_shaper_retained_font_bytes",
             "planCount": "pmndrs_text_shaper_plan_count",
+            "registerFontStack": "pmndrs_text_engine_register_font_stack",
+            "disposeFontStack": "pmndrs_text_engine_dispose_font_stack",
+            "fontStackCount": "pmndrs_text_engine_font_stack_count",
             "registerPolicy": "pmndrs_text_engine_register_policy",
             "disposePolicy": "pmndrs_text_engine_dispose_policy",
             "policyCount": "pmndrs_text_engine_policy_count",
@@ -2284,7 +2287,9 @@ pub fn json() -> String {
             "policyMissing": 9,
             "sessionConflict": 10,
             "sessionMissing": 11,
-            "revisionConflict": 12
+            "revisionConflict": 12,
+            "fontStackMissing": 13,
+            "fontInUse": 14
         }
     })
     .to_string()
