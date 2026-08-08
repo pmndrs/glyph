@@ -417,9 +417,11 @@ and passes the repository's unmodified `LineBreakTest` gate. Published Rust segm
 Unicode-version guarantee; for example, the current ICU4X line segmenter documents Unicode 15.1 data while its other
 segmenters have advanced.[^icu4x]
 
-The implementation stage should therefore port the current generated Unicode 17 tables and rule evaluation into Rust,
-preserving attribution and licensing, and prove it against the same official vector file. Host-supplied break
-opportunities may exist only as a short-lived differential-oracle mechanism before cutover, not as the architecture.
+The frame engine now owns that exact Unicode 17 answer. A generator resolves the pinned `@cto.af/linebreak` 4.0.3
+property trie and the punctuation, East Asian, and future-emoji properties used by its rules into one compact Rust scalar
+partition. The `no_std` evaluator ports the same UAX #14 rule order into reusable scalar/break arrays, preserves the
+upstream MIT notice, reports canonical UTF-16 offsets, and passes all 19,338 cases in the repository's unchanged official
+`LineBreakTest` fixture. TypeScript opportunities are no longer an input to Rust layout.
 
 ### Per-line composition and editorial flow
 
@@ -888,6 +890,14 @@ glyph SoA commit together, while any later frame failure discards both pending v
 Devanagari update constructs exactly two HarfRust plans. Optimized Wasm is 982,356 / 368,183 / 290,439 raw/gzip/Brotli
 bytes (+8,989 / +3,666 / +2,497). Layout/gather still receive no glyphs, so nonempty plan output and complete-path timing
 remain open.
+
+Unicode 17 line breaking now runs with grapheme/script analysis inside the pending Unicode transaction. The generated
+table stores resolved line-break class plus only the punctuation, East Asian, and unassigned-extended-pictographic flags
+read by the rule program; it does not embed a generic Unicode property runtime. Scalar records and break results reserve
+with session text capacity and retain their high-water marks. All 19,338 official `LineBreakTest` cases match at UTF-16
+offsets, and required CRLF/end breaks have focused tests. Optimized Wasm is 1,009,460 / 377,053 / 295,875 raw/gzip/Brotli
+bytes (+27,104 / +8,870 / +5,436). Cluster measurement, composition, nonempty plan output, and complete-path timing remain
+open.
 
 ## Performance contract
 
