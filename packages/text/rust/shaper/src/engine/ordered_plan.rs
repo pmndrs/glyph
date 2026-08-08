@@ -5,12 +5,16 @@
 //! aborted; committed CPU mirrors change only after the immutable plan has been serialized.
 
 use alloc::vec::Vec;
-use core::{mem, slice};
+use core::mem;
 
 use super::{
+    plan_input::{PlanInputError, span_bounds, validate_glyph, validate_input},
+    plan_packing::{
+        MAX_PHYSICAL_BUFFERS, PackingError, align_up, execute_run, grown_capacity, record_alignment,
+    },
     policy::{
         ALLOCATION_ORDERED_DIRECT, BATCH_MATERIAL, BufferSchema, CapabilitySetId,
-        PhysicalBufferMut, PolicyExecutionError, SemanticInputBatch, TechniqueId, ValidatedPolicy,
+        PolicyExecutionError, TechniqueId, ValidatedPolicy,
     },
     render_plan::{
         BUFFER_ORDERED_DIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
@@ -20,34 +24,7 @@ use super::{
     },
 };
 
-const MAX_PHYSICAL_BUFFERS: usize = 16;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct OrderedGlyph {
-    pub stable_id: u32,
-    pub content_revision: u32,
-    pub technique: TechniqueId,
-    pub program_variant: u16,
-    pub resource_id: u32,
-    pub resource_generation: u32,
-    pub resource_kind: u16,
-    pub resource_reference: u32,
-    pub semantic_id: u32,
-    pub material_id: u32,
-    pub clip_id: u32,
-    pub depth_key: u32,
-    pub inline_start: f32,
-    pub block_start: f32,
-    pub inline_extent: f32,
-    pub block_extent: f32,
-}
-
-#[derive(Clone, Copy)]
-pub struct OrderedPlanInput<'a> {
-    pub glyphs: &'a [OrderedGlyph],
-    pub f32_fields: &'a [&'a [f32]],
-    pub u32_fields: &'a [&'a [u32]],
-}
+pub use super::plan_input::{PlanGlyph as OrderedGlyph, PlanInput as OrderedPlanInput};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OrderedPlanError {
@@ -65,6 +42,26 @@ pub enum OrderedPlanError {
     IdentifierExhausted,
     ArithmeticOverflow,
     PolicyExecution(PolicyExecutionError),
+}
+
+impl From<PlanInputError> for OrderedPlanError {
+    fn from(error: PlanInputError) -> Self {
+        match error {
+            PlanInputError::InvalidShape => Self::InvalidInputShape,
+            PlanInputError::InvalidIdentity => Self::InvalidIdentity,
+            PlanInputError::InvalidResource => Self::InvalidResource,
+        }
+    }
+}
+
+impl From<PackingError> for OrderedPlanError {
+    fn from(error: PackingError) -> Self {
+        match error {
+            PackingError::ArithmeticOverflow => Self::ArithmeticOverflow,
+            PackingError::CapacityExceeded => Self::CapacityExceeded,
+            PackingError::Policy(error) => Self::PolicyExecution(error),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1044,68 +1041,6 @@ impl OrderedPlanCompiler {
     }
 }
 
-fn validate_input(input: OrderedPlanInput<'_>) -> Result<(), OrderedPlanError> {
-    if u32::try_from(input.glyphs.len()).is_err() {
-        return Err(OrderedPlanError::InvalidInputShape);
-    }
-    if input
-        .f32_fields
-        .iter()
-        .any(|field| field.len() != input.glyphs.len())
-        || input
-            .u32_fields
-            .iter()
-            .any(|field| field.len() != input.glyphs.len())
-    {
-        return Err(OrderedPlanError::InvalidInputShape);
-    }
-    Ok(())
-}
-
-fn validate_glyph(glyph: OrderedGlyph) -> Result<(), OrderedPlanError> {
-    if glyph.stable_id == 0 || glyph.content_revision == 0 {
-        return Err(OrderedPlanError::InvalidIdentity);
-    }
-    if glyph.resource_id == 0
-        || glyph.resource_generation == 0
-        || !(1..=32).contains(&glyph.resource_kind)
-    {
-        return Err(OrderedPlanError::InvalidResource);
-    }
-    if !glyph.inline_start.is_finite()
-        || !glyph.block_start.is_finite()
-        || !glyph.inline_extent.is_finite()
-        || !glyph.block_extent.is_finite()
-        || glyph.inline_extent < 0.0
-        || glyph.block_extent < 0.0
-        || !(glyph.inline_start + glyph.inline_extent).is_finite()
-        || !(glyph.block_start + glyph.block_extent).is_finite()
-    {
-        return Err(OrderedPlanError::InvalidInputShape);
-    }
-    Ok(())
-}
-
-fn span_bounds(glyphs: &[OrderedGlyph]) -> Result<(f32, f32, f32, f32), OrderedPlanError> {
-    let first = glyphs.first().ok_or(OrderedPlanError::InvalidInputShape)?;
-    let mut inline_start = first.inline_start;
-    let mut block_start = first.block_start;
-    let mut inline_end = first.inline_start + first.inline_extent;
-    let mut block_end = first.block_start + first.block_extent;
-    for glyph in &glyphs[1..] {
-        inline_start = inline_start.min(glyph.inline_start);
-        block_start = block_start.min(glyph.block_start);
-        inline_end = inline_end.max(glyph.inline_start + glyph.inline_extent);
-        block_end = block_end.max(glyph.block_start + glyph.block_extent);
-    }
-    let inline_extent = inline_end - inline_start;
-    let block_extent = block_end - block_start;
-    if !inline_extent.is_finite() || !block_extent.is_finite() {
-        return Err(OrderedPlanError::InvalidInputShape);
-    }
-    Ok((inline_start, block_start, inline_extent, block_extent))
-}
-
 fn collect_changed_ranges(
     ranges: &mut Vec<RecordRange>,
     previous: &[InstanceState],
@@ -1236,74 +1171,6 @@ fn coalesce_ranges(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn execute_run(
-    policy: &ValidatedPolicy,
-    capability_set: CapabilitySetId,
-    program: &super::policy::ProgramDescriptor,
-    input: OrderedPlanInput<'_>,
-    input_index: usize,
-    record_count: u32,
-    output_record: u32,
-    payload: &mut [u8],
-    payload_starts: &[usize; MAX_PHYSICAL_BUFFERS],
-    output_records: u32,
-) -> Result<(), OrderedPlanError> {
-    let input_end = input_index
-        .checked_add(record_count as usize)
-        .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-    let mut f32_fields: [&[f32]; super::policy::MAX_REGISTERS] =
-        [&[]; super::policy::MAX_REGISTERS];
-    let mut u32_fields: [&[u32]; super::policy::MAX_REGISTERS] =
-        [&[]; super::policy::MAX_REGISTERS];
-    for (target, field) in f32_fields
-        .iter_mut()
-        .zip(input.f32_fields.iter())
-        .take(usize::from(program.f32_input_count))
-    {
-        *target = &field[input_index..input_end];
-    }
-    for (target, field) in u32_fields
-        .iter_mut()
-        .zip(input.u32_fields.iter())
-        .take(usize::from(program.u32_input_count))
-    {
-        *target = &field[input_index..input_end];
-    }
-
-    let mut outputs: [mem::MaybeUninit<PhysicalBufferMut<'_>>; MAX_PHYSICAL_BUFFERS] =
-        [const { mem::MaybeUninit::uninit() }; MAX_PHYSICAL_BUFFERS];
-    let base = payload.as_mut_ptr();
-    for (index, schema) in program.buffers.iter().copied().enumerate() {
-        let length = output_records as usize * schema.stride();
-        // SAFETY: all payload segments were sized before this call, are mutually disjoint, and
-        // `payload` cannot reallocate while these temporary views exist.
-        let bytes = unsafe { slice::from_raw_parts_mut(base.add(payload_starts[index]), length) };
-        outputs[index].write(PhysicalBufferMut { schema, bytes });
-    }
-    // SAFETY: the prefix contains exactly one initialized value per declared program buffer.
-    let outputs = unsafe {
-        slice::from_raw_parts_mut(
-            outputs.as_mut_ptr().cast::<PhysicalBufferMut<'_>>(),
-            program.buffers.len(),
-        )
-    };
-    policy
-        .execute(
-            capability_set,
-            program.technique,
-            program.variant,
-            SemanticInputBatch {
-                f32_fields: &f32_fields[..usize::from(program.f32_input_count)],
-                u32_fields: &u32_fields[..usize::from(program.u32_input_count)],
-                record_count: record_count as usize,
-            },
-            output_record as usize,
-            outputs,
-        )
-        .map_err(OrderedPlanError::PolicyExecution)
-}
-
 fn apply_writes(
     buffer: &mut PhysicalBufferState,
     patches: &[PatchRecord],
@@ -1342,26 +1209,6 @@ fn take_allocation(
         .map(|index| allocations.swap_remove(index))
 }
 
-fn grown_capacity(mut capacity: u32, required: u32) -> Result<u32, OrderedPlanError> {
-    while capacity < required {
-        capacity = capacity
-            .checked_mul(2)
-            .ok_or(OrderedPlanError::CapacityExceeded)?;
-    }
-    Ok(capacity)
-}
-
-fn record_alignment(
-    program: &super::policy::ProgramDescriptor,
-    byte_alignment: u32,
-) -> Result<u32, OrderedPlanError> {
-    program.buffers.iter().try_fold(1_u32, |records, schema| {
-        let stride = u32::from(schema.stride);
-        let divisor = gcd(byte_alignment, stride);
-        lcm(records, byte_alignment / divisor)
-    })
-}
-
 fn align_record_range(range: RecordRange, alignment: u32) -> Result<RecordRange, OrderedPlanError> {
     let start = range.start / alignment * alignment;
     let end = range
@@ -1370,26 +1217,6 @@ fn align_record_range(range: RecordRange, alignment: u32) -> Result<RecordRange,
         .map(|value| value / alignment * alignment)
         .ok_or(OrderedPlanError::ArithmeticOverflow)?;
     Ok(RecordRange { start, end })
-}
-
-fn align_up(value: u32, alignment: u32) -> Result<u32, OrderedPlanError> {
-    value
-        .checked_add(alignment - 1)
-        .map(|value| value / alignment * alignment)
-        .ok_or(OrderedPlanError::ArithmeticOverflow)
-}
-
-fn gcd(mut left: u32, mut right: u32) -> u32 {
-    while right != 0 {
-        (left, right) = (right, left % right);
-    }
-    left
-}
-
-fn lcm(left: u32, right: u32) -> Result<u32, OrderedPlanError> {
-    left.checked_div(gcd(left, right))
-        .and_then(|value| value.checked_mul(right))
-        .ok_or(OrderedPlanError::ArithmeticOverflow)
 }
 
 fn range(start: u32, count: u32) -> Result<core::ops::Range<usize>, OrderedPlanError> {

@@ -724,11 +724,16 @@ implementation because its ordinary WebGPU and WebGL fallback render-object path
 shared-buffer adapter must supply an explicit storage index base, while a partitioned policy avoids that requirement.
 
 Interleaved `A, A, B, A` resource tests prove three ordered spans over two deduplicated resources and buffers, and the
-wire validator accepts the compiled transaction. Stable-indirect order storage, session integration, and target-
-hardware timing remain open in Stage 2. The production planner is still unreachable from `text_update` and removed by
-LTO; only the expanded reachable wire grammar and independent policy keys change the optimized artifact, from 739,643
-to 739,909 raw bytes, 272,537 to 272,607 gzip bytes, and 214,149 to 214,288 Brotli bytes. This is not end-to-end latency
-evidence.
+wire validator accepts the compiled transaction. Stable-indirect now has tested transactional foundations: persistent
+physical slots, 64-entry order chunks, explicit publication-fence quarantine, acknowledgment-gated reuse, and abort
+restoration. Local insertion changes one physical record plus only affected order chunks when retained capacity
+permits; arbitrary reorder remains correct even when every order chunk changes. Order-buffer growth requires a complete
+live rewrite because the replacement allocation cannot assume the prior allocation's bytes. The final compiler, a
+dedicated renderer-fence acknowledgment in the session request, and target-hardware timing remain open in Stage 2;
+`consumed_plan_revision` cannot substitute because host application does not prove GPU completion. The production
+planner is still unreachable from `text_update` and removed by LTO; only the expanded reachable wire grammar and
+independent policy keys change the optimized artifact, from 739,643 to 739,909 raw bytes, 272,537 to 272,607 gzip bytes,
+and 214,149 to 214,288 Brotli bytes. This is not end-to-end latency evidence.
 
 ## Performance contract
 
