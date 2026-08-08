@@ -183,7 +183,14 @@ function execute(bytes, allowGrowth = false, operation = 'text_update') {
   if (resultPointer === 0) throw new Error('text_update returned a null result');
   const layout = abi.layouts.engineResult;
   const result = new DataView(memory.buffer, resultPointer, layout.size);
-  requireStatus(result.getUint32(layout.status, true), operation);
+  const status = result.getUint32(layout.status, true);
+  if (status !== abi.status.ok) {
+    const requiredRequestCapacity = result.getUint32(layout.requiredRequestCapacity, true);
+    const requiredResultCapacity = result.getUint32(layout.requiredResultCapacity, true);
+    throw new Error(
+      `${operation} failed with status ${status}; required request=${requiredRequestCapacity}, result=${requiredResultCapacity}`,
+    );
+  }
   const patchCount = result.getUint32(layout.patchCount, true);
   const patchesOffset = result.getUint32(layout.patchesOffset, true);
   const patchLayout = abi.layouts.enginePatch;

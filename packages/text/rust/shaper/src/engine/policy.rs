@@ -456,6 +456,63 @@ impl ValidatedPolicy {
             })?;
         Some(&self.execution.get(index)?.buffer_dependency_masks)
     }
+
+    pub(crate) fn input_masks_for_changes(
+        &self,
+        capability_set: CapabilitySetId,
+        technique: TechniqueId,
+        variant: u16,
+        semantic_changes: u16,
+        force_all: bool,
+    ) -> Option<(u32, u32)> {
+        let index = self
+            .programs
+            .iter()
+            .position(|program| {
+                program.capability_set == capability_set
+                    && program.technique == technique
+                    && program.variant == variant
+            })
+            .or_else(|| {
+                self.programs.iter().position(|program| {
+                    program.capability_set.0 == 0
+                        && program.technique == technique
+                        && program.variant == variant
+                })
+            })?;
+        let execution = self.execution.get(index)?;
+        let program = self.programs.get(index)?;
+        if force_all || semantic_changes == super::positioning::ALL_SEMANTIC_CHANGES {
+            return Some((
+                low_bits(program.f32_input_count),
+                low_bits(program.u32_input_count),
+            ));
+        }
+        let all_buffers = (1_u32 << execution.buffer_dependency_masks.len()) - 1;
+        let active_buffers = execution.buffer_dependency_masks.iter().enumerate().fold(
+            0_u32,
+            |active, (buffer, dependency)| {
+                active | (u32::from(dependency & semantic_changes != 0) << buffer)
+            },
+        ) & all_buffers;
+        let mut f32_inputs = 0_u32;
+        let mut u32_inputs = 0_u32;
+        for buffer in 0..execution.buffer_dependency_masks.len() {
+            if active_buffers & (1 << buffer) != 0 {
+                f32_inputs |= execution.buffer_f32_input_masks[buffer];
+                u32_inputs |= execution.buffer_u32_input_masks[buffer];
+            }
+        }
+        Some((f32_inputs, u32_inputs))
+    }
+}
+
+fn low_bits(count: u8) -> u32 {
+    if count == 0 {
+        0
+    } else {
+        u32::MAX >> (32 - u32::from(count))
+    }
 }
 
 fn policy_fingerprint(descriptor: &PolicyDescriptor) -> u64 {
@@ -595,20 +652,36 @@ fn mix_u32(fingerprint: &mut u64, value: u32) {
 struct ExecutableProgram {
     store_buffer_indices: Vec<u8>,
     buffer_dependency_masks: Vec<u16>,
+    buffer_f32_input_masks: Vec<u32>,
+    buffer_u32_input_masks: Vec<u32>,
+    operation_buffer_masks: Vec<u32>,
 }
 
 impl ExecutableProgram {
     fn new(program: &ProgramDescriptor) -> Result<Self, PolicyError> {
+        let operation_buffer_masks = operation_buffer_masks(program)?;
         let mut store_buffer_indices = Vec::new();
         let mut buffer_dependency_masks = Vec::new();
+        let mut buffer_f32_input_masks = Vec::new();
+        let mut buffer_u32_input_masks = Vec::new();
         store_buffer_indices
             .try_reserve_exact(program.operations.len())
             .map_err(|_| PolicyError::AllocationFailed)?;
         buffer_dependency_masks
             .try_reserve_exact(program.buffers.len())
             .map_err(|_| PolicyError::AllocationFailed)?;
+        buffer_f32_input_masks
+            .try_reserve_exact(program.buffers.len())
+            .map_err(|_| PolicyError::AllocationFailed)?;
+        buffer_u32_input_masks
+            .try_reserve_exact(program.buffers.len())
+            .map_err(|_| PolicyError::AllocationFailed)?;
         buffer_dependency_masks.resize(program.buffers.len(), 0);
+        buffer_f32_input_masks.resize(program.buffers.len(), 0);
+        buffer_u32_input_masks.resize(program.buffers.len(), 0);
         let mut register_dependencies = [0_u16; MAX_REGISTERS];
+        let mut register_f32_inputs = [0_u32; MAX_REGISTERS];
+        let mut register_u32_inputs = [0_u32; MAX_REGISTERS];
         for operation in &program.operations {
             let index = match store_buffer(operation) {
                 Some(buffer) => program
@@ -627,12 +700,176 @@ impl ExecutableProgram {
                 &mut register_dependencies,
                 &mut buffer_dependency_masks,
             )?;
+            propagate_input_dependencies(
+                program,
+                operation,
+                &mut register_f32_inputs,
+                &mut register_u32_inputs,
+                &mut buffer_f32_input_masks,
+                &mut buffer_u32_input_masks,
+            )?;
         }
         Ok(Self {
             store_buffer_indices,
             buffer_dependency_masks,
+            buffer_f32_input_masks,
+            buffer_u32_input_masks,
+            operation_buffer_masks,
         })
     }
+}
+
+fn operation_buffer_masks(program: &ProgramDescriptor) -> Result<Vec<u32>, PolicyError> {
+    let mut masks = Vec::new();
+    masks
+        .try_reserve_exact(program.operations.len())
+        .map_err(|_| PolicyError::AllocationFailed)?;
+    masks.resize(program.operations.len(), 0);
+    let mut register_consumers = [0_u32; MAX_REGISTERS];
+    for (operation_index, operation) in program.operations.iter().enumerate().rev() {
+        if let Some(buffer) = store_buffer(operation) {
+            let buffer_index = program
+                .buffers
+                .iter()
+                .position(|schema| schema.id == buffer)
+                .ok_or(PolicyError::UnknownBuffer)?;
+            let mask = 1_u32 << buffer_index;
+            masks[operation_index] = mask;
+            register_consumers[usize::from(operation_sources(operation)[0])] |= mask;
+            continue;
+        }
+        let Some(target) = operation_target(operation) else {
+            continue;
+        };
+        let mask = register_consumers[usize::from(target)];
+        masks[operation_index] = mask;
+        register_consumers[usize::from(target)] = 0;
+        for source in operation_sources(operation) {
+            if source != u8::MAX {
+                register_consumers[usize::from(source)] |= mask;
+            }
+        }
+    }
+    Ok(masks)
+}
+
+fn operation_target(operation: &Operation) -> Option<u8> {
+    match *operation {
+        Operation::LoadF32 { target, .. }
+        | Operation::LoadU32 { target, .. }
+        | Operation::ConstantF32 { target, .. }
+        | Operation::ConstantU32 { target, .. }
+        | Operation::AddF32 { target, .. }
+        | Operation::SubtractF32 { target, .. }
+        | Operation::MultiplyF32 { target, .. }
+        | Operation::LessThanF32 { target, .. }
+        | Operation::SelectF32 { target, .. }
+        | Operation::ConvertU32ToF32 { target, .. } => Some(target),
+        Operation::StoreF32 { .. } | Operation::StoreU32 { .. } | Operation::StoreU16 { .. } => {
+            None
+        }
+    }
+}
+
+fn operation_sources(operation: &Operation) -> [u8; 3] {
+    match *operation {
+        Operation::AddF32 { left, right, .. }
+        | Operation::SubtractF32 { left, right, .. }
+        | Operation::MultiplyF32 { left, right, .. }
+        | Operation::LessThanF32 { left, right, .. } => [left, right, u8::MAX],
+        Operation::SelectF32 {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => [condition, when_true, when_false],
+        Operation::ConvertU32ToF32 { source, .. }
+        | Operation::StoreF32 { source, .. }
+        | Operation::StoreU32 { source, .. }
+        | Operation::StoreU16 { source, .. } => [source, u8::MAX, u8::MAX],
+        Operation::LoadF32 { .. }
+        | Operation::LoadU32 { .. }
+        | Operation::ConstantF32 { .. }
+        | Operation::ConstantU32 { .. } => [u8::MAX; 3],
+    }
+}
+
+fn propagate_input_dependencies(
+    program: &ProgramDescriptor,
+    operation: &Operation,
+    f32_registers: &mut [u32; MAX_REGISTERS],
+    u32_registers: &mut [u32; MAX_REGISTERS],
+    f32_buffers: &mut [u32],
+    u32_buffers: &mut [u32],
+) -> Result<(), PolicyError> {
+    match *operation {
+        Operation::LoadF32 { target, field } => {
+            f32_registers[usize::from(target)] = 1_u32 << field;
+            u32_registers[usize::from(target)] = 0;
+        }
+        Operation::LoadU32 { target, field } => {
+            f32_registers[usize::from(target)] = 0;
+            u32_registers[usize::from(target)] = 1_u32 << field;
+        }
+        Operation::ConstantF32 { target, .. } | Operation::ConstantU32 { target, .. } => {
+            f32_registers[usize::from(target)] = 0;
+            u32_registers[usize::from(target)] = 0;
+        }
+        Operation::AddF32 {
+            target,
+            left,
+            right,
+        }
+        | Operation::SubtractF32 {
+            target,
+            left,
+            right,
+        }
+        | Operation::MultiplyF32 {
+            target,
+            left,
+            right,
+        }
+        | Operation::LessThanF32 {
+            target,
+            left,
+            right,
+        } => {
+            f32_registers[usize::from(target)] =
+                f32_registers[usize::from(left)] | f32_registers[usize::from(right)];
+            u32_registers[usize::from(target)] =
+                u32_registers[usize::from(left)] | u32_registers[usize::from(right)];
+        }
+        Operation::SelectF32 {
+            target,
+            condition,
+            when_true,
+            when_false,
+        } => {
+            f32_registers[usize::from(target)] = f32_registers[usize::from(condition)]
+                | f32_registers[usize::from(when_true)]
+                | f32_registers[usize::from(when_false)];
+            u32_registers[usize::from(target)] = u32_registers[usize::from(condition)]
+                | u32_registers[usize::from(when_true)]
+                | u32_registers[usize::from(when_false)];
+        }
+        Operation::ConvertU32ToF32 { target, source } => {
+            f32_registers[usize::from(target)] = f32_registers[usize::from(source)];
+            u32_registers[usize::from(target)] = u32_registers[usize::from(source)];
+        }
+        Operation::StoreF32 { source, buffer, .. }
+        | Operation::StoreU32 { source, buffer, .. }
+        | Operation::StoreU16 { source, buffer, .. } => {
+            let index = program
+                .buffers
+                .iter()
+                .position(|schema| schema.id == buffer)
+                .ok_or(PolicyError::UnknownBuffer)?;
+            f32_buffers[index] |= f32_registers[usize::from(source)];
+            u32_buffers[index] |= u32_registers[usize::from(source)];
+        }
+    }
+    Ok(())
 }
 
 fn propagate_dependencies(
@@ -887,6 +1124,9 @@ fn execute_record(
     let mut registers = [0_u32; MAX_REGISTERS];
     let mut values = [0_u32; MAX_OUTPUT_LANES];
     for (operation_index, operation) in program.operations.iter().enumerate() {
+        if execution.operation_buffer_masks[operation_index] & active_buffers == 0 {
+            continue;
+        }
         match *operation {
             Operation::LoadF32 { target, field } => {
                 registers[usize::from(target)] =
@@ -1000,6 +1240,9 @@ unsafe fn execute_simd_records(
         let mut registers = [u32x4_splat(0); MAX_REGISTERS];
         let mut values = [u32x4_splat(0); MAX_OUTPUT_LANES];
         for (operation_index, operation) in program.operations.iter().enumerate() {
+            if execution.operation_buffer_masks[operation_index] & active_buffers == 0 {
+                continue;
+            }
             match *operation {
                 Operation::LoadF32 { target, field } => {
                     // SAFETY: validation proves this field contains four records from `input_record`.
@@ -1585,6 +1828,7 @@ mod tests {
     const BITMAP: TechniqueId = TechniqueId(1);
     const PROGRAM: ProgramId = ProgramId(1);
     const ORIGINS: BufferId = BufferId(1);
+    const COLORS: BufferId = BufferId(2);
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
 
     fn valid_capability_set() -> CapabilitySet {
@@ -1666,6 +1910,35 @@ mod tests {
         assert_eq!(
             policy.buffer_dependency_masks(CAPABILITY, BITMAP, 0),
             Some([0b11].as_slice())
+        );
+    }
+
+    #[test]
+    fn compiles_each_operation_to_only_its_reachable_buffers() {
+        let mut program = valid_program();
+        program.buffers.push(BufferSchema::packed(
+            COLORS,
+            ScalarType::U32,
+            1,
+            BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+            1,
+        ));
+        program.operations.extend([
+            Operation::ConstantU32 {
+                target: 2,
+                value: 0xff00_00ff,
+            },
+            Operation::StoreU32 {
+                source: 2,
+                buffer: COLORS,
+                lane: 0,
+            },
+        ]);
+        let policy = ValidatedPolicy::new(descriptor(vec![program])).unwrap();
+
+        assert_eq!(
+            policy.execution[0].operation_buffer_masks,
+            [1, 1, 1, 1, 2, 2]
         );
     }
 

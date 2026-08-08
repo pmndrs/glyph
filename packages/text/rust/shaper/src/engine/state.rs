@@ -623,6 +623,7 @@ impl TextEngine {
                     semantic_f32: &semantic_f32,
                     semantic_u32: &semantic_u32,
                 },
+                checkpoint || !positioned_changed,
                 |handle| {
                     font_bindings
                         .iter()
