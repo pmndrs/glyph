@@ -1133,13 +1133,22 @@ pipeline before adding new publishing features. The single ABI is its final cuto
 Current checkpoint evidence: the retained Rust transaction reaches real Inter shaping, fallback, measured clusters,
 horizontal editorial flow, positioning, policy gather, and a nonempty render plan. Exact invalidation lets unchanged
 ordered-direct frames publish an empty reuse transaction and lets font-size changes reuse Unicode, bidi, and shaping.
-On the established fully active 25,515-glyph stress case with eight warmups and 31 samples, request copy plus
-`text_update` measures 13.693/0.001/4.090/3.374/13.927/13.986 ms median for
+The original one-F32 diagnostic over 25,515 positioned glyphs measured
+13.693/0.001/4.090/3.374/13.927/13.986 ms median for
 cold/no-op/font-size/full-column-resize/suffix-edit/localized-edit. The unchanged TypeScript comparison measures
-55.25/11.90/8.36/38.55 ms for cold/font-size/width/suffix-edit. These are not final renderer-parity ratios: the Rust lane
-still packs one F32 policy output, while canonical Bitmap requires five physical buffers over real baked glyph records.
-That full policy shape, memory right-sizing, incremental text edits, Three consumption, and removal of the duplicate
-TypeScript path remain foundation-stack gates.
+55.25/11.90/8.36/38.55 ms for cold/font-size/width/suffix-edit.
+
+The renderer-parity benchmark now validates the real baked Bitmap, MTSDF, and Slug fixtures and emits their canonical
+GPU schemas: five Bitmap buffers totaling 48 bytes per instance, seven MTSDF vec4 buffers totaling 112 bytes, and five
+Slug float vec4 plus two unsigned vec4 buffers totaling 112 bytes. The same stress text positions 25,515 glyphs and
+selects 21,805 renderable raster instances, matching the portable techniques' deliberate omission of absent records.
+With five warmups and 11 samples, Bitmap/MTSDF/Slug font-size medians are 5.506/6.396/7.237 ms and full-column-resize
+medians are 4.477/5.276/6.259 ms. SIMD policy output transposes four SoA records in registers and writes tightly packed
+vec2/vec4 records with contiguous 128-bit stores, but every changed glyph still executes every physical output. The
+numbers therefore reject the current plan against the sub-4 ms gate and require dependency-directed policy execution:
+resize touches geometry only; font size touches geometry and Slug inverse scale; static UV, color, band, address, and
+count buffers remain retained. Memory right-sizing, incremental text edits, Three consumption, and deletion of the
+duplicate TypeScript path remain foundation-stack gates.
 
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 

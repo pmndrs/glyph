@@ -914,11 +914,72 @@ fn write_simd_outputs(
     output_start: usize,
     outputs: &mut [PhysicalBufferMut<'_>],
 ) {
+    use core::arch::wasm32::{i32x4_shuffle, v128_store};
+
     for (buffer_index, (schema, output)) in program.buffers.iter().zip(outputs).enumerate() {
+        let first = buffer_index * MAX_VECTOR_WIDTH as usize;
+        if matches!(schema.scalar, ScalarType::F32 | ScalarType::U32)
+            && schema.stride() == usize::from(schema.vector_width) * 4
+        {
+            let destination = output_start * schema.stride();
+            match schema.vector_width {
+                1 => {
+                    // SAFETY: execution validation proves four tightly packed records fit.
+                    unsafe {
+                        v128_store(
+                            output.bytes.as_mut_ptr().add(destination).cast(),
+                            values[first],
+                        );
+                    }
+                    continue;
+                }
+                2 => {
+                    let first_pair = i32x4_shuffle::<0, 4, 1, 5>(values[first], values[first + 1]);
+                    let second_pair = i32x4_shuffle::<2, 6, 3, 7>(values[first], values[first + 1]);
+                    // SAFETY: execution validation proves four tightly packed records fit.
+                    unsafe {
+                        v128_store(
+                            output.bytes.as_mut_ptr().add(destination).cast(),
+                            first_pair,
+                        );
+                        v128_store(
+                            output.bytes.as_mut_ptr().add(destination + 16).cast(),
+                            second_pair,
+                        );
+                    }
+                    continue;
+                }
+                4 => {
+                    let low01 = i32x4_shuffle::<0, 4, 1, 5>(values[first], values[first + 1]);
+                    let low23 = i32x4_shuffle::<0, 4, 1, 5>(values[first + 2], values[first + 3]);
+                    let high01 = i32x4_shuffle::<2, 6, 3, 7>(values[first], values[first + 1]);
+                    let high23 = i32x4_shuffle::<2, 6, 3, 7>(values[first + 2], values[first + 3]);
+                    let records = [
+                        i32x4_shuffle::<0, 1, 4, 5>(low01, low23),
+                        i32x4_shuffle::<2, 3, 6, 7>(low01, low23),
+                        i32x4_shuffle::<0, 1, 4, 5>(high01, high23),
+                        i32x4_shuffle::<2, 3, 6, 7>(high01, high23),
+                    ];
+                    for (record, value) in records.into_iter().enumerate() {
+                        // SAFETY: execution validation proves four tightly packed records fit.
+                        unsafe {
+                            v128_store(
+                                output
+                                    .bytes
+                                    .as_mut_ptr()
+                                    .add(destination + record * 16)
+                                    .cast(),
+                                value,
+                            );
+                        }
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+        }
         for lane in 0..schema.vector_width {
-            let lanes = simd_u32_lanes(
-                values[buffer_index * MAX_VECTOR_WIDTH as usize + usize::from(lane)],
-            );
+            let lanes = simd_u32_lanes(values[first + usize::from(lane)]);
             for (record, value) in lanes.into_iter().enumerate() {
                 let lane_offset = (output_start + record) * schema.stride()
                     + usize::from(lane) * schema.scalar.byte_width();

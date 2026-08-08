@@ -1,5 +1,5 @@
 export function renderPolicyBytes(abi) {
-  return policyBytes(abi, [
+  return renderPolicyBytesFromPrograms(abi, [
     {
       techniqueId: 1,
       programId: 1,
@@ -16,7 +16,7 @@ export function renderPolicyBytes(abi) {
 
 export function kernelPolicyBytes(abi) {
   const opcodes = abi.policy.opcodes;
-  return policyBytes(abi, [
+  return renderPolicyBytesFromPrograms(abi, [
     {
       techniqueId: 1,
       programId: 1,
@@ -325,7 +325,7 @@ function align(value, alignment) {
   return Math.ceil(value / alignment) * alignment;
 }
 
-function policyBytes(abi, programs) {
+export function renderPolicyBytesFromPrograms(abi, programs) {
   const requestLayout = abi.layouts.policyRequest;
   const capabilityLayout = abi.layouts.policyCapabilitySet;
   const programLayout = abi.layouts.policyProgram;
