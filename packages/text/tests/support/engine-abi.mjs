@@ -117,6 +117,95 @@ export function copyIntoAllocation(memory, allocate, bytes) {
   return pointer;
 }
 
+export function fontBindingBytes(
+  abi,
+  {
+    techniqueId,
+    programVariant = 0,
+    glyphCount,
+    strikes,
+    resources,
+    resourceIndices,
+    glyphF32 = [],
+    glyphU32 = [],
+    strikeF32 = [],
+    strikeU32 = [],
+    resourceF32 = [],
+    resourceU32 = [],
+  },
+) {
+  const request = abi.layouts.fontBindingRequest;
+  const strikeLayout = abi.layouts.fontBindingStrike;
+  const resourceLayout = abi.layouts.fontBindingResource;
+  const strikeRows = glyphCount * strikes.length;
+  const fields = [
+    ['glyphF32', glyphF32, glyphCount],
+    ['glyphU32', glyphU32, glyphCount],
+    ['strikeF32', strikeF32, strikeRows],
+    ['strikeU32', strikeU32, strikeRows],
+    ['resourceF32', resourceF32, resources.length],
+    ['resourceU32', resourceU32, resources.length],
+  ];
+  for (const [name, lanes, rows] of fields) {
+    if (lanes.some((lane) => lane.length !== rows)) throw new RangeError(`${name} rows do not match the binding`);
+  }
+  if (resourceIndices.length !== strikeRows) throw new RangeError('resource index rows do not match the binding');
+
+  let length = request.size;
+  const allocateTable = (count, stride, alignment) => {
+    if (count === 0) return 0;
+    const offset = align(length, alignment);
+    length = offset + count * stride;
+    return offset;
+  };
+  const strikesOffset = allocateTable(strikes.length, strikeLayout.size, strikeLayout.alignment);
+  const resourcesOffset = allocateTable(resources.length, resourceLayout.size, resourceLayout.alignment);
+  const resourceIndicesOffset = allocateTable(resourceIndices.length, 4, 4);
+  const fieldOffsets = fields.map(([, lanes, rows]) => allocateTable(lanes.length * rows, 4, 4));
+  const bytes = new Uint8Array(length);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(request.abiVersion, abi.version, true);
+  view.setUint32(request.byteLength, bytes.byteLength, true);
+  view.setUint32(request.techniqueId, techniqueId, true);
+  view.setUint16(request.programVariant, programVariant, true);
+  view.setUint32(request.glyphCount, glyphCount, true);
+  view.setUint32(request.strikeCount, strikes.length, true);
+  view.setUint32(request.resourceCount, resources.length, true);
+  for (const [index, [name, lanes]] of fields.entries()) {
+    view.setUint8(request[`${name}FieldCount`], lanes.length);
+    view.setUint32(request[`${name}Offset`], fieldOffsets[index], true);
+  }
+  view.setUint32(request.strikesOffset, strikesOffset, true);
+  view.setUint32(request.resourcesOffset, resourcesOffset, true);
+  view.setUint32(request.resourceIndicesOffset, resourceIndicesOffset, true);
+
+  for (const [index, ppem] of strikes.entries()) {
+    view.setUint32(strikesOffset + index * strikeLayout.size + strikeLayout.ppem, ppem, true);
+  }
+  for (const [index, resource] of resources.entries()) {
+    const offset = resourcesOffset + index * resourceLayout.size;
+    view.setUint32(offset + resourceLayout.id, resource.id, true);
+    view.setUint32(offset + resourceLayout.generation, resource.generation, true);
+    view.setUint16(offset + resourceLayout.kind, resource.kind, true);
+    view.setUint32(offset + resourceLayout.reference, resource.reference, true);
+  }
+  for (const [index, value] of resourceIndices.entries()) {
+    view.setUint32(resourceIndicesOffset + index * 4, value, true);
+  }
+  for (const [fieldIndex, [, lanes]] of fields.entries()) {
+    let offset = fieldOffsets[fieldIndex];
+    const f32 = fieldIndex === 0 || fieldIndex === 2 || fieldIndex === 4;
+    for (const lane of lanes) {
+      for (const value of lane) {
+        if (f32) view.setFloat32(offset, value, true);
+        else view.setUint32(offset, value, true);
+        offset += 4;
+      }
+    }
+  }
+  return bytes;
+}
+
 function align(value, alignment) {
   return Math.ceil(value / alignment) * alignment;
 }

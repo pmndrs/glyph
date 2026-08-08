@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:72d23c0124450b49869babf957cd04c203e25a5cdecaacdb41911440659d95bd'
+source_digest: 'sha256:0a4159ba082bac6e36ede27796435413d5baac4e15930500b51df468f575fbf3'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -524,8 +524,18 @@ Render-policy registration now retains one exact input-source record per F32/U32
 select semantic, glyph, resource, or strike lanes; source order is fingerprinted, so changing a gather recipe under an
 existing policy handle fails atomically. The compiler-derived policy request/program/input layouts are 44/64/4 bytes,
 and compiled-Wasm tests pin their offsets, tags, conflict behavior, and malformed-input rejection. The optimized module
-is 829,906 raw / 309,646 gzip / 244,790 Brotli bytes, a +1,505 / +394 / +388 contract cost. Per-font tables and gather
-execution remain open, so the measurement is module size rather than layout latency.
+is 829,906 raw / 309,646 gzip / 244,790 Brotli bytes, a +1,505 / +394 / +388 contract cost.
+
+Per-font render bindings now cross a separate cold compiler-mapped ABI and become owned Rust engine state. A binding
+contains one technique/program variant, dense field-major glyph lanes, scalable or strictly ordered physical strikes,
+dense strike×glyph resource addresses and lanes, and a resource directory with its own field lanes. This admits mixed
+Bitmap/MSDF/Slug stacks without a universal union record or a technique repeated by `Text`. Selection is one bounded
+nearest-strike pass with the lower exact tie, and MSDF/Slug take the one scalable-strike branch. Rust hostile-input tests
+cover table shapes, overlap, reserved data, nonfinite floats, invalid resources, and selection; compiled Wasm uses the
+real baked Inter glyph count to prove owned/idempotent registration, conflict, stack retention, and disposal. The
+optimized module is 838,060 raw / 312,606 gzip / 246,732 Brotli bytes, +8,154 / +2,960 / +1,942 from the preceding
+policy-source checkpoint. Policy-directed gather and frame use remain open, so this is a size/ownership result rather
+than a layout-latency claim.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

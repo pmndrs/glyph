@@ -124,6 +124,50 @@ struct PolicyInputRecord {
 }
 
 #[repr(C)]
+struct FontBindingRequestHeader {
+    abi_version: u32,
+    byte_length: u32,
+    technique_id: u32,
+    program_variant: u16,
+    reserved0: u16,
+    glyph_count: u32,
+    strike_count: u32,
+    resource_count: u32,
+    glyph_f32_field_count: u8,
+    glyph_u32_field_count: u8,
+    strike_f32_field_count: u8,
+    strike_u32_field_count: u8,
+    resource_f32_field_count: u8,
+    resource_u32_field_count: u8,
+    reserved1: u16,
+    strikes_offset: u32,
+    resources_offset: u32,
+    resource_indices_offset: u32,
+    glyph_f32_offset: u32,
+    glyph_u32_offset: u32,
+    strike_f32_offset: u32,
+    strike_u32_offset: u32,
+    resource_f32_offset: u32,
+    resource_u32_offset: u32,
+    reserved2: u32,
+}
+
+#[repr(C)]
+struct FontBindingStrikeRecord {
+    ppem: u32,
+    reserved: u32,
+}
+
+#[repr(C)]
+struct FontBindingResourceRecord {
+    id: u32,
+    generation: u32,
+    kind: u16,
+    reserved: u16,
+    reference: u32,
+}
+
+#[repr(C)]
 struct PolicyBufferRecord {
     id: u16,
     scalar: u8,
@@ -466,6 +510,21 @@ layout!(
     PolicyInputRecord
 );
 layout!(
+    FONT_BINDING_REQUEST_HEADER_SIZE,
+    FONT_BINDING_REQUEST_HEADER_ALIGNMENT,
+    FontBindingRequestHeader
+);
+layout!(
+    FONT_BINDING_STRIKE_RECORD_SIZE,
+    FONT_BINDING_STRIKE_RECORD_ALIGNMENT,
+    FontBindingStrikeRecord
+);
+layout!(
+    FONT_BINDING_RESOURCE_RECORD_SIZE,
+    FONT_BINDING_RESOURCE_RECORD_ALIGNMENT,
+    FontBindingResourceRecord
+);
+layout!(
     ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
     EngineUpdateRequestHeader
@@ -748,6 +807,142 @@ field_offset!(POLICY_OPERATION_TARGET, PolicyOperationRecord, target);
 field_offset!(POLICY_INPUT_SCOPE, PolicyInputRecord, scope);
 field_offset!(POLICY_INPUT_FIELD, PolicyInputRecord, field);
 field_offset!(POLICY_INPUT_RESERVED, PolicyInputRecord, reserved);
+field_offset!(
+    FONT_BINDING_ABI_VERSION,
+    FontBindingRequestHeader,
+    abi_version
+);
+field_offset!(
+    FONT_BINDING_BYTE_LENGTH,
+    FontBindingRequestHeader,
+    byte_length
+);
+field_offset!(
+    FONT_BINDING_TECHNIQUE_ID,
+    FontBindingRequestHeader,
+    technique_id
+);
+field_offset!(
+    FONT_BINDING_PROGRAM_VARIANT,
+    FontBindingRequestHeader,
+    program_variant
+);
+field_offset!(FONT_BINDING_RESERVED0, FontBindingRequestHeader, reserved0);
+field_offset!(
+    FONT_BINDING_GLYPH_COUNT,
+    FontBindingRequestHeader,
+    glyph_count
+);
+field_offset!(
+    FONT_BINDING_STRIKE_COUNT,
+    FontBindingRequestHeader,
+    strike_count
+);
+field_offset!(
+    FONT_BINDING_RESOURCE_COUNT,
+    FontBindingRequestHeader,
+    resource_count
+);
+field_offset!(
+    FONT_BINDING_GLYPH_F32_FIELD_COUNT,
+    FontBindingRequestHeader,
+    glyph_f32_field_count
+);
+field_offset!(
+    FONT_BINDING_GLYPH_U32_FIELD_COUNT,
+    FontBindingRequestHeader,
+    glyph_u32_field_count
+);
+field_offset!(
+    FONT_BINDING_STRIKE_F32_FIELD_COUNT,
+    FontBindingRequestHeader,
+    strike_f32_field_count
+);
+field_offset!(
+    FONT_BINDING_STRIKE_U32_FIELD_COUNT,
+    FontBindingRequestHeader,
+    strike_u32_field_count
+);
+field_offset!(
+    FONT_BINDING_RESOURCE_F32_FIELD_COUNT,
+    FontBindingRequestHeader,
+    resource_f32_field_count
+);
+field_offset!(
+    FONT_BINDING_RESOURCE_U32_FIELD_COUNT,
+    FontBindingRequestHeader,
+    resource_u32_field_count
+);
+field_offset!(FONT_BINDING_RESERVED1, FontBindingRequestHeader, reserved1);
+field_offset!(
+    FONT_BINDING_STRIKES_OFFSET,
+    FontBindingRequestHeader,
+    strikes_offset
+);
+field_offset!(
+    FONT_BINDING_RESOURCES_OFFSET,
+    FontBindingRequestHeader,
+    resources_offset
+);
+field_offset!(
+    FONT_BINDING_RESOURCE_INDICES_OFFSET,
+    FontBindingRequestHeader,
+    resource_indices_offset
+);
+field_offset!(
+    FONT_BINDING_GLYPH_F32_OFFSET,
+    FontBindingRequestHeader,
+    glyph_f32_offset
+);
+field_offset!(
+    FONT_BINDING_GLYPH_U32_OFFSET,
+    FontBindingRequestHeader,
+    glyph_u32_offset
+);
+field_offset!(
+    FONT_BINDING_STRIKE_F32_OFFSET,
+    FontBindingRequestHeader,
+    strike_f32_offset
+);
+field_offset!(
+    FONT_BINDING_STRIKE_U32_OFFSET,
+    FontBindingRequestHeader,
+    strike_u32_offset
+);
+field_offset!(
+    FONT_BINDING_RESOURCE_F32_OFFSET,
+    FontBindingRequestHeader,
+    resource_f32_offset
+);
+field_offset!(
+    FONT_BINDING_RESOURCE_U32_OFFSET,
+    FontBindingRequestHeader,
+    resource_u32_offset
+);
+field_offset!(FONT_BINDING_RESERVED2, FontBindingRequestHeader, reserved2);
+field_offset!(FONT_BINDING_STRIKE_PPEM, FontBindingStrikeRecord, ppem);
+field_offset!(
+    FONT_BINDING_STRIKE_RESERVED,
+    FontBindingStrikeRecord,
+    reserved
+);
+field_offset!(FONT_BINDING_RESOURCE_ID, FontBindingResourceRecord, id);
+field_offset!(
+    FONT_BINDING_RESOURCE_GENERATION,
+    FontBindingResourceRecord,
+    generation
+);
+field_offset!(FONT_BINDING_RESOURCE_KIND, FontBindingResourceRecord, kind);
+field_offset!(
+    FONT_BINDING_RESOURCE_RESERVED,
+    FontBindingResourceRecord,
+    reserved
+);
+field_offset!(
+    FONT_BINDING_RESOURCE_REFERENCE,
+    FontBindingResourceRecord,
+    reference
+);
 field_offset!(POLICY_OPERATION_OPERAND0, PolicyOperationRecord, operand0);
 field_offset!(POLICY_OPERATION_OPERAND1, PolicyOperationRecord, operand1);
 field_offset!(
@@ -1665,6 +1860,8 @@ pub fn json() -> String {
             "registerFontStack": "pmndrs_text_engine_register_font_stack",
             "disposeFontStack": "pmndrs_text_engine_dispose_font_stack",
             "fontStackCount": "pmndrs_text_engine_font_stack_count",
+            "registerFontBinding": "pmndrs_text_engine_register_font_binding",
+            "fontBindingCount": "pmndrs_text_engine_font_binding_count",
             "registerPolicy": "pmndrs_text_engine_register_policy",
             "disposePolicy": "pmndrs_text_engine_dispose_policy",
             "policyCount": "pmndrs_text_engine_policy_count",
@@ -1792,6 +1989,50 @@ pub fn json() -> String {
                 "scope": POLICY_INPUT_SCOPE,
                 "field": POLICY_INPUT_FIELD,
                 "reserved": POLICY_INPUT_RESERVED
+            },
+            "fontBindingRequest": {
+                "size": FONT_BINDING_REQUEST_HEADER_SIZE,
+                "alignment": FONT_BINDING_REQUEST_HEADER_ALIGNMENT,
+                "abiVersion": FONT_BINDING_ABI_VERSION,
+                "byteLength": FONT_BINDING_BYTE_LENGTH,
+                "techniqueId": FONT_BINDING_TECHNIQUE_ID,
+                "programVariant": FONT_BINDING_PROGRAM_VARIANT,
+                "reserved0": FONT_BINDING_RESERVED0,
+                "glyphCount": FONT_BINDING_GLYPH_COUNT,
+                "strikeCount": FONT_BINDING_STRIKE_COUNT,
+                "resourceCount": FONT_BINDING_RESOURCE_COUNT,
+                "glyphF32FieldCount": FONT_BINDING_GLYPH_F32_FIELD_COUNT,
+                "glyphU32FieldCount": FONT_BINDING_GLYPH_U32_FIELD_COUNT,
+                "strikeF32FieldCount": FONT_BINDING_STRIKE_F32_FIELD_COUNT,
+                "strikeU32FieldCount": FONT_BINDING_STRIKE_U32_FIELD_COUNT,
+                "resourceF32FieldCount": FONT_BINDING_RESOURCE_F32_FIELD_COUNT,
+                "resourceU32FieldCount": FONT_BINDING_RESOURCE_U32_FIELD_COUNT,
+                "reserved1": FONT_BINDING_RESERVED1,
+                "strikesOffset": FONT_BINDING_STRIKES_OFFSET,
+                "resourcesOffset": FONT_BINDING_RESOURCES_OFFSET,
+                "resourceIndicesOffset": FONT_BINDING_RESOURCE_INDICES_OFFSET,
+                "glyphF32Offset": FONT_BINDING_GLYPH_F32_OFFSET,
+                "glyphU32Offset": FONT_BINDING_GLYPH_U32_OFFSET,
+                "strikeF32Offset": FONT_BINDING_STRIKE_F32_OFFSET,
+                "strikeU32Offset": FONT_BINDING_STRIKE_U32_OFFSET,
+                "resourceF32Offset": FONT_BINDING_RESOURCE_F32_OFFSET,
+                "resourceU32Offset": FONT_BINDING_RESOURCE_U32_OFFSET,
+                "reserved2": FONT_BINDING_RESERVED2
+            },
+            "fontBindingStrike": {
+                "size": FONT_BINDING_STRIKE_RECORD_SIZE,
+                "alignment": FONT_BINDING_STRIKE_RECORD_ALIGNMENT,
+                "ppem": FONT_BINDING_STRIKE_PPEM,
+                "reserved": FONT_BINDING_STRIKE_RESERVED
+            },
+            "fontBindingResource": {
+                "size": FONT_BINDING_RESOURCE_RECORD_SIZE,
+                "alignment": FONT_BINDING_RESOURCE_RECORD_ALIGNMENT,
+                "id": FONT_BINDING_RESOURCE_ID,
+                "generation": FONT_BINDING_RESOURCE_GENERATION,
+                "kind": FONT_BINDING_RESOURCE_KIND,
+                "reserved": FONT_BINDING_RESOURCE_RESERVED,
+                "reference": FONT_BINDING_RESOURCE_REFERENCE
             },
             "engineUpdateRequest": {
                 "size": ENGINE_UPDATE_REQUEST_HEADER_SIZE,

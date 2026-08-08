@@ -3,6 +3,9 @@
 //! The public types in this module are available to native consumers. Wasm memory ownership and
 //! pointer validation stay in the target-gated transport module.
 
+pub mod font_binding;
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
+pub(crate) mod font_binding_wire;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) mod frame;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]

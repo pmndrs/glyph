@@ -1,6 +1,7 @@
 use alloc::{collections::BTreeMap, vec::Vec};
 
 use super::{
+    font_binding::FontRenderBinding,
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
     plan_input::PlanInput,
     policy::{CapabilitySetId, ValidatedPolicy},
@@ -25,8 +26,14 @@ pub enum EngineError {
 #[derive(Default)]
 pub struct TextEngine {
     policies: BTreeMap<u32, ValidatedPolicy>,
+    font_bindings: Vec<RegisteredFontBinding>,
     font_stacks: Vec<RegisteredFontStack>,
     sessions: BTreeMap<u32, EngineSession>,
+}
+
+struct RegisteredFontBinding {
+    handle: u32,
+    binding: FontRenderBinding,
 }
 
 struct RegisteredFontStack {
@@ -52,6 +59,55 @@ struct PolicyBinding {
 }
 
 impl TextEngine {
+    pub fn register_font_binding(
+        &mut self,
+        handle: u32,
+        shaping_glyph_count: u32,
+        binding: FontRenderBinding,
+    ) -> Result<(), EngineError> {
+        if handle == 0 || binding.glyph_count() != shaping_glyph_count {
+            return Err(EngineError::InvalidRequest);
+        }
+        if let Some(existing) = self
+            .font_bindings
+            .iter()
+            .find(|registered| registered.handle == handle)
+        {
+            return if existing.binding == binding {
+                Ok(())
+            } else {
+                Err(EngineError::HandleConflict)
+            };
+        }
+        self.font_bindings
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.font_bindings
+            .push(RegisteredFontBinding { handle, binding });
+        Ok(())
+    }
+
+    pub fn dispose_font_binding(&mut self, handle: u32) {
+        if let Some(index) = self
+            .font_bindings
+            .iter()
+            .position(|binding| binding.handle == handle)
+        {
+            self.font_bindings.swap_remove(index);
+        }
+    }
+
+    pub fn font_binding(&self, handle: u32) -> Option<&FontRenderBinding> {
+        self.font_bindings
+            .iter()
+            .find(|binding| binding.handle == handle)
+            .map(|binding| &binding.binding)
+    }
+
+    pub fn font_binding_count(&self) -> u32 {
+        self.font_bindings.len().try_into().unwrap_or(u32::MAX)
+    }
+
     pub fn register_font_stack(&mut self, handle: u32, fonts: &[u32]) -> Result<(), EngineError> {
         if handle == 0
             || fonts.is_empty()
@@ -455,6 +511,9 @@ mod tests {
             ENGINE_TEXT_MUTATION_TEXT_START, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
         },
         engine::{
+            font_binding::{
+                FieldTable, FontRenderBinding, FontResource, FontStrike, MISSING_RESOURCE_INDEX,
+            },
             frame::{TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16},
             policy::{
                 ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE,
@@ -515,6 +574,26 @@ mod tests {
             engine.dispose_font_stack(7),
             Err(EngineError::FontStackMissing)
         );
+    }
+
+    #[test]
+    fn font_bindings_are_owned_once_per_font_and_match_shaping_coverage() {
+        let mut engine = TextEngine::default();
+        let binding = render_binding(3, 7);
+        assert_eq!(
+            engine.register_font_binding(11, 4, binding.clone()),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.register_font_binding(11, 3, binding.clone()), Ok(()));
+        assert_eq!(engine.register_font_binding(11, 3, binding), Ok(()));
+        assert_eq!(engine.font_binding_count(), 1);
+        assert_eq!(engine.font_binding(11).unwrap().technique(), TechniqueId(7));
+        assert_eq!(
+            engine.register_font_binding(11, 3, render_binding(3, 8)),
+            Err(EngineError::HandleConflict)
+        );
+        engine.dispose_font_binding(11);
+        assert_eq!(engine.font_binding_count(), 0);
     }
 
     #[test]
@@ -797,6 +876,37 @@ mod tests {
                 ],
             }],
         })
+        .unwrap()
+    }
+
+    fn render_binding(glyph_count: u32, technique: u32) -> FontRenderBinding {
+        FontRenderBinding::new(
+            TechniqueId(technique),
+            0,
+            glyph_count,
+            vec![FontStrike { ppem: 0 }],
+            vec![FontResource {
+                id: 1,
+                generation: 1,
+                kind: 1,
+                reference: 0,
+            }],
+            (0..glyph_count)
+                .map(|glyph| {
+                    if glyph == 0 {
+                        MISSING_RESOURCE_INDEX
+                    } else {
+                        0
+                    }
+                })
+                .collect(),
+            FieldTable::new(glyph_count, 0, vec![]).unwrap(),
+            FieldTable::new(glyph_count, 0, vec![]).unwrap(),
+            FieldTable::new(glyph_count, 0, vec![]).unwrap(),
+            FieldTable::new(glyph_count, 0, vec![]).unwrap(),
+            FieldTable::new(1, 0, vec![]).unwrap(),
+            FieldTable::new(1, 0, vec![]).unwrap(),
+        )
         .unwrap()
     }
 

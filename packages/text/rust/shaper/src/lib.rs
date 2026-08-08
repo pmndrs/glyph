@@ -304,6 +304,12 @@ impl ShaperRegistry {
         self.fonts.contains_key(&handle)
     }
 
+    pub fn glyph_count(&self, handle: u32) -> Option<u32> {
+        self.fonts
+            .get(&handle)
+            .and_then(|font| u32::try_from(font.extents.len() / 8).ok())
+    }
+
     pub fn retained_font_bytes(&self) -> u32 {
         self.fonts
             .values()

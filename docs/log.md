@@ -2,6 +2,13 @@
 
 ## 2026-08-08
 
+- **Registered normalized per-font render bindings in Rust** — Added a cold compiler-mapped ABI for one font-owned
+  technique/program variant, field-major glyph/strike/resource lanes, scalable or ordered physical strikes, dense
+  strike×glyph resource selection, and exact shaping-coverage validation. Rust hostile-wire and strike-selection tests
+  pass; compiled Wasm registers a binding against real baked Inter, proves owned/idempotent state and conflict, retains
+  it through the stack lifecycle, and removes it with final font disposal. The optimized module changes from 829,906 /
+  309,646 / 244,790 to 838,060 / 312,606 / 246,732 raw/gzip/Brotli bytes. Policy gather and frame timing remain open.
+
 - **Made render-policy input shaping explicit data** — Policy programs now retain compiler-mapped source records for
   every typed input lane, selecting numeric semantic, glyph, resource, or strike data without callbacks. Source order
   is validated and fingerprinted; Rust and compiled-Wasm tests cover exact decoding, conflict, unknown/reserved data,
