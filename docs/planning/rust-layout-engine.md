@@ -301,6 +301,13 @@ payloads are offset-addressed. Constraint records carry the complete region rang
 call. Rectangle bounds are inline; bounded polygons reference vertex records in the same request. Defining this wire
 grammar does not make a section valid until its Rust decoder and retained transaction land.
 
+The retained style transaction uses two flat pre-reserved arenas per session rather than allocating a language or
+feature vector per span. Stable IDs drive an allocation-reusing mutation merge; authored cascade order remains a
+separate value used to validate nesting and later resolve inheritance. Payload compaction happens while building the
+inactive arena, so replacing a style cannot accumulate dead language or feature bytes. Root target density is retained
+for bitmap strike selection but rejected on non-root spans. Commit is an arena swap and abort does not touch committed
+styles.
+
 All offsets and lengths are range-checked before use. Enum tags, alignment, multiplication, and revision relationships
 are validated at the Wasm boundary. Failure returns a typed result without exposing partially mutated state.
 

@@ -48,16 +48,10 @@ pub(crate) fn parse_update_request(
         return Err(STATUS_INVALID_REQUEST);
     }
 
-    for (offset, count) in [
-        (
-            ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET,
-            ENGINE_UPDATE_STYLE_MUTATION_COUNT,
-        ),
-        (
-            ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
-            ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH,
-        ),
-    ] {
+    for (offset, count) in [(
+        ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
+        ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH,
+    )] {
         if read_u32(bytes, offset)? != 0 || read_u32(bytes, count)? != 0 {
             return Err(STATUS_INVALID_REQUEST);
         }
@@ -86,6 +80,15 @@ pub(crate) fn parse_update_request(
         read_u32(bytes, ENGINE_UPDATE_TEXT_MUTATIONS_OFFSET)?,
         text_mutation_count,
     )?;
+    let style_mutation_count = read_u32(bytes, ENGINE_UPDATE_STYLE_MUTATION_COUNT)?;
+    if style_mutation_count > limits.max_clusters {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let style_mutations = super::semantic_wire::parse_style_mutations(
+        bytes,
+        read_u32(bytes, ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET)?,
+        style_mutation_count,
+    )?;
     let constraint_count = read_u32(bytes, ENGINE_UPDATE_CONSTRAINT_COUNT)?;
     let region_count = read_u32(bytes, ENGINE_UPDATE_REGION_COUNT)?;
     let exclusion_count = read_u32(bytes, ENGINE_UPDATE_EXCLUSION_COUNT)?;
@@ -103,7 +106,9 @@ pub(crate) fn parse_update_request(
         limits,
     )?;
     text_mutations.validate_disjoint_geometry(geometry)?;
+    style_mutations.validate_disjoint_semantics(text_mutations, geometry)?;
     if text_mutation_count == 0
+        && style_mutation_count == 0
         && constraint_count == 0
         && region_count == 0
         && exclusion_count == 0
@@ -124,6 +129,7 @@ pub(crate) fn parse_update_request(
         capability_set: positive(bytes, ENGINE_UPDATE_CAPABILITY_SET)?,
         limits,
         text_mutations,
+        style_mutations,
         geometry,
     })
 }

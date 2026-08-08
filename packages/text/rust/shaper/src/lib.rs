@@ -92,7 +92,7 @@ struct PlanFeatureKey {
     global: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FeatureRecord {
     pub tag: u32,
     pub value: u32,
@@ -776,7 +776,7 @@ fn valid_script(tag: u32) -> bool {
     bytes[0].is_ascii_uppercase() && bytes[1..].iter().all(u8::is_ascii_lowercase)
 }
 
-fn valid_utf16_boundary(text: &[u16], offset: u32) -> bool {
+pub(crate) fn valid_utf16_boundary(text: &[u16], offset: u32) -> bool {
     let Ok(offset) = usize::try_from(offset) else {
         return false;
     };

@@ -5,7 +5,7 @@ import test from 'node:test';
 import { createRuntimeShaper, FontRegistry } from '@pmndrs/text';
 import { createFontBaker } from '@pmndrs/text-font-baker';
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
-import { fontBindingBytes } from '../support/engine-abi.mjs';
+import { fontBindingBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
 const shaperWasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
@@ -142,6 +142,46 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
   fn.deallocate(stack.pointer, stack.length);
   assert.equal(fn.fontStackCount(), 1);
+
+  const policyBytes = renderPolicyBytes(abi);
+  const policy = copyToWasm(memory, fn.allocate, policyBytes);
+  assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
+  fn.deallocate(policy.pointer, policy.length);
+  assert.equal(fn.createSession(29, 512, abi.layouts.engineResult.size, 4), abi.status.ok);
+  const styleWarmBuffer = memory.buffer;
+  const initialUpdate = engineStyleUpdateBytes(abi, {
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    text: [0x61, 0x62, 0x63, 0x64],
+  });
+  let requestPointer = fn.requestPointer(29);
+  new Uint8Array(memory.buffer, requestPointer, initialUpdate.byteLength).set(initialUpdate);
+  let resultPointer = fn.textUpdate(29, requestPointer, initialUpdate.byteLength);
+  assert.strictEqual(memory.buffer, styleWarmBuffer, 'the pre-reserved first style update must not grow Wasm memory');
+  let result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
+  assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
+  assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 1);
+
+  const removeRoot = engineStyleUpdateBytes(abi, {
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    expectedEngineRevision: 1,
+    consumedPlanRevision: 1,
+    acknowledgedPublicationGeneration: 1,
+    removeRoot: true,
+  });
+  requestPointer = fn.requestPointer(29);
+  new Uint8Array(memory.buffer, requestPointer, removeRoot.byteLength).set(removeRoot);
+  resultPointer = fn.textUpdate(29, requestPointer, removeRoot.byteLength);
+  assert.strictEqual(memory.buffer, styleWarmBuffer, 'an invalid retained style update must not grow Wasm memory');
+  result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
+  assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.invalidRequest);
+  assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 1);
+  assert.equal(fn.disposeSession(29), abi.status.ok);
+  assert.equal(fn.disposePolicy(23), abi.status.ok);
+
   assert.equal(fn.disposeFont(101), abi.status.fontInUse);
   assert.equal(fn.disposeFontStack(17), abi.status.ok);
   assert.equal(fn.disposeFontStack(17), abi.status.fontStackMissing);
@@ -167,6 +207,87 @@ function copyToWasm(memory, allocate, source) {
   assert.notEqual(pointer, 0);
   new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
   return { pointer, length: bytes.byteLength };
+}
+
+function engineStyleUpdateBytes(
+  abi,
+  {
+    sessionId,
+    policyHandle,
+    fontStackHandle,
+    expectedEngineRevision = 0,
+    consumedPlanRevision = 0,
+    acknowledgedPublicationGeneration = 0,
+    text = [],
+    removeRoot = false,
+  },
+) {
+  const request = abi.layouts.engineUpdateRequest;
+  const textRecord = abi.layouts.engineTextMutation;
+  const styleRecord = abi.layouts.engineStyleMutation;
+  const textRecordOffset = text.length === 0 ? 0 : request.size;
+  const styleRecordOffset = align(request.size + (text.length === 0 ? 0 : textRecord.size), styleRecord.alignment);
+  const textPayloadOffset = styleRecordOffset + styleRecord.size;
+  const bytes = new Uint8Array(textPayloadOffset + text.length * 2);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(request.abiVersion, abi.version, true);
+  view.setUint32(request.byteLength, bytes.byteLength, true);
+  view.setUint32(request.sessionId, sessionId, true);
+  view.setUint32(request.expectedEngineRevision, expectedEngineRevision, true);
+  view.setUint32(request.consumedPlanRevision, consumedPlanRevision, true);
+  view.setUint32(request.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
+  view.setUint32(request.policyHandle, policyHandle, true);
+  view.setUint32(request.capabilitySet, 1, true);
+  for (const field of [
+    'maxClusters',
+    'maxLines',
+    'maxRegions',
+    'maxExclusions',
+    'maxInlineObjects',
+    'maxSlotsPerBand',
+  ]) {
+    view.setUint32(request[field], field === 'maxClusters' ? 2 : 1, true);
+  }
+  view.setUint32(request.maxOutputBytes, abi.layouts.engineResult.size, true);
+  view.setUint32(request.textMutationsOffset, textRecordOffset, true);
+  view.setUint32(request.textMutationCount, text.length === 0 ? 0 : 1, true);
+  view.setUint32(request.styleMutationsOffset, styleRecordOffset, true);
+  view.setUint32(request.styleMutationCount, 1, true);
+
+  if (text.length > 0) {
+    view.setUint8(textRecordOffset + textRecord.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
+    view.setUint8(textRecordOffset + textRecord.encoding, abi.engine.textEncodings.utf16Le);
+    view.setUint32(textRecordOffset + textRecord.insertOffset, textPayloadOffset, true);
+    view.setUint32(textRecordOffset + textRecord.insertCount, text.length, true);
+    for (const [index, unit] of text.entries()) view.setUint16(textPayloadOffset + index * 2, unit, true);
+  }
+
+  view.setUint8(
+    styleRecordOffset + styleRecord.opcode,
+    removeRoot ? abi.engine.styleMutationOpcodes.remove : abi.engine.styleMutationOpcodes.upsert,
+  );
+  view.setUint32(styleRecordOffset + styleRecord.styleId, 1, true);
+  if (!removeRoot) {
+    view.setUint8(styleRecordOffset + styleRecord.flags, abi.engine.styleFlags.root);
+    view.setUint32(
+      styleRecordOffset + styleRecord.fieldMask,
+      abi.engine.styleFields.fontStack |
+        abi.engine.styleFields.fontSize |
+        abi.engine.styleFields.lineHeight |
+        abi.engine.styleFields.rasterPixelRatio,
+      true,
+    );
+    view.setUint32(styleRecordOffset + styleRecord.textEnd, text.length, true);
+    view.setUint32(styleRecordOffset + styleRecord.fontStackHandle, fontStackHandle, true);
+    view.setFloat32(styleRecordOffset + styleRecord.fontSize, 16, true);
+    view.setFloat32(styleRecordOffset + styleRecord.lineHeight, 1.2, true);
+    view.setFloat32(styleRecordOffset + styleRecord.rasterPixelRatio, 1, true);
+  }
+  return bytes;
+}
+
+function align(value, alignment) {
+  return Math.ceil(value / alignment) * alignment;
 }
 
 test('re-registering the same artifact creates a new lifecycle without reviving stale handles', async () => {

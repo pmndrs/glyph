@@ -74,6 +74,7 @@ pub(crate) struct UpdateRequest<'a> {
     pub capability_set: u32,
     pub limits: UpdateLimits,
     pub text_mutations: super::semantic_wire::TextMutationBatch<'a>,
+    pub style_mutations: super::semantic_wire::StyleMutationBatch<'a>,
     pub geometry: super::semantic_wire::GeometryBatch<'a>,
 }
 

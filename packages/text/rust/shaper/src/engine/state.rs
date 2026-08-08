@@ -9,6 +9,7 @@ use super::{
     },
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
+    style_state::{DEFAULT_STYLE_CAPACITY, MutationKey, StyleArena},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,6 +54,12 @@ struct EngineSession {
     text: Vec<u16>,
     pending_text: Vec<u16>,
     text_prepared: bool,
+    styles: StyleArena,
+    pending_styles: StyleArena,
+    style_mutation_scratch: Vec<MutationKey>,
+    style_order_scratch: Vec<usize>,
+    style_nesting_scratch: Vec<u32>,
+    styles_prepared: bool,
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
     geometry_prepared: bool,
@@ -132,13 +139,19 @@ impl TextEngine {
         {
             return Err(EngineError::InvalidRequest);
         }
-        if let Some(existing) = self.font_stacks.iter().find(|stack| stack.handle == handle) {
-            return if existing.fonts == fonts {
-                Ok(())
-            } else {
-                Err(EngineError::HandleConflict)
-            };
-        }
+        let insertion = match self
+            .font_stacks
+            .binary_search_by_key(&handle, |stack| stack.handle)
+        {
+            Ok(index) => {
+                return if self.font_stacks[index].fonts == fonts {
+                    Ok(())
+                } else {
+                    Err(EngineError::HandleConflict)
+                };
+            }
+            Err(index) => index,
+        };
         let mut retained = Vec::new();
         retained
             .try_reserve_exact(fonts.len())
@@ -147,28 +160,30 @@ impl TextEngine {
         self.font_stacks
             .try_reserve(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
-        self.font_stacks.push(RegisteredFontStack {
-            handle,
-            fonts: retained,
-        });
+        self.font_stacks.insert(
+            insertion,
+            RegisteredFontStack {
+                handle,
+                fonts: retained,
+            },
+        );
         Ok(())
     }
 
     pub fn dispose_font_stack(&mut self, handle: u32) -> Result<(), EngineError> {
         let index = self
             .font_stacks
-            .iter()
-            .position(|stack| stack.handle == handle)
-            .ok_or(EngineError::FontStackMissing)?;
-        self.font_stacks.swap_remove(index);
+            .binary_search_by_key(&handle, |stack| stack.handle)
+            .map_err(|_| EngineError::FontStackMissing)?;
+        self.font_stacks.remove(index);
         Ok(())
     }
 
     pub fn font_stack(&self, handle: u32) -> Result<&[u32], EngineError> {
         self.font_stacks
-            .iter()
-            .find(|stack| stack.handle == handle)
-            .map(|stack| stack.fonts.as_slice())
+            .binary_search_by_key(&handle, |stack| stack.handle)
+            .ok()
+            .map(|index| self.font_stacks[index].fonts.as_slice())
             .ok_or(EngineError::FontStackMissing)
     }
 
@@ -226,7 +241,22 @@ impl TextEngine {
         if self.sessions.contains_key(&handle) {
             return Err(EngineError::SessionConflict);
         }
-        self.sessions.insert(handle, EngineSession::default());
+        let mut session = EngineSession::default();
+        session.styles.reserve_default()?;
+        session.pending_styles.reserve_default()?;
+        session
+            .style_mutation_scratch
+            .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        session
+            .style_order_scratch
+            .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        session
+            .style_nesting_scratch
+            .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.sessions.insert(handle, session);
         Ok(())
     }
 
@@ -263,6 +293,14 @@ impl TextEngine {
             .ok_or(EngineError::SessionMissing)
     }
 
+    #[cfg(test)]
+    pub(crate) fn session_style_count(&self, handle: u32) -> Result<usize, EngineError> {
+        self.sessions
+            .get(&handle)
+            .map(|session| session.styles.len())
+            .ok_or(EngineError::SessionMissing)
+    }
+
     pub fn session_count(&self) -> u32 {
         self.sessions.len().try_into().unwrap_or(u32::MAX)
     }
@@ -287,6 +325,7 @@ impl TextEngine {
         }
         let policy_fingerprint = policy.fingerprint();
         let font_bindings = &self.font_bindings;
+        let font_stacks = &self.font_stacks;
         let gather = &mut self.gather;
         let session = self
             .sessions
@@ -324,8 +363,17 @@ impl TextEngine {
         // plan preparation or publication later aborts.
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
         session.prepare_text(request.text_mutations)?;
+        if let Err(error) = session.prepare_styles(request.style_mutations, |handle| {
+            font_stacks
+                .binary_search_by_key(&handle, |stack| stack.handle)
+                .is_ok()
+        }) {
+            session.abort_text();
+            return Err(error);
+        }
         if let Err(error) = session.prepare_geometry(request.geometry) {
             session.abort_text();
+            session.abort_styles();
             return Err(error);
         }
         if let Err(error) = gather.gather(
@@ -344,6 +392,7 @@ impl TextEngine {
             },
         ) {
             session.abort_text();
+            session.abort_styles();
             session.abort_geometry();
             return Err(gather_error(error));
         }
@@ -357,6 +406,7 @@ impl TextEngine {
             request.acknowledged_publication_generation,
         ) {
             session.abort_text();
+            session.abort_styles();
             session.abort_geometry();
             return Err(plan_error(error));
         }
@@ -403,6 +453,7 @@ impl TextEngine {
         }
         session.plan.abort();
         session.abort_text();
+        session.abort_styles();
         session.abort_geometry();
         Ok(())
     }
@@ -420,6 +471,7 @@ impl TextEngine {
         }
         session.plan.commit().map_err(plan_error)?;
         session.commit_text();
+        session.commit_styles();
         session.commit_geometry();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
@@ -468,6 +520,65 @@ impl EngineSession {
     fn abort_text(&mut self) {
         self.pending_text.clear();
         self.text_prepared = false;
+    }
+
+    fn prepare_styles(
+        &mut self,
+        mutations: super::semantic_wire::StyleMutationBatch<'_>,
+        font_stack_exists: impl FnMut(u32) -> bool,
+    ) -> Result<(), EngineError> {
+        self.abort_styles();
+        if mutations.len() == 0 {
+            if !self.text_prepared || self.styles.len() == 0 {
+                return Ok(());
+            }
+            return self.styles.validate(
+                self.pending_text.as_slice(),
+                font_stack_exists,
+                &mut self.style_order_scratch,
+                &mut self.style_nesting_scratch,
+            );
+        }
+        self.pending_styles.prepare_from(
+            &self.styles,
+            mutations,
+            &mut self.style_mutation_scratch,
+        )?;
+        if self.styles.len() != 0 && self.pending_styles.len() == 0 {
+            self.abort_styles();
+            return Err(EngineError::InvalidRequest);
+        }
+        let text = if self.text_prepared {
+            self.pending_text.as_slice()
+        } else {
+            self.text.as_slice()
+        };
+        if let Err(error) = self.pending_styles.validate(
+            text,
+            font_stack_exists,
+            &mut self.style_order_scratch,
+            &mut self.style_nesting_scratch,
+        ) {
+            self.abort_styles();
+            return Err(error);
+        }
+        self.styles_prepared = true;
+        Ok(())
+    }
+
+    fn abort_styles(&mut self) {
+        self.pending_styles.clear();
+        self.style_mutation_scratch.clear();
+        self.style_order_scratch.clear();
+        self.style_nesting_scratch.clear();
+        self.styles_prepared = false;
+    }
+
+    fn commit_styles(&mut self) {
+        if self.styles_prepared {
+            core::mem::swap(&mut self.styles, &mut self.pending_styles);
+        }
+        self.abort_styles();
     }
 
     fn commit_text(&mut self) {
@@ -586,7 +697,7 @@ mod tests {
     use super::*;
     use crate::{
         abi_contract::{
-            ENGINE_TEXT_MUTATION_DELETE_COUNT, ENGINE_TEXT_MUTATION_ENCODING,
+            self as abi, ENGINE_TEXT_MUTATION_DELETE_COUNT, ENGINE_TEXT_MUTATION_ENCODING,
             ENGINE_TEXT_MUTATION_INSERT_COUNT, ENGINE_TEXT_MUTATION_INSERT_OFFSET,
             ENGINE_TEXT_MUTATION_OPCODE, ENGINE_TEXT_MUTATION_RECORD_SIZE,
             ENGINE_TEXT_MUTATION_TEXT_START, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
@@ -595,14 +706,18 @@ mod tests {
             font_binding::{
                 FieldTable, FontRenderBinding, FontResource, FontStrike, MISSING_RESOURCE_INDEX,
             },
-            frame::{TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16},
+            frame::{
+                STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_LINE_HEIGHT,
+                STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE,
+                STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16,
+            },
             policy::{
                 ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE,
                 BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId,
                 BufferSchema, CAP_ORDERED_DIRECT, CapabilitySet, Operation, PolicyDescriptor,
                 ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
             },
-            semantic_wire::parse_text_mutations,
+            semantic_wire::{parse_style_mutations, parse_text_mutations},
         },
         wire::write_u32,
     };
@@ -856,6 +971,53 @@ mod tests {
     }
 
     #[test]
+    fn retained_style_upserts_commit_and_root_removal_aborts_transactionally() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_session(4).unwrap();
+
+        let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63, 0x64])]);
+        let mut initial = update(0, 0, 0);
+        initial.text_mutations =
+            parse_text_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let root_bytes = root_style_bytes(7);
+        let mut root = update(1, 1, 1);
+        root.style_mutations =
+            parse_style_mutations(&root_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(root, 2).unwrap();
+        assert_eq!(engine.session_style_count(4), Ok(0));
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.session_style_count(4), Ok(1));
+
+        let remove_bytes = remove_style_bytes(1);
+        let mut remove = update(2, 2, 2);
+        remove.style_mutations =
+            parse_style_mutations(&remove_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            engine.prepare_update(remove, 3),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.session_style_count(4), Ok(1));
+
+        let missing_stack_bytes = root_style_bytes(99);
+        let mut missing_stack = update(2, 2, 2);
+        missing_stack.style_mutations =
+            parse_style_mutations(&missing_stack_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        assert_eq!(
+            engine.prepare_update(missing_stack, 3),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.session_style_count(4), Ok(1));
+    }
+
+    #[test]
     fn an_invalid_later_replacement_cannot_partially_mutate_committed_text() {
         let mut engine = TextEngine::default();
         engine
@@ -1013,8 +1175,63 @@ mod tests {
                 max_output_bytes: 128,
             },
             text_mutations: super::super::semantic_wire::TextMutationBatch::empty(),
+            style_mutations: super::super::semantic_wire::StyleMutationBatch::empty(),
             geometry: super::super::semantic_wire::GeometryBatch::empty(),
         }
+    }
+
+    fn root_style_bytes(font_stack_handle: u32) -> Vec<u8> {
+        let record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let mut bytes = vec![0; record + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize];
+        bytes[record + abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_UPSERT;
+        bytes[record + abi::ENGINE_STYLE_MUTATION_FLAGS] = STYLE_FLAG_ROOT;
+        write_u32(&mut bytes, record + abi::ENGINE_STYLE_MUTATION_STYLE_ID, 1);
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+            STYLE_FIELD_FONT_STACK
+                | STYLE_FIELD_FONT_SIZE
+                | STYLE_FIELD_LINE_HEIGHT
+                | STYLE_FIELD_RASTER_PIXEL_RATIO,
+        );
+        write_u32(&mut bytes, record + abi::ENGINE_STYLE_MUTATION_TEXT_END, 4);
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_FONT_STACK_HANDLE,
+            font_stack_handle,
+        );
+        write_f32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_FONT_SIZE,
+            16.0,
+        );
+        write_f32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_LINE_HEIGHT,
+            1.2,
+        );
+        write_f32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_RASTER_PIXEL_RATIO,
+            1.0,
+        );
+        bytes
+    }
+
+    fn write_f32(bytes: &mut [u8], offset: usize, value: f32) {
+        write_u32(bytes, offset, value.to_bits());
+    }
+
+    fn remove_style_bytes(style_id: u32) -> Vec<u8> {
+        let record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let mut bytes = vec![0; record + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize];
+        bytes[record + abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_REMOVE;
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_STYLE_ID,
+            style_id,
+        );
+        bytes
     }
 
     fn text_mutation_bytes(records: &[(u32, u32, &[u16])]) -> Vec<u8> {

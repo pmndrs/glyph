@@ -32,6 +32,7 @@ mod stable_order;
 pub mod stable_plan;
 #[cfg_attr(not(test), allow(dead_code))]
 mod stable_pool;
+mod style_state;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod wire;
 
