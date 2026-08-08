@@ -17,6 +17,7 @@ use super::{
     policy_gather::{
         DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput, PolicyGatherWorkspace,
     },
+    positioning::PositionedGlyphArena,
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     shaping_state::{ShapeArena, ShapingRunArena},
@@ -104,10 +105,14 @@ struct EngineSession {
     glyph_identity_index: IdentityIndex,
     next_glyph_id: u32,
     pending_next_glyph_id: u32,
+    next_content_revision: u32,
+    pending_next_content_revision: u32,
     geometry: FlowGeometryArena,
     pending_geometry: FlowGeometryArena,
     flow_layout: FlowLayoutArena,
     pending_flow_layout: FlowLayoutArena,
+    positioned: PositionedGlyphArena,
+    pending_positioned: PositionedGlyphArena,
     flow_slot_scratch: super::flow_geometry::InlineSlotArena,
     fallback_spans: Vec<FallbackSpan>,
     pending_fallback_spans: Vec<FallbackSpan>,
@@ -127,6 +132,7 @@ struct EngineSession {
     pending_geometry_fingerprint: u64,
     geometry_prepared: bool,
     flow_layout_prepared: bool,
+    positioned_prepared: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -361,6 +367,8 @@ impl TextEngine {
         session.pending_shape.reserve(glyph_capacity)?;
         session.clusters.reserve(capacity)?;
         session.pending_clusters.reserve(capacity)?;
+        session.positioned.reserve(glyph_capacity)?;
+        session.pending_positioned.reserve(glyph_capacity)?;
         session
             .glyph_identity_index
             .prepare(capacity)
@@ -548,32 +556,52 @@ impl TextEngine {
             session.abort_clusters();
             return Err(error);
         }
-        if let Some(shaper) = shaper
-            && let Err(error) = session.prepare_flow_layout(
+        if let Some(shaper) = shaper {
+            if let Err(error) = session.prepare_flow_layout(
                 shaper,
                 font_stacks,
                 request.limits.max_lines,
                 request.limits.max_slots_per_band,
-            )
-        {
-            session.abort_text();
-            session.abort_styles();
-            session.abort_unicode();
-            session.abort_bidi();
-            session.abort_shaping_runs();
-            session.abort_shape();
-            session.abort_clusters();
-            session.abort_geometry();
-            session.abort_flow_layout();
-            return Err(error);
+            ) {
+                session.abort_text();
+                session.abort_styles();
+                session.abort_unicode();
+                session.abort_bidi();
+                session.abort_shaping_runs();
+                session.abort_shape();
+                session.abort_clusters();
+                session.abort_geometry();
+                session.abort_flow_layout();
+                return Err(error);
+            }
+            if let Err(error) = session.prepare_positioned(shaper) {
+                session.abort_text();
+                session.abort_styles();
+                session.abort_unicode();
+                session.abort_bidi();
+                session.abort_shaping_runs();
+                session.abort_shape();
+                session.abort_clusters();
+                session.abort_geometry();
+                session.abort_flow_layout();
+                session.abort_positioned();
+                return Err(error);
+            }
         }
+        let positioned = if session.positioned_prepared {
+            &session.pending_positioned
+        } else {
+            &session.positioned
+        };
+        let semantic_f32 = positioned.semantic_f32();
+        let semantic_u32 = positioned.semantic_u32();
         if let Err(error) = gather.gather(
             policy,
             CapabilitySetId(request.capability_set),
             LayoutPlanInput {
-                glyphs: &[],
-                semantic_f32: &[],
-                semantic_u32: &[],
+                glyphs: positioned.glyphs(),
+                semantic_f32: &semantic_f32,
+                semantic_u32: &semantic_u32,
             },
             |handle| {
                 font_bindings
@@ -591,6 +619,7 @@ impl TextEngine {
             session.abort_clusters();
             session.abort_geometry();
             session.abort_flow_layout();
+            session.abort_positioned();
             return Err(gather_error(error));
         }
         let gathered = gather.view();
@@ -611,6 +640,7 @@ impl TextEngine {
             session.abort_clusters();
             session.abort_geometry();
             session.abort_flow_layout();
+            session.abort_positioned();
             return Err(plan_error(error));
         }
         Ok(PreparedUpdate {
@@ -664,6 +694,7 @@ impl TextEngine {
         session.abort_clusters();
         session.abort_geometry();
         session.abort_flow_layout();
+        session.abort_positioned();
         Ok(())
     }
 
@@ -688,6 +719,7 @@ impl TextEngine {
         session.commit_clusters();
         session.commit_geometry();
         session.commit_flow_layout();
+        session.commit_positioned();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
@@ -1281,6 +1313,76 @@ impl EngineSession {
             core::mem::swap(&mut self.flow_layout, &mut self.pending_flow_layout);
         }
         self.abort_flow_layout();
+    }
+
+    fn prepare_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
+        self.abort_positioned();
+        let text = if self.text_prepared {
+            self.pending_text.as_slice()
+        } else {
+            self.text.as_slice()
+        };
+        let clusters = if self.clusters_prepared {
+            &self.pending_clusters
+        } else {
+            &self.clusters
+        };
+        let runs = if self.shaping_runs_prepared {
+            self.pending_shaping_runs.runs()
+        } else {
+            self.shaping_runs.runs()
+        };
+        let shape = if self.shape_prepared {
+            &self.pending_shape
+        } else {
+            &self.shape
+        };
+        let styles = if self.styles_prepared {
+            self.pending_resolved_styles.segments()
+        } else {
+            self.resolved_styles.segments()
+        };
+        let bidi = if self.bidi_prepared {
+            &self.pending_bidi
+        } else {
+            &self.bidi
+        };
+        let flow = if self.flow_layout_prepared {
+            &self.pending_flow_layout
+        } else {
+            &self.flow_layout
+        };
+        self.pending_next_content_revision = self.next_content_revision.max(1);
+        self.pending_positioned.build(
+            &self.positioned,
+            flow,
+            text,
+            clusters,
+            runs,
+            shape,
+            styles,
+            bidi,
+            &mut self.glyph_identity_index,
+            &mut self.pending_next_content_revision,
+            |handle| shaper.font_metrics(handle),
+            |handle, glyph| shaper.font_glyph_extents(handle, glyph),
+        )?;
+        self.positioned_prepared = true;
+        Ok(())
+    }
+
+    fn abort_positioned(&mut self) {
+        self.pending_positioned.clear();
+        self.pending_next_content_revision = 0;
+        self.positioned_prepared = false;
+    }
+
+    fn commit_positioned(&mut self) {
+        if self.positioned_prepared {
+            core::mem::swap(&mut self.positioned, &mut self.pending_positioned);
+            self.next_content_revision = self.pending_next_content_revision;
+        }
+        self.abort_positioned();
     }
 }
 

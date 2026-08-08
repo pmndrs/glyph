@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:3940f4a4ee7da518d5da84e7943f6a4d025d3b6fe3790b52168fbcd4c112f7e0'
+source_digest: 'sha256:d433667cb29362f65e26cd55240dce68699a350348e480b22a4a56ccccd7dea1'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -172,7 +172,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-08T20:24:50Z'
+  at: '2026-08-08T20:45:32Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -688,6 +688,8 @@ Cluster construction now emits a flat logical-cluster-to-shaped-glyph adjacency 
 The stable GPU slot pool's exact open-addressed identity lookup is now one reusable epoch-cleared component for both plan storage and the upcoming cluster/glyph reconciliation. Hashes select probe positions only; full `u32` equality decides every match. A collision fixture proves distinct keys remain distinct, duplicate insertion is rejected, and a same-capacity prepare clears logically without reallocating. The refactor alone measures 1,043,094 raw, 394,035 gzip, and 307,259 Brotli bytes; the compressed regression is retained because removing a second hot-path identity-table implementation is the stronger invariant.
 
 Glyph identities now reconcile transactionally through that shared index. A cluster retaining its stable text identity keeps each surviving glyph ordinal's monotonic ID; a new cluster or additional ordinal receives a new ID, and abort discards the pending allocator cursor. An exact insertion-and-growth fixture maps committed glyph IDs `[1,2,3]` to `[4,1,3,5]`, then repeats from the same pre-update state with identical IDs and unchanged scratch capacities. The production session commits the glyph allocator with its cluster A/B swap. Optimized size is 1,044,797 raw, 395,222 gzip, and 307,795 Brotli bytes. Exact positioned-content revisions and nonempty plan output remain open.
+
+Horizontal positioning now writes retained `LayoutGlyph` records and six F32/four U32 canonical semantic lanes entirely inside the frame transaction. UAX #9 L1 line resets feed allocation-reusing L2 cluster reordering; editorial slots apply start/center/end alignment or bounded space justification independently. Glyph origins use HarfRust offsets and actual selected-fallback metrics, accumulate in `f64`, include baseline shift, and narrow once. Baked font extents produce primitive bounds; absent extents still advance layout but emit no render instance. Exact float-bit and integer comparison assigns transactional content revisions through the shared identity index. A unit fixture preserves revisions `[1,2]` for a byte-identical rebuild and changes them to `[3,4]` after a one-pixel slot shift. A compiled Inter update publishes nonzero resource, buffer, patch, primitive, and draw tables through `text_update`; its identical warm successor preserves `memory.buffer` and emits zero patches. Optimized Wasm is 1,057,210 raw, 400,071 gzip, and 311,492 Brotli bytes. Complete 25,515-glyph latency is not yet measured, and vertical positioning, narrowed boundary shaping, truncation, decorations, and public renderer consumption remain open.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

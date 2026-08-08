@@ -970,6 +970,18 @@ commits only with the pending cluster arena, so abort/retry is exact. A fixture 
 without growing scratch. Optimized Wasm is 1,044,797 / 395,222 / 307,795 raw/gzip/Brotli bytes (+1,703 / +1,187 / +536).
 Final positioned-content comparison will own `content_revision`; shaping identity alone does not overclaim GPU equality.
 
+Horizontal positioning now completes the first nonempty production frame path. Reusable line-level scratch applies UAX
+#9 L1 resets before L2 reorders logical cluster slices into visual order. Each editorial slot positions independently,
+including direction-aware alignment and non-final-line space justification. HarfRust offsets and actual fallback-font
+metrics accumulate in `f64`; baked glyph extents become positive-down primitive bounds after one `f32` narrowing, while
+non-rendering glyphs advance the cursor without producing instances. Six F32 semantic lanes carry bounds, font size,
+and raster ratio; four U32 lanes carry foreground, cluster, region, and flow-thread identity. Exact float bits plus all
+integer and semantic fields determine a monotonic transactional `content_revision`. A unit fixture retains revisions
+`[1,2]` across an identical rebuild and advances to `[3,4]` after shifting the slot one pixel. A compiled real-Inter
+`text_update` publishes nonzero resource/buffer/patch/primitive/draw tables; the identical next call keeps the same Wasm
+buffer and emits zero patches. Optimized Wasm is 1,057,210 / 400,071 / 311,492 raw/gzip/Brotli bytes (+12,413 / +4,849 /
++3,697). This proves plan reachability and minimal no-op updates, not the still-unmeasured 25,515-glyph latency target.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a

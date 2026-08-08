@@ -63,6 +63,16 @@ pub(crate) const BASELINE_TEXT_TOP: u8 = 2;
 pub(crate) const BASELINE_MIDDLE: u8 = 3;
 pub(crate) const BASELINE_TEXT_BOTTOM: u8 = 4;
 pub(crate) const DEFAULT_SESSION_TEXT_CAPACITY: u32 = 1024;
+pub(crate) const SEMANTIC_F32_INLINE_START: u8 = 0;
+pub(crate) const SEMANTIC_F32_BLOCK_START: u8 = 1;
+pub(crate) const SEMANTIC_F32_INLINE_EXTENT: u8 = 2;
+pub(crate) const SEMANTIC_F32_BLOCK_EXTENT: u8 = 3;
+pub(crate) const SEMANTIC_F32_FONT_SIZE: u8 = 4;
+pub(crate) const SEMANTIC_F32_RASTER_PIXEL_RATIO: u8 = 5;
+pub(crate) const SEMANTIC_U32_FOREGROUND_RGBA: u8 = 0;
+pub(crate) const SEMANTIC_U32_CLUSTER_ID: u8 = 1;
+pub(crate) const SEMANTIC_U32_REGION_ID: u8 = 2;
+pub(crate) const SEMANTIC_U32_FLOW_THREAD_ID: u8 = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct UpdateRequest<'a> {

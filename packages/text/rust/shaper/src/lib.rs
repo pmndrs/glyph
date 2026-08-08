@@ -86,6 +86,14 @@ pub(crate) struct FontMetrics {
     pub line_gap: i16,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FontGlyphExtents {
+    pub x_min: i32,
+    pub y_min: i32,
+    pub x_max: i32,
+    pub y_max: i32,
+}
+
 struct CachedPlan {
     key: PlanKey,
     plan: ShapePlan,
@@ -266,6 +274,19 @@ impl ShaperRegistry {
 
     pub(crate) fn font_metrics(&self, handle: u32) -> Option<FontMetrics> {
         self.fonts.get(&handle).map(|font| font.metrics)
+    }
+
+    pub(crate) fn font_glyph_extents(
+        &self,
+        handle: u32,
+        glyph: u32,
+    ) -> Option<FontGlyphExtents> {
+        let font = self.fonts.get(&handle)?;
+        FlatExtents {
+            records: &font.extents,
+            availability: &font.availability,
+        }
+        .raw_extent_for_glyph(usize::try_from(glyph).ok()?)
     }
 
     pub fn dispose_font(&mut self, handle: u32) -> u32 {
@@ -738,6 +759,16 @@ impl FontFuncs for FlatExtents<'_> {
 
 impl FlatExtents<'_> {
     fn extent_for_glyph(&self, glyph: usize) -> Option<GlyphExtents> {
+        let raw = self.raw_extent_for_glyph(glyph)?;
+        Some(GlyphExtents {
+            x_bearing: raw.x_min,
+            y_bearing: raw.y_max,
+            width: raw.x_max - raw.x_min,
+            height: raw.y_min - raw.y_max,
+        })
+    }
+
+    fn raw_extent_for_glyph(&self, glyph: usize) -> Option<FontGlyphExtents> {
         if self
             .availability
             .get(glyph >> 3)
@@ -752,11 +783,11 @@ impl FlatExtents<'_> {
         let y_min = i16::from_le_bytes([record[2], record[3]]) as i32;
         let x_max = i16::from_le_bytes([record[4], record[5]]) as i32;
         let y_max = i16::from_le_bytes([record[6], record[7]]) as i32;
-        Some(GlyphExtents {
-            x_bearing: x_min,
-            y_bearing: y_max,
-            width: x_max - x_min,
-            height: y_min - y_max,
+        Some(FontGlyphExtents {
+            x_min,
+            y_min,
+            x_max,
+            y_max,
         })
     }
 }

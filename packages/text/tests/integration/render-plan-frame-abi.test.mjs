@@ -80,6 +80,20 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.deepEqual(abi.engine.exclusionWrapSides, { both: 1, inlineEnd: 3, inlineStart: 2, largest: 4 });
   assert.deepEqual(abi.engine.inlineObjectBaselines, { alphabetic: 1, middle: 3, textBottom: 4, textTop: 2 });
   assert.equal(abi.engine.defaultSessionTextCapacity, 1024);
+  assert.deepEqual(abi.engine.semanticF32Fields, {
+    blockExtent: 3,
+    blockStart: 1,
+    fontSize: 4,
+    inlineExtent: 2,
+    inlineStart: 0,
+    rasterPixelRatio: 5,
+  });
+  assert.deepEqual(abi.engine.semanticU32Fields, {
+    clusterId: 1,
+    flowThreadId: 3,
+    foregroundRgba: 0,
+    regionId: 2,
+  });
   assert.equal(fn.createSession(sessionId, requestLayout.size, resultLayout.size, 0), abi.status.ok);
   assert.equal(fn.sessionCount(), 1);
   let requestPointer = fn.requestPointer(sessionId);
