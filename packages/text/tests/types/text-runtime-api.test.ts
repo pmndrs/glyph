@@ -8,13 +8,13 @@ import {
   type TextRuntime,
 } from '../../src/index.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
-import { mtsdf } from '../../src/raster/mtsdf.js';
+import { msdf } from '../../src/raster/msdf.js';
 import { slug } from '../../src/raster/slug-technique.js';
 
 declare const runtime: TextRuntime;
 declare const bitmapFont: LoadedFont<typeof bitmap>;
 declare const bitmapFallback: LoadedFont<typeof bitmap>;
-declare const mtsdfFont: LoadedFont<typeof mtsdf>;
+declare const mtsdfFont: LoadedFont<typeof msdf>;
 
 const uiFont = createFontStack(bitmapFont, bitmapFallback);
 
@@ -60,7 +60,7 @@ async function loadTargetV1Fonts(): Promise<void> {
     input: { baked: '/fonts/Inter.font.glb' },
     raster: { technique: bitmap, options: { strikes: [16, 32] } },
   });
-  await created.loadFont({ input: { baked: '/fonts/Inter.font.glb' }, raster: { technique: mtsdf } });
+  await created.loadFont({ input: { baked: '/fonts/Inter.font.glb' }, raster: { technique: msdf } });
   await created.loadFont({ input: { baked: '/fonts/Inter.font.glb' }, raster: { technique: slug } });
 
   created.loadFont({

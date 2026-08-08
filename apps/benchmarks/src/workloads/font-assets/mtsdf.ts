@@ -1,4 +1,4 @@
-import { mtsdf as mtsdfTechnique } from '@pmndrs/text/three/mtsdf';
+import { msdf as mtsdfTechnique } from '@pmndrs/text/three/msdf';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url';
 import dancingScriptCompressedFontUrl from '../../../fixtures/rendering/dancing-script-mtsdf.font.glb.gz?url';

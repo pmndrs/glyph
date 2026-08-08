@@ -1,5 +1,5 @@
 import type { LoadedFont, ParagraphContentBox, ParagraphStyle } from '@pmndrs/text';
-import type { mtsdf } from '@pmndrs/text/three/mtsdf';
+import type { msdf as mtsdf } from '@pmndrs/text/three/msdf';
 import type { slug } from '@pmndrs/text/three/slug';
 import { Text } from '@pmndrs/text/three';
 import type { Node } from 'three/webgpu';

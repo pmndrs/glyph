@@ -67,24 +67,24 @@ const RGBA8_FORMAT = {
   ],
 } as const;
 
-export type MtsdfArtifactValidationIssue = RasterArtifactValidationIssue;
+export type MsdfArtifactValidationIssue = RasterArtifactValidationIssue;
 
-export interface MtsdfArtifactValidationLimits {
+export interface MsdfArtifactValidationLimits {
   readonly maxTextureDimension2D: number;
   readonly maxGpuBytes: number;
 }
 
-export interface MtsdfArtifactValidationContext {
+export interface MsdfArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
   readonly shapingHash: Sha256Hex | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
   readonly descriptor: MsdfDescriptorV0;
   readonly externalPages?: ReadonlyMap<string, Uint8Array>;
-  readonly limits?: Partial<MtsdfArtifactValidationLimits>;
+  readonly limits?: Partial<MsdfArtifactValidationLimits>;
 }
 
-export interface ValidatedMtsdfPageV0 {
+export interface ValidatedMsdfPageV0 {
   readonly width: number;
   readonly height: number;
   readonly bytes: Uint8Array;
@@ -92,53 +92,53 @@ export interface ValidatedMtsdfPageV0 {
   readonly uri?: string;
 }
 
-export interface ValidatedMtsdfArtifactV0 {
+export interface ValidatedMsdfArtifactV0 {
   readonly document: Readonly<Record<string, unknown>>;
   readonly rasterKey: RasterKey;
   readonly shapingHash: Sha256Hex;
   readonly glyphCount: number;
   readonly records: Uint8Array;
-  readonly pages: readonly ValidatedMtsdfPageV0[];
+  readonly pages: readonly ValidatedMsdfPageV0[];
   readonly khronos: KhronosValidationReport;
 }
 
-export class MtsdfArtifactValidationError extends Error {
-  readonly issues: readonly MtsdfArtifactValidationIssue[];
+export class MsdfArtifactValidationError extends Error {
+  readonly issues: readonly MsdfArtifactValidationIssue[];
 
-  constructor(issues: readonly MtsdfArtifactValidationIssue[]) {
+  constructor(issues: readonly MsdfArtifactValidationIssue[]) {
     super(
       issues
         .map((issue) => `${issue.code}${issue.path === undefined ? '' : ` ${issue.path}`}: ${issue.message}`)
         .join('\n'),
     );
-    this.name = 'MtsdfArtifactValidationError';
+    this.name = 'MsdfArtifactValidationError';
     this.issues = issues;
   }
 }
 
-/** Validate one fixed V0 MTSDF companion before registering or uploading it. */
-export async function validateMtsdfArtifact(
+/** Validate one fixed V0 MSDF companion before registering or uploading it. */
+export async function validateMsdfArtifact(
   bytes: Uint8Array,
-  context: MtsdfArtifactValidationContext,
-): Promise<ValidatedMtsdfArtifactV0> {
+  context: MsdfArtifactValidationContext,
+): Promise<ValidatedMsdfArtifactV0> {
   try {
     const parsed = parseGlb(bytes);
     const khronos = await validateWithKhronos(bytes, parsed.document);
-    return await validateMtsdfSemantics(parsed, khronos, context);
+    return await validateMsdfSemantics(parsed, khronos, context);
   } catch (error) {
-    if (error instanceof MtsdfArtifactValidationError) throw error;
+    if (error instanceof MsdfArtifactValidationError) throw error;
     if (error instanceof FontArtifactValidationError || error instanceof RasterArtifactValidationError) {
-      throw new MtsdfArtifactValidationError(error.issues);
+      throw new MsdfArtifactValidationError(error.issues);
     }
     throw error;
   }
 }
 
-async function validateMtsdfSemantics(
+async function validateMsdfSemantics(
   parsed: ParsedGlb,
   khronos: KhronosValidationReport,
-  context: MtsdfArtifactValidationContext,
-): Promise<ValidatedMtsdfArtifactV0> {
+  context: MsdfArtifactValidationContext,
+): Promise<ValidatedMsdfArtifactV0> {
   requireNonArrayObject(context.descriptor, '/descriptor');
   let configuration: MsdfConfiguration;
   try {
@@ -198,7 +198,7 @@ async function validateMtsdfSemantics(
       },
     ],
   );
-  if (schemaIssues.length !== 0) throw new MtsdfArtifactValidationError(schemaIssues);
+  if (schemaIssues.length !== 0) throw new MsdfArtifactValidationError(schemaIssues);
   if (
     extension.version !== MSDF_FORMAT_VERSION ||
     extension.rasterKey !== context.rasterKey ||
@@ -223,10 +223,10 @@ async function validateMtsdfSemantics(
   }
 
   const limits = resolveLimits(context.limits);
-  const views = validateRasterBufferViews(parsed, 'MTSDF');
+  const views = validateRasterBufferViews(parsed, 'MSDF');
   const claimedViews = new Set<number>();
   if (combined) {
-    claimCoreRasterViews(extensions.PMNDRS_font, claimedViews, views.length, MSDF_EXTENSION, 'MTSDF');
+    claimCoreRasterViews(extensions.PMNDRS_font, claimedViews, views.length, MSDF_EXTENSION, 'MSDF');
   }
   const coverage = validateRasterCoverage(
     parsed,
@@ -236,10 +236,10 @@ async function validateMtsdfSemantics(
     claimedViews,
     context.glyphCount,
     extensionPath,
-    'MTSDF',
+    'MSDF',
   );
   const recordView = asInteger(extension.recordBufferView, `${extensionPath}/recordBufferView`, 0, views.length - 1);
-  claimRasterView(claimedViews, views, recordView, `${extensionPath}/recordBufferView`, 'MTSDF');
+  claimRasterView(claimedViews, views, recordView, `${extensionPath}/recordBufferView`, 'MSDF');
   const expectedRecordBytes = checkedProduct(context.glyphCount, RECORD_STRIDE, `${extensionPath}/records`);
   if (views[recordView]?.byteLength !== expectedRecordBytes) {
     fail(
@@ -251,7 +251,7 @@ async function validateMtsdfSemantics(
 
   let textureArrayWidth = 0;
   let textureArrayHeight = 0;
-  const pages: ValidatedMtsdfPageV0[] = [];
+  const pages: ValidatedMsdfPageV0[] = [];
   const pageValues = asArray(extension.pages, `${extensionPath}/pages`);
   for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
     const pagePath = `${extensionPath}/pages/${pageIndex}`;
@@ -261,11 +261,11 @@ async function validateMtsdfSemantics(
     textureArrayWidth = Math.max(textureArrayWidth, width);
     textureArrayHeight = Math.max(textureArrayHeight, height);
     if (page.mipLevelCount !== 1 || page.colorSpace !== 'linear') {
-      fail('PAGE_BASELINE', 'MTSDF V0 pages must be single-level linear resources', pagePath);
+      fail('PAGE_BASELINE', 'MSDF V0 pages must be single-level linear resources', pagePath);
     }
     const variants = asArray(page.variants, `${pagePath}/variants`);
     if (variants.length !== 1) {
-      fail('VARIANT_COUNT', 'MTSDF V0 pages must contain exactly one variant', `${pagePath}/variants`);
+      fail('VARIANT_COUNT', 'MSDF V0 pages must contain exactly one variant', `${pagePath}/variants`);
     }
     const variantPath = `${pagePath}/variants/0`;
     const variant = requireNonArrayObject(variants[0], variantPath);
@@ -275,7 +275,7 @@ async function validateMtsdfSemantics(
       variant.requiredFeature !== undefined ||
       variant.quality !== 'lossless'
     ) {
-      fail('VARIANT_CONTRACT', 'MTSDF V0 requires one lossless native RGBA8 KTX2 variant', variantPath);
+      fail('VARIANT_CONTRACT', 'MSDF V0 requires one lossless native RGBA8 KTX2 variant', variantPath);
     }
     const source = requireNonArrayObject(variant.source, `${variantPath}/source`);
     const resource = await resolveRasterPageSource(
@@ -285,7 +285,7 @@ async function validateMtsdfSemantics(
       views,
       claimedViews,
       context.externalPages,
-      'MTSDF',
+      'MSDF',
     );
     validateNativeKtx2(resource.bytes, width, height, RGBA8_FORMAT, variantPath);
     pages.push({
@@ -305,19 +305,19 @@ async function validateMtsdfSemantics(
   if (gpuBytes > limits.maxGpuBytes) {
     fail(
       'GPU_BUDGET',
-      'MTSDF padded base texture array exceeds the configured GPU byte budget',
+      'MSDF padded base texture array exceeds the configured GPU byte budget',
       `${extensionPath}/pages`,
     );
   }
 
   const records = sliceRasterView(parsed, views[recordView]!);
-  validateDenseRasterRecords(records, pages, context.glyphCount, extensionPath, 'MTSDF', true);
-  validateRasterCoverageRecords(coverage, records, context.glyphCount, extensionPath, 'MTSDF');
+  validateDenseRasterRecords(records, pages, context.glyphCount, extensionPath, 'MSDF', true);
+  validateRasterCoverageRecords(coverage, records, context.glyphCount, extensionPath, 'MSDF');
   if (combined) {
     claimOtherRasterExtensionViews(extensions, claimedViews, views.length, MSDF_EXTENSION);
   }
   if (claimedViews.size !== views.length) {
-    fail('BUFFER_VIEW_UNCLAIMED', 'MTSDF artifact contains an unclaimed buffer view', '/bufferViews');
+    fail('BUFFER_VIEW_UNCLAIMED', 'MSDF artifact contains an unclaimed buffer view', '/bufferViews');
   }
 
   return {
@@ -332,7 +332,7 @@ async function validateMtsdfSemantics(
   };
 }
 
-function resolveLimits(limits: Partial<MtsdfArtifactValidationLimits> | undefined): MtsdfArtifactValidationLimits {
+function resolveLimits(limits: Partial<MsdfArtifactValidationLimits> | undefined): MsdfArtifactValidationLimits {
   const resolved = {
     maxTextureDimension2D: limits?.maxTextureDimension2D ?? 16_384,
     maxGpuBytes: limits?.maxGpuBytes ?? 256 * 1024 * 1024,
@@ -343,7 +343,7 @@ function resolveLimits(limits: Partial<MtsdfArtifactValidationLimits> | undefine
     !Number.isSafeInteger(resolved.maxGpuBytes) ||
     resolved.maxGpuBytes < 1
   ) {
-    fail('VALIDATION_LIMIT', 'MTSDF validation limits must be positive safe integers');
+    fail('VALIDATION_LIMIT', 'MSDF validation limits must be positive safe integers');
   }
   return resolved;
 }

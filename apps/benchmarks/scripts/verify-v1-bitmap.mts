@@ -99,7 +99,7 @@ try {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-mtsdf.html?backend=${expected}`, {
+    await page.goto(`http://127.0.0.1:5177/v1-msdf.html?backend=${expected}`, {
       waitUntil: 'domcontentloaded',
     });
     const result = await page.evaluate(
@@ -116,7 +116,7 @@ try {
       result.gpuBytes <= 0
     )
       throw new Error(`${expected} target-v1 MTSDF output is not visibly populated: ${JSON.stringify(result)}`);
-    process.stdout.write(`${expected} mtsdf: ${JSON.stringify(result)}\n`);
+    process.stdout.write(`${expected} msdf: ${JSON.stringify(result)}\n`);
     await page.close();
   }
   for (const expected of ['webgpu', 'webgl2'] as const) {

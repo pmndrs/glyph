@@ -5,21 +5,21 @@ import test from 'node:test';
 import { RasterCoverageError } from '@pmndrs/text';
 
 import {
-  createMtsdfBaker,
-  createMtsdfBakerFromInstance,
+  createMsdfBaker,
+  createMsdfBakerFromInstance,
   msdfBakerFromCore,
-  readMtsdfBakerAbi,
+  readMsdfBakerAbi,
 } from '@pmndrs/text/bakers/msdf';
-import { MtsdfArtifactValidationError, validateMtsdfArtifact } from '@pmndrs/text/bakers/msdf/validate';
+import { MsdfArtifactValidationError, validateMsdfArtifact } from '@pmndrs/text/bakers/msdf/validate';
 import {
-  MTSDF_EM_SIZE,
-  MTSDF_EXTENSION,
-  MTSDF_PIXEL_RANGE,
-  MTSDF_PLANE_UNITS_PER_EM,
-  mtsdf,
-  mtsdfDescriptor,
-  mtsdfDescriptorRasterKey,
-} from '@pmndrs/text/raster/mtsdf';
+  MSDF_EM_SIZE,
+  MSDF_EXTENSION,
+  MSDF_PIXEL_RANGE,
+  MSDF_PLANE_UNITS_PER_EM,
+  msdf,
+  msdfDescriptor,
+  msdfDescriptorRasterKey,
+} from '@pmndrs/text/raster/msdf';
 
 const wasmUrl = new URL('../../dist/mtsdf_baker.wasm', import.meta.url);
 const abiUrl = new URL('../../dist/mtsdf-baker-abi-v1.json', import.meta.url);
@@ -35,8 +35,8 @@ const progressImports = { env: { pmndrs_text_bake_progress() {} } };
 
 /** Packs one canonical glyph batch through the portable technique, as core does before any renderer sees it. */
 function packedStorage(data, glyphs) {
-  const storage = mtsdf.createStorage(glyphs.length);
-  mtsdf.writeStorage(storage, { start: 0, count: glyphs.length }, { data, binding: data.binding, glyphs });
+  const storage = msdf.createStorage(glyphs.length);
+  msdf.writeStorage(storage, { start: 0, count: glyphs.length }, { data, binding: data.binding, glyphs });
   return storage;
 }
 
@@ -52,7 +52,7 @@ async function setup() {
     source: new Uint8Array(source),
     module,
     instance,
-    core: await createMtsdfBaker(module),
+    core: await createMsdfBaker(module),
   };
 }
 
@@ -61,7 +61,7 @@ test('ships one generated progress import and bundles its artifact contract in T
   assert.deepEqual(WebAssembly.Module.imports(module), [
     { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
   ]);
-  const generated = readMtsdfBakerAbi(instance);
+  const generated = readMsdfBakerAbi(instance);
   assert.deepEqual(generated, publishedAbi);
   assert.equal(
     WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
@@ -78,8 +78,8 @@ test('ships one generated progress import and bundles its artifact contract in T
 
 test('bakes canonical Inter through the public direct-memory shim', async () => {
   const { source, core } = await setup();
-  const descriptor = mtsdfDescriptor();
-  const rasterKey = await mtsdfDescriptorRasterKey();
+  const descriptor = msdfDescriptor();
+  const rasterKey = await msdfDescriptorRasterKey();
   const progress = [];
   assert.equal(rasterKey, 'e944ba8d2856314856289466e82e471e0adc0775a7c9c3affec7c59bfdd8fe93');
   const result = await msdfBakerFromCore(core).bake({
@@ -96,7 +96,7 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   });
 
   assert.equal(result.kind, 'msdf');
-  assert.equal(result.extension, MTSDF_EXTENSION);
+  assert.equal(result.extension, MSDF_EXTENSION);
   assert.equal(result.version, 0);
   assert.equal(result.report.metadataBytes, 2937 * 20);
   assert.ok(result.report.gpuBytes > 0);
@@ -114,7 +114,7 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
       [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a],
     );
   }
-  const extension = glbRoot(raster.bytes).extensions[MTSDF_EXTENSION];
+  const extension = glbRoot(raster.bytes).extensions[MSDF_EXTENSION];
   assert.deepEqual(
     result.artifacts.map(({ bytes, sha256 }) => [bytes.byteLength, sha256]),
     [
@@ -132,9 +132,9 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
     ],
   );
   assert.equal(extension.encoding, 'mtsdf');
-  assert.equal(extension.emSize, MTSDF_EM_SIZE);
-  assert.equal(extension.pixelRange, MTSDF_PIXEL_RANGE);
-  assert.equal(extension.planeUnitsPerEm, MTSDF_PLANE_UNITS_PER_EM);
+  assert.equal(extension.emSize, MSDF_EM_SIZE);
+  assert.equal(extension.pixelRange, MSDF_PIXEL_RANGE);
+  assert.equal(extension.planeUnitsPerEm, MSDF_PLANE_UNITS_PER_EM);
   assert.equal(extension.recordStride, 20);
   assert.equal(extension.pages.length, pages.length);
   assert.deepEqual(progress.at(-1), [2937, 2937]);
@@ -145,11 +145,11 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
 
 test('bakes and validates authenticated 32 px/em quality policies', async () => {
   const [wasm, source] = await Promise.all([readFile(wasmUrl), readFile(showcaseFontUrl)]);
-  const core = await createMtsdfBaker(wasm);
+  const core = await createMsdfBaker(wasm);
   const reports = [];
   for (const pixelRange of [4, 6]) {
-    const descriptor = mtsdfDescriptor({ emSize: 32, pixelRange });
-    const rasterKey = await mtsdfDescriptorRasterKey(descriptor);
+    const descriptor = msdfDescriptor({ emSize: 32, pixelRange });
+    const rasterKey = await msdfDescriptorRasterKey(descriptor);
     const result = await msdfBakerFromCore(core).bake({
       font: {
         source: new Uint8Array(source),
@@ -163,11 +163,11 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
     });
     const raster = result.artifacts.find((artifact) => artifact.role === 'raster');
     assert.ok(raster);
-    const extension = glbRoot(raster.bytes).extensions[MTSDF_EXTENSION];
+    const extension = glbRoot(raster.bytes).extensions[MSDF_EXTENSION];
     assert.equal(extension.emSize, 32);
     assert.equal(extension.pixelRange, pixelRange);
     assert.equal(extension.planeUnitsPerEm, 32);
-    const validated = await validateMtsdfArtifact(raster.bytes, {
+    const validated = await validateMsdfArtifact(raster.bytes, {
       rasterKey,
       shapingHash: showcaseShapingHash,
       glyphCount: 155,
@@ -182,18 +182,18 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
         font: font.handle,
         handle: 11,
         kind: 'msdf',
-        extension: MTSDF_EXTENSION,
+        extension: MSDF_EXTENSION,
         version: 0,
         rasterKey,
-        extensionData: document.extensions[MTSDF_EXTENSION],
+        extensionData: document.extensions[MSDF_EXTENSION],
         view(index) {
           const view = views[index];
-          if (view === undefined) throw new RangeError('missing embedded 32 px/em MTSDF runtime view');
+          if (view === undefined) throw new RangeError('missing embedded 32 px/em MSDF runtime view');
           return view;
         },
         dispose() {},
       };
-      const data = await mtsdf.decode(font, runtimeRaster);
+      const data = await msdf.decode(font, runtimeRaster);
       try {
         assert.equal(data.emSize, 32);
         assert.equal(data.pixelRange, 4);
@@ -217,7 +217,7 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
           /2-atlas-pixel field limit/,
         );
       } finally {
-        mtsdf.dispose(data);
+        msdf.dispose(data);
       }
     }
     reports.push(result.report);
@@ -227,8 +227,8 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
 
 test('bakes bounded coverage with deterministic progress and a validated selection bitset', async () => {
   const { source, core } = await setup();
-  const descriptor = mtsdfDescriptor({ coverage: { glyphIds: [43, 44] } });
-  const rasterKey = await mtsdfDescriptorRasterKey(descriptor);
+  const descriptor = msdfDescriptor({ coverage: { glyphIds: [43, 44] } });
+  const rasterKey = await msdfDescriptorRasterKey(descriptor);
   const progress = [];
   const result = await msdfBakerFromCore(core).bake({
     font: { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash },
@@ -242,7 +242,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   assert.equal(result.report.metadataBytes, 2937 * 20 + Math.ceil(2937 / 8));
   assert.deepEqual(progress.at(-1), [2, 2]);
   assert.ok(progress.every((entry) => entry[1] === 2));
-  const validated = await validateMtsdfArtifact(raster.bytes, {
+  const validated = await validateMsdfArtifact(raster.bytes, {
     rasterKey,
     shapingHash,
     glyphCount: 2937,
@@ -261,21 +261,21 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
     font: font.handle,
     handle: 11,
     kind: 'msdf',
-    extension: MTSDF_EXTENSION,
+    extension: MSDF_EXTENSION,
     version: 0,
     rasterKey,
-    extensionData: document.extensions[MTSDF_EXTENSION],
+    extensionData: document.extensions[MSDF_EXTENSION],
     view: (index) => views[index],
     dispose() {},
   };
-  const data = await mtsdf.decode(font, runtimeRaster);
+  const data = await msdf.decode(font, runtimeRaster);
   const paint = { color: [1, 1, 1, 1] };
-  assert.ok(mtsdf.select(glyphInput(data, 43, 0, paint)));
-  assert.throws(() => mtsdf.select(glyphInput(data, 45, 0, paint)), RasterCoverageError);
-  mtsdf.dispose(data);
+  assert.ok(msdf.select(glyphInput(data, 43, 0, paint)));
+  assert.throws(() => msdf.select(glyphInput(data, 45, 0, paint)), RasterCoverageError);
+  msdf.dispose(data);
 });
 
-test('keeps the packaged MTSDF schema byte-identical to its canonical source', async () => {
+test('keeps the packaged MSDF schema byte-identical to its canonical source', async () => {
   assert.deepEqual(
     await readFile(
       new URL(
@@ -290,8 +290,8 @@ test('keeps the packaged MTSDF schema byte-identical to its canonical source', a
 test('releases a source allocation when the request allocation fails', () => {
   const released = [];
   let allocations = 0;
-  const core = createMtsdfBakerFromInstance(
-    fakeMtsdfBakerInstance({
+  const core = createMsdfBakerFromInstance(
+    fakeMsdfBakerInstance({
       allocate: () => (++allocations === 1 ? 4096 : 0),
       deallocate: (pointer, length) => released.push([pointer, length]),
     }),
@@ -306,7 +306,7 @@ test('releases a source allocation when the request allocation fails', () => {
           shapingHash: '0'.repeat(64),
           rasterKey: '0'.repeat(64),
           packaging: { artifact: 'external', pages: 'embedded' },
-          descriptor: mtsdfDescriptor(),
+          descriptor: msdfDescriptor(),
         },
       }),
     /allocation failed/,
@@ -319,7 +319,7 @@ test('copies a segmented response in bounded chunks and releases its Wasm owners
   const metadata = {
     rasterKey: '1'.repeat(64),
     kind: 'msdf',
-    extension: MTSDF_EXTENSION,
+    extension: MSDF_EXTENSION,
     version: 0,
     artifacts: [
       {
@@ -352,7 +352,7 @@ test('copies a segmented response in bounded chunks and releases its Wasm owners
   let allocationPointer = 32_768;
   let releases = 0;
   const chunkOffsets = [];
-  const instance = fakeMtsdfBakerInstance({
+  const instance = fakeMsdfBakerInstance({
     allocate: (length) => {
       const pointer = allocationPointer;
       allocationPointer += length;
@@ -375,7 +375,7 @@ test('copies a segmented response in bounded chunks and releases its Wasm owners
   new Uint8Array(instance.exports.memory.buffer, metadataPointer, metadataBytes.byteLength).set(metadataBytes);
   new Uint8Array(instance.exports.memory.buffer, artifactPointer, artifactBytes.byteLength).set(artifactBytes);
 
-  const result = createMtsdfBakerFromInstance(instance).bake({
+  const result = createMsdfBakerFromInstance(instance).bake({
     source: new Uint8Array([1]),
     request: {
       fontFaceIndex: 0,
@@ -383,7 +383,7 @@ test('copies a segmented response in bounded chunks and releases its Wasm owners
       shapingHash: '0'.repeat(64),
       rasterKey: '1'.repeat(64),
       packaging: { artifact: 'embedded', pages: 'embedded' },
-      descriptor: mtsdfDescriptor(),
+      descriptor: msdfDescriptor(),
     },
   });
 
@@ -405,10 +405,10 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
     shapingHash,
     glyphCount: 2937,
     glyphIdWidth: 16,
-    descriptor: mtsdfDescriptor(),
+    descriptor: msdfDescriptor(),
   };
   const externalPages = new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes]));
-  const external = await validateMtsdfArtifact(rasterArtifact.bytes, {
+  const external = await validateMsdfArtifact(rasterArtifact.bytes, {
     ...context,
     externalPages,
   });
@@ -420,7 +420,7 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
   assert.ok(external.pages.every(({ source }) => source === 'external'));
 
   const embeddedBytes = embedRasterPages(rasterArtifact.bytes, pageArtifacts);
-  const embedded = await validateMtsdfArtifact(embeddedBytes, context);
+  const embedded = await validateMsdfArtifact(embeddedBytes, context);
   assert.deepEqual(embedded.records, external.records);
   assert.ok(embedded.pages.every(({ source }) => source === 'embedded'));
   assert.deepEqual(
@@ -444,42 +444,42 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
   ];
   for (const field of required) {
     const document = structuredClone(glbRoot(embeddedBytes));
-    delete document.extensions[MTSDF_EXTENSION][field];
-    await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_');
+    delete document.extensions[MSDF_EXTENSION][field];
+    await rejectsMsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_');
   }
   for (const field of ['width', 'height', 'mipLevelCount', 'colorSpace', 'variants']) {
     const document = structuredClone(glbRoot(embeddedBytes));
-    delete document.extensions[MTSDF_EXTENSION].pages[0][field];
-    await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_');
+    delete document.extensions[MSDF_EXTENSION].pages[0][field];
+    await rejectsMsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_');
   }
   for (const field of ['source', 'container', 'gpuFormat', 'quality']) {
     const document = structuredClone(glbRoot(embeddedBytes));
-    delete document.extensions[MTSDF_EXTENSION].pages[0].variants[0][field];
-    await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_');
+    delete document.extensions[MSDF_EXTENSION].pages[0].variants[0][field];
+    await rejectsMsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_');
   }
   for (const field of ['type', 'bufferView']) {
     const document = structuredClone(glbRoot(embeddedBytes));
-    delete document.extensions[MTSDF_EXTENSION].pages[0].variants[0].source[field];
-    await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_');
+    delete document.extensions[MSDF_EXTENSION].pages[0].variants[0].source[field];
+    await rejectsMsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_');
   }
 
   const decoded = decodeGlb(embeddedBytes);
-  const extension = decoded.document.extensions[MTSDF_EXTENSION];
+  const extension = decoded.document.extensions[MSDF_EXTENSION];
   const recordView = decoded.document.bufferViews[extension.recordBufferView];
   const recordsStart = decoded.binStart + recordView.byteOffset;
   const present = firstPresentGlyph(embedded.records);
 
   const wrongIdentity = structuredClone(decoded.document);
-  wrongIdentity.extensions[MTSDF_EXTENSION].shapingHash = '0'.repeat(64);
-  await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, wrongIdentity), context, 'RECIPROCAL_IDENTITY');
+  wrongIdentity.extensions[MSDF_EXTENSION].shapingHash = '0'.repeat(64);
+  await rejectsMsdf(rewriteGlbDocument(embeddedBytes, wrongIdentity), context, 'RECIPROCAL_IDENTITY');
 
   const wrongConstant = structuredClone(decoded.document);
-  wrongConstant.extensions[MTSDF_EXTENSION].pixelRange = MTSDF_PIXEL_RANGE + 1;
-  await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, wrongConstant), context, 'MTSDF_CONFIGURATION');
+  wrongConstant.extensions[MSDF_EXTENSION].pixelRange = MSDF_PIXEL_RANGE + 1;
+  await rejectsMsdf(rewriteGlbDocument(embeddedBytes, wrongConstant), context, 'MTSDF_CONFIGURATION');
 
   const flags = embeddedBytes.slice();
   new DataView(flags.buffer).setUint16(recordsStart + present * 20 + 18, 1, true);
-  await rejectsMtsdf(flags, context, 'RECORD_FLAGS');
+  await rejectsMsdf(flags, context, 'RECORD_FLAGS');
 
   const emptyPlane = embeddedBytes.slice();
   const emptyPlaneView = new DataView(emptyPlane.buffer);
@@ -488,56 +488,56 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
     emptyPlaneView.getInt16(recordsStart + present * 20, true),
     true,
   );
-  await rejectsMtsdf(emptyPlane, context, 'RECORD_PLANE_BOUNDS');
+  await rejectsMsdf(emptyPlane, context, 'RECORD_PLANE_BOUNDS');
 
   const atlasBounds = embeddedBytes.slice();
   new DataView(atlasBounds.buffer).setUint16(recordsStart + present * 20 + 12, 0xffff, true);
-  await rejectsMtsdf(atlasBounds, context, 'RECORD_ATLAS_BOUNDS');
+  await rejectsMsdf(atlasBounds, context, 'RECORD_ATLAS_BOUNDS');
 
   const duplicateVariant = structuredClone(decoded.document);
-  duplicateVariant.extensions[MTSDF_EXTENSION].pages[0].variants.push(
-    structuredClone(duplicateVariant.extensions[MTSDF_EXTENSION].pages[0].variants[0]),
+  duplicateVariant.extensions[MSDF_EXTENSION].pages[0].variants.push(
+    structuredClone(duplicateVariant.extensions[MSDF_EXTENSION].pages[0].variants[0]),
   );
-  await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, duplicateVariant), context, 'VARIANT_COUNT');
+  await rejectsMsdf(rewriteGlbDocument(embeddedBytes, duplicateVariant), context, 'VARIANT_COUNT');
 
   const pageViewIndex = extension.pages[0].variants[0].source.bufferView;
   const pageView = decoded.document.bufferViews[pageViewIndex];
   const badKtx = embeddedBytes.slice();
   badKtx[decoded.binStart + pageView.byteOffset] ^= 0xff;
-  await rejectsMtsdf(badKtx, context, 'KTX2_INVALID');
+  await rejectsMsdf(badKtx, context, 'KTX2_INVALID');
 
   const badDfd = embeddedBytes.slice();
   badDfd[decoded.binStart + pageView.byteOffset + 118] = 2;
-  await rejectsMtsdf(badDfd, context, 'KTX2_DFD');
+  await rejectsMsdf(badDfd, context, 'KTX2_DFD');
 
-  await rejectsMtsdf(embeddedBytes, { ...context, limits: { maxGpuBytes: 1 } }, 'GPU_BUDGET');
+  await rejectsMsdf(embeddedBytes, { ...context, limits: { maxGpuBytes: 1 } }, 'GPU_BUDGET');
   // The individual Inter pages total 39,111,736 bytes, but the runtime allocates one
   // 1024×1024×10-layer RGBA8 texture array (41,943,040 bytes).
-  await rejectsMtsdf(embeddedBytes, { ...context, limits: { maxGpuBytes: 40_000_000 } }, 'GPU_BUDGET');
-  await rejectsMtsdf(rasterArtifact.bytes, context, 'EXTERNAL_PAGE_MISSING');
+  await rejectsMsdf(embeddedBytes, { ...context, limits: { maxGpuBytes: 40_000_000 } }, 'GPU_BUDGET');
+  await rejectsMsdf(rasterArtifact.bytes, context, 'EXTERNAL_PAGE_MISSING');
 
   const tamperedExternalPages = new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes.slice()]));
   const firstPage = tamperedExternalPages.values().next().value;
   firstPage[firstPage.byteLength - 1] ^= 1;
-  await rejectsMtsdf(rasterArtifact.bytes, { ...context, externalPages: tamperedExternalPages }, 'EXTERNAL_PAGE_HASH');
+  await rejectsMsdf(rasterArtifact.bytes, { ...context, externalPages: tamperedExternalPages }, 'EXTERNAL_PAGE_HASH');
 }
 
-async function rejectsMtsdf(bytes, context, codePrefix) {
+async function rejectsMsdf(bytes, context, codePrefix) {
   await assert.rejects(
-    validateMtsdfArtifact(bytes, context),
+    validateMsdfArtifact(bytes, context),
     (error) =>
-      error instanceof MtsdfArtifactValidationError && error.issues.some(({ code }) => code.startsWith(codePrefix)),
+      error instanceof MsdfArtifactValidationError && error.issues.some(({ code }) => code.startsWith(codePrefix)),
   );
 }
 
 function embedRasterPages(rasterBytes, pageArtifacts) {
   const { document, views } = glbViews(rasterBytes);
-  const extension = document.extensions[MTSDF_EXTENSION];
+  const extension = document.extensions[MSDF_EXTENSION];
   const records = views[extension.recordBufferView];
   assert.ok(records);
   const embeddedDocument = structuredClone(document);
-  embeddedDocument.extensions[MTSDF_EXTENSION].recordBufferView = 0;
-  for (const [pageIndex, page] of embeddedDocument.extensions[MTSDF_EXTENSION].pages.entries()) {
+  embeddedDocument.extensions[MSDF_EXTENSION].recordBufferView = 0;
+  for (const [pageIndex, page] of embeddedDocument.extensions[MSDF_EXTENSION].pages.entries()) {
     page.variants[0].source = { type: 'bufferView', bufferView: pageIndex + 1 };
   }
   return buildGlb(embeddedDocument, [records, ...pageArtifacts.map(({ bytes }) => bytes)]);
@@ -631,20 +631,20 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
     font: font.handle,
     handle: 11,
     kind: 'msdf',
-    extension: MTSDF_EXTENSION,
+    extension: MSDF_EXTENSION,
     version: 0,
     rasterKey,
     extensionData: runtimeExtension,
     view(index) {
       if (index === 0) return records;
       const page = pageArtifacts[index - 1];
-      if (page === undefined) throw new RangeError('missing synthetic MTSDF runtime view');
+      if (page === undefined) throw new RangeError('missing synthetic MSDF runtime view');
       return page.bytes;
     },
     dispose() {},
   };
-  assert.equal(document.extensions[MTSDF_EXTENSION].recordBufferView, 0);
-  const data = await mtsdf.decode(font, runtimeRaster);
+  assert.equal(document.extensions[MSDF_EXTENSION].recordBufferView, 0);
+  const data = await msdf.decode(font, runtimeRaster);
   assert.equal(data.records.byteLength, 2937 * 20);
   assert.equal(data.pages.length, 10);
   assert.deepEqual(data.binding, { width: 1024, height: 1024, layers: 10 });
@@ -665,7 +665,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   };
   const glyphs = [...glyphIds].map((glyphId, index) => glyphInput(data, glyphId, index, decorated));
   for (const glyph of glyphs) {
-    assert.deepEqual(mtsdf.select(glyph), { resource: data.resource, pipelineVariant: 0, binding: data.binding });
+    assert.deepEqual(msdf.select(glyph), { resource: data.resource, pipelineVariant: 0, binding: data.binding });
   }
   const storage = packedStorage(data, glyphs);
   assert.equal(storage.outlineWidths[0], 0.25);
@@ -685,7 +685,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   assert.ok(plain.sizes[0] < storage.sizes[0], 'removing the shadow shrinks the packed instance width');
   assert.ok(plain.sizes[1] < storage.sizes[1], 'removing the shadow shrinks the packed instance height');
   assert.deepEqual([...plain.fillColors.slice(0, 4)], [0.25, 0.5, 1, 0.75]);
-  mtsdf.dispose(data);
+  msdf.dispose(data);
 }
 
 function glbViews(bytes) {
@@ -712,7 +712,7 @@ function firstPresentGlyphByPage(records, pageCount) {
     found[pageIndex] = 1;
     if (found.every((value) => value === 1)) return glyphs;
   }
-  throw new Error('canonical MTSDF fixture has no present glyph on every page');
+  throw new Error('canonical MSDF fixture has no present glyph on every page');
 }
 
 function firstPresentGlyph(records) {
@@ -720,10 +720,10 @@ function firstPresentGlyph(records) {
   for (let glyphId = 0; glyphId < records.byteLength / 20; glyphId += 1) {
     if (view.getUint16(glyphId * 20 + 16, true) !== 0xffff) return glyphId;
   }
-  throw new Error('canonical MTSDF fixture has no present glyph');
+  throw new Error('canonical MSDF fixture has no present glyph');
 }
 
-function fakeMtsdfBakerInstance({ allocate = () => 0, deallocate = () => undefined, segmented = {} } = {}) {
+function fakeMsdfBakerInstance({ allocate = () => 0, deallocate = () => undefined, segmented = {} } = {}) {
   const memory = new WebAssembly.Memory({ initial: 1 });
   return {
     exports: {

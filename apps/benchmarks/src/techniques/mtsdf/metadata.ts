@@ -1,5 +1,5 @@
 import { type RegisteredFont } from '@pmndrs/text';
-import { MTSDF_KIND, mtsdfDescriptorRasterKey } from '@pmndrs/text/raster/mtsdf';
+import { MSDF_KIND as MTSDF_KIND, msdfDescriptorRasterKey as mtsdfDescriptorRasterKey } from '@pmndrs/text/raster/msdf';
 
 export interface MtsdfRasterConfiguration {
   readonly emSize: number;

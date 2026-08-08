@@ -35,7 +35,7 @@ interface BundleResult {
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const diagnosticModuleFragments = ['/packages/text/dist/internal/raster-baker-profile.js'];
-const diagnosticCodeFragments = ['createProfiledDirectRasterBakerFromInstance', 'profiled MTSDF baker'];
+const diagnosticCodeFragments = ['createProfiledDirectRasterBakerFromInstance', 'profiled MSDF baker'];
 
 function isTextPeerDependency(id: string): boolean {
   return id === 'three' || id.startsWith('three/') || id === 'react' || id.startsWith('@react-three/fiber');
@@ -253,7 +253,7 @@ async function measureWasm(id: string, label: string, source: URL): Promise<Meas
   };
 }
 
-async function measureAdmittedMtsdfGenerator(): Promise<MeasuredEntry> {
+async function measureAdmittedMsdfGenerator(): Promise<MeasuredEntry> {
   const evidence = JSON.parse(
     await readFile(
       new URL('../../../packages/text/rust/mtsdf-admission/evidence/simd-v0.json', import.meta.url),
@@ -281,11 +281,11 @@ async function measureAdmittedMtsdfGenerator(): Promise<MeasuredEntry> {
     scalar.gzipBytes === undefined ||
     scalar.brotliBytes === undefined
   ) {
-    throw new Error('admitted scalar MTSDF generator size evidence is incomplete');
+    throw new Error('admitted scalar MSDF generator size evidence is incomplete');
   }
   return {
     id: 'mtsdf-generator-wasm',
-    label: 'MTSDF admitted generator kernel',
+    label: 'MSDF admitted generator kernel',
     status: 'measured',
     format: 'wasm',
     sha256: scalar.optimizedSha256,
@@ -312,7 +312,7 @@ const entries: SizeEntry[] = [
         '/packages/text/dist/r3f.js',
         '/packages/text/dist/three.js',
         '/packages/text/dist/raster/bitmap-technique.js',
-        '/packages/text/dist/raster/mtsdf.js',
+        '/packages/text/dist/raster/msdf.js',
         '/packages/text/dist/raster/slug-technique.js',
         '/packages/text/dist/bakers/msdf.js',
         '/packages/text/dist/node/',
@@ -364,7 +364,7 @@ const entries: SizeEntry[] = [
   ),
   await measureJavaScript(
     'mtsdf-runtime-js',
-    'MTSDF runtime JS graph',
+    'MSDF runtime JS graph',
     new URL('../size-entries/mtsdf-runtime.ts', import.meta.url),
     false,
     true,
@@ -395,18 +395,18 @@ const entries: SizeEntry[] = [
   ),
   await measureJavaScript(
     'mtsdf-generator-js',
-    'MTSDF generator host JS',
+    'MSDF generator host JS',
     new URL('../size-entries/mtsdf-generator.ts', import.meta.url),
   ),
-  await measureAdmittedMtsdfGenerator(),
+  await measureAdmittedMsdfGenerator(),
   await measureWasm(
     'mtsdf-baker-wasm',
-    'MTSDF fixed baker Wasm',
+    'MSDF fixed baker Wasm',
     new URL('../../../packages/text/dist/mtsdf_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'mtsdf-baker-js',
-    'MTSDF fixed baker host JS',
+    'MSDF fixed baker host JS',
     new URL('../size-entries/mtsdf-baker.ts', import.meta.url),
     false,
     true,

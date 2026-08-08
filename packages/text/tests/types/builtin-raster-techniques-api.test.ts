@@ -4,7 +4,7 @@ import {
   type BitmapData,
   type BitmapGlyphBatchStorage,
 } from '../../src/raster/bitmap-technique.js';
-import { mtsdf, type MtsdfBinding, type MtsdfData, type MtsdfGlyphBatchStorage } from '../../src/raster/mtsdf.js';
+import { msdf, type MsdfBinding, type MsdfData, type MsdfGlyphBatchStorage } from '../../src/raster/msdf.js';
 import { slug, type SlugBinding, type SlugData, type SlugGlyphBatchStorage } from '../../src/raster/slug-technique.js';
 import type { GlyphBatchStorageOf, RasterBindingOf, RasterDataOf } from '../../src/index.js';
 
@@ -16,9 +16,9 @@ type _BitmapData = Expect<Equal<RasterDataOf<typeof bitmap>, BitmapData>>;
 type _BitmapBinding = Expect<Equal<RasterBindingOf<typeof bitmap>, BitmapBinding>>;
 type _BitmapStorage = Expect<Equal<GlyphBatchStorageOf<typeof bitmap>, BitmapGlyphBatchStorage>>;
 
-type _MtsdfData = Expect<Equal<RasterDataOf<typeof mtsdf>, MtsdfData>>;
-type _MtsdfBinding = Expect<Equal<RasterBindingOf<typeof mtsdf>, MtsdfBinding>>;
-type _MtsdfStorage = Expect<Equal<GlyphBatchStorageOf<typeof mtsdf>, MtsdfGlyphBatchStorage>>;
+type _MsdfData = Expect<Equal<RasterDataOf<typeof msdf>, MsdfData>>;
+type _MsdfBinding = Expect<Equal<RasterBindingOf<typeof msdf>, MsdfBinding>>;
+type _MtsdfStorage = Expect<Equal<GlyphBatchStorageOf<typeof msdf>, MsdfGlyphBatchStorage>>;
 
 type _SlugData = Expect<Equal<RasterDataOf<typeof slug>, SlugData>>;
 type _SlugBinding = Expect<Equal<RasterBindingOf<typeof slug>, SlugBinding>>;

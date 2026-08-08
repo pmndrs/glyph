@@ -1,10 +1,10 @@
 import type { LoadedFont } from '../../src/index.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
-import { mtsdf } from '../../src/raster/mtsdf.js';
+import { msdf } from '../../src/raster/msdf.js';
 import { FontLoader, span, Text, TextGroup, txt } from '../../src/three.js';
 
 declare const bitmapFont: LoadedFont<typeof bitmap>;
-declare const mtsdfFont: LoadedFont<typeof mtsdf>;
+declare const mtsdfFont: LoadedFont<typeof msdf>;
 
 const emphasis = span(bitmapFont, { color: '#ff00ff' });
 const label = new Text({ font: bitmapFont, text: txt`Typed ${emphasis`span`}` });

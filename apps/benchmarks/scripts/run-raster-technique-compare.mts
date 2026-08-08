@@ -9,8 +9,8 @@
 import { runVitexec } from './support/command-cli.mts';
 
 const paths = [
-  '/?mode=conformance&technique=mtsdf&backend=webgpu&delivery=baked&dpr=1&font=inter&workload=mtsdf-slug-compare',
-  '/?mode=conformance&technique=mtsdf&backend=webgl2&delivery=baked&dpr=1&font=inter&workload=mtsdf-slug-compare',
+  '/?mode=conformance&technique=msdf&backend=webgpu&delivery=baked&dpr=1&font=inter&workload=mtsdf-slug-compare',
+  '/?mode=conformance&technique=msdf&backend=webgl2&delivery=baked&dpr=1&font=inter&workload=mtsdf-slug-compare',
 ] as const;
 
 for (const path of paths) {

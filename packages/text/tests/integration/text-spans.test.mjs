@@ -13,12 +13,12 @@ import {
   txt,
 } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
-import { mtsdf } from '@pmndrs/text/three/mtsdf';
+import { msdf } from '@pmndrs/text/three/msdf';
 import { Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 const interUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
-const interMtsdfUrl = new URL(
+const interMsdfUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/inter-mtsdf.font.glb.gz',
   import.meta.url,
 );
@@ -252,8 +252,8 @@ test('Three Text shapes and draws a formatted literal through the real render li
 
 test('a span keeps every surrounding paint property it does not state', async () => {
   const runtime = await createBitmapRuntime();
-  const inter = await loadMtsdfInter(runtime);
-  const batch = runtime.createParagraphBatch({ technique: mtsdf });
+  const inter = await loadMsdfInter(runtime);
+  const batch = runtime.createParagraphBatch({ technique: msdf });
 
   // Each span states exactly one paint property, so the three it omits must
   // survive from the paragraph. "d" carries no span and fixes the inherited
@@ -276,7 +276,7 @@ test('a span keeps every surrounding paint property it does not state', async ()
   runtime.update();
   assert.equal(batch.preparationError, undefined);
 
-  const painted = mtsdfGlyphPaint(batch, runFor(batch, paragraph));
+  const painted = msdfGlyphPaint(batch, runFor(batch, paragraph));
   assert.equal(painted.length, 4);
   assert.deepEqual(painted[3], { fill: [1, 0, 0, 0.5], outline: [0, 1, 0, 0.5], shadow: [0, 0, 1, 0.5] });
   assert.deepEqual(
@@ -498,10 +498,10 @@ async function loadBitmapFont(runtime, url) {
   });
 }
 
-async function loadMtsdfInter(runtime) {
+async function loadMsdfInter(runtime) {
   return runtime.loadFont({
-    input: { baked: dataUrl(gunzipSync(await readFile(interMtsdfUrl))) },
-    raster: { technique: mtsdf },
+    input: { baked: dataUrl(gunzipSync(await readFile(interMsdfUrl))) },
+    raster: { technique: msdf },
   });
 }
 
@@ -526,7 +526,7 @@ function glyphColors(batch, run) {
   return colors;
 }
 
-function mtsdfGlyphPaint(batch, run) {
+function msdfGlyphPaint(batch, run) {
   const physical = batchFor(batch, run);
   const painted = [];
   for (let index = 0; index < run.count; index += 1) {

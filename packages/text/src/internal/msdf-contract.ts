@@ -7,15 +7,15 @@ export const MSDF_KIND = 'msdf' as const;
 export const MSDF_EXTENSION = 'PMNDRS_font_distance_field' as const;
 export const MSDF_FORMAT_VERSION = 0 as const;
 export const MSDF_GENERATOR_VERSION = '0.0.0' as const;
-export const MTSDF_EM_SIZE = 64 as const;
-export const MTSDF_PIXEL_RANGE = 8 as const;
-export const MTSDF_PLANE_UNITS_PER_EM = 64 as const;
+export const MSDF_EM_SIZE = 64 as const;
+export const MSDF_PIXEL_RANGE = 8 as const;
+export const MSDF_PLANE_UNITS_PER_EM = 64 as const;
 /** Largest em grid that can fit between the fixed 1024-page outer gaps. */
-export const MTSDF_MAX_EM_SIZE = 1_022 as const;
+export const MSDF_MAX_EM_SIZE = 1_022 as const;
 /** Largest full range that can leave at least one inner texel in a fixed 1024 page. */
-export const MTSDF_MAX_PIXEL_RANGE = 1_020 as const;
+export const MSDF_MAX_PIXEL_RANGE = 1_020 as const;
 /** Default 64/8 MTSDF field limit; configured resources derive their limit as `pixelRange / 2`. */
-export const MTSDF_MAX_OUTLINE_ATLAS_PIXELS: number = MTSDF_PIXEL_RANGE / 2;
+export const MSDF_MAX_OUTLINE_ATLAS_PIXELS: number = MSDF_PIXEL_RANGE / 2;
 
 export interface MsdfOptions {
   /** Atlas texels per font em. Defaults to 64. */
@@ -55,10 +55,10 @@ const defaultDescriptor = Object.freeze({
 export function msdfDescriptor(options?: MsdfOptions): MsdfDescriptorV0 {
   const normalized = normalizeMsdfOptions(options);
   if (normalized === undefined) return defaultDescriptor;
-  const emSize = normalized.emSize ?? MTSDF_EM_SIZE;
-  const pixelRange = normalized.pixelRange ?? MTSDF_PIXEL_RANGE;
+  const emSize = normalized.emSize ?? MSDF_EM_SIZE;
+  const pixelRange = normalized.pixelRange ?? MSDF_PIXEL_RANGE;
   const coverage = normalizeRasterCoverage(normalized.coverage);
-  if (emSize === MTSDF_EM_SIZE && pixelRange === MTSDF_PIXEL_RANGE) {
+  if (emSize === MSDF_EM_SIZE && pixelRange === MSDF_PIXEL_RANGE) {
     return coverage === undefined
       ? defaultDescriptor
       : Object.freeze({ coverage, generatorVersion: MSDF_GENERATOR_VERSION });
@@ -96,7 +96,7 @@ export function msdfDescriptorConfiguration(descriptor: MsdfDescriptorV0): MsdfC
   }
   validateEmSize(emSize);
   validatePixelRange(pixelRange);
-  if (emSize === MTSDF_EM_SIZE && pixelRange === MTSDF_PIXEL_RANGE) {
+  if (emSize === MSDF_EM_SIZE && pixelRange === MSDF_PIXEL_RANGE) {
     throw new TypeError('default MTSDF values must use the canonical default descriptor');
   }
   return Object.freeze({
@@ -107,9 +107,9 @@ export function msdfDescriptorConfiguration(descriptor: MsdfDescriptorV0): MsdfC
 }
 
 const defaultConfiguration = Object.freeze({
-  emSize: MTSDF_EM_SIZE,
-  pixelRange: MTSDF_PIXEL_RANGE,
-  planeUnitsPerEm: MTSDF_PLANE_UNITS_PER_EM,
+  emSize: MSDF_EM_SIZE,
+  pixelRange: MSDF_PIXEL_RANGE,
+  planeUnitsPerEm: MSDF_PLANE_UNITS_PER_EM,
 }) satisfies MsdfConfiguration;
 
 /** Derive a key from a descriptor that has crossed package-owned validation. */
@@ -163,13 +163,13 @@ export function normalizeMsdfOptions(value: unknown): MsdfOptions | undefined {
 }
 
 function validateEmSize(value: number): void {
-  if (!Number.isSafeInteger(value) || value < 1 || value > MTSDF_MAX_EM_SIZE) {
-    throw new TypeError(`MTSDF emSize must be an integer in 1..=${MTSDF_MAX_EM_SIZE}`);
+  if (!Number.isSafeInteger(value) || value < 1 || value > MSDF_MAX_EM_SIZE) {
+    throw new TypeError(`MTSDF emSize must be an integer in 1..=${MSDF_MAX_EM_SIZE}`);
   }
 }
 
 function validatePixelRange(value: number): void {
-  if (!Number.isSafeInteger(value) || value < 1 || value > MTSDF_MAX_PIXEL_RANGE) {
-    throw new TypeError(`MTSDF pixelRange must be an integer in 1..=${MTSDF_MAX_PIXEL_RANGE}`);
+  if (!Number.isSafeInteger(value) || value < 1 || value > MSDF_MAX_PIXEL_RANGE) {
+    throw new TypeError(`MTSDF pixelRange must be an integer in 1..=${MSDF_MAX_PIXEL_RANGE}`);
   }
 }
