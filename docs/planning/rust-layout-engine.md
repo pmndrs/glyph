@@ -950,6 +950,12 @@ content revision can change. An exact abort/retry fixture keeps `[1,2,3,4]`, the
 304,815 raw/gzip/Brotli bytes (+2,178 / +543 / +1,110). Per-cluster glyph ranges, glyph identity/revision, positioning,
 and nonempty plans remain open.
 
+Each cluster now owns a slice of one flat shaped-glyph index array. Construction counts glyphs by logical cluster,
+prefix-sums those counts, then fills the slices while retaining HarfRust's run-local glyph order. This makes RTL and
+multi-glyph clusters directly traversable without a per-glyph search, object, or map and reuses all arrays at their high
+water mark. An exact reverse-order fixture maps shaped cluster stream `[2,1,0]` to logical slices `[2]`, `[1]`, `[0]`.
+Optimized Wasm is 1,043,289 / 394,074 / 304,902 raw/gzip/Brotli bytes (+1,707 / +860 / +87).
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a

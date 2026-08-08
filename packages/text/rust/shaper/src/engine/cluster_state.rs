@@ -26,6 +26,9 @@ pub(crate) struct ClusterArena {
     pub source_runs: Vec<u32>,
     pub font_handles: Vec<u32>,
     pub stable_ids: Vec<u32>,
+    pub glyph_starts: Vec<u32>,
+    pub glyph_counts: Vec<u32>,
+    pub glyph_indices: Vec<u32>,
     pub index_at: Vec<u32>,
     pub(super) shaped: Vec<u8>,
     pub(super) unsafe_before: Vec<u8>,
@@ -50,6 +53,9 @@ impl ClusterArena {
         reserve(&mut self.source_runs, capacity)?;
         reserve(&mut self.font_handles, capacity)?;
         reserve(&mut self.stable_ids, capacity)?;
+        reserve(&mut self.glyph_starts, capacity)?;
+        reserve(&mut self.glyph_counts, capacity)?;
+        reserve(&mut self.glyph_indices, capacity.saturating_mul(2))?;
         reserve(&mut self.index_at, capacity.saturating_add(1))?;
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)
@@ -113,6 +119,8 @@ impl ClusterArena {
                     .get(usize::try_from(start).map_err(|_| EngineError::InvalidRequest)?)
                     .ok_or(EngineError::InvalidRequest)?,
             );
+            self.glyph_starts.push(0);
+            self.glyph_counts.push(0);
             self.shaped.push(0);
             self.unsafe_before.push(0);
         }
@@ -131,6 +139,9 @@ impl ClusterArena {
         self.source_runs.clear();
         self.font_handles.clear();
         self.stable_ids.clear();
+        self.glyph_starts.clear();
+        self.glyph_counts.clear();
+        self.glyph_indices.clear();
         self.index_at.clear();
         self.shaped.clear();
         self.unsafe_before.clear();
@@ -158,6 +169,11 @@ impl ClusterArena {
         shape: &ShapeArena,
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
     ) -> Result<(), EngineError> {
+        if shape.glyph_ids.len() != shape.clusters.len() {
+            return Err(EngineError::InvalidRequest);
+        }
+        reserve(&mut self.glyph_indices, shape.glyph_ids.len())?;
+        self.glyph_indices.resize(shape.glyph_ids.len(), 0);
         for shaped_run in &shape.runs {
             let source_index =
                 usize::try_from(shaped_run.source_run).map_err(|_| EngineError::InvalidRequest)?;
@@ -192,6 +208,9 @@ impl ClusterArena {
                     return Err(EngineError::InvalidRequest);
                 }
                 self.shaped[cluster_index] = 1;
+                self.glyph_counts[cluster_index] = self.glyph_counts[cluster_index]
+                    .checked_add(1)
+                    .ok_or(EngineError::ResultTooLarge)?;
                 self.unsafe_before[cluster_index] |= u8::from(
                     shape
                         .glyph_flags
@@ -206,6 +225,47 @@ impl ClusterArena {
                         .ok_or(EngineError::InvalidRequest)?
                         .unsigned_abs(),
                 ) * scale;
+            }
+        }
+        let mut glyph_start = 0_u32;
+        for index in 0..self.glyph_starts.len() {
+            self.glyph_starts[index] = glyph_start;
+            glyph_start = glyph_start
+                .checked_add(self.glyph_counts[index])
+                .ok_or(EngineError::ResultTooLarge)?;
+            self.glyph_counts[index] = 0;
+        }
+        if usize::try_from(glyph_start).ok() != Some(shape.glyph_ids.len()) {
+            return Err(EngineError::InvalidRequest);
+        }
+        for shaped_run in &shape.runs {
+            let start = usize::try_from(shaped_run.glyph_start)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let end = start
+                .checked_add(
+                    usize::try_from(shaped_run.glyph_count)
+                        .map_err(|_| EngineError::InvalidRequest)?,
+                )
+                .ok_or(EngineError::InvalidRequest)?;
+            for glyph in start..end {
+                let cluster = *shape
+                    .clusters
+                    .get(glyph)
+                    .ok_or(EngineError::InvalidRequest)?;
+                let cluster_index = self.cluster_at(cluster)?;
+                let ordinal = self.glyph_counts[cluster_index];
+                let destination = self.glyph_starts[cluster_index]
+                    .checked_add(ordinal)
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or(EngineError::ResultTooLarge)?;
+                *self
+                    .glyph_indices
+                    .get_mut(destination)
+                    .ok_or(EngineError::InvalidRequest)? =
+                    u32::try_from(glyph).map_err(|_| EngineError::ResultTooLarge)?;
+                self.glyph_counts[cluster_index] = ordinal
+                    .checked_add(1)
+                    .ok_or(EngineError::ResultTooLarge)?;
             }
         }
         for index in 0..self.starts.len() {
@@ -312,8 +372,8 @@ mod tests {
                 glyph_start: 0,
                 glyph_count: 3,
             }],
-            glyph_ids: vec![1, 2, 3],
-            clusters: vec![0, 1, 2],
+            glyph_ids: vec![3, 2, 1],
+            clusters: vec![2, 1, 0],
             x_advances: vec![500, 250, 500],
             y_advances: vec![0; 3],
             x_offsets: vec![0; 3],
@@ -349,6 +409,9 @@ mod tests {
         assert_eq!(clusters.source_runs, [0, 0, 0, NO_SOURCE_RUN]);
         assert_eq!(clusters.font_handles, [9, 9, 9, 0]);
         assert_eq!(clusters.stable_ids, [1, 2, 3, 4]);
+        assert_eq!(clusters.glyph_starts, [0, 1, 2, 3]);
+        assert_eq!(clusters.glyph_counts, [1, 1, 1, 0]);
+        assert_eq!(clusters.glyph_indices, [2, 1, 0]);
         assert_eq!(clusters.index_at, [0, 1, 2, 3, 4]);
         assert_eq!(clusters.flags[0], CLUSTER_SAFE_BEFORE);
         assert_eq!(
@@ -365,9 +428,12 @@ mod tests {
             clusters.starts.capacity(),
             clusters.advances.capacity(),
             clusters.flags.capacity(),
+            clusters.glyph_starts.capacity(),
+            clusters.glyph_counts.capacity(),
+            clusters.glyph_indices.capacity(),
             clusters.index_at.capacity(),
         );
-        shape.glyph_flags[2] = GLYPH_UNSAFE_TO_BREAK;
+        shape.glyph_flags[0] = GLYPH_UNSAFE_TO_BREAK;
         clusters
             .build(
                 ClusterBuildInput {
@@ -387,6 +453,9 @@ mod tests {
                 clusters.starts.capacity(),
                 clusters.advances.capacity(),
                 clusters.flags.capacity(),
+                clusters.glyph_starts.capacity(),
+                clusters.glyph_counts.capacity(),
+                clusters.glyph_indices.capacity(),
                 clusters.index_at.capacity(),
             )
         );

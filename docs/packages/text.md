@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:b025aa70a32177a27b8c205fc169225cdb07037571dca571fe94b32feb7f1504'
+source_digest: 'sha256:19c16a5470c147e9c55f3094b5c97d4958489c8f662a5bad56e9017fdb670778'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -172,7 +172,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-08T10:15:42Z'
+  at: '2026-08-08T20:16:21Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -682,6 +682,8 @@ The bounded simple-polygon kernel reuses critical-block, edge-crossing, section,
 Production horizontal frame updates now retain line and fragment arrays derived from those slots. Each band may carry multiple same-baseline fragments around holes, uses actual selected fallback-font metrics, and performs at most one conservative height retry. Sequential regions consume one cursor without balancing; an exact fixture overflows four lines through region IDs `[1, 2, 2, 2]`. Vertical placement and render-plan gather are still open.
 
 Stable render identity begins with a transactional ID parallel to every retained UTF-16 unit. Ordered replacements preserve IDs for unchanged units even when earlier insertions shift their offsets; inserted units receive monotonic nonzero IDs, and abort/retry restores the allocator deterministically. Graphemes inherit their first unit ID. Per-glyph identity and revision still follow before plan publication.
+
+Cluster construction now emits a flat logical-cluster-to-shaped-glyph adjacency alongside measured advances. One count, prefix-sum, and fill pass groups glyph indexes without changing HarfRust's run-local order, so an RTL-shaped `[2,1,0]` stream resolves to logical cluster slices `[2]`, `[1]`, `[0]`. Active and pending arrays reuse their high-water capacities. The optimized shaper is 1,043,289 raw, 394,074 gzip, and 304,902 Brotli bytes at this checkpoint. Stable glyph allocation, positioning, and nonempty plan publication remain open.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 
