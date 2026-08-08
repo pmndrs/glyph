@@ -409,6 +409,9 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
   const memory = instance.exports.memory;
   if (!(memory instanceof WebAssembly.Memory)) throw new TypeError('text shaper is missing memory');
   const functions = textShaperAbi.functions;
+  const initialize = exportedFunction(instance, functions.initialize);
+  const status = initialize();
+  if (status !== 0) throw shaperStatusError(status, 'initialize');
   return {
     exports: {
       memory,

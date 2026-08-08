@@ -2,6 +2,11 @@
 
 ## 2026-08-08
 
+- **Made Wasm engine initialization explicit and eager** — The compiler-derived ABI now publishes `initialize()`, and
+  the standard host invokes it immediately after instantiation so module state is not lazily allocated by the first
+  font, session, or update operation. The focused compiled-Wasm frame test exercises the export. Concrete 32,768-record
+  shaping/layout lanes have not landed, so this checkpoint does not claim first-shape allocation or latency evidence.
+
 - **Retained ordered UTF-16 edits transactionally inside Rust sessions** — The frame decoder now borrows and validates
   replacement records/payloads without allocating mutation objects. Sessions apply sequential edits to retained scratch
   and swap only on commit; abort or an invalid later replacement preserves committed text. Compiled Wasm proves cold

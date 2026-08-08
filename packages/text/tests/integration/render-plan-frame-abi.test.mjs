@@ -17,6 +17,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
   );
   assert.ok(memory instanceof WebAssembly.Memory);
+  assert.equal(fn.initialize(), abi.status.ok);
 
   const policy = renderPolicyBytes(abi);
   const policyPointer = copyIntoAllocation(memory, fn.allocate, policy);

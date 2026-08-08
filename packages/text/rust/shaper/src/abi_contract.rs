@@ -1629,6 +1629,7 @@ pub fn json() -> String {
             "fontFormat": 0
         },
         "functions": {
+            "initialize": "pmndrs_text_shaper_initialize",
             "allocate": "pmndrs_text_shaper_alloc",
             "deallocate": "pmndrs_text_shaper_dealloc",
             "registerFont": "pmndrs_text_shaper_register_font",

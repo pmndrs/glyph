@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:1bc7cd639c991441bb0dae6ed543b101bbf472ca6221ac80a5e5944c0b709eee'
+source_digest: 'sha256:a251ffc58d3779c03b32a7fac04d6773d5f54b4ba10115465aca6d32e1976e25'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -508,6 +508,9 @@ Session creation also prewarms both retained UTF-16 buffers to 1,024 units by de
 accepts an explicit text capacity for known large paragraphs. This removes the observed second-buffer lazy allocation
 without giving every text object the 25K-glyph benchmark footprint. Production analysis/shaping/layout scratch will be
 one synchronous engine-global 32,768-record workspace, reserved once when those arrays land and shared by every session.
+The compiler-published `initialize()` export is invoked by the standard host immediately after Wasm instantiation, so
+module-owned state no longer allocates behind the first operational export. This checkpoint does not yet reserve the
+unimplemented shaping lanes and therefore makes no first-shape allocation or latency claim.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

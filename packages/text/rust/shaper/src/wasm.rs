@@ -2,9 +2,9 @@ use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
-    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING,
-    STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT,
-    STATUS_SESSION_MISSING, ShaperRegistry, bidi,
+    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_OK, STATUS_POLICY_CONFLICT,
+    STATUS_POLICY_MISSING, STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT,
+    STATUS_SESSION_CONFLICT, STATUS_SESSION_MISSING, ShaperRegistry, bidi,
     engine::{
         EngineError, TextEngine, frame::SessionRevision, frame_wire::parse_update_request,
         render_plan_wire::plan_layout, transport::FrameTransport, wire::parse_policy,
@@ -26,6 +26,11 @@ static STATE: AtomicUsize = AtomicUsize::new(0);
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
     core::arch::wasm32::unreachable()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_shaper_initialize() -> u32 {
+    with_state(|_| STATUS_OK)
 }
 
 #[unsafe(no_mangle)]
