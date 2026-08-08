@@ -18,10 +18,7 @@ import { Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 const interUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
-const interMsdfUrl = new URL(
-  '../../../../apps/benchmarks/fixtures/rendering/inter-mtsdf.font.glb.gz',
-  import.meta.url,
-);
+const interMsdfUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-mtsdf.font.glb.gz', import.meta.url);
 const devanagariUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb',
   import.meta.url,

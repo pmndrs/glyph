@@ -36,11 +36,7 @@ interface MsdfTargetResource extends RetainedThreeTargetResource<typeof msdf> {
 
 export class ThreeMsdfTargetRevision extends RetainedThreeTargetRevision<typeof msdf, MsdfTargetResource> {}
 
-export class ThreeMsdfTarget<Variant> implements ParagraphBatchTarget<
-  typeof msdf,
-  Variant,
-  ThreeMsdfTargetRevision
-> {
+export class ThreeMsdfTarget<Variant> implements ParagraphBatchTarget<typeof msdf, Variant, ThreeMsdfTargetRevision> {
   readonly technique: typeof msdf = msdf;
   readonly #owner: ThreeMsdfTargetOwner;
   readonly #atlases = new Map<string, THREE.DataArrayTexture>();

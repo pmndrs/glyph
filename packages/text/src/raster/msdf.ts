@@ -44,22 +44,22 @@ import {
 } from '../raster-technique.js';
 
 export {
-  MSDF_EXTENSION as MSDF_EXTENSION,
-  MSDF_FORMAT_VERSION as MSDF_FORMAT_VERSION,
-  MSDF_GENERATOR_VERSION as MSDF_GENERATOR_VERSION,
-  MSDF_KIND as MSDF_KIND,
+  MSDF_EXTENSION,
+  MSDF_FORMAT_VERSION,
+  MSDF_GENERATOR_VERSION,
+  MSDF_KIND,
   MSDF_EM_SIZE,
   MSDF_MAX_EM_SIZE,
   MSDF_MAX_OUTLINE_ATLAS_PIXELS,
   MSDF_MAX_PIXEL_RANGE,
   MSDF_PIXEL_RANGE,
   MSDF_PLANE_UNITS_PER_EM,
-  msdfDescriptor as msdfDescriptor,
-  msdfDescriptorRasterKey as msdfDescriptorRasterKey,
-  msdfRasterKey as msdfRasterKey,
-  type MsdfConfiguration as MsdfConfiguration,
-  type MsdfDescriptorV0 as MsdfDescriptorV0,
-  type MsdfOptions as MsdfOptions,
+  msdfDescriptor,
+  msdfDescriptorRasterKey,
+  msdfRasterKey,
+  type MsdfConfiguration,
+  type MsdfDescriptorV0,
+  type MsdfOptions,
 } from '../internal/msdf-contract.js';
 export { DENSE_GLYPH_RECORD_STRIDE as MSDF_GLYPH_RECORD_STRIDE } from '../internal/raster-atlas.js';
 

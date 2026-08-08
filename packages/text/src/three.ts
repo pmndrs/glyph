@@ -20,11 +20,7 @@ export type {
 } from './three/bitmap-shader.js';
 export { FontLoader } from './three/font-loader.js';
 export { msdfShader } from './three/msdf-shader.js';
-export type {
-  ThreeMsdfInstanceNodes,
-  ThreeMsdfShaderOutput,
-  ThreeMsdfShaderResources,
-} from './three/msdf-shader.js';
+export type { ThreeMsdfInstanceNodes, ThreeMsdfShaderOutput, ThreeMsdfShaderResources } from './three/msdf-shader.js';
 export { registerThreeRasterProgram } from './three/program-registry.js';
 export type {
   ThreeRasterProgram,

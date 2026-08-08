@@ -276,7 +276,6 @@ const PRODUCE_UNSAFE_TO_CONCAT = 0x40;
 const BEGINNING_OF_TEXT = 0x01;
 const END_OF_TEXT = 0x02;
 const GLYPH_UNSAFE_TO_BREAK = 0x01;
-const GLYPH_UNSAFE_TO_CONCAT = 0x02;
 /** The cluster starts at a shaping boundary that shaping did not mark unsafe to break. */
 const CLUSTER_SAFE_BEFORE = 0x01;
 /** Unicode line breaking requires a break after the cluster. */
@@ -379,7 +378,8 @@ class ParagraphImpl implements Paragraph {
     // The shaping request appends one ellipsis run per source run, clustered past the end of the text, so a caller
     // inspecting glyph identity must not see them: they are how overflow is measured, not glyphs of this paragraph.
     // Those runs are requested after every source run, so the first of them bounds the paragraph's own glyphs.
-    const end = runs.length < shape.runGlyphStarts.length ? (shape.runGlyphStarts[runs.length] ?? 0) : shape.glyphIds.length;
+    const end =
+      runs.length < shape.runGlyphStarts.length ? (shape.runGlyphStarts[runs.length] ?? 0) : shape.glyphIds.length;
     return { glyphIds: shape.glyphIds.subarray(0, end), clusters: shape.clusters.subarray(0, end) };
   }
 
@@ -1727,27 +1727,6 @@ function reverse<Value>(values: Value[], start: number, end: number): void {
     values[left] = values[right] as Value;
     values[right] = value;
   }
-}
-
-function fragmentHasFlag(
-  prepared: PreparedParagraph,
-  runIndex: number,
-  start: number,
-  end: number,
-  flag: number,
-): boolean {
-  const glyphStart = prepared.shape.runGlyphStarts[runIndex];
-  const glyphCount = prepared.shape.runGlyphCounts[runIndex];
-  if (glyphStart === undefined || glyphCount === undefined) return true;
-  const selected = glyphRange(prepared.shape, glyphStart, glyphCount, start, end);
-  const first = selected.end > selected.start ? selected.start : undefined;
-  const last = selected.end > selected.start ? selected.end - 1 : undefined;
-  return (
-    first === undefined ||
-    last === undefined ||
-    ((prepared.shape.glyphFlags[first] ?? flag) & flag) !== 0 ||
-    ((prepared.shape.glyphFlags[last] ?? flag) & flag) !== 0
-  );
 }
 
 /**
