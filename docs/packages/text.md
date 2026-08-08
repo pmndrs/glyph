@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:afa202c4e5724631c1e78a72458aed0c6300b0c4bf7aa455fbcbbfac3cb0af60'
+source_digest: 'sha256:83743db2511596234438802099b7746463b60b41d7c1515c235f833a3f911a61'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -457,6 +457,18 @@ validation, bounded order fragmentation, and unchanged nested scratch capacities
 and the ABI acknowledgment field remain open. The planner remains LTO-stripped: raw Wasm stays 739,909 bytes; the
 reachable binding identity shifts gzip 272,607→272,624 and Brotli 214,288→214,395 bytes. No planner-latency or end-to-end
 claim is attached yet.
+
+The allocation-strategy dispatcher now compiles one frame containing both ordered-direct and stable-indirect policy
+programs without first copying glyphs or semantic fields into strategy-specific arrays. Homogeneous frames delegate
+directly to one compiler; only mixed frames merge renderer-facing tables. Ordered buffers occupy the low `u32` ID half
+and stable physical/order buffers the high half. The merge rebases patch payload offsets, validates/deduplicates shared
+resources, removes resource retirements when another strategy keeps the same generation live, and restores the original
+global draw order. Focused tests cover alternating strategies, allocation-strategy transitions, zero-output mixed
+no-ops, and settled merge capacities. This dispatcher remains unreachable from `text_update`; it adds no end-to-end
+timing claim before session integration. The required unchanged-path 25,515-glyph benchmark reports
+57.18/12.44/8.58/39.28 ms median and 72.41/15.53/11.32/41.81 ms p95 for cold/font-size/width/text versus the prior
+recorded 54.42/12.15/8.31/38.98 ms medians. The optimized Wasm remains 739,909 raw and 214,395 Brotli bytes, so the
+dispatcher is still LTO-stripped and the table is baseline run variance rather than a planner performance result.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

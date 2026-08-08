@@ -28,6 +28,8 @@ use super::{
 
 pub use super::plan_input::{PlanGlyph as OrderedGlyph, PlanInput as OrderedPlanInput};
 
+const NONE: u32 = u32::MAX;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OrderedPlanError {
     AllocationFailed,
@@ -145,11 +147,19 @@ pub struct OrderedPlanCompiler {
     payload: Vec<u8>,
     next_buffer_id: u32,
     pending_next_buffer_id: u32,
+    buffer_id_limit: u32,
     publish_bindings: bool,
     prepared: bool,
 }
 
 impl OrderedPlanCompiler {
+    pub(crate) fn with_buffer_id_limit(buffer_id_limit: u32) -> Self {
+        Self {
+            buffer_id_limit,
+            ..Self::default()
+        }
+    }
+
     pub fn prepare(
         &mut self,
         policy: &ValidatedPolicy,
@@ -157,6 +167,43 @@ impl OrderedPlanCompiler {
         input: OrderedPlanInput<'_>,
         checkpoint: bool,
         publication_generation: u32,
+    ) -> Result<(), OrderedPlanError> {
+        self.prepare_internal(
+            policy,
+            capability_set,
+            input,
+            checkpoint,
+            publication_generation,
+            true,
+        )
+    }
+
+    pub(crate) fn prepare_filtered(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        input: OrderedPlanInput<'_>,
+        checkpoint: bool,
+        publication_generation: u32,
+    ) -> Result<(), OrderedPlanError> {
+        self.prepare_internal(
+            policy,
+            capability_set,
+            input,
+            checkpoint,
+            publication_generation,
+            false,
+        )
+    }
+
+    fn prepare_internal(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        input: OrderedPlanInput<'_>,
+        checkpoint: bool,
+        publication_generation: u32,
+        strict_strategy: bool,
     ) -> Result<(), OrderedPlanError> {
         if self.prepared {
             return Err(OrderedPlanError::AlreadyPrepared);
@@ -172,7 +219,8 @@ impl OrderedPlanCompiler {
         reserve(&mut self.input_batches, input.glyphs.len())?;
         reserve(&mut self.input_slots, input.glyphs.len())?;
         reserve(&mut self.pending_instances, input.glyphs.len())?;
-        self.input_batches.resize(input.glyphs.len(), 0);
+        self.input_batches.resize(input.glyphs.len(), NONE);
+        self.input_batches.fill(NONE);
         self.input_slots.resize(input.glyphs.len(), 0);
         self.prepare_identity_set(input.glyphs.len())?;
 
@@ -185,7 +233,10 @@ impl OrderedPlanCompiler {
                 .program(capability_set, glyph.technique, glyph.program_variant)
                 .ok_or(OrderedPlanError::ProgramMissing)?;
             if program.allocation_strategy != ALLOCATION_ORDERED_DIRECT {
-                return Err(OrderedPlanError::UnsupportedStrategy);
+                if strict_strategy {
+                    return Err(OrderedPlanError::UnsupportedStrategy);
+                }
+                continue;
             }
             let resource_bit = 1_u32
                 .checked_shl(u32::from(glyph.resource_kind - 1))
@@ -275,31 +326,58 @@ impl OrderedPlanCompiler {
         Ok(())
     }
 
+    pub(crate) fn has_state(&self) -> bool {
+        !self.batches.is_empty()
+    }
+
+    pub(crate) fn publishes_bindings(&self) -> bool {
+        self.publish_bindings
+    }
+
     pub fn plan_view(
         &self,
         policy_handle: u32,
         capability_set: CapabilitySetId,
         policy_fingerprint: u64,
     ) -> Result<RenderPlanView<'_>, OrderedPlanError> {
+        self.plan_view_internal(policy_handle, capability_set, policy_fingerprint, false)
+    }
+
+    pub(crate) fn plan_view_forced(
+        &self,
+        policy_handle: u32,
+        capability_set: CapabilitySetId,
+        policy_fingerprint: u64,
+    ) -> Result<RenderPlanView<'_>, OrderedPlanError> {
+        self.plan_view_internal(policy_handle, capability_set, policy_fingerprint, true)
+    }
+
+    fn plan_view_internal(
+        &self,
+        policy_handle: u32,
+        capability_set: CapabilitySetId,
+        policy_fingerprint: u64,
+        force_bindings: bool,
+    ) -> Result<RenderPlanView<'_>, OrderedPlanError> {
         if !self.prepared {
             return Err(OrderedPlanError::NotPrepared);
         }
-        let resources = if self.publish_bindings {
+        let resources = if self.publish_bindings || force_bindings {
             self.resources.as_slice()
         } else {
             &[]
         };
-        let buffers = if self.publish_bindings {
+        let buffers = if self.publish_bindings || force_bindings {
             self.plan_buffers.as_slice()
         } else {
             &[]
         };
-        let primitives = if self.publish_bindings {
+        let primitives = if self.publish_bindings || force_bindings {
             self.primitives.as_slice()
         } else {
             &[]
         };
-        let draws = if self.publish_bindings {
+        let draws = if self.publish_bindings || force_bindings {
             self.draws.as_slice()
         } else {
             &[]
@@ -460,8 +538,11 @@ impl OrderedPlanCompiler {
             self.batch_cursors.push(batch.state.instance_start);
         }
         self.pending_instances
-            .resize(input.glyphs.len(), InstanceState::default());
+            .resize(cursor as usize, InstanceState::default());
         for (input_index, glyph) in input.glyphs.iter().enumerate() {
+            if self.input_batches[input_index] == NONE {
+                continue;
+            }
             let batch = self.input_batches[input_index] as usize;
             let destination = self.batch_cursors[batch] as usize;
             self.pending_instances[destination] = InstanceState {
@@ -556,6 +637,10 @@ impl OrderedPlanCompiler {
                     },
                 )
             } else {
+                if self.buffer_id_limit != 0 && self.pending_next_buffer_id >= self.buffer_id_limit
+                {
+                    return Err(OrderedPlanError::IdentifierExhausted);
+                }
                 self.pending_next_buffer_id = self
                     .pending_next_buffer_id
                     .checked_add(1)
@@ -805,7 +890,10 @@ impl OrderedPlanCompiler {
                 u32::try_from(buffer_start).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
         }
 
-        for glyph in context.input.glyphs.iter().copied() {
+        for (input_index, glyph) in context.input.glyphs.iter().copied().enumerate() {
+            if self.input_batches[input_index] == NONE {
+                continue;
+            }
             if let Some(resource) = self.resources.iter().find(|resource| {
                 resource.id == glyph.resource_id && resource.generation == glyph.resource_generation
             }) {
@@ -842,6 +930,10 @@ impl OrderedPlanCompiler {
         }
         let mut input_index = 0_usize;
         while input_index < context.input.glyphs.len() {
+            if self.input_batches[input_index] == NONE {
+                input_index += 1;
+                continue;
+            }
             let first = context.input.glyphs[input_index];
             let batch_index = self.input_batches[input_index] as usize;
             let first_slot = self.input_slots[input_index];

@@ -261,6 +261,14 @@ pub struct StablePlanCompiler {
 }
 
 impl StablePlanCompiler {
+    pub(crate) fn with_buffer_id_floor(last_assigned_id: u32) -> Self {
+        Self {
+            next_buffer_id: last_assigned_id,
+            pending_next_buffer_id: last_assigned_id,
+            ..Self::default()
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         &mut self,
@@ -271,6 +279,49 @@ impl StablePlanCompiler {
         publication_generation: u32,
         acknowledged_publication_generation: u32,
     ) -> Result<(), StablePlanError> {
+        self.prepare_with_strategy_filter(
+            policy,
+            capability_set,
+            input,
+            checkpoint,
+            publication_generation,
+            acknowledged_publication_generation,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prepare_filtered(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        input: StablePlanInput<'_>,
+        checkpoint: bool,
+        publication_generation: u32,
+        acknowledged_publication_generation: u32,
+    ) -> Result<(), StablePlanError> {
+        self.prepare_with_strategy_filter(
+            policy,
+            capability_set,
+            input,
+            checkpoint,
+            publication_generation,
+            acknowledged_publication_generation,
+            false,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn prepare_with_strategy_filter(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        input: StablePlanInput<'_>,
+        checkpoint: bool,
+        publication_generation: u32,
+        acknowledged_publication_generation: u32,
+        strict_strategy: bool,
+    ) -> Result<(), StablePlanError> {
         if self.prepared {
             return Err(StablePlanError::AlreadyPrepared);
         }
@@ -279,6 +330,7 @@ impl StablePlanCompiler {
         {
             return Err(StablePlanError::InvalidIdentity);
         }
+        self.committed_batch_count = self.batches.len();
         let result = self.prepare_inner(
             policy,
             capability_set,
@@ -286,6 +338,7 @@ impl StablePlanCompiler {
             checkpoint,
             publication_generation,
             acknowledged_publication_generation,
+            strict_strategy,
         );
         if result.is_err() {
             self.abort();
@@ -293,6 +346,7 @@ impl StablePlanCompiler {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn prepare_inner(
         &mut self,
         policy: &ValidatedPolicy,
@@ -301,6 +355,7 @@ impl StablePlanCompiler {
         checkpoint: bool,
         publication_generation: u32,
         acknowledged_publication_generation: u32,
+        strict_strategy: bool,
     ) -> Result<(), StablePlanError> {
         let capability = policy
             .capability_set(capability_set)
@@ -310,13 +365,13 @@ impl StablePlanCompiler {
             batch.acknowledge(acknowledged_publication_generation)?;
         }
         self.reset_pending();
-        self.committed_batch_count = self.batches.len();
         self.pending_publication_generation = publication_generation;
         self.prepare_identity_set(input.glyphs.len())?;
         reserve(&mut self.input_batches, input.glyphs.len())?;
         reserve(&mut self.input_slots, input.glyphs.len())?;
         reserve(&mut self.input_order_records, input.glyphs.len())?;
-        self.input_batches.resize(input.glyphs.len(), 0);
+        self.input_batches.resize(input.glyphs.len(), NONE);
+        self.input_batches.fill(NONE);
         self.input_slots.resize(input.glyphs.len(), 0);
         self.input_order_records.resize(input.glyphs.len(), 0);
         self.batch_pending_indices.resize(self.batches.len(), NONE);
@@ -330,7 +385,10 @@ impl StablePlanCompiler {
                 .program(capability_set, glyph.technique, glyph.program_variant)
                 .ok_or(StablePlanError::ProgramMissing)?;
             if program.allocation_strategy != ALLOCATION_STABLE_INDIRECT {
-                return Err(StablePlanError::UnsupportedStrategy);
+                if strict_strategy {
+                    return Err(StablePlanError::UnsupportedStrategy);
+                }
+                continue;
             }
             let resource_bit = 1_u32
                 .checked_shl(u32::from(glyph.resource_kind - 1))
@@ -420,11 +478,38 @@ impl StablePlanCompiler {
         Ok(())
     }
 
+    pub(crate) fn has_state(&self) -> bool {
+        self.batches.iter().any(|batch| batch.active)
+    }
+
+    pub(crate) fn publishes_bindings(&self) -> bool {
+        self.publish_bindings
+    }
+
     pub fn plan_view(
         &self,
         policy_handle: u32,
         capability_set: CapabilitySetId,
         policy_fingerprint: u64,
+    ) -> Result<RenderPlanView<'_>, StablePlanError> {
+        self.plan_view_internal(policy_handle, capability_set, policy_fingerprint, false)
+    }
+
+    pub(crate) fn plan_view_forced(
+        &self,
+        policy_handle: u32,
+        capability_set: CapabilitySetId,
+        policy_fingerprint: u64,
+    ) -> Result<RenderPlanView<'_>, StablePlanError> {
+        self.plan_view_internal(policy_handle, capability_set, policy_fingerprint, true)
+    }
+
+    fn plan_view_internal(
+        &self,
+        policy_handle: u32,
+        capability_set: CapabilitySetId,
+        policy_fingerprint: u64,
+        force_bindings: bool,
     ) -> Result<RenderPlanView<'_>, StablePlanError> {
         if !self.prepared {
             return Err(StablePlanError::NotPrepared);
@@ -433,24 +518,24 @@ impl StablePlanCompiler {
             policy_handle,
             capability_set: capability_set.0,
             policy_fingerprint,
-            resources: if self.publish_bindings {
+            resources: if self.publish_bindings || force_bindings {
                 &self.resources
             } else {
                 &[]
             },
-            buffers: if self.publish_bindings {
+            buffers: if self.publish_bindings || force_bindings {
                 &self.plan_buffers
             } else {
                 &[]
             },
             patches: &self.patches,
             retirements: &self.retirements,
-            primitives: if self.publish_bindings {
+            primitives: if self.publish_bindings || force_bindings {
                 &self.primitives
             } else {
                 &[]
             },
-            draws: if self.publish_bindings {
+            draws: if self.publish_bindings || force_bindings {
                 &self.draws
             } else {
                 &[]
@@ -542,9 +627,16 @@ impl StablePlanCompiler {
     fn layout_batch_inputs(&mut self, input: StablePlanInput<'_>) -> Result<(), StablePlanError> {
         reserve(&mut self.batch_input_indices, input.glyphs.len())?;
         reserve(&mut self.batch_identities, input.glyphs.len())?;
-        self.batch_input_indices.resize(input.glyphs.len(), 0);
+        let item_count = self
+            .pending_batches
+            .iter()
+            .try_fold(0_usize, |total, pending| {
+                total.checked_add(pending.item_count as usize)
+            })
+            .ok_or(StablePlanError::ArithmeticOverflow)?;
+        self.batch_input_indices.resize(item_count, 0);
         self.batch_identities.resize(
-            input.glyphs.len(),
+            item_count,
             SlotIdentity {
                 stable_id: 0,
                 content_revision: 0,
@@ -559,6 +651,9 @@ impl StablePlanCompiler {
                 .ok_or(StablePlanError::ArithmeticOverflow)?;
         }
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
+            if self.input_batches[input_index] == NONE {
+                continue;
+            }
             let pending_index = self.input_batches[input_index] as usize;
             let destination = self.pending_batches[pending_index].cursor as usize;
             self.batch_input_indices[destination] =
@@ -1117,7 +1212,10 @@ impl StablePlanCompiler {
     }
 
     fn compile_resources(&mut self, context: PrepareContext<'_>) -> Result<(), StablePlanError> {
-        for glyph in context.input.glyphs.iter().copied() {
+        for (input_index, glyph) in context.input.glyphs.iter().copied().enumerate() {
+            if self.input_batches[input_index] == NONE {
+                continue;
+            }
             if let Some(resource) = self.resources.iter().find(|resource| {
                 resource.id == glyph.resource_id && resource.generation == glyph.resource_generation
             }) {
@@ -1158,6 +1256,10 @@ impl StablePlanCompiler {
         }
         let mut input_index = 0_usize;
         while input_index < context.input.glyphs.len() {
+            if self.input_batches[input_index] == NONE {
+                input_index += 1;
+                continue;
+            }
             let first = context.input.glyphs[input_index];
             let pending_index = self.input_batches[input_index] as usize;
             let pending = self.pending_batches[pending_index];
