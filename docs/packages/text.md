@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:132c8cd7ca9681ea8ea2dad94056b26d1a512a6bd2dc22e1666168ea66d85659'
+source_digest: 'sha256:6ebded1e5e096e63022857f5f89225b703825ac7554918f14481780c8e30b8c8'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -488,10 +488,12 @@ Sessions still publish an empty Rust plan because retained text is not yet shape
 shaping/layout performance result yet, and the TypeScript layout table above remains baseline-only.
 
 The semantic request now has compiler-derived record layouts without a handwritten TypeScript mirror: 24-byte UTF-16
-text replacements, 80-byte stable style mutations, 52-byte constraints, 8-byte flow vertices, 56-byte regions, 48-byte
+text replacements, 88-byte stable style mutations, 52-byte constraints, 8-byte flow vertices, 56-byte regions, 48-byte
 exclusions, and 56-byte inline objects. Region/exclusion rectangles use inline bounds, while bounded polygons reference
-vertices inside the same request. Styles include current shaping fields plus word spacing, material/color, and
-decoration inputs. The generated ABI and compiled-Wasm test pin every size, tag, and the inline-object
+vertices inside the same request. Styles separate stable identity from authored cascade order and include current
+shaping fields plus word spacing, target raster density, material/color, and decoration inputs. A field mask records
+which values were authored so absent values inherit rather than being confused with zero-valued declarations. The
+generated ABI and compiled-Wasm test pin every size, tag, and the inline-object
 `baselineAlignment` offset. The generated engine vocabulary now also fixes axis, wrap, inline/block alignment, overflow,
 writing, orientation, exclusion-side, and inline-object baseline tags rather than accepting renderer-local enum bytes.
 

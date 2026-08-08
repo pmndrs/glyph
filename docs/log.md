@@ -2,6 +2,13 @@
 
 ## 2026-08-08
 
+- **Fixed the retained style wire semantics before admission** — The compiler-mapped style record is now 88 bytes and
+  separates stable `styleId` from authored `cascadeOrder`. A stated-property field mask preserves inheritance and
+  explicit zero values, target raster density is available for Rust-owned bitmap strike selection, and generated
+  vocabularies pin style, decoration-style, and decoration-line flags. Rust unit tests and the compiled-Wasm frame ABI
+  test pass. Nonempty styles remain rejected until the transactional retained arena consumes this contract, so no
+  shaping/layout or frame-latency claim is attached.
+
 - **Admitted one-call editorial geometry into the Rust frame transaction** — Constraints, regions, exclusions, bounded
   rectangle/polygon vertices, and inline objects now decode as borrowed records from one pinned request. Validation
   covers limits, finite ordered bounds, enum/reserved data, identities, region ownership/ranges, pending-text anchors,

@@ -5,13 +5,20 @@ use serde_json::json;
 use crate::engine::frame::{
     ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, AXIS_AT_MOST, AXIS_EXACT,
     AXIS_UNCONSTRAINED, BASELINE_ALPHABETIC, BASELINE_MIDDLE, BASELINE_TEXT_BOTTOM,
-    BASELINE_TEXT_TOP, BLOCK_ALIGN_CENTER, BLOCK_ALIGN_END, BLOCK_ALIGN_START,
-    DEFAULT_SESSION_TEXT_CAPACITY, EXCLUSION_WRAP_BOTH, EXCLUSION_WRAP_INLINE_END,
-    EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST, ORIENTATION_MIXED, ORIENTATION_SIDEWAYS,
-    ORIENTATION_UPRIGHT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-    RESULT_FLAG_CHECKPOINT, SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_MUTATION_REMOVE,
-    STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16, WRAP_CHARACTER,
-    WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
+    BASELINE_TEXT_TOP, BLOCK_ALIGN_CENTER, BLOCK_ALIGN_END, BLOCK_ALIGN_START, DECORATION_DASHED,
+    DECORATION_DOTTED, DECORATION_DOUBLE, DECORATION_FLAGS_MASK, DECORATION_LINE_THROUGH,
+    DECORATION_NONE, DECORATION_OVERLINE, DECORATION_SKIP_INK, DECORATION_SOLID,
+    DECORATION_UNDERLINE, DECORATION_WAVY, DEFAULT_SESSION_TEXT_CAPACITY, EXCLUSION_WRAP_BOTH,
+    EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST,
+    ORIENTATION_MIXED, ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS,
+    OVERFLOW_VISIBLE, RESULT_FLAG_CHECKPOINT, SHAPE_POLYGON, SHAPE_RECTANGLE,
+    STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION,
+    STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND,
+    STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK,
+    STYLE_FIELD_MATERIAL, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING,
+    STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
+    TEXT_MUTATION_REPLACE_UTF16, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB,
+    WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
 };
 use crate::engine::policy::{
     ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
@@ -250,6 +257,7 @@ struct EngineStyleMutationRecord {
     decoration_style: u8,
     flags: u8,
     style_id: u32,
+    cascade_order: u32,
     field_mask: u32,
     text_start: u32,
     text_end: u32,
@@ -264,6 +272,7 @@ struct EngineStyleMutationRecord {
     letter_spacing: f32,
     word_spacing: f32,
     baseline_shift: f32,
+    raster_pixel_ratio: f32,
     foreground_rgba: u32,
     decoration_rgba: u32,
     decoration_flags: u32,
@@ -1183,6 +1192,11 @@ field_offset!(
     style_id
 );
 field_offset!(
+    ENGINE_STYLE_MUTATION_CASCADE_ORDER,
+    EngineStyleMutationRecord,
+    cascade_order
+);
+field_offset!(
     ENGINE_STYLE_MUTATION_FIELD_MASK,
     EngineStyleMutationRecord,
     field_mask
@@ -1251,6 +1265,11 @@ field_offset!(
     ENGINE_STYLE_MUTATION_BASELINE_SHIFT,
     EngineStyleMutationRecord,
     baseline_shift
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_RASTER_PIXEL_RATIO,
+    EngineStyleMutationRecord,
+    raster_pixel_ratio
 );
 field_offset!(
     ENGINE_STYLE_MUTATION_FOREGROUND_RGBA,
@@ -2095,6 +2114,7 @@ pub fn json() -> String {
                 "decorationStyle": ENGINE_STYLE_MUTATION_DECORATION_STYLE,
                 "flags": ENGINE_STYLE_MUTATION_FLAGS,
                 "styleId": ENGINE_STYLE_MUTATION_STYLE_ID,
+                "cascadeOrder": ENGINE_STYLE_MUTATION_CASCADE_ORDER,
                 "fieldMask": ENGINE_STYLE_MUTATION_FIELD_MASK,
                 "textStart": ENGINE_STYLE_MUTATION_TEXT_START,
                 "textEnd": ENGINE_STYLE_MUTATION_TEXT_END,
@@ -2109,6 +2129,7 @@ pub fn json() -> String {
                 "letterSpacing": ENGINE_STYLE_MUTATION_LETTER_SPACING,
                 "wordSpacing": ENGINE_STYLE_MUTATION_WORD_SPACING,
                 "baselineShift": ENGINE_STYLE_MUTATION_BASELINE_SHIFT,
+                "rasterPixelRatio": ENGINE_STYLE_MUTATION_RASTER_PIXEL_RATIO,
                 "foregroundRgba": ENGINE_STYLE_MUTATION_FOREGROUND_RGBA,
                 "decorationRgba": ENGINE_STYLE_MUTATION_DECORATION_RGBA,
                 "decorationFlags": ENGINE_STYLE_MUTATION_DECORATION_FLAGS,
@@ -2509,6 +2530,40 @@ pub fn json() -> String {
             "styleMutationOpcodes": {
                 "upsert": STYLE_MUTATION_UPSERT,
                 "remove": STYLE_MUTATION_REMOVE
+            },
+            "styleFlags": {
+                "root": STYLE_FLAG_ROOT
+            },
+            "styleFields": {
+                "fontStack": STYLE_FIELD_FONT_STACK,
+                "material": STYLE_FIELD_MATERIAL,
+                "language": STYLE_FIELD_LANGUAGE,
+                "features": STYLE_FIELD_FEATURES,
+                "fontSize": STYLE_FIELD_FONT_SIZE,
+                "lineHeight": STYLE_FIELD_LINE_HEIGHT,
+                "letterSpacing": STYLE_FIELD_LETTER_SPACING,
+                "wordSpacing": STYLE_FIELD_WORD_SPACING,
+                "baselineShift": STYLE_FIELD_BASELINE_SHIFT,
+                "rasterPixelRatio": STYLE_FIELD_RASTER_PIXEL_RATIO,
+                "direction": STYLE_FIELD_DIRECTION,
+                "foreground": STYLE_FIELD_FOREGROUND,
+                "decoration": STYLE_FIELD_DECORATION,
+                "all": STYLE_FIELD_MASK
+            },
+            "decorationStyles": {
+                "none": DECORATION_NONE,
+                "solid": DECORATION_SOLID,
+                "double": DECORATION_DOUBLE,
+                "dotted": DECORATION_DOTTED,
+                "dashed": DECORATION_DASHED,
+                "wavy": DECORATION_WAVY
+            },
+            "decorationFlags": {
+                "underline": DECORATION_UNDERLINE,
+                "overline": DECORATION_OVERLINE,
+                "lineThrough": DECORATION_LINE_THROUGH,
+                "skipInk": DECORATION_SKIP_INK,
+                "all": DECORATION_FLAGS_MASK
             },
             "flowShapeKinds": {
                 "rectangle": SHAPE_RECTANGLE,

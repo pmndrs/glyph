@@ -42,7 +42,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
       abi.layouts.engineExclusion.size,
       abi.layouts.engineInlineObject.size,
     ],
-    [24, 80, 52, 8, 56, 48, 56],
+    [24, 88, 52, 8, 56, 48, 56],
   );
   assert.equal(abi.layouts.engineInlineObject.alignment, 4);
   assert.equal(abi.layouts.engineInlineObject.baselineAlignment, 52);
@@ -50,6 +50,25 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.equal(abi.engine.textEncodings.utf16Le, 1);
   assert.equal(abi.engine.styleMutationOpcodes.upsert, 1);
   assert.equal(abi.engine.styleMutationOpcodes.remove, 2);
+  assert.deepEqual(abi.engine.styleFlags, { root: 1 });
+  assert.deepEqual(abi.engine.decorationStyles, {
+    dashed: 4,
+    dotted: 3,
+    double: 2,
+    none: 0,
+    solid: 1,
+    wavy: 5,
+  });
+  assert.deepEqual(abi.engine.decorationFlags, {
+    all: 15,
+    lineThrough: 4,
+    overline: 2,
+    skipInk: 8,
+    underline: 1,
+  });
+  assert.equal(abi.engine.styleFields.all, 8191);
+  assert.equal(abi.layouts.engineStyleMutation.cascadeOrder, 8);
+  assert.equal(abi.layouts.engineStyleMutation.rasterPixelRatio, 64);
   assert.deepEqual(abi.engine.flowShapeKinds, { polygon: 2, rectangle: 1 });
   assert.deepEqual(abi.engine.writingModes, { horizontalTb: 1, verticalLr: 3, verticalRl: 2 });
   assert.deepEqual(abi.engine.textOrientations, { mixed: 1, sideways: 3, upright: 2 });
