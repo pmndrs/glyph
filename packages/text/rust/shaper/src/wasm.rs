@@ -477,6 +477,10 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
         let Some(transport) = state.frames.get_mut(&session_id) else {
             return 0;
         };
+        debug_assert_eq!(
+            transport.next_publication_generation().ok(),
+            Some(publication_generation)
+        );
         u32::try_from(transport.publish_success(commit, staged)).unwrap_or(0)
     })
 }

@@ -156,6 +156,8 @@ impl TextEngine {
         };
         let checkpoint =
             session.revision.plan == 0 || request.consumed_plan_revision != session.revision.plan;
+        // A completed renderer fence is external monotonic state. It remains accepted even if
+        // plan preparation or publication later aborts.
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
         session
             .plan
@@ -337,7 +339,7 @@ mod tests {
             .unwrap();
         engine.create_session(4).unwrap();
         let mut request = update(0, 0, 0);
-        request.capability_set = 2;
+        request.capability_set = 3;
         assert_eq!(
             engine.prepare_update(request, 1),
             Err(EngineError::InvalidRequest)
@@ -346,6 +348,23 @@ mod tests {
             engine.session_revision(4).unwrap(),
             SessionRevision::default()
         );
+    }
+
+    #[test]
+    fn a_committed_session_accepts_another_capability_set_from_the_same_policy() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        engine.commit_update(first).unwrap();
+
+        let mut request = update(1, 1, 1);
+        request.capability_set = 2;
+        let second = engine.prepare_update(request, 2).unwrap();
+        assert_eq!(engine.prepared_plan(second).unwrap().capability_set, 2);
+        engine.commit_update(second).unwrap();
     }
 
     #[test]
@@ -409,19 +428,34 @@ mod tests {
 
     fn validated_policy(technique: TechniqueId) -> ValidatedPolicy {
         ValidatedPolicy::new(PolicyDescriptor {
-            capability_sets: vec![CapabilitySet {
-                id: CapabilitySetId(1),
-                flags: CAP_ORDERED_DIRECT,
-                max_buffer_bytes: 1024,
-                update_alignment: 4,
-                coalesce_gap_bytes: 0,
-                range_call_penalty_bytes: 0,
-                max_buffers_per_draw: 1,
-                max_resources_per_draw: 1,
-                max_indirect_draws: 0,
-                fragmentation_budget: 1,
-                whole_buffer_threshold_basis_points: 10_000,
-            }],
+            capability_sets: vec![
+                CapabilitySet {
+                    id: CapabilitySetId(1),
+                    flags: CAP_ORDERED_DIRECT,
+                    max_buffer_bytes: 1024,
+                    update_alignment: 4,
+                    coalesce_gap_bytes: 0,
+                    range_call_penalty_bytes: 0,
+                    max_buffers_per_draw: 1,
+                    max_resources_per_draw: 1,
+                    max_indirect_draws: 0,
+                    fragmentation_budget: 1,
+                    whole_buffer_threshold_basis_points: 10_000,
+                },
+                CapabilitySet {
+                    id: CapabilitySetId(2),
+                    flags: CAP_ORDERED_DIRECT,
+                    max_buffer_bytes: 1024,
+                    update_alignment: 4,
+                    coalesce_gap_bytes: 0,
+                    range_call_penalty_bytes: 0,
+                    max_buffers_per_draw: 1,
+                    max_resources_per_draw: 1,
+                    max_indirect_draws: 0,
+                    fragmentation_budget: 1,
+                    whole_buffer_threshold_basis_points: 10_000,
+                },
+            ],
             programs: vec![ProgramDescriptor {
                 technique,
                 variant: 0,
