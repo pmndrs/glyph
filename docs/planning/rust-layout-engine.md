@@ -293,7 +293,7 @@ The versioned request contains offsets to packed sections for:
 Stable fonts, policies, and capabilities are referenced by IDs. Repeating a large descriptor every frame would merely
 move host work into serialization.
 
-The V0 compiler-mapped section records are 24-byte ordered UTF-16 replacements, 80-byte stable style upserts/removals,
+The V0 compiler-mapped section records are 24-byte ordered UTF-16 replacements, 88-byte stable style upserts/removals,
 52-byte flow constraints, 8-byte inline/block vertices, 56-byte regions, 48-byte exclusions, and 56-byte inline
 objects. UTF-16 payload preserves the public cluster coordinate without a host UTF-8 conversion. Styles carry current
 shaping fields plus word spacing, baseline shift, material, color, and decoration inputs; checked language and feature

@@ -728,35 +728,44 @@ fn decode_scalar(units: &[u16], index: usize) -> (char, usize) {
 }
 
 fn parse_language(bytes: &[u8]) -> Option<Language> {
+    if valid_language_bytes(bytes) {
+        Language::new(bytes)
+    } else {
+        None
+    }
+}
+
+pub(crate) fn valid_language_bytes(bytes: &[u8]) -> bool {
     if bytes.len() > u16::MAX as usize {
-        return None;
+        return false;
     }
 
     let mut subtags = bytes.split(|byte| *byte == b'-');
-    let primary = subtags.next()?;
+    let Some(primary) = subtags.next() else {
+        return false;
+    };
     let primary_is_private_or_grandfathered = matches!(primary, [b'x' | b'X'] | [b'i' | b'I']);
     if !(2..=8).contains(&primary.len()) && !primary_is_private_or_grandfathered {
-        return None;
+        return false;
     }
     if !primary.iter().all(u8::is_ascii_alphabetic) {
-        return None;
+        return false;
     }
 
     let mut subtag_count = 0;
     for subtag in subtags {
         if subtag.is_empty() || subtag.len() > 8 || !subtag.iter().all(u8::is_ascii_alphanumeric) {
-            return None;
+            return false;
         }
         subtag_count += 1;
     }
     if primary_is_private_or_grandfathered && subtag_count == 0 {
-        return None;
+        return false;
     }
-
-    Language::new(bytes)
+    true
 }
 
-fn valid_tag(tag: u32) -> bool {
+pub(crate) fn valid_tag(tag: u32) -> bool {
     tag.to_be_bytes()
         .iter()
         .all(|byte| (0x20..=0x7e).contains(byte))
