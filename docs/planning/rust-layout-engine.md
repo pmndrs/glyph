@@ -1163,6 +1163,15 @@ or flow reordering retains the map fallback. The current five-warmup/11-sample r
 4.414/4.984/5.196 ms for Bitmap/MTSDF/Slug. The inter-run variance is too large to assign a precise causal speedup to
 this small change, and all three remain above the median gate.
 
+The common visually LTR lane now proves every retained bidi level is even and that no run has a direction override once
+per positioning pass. It then walks logical clusters directly, avoiding per-line L1 scratch copies and visual
+cluster/level writes; any odd level or override takes the unchanged complete L1/L2 path. On the same workload, two
+adjacent eight-warmup/31-sample Bitmap baselines measured 5.197 and 5.162 ms, while two optimized runs measured 4.849
+and 4.878 ms with the same one-patch 170.4 KiB output. Post-change MTSDF and Slug medians are 5.355 and 6.001 ms. This
+retains a measured positioning reduction without claiming the still-open sub-4 ms gate. Optimized Wasm is 1,065,857
+raw / 403,525 gzip / 318,137 Brotli bytes; Brotli changes by six bytes from D-201, while gzip is sensitive to the new
+code layout.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement

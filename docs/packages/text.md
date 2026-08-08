@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:1f5414678eccbef60f2e2ecce2164c807d8d8b3a4806ef5db2bc76918a819c89'
+source_digest: 'sha256:0e38f1a6590252d59ab0bae52ce79c6984c0cb47d859a9e2386ee6ab33a3ac7f'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -172,7 +172,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-08T20:45:32Z'
+  at: '2026-08-08T23:04:50Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -698,6 +698,8 @@ The full-policy benchmark validates real baked Inter artifacts and compiles all 
 Policy registration now propagates semantic dependencies to every physical buffer. Positioning records exact six-F32/four-U32 change bits in a compact side lane while preserving the 60-byte `PlanGlyph`; both ordered-direct and stable-indirect planning publish only buffers whose dependencies intersect. A full-column resize over 21,805 instances writes 170.4 KiB for Bitmap and 340.7 KiB for MTSDF or Slug rather than their 1,022.1/2,384.9/2,384.9 KiB cold-plan payloads. Font-size writes 340.7/340.7/681.4 KiB. Five-warmup/11-sample resize medians remain 4.599/4.916/6.057 milliseconds, so the exact payload reduction does not support a packing-dominance or general latency-speedup claim; layout remains above the sub-4 ms gate. The optimized module is 1,065,394 raw / 399,111 gzip / 317,830 Brotli bytes. A 97.19 MiB sequential-process high-water mark remains unresolved process evidence, not an accepted session budget.
 
 Order-preserving reflow now compares retained positioned glyphs directly by stable-ID slot and uses the exact identity index only after a reorder. A symbolized temporary Wasm profile identifies positioning as the largest sampled resize function and policy gather as the second. The canonical benchmark supports case isolation and an explicit profiling module while retaining its unchanged defaults. Current Bitmap/MTSDF/Slug resize medians are 4.414/4.984/5.196 milliseconds; inter-run variance prevents a precise speedup attribution and the sub-4 ms gate remains open. Optimized Wasm is 1,065,543 raw / 399,248 gzip / 318,131 Brotli bytes.
+
+Trivially LTR positioning now proves all retained bidi levels are even and no run is direction-overridden once, then walks logical clusters without filling line-level or visual-order scratch. Odd levels and overrides preserve the complete UAX #9 L1/L2 path. Two adjacent eight-warmup/31-sample Bitmap baselines measured 5.197 and 5.162 milliseconds; two optimized runs measured 4.849 and 4.878 milliseconds with the same 170.4 KiB patch. Post-change MTSDF and Slug medians are 5.355 and 6.001 milliseconds. The optimized module is 1,065,857 raw / 403,525 gzip / 318,137 Brotli bytes, and the sub-4 ms gate remains open.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

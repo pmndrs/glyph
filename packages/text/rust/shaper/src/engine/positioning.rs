@@ -78,6 +78,7 @@ impl PositionedGlyphArena {
     ) -> Result<(), EngineError> {
         self.clear();
         self.reserve(shape.glyph_ids.len())?;
+        let visually_ltr = is_trivially_ltr(bidi, runs);
         for (line_index, line) in flow.lines.iter().copied().enumerate() {
             let fragments = line_fragments(flow, line)?;
             let Some(first) = fragments.first() else {
@@ -86,12 +87,14 @@ impl PositionedGlyphArena {
             let Some(last) = fragments.last() else {
                 continue;
             };
-            prepare_line_levels(
-                &mut self.line_levels,
-                bidi,
-                first.line.text_start,
-                last.line.text_end,
-            )?;
+            if !visually_ltr {
+                prepare_line_levels(
+                    &mut self.line_levels,
+                    bidi,
+                    first.line.text_start,
+                    last.line.text_end,
+                )?;
+            }
             let final_line = flow
                 .lines
                 .get(line_index + 1)
@@ -107,6 +110,7 @@ impl PositionedGlyphArena {
                     shape,
                     styles,
                     bidi,
+                    visually_ltr,
                     metrics_for,
                     extents_for,
                 )?;
@@ -157,6 +161,7 @@ impl PositionedGlyphArena {
         shape: &ShapeArena,
         styles: &[StyleSegment],
         bidi: &BidiAnalysis,
+        visually_ltr: bool,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
@@ -165,25 +170,27 @@ impl PositionedGlyphArena {
         let cluster_end =
             usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
         let visual_start = self.visual_clusters.len();
-        for cluster in cluster_start..cluster_end {
-            if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                continue;
+        if !visually_ltr {
+            for cluster in cluster_start..cluster_end {
+                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                    continue;
+                }
+                self.visual_clusters
+                    .push(u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?);
+                self.visual_levels.push(cluster_level(
+                    cluster,
+                    fragment.line.text_start,
+                    clusters,
+                    runs,
+                    &self.line_levels,
+                )?);
             }
-            self.visual_clusters
-                .push(u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?);
-            self.visual_levels.push(cluster_level(
-                cluster,
-                fragment.line.text_start,
-                clusters,
-                runs,
-                &self.line_levels,
-            )?);
+            reorder_l2(
+                &mut self.visual_clusters,
+                &mut self.visual_levels,
+                visual_start,
+            );
         }
-        reorder_l2(
-            &mut self.visual_clusters,
-            &mut self.visual_levels,
-            visual_start,
-        );
 
         let available = (fragment.slot_end - fragment.slot_start - fragment.line.advance).max(0.0);
         let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
@@ -205,9 +212,18 @@ impl PositionedGlyphArena {
         };
         let mut cursor = fragment.slot_start + offset;
         let baseline = line.block_start + line.baseline;
-        for visual in visual_start..self.visual_clusters.len() {
-            let cluster = usize::try_from(self.visual_clusters[visual])
-                .map_err(|_| EngineError::InvalidRequest)?;
+        let visual_count = if visually_ltr {
+            cluster_end.saturating_sub(cluster_start)
+        } else {
+            self.visual_clusters.len().saturating_sub(visual_start)
+        };
+        for ordinal in 0..visual_count {
+            let cluster = if visually_ltr {
+                cluster_start + ordinal
+            } else {
+                usize::try_from(self.visual_clusters[visual_start + ordinal])
+                    .map_err(|_| EngineError::InvalidRequest)?
+            };
             if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
                 continue;
             }
@@ -443,6 +459,11 @@ fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragme
         .ok_or(EngineError::InvalidRequest)
 }
 
+fn is_trivially_ltr(bidi: &BidiAnalysis, runs: &[ShapingRun]) -> bool {
+    bidi.levels.iter().all(|level| level & 1 == 0)
+        && runs.iter().all(|run| !run.style.bidi_override)
+}
+
 fn prepare_line_levels(
     target: &mut Vec<u8>,
     bidi: &BidiAnalysis,
@@ -641,6 +662,28 @@ mod tests {
         assert_eq!(indices, [0, 3, 2, 1, 4]);
         assert_eq!(levels, [0, 2, 1, 1, 0]);
         assert_eq!((indices.capacity(), levels.capacity()), capacities);
+    }
+
+    #[test]
+    fn only_even_unoverridden_runs_skip_visual_reordering() {
+        let mut bidi = BidiAnalysis {
+            levels: vec![0, 2, 0],
+            ..BidiAnalysis::default()
+        };
+        let mut run = ShapingRun {
+            text_start: 0,
+            text_end: 3,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 0,
+            bidi_level: 0,
+            style: ResolvedStyle::default(),
+        };
+        assert!(is_trivially_ltr(&bidi, &[run]));
+        bidi.levels[1] = 1;
+        assert!(!is_trivially_ltr(&bidi, &[run]));
+        bidi.levels[1] = 0;
+        run.style.bidi_override = true;
+        assert!(!is_trivially_ltr(&bidi, &[run]));
     }
 
     #[test]
