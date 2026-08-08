@@ -10,7 +10,9 @@ use core::mem;
 use super::{
     plan_input::{PlanInputError, span_bounds, validate_glyph, validate_input},
     plan_packing::{
-        MAX_PHYSICAL_BUFFERS, PackingError, align_up, execute_run, grown_capacity, record_alignment,
+        MAX_PHYSICAL_BUFFERS, PackingError, PendingAllocation, PhysicalBufferState, RecordRange,
+        align_record_range, align_up, apply_writes, coalesce_ranges, execute_run, grown_capacity,
+        record_alignment, take_allocation,
     },
     policy::{
         ALLOCATION_ORDERED_DIRECT, BATCH_MATERIAL, BufferSchema, CapabilitySetId,
@@ -57,8 +59,10 @@ impl From<PlanInputError> for OrderedPlanError {
 impl From<PackingError> for OrderedPlanError {
     fn from(error: PackingError) -> Self {
         match error {
+            PackingError::AllocationFailed => Self::AllocationFailed,
             PackingError::ArithmeticOverflow => Self::ArithmeticOverflow,
             PackingError::CapacityExceeded => Self::CapacityExceeded,
+            PackingError::InvalidIdentity => Self::InvalidIdentity,
             PackingError::Policy(error) => Self::PolicyExecution(error),
         }
     }
@@ -94,15 +98,6 @@ struct BatchState {
     buffer_count: u16,
 }
 
-struct PhysicalBufferState {
-    id: u32,
-    generation: u32,
-    program_id: u32,
-    schema: BufferSchema,
-    capacity: u32,
-    bytes: Vec<u8>,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct PendingBatch {
     state: BatchState,
@@ -110,16 +105,6 @@ struct PendingBatch {
     capacity: u32,
     buffer_ids: [u32; MAX_PHYSICAL_BUFFERS],
     buffer_generations: [u32; MAX_PHYSICAL_BUFFERS],
-}
-
-struct PendingAllocation {
-    state: PhysicalBufferState,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct RecordRange {
-    start: u32,
-    end: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -772,25 +757,9 @@ impl OrderedPlanCompiler {
         schema: BufferSchema,
         capacity: u32,
     ) -> Result<(), OrderedPlanError> {
-        let length = usize::try_from(capacity)
-            .ok()
-            .and_then(|value| value.checked_mul(schema.stride()))
-            .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-        let mut bytes = Vec::new();
-        bytes
-            .try_reserve_exact(length)
-            .map_err(|_| OrderedPlanError::AllocationFailed)?;
-        bytes.resize(length, 0);
         reserve(&mut self.pending_allocations, 1)?;
         self.pending_allocations.push(PendingAllocation {
-            state: PhysicalBufferState {
-                id,
-                generation,
-                program_id,
-                schema,
-                capacity,
-                bytes,
-            },
+            state: PhysicalBufferState::new(id, generation, program_id, schema, capacity)?,
         });
         Ok(())
     }
@@ -1099,124 +1068,6 @@ fn instance_unchanged(
             previous.stable_id == next.stable_id
                 && previous.content_revision == next.content_revision
         })
-}
-
-fn coalesce_ranges(
-    ranges: &mut Vec<RecordRange>,
-    program: &super::policy::ProgramDescriptor,
-    capability: &super::policy::CapabilitySet,
-    live_records: u32,
-) -> Result<(), OrderedPlanError> {
-    if ranges.is_empty() {
-        return Ok(());
-    }
-    let bytes_per_record = program.buffers.iter().try_fold(0_u32, |total, schema| {
-        total
-            .checked_add(u32::from(schema.stride))
-            .ok_or(OrderedPlanError::ArithmeticOverflow)
-    })?;
-    let accepted_gap = capability
-        .coalesce_gap_bytes
-        .max(capability.range_call_penalty_bytes);
-    if ranges.len() > 1 {
-        let mut write = 0;
-        for read in 1..ranges.len() {
-            let gap = ranges[read]
-                .start
-                .saturating_sub(ranges[write].end)
-                .saturating_mul(bytes_per_record);
-            if gap <= accepted_gap {
-                ranges[write].end = ranges[read].end;
-            } else {
-                write += 1;
-                ranges[write] = ranges[read];
-            }
-        }
-        ranges.truncate(write + 1);
-    }
-    if ranges.len() > usize::from(capability.fragmentation_budget) {
-        let first = ranges[0].start;
-        let last = ranges.last().ok_or(OrderedPlanError::InvalidIdentity)?.end;
-        ranges.clear();
-        ranges.push(RecordRange {
-            start: first,
-            end: last,
-        });
-    }
-    let upload_records = ranges.iter().try_fold(0_u32, |total, range| {
-        total
-            .checked_add(range.end - range.start)
-            .ok_or(OrderedPlanError::ArithmeticOverflow)
-    })?;
-    let upload_cost = upload_records
-        .checked_mul(bytes_per_record)
-        .and_then(|bytes| {
-            bytes.checked_add(
-                (ranges.len() as u32).saturating_mul(capability.range_call_penalty_bytes),
-            )
-        })
-        .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-    let full_bytes = live_records
-        .checked_mul(bytes_per_record)
-        .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-    if upload_cost.saturating_mul(10_000)
-        >= full_bytes.saturating_mul(u32::from(capability.whole_buffer_threshold_basis_points))
-    {
-        ranges.clear();
-        ranges.push(RecordRange {
-            start: 0,
-            end: live_records,
-        });
-    }
-    Ok(())
-}
-
-fn apply_writes(
-    buffer: &mut PhysicalBufferState,
-    patches: &[PatchRecord],
-    payload: &[u8],
-) -> Result<(), OrderedPlanError> {
-    for patch in patches.iter().filter(|patch| {
-        patch.opcode == PATCH_WRITE
-            && patch.buffer_id == buffer.id
-            && patch.buffer_generation == buffer.generation
-    }) {
-        let destination = patch.destination_offset as usize;
-        let source = patch.payload_start as usize;
-        let length = patch.byte_length as usize;
-        let destination = buffer
-            .bytes
-            .get_mut(destination..destination + length)
-            .ok_or(OrderedPlanError::InvalidIdentity)?;
-        let source = payload
-            .get(source..source + length)
-            .ok_or(OrderedPlanError::InvalidIdentity)?;
-        destination.copy_from_slice(source);
-    }
-    Ok(())
-}
-
-fn take_allocation(
-    allocations: &mut Vec<PendingAllocation>,
-    id: u32,
-    generation: u32,
-) -> Option<PendingAllocation> {
-    allocations
-        .iter()
-        .position(|allocation| {
-            allocation.state.id == id && allocation.state.generation == generation
-        })
-        .map(|index| allocations.swap_remove(index))
-}
-
-fn align_record_range(range: RecordRange, alignment: u32) -> Result<RecordRange, OrderedPlanError> {
-    let start = range.start / alignment * alignment;
-    let end = range
-        .end
-        .checked_add(alignment - 1)
-        .map(|value| value / alignment * alignment)
-        .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-    Ok(RecordRange { start, end })
 }
 
 fn range(start: u32, count: u32) -> Result<core::ops::Range<usize>, OrderedPlanError> {

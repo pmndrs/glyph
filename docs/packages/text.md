@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:ed891ae9acf97c9f3974df2f797b6d005a4c688143c59f15f4fdaad5cc9f2031'
+source_digest: 'sha256:afa202c4e5724631c1e78a72458aed0c6300b0c4bf7aa455fbcbbfac3cb0af60'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -445,12 +445,18 @@ produces three ordered spans over two deduplicated resources and buffers. The po
 bytecode executed by Rust; the render plan itself is data. The planner remains unreachable from the shipping Wasm update
 and is LTO-stripped. Only the reachable draw-wire and policy-key expansion changes the optimized SIMD artifact to
 739,909 raw / 272,607 gzip / 214,288 Brotli bytes. No planner latency claim is attached until session wiring makes it
-reachable. Stable-indirect storage now has a private tested allocator foundation: semantic identities retain physical
-record slots, content revisions select writes, and logical order reconciles through fixed 64-entry chunks. Removed slots
-and chunks stay quarantined until an explicit renderer-fence acknowledgment; applying a plan is not treated as proof
-that queued GPU work completed. Prepare/abort tests prove that tentative reuse cannot leak into committed state. The
-complete stable-indirect display-list compiler and ABI acknowledgment field remain open, so this foundation adds no
-end-to-end performance claim.
+reachable. Stable-indirect storage now compiles complete resource, physical-buffer, patch, glyph-span, draw, and
+retirement tables. Semantic identities retain physical record slots; content revisions select writes; fixed 64-entry
+`u32` chunks carry logical order through the generated reserved binding ID 65,535. In the one-stream fixture, a localized
+insertion writes one new 4-byte physical record and one affected 16-byte order range, while a pure reorder emits no
+physical write. Removed slots/chunks remain quarantined until an explicit renderer-fence acknowledgment; applying a plan
+is not proof that queued GPU work completed. When physical order spans would exceed the capability fragmentation budget,
+the compiler transactionally rebases only the order buffer, retires its prior generation, and preserves glyph-buffer
+generations. Tests cover no-op, abort, mixed resources, shared and material-partitioned storage, fence-gated reuse, wire
+validation, bounded order fragmentation, and unchanged nested scratch capacities after warm settlement. Session wiring
+and the ABI acknowledgment field remain open. The planner remains LTO-stripped: raw Wasm stays 739,909 bytes; the
+reachable binding identity shifts gzip 272,607→272,624 and Brotli 214,288→214,395 bytes. No planner-latency or end-to-end
+claim is attached yet.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

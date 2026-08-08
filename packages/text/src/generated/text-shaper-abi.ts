@@ -38,6 +38,9 @@ export const textShaperAbi = {
       "orderedDirect": 1,
       "stableIndirect": 2
     },
+    "internalBufferBindings": {
+      "order": 65535
+    },
     "patchOpcodes": {
       "allocateOrResize": 1,
       "copy": 4,

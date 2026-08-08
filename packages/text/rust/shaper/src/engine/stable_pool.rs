@@ -224,6 +224,22 @@ impl StableSlotPool {
         self.finish_transaction();
     }
 
+    #[cfg(test)]
+    pub fn scratch_capacities(&self) -> [usize; 10] {
+        [
+            self.slots.capacity(),
+            self.free_slots.capacity(),
+            self.quarantine.capacity(),
+            self.assignments.capacity(),
+            self.retired_slots.capacity(),
+            self.allocated_free_slots.capacity(),
+            self.identity_keys.capacity(),
+            self.identity_slots.capacity(),
+            self.identity_epochs.capacity(),
+            self.seen_slots.capacity(),
+        ]
+    }
+
     fn finish_transaction(&mut self) {
         self.assignments.clear();
         self.retired_slots.clear();
