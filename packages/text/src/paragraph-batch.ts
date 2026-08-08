@@ -1276,11 +1276,14 @@ export class ParagraphLayoutSession {
       // paragraph out to discover it would break lines and position every glyph for a result that is discarded, and
       // would make font selection depend on where the text happened to wrap.
       const probe = paragraph.shaped();
-      const clusters = [...new Set(probe.clusters)].sort((left, right) => left - right);
+      // Only clusters of the paragraph's own text can carry a fallback selection. A cluster past the end belongs to
+      // overflow measurement, and substituting a font for one would author a span outside the text.
+      const clusters = [...new Set(probe.clusters)].filter((value) => value < state.text.length).sort((left, right) => left - right);
       let changed = false;
       for (let glyph = 0; glyph < probe.glyphIds.length; glyph += 1) {
         if (probe.glyphIds[glyph] !== 0) continue;
         const cluster = probe.clusters[glyph]!;
+        if (cluster >= state.text.length) continue;
         const fonts = fontHandlesAt(state, cluster);
         const next = (fallbackIndexes.get(cluster) ?? 0) + 1;
         if (next >= fonts.length) continue;
