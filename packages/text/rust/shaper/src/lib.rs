@@ -38,11 +38,24 @@ pub const STATUS_FONT_IN_USE: u32 = 14;
 
 const BUFFER_FLAGS_MASK: u32 = 0xff;
 const MAX_CACHED_PLANS_PER_FONT: usize = 64;
+const DEFAULT_SHAPE_BUFFER_CAPACITY: usize = 32_768;
 
-#[derive(Default)]
 pub struct ShaperRegistry {
     fonts: BTreeMap<u32, RegisteredFont>,
     result: ResultArena,
+    shape_buffer: Option<UnicodeBuffer>,
+    context_codepoints: Vec<u32>,
+}
+
+impl Default for ShaperRegistry {
+    fn default() -> Self {
+        Self {
+            fonts: BTreeMap::new(),
+            result: ResultArena::default(),
+            shape_buffer: Some(UnicodeBuffer::new()),
+            context_codepoints: Vec::new(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -137,6 +150,20 @@ pub struct ShapeBatchOutput {
 }
 
 impl ShaperRegistry {
+    pub fn initialize(&mut self) -> Result<(), u32> {
+        let Some(shape_buffer) = self.shape_buffer.as_mut() else {
+            return Err(STATUS_INVALID_REQUEST);
+        };
+        if !shape_buffer.reserve(DEFAULT_SHAPE_BUFFER_CAPACITY) {
+            return Err(STATUS_RESULT_TOO_LARGE);
+        }
+        self.context_codepoints
+            .try_reserve_exact(
+                DEFAULT_SHAPE_BUFFER_CAPACITY.saturating_sub(self.context_codepoints.len()),
+            )
+            .map_err(|_| STATUS_RESULT_TOO_LARGE)
+    }
+
     pub fn register_font(
         &mut self,
         handle: u32,
@@ -258,24 +285,38 @@ impl ShaperRegistry {
                 .fonts
                 .get_mut(&run.font_handle)
                 .ok_or(STATUS_FONT_MISSING)?;
-            let shaped = shape_segment(font, &request.text, run, range)?;
-            let glyph_count = u32::try_from(shaped.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-            output.run_font_slots.push(slot);
-            output.run_glyph_starts.push(glyph_start);
-            output.run_glyph_counts.push(glyph_count);
-            for (info, position) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
-                output
-                    .glyph_ids
-                    .push(u16::try_from(info.glyph_id).map_err(|_| STATUS_RESULT_TOO_LARGE)?);
-                output.clusters.push(info.cluster);
-                output.x_advances.push(position.x_advance);
-                output.y_advances.push(position.y_advance);
-                output.x_offsets.push(position.x_offset);
-                output.y_offsets.push(position.y_offset);
-                output.glyph_flags.push(
-                    u16::try_from(info.flags().to_bits()).map_err(|_| STATUS_RESULT_TOO_LARGE)?,
-                );
-            }
+            let shaped = shape_segment(
+                font,
+                &request.text,
+                run,
+                range,
+                &mut self.shape_buffer,
+                &mut self.context_codepoints,
+            )?;
+            let append_result: Result<(), u32> = (|| {
+                let glyph_count =
+                    u32::try_from(shaped.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+                output.run_font_slots.push(slot);
+                output.run_glyph_starts.push(glyph_start);
+                output.run_glyph_counts.push(glyph_count);
+                for (info, position) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
+                    output
+                        .glyph_ids
+                        .push(u16::try_from(info.glyph_id).map_err(|_| STATUS_RESULT_TOO_LARGE)?);
+                    output.clusters.push(info.cluster);
+                    output.x_advances.push(position.x_advance);
+                    output.y_advances.push(position.y_advance);
+                    output.x_offsets.push(position.x_offset);
+                    output.y_offsets.push(position.y_offset);
+                    output.glyph_flags.push(
+                        u16::try_from(info.flags().to_bits())
+                            .map_err(|_| STATUS_RESULT_TOO_LARGE)?,
+                    );
+                }
+                Ok(())
+            })();
+            self.shape_buffer = Some(shaped.clear());
+            append_result?;
         }
         Ok(output)
     }
@@ -435,7 +476,52 @@ fn shape_segment(
     text: &[u16],
     run: &RunRequest,
     range: SegmentRange,
+    buffer_slot: &mut Option<UnicodeBuffer>,
+    context_codepoints: &mut Vec<u32>,
 ) -> Result<harfrust::GlyphBuffer, u32> {
+    let mut buffer = buffer_slot.take().ok_or(STATUS_INVALID_REQUEST)?;
+    let features =
+        match shape_segment_inner(font, text, run, range, &mut buffer, context_codepoints) {
+            Ok(features) => features,
+            Err(status) => {
+                *buffer_slot = Some(buffer);
+                return Err(status);
+            }
+        };
+
+    let font_ref = match FontRef::new(&font.sfnt) {
+        Ok(font_ref) => font_ref,
+        Err(_) => {
+            *buffer_slot = Some(buffer);
+            return Err(STATUS_INVALID_FONT);
+        }
+    };
+    let shaper = font.data.shaper(&font_ref).build();
+    let Some(plan) = font.plans.last().map(|cached| &cached.plan) else {
+        *buffer_slot = Some(buffer);
+        return Err(STATUS_INVALID_REQUEST);
+    };
+    let mut extents = FlatExtents {
+        records: &font.extents,
+        availability: &font.availability,
+    };
+    Ok(shaper.shape(
+        buffer,
+        ShapeOptions::new()
+            .features(&features)
+            .plan(Some(plan))
+            .font_funcs(Some(&mut extents)),
+    ))
+}
+
+fn shape_segment_inner(
+    font: &mut RegisteredFont,
+    text: &[u16],
+    run: &RunRequest,
+    range: SegmentRange,
+    buffer: &mut UnicodeBuffer,
+    context_codepoints: &mut Vec<u32>,
+) -> Result<Vec<Feature>, u32> {
     let direction = match run.direction {
         0 => Direction::LeftToRight,
         1 => Direction::RightToLeft,
@@ -448,19 +534,7 @@ fn shape_segment(
         .as_ref()
         .map(|value| parse_language(value).ok_or(STATUS_INVALID_REQUEST))
         .transpose()?;
-    let features = run
-        .features
-        .iter()
-        .map(|feature| {
-            let global = feature.start <= range.item_start && feature.end >= range.item_end;
-            Feature {
-                tag: Tag::from_be_bytes(feature.tag.to_be_bytes()),
-                value: feature.value,
-                start: if global { 0 } else { feature.start },
-                end: if global { u32::MAX } else { feature.end },
-            }
-        })
-        .collect::<Vec<_>>();
+    let features = shape_features(run, range);
     let key = PlanKey {
         direction: run.direction,
         script: run.script,
@@ -493,16 +567,21 @@ fn shape_segment(
         font.plans.push(CachedPlan { key, plan });
     }
 
-    let mut buffer = UnicodeBuffer::new();
-    add_utf16_range(&mut buffer, text, range.item_start, range.item_end)?;
+    buffer.clear();
+    add_utf16_range(buffer, text, range.item_start, range.item_end)?;
     if range.context_start < range.item_start {
-        let mut pre_context = decode_utf16_range(text, range.context_start, range.item_start)?;
-        pre_context.reverse();
-        buffer.set_pre_context_codepoints(&pre_context);
+        decode_utf16_range_into(
+            text,
+            range.context_start,
+            range.item_start,
+            context_codepoints,
+        )?;
+        context_codepoints.reverse();
+        buffer.set_pre_context_codepoints(context_codepoints);
     }
     if range.item_end < range.context_end {
-        let post_context = decode_utf16_range(text, range.item_end, range.context_end)?;
-        buffer.set_post_context_codepoints(&post_context);
+        decode_utf16_range_into(text, range.item_end, range.context_end, context_codepoints)?;
+        buffer.set_post_context_codepoints(context_codepoints);
     }
     buffer.set_direction(direction);
     buffer.set_script(script);
@@ -518,20 +597,22 @@ fn shape_segment(
     });
     buffer.set_flags(BufferFlags::from_bits(range.flags).ok_or(STATUS_INVALID_REQUEST)?);
 
-    let font_ref = FontRef::new(&font.sfnt).map_err(|_| STATUS_INVALID_FONT)?;
-    let shaper = font.data.shaper(&font_ref).build();
-    let plan = &font.plans.last().ok_or(STATUS_INVALID_REQUEST)?.plan;
-    let mut extents = FlatExtents {
-        records: &font.extents,
-        availability: &font.availability,
-    };
-    Ok(shaper.shape(
-        buffer,
-        ShapeOptions::new()
-            .features(&features)
-            .plan(Some(plan))
-            .font_funcs(Some(&mut extents)),
-    ))
+    Ok(features)
+}
+
+fn shape_features(run: &RunRequest, range: SegmentRange) -> Vec<Feature> {
+    run.features
+        .iter()
+        .map(|feature| {
+            let global = feature.start <= range.item_start && feature.end >= range.item_end;
+            Feature {
+                tag: Tag::from_be_bytes(feature.tag.to_be_bytes()),
+                value: feature.value,
+                start: if global { 0 } else { feature.start },
+                end: if global { u32::MAX } else { feature.end },
+            }
+        })
+        .collect()
 }
 
 struct FlatExtents<'a> {
@@ -595,18 +676,33 @@ fn add_utf16_range(
     Ok(())
 }
 
+#[cfg(test)]
 fn decode_utf16_range(text: &[u16], start: u32, end: u32) -> Result<Vec<u32>, u32> {
+    let mut decoded = Vec::new();
+    decode_utf16_range_into(text, start, end, &mut decoded)?;
+    Ok(decoded)
+}
+
+fn decode_utf16_range_into(
+    text: &[u16],
+    start: u32,
+    end: u32,
+    decoded: &mut Vec<u32>,
+) -> Result<(), u32> {
     let start = usize::try_from(start).map_err(|_| STATUS_INVALID_REQUEST)?;
     let end = usize::try_from(end).map_err(|_| STATUS_INVALID_REQUEST)?;
     let units = text.get(start..end).ok_or(STATUS_INVALID_REQUEST)?;
-    let mut decoded = Vec::new();
+    decoded.clear();
+    decoded
+        .try_reserve(units.len())
+        .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
     let mut local = 0;
     while local < units.len() {
         let (character, consumed) = decode_scalar(units, local);
         decoded.push(character as u32);
         local += consumed;
     }
-    Ok(decoded)
+    Ok(())
 }
 
 fn decode_scalar(units: &[u16], index: usize) -> (char, usize) {

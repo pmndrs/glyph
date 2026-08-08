@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:4eeac6683ea12cc696436df84aa88ebb803aff998185177230d47e838bfae5e3'
+source_digest: 'sha256:25c46ab6db745a3d82eded9d1d3a3579546689abffbc052daaedbbce98845e6e'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -508,10 +508,14 @@ Session creation also prewarms both retained UTF-16 buffers to 1,024 units by de
 accepts an explicit text capacity for known large paragraphs. This removes the observed second-buffer lazy allocation
 without giving every text object the 25K-glyph benchmark footprint. Production analysis/shaping/layout scratch will be
 one synchronous engine-global 32,768-record workspace, reserved once when those arrays land and shared by every session.
-The compiler-published `initialize()` export is invoked by the standard host immediately after Wasm instantiation, so
-module-owned state and the first concrete plan-glyph arena no longer allocate behind the first operational export.
-Policy-specific gather lanes settle during cold registration. HarfRust/Unicode/layout lanes remain unimplemented, so
-this still makes no first-shape allocation or latency claim.
+The compiler-published `initialize()` export is invoked by the standard host immediately after Wasm instantiation. It
+now reserves both the plan-glyph arena and HarfRust's actual 32,768-codepoint internal info/position allocation plus one
+equally sized decoded-context array. Each segment returns the same allocation through `GlyphBuffer::clear`, including
+restoration after fallible setup. Initialization grows linear memory from 1,245,184 to 4,980,736 bytes (57 pages), and
+a repeated call preserves buffer identity. Policy-specific gather lanes settle during cold registration. The optimized
+artifact is 847,814 raw / 315,809 gzip / 249,629 Brotli bytes, +2,234 / +524 / +408 over the policy-gather checkpoint.
+The old three-export batch result still allocates its temporary output vectors, while bidi/layout arrays remain open;
+this is HarfRust workspace evidence, not yet a complete allocation-free `text_update` or latency result.
 
 Ordered font stacks now have cold Rust lifecycle operations independent from frame updates. A stack is nonempty,
 duplicate-free, idempotent only for the same ordered handles, and retains its already registered shaping fonts until
