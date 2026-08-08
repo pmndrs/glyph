@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:78ef2b495017f313318d824f1f946df614d65a778799ed91aac444441d962e90'
+source_digest: 'sha256:155e19bc6f7cc851bb20e59c2398145d911a209b09bae9645d23b995ae9ca8c7'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -406,7 +406,7 @@ at its deliberately stale checked package-size snapshot; this stage records the 
 that unrelated historical evidence.
 
 The render-plan wire layer now gives those result tables concrete compiler-mapped records: semantic 44 bytes, resource
-40, physical buffer 36, patch 36, primitive 64, draw 48, retirement 24, and diagnostic 24. Resource kind is independent
+40, physical buffer 36, patch 36, primitive 64, draw 60, retirement 24, and diagnostic 24. Resource kind is independent
 from create/update/retain action, and ordered-direct versus stable-indirect allocation is a dedicated buffer strategy.
 Patch payload bytes live inside the same immutable publication and write records carry absolute rebased spans; allocate/
 resize, fill, copy, and retire records do not carry a payload address. Serialization is allocation-free, canonical
@@ -419,8 +419,8 @@ wire and publication contract, not incremental-layout performance.
 Policy registration now supplies the missing inputs to that compiler through the same compiler-mapped direct-memory
 contract. Its 36-byte header addresses fixed 40-byte capability-set, 56-byte program, 16-byte buffer, and 16-byte
 operation tables; registration decodes those bytes once into retained typed Rust state. Capability-set-specific lookup
-validates backend flags, binding and draw limits, integer upload costs, resource-kind and batch-key masks, allocation
-strategy, and aligned padded buffer strides before a session revision can advance. The executor honors declared stride
+validates backend flags, binding and draw limits, integer upload costs, resource-kind masks, independent storage/draw
+keys, allocation strategy, and aligned padded buffer strides before a session revision can advance. The executor honors declared stride
 without touching padding. Physical outputs remain disjoint independently bindable vector streams; policy operations
 pack wider records instead of introducing aliased mutable interleaved fields. Thirty-six Rust unit tests and the focused
 Node registration/frame tests pass. The optimized SIMD artifact is 739,647 raw / 272,532 gzip / 214,186 Brotli bytes,
@@ -435,10 +435,17 @@ runs, while resource interleaving produces smaller scalar tails only where conti
 is separately viewable, committable, and abortable: no committed CPU mirror changes before immutable plan serialization.
 Tests cover exact first publication, a one-record update, ordered suffix movement, no-op zero output, metadata-only tail
 deletion, retirement generations, abort preservation, compiler-wire validation, and unchanged warm scratch capacities.
-The slice emits only resource/buffer/patch/retirement tables and is not called by the shipping Wasm update yet; LTO
-therefore removes it. The rebuilt optimized SIMD artifact is 739,643 raw / 272,537 gzip / 214,149 Brotli bytes, a delta
-of -4 / +5 / -37 bytes from the preceding policy checkpoint. No planner latency claim is attached until the Wasm lab
-and primitive/draw compilation make that code reachable.
+Dirty transactions additionally publish complete compact resource/buffer bindings and ordered glyph-span/draw tables;
+the physical buffer payload remains range-minimal. A primitive span represents consecutive compatible physical records
+and carries one 16-bit record count, so the compiler splits only on ordering/binding identity, physical discontinuity, or
+the 65,535-record wire limit instead of emitting a 64-byte primitive per glyph. Draws carry numeric material, clip, and
+depth identities and exact table ranges, never a renderer object or callback. Different material IDs split draws under
+the first-party policy while retaining one shared physical glyph buffer. An interleaved `A, A, B, A` resource test
+produces three ordered spans over two deduplicated resources and buffers. The policy program is restricted packing
+bytecode executed by Rust; the render plan itself is data. The planner remains unreachable from the shipping Wasm update
+and is LTO-stripped. Only the reachable draw-wire and policy-key expansion changes the optimized SIMD artifact to
+739,909 raw / 272,607 gzip / 214,288 Brotli bytes. No planner latency claim is attached until session wiring makes it
+reachable.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

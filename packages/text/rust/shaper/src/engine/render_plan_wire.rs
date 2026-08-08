@@ -269,7 +269,7 @@ fn validate_plan(plan: RenderPlanView<'_>) -> Result<(), u32> {
                     | PRIMITIVE_CLIP
                     | PRIMITIVE_POLICY
             )
-            || record.reserved != 0
+            || record.record_count == 0
             || !finite4(
                 record.inline_start,
                 record.block_start,
@@ -471,8 +471,8 @@ fn write_primitive(bytes: &mut [u8], at: usize, value: PrimitiveRecord) {
         value.resource_generation,
     );
     u32_at(bytes, at, PRIMITIVE_PROGRAM_ID, value.program_id);
-    u16_at(bytes, at, PRIMITIVE_VARIANT, value.variant);
-    u16_at(bytes, at, PRIMITIVE_RESERVED, value.reserved);
+    u16_at(bytes, at, PRIMITIVE_PROGRAM_VARIANT, value.program_variant);
+    u16_at(bytes, at, PRIMITIVE_RECORD_COUNT, value.record_count);
     u32_at(bytes, at, PRIMITIVE_BUFFER_ID, value.buffer_id);
     u32_at(bytes, at, PRIMITIVE_RECORD_INDEX, value.record_index);
     u32_at(bytes, at, PRIMITIVE_LOGICAL_ORDER, value.logical_order);
@@ -487,8 +487,11 @@ fn write_primitive(bytes: &mut [u8], at: usize, value: PrimitiveRecord) {
 fn write_draw(bytes: &mut [u8], at: usize, value: DrawRecord) {
     u32_at(bytes, at, DRAW_ID, value.id);
     u32_at(bytes, at, DRAW_PROGRAM_ID, value.program_id);
-    u16_at(bytes, at, DRAW_VARIANT, value.variant);
+    u16_at(bytes, at, DRAW_PROGRAM_VARIANT, value.program_variant);
     u16_at(bytes, at, DRAW_FLAGS, value.flags);
+    u32_at(bytes, at, DRAW_MATERIAL_ID, value.material_id);
+    u32_at(bytes, at, DRAW_CLIP_ID, value.clip_id);
+    u32_at(bytes, at, DRAW_DEPTH_KEY, value.depth_key);
     u32_at(bytes, at, DRAW_PRIMITIVE_START, value.primitive_start);
     u32_at(bytes, at, DRAW_PRIMITIVE_COUNT, value.primitive_count);
     u32_at(bytes, at, DRAW_BUFFER_START, value.buffer_start);
@@ -610,6 +613,7 @@ mod tests {
             resource_id: 2,
             resource_generation: 3,
             program_id: 8,
+            record_count: 1,
             buffer_id: 6,
             semantic_id: 1,
             inline_extent: 8.0,

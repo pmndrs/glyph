@@ -1,10 +1,10 @@
 ---
 type: Research Concept
 title: Three material authority for text draws
-description: Proposes that a render variant carry an optional user material factory over the exported canonical shaders, so applications compose text materials with ordinary Three.js idioms instead of a bespoke effects vocabulary.
-documentation_type: explanation
+description: Defines user-owned material factories carried from text and span properties through numeric Rust render-plan material identities.
+documentation_type: reference
 status: draft
-tags: [planning, threejs, tsl, materials, render-variants, follow-up]
+tags: [planning, threejs, tsl, materials, render-plan]
 sources:
   - id: three-api
     resource: three-api.md
@@ -15,110 +15,149 @@ sources:
   - id: raster-technique
     resource: raster-technique-api.md
     title: Raster technique and engine resource API
-  - id: variant-run-split
-    resource: ../../packages/text/src/paragraph-batch.ts
-    title: Ordered run compilation and variant splitting
+  - id: ordered-plan
+    resource: ../../packages/text/rust/shaper/src/engine/ordered_plan.rs
+    title: Rust retained ordered-plan compiler
+  - id: render-plan
+    resource: ../../packages/text/rust/shaper/src/engine/render_plan.rs
+    title: Rust render-plan records
   - id: bitmap-target
     resource: ../../packages/text/src/three/bitmap-target.ts
-    title: Three Bitmap target and its program-owned material
-  - id: program-registry
-    resource: ../../packages/text/src/three/program-registry.ts
-    title: Three raster program registry
+    title: Three Bitmap target and current program-owned material
 generated:
-  by: anthropic-claude/opus-5
-  at: '2026-08-07T19:05:00Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-08T00:00:00Z'
 ---
 
 # Three material authority for text draws
 
-**Status: work in progress.** This records a proposal made during the target-v1 Three slice so it is not lost. Maintainers
-have identified incorrect edges in it that are not yet resolved. Treat every section as a starting position for that
-discussion rather than an accepted design, and do not implement from it without settling the open questions below.
+Applications may supply a material factory at batch, text, or span scope. `material` is one cascaded rendering property;
+the nearest authored value wins. It replaces the former generic `renderVariant` name and the unimplemented `TextEffect`
+proposal. The Rust engine carries only a numeric `material_id`, while the Three integration owns the corresponding
+factory, `NodeMaterial`, bindings, cache, and disposal.
 
-## The problem
+This boundary keeps layout and shaping renderer-neutral. Rust never stores a JavaScript object, invokes a host callback,
+or interprets a Three material. It uses `material_id` only as policy-directed draw compatibility data and writes it into
+the fixed render-plan draw record as `materialId`.
 
-Target-v1's Three targets construct their own material and never expose it:
-
-```ts
-new THREE.MeshBasicNodeMaterial({ depthTest: false, depthWrite: false, side: THREE.DoubleSide, transparent: true })
-```
-
-That single choice decides more than it appears to. `MeshBasicNodeMaterial` is unlit, so text cannot receive lighting.
-Without depth write or depth test, text never enters the depth buffer, so it cannot cast shadows, receive them, or
-participate in depth-composited effects such as depth of field. Text renders as a depth-less transparent overlay, which
-is a reasonable default for labels and heads-up displays and is part of what makes the pinned Bitmap conformance exact,
-but it prevents text from behaving like an ordinary object in a three-dimensional scene.
-
-Colour-space composition already works: a third party can register a program and compose over the exported canonical
-shaders, which is how the composed-program proof masks its own paint over `bitmapShader`. The gap is that doing so
-requires implementing an entire `ThreeRasterProgram` — owning buffers, geometry, pipeline, and draw compilation — which
-is heavy ceremony for an application that only wants a different material.
-
-## The proposal
-
-Three.js attaches materials to objects, and overriding an object's material is ordinary practice. Text should accept a
-user-defined material through that same instinct rather than through a bespoke effects vocabulary.
-
-The routing already exists. Core treats a render variant as opaque render intent and splits ordered runs by it: the
-run-merge condition requires `Object.is(previousRun.variant, variant)`, so two variants already produce two runs and
-therefore two draws. Nothing new is needed to dispatch a per-variant material.
-
-So the render variant carries an optional material factory, invoked where each program currently constructs its own
-material. That call happens per glyph batch, because each batch binds different pages and textures — which is already
-the shape the exported shaders take.
+## Provisional public shape
 
 ```ts
-const etched = {
-  material: (text) => {
-    const material = new MeshStandardNodeMaterial();
-    material.colorNode = mix(base, sheen, text.coverage);
-    material.opacityNode = text.coverage;
-    return material;
-  },
-};
+interface ThreeTextMaterialContext<Shader extends AnyThreeRasterShader> {
+  /** The package-owned canonical Bitmap, MTSDF, or Slug shader for this exact technique. */
+  readonly shader: Shader;
+  /** Exact resource and instance accessors for the draw being realized. */
+  readonly resource: ThreeRasterResourceContextOf<Shader>;
+  readonly instance: ThreeRasterInstanceContextOf<Shader>;
+  /** Builds the same default material used when no application material is supplied. */
+  createDefaultMaterial(): ThreeRasterMaterialOf<Shader>;
+}
 
-new TextGroup({ technique: slug, renderVariant: etched });
+interface ThreeTextMaterial<Shader extends AnyThreeRasterShader> {
+  create(context: ThreeTextMaterialContext<Shader>): THREE.NodeMaterial;
+}
+
+declare function defineTextMaterial<Shader extends AnyThreeRasterShader>(
+  shader: Shader,
+  create: (context: ThreeTextMaterialContext<Shader>) => THREE.NodeMaterial,
+): ThreeTextMaterial<Shader>;
+
+interface TextGroupOptions {
+  readonly material?: ThreeTextMaterial<ThreeRasterShaderOfFont>;
+}
+
+interface TextProperties {
+  readonly material?: ThreeTextMaterial<ThreeRasterShaderOfFont>;
+}
+
+interface TextSpan {
+  readonly material?: ThreeTextMaterial<ThreeRasterShaderOfFont>;
+}
 ```
 
-Composing a variant of an existing technique then needs no raster module. `registerThreeRasterProgram` remains for
-implementing a genuinely new technique, not for restyling one that exists.
+The exact conditional types remain technique-specific in the public declaration. The abbreviated aliases above state
+ownership, not a new universal shader context.
 
-Lighting, shadows, and depth of field stop being this package's concern under this shape. They follow from the material
-the application chose — a standard material with depth write enabled participates in depth and lighting like any other
-object — rather than from flags this package invents and maintains.
+```ts
+const etched = defineTextMaterial(slugShader, ({ shader, resource, instance }) => {
+  const raster = shader({ resource, instance });
+  const material = new THREE.MeshStandardNodeMaterial({ transparent: true });
+  material.positionNode = raster.position;
+  material.colorNode = mix(raster.color, sheen, raster.coverage);
+  material.opacityNode = raster.opacity;
+  return material;
+});
 
-## Factory rather than subclass
+const text = new Text({ font, text: 'Etched', material: etched });
+text.setSpan(0, { start: 0, end: 3, material: warning });
+```
 
-Export a factory returning exactly the material each program builds internally, so an application starts from that
-material and changes one node instead of reconstructing it. A subclassable base class would bind applications to a
-package-owned class and work against the ecosystem idiom, which is to assign nodes to a material the application chose.
-A factory also keeps the internal path and the application path on the same code, the same property that makes the
-exported canonical shaders trustworthy: deleting the export breaks the built-in target.
+`createDefaultMaterial()` is the DRY path for changing ordinary material state while retaining the package's canonical
+placement, coverage, color, and opacity nodes. Creating another `NodeMaterial` is the low-level path for lighting,
+shadows, depth writes/tests, and other standard Three behavior. Neither path may replace or duplicate the technique's
+glyph coverage algorithm unless the application registers a complete custom raster program.
 
-## Consequence for the effect placeholder
+## Identity and render-plan route
 
-`ThreeRenderVariant.effects` is declared and never read. Under this proposal a variant carrying a material is the
-effect, so the placeholder becomes unnecessary and should be removed rather than implemented. That also settles the
-deferred `TextEffect` helper in the direction of not building it.
+The Three integration interns each live `ThreeTextMaterial` by object identity and assigns a nonzero `u32 material_id`;
+zero means the built-in default material. The frame request carries the resolved ID on Rust-owned material segments.
+Rust resolves the ordinary batch → text → span cascade, maps clusters to one material ID, and preserves that ID through
+glyph primitives into draw packets.
 
-## Constraint
+The registered policy has independent storage and draw key masks. Every first-party policy includes material in its draw
+key. A capability-specific policy may omit it from the storage key, producing different material draws over ranges in
+the same physical glyph buffers, or include it when per-material schemas or backend addressing make distinct buffers
+preferable. A third-party policy may omit material from the draw key only when it packs per-instance material selection
+and its renderer can draw those materials together; the draw-level `materialId` is then zero and the policy-owned
+physical record is authoritative.
 
-The default path must stay byte-identical. The pinned Bitmap conformance frame depends on the exact current material
-state, so application materials are opt-in per variant and the default variant keeps the program-owned material.
+Material assignment changes run/draw planning and any policy-requested material sidecar; it never reshapes text or
+recomputes line layout. Stable material-owned uniforms may change outside the core update. Replacing the factory object
+changes material identity and schedules render-plan recompilation.
 
-## Open questions and known incorrect edges
+## Construction, caching, and lifetime
 
-Maintainers have flagged that this proposal has edges that are wrong as written. Those are not yet enumerated here, and
-enumerating them is the first task when this is picked up. Known open items so far:
+Factories run only when the Three adapter needs a compatible material/resource realization: first use, a new material
+ID, an incompatible resource binding, or a retired realization. They never run in Rust, per glyph, or merely because a
+frame was requested. The adapter retains a bounded cache keyed by technique, material ID, program, and resource-binding
+compatibility.
 
-- Whether glyph coverage drives a shadow-casting depth prepass cleanly is empirical and unproven. It should be spiked
-  against a standard material before any of this is committed to.
-- The relationship between a per-variant material and paint resolved per glyph is unspecified. Core resolves paint into
-  canonical instance storage, so a material that ignores the resolved paint would silently discard authored colour, and
-  the interaction between authored spans and an application material needs a stated rule.
-- Whether a material factory can be reconciled with the requirement that programs own variant compatibility and final
-  draw compilation is unexamined. Two variants that differ only by material may or may not be safely coalescable.
-- A separate request asked for text usable as a sampled function, `getTextNode({ coordinates })`, which is a different
-  model from instanced glyph geometry. Rendering a group to a render target satisfies it today with no package change,
-  and that route should be documented; an analytic evaluation at arbitrary paragraph coordinates is conceivable for
-  MSDF and Slug but not for Bitmap, whose atlas sampling and pixel snapping are per quad.
+The adapter owns and disposes every material returned by a factory. A factory must return a fresh unowned material for
+each invocation; returning a material already owned by another scene object is rejected. Removing a material ID from the
+live plan retires it only after the renderer-safe publication/fence boundary. Disposing a material definition still
+referenced by a live batch, text, or span is an integration lifecycle error.
+
+## Paint and batching rules
+
+Fill, opacity, outline, and shadow remain Rust-resolved per-glyph paint. The canonical shader consumes those values before
+the application material composes its output. A custom material may intentionally ignore canonical color, but it cannot
+silently disable required glyph placement, clipping, or coverage. Bitmap still rejects outline/shadow; MTSDF retains its
+bounded distance-based implementation; Slug remains fill-only until a separately measured shared-traversal design lands.
+
+Material identity is always independent from shaping/layout and is policy-selectable at the two rendering boundaries.
+Adjacent glyph spans with the same draw key form one draw span. Different material IDs may reference the same physical
+buffers at different record ranges, or a storage key containing material may partition those records. Rust ordered-plan
+tests prove both outcomes rather than leaving the adapter to reinterpret the published plan.
+
+## Rejected effects layer
+
+There is no `TextEffect`, effect list, graph-composition registry, or effect parameter schema. Those types duplicated the
+material system, introduced a second shader vocabulary, and still could not express ordinary Three lighting/depth/shadow
+behavior without material authority. Reusable functions may help applications build `NodeMaterial` graphs, but they are
+ordinary Three/TSL code outside the text core contract.
+
+## Required implementation evidence
+
+- batch, text, and nested-span material cascade reaches exact `materialId` draw records without shaping/layout work;
+- two materials over one resource share physical glyph buffers and produce ordered draw spans;
+- Bitmap, MTSDF, and Slug factories consume the exact canonical shaders used by their default targets;
+- WebGPURenderer and its WebGL2 fallback preserve placement and coverage for default and custom materials;
+- replacement, failure, cache eviction, renderer retirement, and disposal preserve the previous complete frame;
+- a lit/depth-writing material proves standard Three lighting, depth, and shadow participation where Three supports it;
+- untouched text pays no material-factory call, allocation, pipeline rebuild, or extra package import; and
+- package raw/minified/gzip/Brotli and first-pipeline costs are reported before the API is marked implemented.
+
+The numeric `material_id` route, material-directed draw compatibility, shared physical glyph storage, and rejection of a
+second effects vocabulary are settled inputs to the Rust plan. The exact Three factory types above remain provisional for
+the later material-design pass. Until its gates pass, the current first-party Three targets remain the implementation
+gap; documentation must not describe the factory as already shipped.

@@ -41,6 +41,9 @@ const BATCH_FIELDS: u32 = BATCH_TECHNIQUE
     | BATCH_CLIP
     | BATCH_DEPTH
     | BATCH_ORDER;
+const STORAGE_KEY_FIELDS: u32 = BATCH_FIELDS & !BATCH_ORDER;
+const REQUIRED_STORAGE_KEYS: u32 = BATCH_TECHNIQUE | BATCH_RESOURCE | BATCH_PROGRAM;
+const REQUIRED_DRAW_KEYS: u32 = REQUIRED_STORAGE_KEYS | BATCH_ORDER;
 
 pub const BUFFER_USAGE_VERTEX: u32 = 1 << 0;
 pub const BUFFER_USAGE_STORAGE: u32 = 1 << 1;
@@ -232,7 +235,8 @@ pub struct ProgramDescriptor {
     pub capability_set: CapabilitySetId,
     pub resource_kind_mask: u32,
     pub semantic_view_mask: u32,
-    pub batch_key_mask: u32,
+    pub storage_key_mask: u32,
+    pub draw_key_mask: u32,
     pub allocation_strategy: u16,
     pub f32_input_count: u8,
     pub u32_input_count: u8,
@@ -377,7 +381,8 @@ fn policy_fingerprint(descriptor: &PolicyDescriptor) -> u64 {
         mix_u32(&mut fingerprint, program.capability_set.0);
         mix_u32(&mut fingerprint, program.resource_kind_mask);
         mix_u32(&mut fingerprint, program.semantic_view_mask);
-        mix_u32(&mut fingerprint, program.batch_key_mask);
+        mix_u32(&mut fingerprint, program.storage_key_mask);
+        mix_u32(&mut fingerprint, program.draw_key_mask);
         mix_u32(&mut fingerprint, u32::from(program.allocation_strategy));
         mix_u32(&mut fingerprint, u32::from(program.variant));
         mix_u32(&mut fingerprint, u32::from(program.f32_input_count));
@@ -951,8 +956,10 @@ fn validate_policy(descriptor: &PolicyDescriptor) -> Result<(), PolicyError> {
         if program.resource_kind_mask == 0 {
             return Err(PolicyError::InvalidResourceKinds);
         }
-        if program.batch_key_mask & !BATCH_FIELDS != 0
-            || program.batch_key_mask & BATCH_PROGRAM == 0
+        if program.storage_key_mask & !STORAGE_KEY_FIELDS != 0
+            || program.storage_key_mask & REQUIRED_STORAGE_KEYS != REQUIRED_STORAGE_KEYS
+            || program.draw_key_mask & !BATCH_FIELDS != 0
+            || program.draw_key_mask & REQUIRED_DRAW_KEYS != REQUIRED_DRAW_KEYS
         {
             return Err(PolicyError::InvalidBatchKey);
         }
@@ -1305,7 +1312,8 @@ mod tests {
             capability_set: CapabilitySetId(0),
             resource_kind_mask: 1,
             semantic_view_mask: 0,
-            batch_key_mask: BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+            storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
+            draw_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
             allocation_strategy: ALLOCATION_ORDERED_DIRECT,
             f32_input_count: 2,
             u32_input_count: 0,
@@ -1446,6 +1454,28 @@ mod tests {
     }
 
     #[test]
+    fn storage_and_draw_keys_validate_independently() {
+        let mut missing_storage_resource = valid_program();
+        missing_storage_resource.storage_key_mask = BATCH_TECHNIQUE | BATCH_PROGRAM;
+        assert_eq!(
+            ValidatedPolicy::new(descriptor(vec![missing_storage_resource])).unwrap_err(),
+            PolicyError::InvalidBatchKey,
+        );
+
+        let mut missing_draw_order = valid_program();
+        missing_draw_order.draw_key_mask = BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE;
+        assert_eq!(
+            ValidatedPolicy::new(descriptor(vec![missing_draw_order])).unwrap_err(),
+            PolicyError::InvalidBatchKey,
+        );
+
+        let mut material_partitioned = valid_program();
+        material_partitioned.storage_key_mask |= BATCH_MATERIAL;
+        material_partitioned.draw_key_mask |= BATCH_MATERIAL;
+        assert!(ValidatedPolicy::new(descriptor(vec![material_partitioned])).is_ok());
+    }
+
+    #[test]
     fn capability_sets_select_exact_programs_and_reject_invalid_costs() {
         let mut webgpu = valid_capability_set();
         webgpu.id = CapabilitySetId(1);
@@ -1571,7 +1601,8 @@ mod tests {
             capability_set: CapabilitySetId(0),
             resource_kind_mask: 1,
             semantic_view_mask: 0,
-            batch_key_mask: BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+            storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
+            draw_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
             allocation_strategy: ALLOCATION_ORDERED_DIRECT,
             f32_input_count: 1,
             u32_input_count: 1,

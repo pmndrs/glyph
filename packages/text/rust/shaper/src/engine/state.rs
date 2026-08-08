@@ -163,7 +163,7 @@ impl TextEngine {
 mod tests {
     use super::*;
     use crate::engine::policy::{
-        ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE,
+        ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE,
         BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CAP_ORDERED_DIRECT,
         CapabilitySet, Operation, PolicyDescriptor, ProgramCapabilities, ProgramDescriptor,
         ProgramId, ScalarType, TechniqueId,
@@ -275,7 +275,8 @@ mod tests {
                 capability_set: CapabilitySetId(0),
                 resource_kind_mask: 1,
                 semantic_view_mask: 0,
-                batch_key_mask: BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+                storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
+                draw_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
                 allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,

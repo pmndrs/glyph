@@ -111,8 +111,9 @@ pub struct PrimitiveRecord {
     pub resource_id: u32,
     pub resource_generation: u32,
     pub program_id: u32,
-    pub variant: u16,
-    pub reserved: u16,
+    pub program_variant: u16,
+    /// Number of consecutive physical records represented by this primitive span.
+    pub record_count: u16,
     pub buffer_id: u32,
     pub record_index: u32,
     pub logical_order: u32,
@@ -129,8 +130,14 @@ pub struct PrimitiveRecord {
 pub struct DrawRecord {
     pub id: u32,
     pub program_id: u32,
-    pub variant: u16,
+    pub program_variant: u16,
     pub flags: u16,
+    /// Renderer-owned material/pipeline identity. This is data, never a host callback.
+    pub material_id: u32,
+    /// Clip identity shared by every primitive in this packet.
+    pub clip_id: u32,
+    /// Caller-defined sortable depth bucket; logical order remains authoritative within a bucket.
+    pub depth_key: u32,
     pub primitive_start: u32,
     pub primitive_count: u32,
     pub buffer_start: u32,
@@ -188,6 +195,6 @@ const _: () = assert!(core::mem::size_of::<ResourceRecord>() == 40);
 const _: () = assert!(core::mem::size_of::<BufferRecord>() == 36);
 const _: () = assert!(core::mem::size_of::<PatchRecord>() == 36);
 const _: () = assert!(core::mem::size_of::<PrimitiveRecord>() == 64);
-const _: () = assert!(core::mem::size_of::<DrawRecord>() == 48);
+const _: () = assert!(core::mem::size_of::<DrawRecord>() == 60);
 const _: () = assert!(core::mem::size_of::<RetirementRecord>() == 24);
 const _: () = assert!(core::mem::size_of::<DiagnosticRecord>() == 24);

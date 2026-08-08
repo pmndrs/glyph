@@ -2,6 +2,23 @@
 
 ## 2026-08-08
 
+- **Completed ordered-direct display-list compilation** — Dirty retained updates now publish complete compact binding
+  and command tables while keeping physical payloads revision-directed. Consecutive compatible glyphs compile into one
+  primitive span and draw packet; interleaved `A, A, B, A` resources preserve three ordered spans over two deduplicated
+  resources and buffers. Material IDs split ordered draws without splitting shared physical glyph storage. Draw records
+  also carry numeric clip and depth identities, and the generated TypeScript ABI derives their 60-byte compiler layout
+  from Rust. No-op output remains empty and one changed glyph remains one four-byte payload in the focused policy fixture.
+  Policies independently select storage and draw keys, proving material-split draws both over shared storage and over
+  material-partitioned buffers. The planner remains LTO-stripped until session wiring; reachable ABI/policy growth from
+  the preceding checkpoint measures 266 raw / 70 gzip / 139 Brotli bytes. Stable-indirect compilation and end-to-end
+  timing remain open.
+
+- **Replaced the unimplemented effects vocabulary with material routing** — Superseded `renderVariant` and the declared-
+  only `TextEffect` proposal with one batch → text → span `material` property and numeric Rust/Wire `material_id` identity.
+  The Rust contract is fixed: policies control material draw compatibility, material changes never reshape or relayout,
+  and different materials may share canonical glyph buffers. The exact Three material-factory API remains deliberately
+  provisional for a later design pass; current first-party targets do not yet implement it.
+
 - **Implemented retained ordered-direct physical patches** — Added an abortable native planner that groups glyphs by
   policy program/resource and uses stable instance IDs plus semantic revisions, never full-buffer byte comparison, to
   select writes. Capability alignment and upload costs coalesce ranges; consecutive changed records retain SIMD policy
