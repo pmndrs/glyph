@@ -332,3 +332,48 @@ test('the maintained TypeGPU engine retains core handles and delegates exact tar
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 }
+
+const fontAwesomeUrl = new URL(
+  '../../../../apps/benchmarks/fixtures/rendering/font-awesome-free-6.7.2-bitmap-16.font.glb',
+  import.meta.url,
+);
+
+/**
+ * Font fallback inspects shaped glyph identity, and the shaping request appends one ellipsis run per source run
+ * clustered past the end of the text so overflow can be measured. Those runs are not glyphs of the paragraph, and a
+ * primary font without U+2026 shapes them to .notdef. Substituting a font for one authored a span outside the text,
+ * which failed preparation for the whole batch rather than for one paragraph.
+ *
+ * The icon-font-first stack is the ordinary configuration that reaches this: Font Awesome carries neither the Latin
+ * text nor the ellipsis. The fallback must land in the middle of the text, because a stack whose substitution happens
+ * to end at the final cluster is the one arrangement where the stray entry is dropped harmlessly.
+ */
+test('font fallback ignores the ellipsis runs shaped past the end of the text', async () => {
+  const [awesomeBytes, interBytes] = await Promise.all([readFile(fontAwesomeUrl), readFile(interUrl)]);
+  const registry = new FontRegistry();
+  const shaper = await createRuntimeShaper({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const runtime = await createTextRuntime({ registry, shaper });
+  const [awesome, inter] = await Promise.all([
+    runtime.loadFont({ input: { baked: dataUrl(awesomeBytes) }, raster: { technique: bitmap, options: { strikes: [16] } } }),
+    runtime.loadFont({ input: { baked: dataUrl(interBytes) }, raster: { technique: bitmap, options: { strikes: [16] } } }),
+  ]);
+  const batch = runtime.createParagraphBatch({ technique: bitmap });
+  const paragraph = batch.add({ font: createFontStack(awesome, inter), text: 'hello\nworld' });
+
+  const first = runtime.update();
+  assert.equal(first.preparationError, undefined, 'a primary font without U+2026 must still prepare');
+  assert.equal(batch.current.paragraphs[0].layout.glyphIds.length, 10);
+
+  // The retained paragraph re-enters preparation here, so the stray selection would reappear on the second pass.
+  paragraph.style = { fontSize: 18 };
+  assert.equal(runtime.update().preparationError, undefined, 'reparation must not accumulate a stray fallback span');
+  assert.equal(batch.current.paragraphs[0].layout.glyphIds.length, 10);
+
+  batch.dispose();
+  runtime.dispose();
+  awesome.dispose();
+  inter.dispose();
+});

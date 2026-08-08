@@ -350,7 +350,12 @@ class ParagraphImpl implements Paragraph {
 
   shaped(): ShapedGlyphIdentity {
     this.#assertActive();
-    return { glyphIds: this.#prepared.shape.glyphIds, clusters: this.#prepared.shape.clusters };
+    const { shape, runs } = this.#prepared;
+    // The shaping request appends one ellipsis run per source run, clustered past the end of the text, so a caller
+    // inspecting glyph identity must not see them: they are how overflow is measured, not glyphs of this paragraph.
+    // Those runs are requested after every source run, so the first of them bounds the paragraph's own glyphs.
+    const end = runs.length < shape.runGlyphStarts.length ? (shape.runGlyphStarts[runs.length] ?? 0) : shape.glyphIds.length;
+    return { glyphIds: shape.glyphIds.subarray(0, end), clusters: shape.clusters.subarray(0, end) };
   }
 
   update(input: ParagraphInput): void {
@@ -1736,9 +1741,12 @@ function clusterRangeSum(
   end: number,
 ): number {
   if (end <= start) return 0;
+  // An offset past the table addresses no cluster, and answering `0` would invert the prefix difference rather than
+  // return nothing. Shaped clusters cross the Wasm boundary, so a malformed one must degrade, not silently mis-space.
   const index = prepared.clusterIndexAt;
-  const first = index[start] ?? 0;
-  const afterLast = index[end] ?? 0;
+  const last = index.length - 1;
+  const first = index[Math.min(start, last)] ?? 0;
+  const afterLast = index[Math.min(end, last)] ?? 0;
   return (prefix[afterLast] ?? 0) - (prefix[first] ?? 0);
 }
 

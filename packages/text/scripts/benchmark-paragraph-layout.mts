@@ -101,11 +101,15 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
   for (let repetition = 0; repetition < total; repetition += 1) {
     const recording = repetition >= options.warmup;
     const phases = new Map<TextProfilePhase, number>();
-    if (recording) {
-      setTextProfiler((phase, startedMs, endedMs) => {
-        phases.set(phase, (phases.get(phase) ?? 0) + (endedMs - startedMs));
-      });
-    }
+    // Warmup installs a profiler too. Warming with instrumentation disabled and recording with it enabled would let
+    // the compiler specialize a branch that the measured repetitions never take.
+    setTextProfiler(
+      recording
+        ? (phase, startedMs, endedMs) => {
+            phases.set(phase, (phases.get(phase) ?? 0) + (endedMs - startedMs));
+          }
+        : discardPhase,
+    );
 
     const created = name === 'cold' ? createParagraph(runtime, text, 600) : undefined;
     if (warm !== undefined) applyChange(name, warm.paragraph, repetition, text);
@@ -149,6 +153,9 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
     phases: medianPhases(samples),
   };
 }
+
+/** Warmup records into nothing, so the instrumented branch is the one the compiler optimizes. */
+function discardPhase(): void {}
 
 /**
  * Attributes the case median across phases. Each phase is reduced independently by median rather than by summing one
