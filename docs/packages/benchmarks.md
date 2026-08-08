@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:79e8650499e9764b5e7449d16ca6446f60caaef77c8b53ac08fc2901cfd10985'
+source_digest: 'sha256:3185896663acc3394d719ec4eddf94c2c038a9386b7119e67d4bfd10eac30d88'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -198,8 +198,8 @@ sources:
     resource: ../../apps/benchmarks/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
 generated:
-  by: anthropic-claude/opus-5
-  at: '2026-08-08T08:15:00Z'
+  by: openai-codex/gpt-5
+  at: '2026-08-08T10:15:42Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -484,6 +484,15 @@ The size lane is also a package-graph gate. Its consumer builds inspect emitted 
 The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, CJK, and advanced-shaping conformance records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
 
 The packed-consumer lane builds and packs both workspace packages, extracts only their published tarballs into an isolated Vite application, and executes `@pmndrs/text/runtime-bake` through the installed module Worker in Chromium. Canonical Inter returns the exact 172,156-byte artifact and SHA-256 `af7bfb85f04a6a63c6462735a6e8ec6d739576adb354c07ca51e744814db2f7b`. This closes the gap between source-workspace Worker evidence and what an installed consumer actually resolves.
+
+The `text:kernel-lab-browser` workflow runs the package-owned scalar, compiler-vectorized, and selected hybrid shaper
+artifacts in the project-pinned Chromium from a trustworthy loopback origin. It consumes the same captured 25,515- and
+100,602-glyph typed arrays as the Node workflow and fails before timing unless every artifact reproduces the scalar
+horizontal, vertical, partial-tail, and unaligned hashes. The current Chromium 149 run executed the SIMD artifact,
+observed no warm memory growth, and supports the 64-cluster choice: at 100,602 glyphs its selected-hybrid p95 was 0.01875
+ms versus 0.06875 ms scalar for chunk summaries, 0.009375 versus 0.053125 ms for break masks, and 0.0125 versus 0.046875
+ms for bidi masks. Browser timer quantization is visible in those figures, so Node retains the finer candidate ranking
+while Chromium supplies the independent engine-admission check.
 
 The bake-host report separates the consumer phases without timing conformance work. Each offline sample creates a fresh Wasm baker and records initialization plus first bake as cold, then records a second bake on that instance as warm. Each isolated Chromium context queues two requests onto one Worker: first completion contains Worker/Wasm startup plus its bake, while the interval to second completion is the warm reused-instance bake. Three captured arm64/Chromium 149 samples preserve complete artifact parity; medians were 4.16 ms cold / 2.94 ms warm offline and 21.70 ms cold / 3.50 ms warm in the Worker. These are observations, not cross-host thresholds.
 
