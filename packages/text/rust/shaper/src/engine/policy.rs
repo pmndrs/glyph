@@ -383,7 +383,78 @@ impl ValidatedPolicy {
             .execution
             .get(program_index)
             .ok_or(PolicyExecutionError::ProgramMissing)?;
-        execute_program(program, execution, inputs, output_start, outputs)
+        let active_buffers = (1_u32 << program.buffers.len()) - 1;
+        execute_program(
+            program,
+            execution,
+            inputs,
+            output_start,
+            outputs,
+            active_buffers,
+        )
+    }
+
+    pub(crate) fn execute_buffers(
+        &self,
+        capability_set: CapabilitySetId,
+        technique: TechniqueId,
+        variant: u16,
+        inputs: SemanticInputBatch<'_>,
+        output_start: usize,
+        outputs: &mut [PhysicalBufferMut<'_>],
+        active_buffers: u32,
+    ) -> Result<(), PolicyExecutionError> {
+        if self.capability_set(capability_set).is_none() {
+            return Err(PolicyExecutionError::CapabilitySetMissing);
+        }
+        let program_index = self
+            .programs
+            .iter()
+            .position(|program| {
+                program.capability_set == capability_set
+                    && program.technique == technique
+                    && program.variant == variant
+            })
+            .or_else(|| {
+                self.programs.iter().position(|program| {
+                    program.capability_set.0 == 0
+                        && program.technique == technique
+                        && program.variant == variant
+                })
+            })
+            .ok_or(PolicyExecutionError::ProgramMissing)?;
+        execute_program(
+            &self.programs[program_index],
+            &self.execution[program_index],
+            inputs,
+            output_start,
+            outputs,
+            active_buffers,
+        )
+    }
+
+    pub(crate) fn buffer_dependency_masks(
+        &self,
+        capability_set: CapabilitySetId,
+        technique: TechniqueId,
+        variant: u16,
+    ) -> Option<&[u16]> {
+        let index = self
+            .programs
+            .iter()
+            .position(|program| {
+                program.capability_set == capability_set
+                    && program.technique == technique
+                    && program.variant == variant
+            })
+            .or_else(|| {
+                self.programs.iter().position(|program| {
+                    program.capability_set.0 == 0
+                        && program.technique == technique
+                        && program.variant == variant
+                })
+            })?;
+        Some(&self.execution.get(index)?.buffer_dependency_masks)
     }
 }
 
@@ -523,14 +594,21 @@ fn mix_u32(fingerprint: &mut u64, value: u32) {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ExecutableProgram {
     store_buffer_indices: Vec<u8>,
+    buffer_dependency_masks: Vec<u16>,
 }
 
 impl ExecutableProgram {
     fn new(program: &ProgramDescriptor) -> Result<Self, PolicyError> {
         let mut store_buffer_indices = Vec::new();
+        let mut buffer_dependency_masks = Vec::new();
         store_buffer_indices
             .try_reserve_exact(program.operations.len())
             .map_err(|_| PolicyError::AllocationFailed)?;
+        buffer_dependency_masks
+            .try_reserve_exact(program.buffers.len())
+            .map_err(|_| PolicyError::AllocationFailed)?;
+        buffer_dependency_masks.resize(program.buffers.len(), 0);
+        let mut register_dependencies = [0_u16; MAX_REGISTERS];
         for operation in &program.operations {
             let index = match store_buffer(operation) {
                 Some(buffer) => program
@@ -543,10 +621,105 @@ impl ExecutableProgram {
                 None => NOT_A_STORE,
             };
             store_buffer_indices.push(index);
+            propagate_dependencies(
+                program,
+                operation,
+                &mut register_dependencies,
+                &mut buffer_dependency_masks,
+            )?;
         }
         Ok(Self {
             store_buffer_indices,
+            buffer_dependency_masks,
         })
+    }
+}
+
+fn propagate_dependencies(
+    program: &ProgramDescriptor,
+    operation: &Operation,
+    registers: &mut [u16; MAX_REGISTERS],
+    buffers: &mut [u16],
+) -> Result<(), PolicyError> {
+    match *operation {
+        Operation::LoadF32 { target, field } => {
+            registers[usize::from(target)] =
+                f32_input_dependency(program.inputs[usize::from(field)]);
+        }
+        Operation::LoadU32 { target, field } => {
+            let input = usize::from(program.f32_input_count) + usize::from(field);
+            registers[usize::from(target)] = u32_input_dependency(program.inputs[input]);
+        }
+        Operation::ConstantF32 { target, .. } | Operation::ConstantU32 { target, .. } => {
+            registers[usize::from(target)] = 0;
+        }
+        Operation::AddF32 {
+            target,
+            left,
+            right,
+        }
+        | Operation::SubtractF32 {
+            target,
+            left,
+            right,
+        }
+        | Operation::MultiplyF32 {
+            target,
+            left,
+            right,
+        }
+        | Operation::LessThanF32 {
+            target,
+            left,
+            right,
+        } => {
+            registers[usize::from(target)] =
+                registers[usize::from(left)] | registers[usize::from(right)];
+        }
+        Operation::SelectF32 {
+            target,
+            condition,
+            when_true,
+            when_false,
+        } => {
+            registers[usize::from(target)] = registers[usize::from(condition)]
+                | registers[usize::from(when_true)]
+                | registers[usize::from(when_false)];
+        }
+        Operation::ConvertU32ToF32 { target, source } => {
+            registers[usize::from(target)] = registers[usize::from(source)];
+        }
+        Operation::StoreF32 { source, buffer, .. }
+        | Operation::StoreU32 { source, buffer, .. }
+        | Operation::StoreU16 { source, buffer, .. } => {
+            let index = program
+                .buffers
+                .iter()
+                .position(|schema| schema.id == buffer)
+                .ok_or(PolicyError::UnknownBuffer)?;
+            buffers[index] |= registers[usize::from(source)];
+        }
+    }
+    Ok(())
+}
+
+fn f32_input_dependency(source: InputSource) -> u16 {
+    if source.scope != InputScope::Semantic {
+        return 0;
+    }
+    match source.field {
+        0..=5 => 1 << source.field,
+        6..=9 => 1 << 6,
+        10 => 1 << 4,
+        _ => 0,
+    }
+}
+
+fn u32_input_dependency(source: InputSource) -> u16 {
+    if source.scope == InputScope::Semantic && source.field < 4 {
+        1 << (6 + source.field)
+    } else {
+        0
     }
 }
 
@@ -626,11 +799,20 @@ fn execute_program(
     inputs: SemanticInputBatch<'_>,
     output_start: usize,
     outputs: &mut [PhysicalBufferMut<'_>],
+    active_buffers: u32,
 ) -> Result<(), PolicyExecutionError> {
-    validate_execution(program, inputs, output_start, outputs)?;
+    validate_execution(program, inputs, output_start, outputs, active_buffers)?;
     #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
-    let completed =
-        unsafe { execute_simd_records(program, execution, inputs, output_start, outputs)? };
+    let completed = unsafe {
+        execute_simd_records(
+            program,
+            execution,
+            inputs,
+            output_start,
+            outputs,
+            active_buffers,
+        )?
+    };
     #[cfg(not(all(target_arch = "wasm32", feature = "simd128")))]
     let completed = 0;
     for record in completed..inputs.record_count {
@@ -641,6 +823,7 @@ fn execute_program(
             output_start + record,
             record,
             outputs,
+            active_buffers,
         )?;
     }
     Ok(())
@@ -651,6 +834,7 @@ fn validate_execution(
     inputs: SemanticInputBatch<'_>,
     output_start: usize,
     outputs: &[PhysicalBufferMut<'_>],
+    active_buffers: u32,
 ) -> Result<(), PolicyExecutionError> {
     if inputs.f32_fields.len() != usize::from(program.f32_input_count)
         || inputs.u32_fields.len() != usize::from(program.u32_input_count)
@@ -674,9 +858,12 @@ fn validate_execution(
     let output_end = output_start
         .checked_add(inputs.record_count)
         .ok_or(PolicyExecutionError::OutputCapacity)?;
-    for (output, schema) in outputs.iter().zip(&program.buffers) {
+    for (index, (output, schema)) in outputs.iter().zip(&program.buffers).enumerate() {
         if output.schema != *schema {
             return Err(PolicyExecutionError::OutputSchema);
+        }
+        if active_buffers & (1 << index) == 0 {
+            continue;
         }
         let required = output_end
             .checked_mul(schema.stride())
@@ -695,6 +882,7 @@ fn execute_record(
     output_record: usize,
     input_record: usize,
     outputs: &mut [PhysicalBufferMut<'_>],
+    active_buffers: u32,
 ) -> Result<(), PolicyExecutionError> {
     let mut registers = [0_u32; MAX_REGISTERS];
     let mut values = [0_u32; MAX_OUTPUT_LANES];
@@ -771,6 +959,9 @@ fn execute_record(
         }
     }
     for (buffer_index, (schema, output)) in program.buffers.iter().zip(outputs).enumerate() {
+        if active_buffers & (1 << buffer_index) == 0 {
+            continue;
+        }
         let record_offset = output_record * schema.stride();
         for lane in 0..schema.vector_width {
             let value = values[buffer_index * MAX_VECTOR_WIDTH as usize + usize::from(lane)];
@@ -797,6 +988,7 @@ unsafe fn execute_simd_records(
     inputs: SemanticInputBatch<'_>,
     output_start: usize,
     outputs: &mut [PhysicalBufferMut<'_>],
+    active_buffers: u32,
 ) -> Result<usize, PolicyExecutionError> {
     use core::arch::wasm32::{
         f32x4_add, f32x4_convert_u32x4, f32x4_lt, f32x4_mul, f32x4_sub, i32x4_ne, u32x4_splat,
@@ -902,7 +1094,13 @@ unsafe fn execute_simd_records(
                 }
             }
         }
-        write_simd_outputs(program, &values, output_start + input_record, outputs);
+        write_simd_outputs(
+            program,
+            &values,
+            output_start + input_record,
+            outputs,
+            active_buffers,
+        );
     }
     Ok(completed)
 }
@@ -913,10 +1111,14 @@ fn write_simd_outputs(
     values: &[core::arch::wasm32::v128; MAX_OUTPUT_LANES],
     output_start: usize,
     outputs: &mut [PhysicalBufferMut<'_>],
+    active_buffers: u32,
 ) {
     use core::arch::wasm32::{i32x4_shuffle, v128_store};
 
     for (buffer_index, (schema, output)) in program.buffers.iter().zip(outputs).enumerate() {
+        if active_buffers & (1 << buffer_index) == 0 {
+            continue;
+        }
         let first = buffer_index * MAX_VECTOR_WIDTH as usize;
         if matches!(schema.scalar, ScalarType::F32 | ScalarType::U32)
             && schema.stride() == usize::from(schema.vector_width) * 4
@@ -1461,6 +1663,10 @@ mod tests {
             Some(PROGRAM)
         );
         assert_eq!(policy.program(CAPABILITY, BITMAP, 1), None);
+        assert_eq!(
+            policy.buffer_dependency_masks(CAPABILITY, BITMAP, 0),
+            Some([0b11].as_slice())
+        );
     }
 
     #[test]

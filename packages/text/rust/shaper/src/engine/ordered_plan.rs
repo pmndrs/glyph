@@ -89,6 +89,7 @@ struct InstanceState {
     stable_id: u32,
     content_revision: u32,
     input_index: u32,
+    semantic_change_mask: u16,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -549,6 +550,11 @@ impl OrderedPlanCompiler {
                 stable_id: glyph.stable_id,
                 content_revision: glyph.content_revision,
                 input_index: input_index as u32,
+                semantic_change_mask: input
+                    .semantic_change_masks
+                    .get(input_index)
+                    .copied()
+                    .unwrap_or(super::positioning::ALL_SEMANTIC_CHANGES),
             };
             self.input_slots[input_index] = u32::try_from(destination)
                 .map_err(|_| OrderedPlanError::ArithmeticOverflow)?
@@ -738,8 +744,20 @@ impl OrderedPlanCompiler {
             let changed = self.changed_ranges[range_index];
             let aligned = align_record_range(changed, record_alignment)?;
             let count = aligned.end - aligned.start;
+            let active_buffers = active_buffers_for_range(
+                policy,
+                capability_set,
+                program,
+                prior_instances,
+                next_instances,
+                changed,
+                replace,
+            )?;
             let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
             for (schema_index, schema) in program.buffers.iter().enumerate() {
+                if active_buffers & (1 << schema_index) == 0 {
+                    continue;
+                }
                 let byte_count = usize::try_from(count)
                     .ok()
                     .and_then(|value| value.checked_mul(schema.stride()))
@@ -788,10 +806,14 @@ impl OrderedPlanCompiler {
                     &mut self.payload,
                     &payload_starts,
                     count,
+                    active_buffers,
                 )?;
             }
 
             for (schema_index, schema) in program.buffers.iter().enumerate() {
+                if active_buffers & (1 << schema_index) == 0 {
+                    continue;
+                }
                 let buffer_id = pending.buffer_ids[schema_index];
                 let buffer_generation = pending.buffer_generations[schema_index];
                 let byte_length = count
@@ -1102,6 +1124,42 @@ impl OrderedPlanCompiler {
     }
 }
 
+fn active_buffers_for_range(
+    policy: &ValidatedPolicy,
+    capability_set: CapabilitySetId,
+    program: &super::policy::ProgramDescriptor,
+    previous: &[InstanceState],
+    next: &[InstanceState],
+    changed: RecordRange,
+    replace: bool,
+) -> Result<u32, OrderedPlanError> {
+    let all = (1_u32 << program.buffers.len()) - 1;
+    if replace {
+        return Ok(all);
+    }
+    let dependencies = policy
+        .buffer_dependency_masks(capability_set, program.technique, program.variant)
+        .ok_or(OrderedPlanError::ProgramMissing)?;
+    let mut active = 0_u32;
+    for slot in changed.start..changed.end {
+        let next = next[slot as usize];
+        let Some(previous) = previous.get(slot as usize) else {
+            return Ok(all);
+        };
+        if previous.stable_id != next.stable_id
+            || next.semantic_change_mask == super::positioning::ALL_SEMANTIC_CHANGES
+        {
+            return Ok(all);
+        }
+        for (index, &dependency) in dependencies.iter().enumerate() {
+            if dependency & next.semantic_change_mask != 0 {
+                active |= 1 << index;
+            }
+        }
+    }
+    Ok(active)
+}
+
 fn collect_changed_ranges(
     ranges: &mut Vec<RecordRange>,
     previous: &[InstanceState],
@@ -1223,6 +1281,60 @@ mod tests {
         assert_eq!(delta.draws.len(), 1);
         compiler.commit().unwrap();
         assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 4), 20.0);
+    }
+
+    #[test]
+    fn semantic_dependencies_suppress_unrelated_physical_buffer_writes() {
+        let policy = policy();
+        let mut compiler = OrderedPlanCompiler::default();
+        let initial = [glyph(1, 1)];
+        prepare(&mut compiler, &policy, &initial, &[1.0], true);
+        compiler.commit().unwrap();
+
+        let mut block_changed = glyph(1, 2);
+        block_changed.block_start = 4.0;
+        compiler
+            .prepare(
+                &policy,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &[block_changed],
+                    semantic_change_masks: &[1 << 1],
+                    f32_fields: &[&[1.0]],
+                    u32_fields: &[],
+                },
+                false,
+                1,
+            )
+            .unwrap();
+        assert!(
+            compiler
+                .plan_view(7, CAPABILITY, policy.fingerprint())
+                .unwrap()
+                .patches
+                .is_empty()
+        );
+        compiler.commit().unwrap();
+
+        compiler
+            .prepare(
+                &policy,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &[glyph(1, 3)],
+                    semantic_change_masks: &[1],
+                    f32_fields: &[&[2.0]],
+                    u32_fields: &[],
+                },
+                false,
+                1,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        assert_eq!(plan.patches.len(), 1);
+        assert_eq!(plan.payload, 2.0_f32.to_le_bytes());
     }
 
     #[test]
@@ -1429,6 +1541,7 @@ mod tests {
                 CAPABILITY,
                 OrderedPlanInput {
                     glyphs,
+                    semantic_change_masks: &[],
                     f32_fields: &[x],
                     u32_fields: &[],
                 },

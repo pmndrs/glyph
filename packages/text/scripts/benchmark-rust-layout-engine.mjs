@@ -78,15 +78,19 @@ printReport(reports);
 
 function measureCold() {
   const samples = [];
+  const plans = [];
   let glyphs = 0;
   for (let index = 0; index < options.warmup + options.repetitions; index += 1) {
     createSession(initial.byteLength);
     const result = execute(initial, true);
     glyphs = result.primitiveCount;
-    if (index >= options.warmup) samples.push(result.durationMs);
+    if (index >= options.warmup) {
+      samples.push(result.durationMs);
+      plans.push(result);
+    }
     requireStatus(fn.disposeSession(sessionId), 'dispose cold session');
   }
-  return summarize('cold', glyphs, samples);
+  return summarize('cold', glyphs, samples, plans);
 }
 
 function measureWarm(name) {
@@ -96,6 +100,7 @@ function measureWarm(name) {
   const localizedText = [...utf16];
   let suffixLength = utf16.length;
   const samples = [];
+  const plans = [];
   for (let index = 0; index < options.warmup + options.repetitions; index += 1) {
     const revision = index + 2;
     const common = {
@@ -141,10 +146,13 @@ function measureWarm(name) {
       bytes = updateBytes({ ...common, geometry: baseGeometry });
     }
     state = execute(bytes, index < options.warmup, `${name}[${index}]`);
-    if (index >= options.warmup) samples.push(state.durationMs);
+    if (index >= options.warmup) {
+      samples.push(state.durationMs);
+      plans.push(state);
+    }
   }
   requireStatus(fn.disposeSession(sessionId), `dispose ${name} session`);
-  return summarize(name, livePrimitiveCount, samples);
+  return summarize(name, livePrimitiveCount, samples, plans);
 }
 
 function createSession(requestCapacity) {
@@ -176,13 +184,25 @@ function execute(bytes, allowGrowth = false, operation = 'text_update') {
   const layout = abi.layouts.engineResult;
   const result = new DataView(memory.buffer, resultPointer, layout.size);
   requireStatus(result.getUint32(layout.status, true), operation);
+  const patchCount = result.getUint32(layout.patchCount, true);
+  const patchesOffset = result.getUint32(layout.patchesOffset, true);
+  const patchLayout = abi.layouts.enginePatch;
+  let writeBytes = 0;
+  for (let index = 0; index < patchCount; index += 1) {
+    const at = resultPointer + patchesOffset + index * patchLayout.size;
+    const patch = new DataView(memory.buffer, at, patchLayout.size);
+    if (patch.getUint8(patchLayout.opcode) === abi.engine.patchOpcodes.write) {
+      writeBytes += patch.getUint32(patchLayout.byteLength, true);
+    }
+  }
   return {
     durationMs,
     engineRevision: result.getUint32(layout.engineRevision, true),
     planRevision: result.getUint32(layout.planRevision, true),
     publicationGeneration: result.getUint32(layout.publicationGeneration, true),
     primitiveCount: result.getUint32(layout.primitiveCount, true),
-    patchCount: result.getUint32(layout.patchCount, true),
+    patchCount,
+    writeBytes,
   };
 }
 
@@ -239,7 +259,7 @@ function registerPolicy() {
   fn.deallocate(pointer, bytes.byteLength);
 }
 
-function summarize(name, glyphs, samples) {
+function summarize(name, glyphs, samples, plans) {
   const sorted = samples.toSorted((left, right) => left - right);
   const mean = sorted.reduce((sum, value) => sum + value, 0) / sorted.length;
   const variance = sorted.reduce((sum, value) => sum + (value - mean) ** 2, 0) / sorted.length;
@@ -250,6 +270,8 @@ function summarize(name, glyphs, samples) {
     p95Ms: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))],
     minMs: sorted[0],
     rsdPercent: (Math.sqrt(variance) / mean) * 100,
+    patchCount: plans[Math.floor(plans.length / 2)].patchCount,
+    writeBytes: plans[Math.floor(plans.length / 2)].writeBytes,
   };
 }
 
@@ -258,16 +280,20 @@ function printReport(caseReports) {
     `\ncomplete Rust text_update + ${options.technique} render plan · ${caseReports[0]?.glyphs ?? 0} renderable instances (${options.glyphs} fixture target) · ${options.warmup} warmup · ${options.repetitions} measured`,
   );
   console.log(
-    `${'case'.padEnd(16)}${'instances'.padStart(9)}${'median'.padStart(11)}${'p95'.padStart(11)}${'min'.padStart(11)}${'rsd'.padStart(9)}`,
+    `${'case'.padEnd(16)}${'instances'.padStart(9)}${'median'.padStart(11)}${'p95'.padStart(11)}${'min'.padStart(11)}${'rsd'.padStart(9)}${'patches'.padStart(9)}${'writes'.padStart(11)}`,
   );
   for (const report of caseReports) {
     console.log(
-      `${report.name.padEnd(16)}${String(report.glyphs).padStart(9)}${`${report.medianMs.toFixed(3)}ms`.padStart(11)}${`${report.p95Ms.toFixed(3)}ms`.padStart(11)}${`${report.minMs.toFixed(3)}ms`.padStart(11)}${`${report.rsdPercent.toFixed(1)}%`.padStart(9)}`,
+      `${report.name.padEnd(16)}${String(report.glyphs).padStart(9)}${`${report.medianMs.toFixed(3)}ms`.padStart(11)}${`${report.p95Ms.toFixed(3)}ms`.padStart(11)}${`${report.minMs.toFixed(3)}ms`.padStart(11)}${`${report.rsdPercent.toFixed(1)}%`.padStart(9)}${String(report.patchCount).padStart(9)}${formatBytes(report.writeBytes).padStart(11)}`,
     );
   }
   console.log('column-resize is the existing layout-width case: one fully active column is reflowed end to end.');
   console.log('suffix-edit matches the TypeScript text benchmark; localized-edit is an additional one-code-unit edit.');
   console.log(`Wasm memory after retained high-water mark: ${(memory.buffer.byteLength / 1024 / 1024).toFixed(2)} MiB`);
+}
+
+function formatBytes(value) {
+  return value < 1024 ? `${value} B` : `${(value / 1024).toFixed(1)} KiB`;
 }
 
 function stringToUtf16(value) {

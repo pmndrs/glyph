@@ -619,6 +619,7 @@ impl TextEngine {
                 CapabilitySetId(request.capability_set),
                 LayoutPlanInput {
                     glyphs: positioned.glyphs(),
+                    semantic_change_masks: positioned.semantic_change_masks(),
                     semantic_f32: &semantic_f32,
                     semantic_u32: &semantic_u32,
                 },

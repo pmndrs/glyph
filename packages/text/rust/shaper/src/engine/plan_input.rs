@@ -25,6 +25,7 @@ pub struct PlanGlyph {
 #[derive(Clone, Copy)]
 pub struct PlanInput<'a> {
     pub glyphs: &'a [PlanGlyph],
+    pub semantic_change_masks: &'a [u16],
     pub f32_fields: &'a [&'a [f32]],
     pub u32_fields: &'a [&'a [u32]],
 }
@@ -38,6 +39,8 @@ pub enum PlanInputError {
 
 pub fn validate_input(input: PlanInput<'_>) -> Result<(), PlanInputError> {
     if u32::try_from(input.glyphs.len()).is_err()
+        || (!input.semantic_change_masks.is_empty()
+            && input.semantic_change_masks.len() != input.glyphs.len())
         || input
             .f32_fields
             .iter()

@@ -870,8 +870,20 @@ impl StablePlanCompiler {
         for range_index in 0..self.changed_ranges.len() {
             let changed = align_record_range(self.changed_ranges[range_index], record_alignment)?;
             let count = changed.end - changed.start;
+            let active_buffers = stable_active_buffers(
+                context.policy,
+                context.capability_set,
+                program,
+                context.input,
+                &self.slot_writes,
+                changed,
+                replace,
+            )?;
             let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
             for (schema_index, schema) in program.buffers.iter().enumerate() {
+                if active_buffers & (1 << schema_index) == 0 {
+                    continue;
+                }
                 let byte_count = count as usize * schema.stride();
                 let payload_start = self.payload.len();
                 reserve(&mut self.payload, byte_count)?;
@@ -923,10 +935,14 @@ impl StablePlanCompiler {
                     &mut self.payload,
                     &payload_starts,
                     count,
+                    active_buffers,
                 )?;
                 write_index = end;
             }
             for (schema_index, schema) in program.buffers.iter().enumerate() {
+                if active_buffers & (1 << schema_index) == 0 {
+                    continue;
+                }
                 reserve(&mut self.patches, 1)?;
                 self.patches.push(PatchRecord {
                     opcode: PATCH_WRITE,
@@ -1538,6 +1554,44 @@ impl StablePlanCompiler {
     }
 }
 
+fn stable_active_buffers(
+    policy: &ValidatedPolicy,
+    capability_set: CapabilitySetId,
+    program: &super::policy::ProgramDescriptor,
+    input: StablePlanInput<'_>,
+    writes: &[SlotWrite],
+    changed: RecordRange,
+    replace: bool,
+) -> Result<u32, StablePlanError> {
+    let all = (1_u32 << program.buffers.len()) - 1;
+    if replace {
+        return Ok(all);
+    }
+    let dependencies = policy
+        .buffer_dependency_masks(capability_set, program.technique, program.variant)
+        .ok_or(StablePlanError::ProgramMissing)?;
+    let mut active = 0_u32;
+    for write in writes
+        .iter()
+        .filter(|write| write.changed && (changed.start..changed.end).contains(&write.slot))
+    {
+        let mask = input
+            .semantic_change_masks
+            .get(write.input_index as usize)
+            .copied()
+            .unwrap_or(super::positioning::ALL_SEMANTIC_CHANGES);
+        if mask == super::positioning::ALL_SEMANTIC_CHANGES {
+            return Ok(all);
+        }
+        for (index, &dependency) in dependencies.iter().enumerate() {
+            if dependency & mask != 0 {
+                active |= 1 << index;
+            }
+        }
+    }
+    Ok(active)
+}
+
 fn order_schema() -> BufferSchema {
     BufferSchema::packed(
         BufferId(POLICY_BUFFER_ORDER),
@@ -1627,6 +1681,61 @@ mod tests {
         compiler.commit().unwrap();
         assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 12), 4.0);
         assert_eq!(read_u32(compiler.buffer_bytes(2).unwrap(), 4), 3);
+    }
+
+    #[test]
+    fn stable_semantic_dependencies_suppress_unrelated_physical_buffer_writes() {
+        let policy = policy(false);
+        let mut compiler = StablePlanCompiler::default();
+        prepare(&mut compiler, &policy, &[glyph(1, 1)], &[1.0], true, 1, 0);
+        compiler.commit().unwrap();
+
+        let mut block_changed = glyph(1, 2);
+        block_changed.block_start = 4.0;
+        compiler
+            .prepare(
+                &policy,
+                CAPABILITY,
+                StablePlanInput {
+                    glyphs: &[block_changed],
+                    semantic_change_masks: &[1 << 1],
+                    f32_fields: &[&[1.0]],
+                    u32_fields: &[],
+                },
+                false,
+                2,
+                0,
+            )
+            .unwrap();
+        assert!(
+            compiler
+                .plan_view(7, CAPABILITY, policy.fingerprint())
+                .unwrap()
+                .patches
+                .is_empty()
+        );
+        compiler.commit().unwrap();
+
+        compiler
+            .prepare(
+                &policy,
+                CAPABILITY,
+                StablePlanInput {
+                    glyphs: &[glyph(1, 3)],
+                    semantic_change_masks: &[1],
+                    f32_fields: &[&[2.0]],
+                    u32_fields: &[],
+                },
+                false,
+                3,
+                0,
+            )
+            .unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        assert_eq!(plan.patches.len(), 1);
+        assert_eq!(plan.payload, 2.0_f32.to_le_bytes());
     }
 
     #[test]
@@ -1925,6 +2034,7 @@ mod tests {
                 CAPABILITY,
                 StablePlanInput {
                     glyphs,
+                    semantic_change_masks: &[],
                     f32_fields: &[x],
                     u32_fields: &[],
                 },

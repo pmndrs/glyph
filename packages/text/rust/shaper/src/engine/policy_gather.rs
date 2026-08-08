@@ -35,6 +35,7 @@ pub struct LayoutGlyph {
 #[derive(Clone, Copy)]
 pub struct LayoutPlanInput<'a> {
     pub glyphs: &'a [LayoutGlyph],
+    pub semantic_change_masks: &'a [u16],
     pub semantic_f32: &'a [&'a [f32]],
     pub semantic_u32: &'a [&'a [u32]],
 }
@@ -53,6 +54,7 @@ pub enum GatherError {
 #[derive(Default)]
 pub struct PolicyGatherWorkspace {
     glyphs: Vec<PlanGlyph>,
+    semantic_change_masks: Vec<u16>,
     f32_fields: Vec<AlignedField<f32>>,
     u32_fields: Vec<AlignedField<u32>>,
 }
@@ -69,6 +71,7 @@ struct AlignedField<T> {
 
 pub struct GatheredPlanInput<'a> {
     glyphs: &'a [PlanGlyph],
+    semantic_change_masks: &'a [u16],
     f32_fields: [&'a [f32]; MAX_REGISTERS],
     u32_fields: [&'a [u32]; MAX_REGISTERS],
     f32_field_count: usize,
@@ -77,7 +80,8 @@ pub struct GatheredPlanInput<'a> {
 
 impl PolicyGatherWorkspace {
     pub fn reserve_records(&mut self, record_capacity: usize) -> Result<(), GatherError> {
-        reserve(&mut self.glyphs, record_capacity)
+        reserve(&mut self.glyphs, record_capacity)?;
+        reserve(&mut self.semantic_change_masks, record_capacity)
     }
 
     pub fn reserve_policy(
@@ -155,6 +159,13 @@ impl PolicyGatherWorkspace {
                 inline_extent: glyph.inline_extent,
                 block_extent: glyph.block_extent,
             });
+            self.semantic_change_masks.push(
+                input
+                    .semantic_change_masks
+                    .get(glyph_index)
+                    .copied()
+                    .unwrap_or(super::positioning::ALL_SEMANTIC_CHANGES),
+            );
         }
         Ok(())
     }
@@ -170,6 +181,7 @@ impl PolicyGatherWorkspace {
         }
         GatheredPlanInput {
             glyphs: &self.glyphs,
+            semantic_change_masks: &self.semantic_change_masks,
             f32_fields,
             u32_fields,
             f32_field_count: self.f32_fields.len(),
@@ -224,6 +236,7 @@ impl PolicyGatherWorkspace {
 
     fn clear(&mut self) {
         self.glyphs.clear();
+        self.semantic_change_masks.clear();
         for field in &mut self.f32_fields {
             field.clear();
         }
@@ -298,6 +311,7 @@ impl GatheredPlanInput<'_> {
     pub fn plan_input(&self) -> PlanInput<'_> {
         PlanInput {
             glyphs: self.glyphs,
+            semantic_change_masks: self.semantic_change_masks,
             f32_fields: &self.f32_fields[..self.f32_field_count],
             u32_fields: &self.u32_fields[..self.u32_field_count],
         }
@@ -305,12 +319,15 @@ impl GatheredPlanInput<'_> {
 }
 
 fn validate_semantic_shape(input: LayoutPlanInput<'_>) -> Result<(), GatherError> {
-    if input.semantic_f32.iter().any(|field| {
-        field.len() != input.glyphs.len() || field.iter().any(|value| !value.is_finite())
-    }) || input
-        .semantic_u32
-        .iter()
-        .any(|field| field.len() != input.glyphs.len())
+    if (!input.semantic_change_masks.is_empty()
+        && input.semantic_change_masks.len() != input.glyphs.len())
+        || input.semantic_f32.iter().any(|field| {
+            field.len() != input.glyphs.len() || field.iter().any(|value| !value.is_finite())
+        })
+        || input
+            .semantic_u32
+            .iter()
+            .any(|field| field.len() != input.glyphs.len())
     {
         return Err(GatherError::InvalidSemanticShape);
     }
@@ -464,6 +481,7 @@ mod tests {
         let foreground = [0x8040_20ff];
         let input = LayoutPlanInput {
             glyphs: &glyphs,
+            semantic_change_masks: &[],
             semantic_f32: &[],
             semantic_u32: &[&foreground],
         };
@@ -505,6 +523,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     glyphs: &glyphs,
+                    semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
                 },
@@ -567,6 +586,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     glyphs: &glyphs,
+                    semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[],
                 },
@@ -580,6 +600,7 @@ mod tests {
                 CapabilitySetId(2),
                 LayoutPlanInput {
                     glyphs: &glyphs,
+                    semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[],
                 },
@@ -593,6 +614,7 @@ mod tests {
                 CAPABILITY,
                 LayoutPlanInput {
                     glyphs: &glyphs,
+                    semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[],
                 },

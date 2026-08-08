@@ -858,6 +858,7 @@ mod tests {
                 CAPABILITY,
                 PlanInput {
                     glyphs,
+                    semantic_change_masks: &[],
                     f32_fields: &[x],
                     u32_fields: &[],
                 },
