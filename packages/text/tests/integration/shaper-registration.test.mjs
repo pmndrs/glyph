@@ -147,13 +147,14 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   const policy = copyToWasm(memory, fn.allocate, policyBytes);
   assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
   fn.deallocate(policy.pointer, policy.length);
-  assert.equal(fn.createSession(29, 512, abi.layouts.engineResult.size, 4), abi.status.ok);
+  assert.equal(fn.createSession(29, 2048, 64 * 1024, 4), abi.status.ok);
   const styleWarmBuffer = memory.buffer;
   const initialUpdate = engineStyleUpdateBytes(abi, {
     sessionId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     text: [0x61, 0x62, 0x63, 0x64],
+    geometry: true,
   });
   assert.equal(fn.planCount(), 0);
   let requestPointer = fn.requestPointer(29);
@@ -163,15 +164,37 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   let result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
   assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 1);
+  for (const field of ['resourceCount', 'bufferCount', 'patchCount', 'primitiveCount', 'drawCount']) {
+    assert.ok(result.getUint32(abi.layouts.engineResult[field], true) > 0, `${field} must be nonempty`);
+  }
   assert.equal(fn.planCount(), 1, 'text_update must shape retained runs through HarfRust');
 
-  const removeRoot = engineStyleUpdateBytes(abi, {
+  const warmUpdate = engineStyleUpdateBytes(abi, {
     sessionId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: 1,
     consumedPlanRevision: 1,
     acknowledgedPublicationGeneration: 1,
+    textEnd: 4,
+    geometry: true,
+  });
+  requestPointer = fn.requestPointer(29);
+  new Uint8Array(memory.buffer, requestPointer, warmUpdate.byteLength).set(warmUpdate);
+  resultPointer = fn.textUpdate(29, requestPointer, warmUpdate.byteLength);
+  assert.strictEqual(memory.buffer, styleWarmBuffer, 'the identical nonempty frame must stay allocation-free');
+  result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
+  assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
+  assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 2);
+  assert.equal(result.getUint32(abi.layouts.engineResult.patchCount, true), 0);
+
+  const removeRoot = engineStyleUpdateBytes(abi, {
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    expectedEngineRevision: 2,
+    consumedPlanRevision: 2,
+    acknowledgedPublicationGeneration: 2,
     removeRoot: true,
   });
   requestPointer = fn.requestPointer(29);
@@ -180,7 +203,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.strictEqual(memory.buffer, styleWarmBuffer, 'an invalid retained style update must not grow Wasm memory');
   result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.invalidRequest);
-  assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 1);
+  assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 2);
   assert.equal(fn.planCount(), 1, 'an aborted update must not perform another shape');
   assert.equal(fn.disposeSession(29), abi.status.ok);
   assert.equal(fn.disposePolicy(23), abi.status.ok);
@@ -295,7 +318,9 @@ function engineStyleUpdateBytes(
     consumedPlanRevision = 0,
     acknowledgedPublicationGeneration = 0,
     text = [],
+    textEnd = text.length,
     removeRoot = false,
+    geometry = false,
   },
 ) {
   const request = abi.layouts.engineUpdateRequest;
@@ -304,7 +329,13 @@ function engineStyleUpdateBytes(
   const textRecordOffset = text.length === 0 ? 0 : request.size;
   const styleRecordOffset = align(request.size + (text.length === 0 ? 0 : textRecord.size), styleRecord.alignment);
   const textPayloadOffset = styleRecordOffset + styleRecord.size;
-  const bytes = new Uint8Array(textPayloadOffset + text.length * 2);
+  const textPayloadEnd = textPayloadOffset + text.length * 2;
+  const constraint = abi.layouts.engineConstraint;
+  const region = abi.layouts.engineRegion;
+  const constraintOffset = geometry ? align(textPayloadEnd, constraint.alignment) : 0;
+  const regionOffset = geometry ? align(constraintOffset + constraint.size, region.alignment) : 0;
+  const byteLength = geometry ? regionOffset + region.size : textPayloadEnd;
+  const bytes = new Uint8Array(byteLength);
   const view = new DataView(bytes.buffer);
   view.setUint32(request.abiVersion, abi.version, true);
   view.setUint32(request.byteLength, bytes.byteLength, true);
@@ -324,11 +355,17 @@ function engineStyleUpdateBytes(
   ]) {
     view.setUint32(request[field], field === 'maxClusters' ? 2 : 1, true);
   }
-  view.setUint32(request.maxOutputBytes, abi.layouts.engineResult.size, true);
+  view.setUint32(request.maxOutputBytes, 64 * 1024, true);
   view.setUint32(request.textMutationsOffset, textRecordOffset, true);
   view.setUint32(request.textMutationCount, text.length === 0 ? 0 : 1, true);
   view.setUint32(request.styleMutationsOffset, styleRecordOffset, true);
   view.setUint32(request.styleMutationCount, 1, true);
+  if (geometry) {
+    view.setUint32(request.constraintsOffset, constraintOffset, true);
+    view.setUint32(request.constraintCount, 1, true);
+    view.setUint32(request.regionsOffset, regionOffset, true);
+    view.setUint32(request.regionCount, 1, true);
+  }
 
   if (text.length > 0) {
     view.setUint8(textRecordOffset + textRecord.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
@@ -353,11 +390,34 @@ function engineStyleUpdateBytes(
         abi.engine.styleFields.rasterPixelRatio,
       true,
     );
-    view.setUint32(styleRecordOffset + styleRecord.textEnd, text.length, true);
+    view.setUint32(styleRecordOffset + styleRecord.textEnd, textEnd, true);
     view.setUint32(styleRecordOffset + styleRecord.fontStackHandle, fontStackHandle, true);
     view.setFloat32(styleRecordOffset + styleRecord.fontSize, 16, true);
     view.setFloat32(styleRecordOffset + styleRecord.lineHeight, 1.2, true);
     view.setFloat32(styleRecordOffset + styleRecord.rasterPixelRatio, 1, true);
+  }
+  if (geometry) {
+    view.setUint32(constraintOffset + constraint.flowThreadId, 1, true);
+    view.setFloat32(constraintOffset + constraint.width, 100, true);
+    view.setFloat32(constraintOffset + constraint.height, 100, true);
+    view.setFloat32(constraintOffset + constraint.viewportBlockEnd, 100, true);
+    view.setUint32(constraintOffset + constraint.maxLines, 1, true);
+    view.setUint16(constraintOffset + constraint.regionCount, 1, true);
+    view.setUint8(constraintOffset + constraint.widthMode, abi.engine.axisModes.exact);
+    view.setUint8(constraintOffset + constraint.heightMode, abi.engine.axisModes.exact);
+    view.setUint8(constraintOffset + constraint.wrap, abi.engine.wrapModes.word);
+    view.setUint8(constraintOffset + constraint.align, abi.engine.inlineAlignments.start);
+    view.setUint8(constraintOffset + constraint.overflow, abi.engine.overflowModes.clip);
+    view.setUint8(constraintOffset + constraint.blockAlign, abi.engine.blockAlignments.start);
+
+    view.setUint32(regionOffset + region.id, 1, true);
+    view.setUint32(regionOffset + region.geometryRevision, 1, true);
+    view.setUint8(regionOffset + region.shape, abi.engine.flowShapeKinds.rectangle);
+    view.setUint8(regionOffset + region.writingMode, abi.engine.writingModes.horizontalTb);
+    view.setUint8(regionOffset + region.textOrientation, abi.engine.textOrientations.mixed);
+    for (const field of ['inlineEnd', 'blockEnd', 'clipInlineEnd', 'clipBlockEnd']) {
+      view.setFloat32(regionOffset + region[field], 100, true);
+    }
   }
   return bytes;
 }

@@ -122,6 +122,14 @@ export const textShaperAbi = {
       "resource": 1,
       "slotRange": 3
     },
+    "semanticF32Fields": {
+      "blockExtent": 3,
+      "blockStart": 1,
+      "fontSize": 4,
+      "inlineExtent": 2,
+      "inlineStart": 0,
+      "rasterPixelRatio": 5
+    },
     "semanticKinds": {
       "caret": 5,
       "cluster": 4,
@@ -130,6 +138,12 @@ export const textShaperAbi = {
       "line": 1,
       "run": 3,
       "selection": 6
+    },
+    "semanticU32Fields": {
+      "clusterId": 1,
+      "flowThreadId": 3,
+      "foregroundRgba": 0,
+      "regionId": 2
     },
     "styleFields": {
       "all": 8191,
