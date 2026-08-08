@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6ae55db41be216c0ccf2a79b55167c964770e5fbc6c490940d6b68b4b3bca512'
+source_digest: 'sha256:ac4d619314a7e2d2e02840013b6b4ef50ca74971f7ff0df87120d85a7213c74e'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -365,6 +365,12 @@ Thin production artifacts use `pnpm build`; its MTSDF Wasm command is an optimiz
 The retained SIMD decision evidence compares an equivalent four-texel scalar tile with a feature-gated adjacent-texel SIMD candidate. Both preserved every seven-case native-oracle hash, the complete 2,937-slot Inter checksum, rejection set, composite identity, warm allocation count, and steady-state Wasm memory. The candidate vectorized line-distance work across four neighboring texels while retaining the exact scalar quadratic and cubic solvers lane by lane. Adjacent SIMD improved the bounded Node corpus from 45.712 to 44.608 milliseconds (2.4%) and Chromium from 28.965 to 28.700 milliseconds (0.9%), but complete Inter was indistinguishable warm at 45.068 versus 45.066 seconds and its 50.110-second cold pass was slower than scalar's 44.089 seconds. Those bounded improvements did not justify a second target-specific artifact: optimized size grew from 52,633 to 63,549 bytes (20.7%) and Brotli size from 19,660 to 21,904 bytes (11.4%). The closed experiment runners are no longer maintained as product workflows; the accepted scalar kernel, independent native oracle, public baker tests, and package-size gate remain active.
 
 The shaper, Bitmap baker, and MTSDF generator/artifact boundary define every direct-memory header and table as a fixed-width `#[repr(C)]` Rust type. Build-only Rust generators derive each JSON size, alignment, and field offset from `size_of`, `align_of`, and `offset_of!`, then emit exact typed `as const` TypeScript modules from that JSON. Rust readers/writers and production TypeScript therefore consume one compiler-led truth; CI compares regenerated output byte-for-byte and fails on stale checked-in modules. Production Wasm embeds no duplicate JSON and exports no ABI pointer/length bootstrap. This keeps QuickType, JSON Schema, runtime JSON parsing, and binding-generator code out of the shipping graph. Wasm linear memory is guaranteed little-endian; serialized GLB, KTX2, SFNT, and extension records continue to follow their own portable format contracts.
+
+The first Rust text-engine foundation keeps that direct-memory rule and adds a renderer-neutral `no_std + alloc` policy
+model to the existing shaper `rlib`, not a second Wasm module. Plain data and total validation functions bound program,
+buffer, operation, register, field, vector-width, and store coverage before execution; technique variants share that one
+verifier instead of owning parallel packers. The initial module is deliberately unreachable from the Wasm exports while
+its fixed-width wire contract is built, and optimized dead-code evidence keeps the shipping shaper at 680,312 raw bytes.
 
 Item 8.3 promotes `@pmndrs/text/raster/msdf` from an identity-only contract to the browser module and adds the isolated `@pmndrs/text/bakers/msdf/validate` entry. The standalone path layers the pinned Khronos validator, byte-identical Draft-04 schema, and semantic checks for reciprocal identity, descriptor-authenticated generation values, `planeUnitsPerEm = emSize`, view ownership, exact dense records, page bounds, embedded/external length and SHA-256 authentication, single-level linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and a 256 MiB padded-base-array residency ceiling. Canonical Inter's ten legacy-default pages round-trip through both packaging forms; field deletion, record/page mutations, KTX2 and DFD corruption, missing/tampered external pages, and budget failures are named negative controls.
 

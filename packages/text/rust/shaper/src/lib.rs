@@ -4,6 +4,7 @@ extern crate alloc;
 
 mod abi_contract;
 pub mod bidi;
+pub mod engine;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 mod wire;
 
