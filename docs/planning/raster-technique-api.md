@@ -25,7 +25,7 @@ sources:
     resource: ../../packages/text/src/bake.ts
     title: Current portable raster baker contract
   - id: current-mtsdf
-    resource: ../../packages/text/src/raster/mtsdf.ts
+    resource: ../../packages/text/src/raster/msdf.ts
     title: Current MTSDF decoder and Three.js target
   - id: external-proof
     resource: ../../packages/glyph-example-raster/src/raster.ts
