@@ -1,6 +1,9 @@
 use alloc::{collections::BTreeMap, vec::Vec};
 
-use crate::unicode::{UnicodeAnalysis, UnicodeError};
+use crate::{
+    bidi::{BidiAnalysis, BidiError, DIRECTION_AUTO, analyze_into as analyze_bidi_into},
+    unicode::{UnicodeAnalysis, UnicodeError},
+};
 
 use super::{
     font_binding::FontRenderBinding,
@@ -11,6 +14,7 @@ use super::{
     },
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
+    shaping_state::ShapingRunArena,
     style_state::{
         DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
     },
@@ -64,12 +68,18 @@ struct EngineSession {
     pending_resolved_styles: ResolvedStyleArena,
     unicode: UnicodeAnalysis,
     pending_unicode: UnicodeAnalysis,
+    bidi: BidiAnalysis,
+    pending_bidi: BidiAnalysis,
+    shaping_runs: ShapingRunArena,
+    pending_shaping_runs: ShapingRunArena,
     style_mutation_scratch: Vec<MutationKey>,
     style_order_scratch: Vec<usize>,
     style_nesting_scratch: Vec<u32>,
     style_resolution_scratch: Vec<ResolutionScope>,
     styles_prepared: bool,
     unicode_prepared: bool,
+    bidi_prepared: bool,
+    shaping_runs_prepared: bool,
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
     geometry_prepared: bool,
@@ -296,6 +306,10 @@ impl TextEngine {
             .pending_unicode
             .reserve(capacity)
             .map_err(unicode_error)?;
+        session.bidi.reserve(capacity).map_err(bidi_error)?;
+        session.pending_bidi.reserve(capacity).map_err(bidi_error)?;
+        session.shaping_runs.reserve(capacity)?;
+        session.pending_shaping_runs.reserve(capacity)?;
         Ok(())
     }
 
@@ -327,6 +341,14 @@ impl TextEngine {
         self.sessions
             .get(&handle)
             .map(|session| session.resolved_styles.segments().len())
+            .ok_or(EngineError::SessionMissing)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn session_shaping_run_count(&self, handle: u32) -> Result<usize, EngineError> {
+        self.sessions
+            .get(&handle)
+            .map(|session| session.shaping_runs.runs().len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -405,10 +427,25 @@ impl TextEngine {
             session.abort_styles();
             return Err(error);
         }
+        if let Err(error) = session.prepare_bidi() {
+            session.abort_text();
+            session.abort_styles();
+            session.abort_unicode();
+            return Err(error);
+        }
+        if let Err(error) = session.prepare_shaping_runs() {
+            session.abort_text();
+            session.abort_styles();
+            session.abort_unicode();
+            session.abort_bidi();
+            return Err(error);
+        }
         if let Err(error) = session.prepare_geometry(request.geometry) {
             session.abort_text();
             session.abort_styles();
             session.abort_unicode();
+            session.abort_bidi();
+            session.abort_shaping_runs();
             return Err(error);
         }
         if let Err(error) = gather.gather(
@@ -429,6 +466,8 @@ impl TextEngine {
             session.abort_text();
             session.abort_styles();
             session.abort_unicode();
+            session.abort_bidi();
+            session.abort_shaping_runs();
             session.abort_geometry();
             return Err(gather_error(error));
         }
@@ -444,6 +483,8 @@ impl TextEngine {
             session.abort_text();
             session.abort_styles();
             session.abort_unicode();
+            session.abort_bidi();
+            session.abort_shaping_runs();
             session.abort_geometry();
             return Err(plan_error(error));
         }
@@ -492,6 +533,8 @@ impl TextEngine {
         session.abort_text();
         session.abort_styles();
         session.abort_unicode();
+        session.abort_bidi();
+        session.abort_shaping_runs();
         session.abort_geometry();
         Ok(())
     }
@@ -511,6 +554,8 @@ impl TextEngine {
         session.commit_text();
         session.commit_styles();
         session.commit_unicode();
+        session.commit_bidi();
+        session.commit_shaping_runs();
         session.commit_geometry();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
@@ -661,6 +706,84 @@ impl EngineSession {
         self.abort_unicode();
     }
 
+    fn prepare_bidi(&mut self) -> Result<(), EngineError> {
+        self.abort_bidi();
+        if !self.text_prepared && !self.styles_prepared {
+            return Ok(());
+        }
+        let text = if self.text_prepared {
+            self.pending_text.as_slice()
+        } else {
+            self.text.as_slice()
+        };
+        let styles = if self.styles_prepared {
+            &self.pending_resolved_styles
+        } else {
+            &self.resolved_styles
+        };
+        let direction = styles
+            .segments()
+            .first()
+            .map_or(DIRECTION_AUTO, |segment| segment.style.direction);
+        analyze_bidi_into(text, direction, &mut self.pending_bidi).map_err(bidi_error)?;
+        self.bidi_prepared = true;
+        Ok(())
+    }
+
+    fn abort_bidi(&mut self) {
+        self.bidi_prepared = false;
+    }
+
+    fn commit_bidi(&mut self) {
+        if self.bidi_prepared {
+            core::mem::swap(&mut self.bidi, &mut self.pending_bidi);
+        }
+        self.abort_bidi();
+    }
+
+    fn prepare_shaping_runs(&mut self) -> Result<(), EngineError> {
+        self.abort_shaping_runs();
+        if !self.text_prepared && !self.styles_prepared {
+            return Ok(());
+        }
+        let text = if self.text_prepared {
+            self.pending_text.as_slice()
+        } else {
+            self.text.as_slice()
+        };
+        let styles = if self.styles_prepared {
+            self.pending_resolved_styles.segments()
+        } else {
+            self.resolved_styles.segments()
+        };
+        let unicode = if self.unicode_prepared {
+            &self.pending_unicode
+        } else {
+            &self.unicode
+        };
+        let bidi = if self.bidi_prepared {
+            &self.pending_bidi
+        } else {
+            &self.bidi
+        };
+        self.pending_shaping_runs
+            .build(text, styles, unicode, bidi)?;
+        self.shaping_runs_prepared = true;
+        Ok(())
+    }
+
+    fn abort_shaping_runs(&mut self) {
+        self.pending_shaping_runs.clear();
+        self.shaping_runs_prepared = false;
+    }
+
+    fn commit_shaping_runs(&mut self) {
+        if self.shaping_runs_prepared {
+            core::mem::swap(&mut self.shaping_runs, &mut self.pending_shaping_runs);
+        }
+        self.abort_shaping_runs();
+    }
+
     fn prepare_geometry(
         &mut self,
         geometry: super::semantic_wire::GeometryBatch<'_>,
@@ -747,6 +870,13 @@ fn unicode_error(error: UnicodeError) -> EngineError {
     }
 }
 
+fn bidi_error(error: BidiError) -> EngineError {
+    match error {
+        BidiError::InvalidDirection => EngineError::InvalidRequest,
+        BidiError::ResultTooLarge => EngineError::ResultTooLarge,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TextMutationError {
     Invalid,
@@ -782,14 +912,16 @@ mod tests {
             ENGINE_TEXT_MUTATION_OPCODE, ENGINE_TEXT_MUTATION_RECORD_SIZE,
             ENGINE_TEXT_MUTATION_TEXT_START, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
         },
+        bidi::DIRECTION_RTL,
         engine::{
             font_binding::{
                 FieldTable, FontRenderBinding, FontResource, FontStrike, MISSING_RESOURCE_INDEX,
             },
             frame::{
-                STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_LINE_HEIGHT,
-                STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE,
-                STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16,
+                STYLE_FIELD_DIRECTION, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
+                STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FLAG_ROOT,
+                STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
+                TEXT_MUTATION_REPLACE_UTF16,
             },
             policy::{
                 ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE,
@@ -1078,6 +1210,34 @@ mod tests {
         let session = engine.sessions.get(&4).unwrap();
         assert!(session.text.is_empty());
         assert!(session.unicode.grapheme_boundaries().is_empty());
+        assert!(session.bidi.levels.is_empty());
+    }
+
+    #[test]
+    fn root_direction_reanalyzes_bidi_without_a_text_mutation() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_session(4).unwrap();
+
+        let text_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63, 0x64])]);
+        let mut text = update(0, 0, 0);
+        text.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(text, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.sessions.get(&4).unwrap().bidi.paragraph_levels, &[0]);
+
+        let root_bytes = root_style_bytes_with_direction(7, DIRECTION_RTL);
+        let mut root = update(1, 1, 1);
+        root.style_mutations =
+            parse_style_mutations(&root_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(root, 2).unwrap();
+        assert_eq!(engine.sessions.get(&4).unwrap().bidi.paragraph_levels, &[0]);
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.sessions.get(&4).unwrap().bidi.paragraph_levels, &[1]);
     }
 
     #[test]
@@ -1106,6 +1266,7 @@ mod tests {
         engine.commit_update(prepared).unwrap();
         assert_eq!(engine.session_style_count(4), Ok(1));
         assert_eq!(engine.session_style_segment_count(4), Ok(1));
+        assert_eq!(engine.session_shaping_run_count(4), Ok(1));
 
         let remove_bytes = remove_style_bytes(1);
         let mut remove = update(2, 2, 2);
@@ -1293,6 +1454,14 @@ mod tests {
     }
 
     fn root_style_bytes(font_stack_handle: u32) -> Vec<u8> {
+        root_style_bytes_inner(font_stack_handle, None)
+    }
+
+    fn root_style_bytes_with_direction(font_stack_handle: u32, direction: u8) -> Vec<u8> {
+        root_style_bytes_inner(font_stack_handle, Some(direction))
+    }
+
+    fn root_style_bytes_inner(font_stack_handle: u32, direction: Option<u8>) -> Vec<u8> {
         let record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
         let mut bytes = vec![0; record + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize];
         bytes[record + abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_UPSERT;
@@ -1304,7 +1473,8 @@ mod tests {
             STYLE_FIELD_FONT_STACK
                 | STYLE_FIELD_FONT_SIZE
                 | STYLE_FIELD_LINE_HEIGHT
-                | STYLE_FIELD_RASTER_PIXEL_RATIO,
+                | STYLE_FIELD_RASTER_PIXEL_RATIO
+                | direction.map_or(0, |_| STYLE_FIELD_DIRECTION),
         );
         write_u32(&mut bytes, record + abi::ENGINE_STYLE_MUTATION_TEXT_END, 4);
         write_u32(
@@ -1327,6 +1497,9 @@ mod tests {
             record + abi::ENGINE_STYLE_MUTATION_RASTER_PIXEL_RATIO,
             1.0,
         );
+        if let Some(direction) = direction {
+            bytes[record + abi::ENGINE_STYLE_MUTATION_DIRECTION] = direction;
+        }
         bytes
     }
 

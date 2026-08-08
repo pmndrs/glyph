@@ -857,6 +857,14 @@ derivable starts. Optimized Wasm measures 964,019 / 360,765 / 288,742 raw/gzip/B
 895,593 / 335,396 / 264,355 checkpoint. This is shared runtime data and code, not per-font shaping payload. The number
 does not claim layout or shaping latency because neither has consumed these products yet.
 
+Retained bidi and run-itemization now consume those products inside the same transaction. UAX #9 output is copied into
+reusable active/pending level, class, paragraph, and equal-level-run arrays. Text or root base-direction changes re-run
+bidi; unchanged text and style do not. Root direction selects paragraph base level, while a nested stated LTR/RTL value
+is preserved separately as a run override and forces level parity only during one style×script×bidi interval sweep.
+That sweep excludes mandatory hard-break controls and emits allocation-reusing shaping-run records. Optimized Wasm is
+968,086 / 362,664 / 286,438 raw/gzip/Brotli bytes (+4,067 / +1,899 / -2,304 from retained Unicode). HarfRust fallback
+shaping has not consumed the runs yet, so plan output and complete-path timing remain open.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a

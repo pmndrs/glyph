@@ -2,6 +2,13 @@
 
 ## 2026-08-08
 
+- **Retained bidi and shaping-run itemization moved inside `text_update`** — UAX #9 output now fills reusable
+  active/pending level, class, paragraph, and equal-level-run arrays. Root direction changes paragraph base level;
+  nested direction carries a distinct override bit and forces parity during one style×script×level interval sweep.
+  The sweep skips mandatory hard-break controls and commits/aborts with the session. Rust tests and host/SIMD Clippy
+  pass. Optimized Wasm is 968,086 / 362,664 / 286,438 raw/gzip/Brotli bytes (+4,067 / +1,899 / -2,304). Fallback
+  shaping, layout, nonempty plan output, and complete-path timing remain open.
+
 - **Retained Unicode 17 analysis moved inside `text_update`** — The shared Unicode generator now emits compact Rust
   Script/Script_Extensions partitions beside the TypeScript tables. A no-std Unicode 17 grapheme iterator validates
   UTF-16, preserves UTF-16 boundaries, resolves contextual scripts, and reuses pre-reserved active/pending session
