@@ -956,6 +956,13 @@ multi-glyph clusters directly traversable without a per-glyph search, object, or
 water mark. An exact reverse-order fixture maps shaped cluster stream `[2,1,0]` to logical slices `[2]`, `[1]`, `[0]`.
 Optimized Wasm is 1,043,289 / 394,074 / 304,902 raw/gzip/Brotli bytes (+1,707 / +860 / +87).
 
+The plan pool's allocation-reusing identity lookup is now a shared exact `u32 -> u32` scratch component. Epoch clearing
+avoids zeroing the table on every prepare, open addressing resolves probe collisions with full-key equality, and growth
+occurs only beyond the retained high water mark. This extraction prevents glyph reconciliation from carrying a second
+identity-table implementation. Its isolated size is 1,043,094 / 394,035 / 307,259 raw/gzip/Brotli bytes (-195 / -39 /
++2,357); the Brotli regression is accepted for the single correctness implementation and will be remeasured with its
+glyph-reconciliation consumer reachable.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a

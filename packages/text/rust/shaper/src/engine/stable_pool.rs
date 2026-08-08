@@ -2,6 +2,8 @@
 
 use alloc::vec::Vec;
 
+use super::identity_index::{IdentityIndex, IdentityIndexError};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SlotIdentity {
     pub stable_id: u32,
@@ -47,10 +49,7 @@ pub struct StableSlotPool {
     assignments: Vec<SlotAssignment>,
     retired_slots: Vec<u32>,
     allocated_free_slots: Vec<u32>,
-    identity_keys: Vec<u32>,
-    identity_slots: Vec<u32>,
-    identity_epochs: Vec<u32>,
-    identity_epoch: u32,
+    identity_index: IdentityIndex,
     seen_slots: Vec<u32>,
     seen_epoch: u32,
     pending_slot_count: u32,
@@ -230,6 +229,7 @@ impl StableSlotPool {
 
     #[cfg(test)]
     pub fn scratch_capacities(&self) -> [usize; 10] {
+        let identity = self.identity_index.capacities();
         [
             self.slots.capacity(),
             self.free_slots.capacity(),
@@ -237,9 +237,9 @@ impl StableSlotPool {
             self.assignments.capacity(),
             self.retired_slots.capacity(),
             self.allocated_free_slots.capacity(),
-            self.identity_keys.capacity(),
-            self.identity_slots.capacity(),
-            self.identity_epochs.capacity(),
+            identity[0],
+            identity[1],
+            identity[2],
             self.seen_slots.capacity(),
         ]
     }
@@ -259,26 +259,10 @@ impl StableSlotPool {
             .count();
         let required = live_count
             .checked_add(desired_count)
-            .and_then(|count| count.checked_mul(2))
-            .and_then(usize::checked_next_power_of_two)
-            .unwrap_or(usize::MAX)
-            .max(8);
-        if required == usize::MAX {
-            return Err(StablePoolError::ArithmeticOverflow);
-        }
-        if self.identity_keys.len() < required {
-            let additional_keys = required - self.identity_keys.len();
-            let additional_slots = required - self.identity_slots.len();
-            let additional_epochs = required - self.identity_epochs.len();
-            reserve(&mut self.identity_keys, additional_keys)?;
-            reserve(&mut self.identity_slots, additional_slots)?;
-            reserve(&mut self.identity_epochs, additional_epochs)?;
-            self.identity_keys.resize(required, 0);
-            self.identity_slots.resize(required, 0);
-            self.identity_epochs.resize(required, 0);
-        }
-        self.identity_epoch = next_epoch(&mut self.identity_epochs, self.identity_epoch);
-        Ok(())
+            .ok_or(StablePoolError::ArithmeticOverflow)?;
+        self.identity_index
+            .prepare(required)
+            .map_err(identity_index_error)
     }
 
     fn prepare_seen_slots(&mut self) -> Result<(), StablePoolError> {
@@ -296,56 +280,19 @@ impl StableSlotPool {
         identity: u32,
         slot: u32,
     ) -> Result<(), StablePoolError> {
-        let index = self.identity_insert_position(identity)?;
-        if self.identity_epochs[index] == self.identity_epoch {
-            return Err(StablePoolError::DuplicateIdentity);
-        }
-        self.identity_epochs[index] = self.identity_epoch;
-        self.identity_keys[index] = identity;
-        self.identity_slots[index] = slot;
-        Ok(())
+        self.identity_index
+            .insert(identity, slot)
+            .map_err(identity_index_error)
     }
 
     fn insert_new_identity(&mut self, identity: u32, slot: u32) -> Result<(), StablePoolError> {
-        let index = self.identity_insert_position(identity)?;
-        if self.identity_epochs[index] == self.identity_epoch {
-            return Err(StablePoolError::DuplicateIdentity);
-        }
-        self.identity_epochs[index] = self.identity_epoch;
-        self.identity_keys[index] = identity;
-        self.identity_slots[index] = slot;
-        Ok(())
+        self.identity_index
+            .insert(identity, slot)
+            .map_err(identity_index_error)
     }
 
     fn find_identity(&self, identity: u32) -> Option<u32> {
-        let mask = self.identity_keys.len() - 1;
-        let mut index = hash(identity) & mask;
-        loop {
-            if self.identity_epochs[index] != self.identity_epoch {
-                return None;
-            }
-            if self.identity_keys[index] == identity {
-                return Some(self.identity_slots[index]);
-            }
-            index = (index + 1) & mask;
-        }
-    }
-
-    fn identity_insert_position(&self, identity: u32) -> Result<usize, StablePoolError> {
-        let mask = self
-            .identity_keys
-            .len()
-            .checked_sub(1)
-            .ok_or(StablePoolError::ArithmeticOverflow)?;
-        let mut index = hash(identity) & mask;
-        loop {
-            if self.identity_epochs[index] != self.identity_epoch
-                || self.identity_keys[index] == identity
-            {
-                return Ok(index);
-            }
-            index = (index + 1) & mask;
-        }
+        self.identity_index.get(identity)
     }
 
     fn allocate_slot(&mut self) -> Result<u32, StablePoolError> {
@@ -392,8 +339,12 @@ fn next_epoch(values: &mut [u32], current: u32) -> u32 {
     }
 }
 
-fn hash(identity: u32) -> usize {
-    identity.wrapping_mul(0x9e37_79b1) as usize
+fn identity_index_error(error: IdentityIndexError) -> StablePoolError {
+    match error {
+        IdentityIndexError::AllocationFailed => StablePoolError::AllocationFailed,
+        IdentityIndexError::ArithmeticOverflow => StablePoolError::ArithmeticOverflow,
+        IdentityIndexError::DuplicateIdentity => StablePoolError::DuplicateIdentity,
+    }
 }
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), StablePoolError> {
