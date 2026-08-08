@@ -276,11 +276,7 @@ impl ShaperRegistry {
         self.fonts.get(&handle).map(|font| font.metrics)
     }
 
-    pub(crate) fn font_glyph_extents(
-        &self,
-        handle: u32,
-        glyph: u32,
-    ) -> Option<FontGlyphExtents> {
+    pub(crate) fn font_glyph_extents(&self, handle: u32, glyph: u32) -> Option<FontGlyphExtents> {
         let font = self.fonts.get(&handle)?;
         FlatExtents {
             records: &font.extents,

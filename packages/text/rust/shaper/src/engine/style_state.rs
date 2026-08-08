@@ -104,6 +104,14 @@ pub(crate) struct ResolutionScope {
     style: ResolvedStyle,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StyleInvalidation {
+    pub bidi: bool,
+    pub shaping: bool,
+    pub metrics: bool,
+    pub positioning: bool,
+}
+
 #[derive(Default)]
 pub(crate) struct ResolvedStyleArena {
     segments: Vec<StyleSegment>,
@@ -160,6 +168,58 @@ impl ResolvedStyleArena {
 
     pub(crate) fn segments(&self) -> &[StyleSegment] {
         &self.segments
+    }
+
+    pub(crate) fn invalidation_against(
+        &self,
+        previous_storage: &StyleArena,
+        next: &Self,
+        next_storage: &StyleArena,
+    ) -> StyleInvalidation {
+        if self.segments.len() != next.segments.len() {
+            return StyleInvalidation {
+                bidi: true,
+                shaping: true,
+                metrics: true,
+                positioning: true,
+            };
+        }
+        let mut invalidation = StyleInvalidation::default();
+        for (previous, next) in self.segments.iter().zip(&next.segments) {
+            if previous.text_start != next.text_start || previous.text_end != next.text_end {
+                return StyleInvalidation {
+                    bidi: true,
+                    shaping: true,
+                    metrics: true,
+                    positioning: true,
+                };
+            }
+            let old = previous.style;
+            let new = next.style;
+            invalidation.bidi |=
+                old.direction != new.direction || old.bidi_override != new.bidi_override;
+            invalidation.shaping |= invalidation.bidi
+                || old.font_stack_handle != new.font_stack_handle
+                || previous_storage.resolved_language(old) != next_storage.resolved_language(new)
+                || previous_storage.resolved_features(old) != next_storage.resolved_features(new);
+            invalidation.metrics |= invalidation.shaping
+                || old.font_size.to_bits() != new.font_size.to_bits()
+                || old.line_height.to_bits() != new.line_height.to_bits()
+                || old.has_line_height != new.has_line_height
+                || old.letter_spacing.to_bits() != new.letter_spacing.to_bits()
+                || old.word_spacing.to_bits() != new.word_spacing.to_bits()
+                || old.baseline_shift.to_bits() != new.baseline_shift.to_bits();
+            invalidation.positioning |= invalidation.metrics
+                || old.material_id != new.material_id
+                || old.raster_pixel_ratio.to_bits() != new.raster_pixel_ratio.to_bits()
+                || old.foreground_rgba != new.foreground_rgba
+                || old.decoration_rgba != new.decoration_rgba
+                || old.decoration_flags != new.decoration_flags
+                || old.decoration_style != new.decoration_style
+                || old.decoration_thickness.to_bits() != new.decoration_thickness.to_bits()
+                || old.decoration_offset.to_bits() != new.decoration_offset.to_bits();
+        }
+        invalidation
     }
 }
 
@@ -737,6 +797,63 @@ mod tests {
         assert_eq!(arena.resolved_features(deepest), arena.features.as_slice());
         assert!(!deepest.has_line_height);
         assert_eq!(resolved.segments()[3].style.material_id, 0);
+    }
+
+    #[test]
+    fn invalidation_stops_at_the_first_affected_retained_stage() {
+        let storage = StyleArena::default();
+        let previous = resolved(ResolvedStyle::default());
+
+        assert_eq!(
+            previous.invalidation_against(&storage, &previous, &storage),
+            StyleInvalidation::default(),
+        );
+
+        let mut font_size = ResolvedStyle::default();
+        font_size.font_size = 24.0;
+        assert_eq!(
+            previous.invalidation_against(&storage, &resolved(font_size), &storage),
+            StyleInvalidation {
+                bidi: false,
+                shaping: false,
+                metrics: true,
+                positioning: true,
+            },
+        );
+
+        let mut foreground = ResolvedStyle::default();
+        foreground.foreground_rgba = 0xff00_00ff;
+        assert_eq!(
+            previous.invalidation_against(&storage, &resolved(foreground), &storage),
+            StyleInvalidation {
+                bidi: false,
+                shaping: false,
+                metrics: false,
+                positioning: true,
+            },
+        );
+
+        let mut direction = ResolvedStyle::default();
+        direction.direction = 2;
+        assert_eq!(
+            previous.invalidation_against(&storage, &resolved(direction), &storage),
+            StyleInvalidation {
+                bidi: true,
+                shaping: true,
+                metrics: true,
+                positioning: true,
+            },
+        );
+    }
+
+    fn resolved(style: ResolvedStyle) -> ResolvedStyleArena {
+        ResolvedStyleArena {
+            segments: vec![StyleSegment {
+                text_start: 0,
+                text_end: 8,
+                style,
+            }],
+        }
     }
 
     fn style(

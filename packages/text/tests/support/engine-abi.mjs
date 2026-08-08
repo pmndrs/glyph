@@ -110,6 +110,121 @@ export function engineUpdateBytes(
   return bytes;
 }
 
+export function engineFrameUpdateBytes(
+  abi,
+  {
+    sessionId,
+    policyHandle,
+    fontStackHandle,
+    expectedEngineRevision = 0,
+    consumedPlanRevision = 0,
+    acknowledgedPublicationGeneration = 0,
+    textMutation,
+    style,
+    geometry,
+    limits,
+  },
+) {
+  const request = abi.layouts.engineUpdateRequest;
+  const textRecord = abi.layouts.engineTextMutation;
+  const styleRecord = abi.layouts.engineStyleMutation;
+  const constraint = abi.layouts.engineConstraint;
+  const region = abi.layouts.engineRegion;
+  let cursor = request.size;
+  const textRecordOffset = textMutation === undefined ? 0 : cursor;
+  if (textMutation !== undefined) cursor += textRecord.size;
+  const styleRecordOffset = style === undefined ? 0 : align(cursor, styleRecord.alignment);
+  if (style !== undefined) cursor = styleRecordOffset + styleRecord.size;
+  const constraintOffset = geometry === undefined ? 0 : align(cursor, constraint.alignment);
+  if (geometry !== undefined) cursor = constraintOffset + constraint.size;
+  const regionOffset = geometry === undefined ? 0 : align(cursor, region.alignment);
+  if (geometry !== undefined) cursor = regionOffset + region.size;
+  const textPayloadOffset = textMutation === undefined || textMutation.insert.length === 0 ? 0 : align(cursor, 2);
+  const textPayloadLength = textMutation === undefined ? 0 : textMutation.insert.length * 2;
+  const bytes = new Uint8Array(textPayloadOffset === 0 ? cursor : textPayloadOffset + textPayloadLength);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(request.abiVersion, abi.version, true);
+  view.setUint32(request.byteLength, bytes.byteLength, true);
+  view.setUint32(request.sessionId, sessionId, true);
+  view.setUint32(request.expectedEngineRevision, expectedEngineRevision, true);
+  view.setUint32(request.consumedPlanRevision, consumedPlanRevision, true);
+  view.setUint32(request.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
+  view.setUint32(request.policyHandle, policyHandle, true);
+  view.setUint32(request.capabilitySet, 1, true);
+  view.setUint32(request.maxClusters, limits.maxClusters, true);
+  view.setUint32(request.maxLines, limits.maxLines, true);
+  view.setUint32(request.maxRegions, 1, true);
+  view.setUint32(request.maxExclusions, 1, true);
+  view.setUint32(request.maxInlineObjects, 1, true);
+  view.setUint32(request.maxSlotsPerBand, 1, true);
+  view.setUint32(request.maxOutputBytes, limits.maxOutputBytes, true);
+  view.setUint32(request.textMutationsOffset, textRecordOffset, true);
+  view.setUint32(request.textMutationCount, textMutation === undefined ? 0 : 1, true);
+  view.setUint32(request.styleMutationsOffset, styleRecordOffset, true);
+  view.setUint32(request.styleMutationCount, style === undefined ? 0 : 1, true);
+  view.setUint32(request.constraintsOffset, constraintOffset, true);
+  view.setUint32(request.constraintCount, geometry === undefined ? 0 : 1, true);
+  view.setUint32(request.regionsOffset, regionOffset, true);
+  view.setUint32(request.regionCount, geometry === undefined ? 0 : 1, true);
+
+  if (textMutation !== undefined) {
+    view.setUint8(textRecordOffset + textRecord.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
+    view.setUint8(textRecordOffset + textRecord.encoding, abi.engine.textEncodings.utf16Le);
+    view.setUint32(textRecordOffset + textRecord.textStart, textMutation.start, true);
+    view.setUint32(textRecordOffset + textRecord.deleteCount, textMutation.deleteCount, true);
+    view.setUint32(textRecordOffset + textRecord.insertOffset, textPayloadOffset, true);
+    view.setUint32(textRecordOffset + textRecord.insertCount, textMutation.insert.length, true);
+    for (const [index, unit] of textMutation.insert.entries()) {
+      view.setUint16(textPayloadOffset + index * 2, unit, true);
+    }
+  }
+
+  if (style !== undefined) {
+    view.setUint8(styleRecordOffset + styleRecord.opcode, abi.engine.styleMutationOpcodes.upsert);
+    view.setUint8(styleRecordOffset + styleRecord.flags, abi.engine.styleFlags.root);
+    view.setUint32(styleRecordOffset + styleRecord.styleId, 1, true);
+    view.setUint32(
+      styleRecordOffset + styleRecord.fieldMask,
+      abi.engine.styleFields.fontStack |
+        abi.engine.styleFields.fontSize |
+        abi.engine.styleFields.lineHeight |
+        abi.engine.styleFields.rasterPixelRatio,
+      true,
+    );
+    view.setUint32(styleRecordOffset + styleRecord.textEnd, style.textEnd, true);
+    view.setUint32(styleRecordOffset + styleRecord.fontStackHandle, fontStackHandle, true);
+    view.setFloat32(styleRecordOffset + styleRecord.fontSize, style.fontSize, true);
+    view.setFloat32(styleRecordOffset + styleRecord.lineHeight, style.lineHeight, true);
+    view.setFloat32(styleRecordOffset + styleRecord.rasterPixelRatio, style.rasterPixelRatio, true);
+  }
+
+  if (geometry !== undefined) {
+    view.setUint32(constraintOffset + constraint.flowThreadId, 1, true);
+    view.setFloat32(constraintOffset + constraint.width, geometry.width, true);
+    view.setFloat32(constraintOffset + constraint.height, geometry.height, true);
+    view.setFloat32(constraintOffset + constraint.viewportBlockEnd, geometry.height, true);
+    view.setUint32(constraintOffset + constraint.maxLines, geometry.maxLines, true);
+    view.setUint16(constraintOffset + constraint.regionCount, 1, true);
+    view.setUint8(constraintOffset + constraint.widthMode, abi.engine.axisModes.exact);
+    view.setUint8(constraintOffset + constraint.heightMode, abi.engine.axisModes.exact);
+    view.setUint8(constraintOffset + constraint.wrap, abi.engine.wrapModes.word);
+    view.setUint8(constraintOffset + constraint.align, abi.engine.inlineAlignments.start);
+    view.setUint8(constraintOffset + constraint.overflow, abi.engine.overflowModes.visible);
+    view.setUint8(constraintOffset + constraint.blockAlign, abi.engine.blockAlignments.start);
+
+    view.setUint32(regionOffset + region.id, 1, true);
+    view.setUint32(regionOffset + region.geometryRevision, geometry.revision, true);
+    view.setUint8(regionOffset + region.shape, abi.engine.flowShapeKinds.rectangle);
+    view.setUint8(regionOffset + region.writingMode, abi.engine.writingModes.horizontalTb);
+    view.setUint8(regionOffset + region.textOrientation, abi.engine.textOrientations.mixed);
+    view.setFloat32(regionOffset + region.inlineEnd, geometry.width, true);
+    view.setFloat32(regionOffset + region.blockEnd, geometry.height, true);
+    view.setFloat32(regionOffset + region.clipInlineEnd, geometry.width, true);
+    view.setFloat32(regionOffset + region.clipBlockEnd, geometry.height, true);
+  }
+  return bytes;
+}
+
 export function copyIntoAllocation(memory, allocate, bytes) {
   const pointer = allocate(bytes.byteLength);
   if (pointer === 0) throw new Error('Wasm request allocation failed');

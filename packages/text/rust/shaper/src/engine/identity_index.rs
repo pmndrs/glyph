@@ -39,11 +39,7 @@ impl IdentityIndex {
         Ok(())
     }
 
-    pub(crate) fn insert(
-        &mut self,
-        identity: u32,
-        value: u32,
-    ) -> Result<(), IdentityIndexError> {
+    pub(crate) fn insert(&mut self, identity: u32, value: u32) -> Result<(), IdentityIndexError> {
         let index = self.insert_position(identity)?;
         if self.epochs[index] == self.epoch {
             return Err(IdentityIndexError::DuplicateIdentity);

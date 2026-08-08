@@ -54,6 +54,18 @@ pub(crate) struct FlowLayoutArena {
 }
 
 impl FlowLayoutArena {
+    pub(crate) fn reserve(
+        &mut self,
+        line_capacity: usize,
+        max_slots_per_band: usize,
+    ) -> Result<(), EngineError> {
+        reserve(&mut self.lines, line_capacity)?;
+        reserve(
+            &mut self.fragments,
+            line_capacity.saturating_mul(max_slots_per_band),
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn build(
         &mut self,
@@ -70,11 +82,7 @@ impl FlowLayoutArena {
         if clusters.starts.is_empty() || geometry.constraints.is_empty() {
             return Ok(());
         }
-        reserve(&mut self.lines, max_lines)?;
-        reserve(
-            &mut self.fragments,
-            max_lines.saturating_mul(max_slots_per_band),
-        )?;
+        self.reserve(max_lines, max_slots_per_band)?;
         for constraint in geometry.constraints.iter().copied() {
             let resume = cluster_for_offset(clusters, constraint.resume_cluster)?;
             let mut cursor = LineCursor::at_cluster(resume);

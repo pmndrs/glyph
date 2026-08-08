@@ -8,7 +8,6 @@ mod cluster_state;
 mod flow_composition;
 #[cfg_attr(not(test), allow(dead_code))]
 mod flow_geometry;
-mod identity_index;
 pub mod font_binding;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod font_binding_wire;
@@ -16,6 +15,7 @@ pub(crate) mod font_binding_wire;
 pub(crate) mod frame;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod frame_wire;
+mod identity_index;
 #[cfg(feature = "kernel-lab")]
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) mod kernel_lab;

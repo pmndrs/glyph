@@ -10,10 +10,10 @@ use super::{
     cluster_state::{ClusterArena, ClusterBuildInput},
     flow_composition::FlowLayoutArena,
     flow_geometry::FlowGeometryArena,
-    identity_index::IdentityIndex,
     font_binding::FontRenderBinding,
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
-    policy::{CapabilitySetId, ValidatedPolicy},
+    identity_index::IdentityIndex,
+    policy::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedPolicy},
     policy_gather::{
         DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput, PolicyGatherWorkspace,
     },
@@ -23,6 +23,7 @@ use super::{
     shaping_state::{ShapeArena, ShapingRunArena},
     style_state::{
         DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
+        StyleInvalidation,
     },
 };
 
@@ -123,6 +124,7 @@ struct EngineSession {
     style_nesting_scratch: Vec<u32>,
     style_resolution_scratch: Vec<ResolutionScope>,
     styles_prepared: bool,
+    style_invalidation: StyleInvalidation,
     unicode_prepared: bool,
     bidi_prepared: bool,
     shaping_runs_prepared: bool,
@@ -367,11 +369,13 @@ impl TextEngine {
         session.pending_shape.reserve(glyph_capacity)?;
         session.clusters.reserve(capacity)?;
         session.pending_clusters.reserve(capacity)?;
+        session.flow_layout.reserve(capacity, 1)?;
+        session.pending_flow_layout.reserve(capacity, 1)?;
         session.positioned.reserve(glyph_capacity)?;
         session.pending_positioned.reserve(glyph_capacity)?;
         session
             .glyph_identity_index
-            .prepare(capacity)
+            .prepare(glyph_capacity)
             .map_err(|_| EngineError::ResultTooLarge)?;
         reserve_vec(&mut session.fallback_spans, capacity)?;
         reserve_vec(&mut session.pending_fallback_spans, capacity)?;
@@ -556,13 +560,19 @@ impl TextEngine {
             session.abort_clusters();
             return Err(error);
         }
+        let flow_changed = session.clusters_prepared
+            || session.geometry_prepared
+            || session.style_invalidation.metrics;
+        let positioned_changed = flow_changed || session.style_invalidation.positioning;
         if let Some(shaper) = shaper {
-            if let Err(error) = session.prepare_flow_layout(
-                shaper,
-                font_stacks,
-                request.limits.max_lines,
-                request.limits.max_slots_per_band,
-            ) {
+            if flow_changed
+                && let Err(error) = session.prepare_flow_layout(
+                    shaper,
+                    font_stacks,
+                    request.limits.max_lines,
+                    request.limits.max_slots_per_band,
+                )
+            {
                 session.abort_text();
                 session.abort_styles();
                 session.abort_unicode();
@@ -574,7 +584,7 @@ impl TextEngine {
                 session.abort_flow_layout();
                 return Err(error);
             }
-            if let Err(error) = session.prepare_positioned(shaper) {
+            if positioned_changed && let Err(error) = session.prepare_positioned(shaper) {
                 session.abort_text();
                 session.abort_styles();
                 session.abort_unicode();
@@ -588,49 +598,60 @@ impl TextEngine {
                 return Err(error);
             }
         }
-        let positioned = if session.positioned_prepared {
-            &session.pending_positioned
+        let reuse_ordered_plan = !checkpoint
+            && !positioned_changed
+            && policy
+                .programs()
+                .iter()
+                .all(|program| program.allocation_strategy == ALLOCATION_ORDERED_DIRECT);
+        let plan_result = if reuse_ordered_plan {
+            session.plan.prepare_reuse()
         } else {
-            &session.positioned
+            let positioned = if session.positioned_prepared {
+                &session.pending_positioned
+            } else {
+                &session.positioned
+            };
+            let semantic_f32 = positioned.semantic_f32();
+            let semantic_u32 = positioned.semantic_u32();
+            if let Err(error) = gather.gather(
+                policy,
+                CapabilitySetId(request.capability_set),
+                LayoutPlanInput {
+                    glyphs: positioned.glyphs(),
+                    semantic_f32: &semantic_f32,
+                    semantic_u32: &semantic_u32,
+                },
+                |handle| {
+                    font_bindings
+                        .iter()
+                        .find(|binding| binding.handle == handle)
+                        .map(|binding| &binding.binding)
+                },
+            ) {
+                session.abort_text();
+                session.abort_styles();
+                session.abort_unicode();
+                session.abort_bidi();
+                session.abort_shaping_runs();
+                session.abort_shape();
+                session.abort_clusters();
+                session.abort_geometry();
+                session.abort_flow_layout();
+                session.abort_positioned();
+                return Err(gather_error(error));
+            }
+            let gathered = gather.view();
+            session.plan.prepare(
+                policy,
+                CapabilitySetId(request.capability_set),
+                gathered.plan_input(),
+                checkpoint,
+                publication_generation,
+                request.acknowledged_publication_generation,
+            )
         };
-        let semantic_f32 = positioned.semantic_f32();
-        let semantic_u32 = positioned.semantic_u32();
-        if let Err(error) = gather.gather(
-            policy,
-            CapabilitySetId(request.capability_set),
-            LayoutPlanInput {
-                glyphs: positioned.glyphs(),
-                semantic_f32: &semantic_f32,
-                semantic_u32: &semantic_u32,
-            },
-            |handle| {
-                font_bindings
-                    .iter()
-                    .find(|binding| binding.handle == handle)
-                    .map(|binding| &binding.binding)
-            },
-        ) {
-            session.abort_text();
-            session.abort_styles();
-            session.abort_unicode();
-            session.abort_bidi();
-            session.abort_shaping_runs();
-            session.abort_shape();
-            session.abort_clusters();
-            session.abort_geometry();
-            session.abort_flow_layout();
-            session.abort_positioned();
-            return Err(gather_error(error));
-        }
-        let gathered = gather.view();
-        if let Err(error) = session.plan.prepare(
-            policy,
-            CapabilitySetId(request.capability_set),
-            gathered.plan_input(),
-            checkpoint,
-            publication_generation,
-            request.acknowledged_publication_generation,
-        ) {
+        if let Err(error) = plan_result {
             session.abort_text();
             session.abort_styles();
             session.abort_unicode();
@@ -841,6 +862,11 @@ impl EngineSession {
             self.abort_styles();
             return Err(error);
         }
+        self.style_invalidation = self.resolved_styles.invalidation_against(
+            &self.styles,
+            &self.pending_resolved_styles,
+            &self.pending_styles,
+        );
         self.styles_prepared = true;
         Ok(())
     }
@@ -853,6 +879,7 @@ impl EngineSession {
         self.style_nesting_scratch.clear();
         self.style_resolution_scratch.clear();
         self.styles_prepared = false;
+        self.style_invalidation = StyleInvalidation::default();
     }
 
     fn commit_styles(&mut self) {
@@ -897,7 +924,7 @@ impl EngineSession {
 
     fn prepare_bidi(&mut self) -> Result<(), EngineError> {
         self.abort_bidi();
-        if !self.text_prepared && !self.styles_prepared {
+        if !self.text_prepared && !self.style_invalidation.bidi {
             return Ok(());
         }
         let text = if self.text_prepared {
@@ -932,7 +959,7 @@ impl EngineSession {
 
     fn prepare_shaping_runs(&mut self) -> Result<(), EngineError> {
         self.abort_shaping_runs();
-        if !self.text_prepared && !self.styles_prepared {
+        if !self.text_prepared && !self.style_invalidation.shaping && !self.bidi_prepared {
             return Ok(());
         }
         let text = if self.text_prepared {
@@ -1156,7 +1183,7 @@ impl EngineSession {
 
     fn prepare_clusters(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
         self.abort_clusters();
-        if !self.shape_prepared {
+        if !self.shape_prepared && !self.style_invalidation.metrics {
             return Ok(());
         }
         let text = if self.text_prepared {
@@ -1197,7 +1224,11 @@ impl EngineSession {
                 unicode,
                 styles,
                 runs,
-                shape: &self.pending_shape,
+                shape: if self.shape_prepared {
+                    &self.pending_shape
+                } else {
+                    &self.shape
+                },
             },
             |handle| shaper.font_metrics(handle),
         )?;
@@ -1243,6 +1274,11 @@ impl EngineSession {
             .map_err(|_| EngineError::InvalidRequest)?;
         self.pending_geometry.build(geometry)?;
         self.pending_geometry_fingerprint = geometry.fingerprint();
+        if geometry.inline_object_count() == 0 && self.pending_geometry == self.geometry {
+            self.pending_geometry.clear();
+            self.pending_geometry_fingerprint = 0;
+            return Ok(());
+        }
         self.geometry_prepared = true;
         Ok(())
     }
