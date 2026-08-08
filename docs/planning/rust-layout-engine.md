@@ -267,6 +267,14 @@ The versioned request contains offsets to packed sections for:
 Stable fonts, policies, and capabilities are referenced by IDs. Repeating a large descriptor every frame would merely
 move host work into serialization.
 
+The V0 compiler-mapped section records are 24-byte ordered UTF-16 replacements, 80-byte stable style upserts/removals,
+52-byte flow constraints, 8-byte inline/block vertices, 56-byte regions, 48-byte exclusions, and 56-byte inline
+objects. UTF-16 payload preserves the public cluster coordinate without a host UTF-8 conversion. Styles carry current
+shaping fields plus word spacing, baseline shift, material, color, and decoration inputs; checked language and feature
+payloads are offset-addressed. Constraint records carry the complete region range, viewport, and resume cursor for the
+call. Rectangle bounds are inline; bounded polygons reference vertex records in the same request. Defining this wire
+grammar does not make a section valid until its Rust decoder and retained transaction land.
+
 All offsets and lengths are range-checked before use. Enum tags, alignment, multiplication, and revision relationships
 are validated at the Wasm boundary. Failure returns a typed result without exposing partially mutated state.
 

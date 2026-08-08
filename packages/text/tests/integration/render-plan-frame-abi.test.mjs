@@ -31,6 +31,25 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.equal(abi.layouts.engineBuffer.size, 36);
   assert.equal(abi.layouts.enginePatch.size, 36);
   assert.equal(abi.layouts.enginePrimitive.size, 64);
+  assert.deepEqual(
+    [
+      abi.layouts.engineTextMutation.size,
+      abi.layouts.engineStyleMutation.size,
+      abi.layouts.engineConstraint.size,
+      abi.layouts.engineFlowVertex.size,
+      abi.layouts.engineRegion.size,
+      abi.layouts.engineExclusion.size,
+      abi.layouts.engineInlineObject.size,
+    ],
+    [24, 80, 52, 8, 56, 48, 56],
+  );
+  assert.equal(abi.layouts.engineInlineObject.alignment, 4);
+  assert.equal(abi.layouts.engineInlineObject.baselineAlignment, 52);
+  assert.equal(abi.engine.textMutationOpcodes.replaceUtf16, 1);
+  assert.equal(abi.engine.styleMutationOpcodes.upsert, 1);
+  assert.equal(abi.engine.styleMutationOpcodes.remove, 2);
+  assert.deepEqual(abi.engine.flowShapeKinds, { polygon: 2, rectangle: 1 });
+  assert.deepEqual(abi.engine.writingModes, { horizontalTb: 1, verticalLr: 3, verticalRl: 2 });
   assert.equal(fn.createSession(sessionId, requestLayout.size, resultLayout.size), abi.status.ok);
   assert.equal(fn.sessionCount(), 1);
   let requestPointer = fn.requestPointer(sessionId);
