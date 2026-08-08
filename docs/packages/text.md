@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:ec94ea3821e3a72a7cf944b536921d90436bba3aeb849f5f914d9f661cbe9db3'
+source_digest: 'sha256:3c2123625efa37228ccddc3853ba2f1c449b8aa90e9ff73f6e541085b519ec8b'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -676,6 +676,8 @@ The same frame path aggregates final fallback glyphs into a retained grapheme-cl
 An allocation-free Rust line kernel advances that retained grapheme cursor for a supplied width while preserving word, character, no-wrap, required-break, over-wide-cluster, and trailing-hard-break behavior. It remains an internal proof until declarative region bands and exclusions drive it during a production frame update.
 
 Validated flow snapshots are now copied into transactional A/B Rust storage: constraints, ordered regions, exclusions, and rebased polygon vertices remain owned after request memory is reused. The rectangle band kernel subtracts intersecting exclusions into retained, bounded inline-slot scratch and fails explicitly if the declared per-band slot envelope is exceeded. Polygon intersection and line placement are not yet connected.
+
+The bounded simple-polygon kernel reuses critical-block, edge-crossing, section, and intersection arrays. Concave region cross-sections can yield multiple normalized inline slots; polygon exclusions conservatively project over the full margin-expanded line band before subtraction. Focused tests cover triangle, concave, exclusion, horizontal-boundary, and slot-limit behavior. Production line placement is still the next connection.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 
