@@ -119,6 +119,7 @@ pub fn execute_run(
     payload: &mut [u8],
     payload_starts: &[usize; MAX_PHYSICAL_BUFFERS],
     output_records: u32,
+    active_buffers: u32,
 ) -> Result<(), PackingError> {
     let input_end = input_index
         .checked_add(record_count as usize)
@@ -146,10 +147,19 @@ pub fn execute_run(
         [const { mem::MaybeUninit::uninit() }; MAX_PHYSICAL_BUFFERS];
     let base = payload.as_mut_ptr();
     for (index, schema) in program.buffers.iter().copied().enumerate() {
-        let length = output_records as usize * schema.stride();
+        let length = if active_buffers & (1 << index) == 0 {
+            0
+        } else {
+            output_records as usize * schema.stride()
+        };
         // SAFETY: the caller sizes mutually disjoint payload segments before this call, and the
         // payload cannot reallocate while these temporary views exist.
-        let bytes = unsafe { slice::from_raw_parts_mut(base.add(payload_starts[index]), length) };
+        let start = if length == 0 {
+            0
+        } else {
+            payload_starts[index]
+        };
+        let bytes = unsafe { slice::from_raw_parts_mut(base.add(start), length) };
         outputs[index].write(PhysicalBufferMut { schema, bytes });
     }
     // SAFETY: the prefix contains exactly one initialized value per declared program buffer.
@@ -160,7 +170,7 @@ pub fn execute_run(
         )
     };
     policy
-        .execute(
+        .execute_buffers(
             capability_set,
             program.technique,
             program.variant,
@@ -171,6 +181,7 @@ pub fn execute_run(
             },
             output_record as usize,
             outputs,
+            active_buffers,
         )
         .map_err(PackingError::Policy)
 }

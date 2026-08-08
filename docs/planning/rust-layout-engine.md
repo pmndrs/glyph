@@ -1142,13 +1142,19 @@ The renderer-parity benchmark now validates the real baked Bitmap, MTSDF, and Sl
 GPU schemas: five Bitmap buffers totaling 48 bytes per instance, seven MTSDF vec4 buffers totaling 112 bytes, and five
 Slug float vec4 plus two unsigned vec4 buffers totaling 112 bytes. The same stress text positions 25,515 glyphs and
 selects 21,805 renderable raster instances, matching the portable techniques' deliberate omission of absent records.
-With five warmups and 11 samples, Bitmap/MTSDF/Slug font-size medians are 5.506/6.396/7.237 ms and full-column-resize
-medians are 4.477/5.276/6.259 ms. SIMD policy output transposes four SoA records in registers and writes tightly packed
-vec2/vec4 records with contiguous 128-bit stores, but every changed glyph still executes every physical output. The
-numbers therefore reject the current plan against the sub-4 ms gate and require dependency-directed policy execution:
-resize touches geometry only; font size touches geometry and Slug inverse scale; static UV, color, band, address, and
-count buffers remain retained. Memory right-sizing, incremental text edits, Three consumption, and deletion of the
-duplicate TypeScript path remain foundation-stack gates.
+Policy validation now propagates semantic input dependencies through the straight-line program once and stores a mask
+per physical output. Positioning records exact six-F32/four-U32 change bits in a compact side lane without enlarging the
+60-byte `PlanGlyph`; ordered-direct and stable-indirect planning intersect the two masks. New or rebound records remain
+conservative full writes. For 21,805 renderable instances, full-column resize now emits one position/geometry patch:
+170.4 KiB for Bitmap and 340.7 KiB for MTSDF or Slug, down from cold-plan writes of 1,022.1, 2,384.9, and 2,384.9 KiB.
+Font-size emits 340.7/340.7/681.4 KiB because Bitmap size and Slug inverse scale also change. Static UV, color, bounds,
+effects, band, address, and count outputs remain retained.
+
+Five-warmup/11-sample Bitmap/MTSDF/Slug medians are now 5.812/6.274/7.443 ms for font-size and
+4.599/4.916/6.057 ms for full-column resize. Run-to-run latency does not establish a general speedup despite the exact
+payload reduction; it confirms that packing and copying were not the dominant cost. The sub-4 ms gate still rejects the
+current path, so layout composition is the next measured optimization target. Memory right-sizing, incremental text
+edits, Three consumption, and deletion of the duplicate TypeScript path remain foundation-stack gates.
 
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 

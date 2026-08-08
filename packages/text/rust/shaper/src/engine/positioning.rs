@@ -17,6 +17,8 @@ use super::{
 
 pub(crate) const SEMANTIC_F32_FIELD_COUNT: usize = 6;
 pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 4;
+pub(crate) const ALL_SEMANTIC_CHANGES: u16 =
+    (1 << (SEMANTIC_F32_FIELD_COUNT + SEMANTIC_U32_FIELD_COUNT)) - 1;
 
 const BIDI_BN: u8 = 9;
 const BIDI_B: u8 = 10;
@@ -35,6 +37,7 @@ const BIDI_PDI: u8 = 22;
 #[derive(Default)]
 pub(crate) struct PositionedGlyphArena {
     glyphs: Vec<LayoutGlyph>,
+    semantic_change_masks: Vec<u16>,
     semantic_f32: [Vec<f32>; SEMANTIC_F32_FIELD_COUNT],
     semantic_u32: [Vec<u32>; SEMANTIC_U32_FIELD_COUNT],
     visual_clusters: Vec<u32>,
@@ -45,6 +48,7 @@ pub(crate) struct PositionedGlyphArena {
 impl PositionedGlyphArena {
     pub(crate) fn reserve(&mut self, capacity: usize) -> Result<(), EngineError> {
         reserve(&mut self.glyphs, capacity)?;
+        reserve(&mut self.semantic_change_masks, capacity)?;
         for field in &mut self.semantic_f32 {
             reserve(field, capacity)?;
         }
@@ -113,6 +117,7 @@ impl PositionedGlyphArena {
 
     pub(crate) fn clear(&mut self) {
         self.glyphs.clear();
+        self.semantic_change_masks.clear();
         for field in &mut self.semantic_f32 {
             field.clear();
         }
@@ -126,6 +131,10 @@ impl PositionedGlyphArena {
 
     pub(crate) fn glyphs(&self) -> &[LayoutGlyph] {
         &self.glyphs
+    }
+
+    pub(crate) fn semantic_change_masks(&self) -> &[u16] {
+        &self.semantic_change_masks
     }
 
     pub(crate) fn semantic_f32(&self) -> [&[f32]; SEMANTIC_F32_FIELD_COUNT] {
@@ -348,10 +357,12 @@ impl PositionedGlyphArena {
             let previous_slot = index
                 .get(self.glyphs[slot].stable_id)
                 .and_then(|value| usize::try_from(value).ok());
-            let revision = if let Some(previous_slot) = previous_slot
-                .filter(|&previous_slot| self.same_content(slot, previous, previous_slot))
-            {
-                previous.glyphs[previous_slot].content_revision
+            let change_mask = previous_slot.map_or(ALL_SEMANTIC_CHANGES, |previous_slot| {
+                self.semantic_change_mask(slot, previous, previous_slot)
+            });
+            let revision = if change_mask == 0 {
+                previous.glyphs[previous_slot.expect("zero change requires a previous glyph")]
+                    .content_revision
             } else {
                 let revision = *next_revision;
                 *next_revision = next_revision
@@ -363,33 +374,38 @@ impl PositionedGlyphArena {
                 return Err(EngineError::ResultTooLarge);
             }
             self.glyphs[slot].content_revision = revision;
+            self.semantic_change_masks.push(change_mask);
         }
         Ok(())
     }
 
-    fn same_content(&self, slot: usize, previous: &Self, previous_slot: usize) -> bool {
+    fn semantic_change_mask(&self, slot: usize, previous: &Self, previous_slot: usize) -> u16 {
         let next = self.glyphs[slot];
         let old = previous.glyphs[previous_slot];
-        next.stable_id == old.stable_id
-            && next.font_handle == old.font_handle
-            && next.glyph_id == old.glyph_id
-            && next.semantic_id == old.semantic_id
-            && next.material_id == old.material_id
-            && next.clip_id == old.clip_id
-            && next.depth_key == old.depth_key
-            && next.font_size.to_bits() == old.font_size.to_bits()
-            && next.raster_pixel_ratio.to_bits() == old.raster_pixel_ratio.to_bits()
-            && next.inline_start.to_bits() == old.inline_start.to_bits()
-            && next.block_start.to_bits() == old.block_start.to_bits()
-            && next.inline_extent.to_bits() == old.inline_extent.to_bits()
-            && next.block_extent.to_bits() == old.block_extent.to_bits()
-            && (0..SEMANTIC_F32_FIELD_COUNT).all(|field| {
-                self.semantic_f32[field][slot].to_bits()
-                    == previous.semantic_f32[field][previous_slot].to_bits()
-            })
-            && (0..SEMANTIC_U32_FIELD_COUNT).all(|field| {
-                self.semantic_u32[field][slot] == previous.semantic_u32[field][previous_slot]
-            })
+        if next.stable_id != old.stable_id
+            || next.font_handle != old.font_handle
+            || next.glyph_id != old.glyph_id
+            || next.semantic_id != old.semantic_id
+            || next.material_id != old.material_id
+            || next.clip_id != old.clip_id
+            || next.depth_key != old.depth_key
+        {
+            return ALL_SEMANTIC_CHANGES;
+        }
+        let mut mask = 0_u16;
+        for field in 0..SEMANTIC_F32_FIELD_COUNT {
+            if self.semantic_f32[field][slot].to_bits()
+                != previous.semantic_f32[field][previous_slot].to_bits()
+            {
+                mask |= 1 << field;
+            }
+        }
+        for field in 0..SEMANTIC_U32_FIELD_COUNT {
+            if self.semantic_u32[field][slot] != previous.semantic_u32[field][previous_slot] {
+                mask |= 1 << (SEMANTIC_F32_FIELD_COUNT + field);
+            }
+        }
+        mask
     }
 }
 
