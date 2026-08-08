@@ -61,8 +61,19 @@ export interface Paragraph {
   measure(constraints?: ParagraphConstraints): ParagraphMeasurement;
   /** Resolve the final box and materialize positioned glyph output. */
   layout(constraints?: ParagraphConstraints): ParagraphLayout;
+  /**
+   * Shaped glyph identity, before line breaking and positioning. A caller resolving font fallback needs to know which
+   * clusters shaped to `.notdef` and nothing else, and that answer must not depend on where lines happen to break.
+   */
+  shaped(): ShapedGlyphIdentity;
   update(input: ParagraphInput): void;
   dispose(): void;
+}
+
+/** Glyph identity in shaping order, covering every run of the paragraph. */
+export interface ShapedGlyphIdentity {
+  readonly glyphIds: Uint16Array;
+  readonly clusters: Uint32Array;
 }
 
 export interface ParagraphEngine {
@@ -331,6 +342,11 @@ class ParagraphImpl implements Paragraph {
     return layout;
   }
 
+  shaped(): ShapedGlyphIdentity {
+    this.#assertActive();
+    return { glyphIds: this.#prepared.shape.glyphIds, clusters: this.#prepared.shape.clusters };
+  }
+
   update(input: ParagraphInput): void {
     this.#assertActive();
     this.#prepared = prepareParagraph(this.#shaper, input, this.#prepared);
@@ -399,15 +415,23 @@ function prepareParagraph(
 ): PreparedParagraph {
   const preparing = profileBegin();
   const ownedInput = copyInput(input);
+  // Grapheme boundaries, line break opportunities, script items, and bidi levels are decided by the text and its base
+  // direction and by nothing else, so a resize, a colour change, or a letter-spacing change all recompute a result
+  // identical to the retained one. Both are owned, immutable products, so reusing them is a pointer copy.
+  const sameText =
+    previous !== undefined &&
+    previous.input.text === ownedInput.text &&
+    (previous.input.style?.direction ?? 'auto') === (ownedInput.style?.direction ?? 'auto');
   let phase = profileBegin();
-  const unicode = analyzeUnicodeText(ownedInput.text);
+  const unicode = sameText ? previous.unicode : analyzeUnicodeText(ownedInput.text);
   profileEnd('prepare.unicode', phase);
   phase = profileBegin();
   const styles = resolveStyles(shaper, ownedInput, unicode.graphemeBoundaries);
   profileEnd('prepare.styles', phase);
   phase = profileBegin();
-  const textUtf16 = utf16(ownedInput.text);
-  const bidi = ownBidi(shaper.analyzeBidi(textUtf16, ownedInput.style?.direction ?? 'auto'));
+  const bidi = sameText
+    ? previous.bidi
+    : ownBidi(shaper.analyzeBidi(utf16(ownedInput.text), ownedInput.style?.direction ?? 'auto'));
   profileEnd('prepare.bidi', phase);
   phase = profileBegin();
   const runs = prepareRuns(ownedInput.text, styles, unicode, bidi);

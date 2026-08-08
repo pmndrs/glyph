@@ -8,7 +8,12 @@ import {
 } from './loaded-font.js';
 import type { ParagraphLayout } from './layout.js';
 import type { FontHandle } from './identity.js';
-import { createParagraphEngine, type ParagraphStyle } from './paragraph.js';
+import {
+  createParagraphEngine,
+  type Paragraph as EngineParagraph,
+  type ParagraphEngine,
+  type ParagraphStyle,
+} from './paragraph.js';
 import { profileBegin, profileEnd } from './profiler.js';
 import type { ResolvedPaint } from './paint.js';
 import type {
@@ -598,6 +603,7 @@ class ParagraphImpl<Technique extends AnyRasterTechnique, Variant> implements Pa
   #desiredRevision = 0;
   #leasedFonts: readonly LoadedFont<Technique>[];
   #needsShape = true;
+  #layoutSession: ParagraphLayoutSession | undefined;
   readonly hasDensity: boolean;
 
   constructor(
@@ -772,7 +778,7 @@ class ParagraphImpl<Technique extends AnyRasterTechnique, Variant> implements Pa
     const layout =
       !capture.needsShape && capture.prepared !== undefined
         ? capture.prepared.layout
-        : (preparedLayout ?? layoutWithFallback(shaper, capture.state));
+        : (preparedLayout ?? this.#session(shaper).layout(paragraphLayoutInput(capture.state)));
     const topology = (
       !capture.needsShape && capture.prepared !== undefined
         ? capture.prepared.publicParagraph.topology
@@ -805,7 +811,15 @@ class ParagraphImpl<Technique extends AnyRasterTechnique, Variant> implements Pa
     this.#leasedFonts = [];
     this.batch.removeParagraph(this);
     this.#prepared = undefined;
+    this.#layoutSession?.dispose();
+    this.#layoutSession = undefined;
   }
+  /** Retained so preparation survives a change that only moves the content box. */
+  #session(shaper: RuntimeShaper): ParagraphLayoutSession {
+    this.#layoutSession ??= new ParagraphLayoutSession(shaper);
+    return this.#layoutSession;
+  }
+
   #assertActive(): void {
     if (this.#disposed) throw new Error('paragraph has been disposed');
   }
@@ -1166,13 +1180,6 @@ function shapingSpans(
   return authored;
 }
 
-function layoutWithFallback<Technique extends AnyRasterTechnique, Variant>(
-  shaper: RuntimeShaper,
-  state: ParagraphSnapshot<Technique, Variant>,
-): ParagraphLayout {
-  return prepareParagraphLayout(shaper, paragraphLayoutInput(state));
-}
-
 /**
  * The shaping layer receives the cascade already resolved into disjoint
  * segments, so a span's font and shaping style reach run segmentation with the
@@ -1219,21 +1226,56 @@ export interface WorkerParagraphLayoutInput {
   readonly contentBox: ParagraphContentBox;
 }
 
-/** @internal */
-export function prepareParagraphLayout(shaper: RuntimeShaper, state: WorkerParagraphLayoutInput): ParagraphLayout {
-  const engine = createParagraphEngine({ shaper });
-  const fallbackIndexes = new Map<number, number>();
-  const fallbacks = new Map<number, FontHandle>();
-  const maximumDepth = Math.max(state.fonts.length, ...state.spans.map((span) => span.fonts?.length ?? 1));
-  for (let pass = 0; pass < maximumDepth; pass += 1) {
-    const paragraph = engine.create({
-      text: state.text,
-      font: state.fonts[0]!,
-      spans: shapingSpans(state, fallbacks),
-      style: state.style,
-    });
-    try {
-      const probe = paragraph.layout();
+/**
+ * Retains one prepared paragraph across updates.
+ *
+ * Preparation resolves Unicode segmentation, bidi levels, style and run segmentation, shaping, and cluster metrics from
+ * the text, the fonts, the spans, and the style. A content box is none of those: it is a layout constraint the retained
+ * paragraph already answers per call, against caches it keeps for exactly that purpose. Building a fresh paragraph for
+ * every change recomputed the whole preparation and then discarded those caches, so a width drag paid a cold build and
+ * shaping could never be reused.
+ *
+ * @internal
+ */
+export class ParagraphLayoutSession {
+  readonly #engine: ParagraphEngine;
+  #paragraph: EngineParagraph | undefined;
+  #preparedFrom: string | undefined;
+  #preparedText: string | undefined;
+
+  constructor(shaper: RuntimeShaper) {
+    this.#engine = createParagraphEngine({ shaper });
+  }
+
+  layout(state: WorkerParagraphLayoutInput): ParagraphLayout {
+    const paragraph = this.#paragraph;
+    const preparedFrom = preparationKey(state);
+    if (paragraph !== undefined && this.#preparedText === state.text && this.#preparedFrom === preparedFrom) {
+      return paragraph.layout(layoutConstraints(state.contentBox));
+    }
+    const layout = this.#prepare(state);
+    this.#preparedText = state.text;
+    this.#preparedFrom = preparedFrom;
+    return layout;
+  }
+
+  dispose(): void {
+    this.#paragraph?.dispose();
+    this.#paragraph = undefined;
+    this.#preparedFrom = undefined;
+    this.#preparedText = undefined;
+  }
+
+  #prepare(state: WorkerParagraphLayoutInput): ParagraphLayout {
+    const fallbackIndexes = new Map<number, number>();
+    const fallbacks = new Map<number, FontHandle>();
+    const maximumDepth = Math.max(state.fonts.length, ...state.spans.map((span) => span.fonts?.length ?? 1));
+    for (let pass = 0; pass < maximumDepth; pass += 1) {
+      const paragraph: EngineParagraph = this.#retain(state, fallbacks);
+      // Fallback substitution asks which clusters shaped to `.notdef`, which shaping already answered. Laying the
+      // paragraph out to discover it would break lines and position every glyph for a result that is discarded, and
+      // would make font selection depend on where the text happened to wrap.
+      const probe = paragraph.shaped();
       const clusters = [...new Set(probe.clusters)].sort((left, right) => left - right);
       let changed = false;
       for (let glyph = 0; glyph < probe.glyphIds.length; glyph += 1) {
@@ -1252,20 +1294,43 @@ export function prepareParagraphLayout(shaper: RuntimeShaper, state: WorkerParag
         changed = true;
       }
       if (!changed) return paragraph.layout(layoutConstraints(state.contentBox));
-    } finally {
-      paragraph.dispose();
     }
+    return this.#retain(state, fallbacks).layout(layoutConstraints(state.contentBox));
   }
-  const paragraph = engine.create({
-    text: state.text,
-    font: state.fonts[0]!,
-    spans: shapingSpans(state, fallbacks),
-    style: state.style,
-  });
+
+  #retain(state: WorkerParagraphLayoutInput, fallbacks: ReadonlyMap<number, FontHandle>): EngineParagraph {
+    const input = {
+      text: state.text,
+      font: state.fonts[0]!,
+      spans: shapingSpans(state, fallbacks),
+      style: state.style,
+    };
+    const existing = this.#paragraph;
+    if (existing === undefined) {
+      const created = this.#engine.create(input);
+      this.#paragraph = created;
+      return created;
+    }
+    existing.update(input);
+    return existing;
+  }
+}
+
+/**
+ * Identifies everything preparation depends on, excluding the text, which is compared directly. Spans, fonts, and style
+ * are bounded by the authored markup rather than by the glyph count, so serializing them stays cheap at any scale.
+ */
+function preparationKey(state: WorkerParagraphLayoutInput): string {
+  return JSON.stringify({ fonts: state.fonts, spans: state.spans, style: state.style });
+}
+
+/** @internal */
+export function prepareParagraphLayout(shaper: RuntimeShaper, state: WorkerParagraphLayoutInput): ParagraphLayout {
+  const session = new ParagraphLayoutSession(shaper);
   try {
-    return paragraph.layout(layoutConstraints(state.contentBox));
+    return session.layout(state);
   } finally {
-    paragraph.dispose();
+    session.dispose();
   }
 }
 
