@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:19c16a5470c147e9c55f3094b5c97d4958489c8f662a5bad56e9017fdb670778'
+source_digest: 'sha256:c4dfe1a2d98c2cb4ec0c9695c1db0b7083681fbf49feeda101dd4303136999df'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -172,7 +172,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-08T20:16:21Z'
+  at: '2026-08-08T20:20:37Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -684,6 +684,8 @@ Production horizontal frame updates now retain line and fragment arrays derived 
 Stable render identity begins with a transactional ID parallel to every retained UTF-16 unit. Ordered replacements preserve IDs for unchanged units even when earlier insertions shift their offsets; inserted units receive monotonic nonzero IDs, and abort/retry restores the allocator deterministically. Graphemes inherit their first unit ID. Per-glyph identity and revision still follow before plan publication.
 
 Cluster construction now emits a flat logical-cluster-to-shaped-glyph adjacency alongside measured advances. One count, prefix-sum, and fill pass groups glyph indexes without changing HarfRust's run-local order, so an RTL-shaped `[2,1,0]` stream resolves to logical cluster slices `[2]`, `[1]`, `[0]`. Active and pending arrays reuse their high-water capacities. The optimized shaper is 1,043,289 raw, 394,074 gzip, and 304,902 Brotli bytes at this checkpoint. Stable glyph allocation, positioning, and nonempty plan publication remain open.
+
+The stable GPU slot pool's exact open-addressed identity lookup is now one reusable epoch-cleared component for both plan storage and the upcoming cluster/glyph reconciliation. Hashes select probe positions only; full `u32` equality decides every match. A collision fixture proves distinct keys remain distinct, duplicate insertion is rejected, and a same-capacity prepare clears logically without reallocating. The refactor alone measures 1,043,094 raw, 394,035 gzip, and 307,259 Brotli bytes; the compressed regression is retained because removing a second hot-path identity-table implementation is the stronger invariant.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

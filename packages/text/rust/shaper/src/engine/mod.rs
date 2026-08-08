@@ -8,6 +8,7 @@ mod cluster_state;
 mod flow_composition;
 #[cfg_attr(not(test), allow(dead_code))]
 mod flow_geometry;
+mod identity_index;
 pub mod font_binding;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod font_binding_wire;
