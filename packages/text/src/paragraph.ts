@@ -5,6 +5,7 @@ import type { RegisteredFont } from './font.js';
 import type { BidiAnalysisViews, ReshapeRange, RuntimeShaper, ShapeBatchRequest, ShapedBatchViews } from './shaper.js';
 import { analyzeUnicodeText, type UnicodeTextAnalysis } from './internal/unicode.js';
 import { resolveSpanCascade, type SpanCascadeEntry } from './internal/span-cascade.js';
+import { profileBegin, profileEnd } from './profiler.js';
 
 /**
  * A layout-system-neutral axis constraint.
@@ -305,9 +306,12 @@ class ParagraphImpl implements Paragraph {
     if (geometry === undefined) {
       let positioning = getRecent(this.#positioning, positioningKey);
       if (positioning === undefined) {
+        const preparingPositions = profileBegin();
         positioning = preparePositioning(this.#shaper, this.#prepared, measured.lines);
+        profileEnd('layout.positioning', preparingPositions);
         retainRecent(this.#positioning, positioningKey, positioning);
       }
+      const positioningGeometry = profileBegin();
       geometry = positionPrepared(
         this.#shaper,
         this.#prepared,
@@ -316,6 +320,7 @@ class ParagraphImpl implements Paragraph {
         normalized,
         measured.measurement.width,
       );
+      profileEnd('layout.position', positioningGeometry);
       retainRecent(this.#positionedLines, lineKey, geometry);
     }
     layout = Object.freeze({
@@ -353,10 +358,14 @@ class ParagraphImpl implements Paragraph {
       const lineKey = linePlanConstraintKey(constraints);
       let lines = getRecent(this.#linePlans, lineKey);
       if (lines === undefined) {
+        const breaking = profileBegin();
         lines = planLines(this.#shaper, this.#prepared, constraints);
+        profileEnd('layout.line-break', breaking);
         retainRecent(this.#linePlans, lineKey, lines);
       }
+      const measuring = profileBegin();
       plan = measurePrepared(this.#prepared, constraints, lines);
+      profileEnd('layout.measure', measuring);
       retainRecent(this.#measurements, key, plan);
     }
     return plan;
@@ -388,23 +397,41 @@ function prepareParagraph(
   input: ParagraphInput,
   previous?: PreparedParagraph,
 ): PreparedParagraph {
+  const preparing = profileBegin();
   const ownedInput = copyInput(input);
+  let phase = profileBegin();
   const unicode = analyzeUnicodeText(ownedInput.text);
+  profileEnd('prepare.unicode', phase);
+  phase = profileBegin();
   const styles = resolveStyles(shaper, ownedInput, unicode.graphemeBoundaries);
+  profileEnd('prepare.styles', phase);
+  phase = profileBegin();
   const textUtf16 = utf16(ownedInput.text);
   const bidi = ownBidi(shaper.analyzeBidi(textUtf16, ownedInput.style?.direction ?? 'auto'));
+  profileEnd('prepare.bidi', phase);
+  phase = profileBegin();
   const runs = prepareRuns(ownedInput.text, styles, unicode, bidi);
   const shapedRequest = shapeRequest(ownedInput.text, runs);
+  profileEnd('prepare.runs', phase);
   const request = shapedRequest.request;
   // Shaping is deterministic in its request, and the request carries no font size, line height, or letter spacing —
   // those scale the shaped advances afterward. An animated resize therefore rebuilds an identical request, so reusing
   // the retained shape skips the whole shaping pass while every measurement below still recomputes at the new size.
   // A shape is plain owned typed arrays that nothing releases, so retaining one across preparations is safe.
   const reused = previous !== undefined && sameShapeRequest(previous.request, request) ? previous.shape : undefined;
+  phase = profileBegin();
   const shape = reused ?? ownShape(request.runs.length === 0 ? emptyShape() : shaper.shapeBatch(request));
+  profileEnd('prepare.shape', phase);
+  phase = profileBegin();
   const ellipses = measureEllipses(shaper, runs, shape, shapedRequest.ellipses);
+  profileEnd('prepare.ellipses', phase);
+  phase = profileBegin();
   const clusters = measureClusters(shaper, ownedInput.text, unicode, styles, runs, shape);
+  profileEnd('prepare.clusters', phase);
+  phase = profileBegin();
   const clusterIndexes = indexClusters(ownedInput.text, clusters, previous);
+  profileEnd('prepare.cluster-index', phase);
+  profileEnd('prepare', preparing);
   return {
     input: ownedInput,
     unicode,
