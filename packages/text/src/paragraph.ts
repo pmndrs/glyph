@@ -404,7 +404,7 @@ function prepareParagraph(
   const shape = reused ?? ownShape(request.runs.length === 0 ? emptyShape() : shaper.shapeBatch(request));
   const ellipses = measureEllipses(shaper, runs, shape, shapedRequest.ellipses);
   const clusters = measureClusters(shaper, ownedInput.text, unicode, styles, runs, shape);
-  const clusterIndexes = indexClusters(ownedInput.text, clusters);
+  const clusterIndexes = indexClusters(ownedInput.text, clusters, previous);
   return {
     input: ownedInput,
     unicode,
@@ -822,13 +822,46 @@ function measureClusters(
   return clusters;
 }
 
+/** Smallest retained index capacity. Ordinary paragraphs never pay a growth step on their first frames. */
+const MINIMUM_CLUSTER_INDEX_CAPACITY = 512;
+
+/**
+ * Reuses a retained buffer's memory when it already holds `length` elements, and otherwise grows to a high watermark
+ * that later preparations reuse. The returned view carries the live length, so binary searches over it stay correct
+ * while the backing allocation outlives any single preparation.
+ */
+function reuseTypedArray<Array extends Uint32Array | Float64Array>(
+  previous: Array | undefined,
+  length: number,
+  construct: (capacity: number) => Array,
+): Array {
+  const capacity = previous === undefined ? 0 : previous.buffer.byteLength / previous.BYTES_PER_ELEMENT;
+  if (previous !== undefined && capacity >= length) {
+    const view = new (previous.constructor as new (buffer: ArrayBufferLike, offset: number, length: number) => Array)(
+      previous.buffer,
+      0,
+      length,
+    );
+    view.fill(0);
+    return view;
+  }
+  return construct(Math.max(length, MINIMUM_CLUSTER_INDEX_CAPACITY, capacity * 2));
+}
+
 function indexClusters(
   text: string,
   clusters: readonly MeasuredCluster[],
+  previous?: PreparedParagraph,
 ): Pick<PreparedParagraph, 'clusterStarts' | 'letterSpacingPrefix' | 'spacePrefix'> {
-  const clusterStarts = new Uint32Array(clusters.length);
-  const letterSpacingPrefix = new Float64Array(clusters.length + 1);
-  const spacePrefix = new Uint32Array(clusters.length + 1);
+  const clusterStarts = reuseTypedArray(previous?.clusterStarts, clusters.length, (capacity) =>
+    new Uint32Array(capacity).subarray(0, clusters.length),
+  );
+  const letterSpacingPrefix = reuseTypedArray(previous?.letterSpacingPrefix, clusters.length + 1, (capacity) =>
+    new Float64Array(capacity).subarray(0, clusters.length + 1),
+  );
+  const spacePrefix = reuseTypedArray(previous?.spacePrefix, clusters.length + 1, (capacity) =>
+    new Uint32Array(capacity).subarray(0, clusters.length + 1),
+  );
   for (let index = 0; index < clusters.length; index += 1) {
     const cluster = clusters[index];
     if (cluster === undefined) continue;
