@@ -23,6 +23,7 @@ pub mod render_plan;
 pub(crate) mod render_plan_wire;
 #[cfg_attr(not(test), allow(dead_code))]
 mod stable_order;
+pub mod stable_plan;
 #[cfg_attr(not(test), allow(dead_code))]
 mod stable_pool;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]

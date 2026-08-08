@@ -17,6 +17,8 @@ pub const RESOURCE_ACTION_RETAIN: u16 = 3;
 
 pub const BUFFER_ORDERED_DIRECT: u16 = 1;
 pub const BUFFER_STABLE_INDIRECT: u16 = 2;
+/// Reserved non-policy binding ID for the stable-indirect logical-order buffer.
+pub const POLICY_BUFFER_ORDER: u16 = u16::MAX;
 
 pub const PATCH_ALLOCATE_OR_RESIZE: u16 = 1;
 pub const PATCH_WRITE: u16 = 2;

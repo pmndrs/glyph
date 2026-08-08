@@ -56,6 +56,7 @@ pub struct ChunkedOrder {
     pending_next_chunk_slot: u32,
     capacity_chunks: u32,
     pending_capacity_chunks: u32,
+    pending_rebased: bool,
     prepared: bool,
 }
 
@@ -72,6 +73,7 @@ impl ChunkedOrder {
             self.allocated_free_chunks.clear();
             self.pending_next_chunk_slot = self.next_chunk_slot;
             self.pending_capacity_chunks = self.capacity_chunks;
+            self.pending_rebased = false;
 
             let old_len = self
                 .chunks
@@ -108,10 +110,15 @@ impl ChunkedOrder {
                 suffix_entries += usize::from(candidate.len);
             }
 
-            reserve(
-                &mut self.pending_chunks,
-                self.chunks.len().saturating_add(1),
-            )?;
+            let desired_chunks = desired.len().div_ceil(ORDER_CHUNK_RECORDS as usize);
+            let pending_chunk_bound = self
+                .chunks
+                .len()
+                .checked_add(desired_chunks)
+                .and_then(|count| count.checked_add(2))
+                .ok_or(ChunkedOrderError::ArithmeticOverflow)?;
+            reserve(&mut self.pending_chunks, pending_chunk_bound)?;
+            reserve(&mut self.pending_retired, self.chunks.len())?;
             for chunk in &self.chunks[..prefix_chunk_count] {
                 self.pending_chunks.push(PendingChunk {
                     slot: chunk.slot,
@@ -161,6 +168,14 @@ impl ChunkedOrder {
             if self.pending_capacity_chunks != self.capacity_chunks {
                 self.mark_every_chunk_changed()?;
             }
+            let required_entries = usize::try_from(self.pending_capacity_chunks)
+                .ok()
+                .and_then(|chunks| chunks.checked_mul(ORDER_CHUNK_RECORDS as usize))
+                .ok_or(ChunkedOrderError::ArithmeticOverflow)?;
+            let additional_entries = required_entries.saturating_sub(self.entries.len());
+            reserve(&mut self.entries, additional_entries)?;
+            let additional_chunks = self.pending_chunks.len().saturating_sub(self.chunks.len());
+            reserve(&mut self.chunks, additional_chunks)?;
             self.prepared = true;
             Ok(())
         })();
@@ -175,6 +190,66 @@ impl ChunkedOrder {
             return Err(ChunkedOrderError::NotPrepared);
         }
         Ok(&self.pending_chunks)
+    }
+
+    /// Replaces a fragmented pending order with dense full chunks in a fresh buffer generation.
+    pub fn rebase(&mut self, desired: &[OrderEntry]) -> Result<(), ChunkedOrderError> {
+        if !self.prepared {
+            return Err(ChunkedOrderError::NotPrepared);
+        }
+        validate_desired(desired)?;
+        self.pending_chunks.clear();
+        self.pending_entries.clear();
+        self.pending_retired.clear();
+        for slot in self.allocated_free_chunks.drain(..) {
+            self.free_chunks.push(slot);
+        }
+        let required_chunks = desired.len().div_ceil(ORDER_CHUNK_RECORDS as usize);
+        reserve(&mut self.pending_chunks, required_chunks)?;
+        reserve(&mut self.pending_entries, desired.len())?;
+        self.pending_rebased = true;
+        for (slot, entries) in desired.chunks(ORDER_CHUNK_RECORDS as usize).enumerate() {
+            let slot = u32::try_from(slot).map_err(|_| ChunkedOrderError::ArithmeticOverflow)?;
+            self.push_pending_chunk(slot, entries)?;
+        }
+        self.pending_next_chunk_slot =
+            u32::try_from(required_chunks).map_err(|_| ChunkedOrderError::ArithmeticOverflow)?;
+        self.pending_capacity_chunks = 0;
+        self.grow_capacity()?;
+        let required_entries = usize::try_from(self.pending_capacity_chunks)
+            .ok()
+            .and_then(|chunks| chunks.checked_mul(ORDER_CHUNK_RECORDS as usize))
+            .ok_or(ChunkedOrderError::ArithmeticOverflow)?;
+        let additional_entries = required_entries.saturating_sub(self.entries.len());
+        reserve(&mut self.entries, additional_entries)?;
+        let additional_chunks = required_chunks.saturating_sub(self.chunks.len());
+        reserve(&mut self.chunks, additional_chunks)?;
+        Ok(())
+    }
+
+    pub fn span_count(&self) -> Result<u32, ChunkedOrderError> {
+        if !self.prepared {
+            return Err(ChunkedOrderError::NotPrepared);
+        }
+        let mut spans = 0_u32;
+        let mut expected = None;
+        for chunk in &self.pending_chunks {
+            let start = chunk.record_start();
+            if expected != Some(start) {
+                spans = spans
+                    .checked_add(1)
+                    .ok_or(ChunkedOrderError::ArithmeticOverflow)?;
+            }
+            expected = start.checked_add(u32::from(chunk.len));
+        }
+        Ok(spans)
+    }
+
+    pub fn rebased(&self) -> Result<bool, ChunkedOrderError> {
+        if !self.prepared {
+            return Err(ChunkedOrderError::NotPrepared);
+        }
+        Ok(self.pending_rebased)
     }
 
     pub fn entries(&self, chunk: PendingChunk) -> Result<&[OrderEntry], ChunkedOrderError> {
@@ -245,8 +320,6 @@ impl ChunkedOrder {
             .ok()
             .and_then(|chunks| chunks.checked_mul(ORDER_CHUNK_RECORDS as usize))
             .ok_or(ChunkedOrderError::ArithmeticOverflow)?;
-        let additional = required.saturating_sub(self.entries.len());
-        reserve(&mut self.entries, additional)?;
         self.entries.resize(required, OrderEntry::default());
         for chunk in self
             .pending_chunks
@@ -268,7 +341,6 @@ impl ChunkedOrder {
             destination.copy_from_slice(source);
         }
         self.chunks.clear();
-        reserve(&mut self.chunks, self.pending_chunks.len())?;
         self.chunks
             .extend(self.pending_chunks.iter().map(|chunk| ChunkState {
                 slot: chunk.slot,
@@ -276,10 +348,14 @@ impl ChunkedOrder {
             }));
         self.next_chunk_slot = self.pending_next_chunk_slot;
         self.capacity_chunks = self.pending_capacity_chunks;
+        if self.pending_rebased {
+            self.free_chunks.clear();
+        }
         self.pending_chunks.clear();
         self.pending_entries.clear();
         self.pending_retired.clear();
         self.allocated_free_chunks.clear();
+        self.pending_rebased = false;
         self.prepared = false;
         Ok(())
     }
@@ -291,7 +367,22 @@ impl ChunkedOrder {
         self.pending_chunks.clear();
         self.pending_entries.clear();
         self.pending_retired.clear();
+        self.pending_rebased = false;
         self.prepared = false;
+    }
+
+    #[cfg(test)]
+    pub fn scratch_capacities(&self) -> [usize; 8] {
+        [
+            self.chunks.capacity(),
+            self.entries.capacity(),
+            self.free_chunks.capacity(),
+            self.pending_chunks.capacity(),
+            self.pending_entries.capacity(),
+            self.pending_retired.capacity(),
+            self.allocated_free_chunks.capacity(),
+            usize::try_from(self.capacity_chunks).unwrap_or(usize::MAX),
+        ]
     }
 
     fn common_prefix(&self, desired: &[OrderEntry]) -> usize {
@@ -359,12 +450,13 @@ impl ChunkedOrder {
     ) -> Result<(), ChunkedOrderError> {
         let len =
             u16::try_from(entries.len()).map_err(|_| ChunkedOrderError::ArithmeticOverflow)?;
-        let unchanged = self
-            .chunks
-            .iter()
-            .find(|chunk| chunk.slot == slot && chunk.len == len)
-            .and_then(|chunk| self.committed_entries(chunk.slot, chunk.len).ok())
-            == Some(entries);
+        let unchanged = !self.pending_rebased
+            && self
+                .chunks
+                .iter()
+                .find(|chunk| chunk.slot == slot && chunk.len == len)
+                .and_then(|chunk| self.committed_entries(chunk.slot, chunk.len).ok())
+                == Some(entries);
         let scratch_start = if unchanged {
             SCRATCH_NONE
         } else {
@@ -545,6 +637,28 @@ mod tests {
         order.prepare(&reversed).unwrap();
         assert_eq!(flatten(&order), reversed);
         assert_eq!(changed_chunks(&order).len(), 3);
+    }
+
+    #[test]
+    fn rebase_restores_one_dense_span_transactionally() {
+        let mut order = ChunkedOrder::default();
+        let initial: Vec<_> = (1..=128).map(entry).collect();
+        order.prepare(&initial).unwrap();
+        order.commit().unwrap();
+        let mut inserted = initial.clone();
+        inserted.insert(
+            64,
+            OrderEntry {
+                stable_id: 200,
+                record_slot: 200,
+            },
+        );
+        order.prepare(&inserted).unwrap();
+        assert!(order.span_count().unwrap() > 1);
+        order.rebase(&inserted).unwrap();
+        assert!(order.rebased().unwrap());
+        assert_eq!(order.span_count().unwrap(), 1);
+        assert_eq!(flatten(&order), inserted);
     }
 
     fn entry(stable_id: u32) -> OrderEntry {
