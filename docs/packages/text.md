@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:f18ed2a30d4411474f7c0168e263ea43b46987af50b377c621416c93714a3c8c'
+source_digest: 'sha256:d13bd8a468c1c52140baf47335e071c24774451d9ad205bbb14dcf8321e69b83'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -172,7 +172,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-08T02:45:00Z'
+  at: '2026-08-08T04:20:00Z'
 ---
 
 # Package reference: `@pmndrs/text`

@@ -248,13 +248,6 @@ function acceptsContext(graphemes: GraphemeScripts, index: number, script: numbe
   return false;
 }
 
-function extensionSet(codePoint: number): number[] {
-  const setIndex = lookupTriple(scriptExtensionRanges, codePoint);
-  const start = scriptExtensionOffsets[setIndex];
-  const end = scriptExtensionOffsets[setIndex + 1];
-  if (start === undefined || end === undefined) throw new Error('invalid generated script set');
-  return Array.from(scriptExtensionTags.subarray(start, end));
-}
 
 function lookupTriple(ranges: Uint32Array, codePoint: number): number {
   let low = 0;
