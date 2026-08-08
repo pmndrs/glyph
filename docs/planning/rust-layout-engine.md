@@ -923,6 +923,14 @@ fixture resolves a `0..100` region around a `20..40` exclusion to `[0..20, 40..1
 the line cursor remain open. Optimized Wasm is 1,016,720 / 384,593 / 297,049 raw/gzip/Brotli bytes (+2,143 / +5,083 /
 +1,341 from the last production Wasm checkpoint); compressed deltas are recorded as transport evidence only.
 
+The bounded polygon band kernel now reuses retained critical-block, crossing, section, and intersection vectors. Region
+slots are conservatively intersected across vertex boundaries and intervening linear-edge slabs; horizontal boundary
+segments are included before normalized interval intersection. Polygon exclusions project every vertex and band-edge
+intersection over the margin-expanded band, then subtract that conservative inline range using the declared wrap side.
+Focused fixtures cover a triangular serialized region, a concave U-shaped region that yields two slots, a diamond
+exclusion, and rejection when the normalized answer exceeds the public slot envelope. The kernel is not yet called by
+frame line placement, so this checkpoint makes no production Wasm-size or end-to-end timing claim.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a

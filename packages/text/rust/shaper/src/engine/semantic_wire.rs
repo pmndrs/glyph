@@ -1760,6 +1760,17 @@ mod tests {
                 block: 100.0
             }
         );
+        retained.regions[0].record.exclusion_count = 0;
+        let mut polygon_slots = InlineSlotArena::default();
+        assert_eq!(
+            polygon_slots
+                .resolve_band(&retained, 0, 0.0, 50.0, 4)
+                .unwrap(),
+            [InlineSlot {
+                start: 0.0,
+                end: 50.0,
+            }]
+        );
         let mut rectangle = FlowGeometryArena::default();
         rectangle.build(geometry).unwrap();
         let mut slots = InlineSlotArena::default();
