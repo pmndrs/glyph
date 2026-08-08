@@ -27,6 +27,8 @@ pub const STATUS_HANDLE_CONFLICT: u32 = 4;
 pub const STATUS_FONT_MISSING: u32 = 5;
 pub const STATUS_INVALID_REQUEST: u32 = 6;
 pub const STATUS_RESULT_TOO_LARGE: u32 = 7;
+pub const STATUS_POLICY_CONFLICT: u32 = 8;
+pub const STATUS_POLICY_MISSING: u32 = 9;
 
 const BUFFER_FLAGS_MASK: u32 = 0xff;
 const MAX_CACHED_PLANS_PER_FONT: usize = 64;

@@ -2,7 +2,9 @@ use alloc::{boxed::Box, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
-    STATUS_INVALID_REQUEST, STATUS_RESULT_TOO_LARGE, ShaperRegistry, bidi,
+    STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING,
+    STATUS_RESULT_TOO_LARGE, ShaperRegistry, bidi,
+    engine::{EngineError, TextEngine, wire::parse_policy},
     wire::{
         pack_bidi_result, pack_result, parse_bidi_request, parse_reshape_request,
         parse_shape_request,
@@ -46,6 +48,7 @@ pub unsafe extern "C" fn pmndrs_text_shaper_register_font(
         let WasmState {
             registry,
             allocations,
+            ..
         } = state;
         let Some(sfnt) = owned_bytes(allocations, sfnt_pointer, sfnt_length) else {
             return 2;
@@ -80,6 +83,45 @@ pub extern "C" fn pmndrs_text_shaper_retained_font_bytes() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_text_shaper_plan_count() -> u32 {
     with_state(|state| state.registry.plan_count())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_text_engine_register_policy(
+    handle: u32,
+    pointer: u32,
+    length: u32,
+) -> u32 {
+    with_state(|state| {
+        let WasmState {
+            engine,
+            allocations,
+            ..
+        } = state;
+        let Some(bytes) = owned_bytes(allocations, pointer, length) else {
+            return STATUS_INVALID_REQUEST;
+        };
+        let policy = match parse_policy(bytes) {
+            Ok(policy) => policy,
+            Err(status) => return status,
+        };
+        match engine.register_policy(handle, policy) {
+            Ok(()) => 0,
+            Err(error) => engine_status(error),
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_engine_dispose_policy(handle: u32) -> u32 {
+    with_state(|state| match state.engine.dispose_policy(handle) {
+        Ok(()) => 0,
+        Err(error) => engine_status(error),
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_engine_policy_count() -> u32 {
+    with_state(|state| state.engine.policy_count())
 }
 
 #[unsafe(no_mangle)]
@@ -162,6 +204,7 @@ pub extern "C" fn pmndrs_text_shaper_result_len() -> u32 {
 #[derive(Default)]
 struct WasmState {
     registry: ShaperRegistry,
+    engine: TextEngine,
     allocations: Vec<Allocation>,
 }
 
@@ -231,6 +274,14 @@ fn store_result(registry: &mut ShaperRegistry, result: Vec<u8>) -> u32 {
     match registry.set_result(result) {
         Ok(()) => 0,
         Err(status) => status,
+    }
+}
+
+fn engine_status(error: EngineError) -> u32 {
+    match error {
+        EngineError::InvalidHandle => STATUS_INVALID_HANDLE,
+        EngineError::HandleConflict => STATUS_POLICY_CONFLICT,
+        EngineError::PolicyMissing => STATUS_POLICY_MISSING,
     }
 }
 

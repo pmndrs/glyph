@@ -319,7 +319,13 @@ pub fn pack_bidi_result(output: &BidiAnalysis) -> Result<Vec<u8>, u32> {
     Ok(bytes)
 }
 
-fn array(bytes: &[u8], offset: u32, count: u32, stride: u32, alignment: u32) -> Result<&[u8], u32> {
+pub(crate) fn array(
+    bytes: &[u8],
+    offset: u32,
+    count: u32,
+    stride: u32,
+    alignment: u32,
+) -> Result<&[u8], u32> {
     if !offset.is_multiple_of(alignment) {
         return Err(STATUS_INVALID_REQUEST);
     }
@@ -330,14 +336,14 @@ fn array(bytes: &[u8], offset: u32, count: u32, stride: u32, alignment: u32) -> 
     bytes.get(offset..end).ok_or(STATUS_INVALID_REQUEST)
 }
 
-fn read_u16(bytes: &[u8], offset: usize) -> Result<u16, u32> {
+pub(crate) fn read_u16(bytes: &[u8], offset: usize) -> Result<u16, u32> {
     let value = bytes
         .get(offset..offset.checked_add(2).ok_or(STATUS_INVALID_REQUEST)?)
         .ok_or(STATUS_INVALID_REQUEST)?;
     Ok(u16::from_le_bytes([value[0], value[1]]))
 }
 
-fn read_u32(bytes: &[u8], offset: usize) -> Result<u32, u32> {
+pub(crate) fn read_u32(bytes: &[u8], offset: usize) -> Result<u32, u32> {
     let value = bytes
         .get(offset..offset.checked_add(4).ok_or(STATUS_INVALID_REQUEST)?)
         .ok_or(STATUS_INVALID_REQUEST)?;
