@@ -1,9 +1,9 @@
 export const packageSizeBudgets = {
   'browser-core': {
-    rawBytes: 378_000,
-    minifiedBytes: 282_000,
-    gzipBytes: 83_000,
-    brotliBytes: 62_800,
+    rawBytes: 386_000,
+    minifiedBytes: 285_000,
+    gzipBytes: 82_600,
+    brotliBytes: 63_700,
   },
   'font-validator-js': {
     rawBytes: 741_000,

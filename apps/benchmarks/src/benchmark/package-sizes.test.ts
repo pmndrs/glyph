@@ -72,16 +72,22 @@ describe('independent package-size report', () => {
       // replaced a style sweep plus seven per-property heaps and now serves both the shaping and paint layers, and the
       // Three Bitmap program regained the device-pixel snapping milestone 1 records as a hard contract.
       //
+      // The browser-core allowance was raised once more for the layout tiering: 646 Brotli bytes bought a retained
+      // layout session that stops a content-box change from re-preparing the paragraph, Unicode and bidi reuse across
+      // any change that alters neither text nor base direction, positioning that writes typed arrays in place, and the
+      // opt-in phase profiler that measures all of it. A resize went from 130.78ms to 33.72ms at 25,515 glyphs, so this
+      // is bytes traded for time rather than new surface, and the raised ceiling keeps the same one-or-two-feature gap.
+      //
       // The three runtime baselines are re-derived against the tree with merged-v0 deleted, which shed roughly 215 KB
       // from each graph, so growth is once again measured from something that exists. browser-core keeps its original
       // pre-coverage baseline because deleting v0 did not move it: the root index never referenced v0, v0 re-exported
       // the root. Each ceiling leaves roughly one or two features of room and no more, so it starts pushing back soon
       // rather than quietly absorbing whatever lands next.
       'browser-core': {
-        rawBytes: { baseline: 324_269, maximumGrowth: 54_000 },
-        minifiedBytes: { baseline: 247_205, maximumGrowth: 34_000 },
-        gzipBytes: { baseline: 72_108, maximumGrowth: 9_200 },
-        brotliBytes: { baseline: 55_251, maximumGrowth: 7_400 },
+        rawBytes: { baseline: 324_269, maximumGrowth: 62_000 },
+        minifiedBytes: { baseline: 247_205, maximumGrowth: 38_000 },
+        gzipBytes: { baseline: 72_108, maximumGrowth: 10_500 },
+        brotliBytes: { baseline: 55_251, maximumGrowth: 8_500 },
       },
       'bitmap-baker-js': {
         rawBytes: { baseline: 17_478, maximumGrowth: 5_700 },

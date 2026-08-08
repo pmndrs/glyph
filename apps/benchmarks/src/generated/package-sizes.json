@@ -10,11 +10,11 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "sha256": "c1a896097d1974395e3f66bd97b1fb45fbda010febdbce15447c847767435a6f",
-      "rawBytes": 373181,
-      "minifiedBytes": 278502,
-      "gzipBytes": 80630,
-      "brotliBytes": 62057
+      "sha256": "bf7bb68a228a5ace41beb54fd8680696b3774d76018c7859beed730f94178084",
+      "rawBytes": 379892,
+      "minifiedBytes": 281093,
+      "gzipBytes": 81398,
+      "brotliBytes": 62703
     },
     {
       "id": "font-validator-js",
