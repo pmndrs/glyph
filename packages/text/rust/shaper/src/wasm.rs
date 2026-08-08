@@ -519,7 +519,11 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
                 return publish_failure(state, session_id, revision, STATUS_RESULT_TOO_LARGE, 0, 0);
             }
         };
-        let prepared = match state.engine.prepare_update(request, publication_generation) {
+        let prepared = match state.engine.prepare_update_with_shaper(
+            &mut state.registry,
+            request,
+            publication_generation,
+        ) {
             Ok(prepared) => prepared,
             Err(error) => {
                 return publish_failure(state, session_id, revision, engine_status(error), 0, 0);

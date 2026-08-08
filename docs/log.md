@@ -2,6 +2,13 @@
 
 ## 2026-08-08
 
+- **Primary HarfRust shaping now runs inside `text_update`** — A borrowed run view lets legacy batching and the retained
+  engine share the prewarmed UnicodeBuffer, UTF-16 context, and reusable feature scratch. Retained style payloads feed
+  HarfRust without an owned request, and glyph SoA appends directly into a pre-reserved A/B session arena. A real-Inter
+  compiled-Wasm proof observes shape-plan count 0→1 after the frame and no increase after abort. Rust tests and
+  host/SIMD Clippy pass. Optimized Wasm is 973,367 / 364,517 / 287,942 raw/gzip/Brotli bytes (+5,281 / +1,853 /
+  +1,504). Ordered fallback, layout, nonempty plan output, and complete timing remain open.
+
 - **Retained bidi and shaping-run itemization moved inside `text_update`** — UAX #9 output now fills reusable
   active/pending level, class, paragraph, and equal-level-run arrays. Root direction changes paragraph base level;
   nested direction carries a distinct override bit and forces parity during one style×script×level interval sweep.

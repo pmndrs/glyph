@@ -865,6 +865,15 @@ That sweep excludes mandatory hard-break controls and emits allocation-reusing s
 968,086 / 362,664 / 286,438 raw/gzip/Brotli bytes (+4,067 / +1,899 / -2,304 from retained Unicode). HarfRust fallback
 shaping has not consumed the runs yet, so plan output and complete-path timing remain open.
 
+Primary-font HarfRust shaping now consumes retained runs during Wasm `text_update`. The legacy batch export and frame
+engine share one borrowed run view, actual prewarmed `UnicodeBuffer`, UTF-16 context scratch, and reusable 128-feature
+scratch vector. Frame language/features borrow the retained style arena; glyph IDs, clusters, advances, offsets, flags,
+and source-run/font records append directly into a pre-reserved A/B shape arena without constructing or serializing a
+`ShapeBatchRequest`. A compiled real-Inter test observes plan-cache count 0→1 only after `text_update` and no increase
+after an aborted update. Optimized Wasm is 973,367 / 364,517 / 287,942 raw/gzip/Brotli bytes (+5,281 / +1,853 /
++1,504). Ordered fallback is not yet applied, and layout/gather still receive no glyphs, so nonempty plan output and
+complete-path timing remain open.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a
