@@ -11,6 +11,20 @@ pub const MAX_OPERATIONS_PER_PROGRAM: usize = 128;
 pub const MAX_REGISTERS: usize = 32;
 pub const MAX_VECTOR_WIDTH: u8 = 4;
 
+pub const OP_LOAD_F32: u8 = 1;
+pub const OP_LOAD_U32: u8 = 2;
+pub const OP_CONSTANT_F32: u8 = 3;
+pub const OP_CONSTANT_U32: u8 = 4;
+pub const OP_ADD_F32: u8 = 5;
+pub const OP_SUBTRACT_F32: u8 = 6;
+pub const OP_MULTIPLY_F32: u8 = 7;
+pub const OP_LESS_THAN_F32: u8 = 8;
+pub const OP_SELECT_F32: u8 = 9;
+pub const OP_CONVERT_U32_TO_F32: u8 = 10;
+pub const OP_STORE_F32: u8 = 11;
+pub const OP_STORE_U32: u8 = 12;
+pub const OP_STORE_U16: u8 = 13;
+
 const UNINITIALIZED: u8 = 0;
 const F32_REGISTER: u8 = 1;
 const U32_REGISTER: u8 = 2;

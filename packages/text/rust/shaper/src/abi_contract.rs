@@ -2,6 +2,12 @@ use alloc::string::{String, ToString};
 use core::mem::{align_of, offset_of, size_of};
 use serde_json::json;
 
+use crate::engine::policy::{
+    OP_ADD_F32, OP_CONSTANT_F32, OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32,
+    OP_LOAD_F32, OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16,
+    OP_STORE_U32, OP_SUBTRACT_F32, ScalarType,
+};
+
 pub const ABI_VERSION: u32 = 0;
 pub const SHAPER_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const HARFRUST_VERSION: &str = "0.12.0";
@@ -33,6 +39,52 @@ struct BidiRequestHeader {
     text_length: u32,
     direction: u8,
     reserved: [u8; 3],
+}
+
+#[repr(C)]
+struct PolicyRequestHeader {
+    byte_length: u32,
+    programs_offset: u32,
+    program_count: u32,
+    buffers_offset: u32,
+    buffer_count: u32,
+    operations_offset: u32,
+    operation_count: u32,
+}
+
+#[repr(C)]
+struct PolicyProgramRecord {
+    technique_id: u32,
+    program_id: u32,
+    variant: u16,
+    f32_input_count: u8,
+    u32_input_count: u8,
+    paint_capabilities: u32,
+    compositing_capabilities: u32,
+    buffer_start: u32,
+    buffer_count: u16,
+    reserved0: u16,
+    operation_start: u32,
+    operation_count: u16,
+    reserved1: u16,
+}
+
+#[repr(C)]
+struct PolicyBufferRecord {
+    id: u16,
+    scalar: u8,
+    vector_width: u8,
+}
+
+#[repr(C)]
+struct PolicyOperationRecord {
+    opcode: u8,
+    target: u8,
+    operand0: u8,
+    operand1: u8,
+    immediate0: u32,
+    immediate1: u32,
+    immediate2: u32,
 }
 
 #[repr(C)]
@@ -120,6 +172,26 @@ layout!(
     BIDI_REQUEST_HEADER_ALIGNMENT,
     BidiRequestHeader
 );
+layout!(
+    POLICY_REQUEST_HEADER_SIZE,
+    POLICY_REQUEST_HEADER_ALIGNMENT,
+    PolicyRequestHeader
+);
+layout!(
+    POLICY_PROGRAM_RECORD_SIZE,
+    POLICY_PROGRAM_RECORD_ALIGNMENT,
+    PolicyProgramRecord
+);
+layout!(
+    POLICY_BUFFER_RECORD_SIZE,
+    POLICY_BUFFER_RECORD_ALIGNMENT,
+    PolicyBufferRecord
+);
+layout!(
+    POLICY_OPERATION_RECORD_SIZE,
+    POLICY_OPERATION_RECORD_ALIGNMENT,
+    PolicyOperationRecord
+);
 layout!(FEATURE_RECORD_SIZE, FEATURE_RECORD_ALIGNMENT, FeatureRecord);
 layout!(RUN_RECORD_SIZE, RUN_RECORD_ALIGNMENT, RunRecord);
 layout!(
@@ -153,6 +225,88 @@ field_offset!(RESHAPE_RANGE_COUNT, ReshapeRequestHeader, range_count);
 field_offset!(BIDI_TEXT_OFFSET, BidiRequestHeader, text_offset);
 field_offset!(BIDI_TEXT_LENGTH, BidiRequestHeader, text_length);
 field_offset!(BIDI_DIRECTION, BidiRequestHeader, direction);
+field_offset!(POLICY_BYTE_LENGTH, PolicyRequestHeader, byte_length);
+field_offset!(POLICY_PROGRAMS_OFFSET, PolicyRequestHeader, programs_offset);
+field_offset!(POLICY_PROGRAM_COUNT, PolicyRequestHeader, program_count);
+field_offset!(POLICY_BUFFERS_OFFSET, PolicyRequestHeader, buffers_offset);
+field_offset!(POLICY_BUFFER_COUNT, PolicyRequestHeader, buffer_count);
+field_offset!(
+    POLICY_OPERATIONS_OFFSET,
+    PolicyRequestHeader,
+    operations_offset
+);
+field_offset!(POLICY_OPERATION_COUNT, PolicyRequestHeader, operation_count);
+field_offset!(
+    POLICY_PROGRAM_TECHNIQUE_ID,
+    PolicyProgramRecord,
+    technique_id
+);
+field_offset!(POLICY_PROGRAM_ID, PolicyProgramRecord, program_id);
+field_offset!(POLICY_PROGRAM_VARIANT, PolicyProgramRecord, variant);
+field_offset!(
+    POLICY_PROGRAM_F32_INPUT_COUNT,
+    PolicyProgramRecord,
+    f32_input_count
+);
+field_offset!(
+    POLICY_PROGRAM_U32_INPUT_COUNT,
+    PolicyProgramRecord,
+    u32_input_count
+);
+field_offset!(
+    POLICY_PROGRAM_PAINT_CAPABILITIES,
+    PolicyProgramRecord,
+    paint_capabilities
+);
+field_offset!(
+    POLICY_PROGRAM_COMPOSITING_CAPABILITIES,
+    PolicyProgramRecord,
+    compositing_capabilities
+);
+field_offset!(
+    POLICY_PROGRAM_BUFFER_START,
+    PolicyProgramRecord,
+    buffer_start
+);
+field_offset!(
+    POLICY_PROGRAM_BUFFER_COUNT,
+    PolicyProgramRecord,
+    buffer_count
+);
+field_offset!(POLICY_PROGRAM_RESERVED0, PolicyProgramRecord, reserved0);
+field_offset!(
+    POLICY_PROGRAM_OPERATION_START,
+    PolicyProgramRecord,
+    operation_start
+);
+field_offset!(
+    POLICY_PROGRAM_OPERATION_COUNT,
+    PolicyProgramRecord,
+    operation_count
+);
+field_offset!(POLICY_PROGRAM_RESERVED1, PolicyProgramRecord, reserved1);
+field_offset!(POLICY_BUFFER_ID, PolicyBufferRecord, id);
+field_offset!(POLICY_BUFFER_SCALAR, PolicyBufferRecord, scalar);
+field_offset!(POLICY_BUFFER_VECTOR_WIDTH, PolicyBufferRecord, vector_width);
+field_offset!(POLICY_OPERATION_OPCODE, PolicyOperationRecord, opcode);
+field_offset!(POLICY_OPERATION_TARGET, PolicyOperationRecord, target);
+field_offset!(POLICY_OPERATION_OPERAND0, PolicyOperationRecord, operand0);
+field_offset!(POLICY_OPERATION_OPERAND1, PolicyOperationRecord, operand1);
+field_offset!(
+    POLICY_OPERATION_IMMEDIATE0,
+    PolicyOperationRecord,
+    immediate0
+);
+field_offset!(
+    POLICY_OPERATION_IMMEDIATE1,
+    PolicyOperationRecord,
+    immediate1
+);
+field_offset!(
+    POLICY_OPERATION_IMMEDIATE2,
+    PolicyOperationRecord,
+    immediate2
+);
 field_offset!(FEATURE_TAG, FeatureRecord, tag);
 field_offset!(FEATURE_VALUE, FeatureRecord, value);
 field_offset!(FEATURE_START, FeatureRecord, start);
@@ -251,6 +405,9 @@ pub fn json() -> String {
             "fontCount": "pmndrs_text_shaper_font_count",
             "retainedFontBytes": "pmndrs_text_shaper_retained_font_bytes",
             "planCount": "pmndrs_text_shaper_plan_count",
+            "registerPolicy": "pmndrs_text_engine_register_policy",
+            "disposePolicy": "pmndrs_text_engine_dispose_policy",
+            "policyCount": "pmndrs_text_engine_policy_count",
             "shapeBatch": "pmndrs_text_shaper_shape_batch",
             "reshapeRanges": "pmndrs_text_shaper_reshape_ranges",
             "analyzeBidi": "pmndrs_text_shaper_analyze_bidi",
@@ -282,6 +439,52 @@ pub fn json() -> String {
                 "textOffset": BIDI_TEXT_OFFSET,
                 "textLength": BIDI_TEXT_LENGTH,
                 "direction": BIDI_DIRECTION
+            },
+            "policyRequest": {
+                "size": POLICY_REQUEST_HEADER_SIZE,
+                "alignment": POLICY_REQUEST_HEADER_ALIGNMENT,
+                "byteLength": POLICY_BYTE_LENGTH,
+                "programsOffset": POLICY_PROGRAMS_OFFSET,
+                "programCount": POLICY_PROGRAM_COUNT,
+                "buffersOffset": POLICY_BUFFERS_OFFSET,
+                "bufferCount": POLICY_BUFFER_COUNT,
+                "operationsOffset": POLICY_OPERATIONS_OFFSET,
+                "operationCount": POLICY_OPERATION_COUNT
+            },
+            "policyProgram": {
+                "size": POLICY_PROGRAM_RECORD_SIZE,
+                "alignment": POLICY_PROGRAM_RECORD_ALIGNMENT,
+                "techniqueId": POLICY_PROGRAM_TECHNIQUE_ID,
+                "programId": POLICY_PROGRAM_ID,
+                "variant": POLICY_PROGRAM_VARIANT,
+                "f32InputCount": POLICY_PROGRAM_F32_INPUT_COUNT,
+                "u32InputCount": POLICY_PROGRAM_U32_INPUT_COUNT,
+                "paintCapabilities": POLICY_PROGRAM_PAINT_CAPABILITIES,
+                "compositingCapabilities": POLICY_PROGRAM_COMPOSITING_CAPABILITIES,
+                "bufferStart": POLICY_PROGRAM_BUFFER_START,
+                "bufferCount": POLICY_PROGRAM_BUFFER_COUNT,
+                "reserved0": POLICY_PROGRAM_RESERVED0,
+                "operationStart": POLICY_PROGRAM_OPERATION_START,
+                "operationCount": POLICY_PROGRAM_OPERATION_COUNT,
+                "reserved1": POLICY_PROGRAM_RESERVED1
+            },
+            "policyBuffer": {
+                "size": POLICY_BUFFER_RECORD_SIZE,
+                "alignment": POLICY_BUFFER_RECORD_ALIGNMENT,
+                "id": POLICY_BUFFER_ID,
+                "scalar": POLICY_BUFFER_SCALAR,
+                "vectorWidth": POLICY_BUFFER_VECTOR_WIDTH
+            },
+            "policyOperation": {
+                "size": POLICY_OPERATION_RECORD_SIZE,
+                "alignment": POLICY_OPERATION_RECORD_ALIGNMENT,
+                "opcode": POLICY_OPERATION_OPCODE,
+                "target": POLICY_OPERATION_TARGET,
+                "operand0": POLICY_OPERATION_OPERAND0,
+                "operand1": POLICY_OPERATION_OPERAND1,
+                "immediate0": POLICY_OPERATION_IMMEDIATE0,
+                "immediate1": POLICY_OPERATION_IMMEDIATE1,
+                "immediate2": POLICY_OPERATION_IMMEDIATE2
             },
             "feature": {
                 "size": FEATURE_RECORD_SIZE,
@@ -357,6 +560,28 @@ pub fn json() -> String {
                 "PDI": 22
             }
         },
+        "policy": {
+            "scalarTypes": {
+                "f32": ScalarType::F32 as u8,
+                "u32": ScalarType::U32 as u8,
+                "u16": ScalarType::U16 as u8
+            },
+            "opcodes": {
+                "loadF32": OP_LOAD_F32,
+                "loadU32": OP_LOAD_U32,
+                "constantF32": OP_CONSTANT_F32,
+                "constantU32": OP_CONSTANT_U32,
+                "addF32": OP_ADD_F32,
+                "subtractF32": OP_SUBTRACT_F32,
+                "multiplyF32": OP_MULTIPLY_F32,
+                "lessThanF32": OP_LESS_THAN_F32,
+                "selectF32": OP_SELECT_F32,
+                "convertU32ToF32": OP_CONVERT_U32_TO_F32,
+                "storeF32": OP_STORE_F32,
+                "storeU32": OP_STORE_U32,
+                "storeU16": OP_STORE_U16
+            }
+        },
         "status": {
             "ok": 0,
             "invalidHandle": 1,
@@ -365,7 +590,9 @@ pub fn json() -> String {
             "handleConflict": 4,
             "fontMissing": 5,
             "invalidRequest": 6,
-            "resultTooLarge": 7
+            "resultTooLarge": 7,
+            "policyConflict": 8,
+            "policyMissing": 9
         }
     })
     .to_string()

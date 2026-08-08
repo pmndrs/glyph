@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:ac4d619314a7e2d2e02840013b6b4ef50ca74971f7ff0df87120d85a7213c74e'
+source_digest: 'sha256:cca140771c55745ae3b27ad5056c26301a87f5371a23cd99dd3ea0c12956d743'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -371,6 +371,18 @@ model to the existing shaper `rlib`, not a second Wasm module. Plain data and to
 buffer, operation, register, field, vector-width, and store coverage before execution; technique variants share that one
 verifier instead of owning parallel packers. The initial module is deliberately unreachable from the Wasm exports while
 its fixed-width wire contract is built, and optimized dead-code evidence keeps the shipping shaper at 680,312 raw bytes.
+
+The next boundary slice exposes policy registration through compiler-derived `#[repr(C)]` request, program, buffer, and
+operation records. TypeScript consumes the generated offsets directly; Rust performs one bounded registration-time
+decode and retains typed policy state, so frame updates do not parse policy records. The decoder rejects forged lengths,
+overlapping tables, nonzero reserved fields, noncanonical operation records, invalid register flow, and incomplete
+physical outputs. Registration is idempotent only for an identical handle and policy, conflicting reuse and missing
+disposal are distinct statuses, and retained state survives release of the request allocation. The optimized reachable
+module measures 698,238 raw / 260,228 gzip / 203,760 Brotli bytes on the same Darwin arm64 toolchain, a delta of
+17,926 / 6,660 / 4,395 bytes over the preceding shaper. This is cold registration infrastructure; frame-path admission
+and performance remain unclaimed until the retained update and executor land. The existing 25,515-glyph TypeScript path
+remains within measurement variance: baseline-to-current cold/font-size/layout-width/text medians are
+55.28→52.48 / 12.02→11.92 / 8.42→8.23 / 38.66→38.73 milliseconds.
 
 Item 8.3 promotes `@pmndrs/text/raster/msdf` from an identity-only contract to the browser module and adds the isolated `@pmndrs/text/bakers/msdf/validate` entry. The standalone path layers the pinned Khronos validator, byte-identical Draft-04 schema, and semantic checks for reciprocal identity, descriptor-authenticated generation values, `planeUnitsPerEm = emSize`, view ownership, exact dense records, page bounds, embedded/external length and SHA-256 authentication, single-level linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and a 256 MiB padded-base-array residency ceiling. Canonical Inter's ten legacy-default pages round-trip through both packaging forms; field deletion, record/page mutations, KTX2 and DFD corruption, missing/tampered external pages, and budget failures are named negative controls.
 
