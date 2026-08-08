@@ -11,10 +11,10 @@ use crate::engine::policy::{
     ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
     BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
     BUFFER_USAGE_STORAGE, BUFFER_USAGE_VERTEX, CAP_ALIAS_VEC2, CAP_ALIAS_VEC4, CAP_INDIRECT_DRAWS,
-    CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT, CAP_STORAGE_BUFFERS, OP_ADD_F32, OP_CONSTANT_F32,
-    OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32, OP_LOAD_U32,
-    OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32, OP_SUBTRACT_F32,
-    ScalarType,
+    CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT, CAP_STORAGE_BUFFERS, INPUT_GLYPH, INPUT_RESOURCE,
+    INPUT_SEMANTIC, INPUT_STRIKE, OP_ADD_F32, OP_CONSTANT_F32, OP_CONSTANT_U32,
+    OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32, OP_LOAD_U32, OP_MULTIPLY_F32,
+    OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32, OP_SUBTRACT_F32, ScalarType,
 };
 use crate::engine::render_plan::{
     BUFFER_ORDERED_DIRECT, BUFFER_STABLE_INDIRECT, BufferRecord, DiagnosticRecord, DrawRecord,
@@ -71,6 +71,8 @@ struct PolicyRequestHeader {
     buffer_count: u32,
     operations_offset: u32,
     operation_count: u32,
+    inputs_offset: u32,
+    input_count: u32,
 }
 
 #[repr(C)]
@@ -109,6 +111,16 @@ struct PolicyProgramRecord {
     u32_input_count: u8,
     reserved0: u16,
     draw_key_mask: u32,
+    input_start: u32,
+    input_count: u16,
+    reserved1: u16,
+}
+
+#[repr(C)]
+struct PolicyInputRecord {
+    scope: u8,
+    field: u8,
+    reserved: u16,
 }
 
 #[repr(C)]
@@ -449,6 +461,11 @@ layout!(
     PolicyOperationRecord
 );
 layout!(
+    POLICY_INPUT_RECORD_SIZE,
+    POLICY_INPUT_RECORD_ALIGNMENT,
+    PolicyInputRecord
+);
+layout!(
     ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
     EngineUpdateRequestHeader
@@ -575,6 +592,8 @@ field_offset!(
     operations_offset
 );
 field_offset!(POLICY_OPERATION_COUNT, PolicyRequestHeader, operation_count);
+field_offset!(POLICY_INPUTS_OFFSET, PolicyRequestHeader, inputs_offset);
+field_offset!(POLICY_INPUT_COUNT, PolicyRequestHeader, input_count);
 field_offset!(POLICY_CAPABILITY_SET_ID, PolicyCapabilitySetRecord, id);
 field_offset!(
     POLICY_CAPABILITY_SET_FLAGS,
@@ -709,6 +728,9 @@ field_offset!(
     PolicyProgramRecord,
     draw_key_mask
 );
+field_offset!(POLICY_PROGRAM_INPUT_START, PolicyProgramRecord, input_start);
+field_offset!(POLICY_PROGRAM_INPUT_COUNT, PolicyProgramRecord, input_count);
+field_offset!(POLICY_PROGRAM_RESERVED1, PolicyProgramRecord, reserved1);
 field_offset!(POLICY_BUFFER_ID, PolicyBufferRecord, id);
 field_offset!(POLICY_BUFFER_SCALAR, PolicyBufferRecord, scalar);
 field_offset!(POLICY_BUFFER_VECTOR_WIDTH, PolicyBufferRecord, vector_width);
@@ -723,6 +745,9 @@ field_offset!(
 field_offset!(POLICY_BUFFER_RESERVED0, PolicyBufferRecord, reserved0);
 field_offset!(POLICY_OPERATION_OPCODE, PolicyOperationRecord, opcode);
 field_offset!(POLICY_OPERATION_TARGET, PolicyOperationRecord, target);
+field_offset!(POLICY_INPUT_SCOPE, PolicyInputRecord, scope);
+field_offset!(POLICY_INPUT_FIELD, PolicyInputRecord, field);
+field_offset!(POLICY_INPUT_RESERVED, PolicyInputRecord, reserved);
 field_offset!(POLICY_OPERATION_OPERAND0, PolicyOperationRecord, operand0);
 field_offset!(POLICY_OPERATION_OPERAND1, PolicyOperationRecord, operand1);
 field_offset!(
@@ -1693,7 +1718,9 @@ pub fn json() -> String {
                 "buffersOffset": POLICY_BUFFERS_OFFSET,
                 "bufferCount": POLICY_BUFFER_COUNT,
                 "operationsOffset": POLICY_OPERATIONS_OFFSET,
-                "operationCount": POLICY_OPERATION_COUNT
+                "operationCount": POLICY_OPERATION_COUNT,
+                "inputsOffset": POLICY_INPUTS_OFFSET,
+                "inputCount": POLICY_INPUT_COUNT
             },
             "policyCapabilitySet": {
                 "size": POLICY_CAPABILITY_SET_RECORD_SIZE,
@@ -1731,7 +1758,10 @@ pub fn json() -> String {
                 "reserved0": POLICY_PROGRAM_RESERVED0,
                 "operationStart": POLICY_PROGRAM_OPERATION_START,
                 "operationCount": POLICY_PROGRAM_OPERATION_COUNT,
-                "allocationStrategy": POLICY_PROGRAM_ALLOCATION_STRATEGY
+                "allocationStrategy": POLICY_PROGRAM_ALLOCATION_STRATEGY,
+                "inputStart": POLICY_PROGRAM_INPUT_START,
+                "inputCount": POLICY_PROGRAM_INPUT_COUNT,
+                "reserved1": POLICY_PROGRAM_RESERVED1
             },
             "policyBuffer": {
                 "size": POLICY_BUFFER_RECORD_SIZE,
@@ -1755,6 +1785,13 @@ pub fn json() -> String {
                 "immediate0": POLICY_OPERATION_IMMEDIATE0,
                 "immediate1": POLICY_OPERATION_IMMEDIATE1,
                 "immediate2": POLICY_OPERATION_IMMEDIATE2
+            },
+            "policyInput": {
+                "size": POLICY_INPUT_RECORD_SIZE,
+                "alignment": POLICY_INPUT_RECORD_ALIGNMENT,
+                "scope": POLICY_INPUT_SCOPE,
+                "field": POLICY_INPUT_FIELD,
+                "reserved": POLICY_INPUT_RESERVED
             },
             "engineUpdateRequest": {
                 "size": ENGINE_UPDATE_REQUEST_HEADER_SIZE,
@@ -2191,6 +2228,12 @@ pub fn json() -> String {
                 "f32": ScalarType::F32 as u8,
                 "u32": ScalarType::U32 as u8,
                 "u16": ScalarType::U16 as u8
+            },
+            "inputScopes": {
+                "semantic": INPUT_SEMANTIC,
+                "glyph": INPUT_GLYPH,
+                "resource": INPUT_RESOURCE,
+                "strike": INPUT_STRIKE
             },
             "opcodes": {
                 "loadF32": OP_LOAD_F32,

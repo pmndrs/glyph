@@ -23,6 +23,10 @@ test('registers compiler-mapped render policies as retained typed Wasm state', a
   assert.equal(typeof register, 'function');
   assert.equal(typeof dispose, 'function');
   assert.equal(typeof count, 'function');
+  assert.equal(abi.layouts.policyRequest.size, 44);
+  assert.equal(abi.layouts.policyProgram.size, 64);
+  assert.deepEqual(abi.layouts.policyInput, { alignment: 2, field: 1, reserved: 2, scope: 0, size: 4 });
+  assert.deepEqual(abi.policy.inputScopes, { glyph: 2, resource: 3, semantic: 1, strike: 4 });
 
   const bytes = renderPolicyBytes(abi);
   const pointer = allocate(bytes.byteLength);
@@ -36,6 +40,11 @@ test('registers compiler-mapped render policies as retained typed Wasm state', a
 
   const request = abi.layouts.policyRequest;
   const program = abi.layouts.policyProgram;
+  const input = abi.layouts.policyInput;
+  const inputsOffset = new DataView(bytes.buffer).getUint32(request.inputsOffset, true);
+  new DataView(memory.buffer).setUint8(pointer + inputsOffset + input.scope, abi.policy.inputScopes.glyph);
+  assert.equal(register(7, pointer, bytes.byteLength), abi.status.policyConflict);
+  new DataView(memory.buffer).setUint8(pointer + inputsOffset + input.scope, abi.policy.inputScopes.semantic);
   const programsOffset = new DataView(bytes.buffer).getUint32(request.programsOffset, true);
   new DataView(memory.buffer).setUint32(pointer + programsOffset + program.techniqueId, 2, true);
   assert.equal(register(7, pointer, bytes.byteLength), abi.status.policyConflict);

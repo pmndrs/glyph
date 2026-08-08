@@ -22,6 +22,8 @@ use crate::{
         POLICY_CAPABILITY_SET_RECORD_SIZE, POLICY_CAPABILITY_SET_RESERVED,
         POLICY_CAPABILITY_SET_UPDATE_ALIGNMENT,
         POLICY_CAPABILITY_SET_WHOLE_BUFFER_THRESHOLD_BASIS_POINTS, POLICY_CAPABILITY_SETS_OFFSET,
+        POLICY_INPUT_COUNT, POLICY_INPUT_FIELD, POLICY_INPUT_RECORD_ALIGNMENT,
+        POLICY_INPUT_RECORD_SIZE, POLICY_INPUT_RESERVED, POLICY_INPUT_SCOPE, POLICY_INPUTS_OFFSET,
         POLICY_OPERATION_COUNT, POLICY_OPERATION_IMMEDIATE0, POLICY_OPERATION_IMMEDIATE1,
         POLICY_OPERATION_IMMEDIATE2, POLICY_OPERATION_OPCODE, POLICY_OPERATION_OPERAND0,
         POLICY_OPERATION_OPERAND1, POLICY_OPERATION_RECORD_ALIGNMENT, POLICY_OPERATION_RECORD_SIZE,
@@ -29,20 +31,23 @@ use crate::{
         POLICY_PROGRAM_BUFFER_COUNT, POLICY_PROGRAM_BUFFER_START, POLICY_PROGRAM_CAPABILITY_SET_ID,
         POLICY_PROGRAM_COMPOSITING_CAPABILITIES, POLICY_PROGRAM_COUNT,
         POLICY_PROGRAM_DRAW_KEY_MASK, POLICY_PROGRAM_F32_INPUT_COUNT, POLICY_PROGRAM_ID,
-        POLICY_PROGRAM_OPERATION_COUNT, POLICY_PROGRAM_OPERATION_START,
-        POLICY_PROGRAM_PAINT_CAPABILITIES, POLICY_PROGRAM_RECORD_ALIGNMENT,
-        POLICY_PROGRAM_RECORD_SIZE, POLICY_PROGRAM_RESERVED0, POLICY_PROGRAM_RESOURCE_KIND_MASK,
+        POLICY_PROGRAM_INPUT_COUNT, POLICY_PROGRAM_INPUT_START, POLICY_PROGRAM_OPERATION_COUNT,
+        POLICY_PROGRAM_OPERATION_START, POLICY_PROGRAM_PAINT_CAPABILITIES,
+        POLICY_PROGRAM_RECORD_ALIGNMENT, POLICY_PROGRAM_RECORD_SIZE, POLICY_PROGRAM_RESERVED0,
+        POLICY_PROGRAM_RESERVED1, POLICY_PROGRAM_RESOURCE_KIND_MASK,
         POLICY_PROGRAM_SEMANTIC_VIEW_MASK, POLICY_PROGRAM_STORAGE_KEY_MASK,
         POLICY_PROGRAM_TECHNIQUE_ID, POLICY_PROGRAM_U32_INPUT_COUNT, POLICY_PROGRAM_VARIANT,
         POLICY_PROGRAMS_OFFSET, POLICY_REQUEST_HEADER_SIZE,
     },
     engine::policy::{
-        BufferId, BufferSchema, CapabilitySet, CapabilitySetId, MAX_BUFFERS_PER_PROGRAM,
-        MAX_CAPABILITY_SETS, MAX_OPERATIONS_PER_PROGRAM, MAX_PROGRAMS, OP_ADD_F32, OP_CONSTANT_F32,
-        OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32, OP_LOAD_U32,
-        OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32, OP_SUBTRACT_F32,
-        Operation, PolicyDescriptor, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType,
-        TechniqueId, ValidatedPolicy,
+        BufferId, BufferSchema, CapabilitySet, CapabilitySetId, INPUT_GLYPH, INPUT_RESOURCE,
+        INPUT_SEMANTIC, INPUT_STRIKE, InputScope, InputSource, MAX_BUFFERS_PER_PROGRAM,
+        MAX_CAPABILITY_SETS, MAX_INPUT_FIELDS_PER_PROGRAM, MAX_OPERATIONS_PER_PROGRAM,
+        MAX_PROGRAMS, OP_ADD_F32, OP_CONSTANT_F32, OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32,
+        OP_LESS_THAN_F32, OP_LOAD_F32, OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32,
+        OP_STORE_U16, OP_STORE_U32, OP_SUBTRACT_F32, Operation, PolicyDescriptor,
+        ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
+        ValidatedPolicy,
     },
     wire::{array, read_u16, read_u32},
 };
@@ -59,6 +64,7 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
     let program_count = read_u32(bytes, POLICY_PROGRAM_COUNT)?;
     let buffer_count = read_u32(bytes, POLICY_BUFFER_COUNT)?;
     let operation_count = read_u32(bytes, POLICY_OPERATION_COUNT)?;
+    let input_count = read_u32(bytes, POLICY_INPUT_COUNT)?;
     if usize::try_from(capability_set_count).map_err(|_| STATUS_INVALID_REQUEST)?
         > MAX_CAPABILITY_SETS
         || usize::try_from(program_count).map_err(|_| STATUS_INVALID_REQUEST)? > MAX_PROGRAMS
@@ -66,6 +72,8 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
             > MAX_PROGRAMS * MAX_BUFFERS_PER_PROGRAM
         || usize::try_from(operation_count).map_err(|_| STATUS_INVALID_REQUEST)?
             > MAX_PROGRAMS * MAX_OPERATIONS_PER_PROGRAM
+        || usize::try_from(input_count).map_err(|_| STATUS_INVALID_REQUEST)?
+            > MAX_PROGRAMS * MAX_INPUT_FIELDS_PER_PROGRAM
     {
         return Err(STATUS_INVALID_REQUEST);
     }
@@ -100,7 +108,21 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
         POLICY_OPERATION_RECORD_SIZE,
         POLICY_OPERATION_RECORD_ALIGNMENT,
     )?;
-    reject_overlaps(bytes, capability_sets, programs, buffers, operations)?;
+    let inputs = table(
+        bytes,
+        read_u32(bytes, POLICY_INPUTS_OFFSET)?,
+        input_count,
+        POLICY_INPUT_RECORD_SIZE,
+        POLICY_INPUT_RECORD_ALIGNMENT,
+    )?;
+    reject_overlaps(
+        bytes,
+        capability_sets,
+        programs,
+        buffers,
+        operations,
+        inputs,
+    )?;
 
     let capability_sets = decode_capability_sets(capability_sets)?;
 
@@ -109,7 +131,9 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
         .try_reserve_exact(usize::try_from(program_count).map_err(|_| STATUS_INVALID_REQUEST)?)
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in programs.chunks_exact(POLICY_PROGRAM_RECORD_SIZE as usize) {
-        if read_u16(record, POLICY_PROGRAM_RESERVED0)? != 0 {
+        if read_u16(record, POLICY_PROGRAM_RESERVED0)? != 0
+            || read_u16(record, POLICY_PROGRAM_RESERVED1)? != 0
+        {
             return Err(STATUS_INVALID_REQUEST);
         }
         let selected_buffers = indexed_records(
@@ -124,6 +148,12 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
             read_u16(record, POLICY_PROGRAM_OPERATION_COUNT)?,
             POLICY_OPERATION_RECORD_SIZE,
         )?;
+        let selected_inputs = indexed_records(
+            inputs,
+            read_u32(record, POLICY_PROGRAM_INPUT_START)?,
+            read_u16(record, POLICY_PROGRAM_INPUT_COUNT)?,
+            POLICY_INPUT_RECORD_SIZE,
+        )?;
         decoded.push(ProgramDescriptor {
             technique: TechniqueId(read_u32(record, POLICY_PROGRAM_TECHNIQUE_ID)?),
             variant: read_u16(record, POLICY_PROGRAM_VARIANT)?,
@@ -136,6 +166,7 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
             allocation_strategy: read_u16(record, POLICY_PROGRAM_ALLOCATION_STRATEGY)?,
             f32_input_count: byte(record, POLICY_PROGRAM_F32_INPUT_COUNT)?,
             u32_input_count: byte(record, POLICY_PROGRAM_U32_INPUT_COUNT)?,
+            inputs: decode_inputs(selected_inputs)?,
             capabilities: ProgramCapabilities {
                 paint: read_u32(record, POLICY_PROGRAM_PAINT_CAPABILITIES)?,
                 compositing: read_u32(record, POLICY_PROGRAM_COMPOSITING_CAPABILITIES)?,
@@ -152,6 +183,13 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
 }
 
 fn table(bytes: &[u8], offset: u32, count: u32, stride: u32, alignment: u32) -> Result<&[u8], u32> {
+    if count == 0 {
+        return if offset == 0 {
+            Ok(&bytes[..0])
+        } else {
+            Err(STATUS_INVALID_REQUEST)
+        };
+    }
     if offset < POLICY_REQUEST_HEADER_SIZE {
         return Err(STATUS_INVALID_REQUEST);
     }
@@ -164,12 +202,14 @@ fn reject_overlaps(
     programs: &[u8],
     buffers: &[u8],
     operations: &[u8],
+    inputs: &[u8],
 ) -> Result<(), u32> {
     let ranges = [
         relative_range(bytes, capability_sets)?,
         relative_range(bytes, programs)?,
         relative_range(bytes, buffers)?,
         relative_range(bytes, operations)?,
+        relative_range(bytes, inputs)?,
     ];
     for index in 0..ranges.len() {
         for previous in &ranges[..index] {
@@ -180,6 +220,30 @@ fn reject_overlaps(
         }
     }
     Ok(())
+}
+
+fn decode_inputs(records: &[u8]) -> Result<Vec<InputSource>, u32> {
+    let mut inputs = Vec::new();
+    inputs
+        .try_reserve_exact(records.len() / POLICY_INPUT_RECORD_SIZE as usize)
+        .map_err(|_| STATUS_INVALID_REQUEST)?;
+    for record in records.chunks_exact(POLICY_INPUT_RECORD_SIZE as usize) {
+        if read_u16(record, POLICY_INPUT_RESERVED)? != 0 {
+            return Err(STATUS_INVALID_REQUEST);
+        }
+        let scope = match byte(record, POLICY_INPUT_SCOPE)? {
+            INPUT_SEMANTIC => InputScope::Semantic,
+            INPUT_GLYPH => InputScope::Glyph,
+            INPUT_RESOURCE => InputScope::Resource,
+            INPUT_STRIKE => InputScope::Strike,
+            _ => return Err(STATUS_INVALID_REQUEST),
+        };
+        inputs.push(InputSource {
+            scope,
+            field: byte(record, POLICY_INPUT_FIELD)?,
+        });
+    }
+    Ok(inputs)
 }
 
 fn decode_capability_sets(records: &[u8]) -> Result<Vec<CapabilitySet>, u32> {
@@ -414,8 +478,10 @@ mod tests {
     const BUFFERS_OFFSET: usize = PROGRAMS_OFFSET + POLICY_PROGRAM_RECORD_SIZE as usize;
     const OPERATIONS_OFFSET: usize = BUFFERS_OFFSET + POLICY_BUFFER_RECORD_SIZE as usize;
     const OPERATION_COUNT: usize = 4;
-    const BYTE_LENGTH: usize =
+    const INPUTS_OFFSET: usize =
         OPERATIONS_OFFSET + OPERATION_COUNT * POLICY_OPERATION_RECORD_SIZE as usize;
+    const INPUT_COUNT: usize = 2;
+    const BYTE_LENGTH: usize = INPUTS_OFFSET + INPUT_COUNT * POLICY_INPUT_RECORD_SIZE as usize;
 
     #[test]
     fn decodes_compiler_mapped_policy_records() {
@@ -427,6 +493,16 @@ mod tests {
         assert_eq!(program.id, ProgramId(2));
         assert_eq!(program.buffers[0].stride(), 8);
         assert_eq!(program.operations.len(), OPERATION_COUNT);
+        assert_eq!(
+            program.inputs,
+            vec![
+                InputSource::semantic(0),
+                InputSource {
+                    scope: InputScope::Glyph,
+                    field: 1,
+                },
+            ]
+        );
     }
 
     #[test]
@@ -450,6 +526,10 @@ mod tests {
             1,
         );
         assert_eq!(parse_policy(&reserved), Err(STATUS_INVALID_REQUEST));
+
+        let mut unknown_input = valid_policy_bytes();
+        unknown_input[INPUTS_OFFSET + POLICY_INPUT_SCOPE] = u8::MAX;
+        assert_eq!(parse_policy(&unknown_input), Err(STATUS_INVALID_REQUEST));
     }
 
     #[test]
@@ -482,6 +562,8 @@ mod tests {
             OPERATIONS_OFFSET as u32,
         );
         put_u32(&mut bytes, POLICY_OPERATION_COUNT, OPERATION_COUNT as u32);
+        put_u32(&mut bytes, POLICY_INPUTS_OFFSET, INPUTS_OFFSET as u32);
+        put_u32(&mut bytes, POLICY_INPUT_COUNT, INPUT_COUNT as u32);
 
         let capability = &mut bytes[CAPABILITY_SETS_OFFSET..PROGRAMS_OFFSET];
         put_u32(capability, POLICY_CAPABILITY_SET_ID, 1);
@@ -532,6 +614,7 @@ mod tests {
             POLICY_PROGRAM_OPERATION_COUNT,
             OPERATION_COUNT as u16,
         );
+        put_u16(program, POLICY_PROGRAM_INPUT_COUNT, INPUT_COUNT as u16);
 
         let buffer = &mut bytes[BUFFERS_OFFSET..OPERATIONS_OFFSET];
         put_u16(buffer, POLICY_BUFFER_ID, 1);
@@ -550,6 +633,10 @@ mod tests {
         write_operation(&mut bytes, 1, OP_LOAD_F32, 1, 1, 0, 0);
         write_operation(&mut bytes, 2, OP_STORE_F32, 0, 0, 0, 1);
         write_operation(&mut bytes, 3, OP_STORE_F32, 0, 1, 1, 1);
+        bytes[INPUTS_OFFSET + POLICY_INPUT_SCOPE] = INPUT_SEMANTIC;
+        bytes[INPUTS_OFFSET + POLICY_INPUT_FIELD] = 0;
+        bytes[INPUTS_OFFSET + POLICY_INPUT_RECORD_SIZE as usize + POLICY_INPUT_SCOPE] = INPUT_GLYPH;
+        bytes[INPUTS_OFFSET + POLICY_INPUT_RECORD_SIZE as usize + POLICY_INPUT_FIELD] = 1;
         bytes
     }
 
