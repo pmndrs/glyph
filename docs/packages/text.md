@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:560c885f3d3e7034a35e967be4e608498fa38496058ef1ec618f96573b17ddba'
+source_digest: 'sha256:ec94ea3821e3a72a7cf944b536921d90436bba3aeb849f5f914d9f661cbe9db3'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -674,6 +674,8 @@ The target Rust frame path now derives the same line opportunities internally. I
 The same frame path aggregates final fallback glyphs into a retained grapheme-cluster SoA. It keeps ordered double-precision advances, compact shaping/line-break flags, style/source/font identities, and a UTF-16 offset index. Font UPEM and horizontal line metrics are parsed once at registration; glyph design-unit advances are scaled once per contributing final font, and authored letter/word spacing joins that accumulation without constructing per-cluster objects. Optional Unicode line opportunities survive only where the next cluster is safe according to HarfRust output.
 
 An allocation-free Rust line kernel advances that retained grapheme cursor for a supplied width while preserving word, character, no-wrap, required-break, over-wide-cluster, and trailing-hard-break behavior. It remains an internal proof until declarative region bands and exclusions drive it during a production frame update.
+
+Validated flow snapshots are now copied into transactional A/B Rust storage: constraints, ordered regions, exclusions, and rebased polygon vertices remain owned after request memory is reused. The rectangle band kernel subtracts intersecting exclusions into retained, bounded inline-slot scratch and fails explicitly if the declared per-band slot envelope is exceeded. Polygon intersection and line placement are not yet connected.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 
