@@ -54,6 +54,22 @@ struct RegisteredFontStack {
     fonts: Vec<u32>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FallbackSpan {
+    source_run: u32,
+    text_start: u32,
+    text_end: u32,
+    font_index: u16,
+    font_handle: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ClusterRecord {
+    source_run: u32,
+    cluster: u32,
+    missing: bool,
+}
+
 #[derive(Default)]
 struct EngineSession {
     revision: SessionRevision,
@@ -75,6 +91,10 @@ struct EngineSession {
     pending_shaping_runs: ShapingRunArena,
     shape: ShapeArena,
     pending_shape: ShapeArena,
+    fallback_spans: Vec<FallbackSpan>,
+    pending_fallback_spans: Vec<FallbackSpan>,
+    fallback_span_scratch: Vec<FallbackSpan>,
+    fallback_cluster_scratch: Vec<ClusterRecord>,
     style_mutation_scratch: Vec<MutationKey>,
     style_order_scratch: Vec<usize>,
     style_nesting_scratch: Vec<u32>,
@@ -317,6 +337,10 @@ impl TextEngine {
         let glyph_capacity = capacity.saturating_mul(2);
         session.shape.reserve(glyph_capacity)?;
         session.pending_shape.reserve(glyph_capacity)?;
+        reserve_vec(&mut session.fallback_spans, capacity)?;
+        reserve_vec(&mut session.pending_fallback_spans, capacity)?;
+        reserve_vec(&mut session.fallback_span_scratch, capacity)?;
+        reserve_vec(&mut session.fallback_cluster_scratch, glyph_capacity)?;
         Ok(())
     }
 
@@ -845,44 +869,163 @@ impl EngineSession {
             &self.styles
         };
         let runs = self.pending_shaping_runs.runs();
-        let output = &mut self.pending_shape;
+        let mut max_stack_depth = 0usize;
         for (index, run) in runs.iter().copied().enumerate() {
-            let stack = font_stacks
-                .binary_search_by_key(&run.style.font_stack_handle, |stack| stack.handle)
-                .ok()
-                .and_then(|stack| font_stacks.get(stack))
-                .ok_or(EngineError::FontStackMissing)?;
+            let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
             let font_handle = *stack.fonts.first().ok_or(EngineError::FontStackMissing)?;
-            shaper
-                .with_shaped_run(
+            max_stack_depth = max_stack_depth.max(stack.fonts.len());
+            push_fallback_span(
+                &mut self.pending_fallback_spans,
+                FallbackSpan {
+                    source_run: u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?,
+                    text_start: run.text_start,
+                    text_end: run.text_end,
+                    font_index: 0,
                     font_handle,
-                    text,
-                    ShapeRunRef {
-                        text_start: run.text_start,
-                        text_end: run.text_end,
-                        script: run.script,
-                        language: styles.resolved_language(run.style),
-                        features: styles.resolved_features(run.style),
-                        direction: run.direction,
-                        cluster_level: 0,
-                        flags: 0x40,
-                    },
-                    |shaped| output.append(index, font_handle, shaped),
-                )
-                .map_err(shaper_error)?;
+                },
+            )?;
         }
-        self.shape_prepared = true;
-        Ok(())
+        for _ in 0..max_stack_depth.max(1) {
+            self.pending_shape.clear();
+            for span in self.pending_fallback_spans.iter().copied() {
+                let source_index =
+                    usize::try_from(span.source_run).map_err(|_| EngineError::InvalidRequest)?;
+                let run = *runs.get(source_index).ok_or(EngineError::InvalidRequest)?;
+                let output = &mut self.pending_shape;
+                shaper
+                    .with_shaped_run(
+                        span.font_handle,
+                        text,
+                        ShapeRunRef {
+                            text_start: span.text_start,
+                            text_end: span.text_end,
+                            script: run.script,
+                            language: styles.resolved_language(run.style),
+                            features: styles.resolved_features(run.style),
+                            direction: run.direction,
+                            cluster_level: 0,
+                            flags: 0x40,
+                        },
+                        |shaped| {
+                            output.append(
+                                source_index,
+                                span.font_handle,
+                                span.text_start,
+                                span.text_end,
+                                shaped,
+                            )
+                        },
+                    )
+                    .map_err(shaper_error)?;
+            }
+            collect_cluster_records(&self.pending_shape, &mut self.fallback_cluster_scratch)?;
+            self.fallback_span_scratch.clear();
+            let mut changed = false;
+            let mut cluster_index = 0usize;
+            for span in self.pending_fallback_spans.iter().copied() {
+                while self
+                    .fallback_cluster_scratch
+                    .get(cluster_index)
+                    .is_some_and(|record| {
+                        record.source_run < span.source_run
+                            || (record.source_run == span.source_run
+                                && record.cluster < span.text_start)
+                    })
+                {
+                    cluster_index += 1;
+                }
+                let stack_handle = runs
+                    .get(span.source_run as usize)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .style
+                    .font_stack_handle;
+                let stack = find_font_stack(font_stacks, stack_handle)?;
+                let next_font_index = span.font_index.checked_add(1);
+                let next_font =
+                    next_font_index.and_then(|index| stack.fonts.get(usize::from(index)).copied());
+                let mut cursor = span.text_start;
+                let mut record_index = cluster_index;
+                while let Some(record) = self.fallback_cluster_scratch.get(record_index).copied() {
+                    if record.source_run != span.source_run || record.cluster >= span.text_end {
+                        break;
+                    }
+                    if record.missing
+                        && let (Some(font_index), Some(font_handle)) = (next_font_index, next_font)
+                    {
+                        let cluster_start = record.cluster.max(cursor);
+                        let cluster_end = self
+                            .fallback_cluster_scratch
+                            .get(record_index + 1)
+                            .filter(|next| next.source_run == span.source_run)
+                            .map_or_else(
+                                || {
+                                    runs.get(span.source_run as usize)
+                                        .map_or(span.text_end, |run| run.text_end)
+                                },
+                                |next| next.cluster,
+                            )
+                            .min(span.text_end);
+                        if cursor < cluster_start {
+                            push_fallback_span(
+                                &mut self.fallback_span_scratch,
+                                FallbackSpan {
+                                    text_start: cursor,
+                                    text_end: cluster_start,
+                                    ..span
+                                },
+                            )?;
+                        }
+                        if cluster_start < cluster_end {
+                            push_fallback_span(
+                                &mut self.fallback_span_scratch,
+                                FallbackSpan {
+                                    text_start: cluster_start,
+                                    text_end: cluster_end,
+                                    font_index,
+                                    font_handle,
+                                    ..span
+                                },
+                            )?;
+                            cursor = cluster_end;
+                            changed = true;
+                        }
+                    }
+                    record_index += 1;
+                }
+                if cursor < span.text_end || span.text_start == span.text_end {
+                    push_fallback_span(
+                        &mut self.fallback_span_scratch,
+                        FallbackSpan {
+                            text_start: cursor,
+                            ..span
+                        },
+                    )?;
+                }
+            }
+            if !changed {
+                self.shape_prepared = true;
+                return Ok(());
+            }
+            core::mem::swap(
+                &mut self.pending_fallback_spans,
+                &mut self.fallback_span_scratch,
+            );
+        }
+        Err(EngineError::InvalidRequest)
     }
 
     fn abort_shape(&mut self) {
         self.pending_shape.clear();
+        self.pending_fallback_spans.clear();
+        self.fallback_span_scratch.clear();
+        self.fallback_cluster_scratch.clear();
         self.shape_prepared = false;
     }
 
     fn commit_shape(&mut self) {
         if self.shape_prepared {
             core::mem::swap(&mut self.shape, &mut self.pending_shape);
+            core::mem::swap(&mut self.fallback_spans, &mut self.pending_fallback_spans);
         }
         self.abort_shape();
     }
@@ -986,6 +1129,91 @@ fn shaper_error(status: u32) -> EngineError {
     } else {
         EngineError::InvalidRequest
     }
+}
+
+fn find_font_stack(
+    font_stacks: &[RegisteredFontStack],
+    handle: u32,
+) -> Result<&RegisteredFontStack, EngineError> {
+    font_stacks
+        .binary_search_by_key(&handle, |stack| stack.handle)
+        .ok()
+        .and_then(|index| font_stacks.get(index))
+        .ok_or(EngineError::FontStackMissing)
+}
+
+fn push_fallback_span(
+    spans: &mut Vec<FallbackSpan>,
+    span: FallbackSpan,
+) -> Result<(), EngineError> {
+    if let Some(previous) = spans.last_mut()
+        && previous.source_run == span.source_run
+        && previous.text_end == span.text_start
+        && previous.font_index == span.font_index
+        && previous.font_handle == span.font_handle
+    {
+        previous.text_end = span.text_end;
+        return Ok(());
+    }
+    spans
+        .try_reserve(1)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    spans.push(span);
+    Ok(())
+}
+
+fn collect_cluster_records(
+    shape: &ShapeArena,
+    records: &mut Vec<ClusterRecord>,
+) -> Result<(), EngineError> {
+    records.clear();
+    reserve_vec(records, shape.glyph_ids.len())?;
+    for run in &shape.runs {
+        let start = usize::try_from(run.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+        let end = start
+            .checked_add(usize::try_from(run.glyph_count).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        let clusters = shape
+            .clusters
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)?;
+        let glyph_ids = shape
+            .glyph_ids
+            .get(start..end)
+            .ok_or(EngineError::InvalidRequest)?;
+        for (&cluster, &glyph_id) in clusters.iter().zip(glyph_ids) {
+            records.push(ClusterRecord {
+                source_run: run.source_run,
+                cluster,
+                missing: glyph_id == 0,
+            });
+        }
+    }
+    records.sort_unstable_by_key(|record| (record.source_run, record.cluster));
+    let mut write_index = 0usize;
+    for read_index in 0..records.len() {
+        let record = records[read_index];
+        if write_index > 0
+            && records[write_index - 1].source_run == record.source_run
+            && records[write_index - 1].cluster == record.cluster
+        {
+            records[write_index - 1].missing |= record.missing;
+        } else {
+            records[write_index] = record;
+            write_index += 1;
+        }
+    }
+    records.truncate(write_index);
+    Ok(())
+}
+
+fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
+    if values.capacity() < capacity {
+        values
+            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .map_err(|_| EngineError::ResultTooLarge)?;
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1092,6 +1320,49 @@ mod tests {
         assert_eq!(
             engine.dispose_font_stack(7),
             Err(EngineError::FontStackMissing)
+        );
+    }
+
+    #[test]
+    fn fallback_clusters_restore_logical_order_and_merge_missing_glyphs() {
+        let shape = ShapeArena {
+            runs: vec![crate::engine::shaping_state::ShapedRun {
+                source_run: 7,
+                font_handle: 11,
+                text_start: 0,
+                text_end: 6,
+                glyph_start: 0,
+                glyph_count: 4,
+            }],
+            glyph_ids: vec![3, 0, 2, 0],
+            clusters: vec![4, 4, 2, 0],
+            x_advances: vec![],
+            y_advances: vec![],
+            x_offsets: vec![],
+            y_offsets: vec![],
+            glyph_flags: vec![],
+        };
+        let mut records = Vec::new();
+        collect_cluster_records(&shape, &mut records).unwrap();
+        assert_eq!(
+            records,
+            vec![
+                ClusterRecord {
+                    source_run: 7,
+                    cluster: 0,
+                    missing: true,
+                },
+                ClusterRecord {
+                    source_run: 7,
+                    cluster: 2,
+                    missing: false,
+                },
+                ClusterRecord {
+                    source_run: 7,
+                    cluster: 4,
+                    missing: true,
+                },
+            ]
         );
     }
 

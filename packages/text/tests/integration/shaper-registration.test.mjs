@@ -192,6 +192,58 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.equal(fn.fontBindingCount(), 0);
 });
 
+test('text_update advances missing clusters through an ordered font stack', async () => {
+  const [interArtifact, devanagariArtifact, shaperWasm, abi] = await Promise.all([
+    readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+    readFile(
+      new URL(
+        '../../../../apps/benchmarks/fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb',
+        import.meta.url,
+      ),
+    ),
+    readFile(shaperWasmUrl),
+    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+  ]);
+  const [inter, devanagari] = await Promise.all([
+    validateFontArtifact(interArtifact),
+    validateFontArtifact(devanagariArtifact),
+  ]);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  registerValidatedFont({ abi, fn, memory }, 101, inter);
+  registerValidatedFont({ abi, fn, memory }, 202, devanagari);
+
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(101, 0, 0, 0, 202, 0, 0, 0));
+  assert.equal(fn.registerFontStack(17, stack.pointer, 2), abi.status.ok);
+  fn.deallocate(stack.pointer, stack.length);
+  const policyBytes = renderPolicyBytes(abi);
+  const policy = copyToWasm(memory, fn.allocate, policyBytes);
+  assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
+  fn.deallocate(policy.pointer, policy.length);
+  assert.equal(fn.createSession(29, 512, abi.layouts.engineResult.size, 0), abi.status.ok);
+
+  const update = engineStyleUpdateBytes(abi, {
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    text: [0x0915],
+  });
+  const requestPointer = fn.requestPointer(29);
+  new Uint8Array(memory.buffer, requestPointer, update.byteLength).set(update);
+  const resultPointer = fn.textUpdate(29, requestPointer, update.byteLength);
+  const result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
+  assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
+  assert.equal(
+    fn.planCount(),
+    2,
+    'Inter must shape .notdef before the Devanagari cluster advances to the fallback font',
+  );
+});
+
 test('shaper ownership stays scoped to its FontRegistry', async () => {
   const { artifact, shaperWasm } = await fixture();
   const firstRegistry = new FontRegistry();
@@ -210,6 +262,27 @@ function copyToWasm(memory, allocate, source) {
   assert.notEqual(pointer, 0);
   new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
   return { pointer, length: bytes.byteLength };
+}
+
+function registerValidatedFont({ abi, fn, memory }, handle, validated) {
+  const allocations = [
+    copyToWasm(memory, fn.allocate, validated.shapingSfnt),
+    copyToWasm(memory, fn.allocate, validated.glyphExtents),
+    copyToWasm(memory, fn.allocate, validated.glyphExtentsAvailability),
+  ];
+  assert.equal(
+    fn.registerFont(
+      handle,
+      allocations[0].pointer,
+      allocations[0].length,
+      allocations[1].pointer,
+      allocations[1].length,
+      allocations[2].pointer,
+      allocations[2].length,
+    ),
+    abi.status.ok,
+  );
+  for (const allocation of allocations) fn.deallocate(allocation.pointer, allocation.length);
 }
 
 function engineStyleUpdateBytes(

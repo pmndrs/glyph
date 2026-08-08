@@ -29,6 +29,8 @@ pub(crate) struct ShapingRunArena {
 pub(crate) struct ShapedRun {
     pub source_run: u32,
     pub font_handle: u32,
+    pub text_start: u32,
+    pub text_end: u32,
     pub glyph_start: u32,
     pub glyph_count: u32,
 }
@@ -237,6 +239,8 @@ impl ShapeArena {
         &mut self,
         source_run: usize,
         font_handle: u32,
+        text_start: u32,
+        text_end: u32,
         shaped: &harfrust::GlyphBuffer,
     ) -> Result<(), u32> {
         let glyph_start =
@@ -248,6 +252,8 @@ impl ShapeArena {
         self.runs.push(ShapedRun {
             source_run: u32::try_from(source_run).map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?,
             font_handle,
+            text_start,
+            text_end,
             glyph_start,
             glyph_count,
         });
