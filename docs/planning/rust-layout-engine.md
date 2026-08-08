@@ -174,6 +174,7 @@ reserved by module `initialize()`. Policy registration reserves only the maximum
 policy, each to the same record capacity. The production empty-frame path now passes through this gather before plan
 compilation; a Rust proof gathers all four source scopes into a nonempty ordered plan and asserts exact packed bytes.
 Nonempty shaping/layout frame input is still open and no end-to-end timing is inferred from the synthetic proof.
+
 - Result publication uses A/B Wasm buffers for synchronous reads only. A retained or asynchronous result is copied into
   a worker-owned transferable `ArrayBuffer`; root returns ownership of that same buffer to the worker on retirement so
   pooling or garbage collection occurs on the worker rather than root.
@@ -366,9 +367,15 @@ inside declared capacities may not lazily settle another allocation.
 Module initialization is explicit rather than an incidental side effect of the first operational export. The generated
 ABI publishes `initialize()`, and the standard host calls it immediately after `WebAssembly.instantiate`; this eagerly
 creates module-owned state before a font registration, session operation, or update can be observed. At the current
-checkpoint it creates module state and reserves the first concrete 32,768-entry render-plan gather arena.
-Policy-specific aligned field lanes settle at cold policy registration. HarfRust, Unicode, cluster, line, and geometry
-arrays remain unimplemented and therefore are not yet included in the initialization claim.
+checkpoint it creates module state, reserves the 32,768-entry render-plan gather arena, reserves HarfRust's actual
+32,768-codepoint internal info/position buffer, and reserves one 32,768-codepoint UTF-16 context scratch array. HarfRust
+consumes that buffer by value and returns the same allocation through `GlyphBuffer::clear`; the registry restores it
+after every successful segment and every fallible setup path instead of constructing a fresh buffer per segment.
+Initialization grows the optimized module from 1,245,184 to 4,980,736 linear-memory bytes (57 pages), of which 25 pages
+are the HarfRust/context addition, and repeated initialization preserves byte length and `memory.buffer` identity.
+Policy-specific aligned field lanes settle at cold policy registration. The legacy exported batch-result vectors still
+settle independently and are not evidence for the new frame path; Unicode bidi, clusters, lines, and geometry arrays
+remain unimplemented and therefore are not yet included in the zero-allocation frame claim.
 
 ## Rust layout pipeline
 

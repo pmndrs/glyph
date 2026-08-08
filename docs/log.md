@@ -2,6 +2,14 @@
 
 ## 2026-08-08
 
+- **Reusable HarfRust initialization workspace** — Module initialization now reserves HarfRust's real 32,768-codepoint
+  info/position allocation and a reusable UTF-16 context array beside the existing plan/gather arena. Segment shaping
+  returns that allocation through `GlyphBuffer::clear` on success and restores it on fallible setup without boxing.
+  Optimized Wasm initialization grows 57 pages in total (25 new pages for shaping/context), repeated initialization
+  preserves `memory.buffer`, focused compiled-Wasm shaping/frame tests pass 11/11, and the module measures 847,814 raw /
+  315,809 gzip / 249,629 Brotli bytes. Legacy batch-result vectors and the not-yet-landed bidi/layout arrays remain
+  explicit allocation gaps rather than being included in the claim.
+
 - **Connected policy-directed gather to the Rust plan pipeline** — One reusable workspace now resolves every program's
   semantic/glyph/strike/resource recipe into 16-byte-aligned four-record F32/U32 lanes and feeds the plan compiler. A
   Rust proof emits a nonempty ordered plan with exact packed bytes across all source scopes and unchanged warm capacity.

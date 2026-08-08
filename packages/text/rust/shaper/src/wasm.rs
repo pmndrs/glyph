@@ -32,9 +32,14 @@ fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_text_shaper_initialize() -> u32 {
-    with_state(|state| match state.engine.initialize() {
-        Ok(()) => STATUS_OK,
-        Err(error) => engine_status(error),
+    with_state(|state| {
+        if let Err(status) = state.registry.initialize() {
+            return status;
+        }
+        match state.engine.initialize() {
+            Ok(()) => STATUS_OK,
+            Err(error) => engine_status(error),
+        }
     })
 }
 
