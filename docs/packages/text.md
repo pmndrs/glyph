@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:25c46ab6db745a3d82eded9d1d3a3579546689abffbc052daaedbbce98845e6e'
+source_digest: 'sha256:132c8cd7ca9681ea8ea2dad94056b26d1a512a6bd2dc22e1666168ea66d85659'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -482,7 +482,8 @@ abort/retry, capability-set changes, and policy identity. A post-prepare Wasm ab
 semantic input exists, so that exact ordering remains an explicit test gap. The now-reachable planners increase the
 optimized artifact from 739,909 / 272,624 / 214,395 to
 822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. This is a measured shared-runtime cost and a pending optimization
-target. Ordered UTF-16 replacements are now retained transactionally, while style and geometry sections remain rejected.
+target. Ordered UTF-16 replacements are now retained transactionally. Editorial constraints, regions, exclusions, and
+inline objects now decode as borrowed one-call geometry; style mutations remain rejected.
 Sessions still publish an empty Rust plan because retained text is not yet shaped or laid out; there is no Rust
 shaping/layout performance result yet, and the TypeScript layout table above remains baseline-only.
 
@@ -491,8 +492,8 @@ text replacements, 80-byte stable style mutations, 52-byte constraints, 8-byte f
 exclusions, and 56-byte inline objects. Region/exclusion rectangles use inline bounds, while bounded polygons reference
 vertices inside the same request. Styles include current shaping fields plus word spacing, material/color, and
 decoration inputs. The generated ABI and compiled-Wasm test pin every size, tag, and the inline-object
-`baselineAlignment` offset. The following text-retention checkpoint admits only the text record; the remaining sections
-still fail closed.
+`baselineAlignment` offset. The generated engine vocabulary now also fixes axis, wrap, inline/block alignment, overflow,
+writing, orientation, exclusion-side, and inline-object baseline tags rather than accepting renderer-local enum bytes.
 
 The frame decoder now borrows ordered UTF-16 replacement records and their offset-addressed payloads directly from the
 pinned request. It validates canonical empty offsets, opcode/encoding, reserved fields, bounds, alignment, arithmetic,
@@ -516,6 +517,17 @@ a repeated call preserves buffer identity. Policy-specific gather lanes settle d
 artifact is 847,814 raw / 315,809 gzip / 249,629 Brotli bytes, +2,234 / +524 / +408 over the policy-gather checkpoint.
 The old three-export batch result still allocates its temporary output vectors, while bidi/layout arrays remain open;
 this is HarfRust workspace evidence, not yet a complete allocation-free `text_update` or latency result.
+
+The frame path now accepts complete editorial geometry in the same update as text. Rust borrows constraint, region,
+exclusion, polygon-vertex, and inline-object records directly from the pinned request; it validates request limits,
+finite ordered bounds, enum/reserved fields, identity and region ownership, vertex containment, text anchors after
+pending mutations, and cross-section non-overlap before session mutation. A placement-independent fingerprint omits raw
+vertex offsets, so repacking equal geometry does not manufacture invalidation. The compiled-Wasm proof commits one
+rectangle region with an exclusion and inline object, then rejects a forged region reference without advancing the
+published A/B revision. Layout does not consume these records yet, plans remain empty, and no latency claim is attached.
+The optimized module is 856,832 raw / 318,999 gzip / 252,620 Brotli bytes, +9,018 / +3,190 / +2,991 over the shaping
+workspace checkpoint. The still-TypeScript 25,515-glyph baseline measures 54.02/12.29/8.50/39.12 millisecond medians
+for cold/font-size/width/text; it does not execute this geometry decoder and remains target evidence only.
 
 Ordered font stacks now have cold Rust lifecycle operations independent from frame updates. A stack is nonempty,
 duplicate-free, idempotent only for the same ordered handles, and retains its already registered shaping fonts until

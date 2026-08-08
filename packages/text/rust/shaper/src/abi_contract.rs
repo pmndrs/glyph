@@ -3,9 +3,15 @@ use core::mem::{align_of, offset_of, size_of};
 use serde_json::json;
 
 use crate::engine::frame::{
-    DEFAULT_SESSION_TEXT_CAPACITY, RESULT_FLAG_CHECKPOINT, SHAPE_POLYGON, SHAPE_RECTANGLE,
-    STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
-    TEXT_MUTATION_REPLACE_UTF16, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
+    ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, AXIS_AT_MOST, AXIS_EXACT,
+    AXIS_UNCONSTRAINED, BASELINE_ALPHABETIC, BASELINE_MIDDLE, BASELINE_TEXT_BOTTOM,
+    BASELINE_TEXT_TOP, BLOCK_ALIGN_CENTER, BLOCK_ALIGN_END, BLOCK_ALIGN_START,
+    DEFAULT_SESSION_TEXT_CAPACITY, EXCLUSION_WRAP_BOTH, EXCLUSION_WRAP_INLINE_END,
+    EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST, ORIENTATION_MIXED, ORIENTATION_SIDEWAYS,
+    ORIENTATION_UPRIGHT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
+    RESULT_FLAG_CHECKPOINT, SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_MUTATION_REMOVE,
+    STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16, WRAP_CHARACTER,
+    WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
 };
 use crate::engine::policy::{
     ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
@@ -2512,6 +2518,49 @@ pub fn json() -> String {
                 "horizontalTb": WRITING_HORIZONTAL_TB,
                 "verticalRl": WRITING_VERTICAL_RL,
                 "verticalLr": WRITING_VERTICAL_LR
+            },
+            "textOrientations": {
+                "mixed": ORIENTATION_MIXED,
+                "upright": ORIENTATION_UPRIGHT,
+                "sideways": ORIENTATION_SIDEWAYS
+            },
+            "axisModes": {
+                "unconstrained": AXIS_UNCONSTRAINED,
+                "atMost": AXIS_AT_MOST,
+                "exact": AXIS_EXACT
+            },
+            "wrapModes": {
+                "none": WRAP_NONE,
+                "word": WRAP_WORD,
+                "character": WRAP_CHARACTER
+            },
+            "inlineAlignments": {
+                "start": ALIGN_START,
+                "center": ALIGN_CENTER,
+                "end": ALIGN_END,
+                "justify": ALIGN_JUSTIFY
+            },
+            "overflowModes": {
+                "visible": OVERFLOW_VISIBLE,
+                "clip": OVERFLOW_CLIP,
+                "ellipsis": OVERFLOW_ELLIPSIS
+            },
+            "blockAlignments": {
+                "start": BLOCK_ALIGN_START,
+                "center": BLOCK_ALIGN_CENTER,
+                "end": BLOCK_ALIGN_END
+            },
+            "exclusionWrapSides": {
+                "both": EXCLUSION_WRAP_BOTH,
+                "inlineStart": EXCLUSION_WRAP_INLINE_START,
+                "inlineEnd": EXCLUSION_WRAP_INLINE_END,
+                "largest": EXCLUSION_WRAP_LARGEST
+            },
+            "inlineObjectBaselines": {
+                "alphabetic": BASELINE_ALPHABETIC,
+                "textTop": BASELINE_TEXT_TOP,
+                "middle": BASELINE_MIDDLE,
+                "textBottom": BASELINE_TEXT_BOTTOM
             },
             "resultFlags": {
                 "checkpoint": RESULT_FLAG_CHECKPOINT

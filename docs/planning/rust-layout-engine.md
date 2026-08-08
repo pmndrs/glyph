@@ -823,8 +823,10 @@ requires a regression test once Rust shaping/layout can produce nonempty plan ou
 This makes the full retained plan compiler reachable: the optimized artifact changes from 739,909 / 272,624 / 214,395
 to 822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. The 82,534 raw / 35,409 gzip / 28,052 Brotli increase is shared
 runtime code, not font-local shaping data, and is now an explicit size-optimization target. Ordered UTF-16 text
-replacements now decode as borrowed records and commit into retained session scratch transactionally; style and geometry
-sections remain rejected. Because retained text is not yet analyzed, shaped, or laid out, the Wasm path still emits an
+replacements now decode as borrowed records and commit into retained session scratch transactionally. Constraints,
+regions, exclusions, polygon vertices, and inline objects are borrowed from the same request, fully validated before
+mutation, checked against pending text offsets, and committed as a placement-independent semantic fingerprint. Styles
+remain rejected. Because retained text and geometry are not yet analyzed, shaped, or laid out, the Wasm path still emits an
 empty Rust plan. Rust shaping/layout → nonempty plan connection and its 25,515-glyph end-to-end timing remain open; the
 TypeScript layout benchmark is baseline evidence only.
 

@@ -34,17 +34,50 @@ export const textShaperAbi = {
   },
   "endianness": "little",
   "engine": {
+    "axisModes": {
+      "atMost": 2,
+      "exact": 3,
+      "unconstrained": 1
+    },
+    "blockAlignments": {
+      "center": 2,
+      "end": 3,
+      "start": 1
+    },
     "bufferStrategies": {
       "orderedDirect": 1,
       "stableIndirect": 2
     },
     "defaultSessionTextCapacity": 1024,
+    "exclusionWrapSides": {
+      "both": 1,
+      "inlineEnd": 3,
+      "inlineStart": 2,
+      "largest": 4
+    },
     "flowShapeKinds": {
       "polygon": 2,
       "rectangle": 1
     },
+    "inlineAlignments": {
+      "center": 2,
+      "end": 3,
+      "justify": 4,
+      "start": 1
+    },
+    "inlineObjectBaselines": {
+      "alphabetic": 1,
+      "middle": 3,
+      "textBottom": 4,
+      "textTop": 2
+    },
     "internalBufferBindings": {
       "order": 65535
+    },
+    "overflowModes": {
+      "clip": 2,
+      "ellipsis": 3,
+      "visible": 1
     },
     "patchOpcodes": {
       "allocateOrResize": 1,
@@ -92,6 +125,16 @@ export const textShaperAbi = {
     },
     "textMutationOpcodes": {
       "replaceUtf16": 1
+    },
+    "textOrientations": {
+      "mixed": 1,
+      "sideways": 3,
+      "upright": 2
+    },
+    "wrapModes": {
+      "character": 3,
+      "none": 1,
+      "word": 2
     },
     "writingModes": {
       "horizontalTb": 1,

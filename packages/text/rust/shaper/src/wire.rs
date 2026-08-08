@@ -350,6 +350,10 @@ pub(crate) fn read_u32(bytes: &[u8], offset: usize) -> Result<u32, u32> {
     Ok(u32::from_le_bytes([value[0], value[1], value[2], value[3]]))
 }
 
+pub(crate) fn read_f32(bytes: &[u8], offset: usize) -> Result<f32, u32> {
+    Ok(f32::from_bits(read_u32(bytes, offset)?))
+}
+
 pub(crate) fn write_u32(bytes: &mut [u8], offset: usize, value: u32) {
     bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
 }
