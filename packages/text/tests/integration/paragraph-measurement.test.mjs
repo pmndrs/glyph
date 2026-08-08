@@ -81,7 +81,7 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
   assert.equal(hashParagraphLayout(naturalLayout), layoutGoldens.natural.layout.hash);
 
   const wideLayout = paragraph.layout(wideConstraints);
-  assert.deepEqual(calls, { shape: 2, reshape: 1 }, 'all wide boundaries reshape in one batch');
+  assert.deepEqual(calls, { shape: 2, reshape: 0 }, 'wide boundaries lay out from the retained shape');
   assert.equal(paragraph.layout(wideConstraints), wideLayout, 'equivalent layout reuses one object');
   assertLayoutLines(wideLayout, layoutGoldens.wide.layout);
   assert.deepEqual(
@@ -100,27 +100,18 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
 
   const narrowConstraints = { width: { mode: 'at-most', size: 360 } };
   const narrowLayout = paragraph.layout(narrowConstraints);
-  assert.deepEqual(calls, { shape: 2, reshape: 2 }, 'all narrow boundaries reshape in one batch');
-  assert.deepEqual(
-    reshapeRequests.map(({ ranges }) => ranges.length),
-    [2, 3],
-  );
-  assert.deepEqual(reshapeRequests[0].ranges, [
-    { run: 0, itemStart: 0, itemEnd: 47, contextStart: 0, contextEnd: 56, flags: 0x43 },
-    { run: 0, itemStart: 47, itemEnd: 56, contextStart: 0, contextEnd: 56, flags: 0x43 },
-  ]);
-  assert.deepEqual(reshapeRequests[1].ranges, [
-    { run: 0, itemStart: 0, itemEnd: 22, contextStart: 0, contextEnd: 56, flags: 0x43 },
-    { run: 0, itemStart: 22, itemEnd: 47, contextStart: 0, contextEnd: 56, flags: 0x43 },
-    { run: 0, itemStart: 47, itemEnd: 56, contextStart: 0, contextEnd: 56, flags: 0x43 },
-  ]);
+  // These requests used to carry `contextStart: 0, contextEnd: 56` — the whole run, which is the context the retained
+  // shape was produced with, so the shaper returned the glyphs it had already returned. The golden layout hashes below
+  // are unchanged by removing them, which is the proof. Reinstate them under a narrowed context.
+  assert.deepEqual(calls, { shape: 2, reshape: 0 }, 'narrow boundaries lay out from the retained shape');
+  assert.deepEqual(reshapeRequests, []);
   assertLayoutLines(narrowLayout, layoutGoldens.narrow.layout);
   assert.equal(hashParagraphLayout(narrowLayout), layoutGoldens.narrow.layout.hash);
   const exactHeight = paragraph.layout({
     ...narrowConstraints,
     height: { mode: 'exactly', size: 200 },
   });
-  assert.deepEqual(calls, { shape: 2, reshape: 2 }, 'height-only layout reuses positioned lines');
+  assert.deepEqual(calls, { shape: 2, reshape: 0 }, 'height-only layout reuses positioned lines');
   assert.equal(exactHeight.height, 200);
   assert.equal(exactHeight.glyphIds, narrowLayout.glyphIds);
   const postLayoutInterfering = engine.create({ text: 'ffi', font: font.handle });

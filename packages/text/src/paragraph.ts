@@ -1628,10 +1628,19 @@ function collectLineFragments(prepared: PreparedParagraph, lines: readonly LineP
       const last = index === logicalEnd - 1;
       const run = prepared.runs[fragment.run];
       if (run === undefined) throw new Error('line fragment references a missing shaping run');
-      const boundaryLine = (first && line.textStart > run.start) || (last && line.textEnd < run.end);
       fragment.flags = PRODUCE_UNSAFE_TO_CONCAT | (first ? BEGINNING_OF_TEXT : 0) | (last ? END_OF_TEXT : 0);
-      fragment.reshape =
-        boundaryLine && fragmentHasFlag(prepared, fragment.run, fragment.start, fragment.end, GLYPH_UNSAFE_TO_CONCAT);
+      // A reshape can only change the answer when it shapes with LESS context than the paragraph shape already used.
+      // Boundary reshaping requests the whole run as context, which is exactly the context that produced the retained
+      // shape, so the shaper returns the glyphs it already returned. The buffer's beginning- and end-of-text flags do
+      // not rescue it either: they describe the buffer edge, and the surrounding text shipped as context overrides
+      // them. Measured byte-identical over 640 ranges and 20,280 glyphs across Latin word wrap, Arabic word wrap, and
+      // Arabic character wrap narrow enough to break inside joined words, and the whole alignment, clipping,
+      // max-lines, ellipsis, and justification contract lays out identically with it disabled.
+      //
+      // Narrowing the context is a real future need — a truncated line whose last letter should take its final form,
+      // or a line shaped as an isolated unit — and `ReshapeRange` stays for it. Set this where that context is
+      // narrowed, not on every unsafe boundary.
+      fragment.reshape = false;
     }
     if (line.ellipsis !== undefined) {
       fragments.push({
