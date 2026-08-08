@@ -153,10 +153,13 @@ impl PositionedGlyphArena {
     ) -> Result<(), EngineError> {
         let cluster_start = usize::try_from(fragment.line.cluster_start)
             .map_err(|_| EngineError::InvalidRequest)?;
-        let cluster_end = usize::try_from(fragment.line.cluster_end)
-            .map_err(|_| EngineError::InvalidRequest)?;
+        let cluster_end =
+            usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
         let visual_start = self.visual_clusters.len();
         for cluster in cluster_start..cluster_end {
+            if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                continue;
+            }
             self.visual_clusters
                 .push(u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?);
             self.visual_levels.push(cluster_level(
@@ -175,14 +178,12 @@ impl PositionedGlyphArena {
 
         let available = (fragment.slot_end - fragment.slot_start - fragment.line.advance).max(0.0);
         let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
-        let justify_spaces = if line.align == ALIGN_JUSTIFY
-            && !fragment.line.hard_break
-            && !final_line
-        {
-            count_justification_spaces(text, clusters, cluster_start, cluster_end)
-        } else {
-            0
-        };
+        let justify_spaces =
+            if line.align == ALIGN_JUSTIFY && !fragment.line.hard_break && !final_line {
+                count_justification_spaces(text, clusters, cluster_start, cluster_end)
+            } else {
+                0
+            };
         let per_space = if justify_spaces == 0 {
             0.0
         } else {
@@ -392,10 +393,7 @@ impl PositionedGlyphArena {
     }
 }
 
-fn line_fragments(
-    flow: &FlowLayoutArena,
-    line: FlowLine,
-) -> Result<&[FlowFragment], EngineError> {
+fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragment], EngineError> {
     let start = usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
     let end = start
         .checked_add(usize::from(line.fragment_count))
@@ -463,8 +461,8 @@ fn cluster_level(
     runs: &[ShapingRun],
     line_levels: &[u8],
 ) -> Result<u8, EngineError> {
-    let source = usize::try_from(clusters.source_runs[cluster])
-        .map_err(|_| EngineError::InvalidRequest)?;
+    let source =
+        usize::try_from(clusters.source_runs[cluster]).map_err(|_| EngineError::InvalidRequest)?;
     let run = runs.get(source).ok_or(EngineError::InvalidRequest)?;
     let local = clusters.starts[cluster]
         .checked_sub(line_start)
@@ -587,8 +585,7 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
 mod tests {
     use super::*;
     use crate::engine::{
-        cluster_state::CLUSTER_SAFE_BEFORE,
-        line_composition::ComposedLine,
+        cluster_state::CLUSTER_SAFE_BEFORE, line_composition::ComposedLine,
         style_state::ResolvedStyle,
     };
     use alloc::vec;
@@ -608,11 +605,11 @@ mod tests {
 
     #[test]
     fn positions_once_and_revisions_only_exact_content_changes() {
-        let text = vec![0x61, 0x62];
+        let text = vec![0x61, 0x62, 0x0a];
         let style = ResolvedStyle::test_typography(10.0, 1.0, 0.0);
         let styles = [StyleSegment {
             text_start: 0,
-            text_end: 2,
+            text_end: 3,
             style,
         }];
         let runs = [ShapingRun {
@@ -624,19 +621,19 @@ mod tests {
             style,
         }];
         let clusters = ClusterArena {
-            starts: vec![0, 1],
-            ends: vec![1, 2],
-            advances: vec![6.0, 6.0],
-            flags: vec![CLUSTER_SAFE_BEFORE; 2],
-            style_indexes: vec![0, 0],
-            source_runs: vec![0, 0],
-            font_handles: vec![1, 1],
-            stable_ids: vec![10, 20],
-            glyph_starts: vec![0, 1],
-            glyph_counts: vec![1, 1],
+            starts: vec![0, 1, 2],
+            ends: vec![1, 2, 3],
+            advances: vec![6.0, 6.0, 0.0],
+            flags: vec![CLUSTER_SAFE_BEFORE, CLUSTER_SAFE_BEFORE, CLUSTER_HARD_BREAK],
+            style_indexes: vec![0, 0, 0],
+            source_runs: vec![0, 0, u32::MAX],
+            font_handles: vec![1, 1, 0],
+            stable_ids: vec![10, 20, 30],
+            glyph_starts: vec![0, 1, 2],
+            glyph_counts: vec![1, 1, 0],
             glyph_indices: vec![0, 1],
             glyph_stable_ids: vec![100, 200],
-            index_at: vec![0, 1, 2],
+            index_at: vec![0, 1, 2, 3],
             ..ClusterArena::default()
         };
         let shape = ShapeArena {
@@ -650,10 +647,10 @@ mod tests {
             glyph_flags: vec![0, 0],
         };
         let bidi = BidiAnalysis {
-            levels: vec![0, 0],
-            classes: vec![0, 0],
+            levels: vec![0, 0, BIDI_B],
+            classes: vec![0, 0, BIDI_B],
             paragraph_starts: vec![0],
-            paragraph_ends: vec![2],
+            paragraph_ends: vec![3],
             paragraph_levels: vec![0],
             runs: vec![],
         };
@@ -671,11 +668,11 @@ mod tests {
             fragments: vec![FlowFragment {
                 line: ComposedLine {
                     cluster_start: 0,
-                    cluster_end: 2,
+                    cluster_end: 3,
                     text_start: 0,
                     text_end: 2,
                     advance: 12.0,
-                    hard_break: false,
+                    hard_break: true,
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,

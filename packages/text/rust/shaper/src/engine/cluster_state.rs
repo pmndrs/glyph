@@ -58,10 +58,7 @@ impl ClusterArena {
         reserve(&mut self.glyph_starts, capacity)?;
         reserve(&mut self.glyph_counts, capacity)?;
         reserve(&mut self.glyph_indices, capacity.saturating_mul(2))?;
-        reserve(
-            &mut self.glyph_stable_ids,
-            capacity.saturating_mul(2),
-        )?;
+        reserve(&mut self.glyph_stable_ids, capacity.saturating_mul(2))?;
         reserve(&mut self.index_at, capacity.saturating_add(1))?;
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)
@@ -183,9 +180,7 @@ impl ClusterArena {
                         .ok_or(EngineError::InvalidRequest)?
                 } else {
                     let allocated = *next_id;
-                    *next_id = next_id
-                        .checked_add(1)
-                        .ok_or(EngineError::ResultTooLarge)?;
+                    *next_id = next_id.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
                     allocated
                 };
                 *self
@@ -307,8 +302,8 @@ impl ClusterArena {
             return Err(EngineError::InvalidRequest);
         }
         for shaped_run in &shape.runs {
-            let start = usize::try_from(shaped_run.glyph_start)
-                .map_err(|_| EngineError::InvalidRequest)?;
+            let start =
+                usize::try_from(shaped_run.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
             let end = start
                 .checked_add(
                     usize::try_from(shaped_run.glyph_count)
@@ -331,9 +326,8 @@ impl ClusterArena {
                     .get_mut(destination)
                     .ok_or(EngineError::InvalidRequest)? =
                     u32::try_from(glyph).map_err(|_| EngineError::ResultTooLarge)?;
-                self.glyph_counts[cluster_index] = ordinal
-                    .checked_add(1)
-                    .ok_or(EngineError::ResultTooLarge)?;
+                self.glyph_counts[cluster_index] =
+                    ordinal.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
             }
         }
         for index in 0..self.starts.len() {

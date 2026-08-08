@@ -165,6 +165,15 @@ impl Default for RenderPlanCompiler {
 }
 
 impl RenderPlanCompiler {
+    pub(crate) fn prepare_reuse(&mut self) -> Result<(), RenderPlanCompilerError> {
+        if self.prepared_strategy != PreparedStrategy::None {
+            return Err(RenderPlanCompilerError::AlreadyPrepared);
+        }
+        self.clear_merged_plan();
+        self.prepared_strategy = PreparedStrategy::Empty;
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn prepare(
         &mut self,
@@ -674,6 +683,30 @@ mod tests {
         assert!(compiler.resources.is_empty());
         assert_eq!(plan.buffers[0].strategy, BUFFER_ORDERED_DIRECT);
         assert_eq!(plan.draws.len(), 1);
+    }
+
+    #[test]
+    fn acknowledged_ordered_state_can_publish_an_empty_reuse_transaction() {
+        let policy = policy();
+        let glyphs = [glyph(1, ORDERED, 0)];
+        let x = [1.0];
+        let mut compiler = RenderPlanCompiler::default();
+        prepare(&mut compiler, &policy, &glyphs, &x, true, 1, 0);
+        let buffer = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap()
+            .buffers[0]
+            .id;
+        compiler.commit().unwrap();
+
+        compiler.prepare_reuse().unwrap();
+        let plan = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        assert!(plan.buffers.is_empty());
+        assert!(plan.patches.is_empty());
+        compiler.commit().unwrap();
+        assert!(compiler.buffer_bytes(buffer).is_some());
     }
 
     #[test]

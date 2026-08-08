@@ -1130,6 +1130,17 @@ Each stage is a small Conventional Commit series with unchanged fixtures and an 
 The first stack proves the Wasm boundary, policy, display-list/render-plan contract, and complete current Rust semantic
 pipeline before adding new publishing features. The single ABI is its final cutover, not its first commit.
 
+Current checkpoint evidence: the retained Rust transaction reaches real Inter shaping, fallback, measured clusters,
+horizontal editorial flow, positioning, policy gather, and a nonempty render plan. Exact invalidation lets unchanged
+ordered-direct frames publish an empty reuse transaction and lets font-size changes reuse Unicode, bidi, and shaping.
+On the established fully active 25,515-glyph stress case with eight warmups and 31 samples, request copy plus
+`text_update` measures 13.693/0.001/4.090/3.374/13.927/13.986 ms median for
+cold/no-op/font-size/full-column-resize/suffix-edit/localized-edit. The unchanged TypeScript comparison measures
+55.25/11.90/8.36/38.55 ms for cold/font-size/width/suffix-edit. These are not final renderer-parity ratios: the Rust lane
+still packs one F32 policy output, while canonical Bitmap requires five physical buffers over real baked glyph records.
+That full policy shape, memory right-sizing, incremental text edits, Three consumption, and removal of the duplicate
+TypeScript path remain foundation-stack gates.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement

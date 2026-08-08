@@ -36,7 +36,7 @@ pub(crate) struct RetainedExclusion {
     pub vertex_start: u32,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub(crate) struct FlowGeometryArena {
     pub constraints: Vec<FlowConstraint>,
     pub regions: Vec<RetainedRegion>,

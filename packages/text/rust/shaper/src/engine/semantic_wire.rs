@@ -198,6 +198,10 @@ impl GeometryBatch<'_> {
         self.constraints.len() / abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize
     }
 
+    pub(crate) fn inline_object_count(self) -> usize {
+        self.inline_objects.len() / abi::ENGINE_INLINE_OBJECT_RECORD_SIZE as usize
+    }
+
     pub(crate) fn constraint(self, index: usize) -> Option<FlowConstraint> {
         let record = record_at(self.constraints, abi::ENGINE_CONSTRAINT_RECORD_SIZE, index)?;
         Some(FlowConstraint {
