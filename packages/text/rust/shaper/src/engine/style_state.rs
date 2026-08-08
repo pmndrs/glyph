@@ -79,6 +79,7 @@ pub(crate) struct ResolvedStyle {
     pub baseline_shift: f32,
     pub raster_pixel_ratio: f32,
     pub direction: u8,
+    pub bidi_override: bool,
     pub foreground_rgba: u32,
     pub decoration_rgba: u32,
     pub decoration_flags: u32,
@@ -120,6 +121,7 @@ impl Default for ResolvedStyle {
             baseline_shift: 0.0,
             raster_pixel_ratio: 1.0,
             direction: 0,
+            bidi_override: false,
             foreground_rgba: u32::MAX,
             decoration_rgba: 0,
             decoration_flags: 0,
@@ -144,7 +146,6 @@ impl ResolvedStyleArena {
         self.segments.clear();
     }
 
-    #[cfg(test)]
     pub(crate) fn segments(&self) -> &[StyleSegment] {
         &self.segments
     }
@@ -535,6 +536,7 @@ fn apply_style(mut resolved: ResolvedStyle, style: RetainedStyle, source: usize)
     }
     if fields & STYLE_FIELD_DIRECTION != 0 {
         resolved.direction = style.direction;
+        resolved.bidi_override = !style.root && style.direction != 0;
     }
     if fields & STYLE_FIELD_FOREGROUND != 0 {
         resolved.foreground_rgba = style.foreground_rgba;

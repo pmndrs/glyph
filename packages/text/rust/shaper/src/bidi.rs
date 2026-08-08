@@ -20,15 +20,34 @@ pub enum BidiError {
     ResultTooLarge,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BidiRun {
+    pub text_start: u32,
+    pub text_end: u32,
+    pub level: u8,
+}
+
+#[derive(Default)]
 pub struct BidiAnalysis {
     pub levels: Vec<u8>,
     pub classes: Vec<u8>,
     pub paragraph_starts: Vec<u32>,
     pub paragraph_ends: Vec<u32>,
     pub paragraph_levels: Vec<u8>,
+    pub runs: Vec<BidiRun>,
 }
 
 pub fn analyze(text: &[u16], direction: u8) -> Result<BidiAnalysis, BidiError> {
+    let mut output = BidiAnalysis::default();
+    analyze_into(text, direction, &mut output)?;
+    Ok(output)
+}
+
+pub fn analyze_into(
+    text: &[u16],
+    direction: u8,
+    output: &mut BidiAnalysis,
+) -> Result<(), BidiError> {
     let default_level = match direction {
         DIRECTION_AUTO => None,
         DIRECTION_LTR => Some(LTR_LEVEL),
@@ -36,34 +55,83 @@ pub fn analyze(text: &[u16], direction: u8) -> Result<BidiAnalysis, BidiError> {
         _ => return Err(BidiError::InvalidDirection),
     };
     let info = BidiInfo::new_with_data_source(&Unicode17BidiData, text, default_level);
-    let mut paragraph_starts = Vec::with_capacity(info.paragraphs.len().max(1));
-    let mut paragraph_ends = Vec::with_capacity(info.paragraphs.len().max(1));
-    let mut paragraph_levels = Vec::with_capacity(info.paragraphs.len().max(1));
+    output.clear();
+    output.reserve_for_analysis(text.len(), info.paragraphs.len().max(1))?;
     if info.paragraphs.is_empty() {
-        paragraph_starts.push(0);
-        paragraph_ends.push(0);
-        paragraph_levels.push(default_level.unwrap_or(LTR_LEVEL).number());
+        output.paragraph_starts.push(0);
+        output.paragraph_ends.push(0);
+        output
+            .paragraph_levels
+            .push(default_level.unwrap_or(LTR_LEVEL).number());
     } else {
         for paragraph in &info.paragraphs {
-            paragraph_starts
+            output
+                .paragraph_starts
                 .push(u32::try_from(paragraph.range.start).map_err(|_| BidiError::ResultTooLarge)?);
-            paragraph_ends
+            output
+                .paragraph_ends
                 .push(u32::try_from(paragraph.range.end).map_err(|_| BidiError::ResultTooLarge)?);
-            paragraph_levels.push(paragraph.level.number());
+            output.paragraph_levels.push(paragraph.level.number());
         }
     }
-    Ok(BidiAnalysis {
-        levels: info.levels.iter().map(|level| level.number()).collect(),
-        classes: info
-            .original_classes
-            .iter()
-            .copied()
-            .map(class_code)
-            .collect(),
-        paragraph_starts,
-        paragraph_ends,
-        paragraph_levels,
-    })
+    output
+        .levels
+        .extend(info.levels.iter().map(|level| level.number()));
+    output
+        .classes
+        .extend(info.original_classes.iter().copied().map(class_code));
+    let mut start = 0usize;
+    while start < output.levels.len() {
+        let level = output.levels[start];
+        let mut end = start + 1;
+        while end < output.levels.len() && output.levels[end] == level {
+            end += 1;
+        }
+        output.runs.push(BidiRun {
+            text_start: u32::try_from(start).map_err(|_| BidiError::ResultTooLarge)?,
+            text_end: u32::try_from(end).map_err(|_| BidiError::ResultTooLarge)?,
+            level,
+        });
+        start = end;
+    }
+    Ok(())
+}
+
+impl BidiAnalysis {
+    pub fn reserve(&mut self, text_capacity: usize) -> Result<(), BidiError> {
+        self.reserve_for_analysis(text_capacity, 1)
+    }
+
+    fn reserve_for_analysis(
+        &mut self,
+        text_capacity: usize,
+        paragraph_capacity: usize,
+    ) -> Result<(), BidiError> {
+        reserve(&mut self.levels, text_capacity)?;
+        reserve(&mut self.classes, text_capacity)?;
+        reserve(&mut self.runs, text_capacity)?;
+        reserve(&mut self.paragraph_starts, paragraph_capacity)?;
+        reserve(&mut self.paragraph_ends, paragraph_capacity)?;
+        reserve(&mut self.paragraph_levels, paragraph_capacity)
+    }
+
+    fn clear(&mut self) {
+        self.levels.clear();
+        self.classes.clear();
+        self.paragraph_starts.clear();
+        self.paragraph_ends.clear();
+        self.paragraph_levels.clear();
+        self.runs.clear();
+    }
+}
+
+fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), BidiError> {
+    if values.capacity() < capacity {
+        values
+            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .map_err(|_| BidiError::ResultTooLarge)?;
+    }
+    Ok(())
 }
 
 pub struct Unicode17BidiData;
@@ -159,5 +227,33 @@ mod tests {
         assert_eq!(result.levels.len(), text.len());
         assert_eq!(result.levels[1], result.levels[2]);
         assert_eq!(result.classes[1], result.classes[2]);
+    }
+
+    #[test]
+    fn analysis_reuses_output_and_builds_equal_level_runs() {
+        let text: Vec<u16> = "abc אבג".encode_utf16().collect();
+        let mut result = BidiAnalysis::default();
+        result.reserve(32).unwrap();
+        analyze_into(&text, DIRECTION_AUTO, &mut result).unwrap();
+        let capacities = [
+            result.levels.capacity(),
+            result.classes.capacity(),
+            result.runs.capacity(),
+        ];
+        assert_eq!(result.runs.first().map(|run| run.text_start), Some(0));
+        assert_eq!(
+            result.runs.last().map(|run| run.text_end),
+            Some(text.len() as u32)
+        );
+        assert!(result.runs.iter().any(|run| run.level & 1 == 1));
+        analyze_into(&text, DIRECTION_AUTO, &mut result).unwrap();
+        assert_eq!(
+            [
+                result.levels.capacity(),
+                result.classes.capacity(),
+                result.runs.capacity(),
+            ],
+            capacities
+        );
     }
 }
