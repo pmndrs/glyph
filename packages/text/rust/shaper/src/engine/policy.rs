@@ -553,6 +553,7 @@ pub enum PolicyError {
     InvalidResourceKinds,
     InvalidBatchKey,
     UnsupportedAllocationStrategy,
+    TooManyInputFields,
     EmptyBuffers,
     TooManyBuffers,
     InvalidBufferId,
@@ -1043,6 +1044,11 @@ fn validate_capability_sets(capability_sets: &[CapabilitySet]) -> Result<(), Pol
 }
 
 fn validate_program(program: &ProgramDescriptor) -> Result<(), PolicyError> {
+    if usize::from(program.f32_input_count) > MAX_REGISTERS
+        || usize::from(program.u32_input_count) > MAX_REGISTERS
+    {
+        return Err(PolicyError::TooManyInputFields);
+    }
     if program.buffers.is_empty() {
         return Err(PolicyError::EmptyBuffers);
     }

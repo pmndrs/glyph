@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:750181db8d897681d0bbfb490bb164f20ecd209d4ee3d16a88c9b26d14728715'
+source_digest: 'sha256:78ef2b495017f313318d824f1f946df614d65a778799ed91aac444441d962e90'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -426,6 +426,19 @@ pack wider records instead of introducing aliased mutable interleaved fields. Th
 Node registration/frame tests pass. The optimized SIMD artifact is 739,647 raw / 272,532 gzip / 214,186 Brotli bytes,
 14,075 / 3,272 / 3,173 bytes above the preceding executor artifact; this is registration/planner metadata, not a warm
 layout performance result.
+
+The native renderer-neutral core now contains the first retained ordered-direct storage planner. It groups glyphs by
+validated technique/program/resource, assigns stable physical buffer identities, and uses stable instance IDs plus
+semantic content revisions to select aligned dirty records without comparing buffer bytes. The registered gap/call
+cost, fragmentation budget, and whole-buffer threshold coalesce writes; consecutive changed records execute as SIMD
+runs, while resource interleaving produces smaller scalar tails only where contiguity is genuinely absent. Preparation
+is separately viewable, committable, and abortable: no committed CPU mirror changes before immutable plan serialization.
+Tests cover exact first publication, a one-record update, ordered suffix movement, no-op zero output, metadata-only tail
+deletion, retirement generations, abort preservation, compiler-wire validation, and unchanged warm scratch capacities.
+The slice emits only resource/buffer/patch/retirement tables and is not called by the shipping Wasm update yet; LTO
+therefore removes it. The rebuilt optimized SIMD artifact is 739,643 raw / 272,537 gzip / 214,149 Brotli bytes, a delta
+of -4 / +5 / -37 bytes from the preceding policy checkpoint. No planner latency claim is attached until the Wasm lab
+and primitive/draw compilation make that code reachable.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership
