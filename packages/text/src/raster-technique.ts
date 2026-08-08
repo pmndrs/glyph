@@ -50,6 +50,12 @@ export interface AnyRasterTechnique {
   readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<unknown, JsonValue, unknown, unknown, unknown>;
 }
 
+/**
+ * Valid only for the duration of the `select` or `writeStorage` call that
+ * receives it. Core pools these objects across updates, so a technique that
+ * needs a field beyond the call must copy the value rather than retain the
+ * input.
+ */
 export interface RasterGlyphInput<Data> {
   readonly data: Data;
   readonly glyphId: number;
