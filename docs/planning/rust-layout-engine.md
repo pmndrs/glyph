@@ -931,6 +931,16 @@ Focused fixtures cover a triangular serialized region, a concave U-shaped region
 exclusion, and rejection when the normalized answer exceeds the public slot envelope. The kernel is not yet called by
 frame line placement, so this checkpoint makes no production Wasm-size or end-to-end timing claim.
 
+Horizontal frame layout now calls the retained band and line kernels in production. A flow-layout A/B arena owns lines
+and same-baseline fragments; one reusable slot workspace serves the session. Each band starts from the next cluster's
+actual fallback-font metrics, composes over every available slot, and performs at most one conservative retry when the
+widest first pass discovers taller content. Enlarging a band only intersects more region cross-sections and projects
+more exclusion coverage, so the retry cannot expose later clusters. Exact tests place two fragments around one hole,
+retry 10 px text to a 20 px mixed-style line with 16 px baseline, and continue four lines through region IDs
+`[1, 2, 2, 2]` without balancing. Rebuilt Wasm preserves the frame and real-font/fallback integration tests. Optimized
+Wasm is 1,039,404 / 392,671 / 303,705 raw/gzip/Brotli bytes (+22,684 / +8,078 / +6,656). Vertical flow, positioning,
+boundary reshaping, semantic/glyph gather, nonempty plan output, and complete-path timing remain open.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a

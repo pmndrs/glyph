@@ -13,6 +13,23 @@ pub(crate) struct LineCursor {
     trailing_empty: bool,
 }
 
+impl LineCursor {
+    pub(crate) const fn at_cluster(cluster: usize) -> Self {
+        Self {
+            cluster,
+            trailing_empty: false,
+        }
+    }
+
+    pub(crate) const fn cluster(self) -> usize {
+        self.cluster
+    }
+
+    pub(crate) const fn is_complete(self, cluster_count: usize) -> bool {
+        self.cluster == cluster_count && !self.trailing_empty
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ComposedLine {
     pub cluster_start: u32,

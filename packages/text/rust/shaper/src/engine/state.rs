@@ -8,6 +8,7 @@ use crate::{
 
 use super::{
     cluster_state::ClusterArena,
+    flow_composition::FlowLayoutArena,
     flow_geometry::FlowGeometryArena,
     font_binding::FontRenderBinding,
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
@@ -97,6 +98,9 @@ struct EngineSession {
     pending_clusters: ClusterArena,
     geometry: FlowGeometryArena,
     pending_geometry: FlowGeometryArena,
+    flow_layout: FlowLayoutArena,
+    pending_flow_layout: FlowLayoutArena,
+    flow_slot_scratch: super::flow_geometry::InlineSlotArena,
     fallback_spans: Vec<FallbackSpan>,
     pending_fallback_spans: Vec<FallbackSpan>,
     fallback_span_scratch: Vec<FallbackSpan>,
@@ -114,6 +118,7 @@ struct EngineSession {
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
     geometry_prepared: bool,
+    flow_layout_prepared: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -416,7 +421,7 @@ impl TextEngine {
 
     fn prepare_update_inner(
         &mut self,
-        shaper: Option<&mut ShaperRegistry>,
+        mut shaper: Option<&mut ShaperRegistry>,
         request: UpdateRequest<'_>,
         publication_generation: u32,
     ) -> Result<PreparedUpdate, EngineError> {
@@ -499,7 +504,7 @@ impl TextEngine {
             session.abort_bidi();
             return Err(error);
         }
-        if let Some(shaper) = shaper {
+        if let Some(shaper) = shaper.as_deref_mut() {
             if let Err(error) = session.prepare_shape(shaper, font_stacks) {
                 session.abort_text();
                 session.abort_styles();
@@ -529,6 +534,25 @@ impl TextEngine {
             session.abort_clusters();
             return Err(error);
         }
+        if let Some(shaper) = shaper
+            && let Err(error) = session.prepare_flow_layout(
+                shaper,
+                font_stacks,
+                request.limits.max_lines,
+                request.limits.max_slots_per_band,
+            )
+        {
+            session.abort_text();
+            session.abort_styles();
+            session.abort_unicode();
+            session.abort_bidi();
+            session.abort_shaping_runs();
+            session.abort_shape();
+            session.abort_clusters();
+            session.abort_geometry();
+            session.abort_flow_layout();
+            return Err(error);
+        }
         if let Err(error) = gather.gather(
             policy,
             CapabilitySetId(request.capability_set),
@@ -552,6 +576,7 @@ impl TextEngine {
             session.abort_shape();
             session.abort_clusters();
             session.abort_geometry();
+            session.abort_flow_layout();
             return Err(gather_error(error));
         }
         let gathered = gather.view();
@@ -571,6 +596,7 @@ impl TextEngine {
             session.abort_shape();
             session.abort_clusters();
             session.abort_geometry();
+            session.abort_flow_layout();
             return Err(plan_error(error));
         }
         Ok(PreparedUpdate {
@@ -623,6 +649,7 @@ impl TextEngine {
         session.abort_shape();
         session.abort_clusters();
         session.abort_geometry();
+        session.abort_flow_layout();
         Ok(())
     }
 
@@ -646,6 +673,7 @@ impl TextEngine {
         session.commit_shape();
         session.commit_clusters();
         session.commit_geometry();
+        session.commit_flow_layout();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
@@ -1139,6 +1167,60 @@ impl EngineSession {
             core::mem::swap(&mut self.geometry, &mut self.pending_geometry);
         }
         self.abort_geometry();
+    }
+
+    fn prepare_flow_layout(
+        &mut self,
+        shaper: &ShaperRegistry,
+        font_stacks: &[RegisteredFontStack],
+        max_lines: u32,
+        max_slots_per_band: u32,
+    ) -> Result<(), EngineError> {
+        self.abort_flow_layout();
+        let clusters = if self.clusters_prepared {
+            &self.pending_clusters
+        } else {
+            &self.clusters
+        };
+        let styles = if self.styles_prepared {
+            self.pending_resolved_styles.segments()
+        } else {
+            self.resolved_styles.segments()
+        };
+        let geometry = if self.geometry_prepared {
+            &self.pending_geometry
+        } else {
+            &self.geometry
+        };
+        self.pending_flow_layout.build(
+            geometry,
+            clusters,
+            styles,
+            &mut self.flow_slot_scratch,
+            usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?,
+            usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?,
+            |handle| shaper.font_metrics(handle),
+            |stack_handle| {
+                font_stacks
+                    .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                    .ok()
+                    .and_then(|index| font_stacks[index].fonts.first().copied())
+            },
+        )?;
+        self.flow_layout_prepared = true;
+        Ok(())
+    }
+
+    fn abort_flow_layout(&mut self) {
+        self.pending_flow_layout.clear();
+        self.flow_layout_prepared = false;
+    }
+
+    fn commit_flow_layout(&mut self) {
+        if self.flow_layout_prepared {
+            core::mem::swap(&mut self.flow_layout, &mut self.pending_flow_layout);
+        }
+        self.abort_flow_layout();
     }
 }
 

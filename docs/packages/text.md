@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:3c2123625efa37228ccddc3853ba2f1c449b8aa90e9ff73f6e541085b519ec8b'
+source_digest: 'sha256:8b5e6bb25ae155f20da2f7b70469f514899d81c946cb4b4239d3ca46570e51c9'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -678,6 +678,8 @@ An allocation-free Rust line kernel advances that retained grapheme cursor for a
 Validated flow snapshots are now copied into transactional A/B Rust storage: constraints, ordered regions, exclusions, and rebased polygon vertices remain owned after request memory is reused. The rectangle band kernel subtracts intersecting exclusions into retained, bounded inline-slot scratch and fails explicitly if the declared per-band slot envelope is exceeded. Polygon intersection and line placement are not yet connected.
 
 The bounded simple-polygon kernel reuses critical-block, edge-crossing, section, and intersection arrays. Concave region cross-sections can yield multiple normalized inline slots; polygon exclusions conservatively project over the full margin-expanded line band before subtraction. Focused tests cover triangle, concave, exclusion, horizontal-boundary, and slot-limit behavior. Production line placement is still the next connection.
+
+Production horizontal frame updates now retain line and fragment arrays derived from those slots. Each band may carry multiple same-baseline fragments around holes, uses actual selected fallback-font metrics, and performs at most one conservative height retry. Sequential regions consume one cursor without balancing; an exact fixture overflows four lines through region IDs `[1, 2, 2, 2]`. Vertical placement and render-plan gather are still open.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 
