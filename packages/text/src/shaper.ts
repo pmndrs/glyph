@@ -740,6 +740,8 @@ function shaperStatusError(status: number, action: string): Error {
     5: 'font handle is not registered',
     6: 'invalid batch request',
     7: 'result exceeds the V0 address space',
+    13: 'font stack handle is not registered',
+    14: 'font is retained by a registered font stack',
   };
   return new Error(`text shaper could not ${action}: ${labels[status] ?? `status ${status}`}`);
 }

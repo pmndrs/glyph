@@ -33,6 +33,8 @@ pub const STATUS_POLICY_MISSING: u32 = 9;
 pub const STATUS_SESSION_CONFLICT: u32 = 10;
 pub const STATUS_SESSION_MISSING: u32 = 11;
 pub const STATUS_REVISION_CONFLICT: u32 = 12;
+pub const STATUS_FONT_STACK_MISSING: u32 = 13;
+pub const STATUS_FONT_IN_USE: u32 = 14;
 
 const BUFFER_FLAGS_MASK: u32 = 0xff;
 const MAX_CACHED_PLANS_PER_FONT: usize = 64;
@@ -296,6 +298,10 @@ impl ShaperRegistry {
 
     pub fn font_count(&self) -> u32 {
         self.fonts.len().try_into().unwrap_or(u32::MAX)
+    }
+
+    pub fn contains_font(&self, handle: u32) -> bool {
+        self.fonts.contains_key(&handle)
     }
 
     pub fn retained_font_bytes(&self) -> u32 {

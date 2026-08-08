@@ -78,6 +78,47 @@ test('the shaper registers only the exact shaping views retained from the valida
   assert.throws(() => shaper.memoryReport(), /disposed/);
 });
 
+test('compiled Wasm retains ordered font stacks and prevents dangling font disposal', async () => {
+  const { artifact, shaperWasm } = await fixture();
+  const [validated, abi] = await Promise.all([
+    validateFontArtifact(artifact),
+    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+  ]);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  const allocations = [
+    copyToWasm(memory, fn.allocate, validated.shapingSfnt),
+    copyToWasm(memory, fn.allocate, validated.glyphExtents),
+    copyToWasm(memory, fn.allocate, validated.glyphExtentsAvailability),
+  ];
+  assert.equal(
+    fn.registerFont(
+      101,
+      allocations[0].pointer,
+      allocations[0].length,
+      allocations[1].pointer,
+      allocations[1].length,
+      allocations[2].pointer,
+      allocations[2].length,
+    ),
+    abi.status.ok,
+  );
+  for (const allocation of allocations) fn.deallocate(allocation.pointer, allocation.length);
+
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(101, 0, 0, 0));
+  assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
+  fn.deallocate(stack.pointer, stack.length);
+  assert.equal(fn.fontStackCount(), 1);
+  assert.equal(fn.disposeFont(101), abi.status.fontInUse);
+  assert.equal(fn.disposeFontStack(17), abi.status.ok);
+  assert.equal(fn.disposeFontStack(17), abi.status.fontStackMissing);
+  assert.equal(fn.disposeFont(101), abi.status.ok);
+});
+
 test('shaper ownership stays scoped to its FontRegistry', async () => {
   const { artifact, shaperWasm } = await fixture();
   const firstRegistry = new FontRegistry();
@@ -89,6 +130,14 @@ test('shaper ownership stays scoped to its FontRegistry', async () => {
   shaper.dispose();
   foreign.dispose();
 });
+
+function copyToWasm(memory, allocate, source) {
+  const bytes = new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+  const pointer = allocate(bytes.byteLength);
+  assert.notEqual(pointer, 0);
+  new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+  return { pointer, length: bytes.byteLength };
+}
 
 test('re-registering the same artifact creates a new lifecycle without reviving stale handles', async () => {
   const { artifact, shaperWasm } = await fixture();
