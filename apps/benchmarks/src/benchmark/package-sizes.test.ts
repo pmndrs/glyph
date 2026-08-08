@@ -96,10 +96,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 173_552, maximumGrowth: 7_000 },
       },
       'bitmap-runtime-js': {
-        rawBytes: { baseline: 178_792, maximumGrowth: 12_000 },
-        minifiedBytes: { baseline: 115_766, maximumGrowth: 7_000 },
-        gzipBytes: { baseline: 28_450, maximumGrowth: 1_800 },
-        brotliBytes: { baseline: 24_500, maximumGrowth: 1_500 },
+        rawBytes: { baseline: 89_604, maximumGrowth: 12_000 },
+        minifiedBytes: { baseline: 60_671, maximumGrowth: 7_000 },
+        gzipBytes: { baseline: 16_081, maximumGrowth: 1_800 },
+        brotliBytes: { baseline: 14_229, maximumGrowth: 1_500 },
       },
       'mtsdf-baker-wasm': {
         rawBytes: { baseline: 534_709, maximumGrowth: 18_500 },
@@ -114,10 +114,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 4_176, maximumGrowth: 800 },
       },
       'mtsdf-runtime-js': {
-        rawBytes: { baseline: 178_789, maximumGrowth: 12_000 },
-        minifiedBytes: { baseline: 115_832, maximumGrowth: 7_000 },
-        gzipBytes: { baseline: 28_449, maximumGrowth: 1_800 },
-        brotliBytes: { baseline: 24_558, maximumGrowth: 1_500 },
+        rawBytes: { baseline: 94_145, maximumGrowth: 12_000 },
+        minifiedBytes: { baseline: 63_256, maximumGrowth: 7_000 },
+        gzipBytes: { baseline: 16_777, maximumGrowth: 1_800 },
+        brotliBytes: { baseline: 14_857, maximumGrowth: 1_500 },
       },
     } as const;
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;
@@ -135,7 +135,7 @@ describe('independent package-size report', () => {
   it('bounds retained-capacity growth from the warm-publication baseline', () => {
     const retainedCapacityGrowth = {
       'bitmap-runtime-js': {
-        baseline: { rawBytes: 178_792, minifiedBytes: 115_766, gzipBytes: 28_450, brotliBytes: 24_500 },
+        baseline: { rawBytes: 89_604, minifiedBytes: 60_671, gzipBytes: 16_081, brotliBytes: 14_229 },
         // These ceilings were reviewed against a target-v1 that was missing two things it now carries. The Three
         // Bitmap program had no device-pixel snapping, which milestone 1 records as a hard density contract and
         // which is what makes this graph reproduce the pinned merged-v0 frame exactly. Spans resolved shaping and
@@ -149,11 +149,11 @@ describe('independent package-size report', () => {
         maximumGrowth: { rawBytes: 12_000, minifiedBytes: 7_000, gzipBytes: 1_800, brotliBytes: 1_500 },
       },
       'mtsdf-runtime-js': {
-        baseline: { rawBytes: 178_789, minifiedBytes: 115_832, gzipBytes: 28_449, brotliBytes: 24_558 },
+        baseline: { rawBytes: 94_145, minifiedBytes: 63_256, gzipBytes: 16_777, brotliBytes: 14_857 },
         maximumGrowth: { rawBytes: 12_000, minifiedBytes: 7_000, gzipBytes: 1_800, brotliBytes: 1_500 },
       },
       'slug-runtime-js': {
-        baseline: { rawBytes: 178_790, minifiedBytes: 115_762, gzipBytes: 28_385, brotliBytes: 24_521 },
+        baseline: { rawBytes: 79_169, minifiedBytes: 53_547, gzipBytes: 14_214, brotliBytes: 12_612 },
         maximumGrowth: { rawBytes: 12_000, minifiedBytes: 7_000, gzipBytes: 1_800, brotliBytes: 1_500 },
       },
     } as const;

@@ -23,26 +23,16 @@ import type {
 } from '../index.js';
 import type { ParagraphBatchTarget, ParagraphBatchTargetRevision } from '../paragraph-batch-attachment.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import { bitmap } from '../raster/bitmap-technique.js';
-import { mtsdf } from '../raster/mtsdf.js';
-import { slug } from '../raster/slug-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
-import { ThreeBitmapTarget, type ThreeBitmapTargetOwner } from './bitmap-target.js';
-import { ThreeMtsdfTarget, type ThreeMtsdfTargetOwner } from './mtsdf-target.js';
 import {
-  registerThreeRasterProgram,
   threeRasterProgram,
   type ThreeRasterTargetAccounting,
+  type ThreeRasterTargetOwner,
 } from './program-registry.js';
-import { ThreeSlugTarget, type ThreeSlugTargetOwner } from './slug-target.js';
 
 export interface ThreeRenderVariant {
   readonly effects?: readonly unknown[];
 }
-
-registerThreeRasterProgram(bitmap, (owner: ThreeBitmapTargetOwner) => new ThreeBitmapTarget<never>(owner));
-registerThreeRasterProgram(mtsdf, (owner: ThreeMtsdfTargetOwner) => new ThreeMtsdfTarget<never>(owner));
-registerThreeRasterProgram(slug, (owner: ThreeSlugTargetOwner) => new ThreeSlugTarget<never>(owner));
 
 export type TextSpan<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = ParagraphSpan<
   Technique,
@@ -461,7 +451,7 @@ interface ThreeTargetAttachment {
 }
 
 class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant>
-  implements ThreeBitmapTargetOwner, ThreeMtsdfTargetOwner, ThreeSlugTargetOwner
+  implements ThreeRasterTargetOwner
 {
   readonly #runtime: TextRuntime;
   readonly #group: TextGroup<Technique, Variant> | undefined;

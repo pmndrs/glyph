@@ -14,7 +14,11 @@
     "!dist/internal/raster-baker-profile.js"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/three/bitmap.js",
+    "./dist/three/mtsdf.js",
+    "./dist/three/slug.js"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -23,6 +27,18 @@
     "./three": {
       "types": "./dist/three.d.ts",
       "import": "./dist/three.js"
+    },
+    "./three/bitmap": {
+      "types": "./dist/three/bitmap.d.ts",
+      "import": "./dist/three/bitmap.js"
+    },
+    "./three/mtsdf": {
+      "types": "./dist/three/mtsdf.d.ts",
+      "import": "./dist/three/mtsdf.js"
+    },
+    "./three/slug": {
+      "types": "./dist/three/slug.d.ts",
+      "import": "./dist/three/slug.js"
     },
     "./r3f": {
       "types": "./dist/r3f.d.ts",

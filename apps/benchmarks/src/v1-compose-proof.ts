@@ -8,7 +8,7 @@ import type {
   PreparedParagraphBatchRevision,
 } from '@pmndrs/text';
 import { defineRasterTechnique } from '@pmndrs/text';
-import { bitmap, type BitmapPageData } from '@pmndrs/text/raster/bitmap';
+import { bitmap, type BitmapPageData } from '@pmndrs/text/three/bitmap';
 import {
   bitmapShader,
   FontLoader,

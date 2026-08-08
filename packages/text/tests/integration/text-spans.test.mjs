@@ -12,8 +12,8 @@ import {
   SpanNestingError,
   txt,
 } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/raster/bitmap';
-import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import { bitmap } from '@pmndrs/text/three/bitmap';
+import { mtsdf } from '@pmndrs/text/three/mtsdf';
 import { Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 

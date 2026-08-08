@@ -8,7 +8,7 @@ import {
   type ParagraphStyle,
   type RegisteredFont,
 } from '@pmndrs/text';
-import type { slug } from '@pmndrs/text/raster/slug';
+import type { slug } from '@pmndrs/text/three/slug';
 import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 

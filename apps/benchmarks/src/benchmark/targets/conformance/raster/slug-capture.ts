@@ -1,5 +1,5 @@
 import { FontRegistry, type LoadedFont, type ParagraphLayout } from '@pmndrs/text';
-import { slug } from '@pmndrs/text/raster/slug';
+import { slug } from '@pmndrs/text/three/slug';
 import { FontLoader, Text, type TextSpan } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 

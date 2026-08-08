@@ -1,5 +1,5 @@
 import type { LoadedFont, ParagraphLayout } from '@pmndrs/text';
-import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/text/raster/bitmap';
+import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/text/three/bitmap';
 import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 

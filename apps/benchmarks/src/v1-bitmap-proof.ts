@@ -1,4 +1,4 @@
-import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { bitmap } from '@pmndrs/text/three/bitmap';
 import type { LoadedFont } from '@pmndrs/text';
 import { FontLoader, Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';

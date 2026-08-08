@@ -1,5 +1,5 @@
 import type { AnyRasterTechnique, LoadedFont, LoadedFontRequest, ParagraphLayout } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { bitmap } from '@pmndrs/text/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 

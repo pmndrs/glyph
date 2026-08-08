@@ -1,5 +1,5 @@
 import type { LoadedFont, LoadedFontRequest } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { bitmap } from '@pmndrs/text/three/bitmap';
 import { FontLoader, Text, type ParagraphStyle } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
