@@ -733,9 +733,16 @@ fragmentation budget bounds accumulated draw spans: when an edit would exceed it
 dense chunks, increments and retires that buffer generation, and preserves the physical glyph-buffer generation.
 Order-buffer growth likewise republishes every live chunk because a replacement allocation cannot assume prior bytes.
 No-op, abort, mixed-resource order, shared/partitioned material storage, fence-gated reuse, fragmentation rebasing, and
-settled nested scratch capacities have focused tests. Session integration, a dedicated renderer-fence acknowledgment in
-the request, and target-hardware timing remain open in Stage 2; `consumed_plan_revision` cannot substitute because host
-application does not prove GPU completion. The planners are still unreachable from `text_update` and removed by LTO.
+settled nested scratch capacities have focused tests. One frame may contain programs using both allocation strategies:
+the dispatcher filters the same borrowed glyph and semantic-field slices in each compiler instead of allocating copied
+partitions, assigns ordered-direct buffers to the low `u32` ID half and stable-indirect buffers to the high half, rebases
+patch payload spans, deduplicates shared resources, and merges draws by their original global order token. A program may
+therefore change allocation strategy without retiring a resource that remains live through the other compiler. A
+homogeneous frame delegates its plan view directly to one compiler and does not populate merge scratch; a mixed no-op
+publishes nothing, and repeated same-shape mixed edits retain settled vector capacities. Session integration, a
+dedicated renderer-fence acknowledgment in the request, and target-hardware timing remain open in Stage 2;
+`consumed_plan_revision` cannot substitute because host application does not prove GPU completion. The planners are
+still unreachable from `text_update` and removed by LTO.
 Adding the reachable reserved-binding ABI identity leaves the optimized artifact at 739,909 raw bytes and changes only
 compression from 272,607 to 272,624 gzip bytes and 214,288 to 214,395 Brotli bytes. This is not end-to-end latency
 evidence.

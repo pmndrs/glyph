@@ -20,6 +20,7 @@ pub mod plan_input;
 mod plan_packing;
 pub mod policy;
 pub mod render_plan;
+pub mod render_plan_compiler;
 pub(crate) mod render_plan_wire;
 #[cfg_attr(not(test), allow(dead_code))]
 mod stable_order;
