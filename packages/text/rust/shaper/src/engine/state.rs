@@ -10,6 +10,7 @@ use super::{
     cluster_state::{ClusterArena, ClusterBuildInput},
     flow_composition::FlowLayoutArena,
     flow_geometry::FlowGeometryArena,
+    identity_index::IdentityIndex,
     font_binding::FontRenderBinding,
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
     policy::{CapabilitySetId, ValidatedPolicy},
@@ -100,6 +101,9 @@ struct EngineSession {
     pending_shape: ShapeArena,
     clusters: ClusterArena,
     pending_clusters: ClusterArena,
+    glyph_identity_index: IdentityIndex,
+    next_glyph_id: u32,
+    pending_next_glyph_id: u32,
     geometry: FlowGeometryArena,
     pending_geometry: FlowGeometryArena,
     flow_layout: FlowLayoutArena,
@@ -357,6 +361,10 @@ impl TextEngine {
         session.pending_shape.reserve(glyph_capacity)?;
         session.clusters.reserve(capacity)?;
         session.pending_clusters.reserve(capacity)?;
+        session
+            .glyph_identity_index
+            .prepare(capacity)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         reserve_vec(&mut session.fallback_spans, capacity)?;
         reserve_vec(&mut session.pending_fallback_spans, capacity)?;
         reserve_vec(&mut session.fallback_span_scratch, capacity)?;
@@ -1146,6 +1154,7 @@ impl EngineSession {
         };
         if runs.is_empty() {
             self.pending_clusters.clear();
+            self.pending_next_glyph_id = self.next_glyph_id.max(1);
             self.clusters_prepared = true;
             return Ok(());
         }
@@ -1160,18 +1169,29 @@ impl EngineSession {
             },
             |handle| shaper.font_metrics(handle),
         )?;
+        self.pending_next_glyph_id = self.next_glyph_id.max(1);
+        if let Err(error) = self.pending_clusters.assign_stable_glyph_ids(
+            &self.clusters,
+            &mut self.glyph_identity_index,
+            &mut self.pending_next_glyph_id,
+        ) {
+            self.abort_clusters();
+            return Err(error);
+        }
         self.clusters_prepared = true;
         Ok(())
     }
 
     fn abort_clusters(&mut self) {
         self.pending_clusters.clear();
+        self.pending_next_glyph_id = 0;
         self.clusters_prepared = false;
     }
 
     fn commit_clusters(&mut self) {
         if self.clusters_prepared {
             core::mem::swap(&mut self.clusters, &mut self.pending_clusters);
+            self.next_glyph_id = self.pending_next_glyph_id;
         }
         self.abort_clusters();
     }

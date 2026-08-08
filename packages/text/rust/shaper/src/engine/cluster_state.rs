@@ -4,6 +4,7 @@ use crate::{FontMetrics, unicode::UnicodeAnalysis};
 
 use super::{
     EngineError,
+    identity_index::{IdentityIndex, IdentityIndexError},
     shaping_state::{ShapeArena, ShapingRun},
     style_state::StyleSegment,
 };
@@ -29,6 +30,7 @@ pub(crate) struct ClusterArena {
     pub glyph_starts: Vec<u32>,
     pub glyph_counts: Vec<u32>,
     pub glyph_indices: Vec<u32>,
+    pub glyph_stable_ids: Vec<u32>,
     pub index_at: Vec<u32>,
     pub(super) shaped: Vec<u8>,
     pub(super) unsafe_before: Vec<u8>,
@@ -56,6 +58,10 @@ impl ClusterArena {
         reserve(&mut self.glyph_starts, capacity)?;
         reserve(&mut self.glyph_counts, capacity)?;
         reserve(&mut self.glyph_indices, capacity.saturating_mul(2))?;
+        reserve(
+            &mut self.glyph_stable_ids,
+            capacity.saturating_mul(2),
+        )?;
         reserve(&mut self.index_at, capacity.saturating_add(1))?;
         reserve(&mut self.shaped, capacity)?;
         reserve(&mut self.unsafe_before, capacity)
@@ -130,6 +136,67 @@ impl ClusterArena {
         Ok(())
     }
 
+    pub(crate) fn assign_stable_glyph_ids(
+        &mut self,
+        previous: &Self,
+        index: &mut IdentityIndex,
+        next_id: &mut u32,
+    ) -> Result<(), EngineError> {
+        index
+            .prepare(previous.stable_ids.len())
+            .map_err(identity_index_error)?;
+        for (cluster, &stable_id) in previous.stable_ids.iter().enumerate() {
+            index
+                .insert(
+                    stable_id,
+                    u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?,
+                )
+                .map_err(identity_index_error)?;
+        }
+        reserve(&mut self.glyph_stable_ids, self.glyph_indices.len())?;
+        self.glyph_stable_ids.resize(self.glyph_indices.len(), 0);
+        *next_id = (*next_id).max(1);
+        for cluster in 0..self.stable_ids.len() {
+            let new_start = usize::try_from(self.glyph_starts[cluster])
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let new_count = usize::try_from(self.glyph_counts[cluster])
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let previous_cluster = index
+                .get(self.stable_ids[cluster])
+                .and_then(|value| usize::try_from(value).ok());
+            let previous_start = previous_cluster
+                .and_then(|cluster| previous.glyph_starts.get(cluster))
+                .copied()
+                .and_then(|value| usize::try_from(value).ok())
+                .unwrap_or(0);
+            let previous_count = previous_cluster
+                .and_then(|cluster| previous.glyph_counts.get(cluster))
+                .copied()
+                .and_then(|value| usize::try_from(value).ok())
+                .unwrap_or(0);
+            for ordinal in 0..new_count {
+                let stable_id = if ordinal < previous_count {
+                    *previous
+                        .glyph_stable_ids
+                        .get(previous_start + ordinal)
+                        .filter(|id| **id != 0)
+                        .ok_or(EngineError::InvalidRequest)?
+                } else {
+                    let allocated = *next_id;
+                    *next_id = next_id
+                        .checked_add(1)
+                        .ok_or(EngineError::ResultTooLarge)?;
+                    allocated
+                };
+                *self
+                    .glyph_stable_ids
+                    .get_mut(new_start + ordinal)
+                    .ok_or(EngineError::InvalidRequest)? = stable_id;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn clear(&mut self) {
         self.starts.clear();
         self.ends.clear();
@@ -142,6 +209,7 @@ impl ClusterArena {
         self.glyph_starts.clear();
         self.glyph_counts.clear();
         self.glyph_indices.clear();
+        self.glyph_stable_ids.clear();
         self.index_at.clear();
         self.shaped.clear();
         self.unsafe_before.clear();
@@ -335,6 +403,15 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
     Ok(())
 }
 
+fn identity_index_error(error: IdentityIndexError) -> EngineError {
+    match error {
+        IdentityIndexError::AllocationFailed | IdentityIndexError::ArithmeticOverflow => {
+            EngineError::ResultTooLarge
+        }
+        IdentityIndexError::DuplicateIdentity => EngineError::InvalidRequest,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,5 +538,41 @@ mod tests {
         );
         assert_eq!(clusters.flags[1], CLUSTER_SAFE_BEFORE);
         assert_eq!(clusters.flags[2], 0);
+    }
+
+    #[test]
+    fn stable_glyph_ids_follow_clusters_and_reuse_ordinals_transactionally() {
+        let previous = ClusterArena {
+            stable_ids: vec![10, 20],
+            glyph_starts: vec![0, 2],
+            glyph_counts: vec![2, 1],
+            glyph_indices: vec![0, 1, 2],
+            glyph_stable_ids: vec![1, 2, 3],
+            ..ClusterArena::default()
+        };
+        let mut pending = ClusterArena {
+            stable_ids: vec![30, 10, 20],
+            glyph_starts: vec![0, 1, 2],
+            glyph_counts: vec![1, 1, 2],
+            glyph_indices: vec![0, 1, 2, 3],
+            ..ClusterArena::default()
+        };
+        let mut index = IdentityIndex::default();
+        let mut next_id = 4;
+        pending
+            .assign_stable_glyph_ids(&previous, &mut index, &mut next_id)
+            .unwrap();
+        assert_eq!(pending.glyph_stable_ids, [4, 1, 3, 5]);
+        assert_eq!(next_id, 6);
+
+        let capacities = index.capacities();
+        pending.glyph_stable_ids.clear();
+        next_id = 4;
+        pending
+            .assign_stable_glyph_ids(&previous, &mut index, &mut next_id)
+            .unwrap();
+        assert_eq!(pending.glyph_stable_ids, [4, 1, 3, 5]);
+        assert_eq!(next_id, 6);
+        assert_eq!(index.capacities(), capacities);
     }
 }
