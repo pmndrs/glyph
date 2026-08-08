@@ -16,9 +16,15 @@ mod state;
 pub(crate) mod transport;
 
 pub mod ordered_plan;
+pub mod plan_input;
+mod plan_packing;
 pub mod policy;
 pub mod render_plan;
 pub(crate) mod render_plan_wire;
+#[cfg_attr(not(test), allow(dead_code))]
+mod stable_order;
+#[cfg_attr(not(test), allow(dead_code))]
+mod stable_pool;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod wire;
 

@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:155e19bc6f7cc851bb20e59c2398145d911a209b09bae9645d23b995ae9ca8c7'
+source_digest: 'sha256:ed891ae9acf97c9f3974df2f797b6d005a4c688143c59f15f4fdaad5cc9f2031'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -445,7 +445,12 @@ produces three ordered spans over two deduplicated resources and buffers. The po
 bytecode executed by Rust; the render plan itself is data. The planner remains unreachable from the shipping Wasm update
 and is LTO-stripped. Only the reachable draw-wire and policy-key expansion changes the optimized SIMD artifact to
 739,909 raw / 272,607 gzip / 214,288 Brotli bytes. No planner latency claim is attached until session wiring makes it
-reachable.
+reachable. Stable-indirect storage now has a private tested allocator foundation: semantic identities retain physical
+record slots, content revisions select writes, and logical order reconciles through fixed 64-entry chunks. Removed slots
+and chunks stay quarantined until an explicit renderer-fence acknowledgment; applying a plan is not treated as proof
+that queued GPU work completed. Prepare/abort tests prove that tentative reuse cannot leak into committed state. The
+complete stable-indirect display-list compiler and ABI acknowledgment field remain open, so this foundation adds no
+end-to-end performance claim.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

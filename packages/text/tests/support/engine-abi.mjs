@@ -164,16 +164,16 @@ function policyBytes(abi, programs) {
     view.setUint32(
       offset + programLayout.storageKeyMask,
       descriptor.storageKeyMask ??
-        (abi.policy.batchFields.technique | abi.policy.batchFields.program | abi.policy.batchFields.resource),
+        abi.policy.batchFields.technique | abi.policy.batchFields.program | abi.policy.batchFields.resource,
       true,
     );
     view.setUint32(
       offset + programLayout.drawKeyMask,
       descriptor.drawKeyMask ??
-        (abi.policy.batchFields.technique |
+        abi.policy.batchFields.technique |
           abi.policy.batchFields.program |
           abi.policy.batchFields.resource |
-          abi.policy.batchFields.order),
+          abi.policy.batchFields.order,
       true,
     );
     view.setUint16(offset + programLayout.variant, descriptor.variant ?? 0, true);
@@ -206,7 +206,7 @@ function policyBytes(abi, programs) {
       view.setUint16(offset + bufferLayout.stride, buffer.stride ?? scalarBytes * buffer.vectorWidth, true);
       view.setUint32(
         offset + bufferLayout.usage,
-        buffer.usage ?? (abi.policy.bufferUsage.storage | abi.policy.bufferUsage.copyDst),
+        buffer.usage ?? abi.policy.bufferUsage.storage | abi.policy.bufferUsage.copyDst,
         true,
       );
       view.setUint16(offset + bufferLayout.capacityClass, buffer.capacityClass ?? 1, true);
