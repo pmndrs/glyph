@@ -73,8 +73,17 @@ struct RegisteredFont {
     sfnt: Vec<u8>,
     extents: Vec<u8>,
     availability: Vec<u8>,
+    metrics: FontMetrics,
     data: ShaperData,
     plans: Vec<CachedPlan>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct FontMetrics {
+    pub units_per_em: u16,
+    pub ascender: i16,
+    pub descender: i16,
+    pub line_gap: i16,
 }
 
 struct CachedPlan {
@@ -221,6 +230,15 @@ impl ShaperRegistry {
         if !valid_extents(glyph_count, extents, availability) {
             return STATUS_INVALID_EXTENTS;
         }
+        let metrics = match (font.head(), font.hhea()) {
+            (Ok(head), Ok(hhea)) => FontMetrics {
+                units_per_em: head.units_per_em(),
+                ascender: hhea.ascender().to_i16(),
+                descender: hhea.descender().to_i16(),
+                line_gap: hhea.line_gap().to_i16(),
+            },
+            _ => return STATUS_INVALID_FONT,
+        };
         if let Some(existing) = self.fonts.get(&handle) {
             return if existing.sfnt == sfnt
                 && existing.extents == extents
@@ -238,11 +256,16 @@ impl ShaperRegistry {
                 sfnt: sfnt.to_vec(),
                 extents: extents.to_vec(),
                 availability: availability.to_vec(),
+                metrics,
                 data,
                 plans: Vec::new(),
             },
         );
         STATUS_OK
+    }
+
+    pub(crate) fn font_metrics(&self, handle: u32) -> Option<FontMetrics> {
+        self.fonts.get(&handle).map(|font| font.metrics)
     }
 
     pub fn dispose_font(&mut self, handle: u32) -> u32 {

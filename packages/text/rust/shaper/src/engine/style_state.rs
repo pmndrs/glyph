@@ -135,6 +135,18 @@ impl Default for ResolvedStyle {
     }
 }
 
+#[cfg(test)]
+impl ResolvedStyle {
+    pub(crate) fn test_typography(font_size: f32, letter_spacing: f32, word_spacing: f32) -> Self {
+        Self {
+            font_size,
+            letter_spacing,
+            word_spacing,
+            ..Self::default()
+        }
+    }
+}
+
 impl ResolvedStyleArena {
     pub(crate) fn reserve_default(&mut self) -> Result<(), EngineError> {
         self.segments
