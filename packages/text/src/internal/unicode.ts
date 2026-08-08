@@ -248,7 +248,6 @@ function acceptsContext(graphemes: GraphemeScripts, index: number, script: numbe
   return false;
 }
 
-
 function lookupTriple(ranges: Uint32Array, codePoint: number): number {
   let low = 0;
   let high = ranges.length / 3 - 1;

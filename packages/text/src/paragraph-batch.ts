@@ -1344,7 +1344,9 @@ export class ParagraphLayoutSession {
       const probe = paragraph.shaped();
       // Only clusters of the paragraph's own text can carry a fallback selection. A cluster past the end belongs to
       // overflow measurement, and substituting a font for one would author a span outside the text.
-      const clusters = [...new Set(probe.clusters)].filter((value) => value < state.text.length).sort((left, right) => left - right);
+      const clusters = [...new Set(probe.clusters)]
+        .filter((value) => value < state.text.length)
+        .sort((left, right) => left - right);
       let changed = false;
       for (let glyph = 0; glyph < probe.glyphIds.length; glyph += 1) {
         if (probe.glyphIds[glyph] !== 0) continue;

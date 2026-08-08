@@ -357,8 +357,14 @@ test('font fallback ignores the ellipsis runs shaped past the end of the text', 
   });
   const runtime = await createTextRuntime({ registry, shaper });
   const [awesome, inter] = await Promise.all([
-    runtime.loadFont({ input: { baked: dataUrl(awesomeBytes) }, raster: { technique: bitmap, options: { strikes: [16] } } }),
-    runtime.loadFont({ input: { baked: dataUrl(interBytes) }, raster: { technique: bitmap, options: { strikes: [16] } } }),
+    runtime.loadFont({
+      input: { baked: dataUrl(awesomeBytes) },
+      raster: { technique: bitmap, options: { strikes: [16] } },
+    }),
+    runtime.loadFont({
+      input: { baked: dataUrl(interBytes) },
+      raster: { technique: bitmap, options: { strikes: [16] } },
+    }),
   ]);
   const batch = runtime.createParagraphBatch({ technique: bitmap });
   const paragraph = batch.add({ font: createFontStack(awesome, inter), text: 'hello\nworld' });
