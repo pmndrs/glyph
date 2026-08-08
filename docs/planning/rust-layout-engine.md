@@ -839,14 +839,23 @@ runtime code, not font-local shaping data, and is now an explicit size-optimizat
 replacements now decode as borrowed records and commit into retained session scratch transactionally. Constraints,
 regions, exclusions, polygon vertices, and inline objects are borrowed from the same request, fully validated before
 mutation, checked against pending text offsets, and committed as a placement-independent semantic fingerprint. Styles
-remain rejected. Because retained text and geometry are not yet analyzed, shaped, or laid out, the Wasm path still emits an
-empty Rust plan. Rust shaping/layout → nonempty plan connection and its 25,515-glyph end-to-end timing remain open; the
-TypeScript layout benchmark is baseline evidence only.
+are retained and resolved into maximal derived segments. Retained text now drives transactional Unicode 17
+extended-grapheme segmentation and Script/Script_Extensions itemization in Rust, with malformed UTF-16 aborting the
+same frame transaction. Bidi/run intersection, shaping, and layout are not yet connected, so the Wasm path still emits
+an empty Rust plan. Rust shaping/layout → nonempty plan connection and its 25,515-glyph end-to-end timing remain open;
+the TypeScript layout benchmark is baseline evidence only.
 
 The retained-text decoder, transaction buffers, and cold capacity control change the optimized artifact from
 822,469 / 306,502 / 242,707 to 825,298 / 308,030 / 243,323 raw/gzip/Brotli bytes, a shared-runtime delta of
 2,829 / 1,528 / 616 bytes. The per-session 1,024-unit default is runtime memory rather than binary payload. This size
 checkpoint does not time shaping or layout because neither stage consumes the retained text yet.
+
+The Unicode-analysis checkpoint uses `unicode-segmentation` 1.13.3 under `no_std`, generated Unicode 17 script tables
+shared with the TypeScript generator, and flat reusable session arrays. Session text reservation prewarms both active
+and pending analysis arenas; unchanged text does not re-run analysis. The compact Rust script partitions omit
+derivable starts. Optimized Wasm measures 964,019 / 360,765 / 288,742 raw/gzip/Brotli bytes versus the prior
+895,593 / 335,396 / 264,355 checkpoint. This is shared runtime data and code, not per-font shaping payload. The number
+does not claim layout or shaping latency because neither has consumed these products yet.
 
 ## Performance contract
 

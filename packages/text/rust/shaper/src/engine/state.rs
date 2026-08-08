@@ -1,5 +1,7 @@
 use alloc::{collections::BTreeMap, vec::Vec};
 
+use crate::unicode::{UnicodeAnalysis, UnicodeError};
+
 use super::{
     font_binding::FontRenderBinding,
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
@@ -60,11 +62,14 @@ struct EngineSession {
     pending_styles: StyleArena,
     resolved_styles: ResolvedStyleArena,
     pending_resolved_styles: ResolvedStyleArena,
+    unicode: UnicodeAnalysis,
+    pending_unicode: UnicodeAnalysis,
     style_mutation_scratch: Vec<MutationKey>,
     style_order_scratch: Vec<usize>,
     style_nesting_scratch: Vec<u32>,
     style_resolution_scratch: Vec<ResolutionScope>,
     styles_prepared: bool,
+    unicode_prepared: bool,
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
     geometry_prepared: bool,
@@ -286,6 +291,11 @@ impl TextEngine {
             .ok_or(EngineError::SessionMissing)?;
         reserve_text_buffer(&mut session.text, capacity)?;
         reserve_text_buffer(&mut session.pending_text, capacity)?;
+        session.unicode.reserve(capacity).map_err(unicode_error)?;
+        session
+            .pending_unicode
+            .reserve(capacity)
+            .map_err(unicode_error)?;
         Ok(())
     }
 
@@ -390,9 +400,15 @@ impl TextEngine {
             session.abort_text();
             return Err(error);
         }
+        if let Err(error) = session.prepare_unicode() {
+            session.abort_text();
+            session.abort_styles();
+            return Err(error);
+        }
         if let Err(error) = session.prepare_geometry(request.geometry) {
             session.abort_text();
             session.abort_styles();
+            session.abort_unicode();
             return Err(error);
         }
         if let Err(error) = gather.gather(
@@ -412,6 +428,7 @@ impl TextEngine {
         ) {
             session.abort_text();
             session.abort_styles();
+            session.abort_unicode();
             session.abort_geometry();
             return Err(gather_error(error));
         }
@@ -426,6 +443,7 @@ impl TextEngine {
         ) {
             session.abort_text();
             session.abort_styles();
+            session.abort_unicode();
             session.abort_geometry();
             return Err(plan_error(error));
         }
@@ -473,6 +491,7 @@ impl TextEngine {
         session.plan.abort();
         session.abort_text();
         session.abort_styles();
+        session.abort_unicode();
         session.abort_geometry();
         Ok(())
     }
@@ -491,6 +510,7 @@ impl TextEngine {
         session.plan.commit().map_err(plan_error)?;
         session.commit_text();
         session.commit_styles();
+        session.commit_unicode();
         session.commit_geometry();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
@@ -618,6 +638,29 @@ impl EngineSession {
         self.abort_text();
     }
 
+    fn prepare_unicode(&mut self) -> Result<(), EngineError> {
+        self.abort_unicode();
+        if !self.text_prepared {
+            return Ok(());
+        }
+        self.pending_unicode
+            .analyze(&self.pending_text)
+            .map_err(unicode_error)?;
+        self.unicode_prepared = true;
+        Ok(())
+    }
+
+    fn abort_unicode(&mut self) {
+        self.unicode_prepared = false;
+    }
+
+    fn commit_unicode(&mut self) {
+        if self.unicode_prepared {
+            core::mem::swap(&mut self.unicode, &mut self.pending_unicode);
+        }
+        self.abort_unicode();
+    }
+
     fn prepare_geometry(
         &mut self,
         geometry: super::semantic_wire::GeometryBatch<'_>,
@@ -695,6 +738,13 @@ fn reserve_text_buffer(text: &mut Vec<u16>, capacity: usize) -> Result<(), Engin
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())
+}
+
+fn unicode_error(error: UnicodeError) -> EngineError {
+    match error {
+        UnicodeError::InvalidUtf16 => EngineError::InvalidRequest,
+        UnicodeError::ResultTooLarge => EngineError::ResultTooLarge,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -965,6 +1015,15 @@ mod tests {
         assert!(engine.session_text(4).unwrap().is_empty());
         engine.commit_update(prepared).unwrap();
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        assert_eq!(
+            engine
+                .sessions
+                .get(&4)
+                .unwrap()
+                .unicode
+                .grapheme_boundaries(),
+            &[0, 1, 2, 3, 4]
+        );
 
         let edit_bytes = text_mutation_bytes(&[(1, 2, &[0x58, 0x59]), (4, 0, &[0x21])]);
         let edit_batch =
@@ -998,6 +1057,27 @@ mod tests {
             [session.pending_text.capacity(), session.text.capacity()],
             settled_capacities
         );
+    }
+
+    #[test]
+    fn invalid_utf16_aborts_text_and_unicode_analysis_together() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+
+        let invalid_bytes = text_mutation_bytes(&[(0, 0, &[0xd800])]);
+        let mut invalid = update(0, 0, 0);
+        invalid.text_mutations =
+            parse_text_mutations(&invalid_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            engine.prepare_update(invalid, 1),
+            Err(EngineError::InvalidRequest)
+        );
+        let session = engine.sessions.get(&4).unwrap();
+        assert!(session.text.is_empty());
+        assert!(session.unicode.grapheme_boundaries().is_empty());
     }
 
     #[test]

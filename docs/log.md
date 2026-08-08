@@ -2,6 +2,13 @@
 
 ## 2026-08-08
 
+- **Retained Unicode 17 analysis moved inside `text_update`** — The shared Unicode generator now emits compact Rust
+  Script/Script_Extensions partitions beside the TypeScript tables. A no-std Unicode 17 grapheme iterator validates
+  UTF-16, preserves UTF-16 boundaries, resolves contextual scripts, and reuses pre-reserved active/pending session
+  arrays. Analysis commits and aborts with text/styles and is skipped for unchanged text. Rust tests, host/SIMD Clippy,
+  and focused compiled-Wasm tests pass. Optimized Wasm is 964,019 / 360,765 / 288,742 raw/gzip/Brotli bytes. Bidi/run
+  intersection, fallback shaping, layout, nonempty plan output, and complete-path timing remain open.
+
 - **Resolved the retained style cascade in Rust** — A derived A/B segment arena now sweeps validated containment order
   once, carries resolved parents in pre-reserved scope scratch, applies stated fields at scope entry, restores parents at
   exit, and coalesces equal neighbors without copying retained language/features. A nested/equal-range proof emits five
