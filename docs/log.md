@@ -2,6 +2,12 @@
 
 ## 2026-08-08
 
+- **Made render-policy input shaping explicit data** — Policy programs now retain compiler-mapped source records for
+  every typed input lane, selecting numeric semantic, glyph, resource, or strike data without callbacks. Source order
+  is validated and fingerprinted; Rust and compiled-Wasm tests cover exact decoding, conflict, unknown/reserved data,
+  count mismatch, and overlap. The optimized ABI grows from 828,401 / 309,252 / 244,402 to 829,906 / 309,646 / 244,790
+  raw/gzip/Brotli bytes. Per-font binding tables and gather execution remain open, so there is no frame timing claim.
+
 - **Registered ordered font-stack ownership in Rust** — Added cold, direct-memory font-stack lifecycle operations with
   nonempty/unique member validation, exact-order idempotence, conflict detection, and member-font retention. A
   compiled-Wasm test registers a real baked Inter font, proves disposal fails while its stack is live, releases the

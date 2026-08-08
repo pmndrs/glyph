@@ -146,6 +146,11 @@ renderer.
 - Render implementations register a versioned render-plan policy describing formats, batching compatibility,
   capabilities, patch preferences, and permitted augmentations. Stable policies are referenced by ID on updates rather
   than serialized every frame.
+- Each program owns an explicit typed gather recipe. Ordered 4-byte records name `semantic`, `glyph`, `resource`, or
+  `strike` source lanes for every F32 field followed by every U32 field. This is numeric policy data, not a callback;
+  registration validates and fingerprints it so retained input meanings cannot change under one handle. The per-font
+  render binding owns the latter three lane families and layout owns semantic lanes. Registration is live, while gather
+  execution waits for those binding tables and therefore has no frame timing claim yet.
 - A loaded font owns its raster technique and resource binding. `FontStack`, `Text`, and `TextGroup` do not ask the user
   to repeat a technique: an ordered stack may contain fonts from different techniques in the same runtime, and the
   render policy declares which of those techniques its engine can lower.

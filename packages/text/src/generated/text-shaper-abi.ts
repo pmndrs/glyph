@@ -512,6 +512,13 @@ export const textShaperAbi = {
       "updateAlignment": 12,
       "wholeBufferThresholdBasisPoints": 32
     },
+    "policyInput": {
+      "alignment": 2,
+      "field": 1,
+      "reserved": 2,
+      "scope": 0,
+      "size": 4
+    },
     "policyOperation": {
       "alignment": 4,
       "immediate0": 4,
@@ -532,14 +539,17 @@ export const textShaperAbi = {
       "compositingCapabilities": 28,
       "drawKeyMask": 52,
       "f32InputCount": 48,
+      "inputCount": 60,
+      "inputStart": 56,
       "operationCount": 44,
       "operationStart": 36,
       "paintCapabilities": 24,
       "programId": 4,
       "reserved0": 50,
+      "reserved1": 62,
       "resourceKindMask": 12,
       "semanticViewMask": 16,
-      "size": 56,
+      "size": 64,
       "storageKeyMask": 20,
       "techniqueId": 0,
       "u32InputCount": 49,
@@ -552,11 +562,13 @@ export const textShaperAbi = {
       "byteLength": 0,
       "capabilitySetCount": 8,
       "capabilitySetsOffset": 4,
+      "inputCount": 40,
+      "inputsOffset": 36,
       "operationCount": 32,
       "operationsOffset": 28,
       "programCount": 16,
       "programsOffset": 12,
-      "size": 36
+      "size": 44
     },
     "reshapeRange": {
       "alignment": 4,
@@ -649,6 +661,12 @@ export const textShaperAbi = {
       "orderedDirect": 16,
       "stableIndirect": 32,
       "storageBuffers": 1
+    },
+    "inputScopes": {
+      "glyph": 2,
+      "resource": 3,
+      "semantic": 1,
+      "strike": 4
     },
     "opcodes": {
       "addF32": 5,

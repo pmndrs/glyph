@@ -127,8 +127,17 @@ function policyBytes(abi, programs) {
   const programLayout = abi.layouts.policyProgram;
   const bufferLayout = abi.layouts.policyBuffer;
   const operationLayout = abi.layouts.policyOperation;
+  const inputLayout = abi.layouts.policyInput;
   const bufferCount = programs.reduce((total, program) => total + program.buffers.length, 0);
   const operationCount = programs.reduce((total, program) => total + program.operations.length, 0);
+  const programInputs = programs.map(
+    (program) =>
+      program.inputs ?? [
+        ...Array.from({ length: program.f32InputCount }, (_, field) => ({ scope: 'semantic', field })),
+        ...Array.from({ length: program.u32InputCount }, (_, field) => ({ scope: 'semantic', field })),
+      ],
+  );
+  const inputCount = programInputs.reduce((total, inputs) => total + inputs.length, 0);
   const capabilities = [
     {
       id: 1,
@@ -154,7 +163,13 @@ function policyBytes(abi, programs) {
   );
   const buffersOffset = align(programsOffset + programLayout.size * programs.length, bufferLayout.alignment);
   const operationsOffset = align(buffersOffset + bufferLayout.size * bufferCount, operationLayout.alignment);
-  const bytes = new Uint8Array(operationsOffset + operationLayout.size * operationCount);
+  const inputsOffset =
+    inputCount === 0 ? 0 : align(operationsOffset + operationLayout.size * operationCount, inputLayout.alignment);
+  const byteLength =
+    inputCount === 0
+      ? operationsOffset + operationLayout.size * operationCount
+      : inputsOffset + inputLayout.size * inputCount;
+  const bytes = new Uint8Array(byteLength);
   const view = new DataView(bytes.buffer);
   view.setUint32(requestLayout.byteLength, bytes.byteLength, true);
   view.setUint32(requestLayout.capabilitySetsOffset, capabilitiesOffset, true);
@@ -165,6 +180,8 @@ function policyBytes(abi, programs) {
   view.setUint32(requestLayout.bufferCount, bufferCount, true);
   view.setUint32(requestLayout.operationsOffset, operationsOffset, true);
   view.setUint32(requestLayout.operationCount, operationCount, true);
+  view.setUint32(requestLayout.inputsOffset, inputsOffset, true);
+  view.setUint32(requestLayout.inputCount, inputCount, true);
 
   for (let index = 0; index < capabilities.length; index += 1) {
     const descriptor = capabilities[index];
@@ -188,6 +205,7 @@ function policyBytes(abi, programs) {
 
   let bufferStart = 0;
   let operationStart = 0;
+  let inputStart = 0;
   for (let index = 0; index < programs.length; index += 1) {
     const descriptor = programs[index];
     const offset = programsOffset + index * programLayout.size;
@@ -225,12 +243,16 @@ function policyBytes(abi, programs) {
       descriptor.allocationStrategy ?? abi.policy.allocationStrategies.orderedDirect,
       true,
     );
+    view.setUint32(offset + programLayout.inputStart, inputStart, true);
+    view.setUint16(offset + programLayout.inputCount, programInputs[index].length, true);
     bufferStart += descriptor.buffers.length;
     operationStart += descriptor.operations.length;
+    inputStart += programInputs[index].length;
   }
   let bufferIndex = 0;
   let operationIndex = 0;
-  for (const descriptor of programs) {
+  let inputIndex = 0;
+  for (const [programIndex, descriptor] of programs.entries()) {
     for (const buffer of descriptor.buffers) {
       const offset = buffersOffset + bufferIndex * bufferLayout.size;
       view.setUint16(offset + bufferLayout.id, buffer.id, true);
@@ -257,6 +279,12 @@ function policyBytes(abi, programs) {
       view.setUint32(offset + operationLayout.immediate1, operation.immediate1 ?? 0, true);
       view.setUint32(offset + operationLayout.immediate2, operation.immediate2 ?? 0, true);
       operationIndex += 1;
+    }
+    for (const input of programInputs[programIndex]) {
+      const offset = inputsOffset + inputIndex * inputLayout.size;
+      view.setUint8(offset + inputLayout.scope, abi.policy.inputScopes[input.scope]);
+      view.setUint8(offset + inputLayout.field, input.field);
+      inputIndex += 1;
     }
   }
   return bytes;

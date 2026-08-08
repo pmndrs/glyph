@@ -1998,6 +1998,7 @@ mod tests {
                 allocation_strategy: ALLOCATION_STABLE_INDIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,
+                inputs: vec![crate::engine::policy::InputSource::semantic(0)],
                 capabilities: ProgramCapabilities::default(),
                 buffers: vec![BufferSchema::packed(
                     BufferId(1),

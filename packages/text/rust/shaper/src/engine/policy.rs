@@ -10,6 +10,7 @@ pub const MAX_CAPABILITY_SETS: usize = 8;
 pub const MAX_BUFFERS_PER_PROGRAM: usize = 16;
 pub const MAX_OPERATIONS_PER_PROGRAM: usize = 128;
 pub const MAX_REGISTERS: usize = 32;
+pub const MAX_INPUT_FIELDS_PER_PROGRAM: usize = MAX_REGISTERS * 2;
 pub const MAX_VECTOR_WIDTH: u8 = 4;
 const MAX_OUTPUT_LANES: usize = MAX_BUFFERS_PER_PROGRAM * MAX_VECTOR_WIDTH as usize;
 const NOT_A_STORE: u8 = u8::MAX;
@@ -66,6 +67,11 @@ pub const OP_CONVERT_U32_TO_F32: u8 = 10;
 pub const OP_STORE_F32: u8 = 11;
 pub const OP_STORE_U32: u8 = 12;
 pub const OP_STORE_U16: u8 = 13;
+
+pub const INPUT_SEMANTIC: u8 = 1;
+pub const INPUT_GLYPH: u8 = 2;
+pub const INPUT_RESOURCE: u8 = 3;
+pub const INPUT_STRIKE: u8 = 4;
 
 const UNINITIALIZED: u8 = 0;
 const F32_REGISTER: u8 = 1;
@@ -161,6 +167,30 @@ pub struct ProgramCapabilities {
     pub compositing: u32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum InputScope {
+    Semantic = INPUT_SEMANTIC,
+    Glyph = INPUT_GLYPH,
+    Resource = INPUT_RESOURCE,
+    Strike = INPUT_STRIKE,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InputSource {
+    pub scope: InputScope,
+    pub field: u8,
+}
+
+impl InputSource {
+    pub const fn semantic(field: u8) -> Self {
+        Self {
+            scope: InputScope::Semantic,
+            field,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Operation {
     LoadF32 {
@@ -240,6 +270,8 @@ pub struct ProgramDescriptor {
     pub allocation_strategy: u16,
     pub f32_input_count: u8,
     pub u32_input_count: u8,
+    /// Ordered F32 sources followed by ordered U32 sources.
+    pub inputs: Vec<InputSource>,
     pub capabilities: ProgramCapabilities,
     pub buffers: Vec<BufferSchema>,
     pub operations: Vec<Operation>,
@@ -387,6 +419,11 @@ fn policy_fingerprint(descriptor: &PolicyDescriptor) -> u64 {
         mix_u32(&mut fingerprint, u32::from(program.variant));
         mix_u32(&mut fingerprint, u32::from(program.f32_input_count));
         mix_u32(&mut fingerprint, u32::from(program.u32_input_count));
+        mix_u32(&mut fingerprint, program.inputs.len() as u32);
+        for input in &program.inputs {
+            mix_u32(&mut fingerprint, input.scope as u32);
+            mix_u32(&mut fingerprint, u32::from(input.field));
+        }
         mix_u32(&mut fingerprint, program.capabilities.paint);
         mix_u32(&mut fingerprint, program.capabilities.compositing);
         mix_u32(&mut fingerprint, program.buffers.len() as u32);
@@ -559,6 +596,7 @@ pub enum PolicyError {
     InvalidBatchKey,
     UnsupportedAllocationStrategy,
     TooManyInputFields,
+    InvalidInputSources,
     EmptyBuffers,
     TooManyBuffers,
     InvalidBufferId,
@@ -1056,6 +1094,11 @@ fn validate_program(program: &ProgramDescriptor) -> Result<(), PolicyError> {
     {
         return Err(PolicyError::TooManyInputFields);
     }
+    if program.inputs.len()
+        != usize::from(program.f32_input_count) + usize::from(program.u32_input_count)
+    {
+        return Err(PolicyError::InvalidInputSources);
+    }
     if program.buffers.is_empty() {
         return Err(PolicyError::EmptyBuffers);
     }
@@ -1317,6 +1360,7 @@ mod tests {
             allocation_strategy: ALLOCATION_ORDERED_DIRECT,
             f32_input_count: 2,
             u32_input_count: 0,
+            inputs: vec![InputSource::semantic(0), InputSource::semantic(1)],
             capabilities: ProgramCapabilities::default(),
             buffers: vec![BufferSchema::packed(
                 ORIGINS,
@@ -1356,6 +1400,26 @@ mod tests {
             Some(PROGRAM)
         );
         assert_eq!(policy.program(CAPABILITY, BITMAP, 1), None);
+    }
+
+    #[test]
+    fn input_sources_are_exact_and_participate_in_policy_identity() {
+        let program = valid_program();
+        let first = ValidatedPolicy::new(descriptor(vec![program.clone()])).unwrap();
+        let mut changed = program.clone();
+        changed.inputs[1] = InputSource {
+            scope: InputScope::Glyph,
+            field: 0,
+        };
+        let second = ValidatedPolicy::new(descriptor(vec![changed])).unwrap();
+        assert_ne!(first.fingerprint(), second.fingerprint());
+
+        let mut missing = program;
+        missing.inputs.pop();
+        assert_eq!(
+            ValidatedPolicy::new(descriptor(vec![missing])),
+            Err(PolicyError::InvalidInputSources)
+        );
     }
 
     #[test]
@@ -1606,6 +1670,7 @@ mod tests {
             allocation_strategy: ALLOCATION_ORDERED_DIRECT,
             f32_input_count: 1,
             u32_input_count: 1,
+            inputs: vec![InputSource::semantic(0), InputSource::semantic(0)],
             capabilities: ProgramCapabilities::default(),
             buffers: vec![
                 BufferSchema::packed(

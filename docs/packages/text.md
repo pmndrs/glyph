@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:67818f68ec35bc04acd514ee699833fa69718d7f52710f63c1b2e08f28a0a5dd'
+source_digest: 'sha256:72d23c0124450b49869babf957cd04c203e25a5cdecaacdb41911440659d95bd'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -519,6 +519,13 @@ member cannot be disposed and becomes disposable after the stack is released. Pe
 fallback shaping remain the next slices; this registry alone makes no layout or timing claim. The selected compact
 vector registry produces an optimized 828,401 raw / 309,252 gzip / 244,402 Brotli-byte Wasm. A rejected generic tree-map
 version measured 837,865 / 312,057 / 246,478, so cold linear lookup avoids 9,464 raw and 2,076 Brotli bytes.
+
+Render-policy registration now retains one exact input-source record per F32/U32 program field. Numeric scope tags
+select semantic, glyph, resource, or strike lanes; source order is fingerprinted, so changing a gather recipe under an
+existing policy handle fails atomically. The compiler-derived policy request/program/input layouts are 44/64/4 bytes,
+and compiled-Wasm tests pin their offsets, tags, conflict behavior, and malformed-input rejection. The optimized module
+is 829,906 raw / 309,646 gzip / 244,790 Brotli bytes, a +1,505 / +394 / +388 contract cost. Per-font tables and gather
+execution remain open, so the measurement is module size rather than layout latency.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership
