@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6ebded1e5e096e63022857f5f89225b703825ac7554918f14481780c8e30b8c8'
+source_digest: 'sha256:3e73bcdbe8c884a3fae45b6883ee7d4df14c03f24e7dbccf8157d41ca873d030'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -483,7 +483,7 @@ semantic input exists, so that exact ordering remains an explicit test gap. The 
 optimized artifact from 739,909 / 272,624 / 214,395 to
 822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. This is a measured shared-runtime cost and a pending optimization
 target. Ordered UTF-16 replacements are now retained transactionally. Editorial constraints, regions, exclusions, and
-inline objects now decode as borrowed one-call geometry; style mutations remain rejected.
+inline objects now decode as borrowed one-call geometry; style upserts/removals are decoded and retained transactionally.
 Sessions still publish an empty Rust plan because retained text is not yet shaped or laid out; there is no Rust
 shaping/layout performance result yet, and the TypeScript layout table above remains baseline-only.
 
@@ -496,6 +496,19 @@ which values were authored so absent values inherit rather than being confused w
 generated ABI and compiled-Wasm test pin every size, tag, and the inline-object
 `baselineAlignment` offset. The generated engine vocabulary now also fixes axis, wrap, inline/block alignment, overflow,
 writing, orientation, exclusion-side, and inline-object baseline tags rather than accepting renderer-local enum bytes.
+
+Style decoding is borrowed and allocation-free. Session creation pre-reserves two flat 64-style arenas, 512 language
+bytes and 128 OpenType feature records per arena, plus reusable mutation, cascade-order, and nesting scratch. A style
+update sorts mutations by stable ID, retains only the final operation for each ID, and merge-walks them with committed
+styles into the inactive arena; language and feature payloads are compacted during the merge rather than retained as a
+`Vec` per span or allowed to accumulate stale bytes. Validation covers canonical absent fields, finite/positive values,
+language/tags, feature and UTF-16 boundaries, registered font stacks, one complete root, unambiguous equal-range cascade order,
+nested rather than partially overlapping ranges, and cross-section payload aliasing. Commit swaps arenas; abort clears
+only pending lengths. Once styles exist, a text edit must leave all retained ranges valid and cannot remove the sole
+root. A real-font compiled-Wasm transaction proves the first combined text/root update and an invalid root removal do
+not grow memory after session creation. Reachability changes optimized Wasm from 856,831 / 319,003 / 252,236 to
+888,423 / 332,740 / 262,748 raw/gzip/Brotli bytes (+31,592 / +13,737 / +10,512). Plans remain empty, so this is retained
+state evidence, not a shaping/layout latency result.
 
 The frame decoder now borrows ordered UTF-16 replacement records and their offset-addressed payloads directly from the
 pinned request. It validates canonical empty offsets, opcode/encoding, reserved fields, bounds, alignment, arithmetic,
