@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:873a7dc286bbcc2c3527a566ffcfd47701c63e42588f7962ce975583acda0407'
+source_digest: 'sha256:f18ed2a30d4411474f7c0168e263ea43b46987af50b377c621416c93714a3c8c'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -185,7 +185,10 @@ WebGPU and forced WebGL2, `/r3f` retains those Three objects through React 19 St
 the first `/typegpu` slice provides the caller-owned-root engine plus exact program/target boundary. Built-in TypeGPU raster
 programs and their live-pixel proof remain open. `RasterTechnique` preserves
 exact options, descriptor, decoded data, binding, and canonical storage types without `any`; its public helpers validate
-and brand technique and resource identities without requiring casts. `/raster/bitmap`, `/raster/mtsdf`, and `/raster/slug`
+and brand technique and resource identities without requiring casts. A `RasterGlyphInput` is valid only for the `select`
+or `writeStorage` call that receives it, because packing pools one input per glyph and rewrites it on every update rather
+than allocating a glyph-sized set each time; a technique that needs a field beyond the call copies the value.
+`/raster/bitmap`, `/raster/mtsdf`, and `/raster/slug`
 decode and authenticate CPU resources without importing Three, explicitly omit absent records, select stable physical
 bindings, and pack positive-down paragraph origins plus technique fields into typed canonical arrays. Bitmap selects a
 strike/page per glyph and retains R8 pages; MTSDF retains one RGBA8 atlas-array binding per font; Slug retains its original
