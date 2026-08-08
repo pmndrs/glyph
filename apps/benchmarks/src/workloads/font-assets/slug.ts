@@ -1,4 +1,4 @@
-import { slug as slugTechnique } from '@pmndrs/text/raster/slug';
+import { slug as slugTechnique } from '@pmndrs/text/three/slug';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-slug.font.glb.gz?url';
 import dancingScriptCompressedFontUrl from '../../../fixtures/rendering/dancing-script-slug.font.glb.gz?url';

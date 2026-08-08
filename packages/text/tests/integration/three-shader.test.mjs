@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { createRuntimeShaper, createTextRuntime, defineRasterTechnique, FontRegistry } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { bitmap } from '@pmndrs/text/three/bitmap';
 import { bitmapShader, mtsdfShader, registerThreeRasterProgram, slugShader, Text } from '@pmndrs/text/three';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';

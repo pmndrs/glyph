@@ -1,5 +1,5 @@
 import type { LoadedFont } from '@pmndrs/text';
-import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import { mtsdf } from '@pmndrs/text/three/mtsdf';
 import { FontLoader, Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 import interCompressedFontUrl from '../fixtures/rendering/inter-mtsdf.font.glb.gz?url';

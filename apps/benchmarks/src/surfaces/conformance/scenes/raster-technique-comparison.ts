@@ -1,6 +1,6 @@
 import type { LoadedFont, ParagraphContentBox, ParagraphStyle } from '@pmndrs/text';
-import type { mtsdf } from '@pmndrs/text/raster/mtsdf';
-import type { slug } from '@pmndrs/text/raster/slug';
+import type { mtsdf } from '@pmndrs/text/three/mtsdf';
+import type { slug } from '@pmndrs/text/three/slug';
 import { Text } from '@pmndrs/text/three';
 import type { Node } from 'three/webgpu';
 import * as THREE from 'three/webgpu';

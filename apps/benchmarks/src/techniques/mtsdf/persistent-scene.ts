@@ -7,7 +7,7 @@ import {
   type ParagraphStyle,
   type RegisteredFont,
 } from '@pmndrs/text';
-import type { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import type { mtsdf } from '@pmndrs/text/three/mtsdf';
 import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 

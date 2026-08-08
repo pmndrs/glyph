@@ -3,7 +3,7 @@ import React, { createRef, StrictMode } from 'react';
 import * as THREE from 'three/webgpu';
 
 import type { LoadedFont, ParagraphLayout } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { bitmap } from '@pmndrs/text/three/bitmap';
 import { Text, useFont } from '@pmndrs/text/r3f';
 import type { LoadedFontRequest, ParagraphContentBox, Text as CoreText } from '@pmndrs/text/three';
 

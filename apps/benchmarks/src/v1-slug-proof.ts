@@ -1,5 +1,5 @@
 import type { LoadedFont } from '@pmndrs/text';
-import { slug } from '@pmndrs/text/raster/slug';
+import { slug } from '@pmndrs/text/three/slug';
 import { FontLoader, Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 import interCompressedFontUrl from '../fixtures/rendering/inter-slug.font.glb.gz?url';

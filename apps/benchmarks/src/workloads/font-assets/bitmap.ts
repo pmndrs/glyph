@@ -1,4 +1,4 @@
-import { bitmap as bitmapTechnique } from '@pmndrs/text/raster/bitmap';
+import { bitmap as bitmapTechnique } from '@pmndrs/text/three/bitmap';
 
 import amiriBitmapFontUrl from '../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
 import amiriBitmapDensityFontUrl from '../../../fixtures/rendering/amiri-bitmap-16-32.font.glb?url';
