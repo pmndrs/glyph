@@ -6,8 +6,6 @@ import type { FontDelivery, GraphicsBackend, RasterTechnique } from '../../bench
 import type { PresentationPreset } from '../../benchmark/presentation-sequence';
 import { BENCHMARK_CONTENT_INSET, BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH } from '../../workloads/shared/text-style';
 
-/** How long a control value must hold still before the scene is asked to apply it. */
-const CONTROL_SETTLE_MS = 48;
 import { benchmarkWorkloadDefinition } from '../../workloads/catalog';
 import type {
   ComparisonWorkloadConfiguration,
@@ -316,15 +314,10 @@ export function ComparisonWorkloadViewport({
   useEffect(() => {
     const preview = previewRef.current;
     if (preview === undefined) return;
-    // A control settles before the scene is asked to do anything. Debouncing belongs here, at the input, where
-    // dropping a superseded value costs nothing; the scene must apply and report every update it is given, or the
-    // measurement describes a frame the workload never rendered.
-    const settle = setTimeout(() => {
-      void preview.update(currentConfiguration()).catch(publishError);
-    }, CONTROL_SETTLE_MS);
-    return () => {
-      clearTimeout(settle);
-    };
+    // Applied immediately. The paragraph-stress motion drives width and font size through this same path on its own
+    // animation frames, so delaying here would stall the workload rather than settle an input. Debouncing belongs on
+    // the controls a person drags, not on the path an animation shares with them.
+    void preview.update(currentConfiguration()).catch(publishError);
   }, [
     amount,
     animationEnabled,

@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react';
+import { useEffect, useRef, type ComponentProps } from 'react';
 
 import {
   RuntimeAnimationControls,
@@ -42,6 +42,34 @@ export type RuntimeControlsProps = Omit<
   readonly onRuntimeControl: () => void;
 };
 
+/** How long the workload amount must hold still before the scene rebuilds for it. */
+const WORKLOAD_AMOUNT_SETTLE_MS = 120;
+
+/**
+ * Calls `callback` once the caller stops producing values. A dragged range control emits one value per pointer move,
+ * and the ones in the middle of a drag describe a scene nobody asked to look at.
+ */
+function useDebouncedCallback<Value>(callback: (value: Value) => void, delayMs: number): (value: Value) => void {
+  const latest = useRef(callback);
+  const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    latest.current = callback;
+  });
+  useEffect(
+    () => () => {
+      if (pending.current !== undefined) clearTimeout(pending.current);
+    },
+    [],
+  );
+  return (value: Value) => {
+    if (pending.current !== undefined) clearTimeout(pending.current);
+    pending.current = setTimeout(() => {
+      pending.current = undefined;
+      latest.current(value);
+    }, delayMs);
+  };
+}
+
 export function RuntimeControls({ onBeforeShowGrid, onRuntimeControl, ...props }: RuntimeControlsProps) {
   const world = useRuntimeWorld();
   const view = useRuntimeViewControls();
@@ -53,6 +81,12 @@ export function RuntimeControls({ onBeforeShowGrid, onRuntimeControl, ...props }
     change();
     onRuntimeControl();
   };
+  // Workload amount is the one control whose every intermediate value rebuilds the scene from nothing, so a drag
+  // across it queues a rebuild per step. Settling the input drops the values nobody asked to see, which costs nothing,
+  // rather than letting the scene merge updates it was asked to perform and then report the cost of the survivors.
+  const debouncedWorkloadAmount = useDebouncedCallback((workloadAmount: number) => {
+    changed(() => world.set(RuntimeLayoutControls, { workloadAmount }));
+  }, WORKLOAD_AMOUNT_SETTLE_MS);
   return (
     <Controls
       {...props}
@@ -83,7 +117,7 @@ export function RuntimeControls({ onBeforeShowGrid, onRuntimeControl, ...props }
         changed(() => world.set(RuntimeViewControls, { showGrid }));
       }}
       onShowLayoutBounds={(showLayoutBounds) => changed(() => world.set(RuntimeViewControls, { showLayoutBounds }))}
-      onWorkloadAmount={(workloadAmount) => changed(() => world.set(RuntimeLayoutControls, { workloadAmount }))}
+      onWorkloadAmount={debouncedWorkloadAmount}
     />
   );
 }
