@@ -52,6 +52,14 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.equal(abi.engine.styleMutationOpcodes.remove, 2);
   assert.deepEqual(abi.engine.flowShapeKinds, { polygon: 2, rectangle: 1 });
   assert.deepEqual(abi.engine.writingModes, { horizontalTb: 1, verticalLr: 3, verticalRl: 2 });
+  assert.deepEqual(abi.engine.textOrientations, { mixed: 1, sideways: 3, upright: 2 });
+  assert.deepEqual(abi.engine.axisModes, { atMost: 2, exact: 3, unconstrained: 1 });
+  assert.deepEqual(abi.engine.wrapModes, { character: 3, none: 1, word: 2 });
+  assert.deepEqual(abi.engine.inlineAlignments, { center: 2, end: 3, justify: 4, start: 1 });
+  assert.deepEqual(abi.engine.overflowModes, { clip: 2, ellipsis: 3, visible: 1 });
+  assert.deepEqual(abi.engine.blockAlignments, { center: 2, end: 3, start: 1 });
+  assert.deepEqual(abi.engine.exclusionWrapSides, { both: 1, inlineEnd: 3, inlineStart: 2, largest: 4 });
+  assert.deepEqual(abi.engine.inlineObjectBaselines, { alphabetic: 1, middle: 3, textBottom: 4, textTop: 2 });
   assert.equal(abi.engine.defaultSessionTextCapacity, 1024);
   assert.equal(fn.createSession(sessionId, requestLayout.size, resultLayout.size, 0), abi.status.ok);
   assert.equal(fn.sessionCount(), 1);
@@ -132,9 +140,9 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   });
   const checkpointHeader = resultBytes(memory, checkpointPointer, resultLayout).slice();
 
-  assert.equal(fn.reserveSession(sessionId, 256, resultLayout.size, 8), abi.status.ok);
+  assert.equal(fn.reserveSession(sessionId, 512, resultLayout.size, 8), abi.status.ok);
   requestPointer = fn.requestPointer(sessionId);
-  assert.ok(fn.requestCapacity(sessionId) >= 256);
+  assert.ok(fn.requestCapacity(sessionId) >= 512);
   const textWarmBuffer = memory.buffer;
   const insertLength = writeRequest(memory, requestPointer, abi, 3, 3, 3, [
     { start: 0, deleteCount: 0, insert: [0x61, 0x62, 0x63] },
@@ -183,19 +191,35 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   });
   assert.deepEqual(resultBytes(memory, retainedEditPointer, resultLayout), retainedHeader);
 
-  writeRequest(memory, requestPointer, abi, 5, 5, 5);
-  new DataView(memory.buffer, requestPointer, requestLayout.size).setUint32(requestLayout.regionCount, 1, true);
-  const unsupportedPointer = fn.textUpdate(sessionId, requestPointer, requestLayout.size);
-  assertResult(memory, unsupportedPointer, abi, {
-    status: abi.status.invalidRequest,
-    engineRevision: 5,
-    planRevision: 5,
+  const geometry = geometryRequestBytes(abi, 5, 5, 5);
+  new Uint8Array(memory.buffer, requestPointer, geometry.byteLength).set(geometry);
+  const geometryPointer = fn.textUpdate(sessionId, requestPointer, geometry.byteLength);
+  assertResult(memory, geometryPointer, abi, {
+    status: abi.status.ok,
+    engineRevision: 6,
+    planRevision: 6,
     requiredBaseRevision: 5,
-    publicationGeneration: 5,
+    publicationGeneration: 6,
     outputSlot: 1,
     flags: 0,
   });
-  assert.deepEqual(resultBytes(memory, retainedEditPointer, resultLayout), retainedHeader);
+  const geometryHeader = resultBytes(memory, geometryPointer, resultLayout).slice();
+
+  const invalidGeometry = geometryRequestBytes(abi, 6, 6, 6);
+  const exclusionOffset = new DataView(invalidGeometry.buffer).getUint32(requestLayout.exclusionsOffset, true);
+  new DataView(invalidGeometry.buffer).setUint32(exclusionOffset + abi.layouts.engineExclusion.regionId, 9, true);
+  new Uint8Array(memory.buffer, requestPointer, invalidGeometry.byteLength).set(invalidGeometry);
+  const invalidGeometryPointer = fn.textUpdate(sessionId, requestPointer, invalidGeometry.byteLength);
+  assertResult(memory, invalidGeometryPointer, abi, {
+    status: abi.status.invalidRequest,
+    engineRevision: 6,
+    planRevision: 6,
+    requiredBaseRevision: 6,
+    publicationGeneration: 6,
+    outputSlot: 0,
+    flags: 0,
+  });
+  assert.deepEqual(resultBytes(memory, geometryPointer, resultLayout), geometryHeader);
 
   const oldBuffer = memory.buffer;
   const grownCapacity = 8 * 1024 * 1024;
@@ -232,6 +256,83 @@ function writeRequest(
   });
   new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
   return bytes.byteLength;
+}
+
+function geometryRequestBytes(abi, expectedEngineRevision, consumedPlanRevision, acknowledgedPublicationGeneration) {
+  const request = abi.layouts.engineUpdateRequest;
+  const constraint = abi.layouts.engineConstraint;
+  const region = abi.layouts.engineRegion;
+  const exclusion = abi.layouts.engineExclusion;
+  const inlineObject = abi.layouts.engineInlineObject;
+  const constraintOffset = request.size;
+  const regionOffset = constraintOffset + constraint.size;
+  const exclusionOffset = regionOffset + region.size;
+  const inlineObjectOffset = exclusionOffset + exclusion.size;
+  const bytes = new Uint8Array(inlineObjectOffset + inlineObject.size);
+  bytes.set(
+    engineUpdateBytes(abi, {
+      sessionId,
+      policyHandle,
+      expectedEngineRevision,
+      consumedPlanRevision,
+      acknowledgedPublicationGeneration,
+    }),
+  );
+  const view = new DataView(bytes.buffer);
+  view.setUint32(request.byteLength, bytes.byteLength, true);
+  for (const [offsetField, countField, offset] of [
+    ['constraintsOffset', 'constraintCount', constraintOffset],
+    ['regionsOffset', 'regionCount', regionOffset],
+    ['exclusionsOffset', 'exclusionCount', exclusionOffset],
+    ['inlineObjectsOffset', 'inlineObjectCount', inlineObjectOffset],
+  ]) {
+    view.setUint32(request[offsetField], offset, true);
+    view.setUint32(request[countField], 1, true);
+  }
+
+  view.setUint32(constraintOffset + constraint.flowThreadId, 1, true);
+  view.setFloat32(constraintOffset + constraint.width, 100, true);
+  view.setFloat32(constraintOffset + constraint.height, 100, true);
+  view.setFloat32(constraintOffset + constraint.viewportBlockEnd, 100, true);
+  view.setUint32(constraintOffset + constraint.maxLines, 1, true);
+  view.setUint16(constraintOffset + constraint.regionCount, 1, true);
+  view.setUint8(constraintOffset + constraint.widthMode, abi.engine.axisModes.exact);
+  view.setUint8(constraintOffset + constraint.heightMode, abi.engine.axisModes.exact);
+  view.setUint8(constraintOffset + constraint.wrap, abi.engine.wrapModes.word);
+  view.setUint8(constraintOffset + constraint.align, abi.engine.inlineAlignments.start);
+  view.setUint8(constraintOffset + constraint.overflow, abi.engine.overflowModes.clip);
+  view.setUint8(constraintOffset + constraint.blockAlign, abi.engine.blockAlignments.start);
+
+  view.setUint32(regionOffset + region.id, 1, true);
+  view.setUint32(regionOffset + region.geometryRevision, 1, true);
+  view.setUint16(regionOffset + region.exclusionCount, 1, true);
+  view.setUint8(regionOffset + region.shape, abi.engine.flowShapeKinds.rectangle);
+  view.setUint8(regionOffset + region.writingMode, abi.engine.writingModes.horizontalTb);
+  view.setUint8(regionOffset + region.textOrientation, abi.engine.textOrientations.mixed);
+  for (const field of ['inlineEnd', 'blockEnd', 'clipInlineEnd', 'clipBlockEnd']) {
+    view.setFloat32(regionOffset + region[field], 100, true);
+  }
+
+  view.setUint32(exclusionOffset + exclusion.id, 2, true);
+  view.setUint32(exclusionOffset + exclusion.regionId, 1, true);
+  view.setUint32(exclusionOffset + exclusion.geometryRevision, 1, true);
+  view.setUint8(exclusionOffset + exclusion.shape, abi.engine.flowShapeKinds.rectangle);
+  view.setUint8(exclusionOffset + exclusion.wrapSide, abi.engine.exclusionWrapSides.both);
+  view.setFloat32(exclusionOffset + exclusion.inlineStart, 20, true);
+  view.setFloat32(exclusionOffset + exclusion.blockStart, 20, true);
+  view.setFloat32(exclusionOffset + exclusion.inlineEnd, 40, true);
+  view.setFloat32(exclusionOffset + exclusion.blockEnd, 40, true);
+
+  view.setUint32(inlineObjectOffset + inlineObject.id, 3, true);
+  view.setUint32(inlineObjectOffset + inlineObject.contentRevision, 1, true);
+  view.setUint32(inlineObjectOffset + inlineObject.textOffset, 1, true);
+  view.setUint32(inlineObjectOffset + inlineObject.materialId, 1, true);
+  view.setUint32(inlineObjectOffset + inlineObject.resourceId, 4, true);
+  view.setUint32(inlineObjectOffset + inlineObject.resourceGeneration, 1, true);
+  view.setFloat32(inlineObjectOffset + inlineObject.inlineExtent, 10, true);
+  view.setFloat32(inlineObjectOffset + inlineObject.blockExtent, 10, true);
+  view.setUint8(inlineObjectOffset + inlineObject.baselineAlignment, abi.engine.inlineObjectBaselines.alphabetic);
+  return bytes;
 }
 
 function assertResult(memory, pointer, abi, expected) {

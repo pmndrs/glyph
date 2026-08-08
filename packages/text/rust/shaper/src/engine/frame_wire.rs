@@ -26,7 +26,7 @@ use crate::{
     },
     engine::{
         frame::{UpdateLimits, UpdateRequest},
-        semantic_wire::parse_text_mutations,
+        semantic_wire::{parse_geometry, parse_text_mutations},
     },
     wire::read_u32,
 };
@@ -52,19 +52,6 @@ pub(crate) fn parse_update_request(
         (
             ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET,
             ENGINE_UPDATE_STYLE_MUTATION_COUNT,
-        ),
-        (
-            ENGINE_UPDATE_CONSTRAINTS_OFFSET,
-            ENGINE_UPDATE_CONSTRAINT_COUNT,
-        ),
-        (ENGINE_UPDATE_REGIONS_OFFSET, ENGINE_UPDATE_REGION_COUNT),
-        (
-            ENGINE_UPDATE_EXCLUSIONS_OFFSET,
-            ENGINE_UPDATE_EXCLUSION_COUNT,
-        ),
-        (
-            ENGINE_UPDATE_INLINE_OBJECTS_OFFSET,
-            ENGINE_UPDATE_INLINE_OBJECT_COUNT,
         ),
         (
             ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
@@ -99,7 +86,30 @@ pub(crate) fn parse_update_request(
         read_u32(bytes, ENGINE_UPDATE_TEXT_MUTATIONS_OFFSET)?,
         text_mutation_count,
     )?;
-    if text_mutation_count == 0 && bytes.len() != ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize {
+    let constraint_count = read_u32(bytes, ENGINE_UPDATE_CONSTRAINT_COUNT)?;
+    let region_count = read_u32(bytes, ENGINE_UPDATE_REGION_COUNT)?;
+    let exclusion_count = read_u32(bytes, ENGINE_UPDATE_EXCLUSION_COUNT)?;
+    let inline_object_count = read_u32(bytes, ENGINE_UPDATE_INLINE_OBJECT_COUNT)?;
+    let geometry = parse_geometry(
+        bytes,
+        read_u32(bytes, ENGINE_UPDATE_CONSTRAINTS_OFFSET)?,
+        constraint_count,
+        read_u32(bytes, ENGINE_UPDATE_REGIONS_OFFSET)?,
+        region_count,
+        read_u32(bytes, ENGINE_UPDATE_EXCLUSIONS_OFFSET)?,
+        exclusion_count,
+        read_u32(bytes, ENGINE_UPDATE_INLINE_OBJECTS_OFFSET)?,
+        inline_object_count,
+        limits,
+    )?;
+    text_mutations.validate_disjoint_geometry(geometry)?;
+    if text_mutation_count == 0
+        && constraint_count == 0
+        && region_count == 0
+        && exclusion_count == 0
+        && inline_object_count == 0
+        && bytes.len() != ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+    {
         return Err(STATUS_INVALID_REQUEST);
     }
     Ok(UpdateRequest {
@@ -114,6 +124,7 @@ pub(crate) fn parse_update_request(
         capability_set: positive(bytes, ENGINE_UPDATE_CAPABILITY_SET)?,
         limits,
         text_mutations,
+        geometry,
     })
 }
 

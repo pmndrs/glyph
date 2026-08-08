@@ -53,6 +53,9 @@ struct EngineSession {
     text: Vec<u16>,
     pending_text: Vec<u16>,
     text_prepared: bool,
+    geometry_fingerprint: u64,
+    pending_geometry_fingerprint: u64,
+    geometry_prepared: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -321,6 +324,10 @@ impl TextEngine {
         // plan preparation or publication later aborts.
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
         session.prepare_text(request.text_mutations)?;
+        if let Err(error) = session.prepare_geometry(request.geometry) {
+            session.abort_text();
+            return Err(error);
+        }
         if let Err(error) = gather.gather(
             policy,
             CapabilitySetId(request.capability_set),
@@ -337,6 +344,7 @@ impl TextEngine {
             },
         ) {
             session.abort_text();
+            session.abort_geometry();
             return Err(gather_error(error));
         }
         let gathered = gather.view();
@@ -349,6 +357,7 @@ impl TextEngine {
             request.acknowledged_publication_generation,
         ) {
             session.abort_text();
+            session.abort_geometry();
             return Err(plan_error(error));
         }
         Ok(PreparedUpdate {
@@ -394,6 +403,7 @@ impl TextEngine {
         }
         session.plan.abort();
         session.abort_text();
+        session.abort_geometry();
         Ok(())
     }
 
@@ -410,6 +420,7 @@ impl TextEngine {
         }
         session.plan.commit().map_err(plan_error)?;
         session.commit_text();
+        session.commit_geometry();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
@@ -464,6 +475,36 @@ impl EngineSession {
             core::mem::swap(&mut self.text, &mut self.pending_text);
         }
         self.abort_text();
+    }
+
+    fn prepare_geometry(
+        &mut self,
+        geometry: super::semantic_wire::GeometryBatch<'_>,
+    ) -> Result<(), EngineError> {
+        self.abort_geometry();
+        let text_length = if self.text_prepared {
+            self.pending_text.len()
+        } else {
+            self.text.len()
+        };
+        geometry
+            .validate_text_length(text_length)
+            .map_err(|_| EngineError::InvalidRequest)?;
+        self.pending_geometry_fingerprint = geometry.fingerprint();
+        self.geometry_prepared = true;
+        Ok(())
+    }
+
+    fn abort_geometry(&mut self) {
+        self.pending_geometry_fingerprint = 0;
+        self.geometry_prepared = false;
+    }
+
+    fn commit_geometry(&mut self) {
+        if self.geometry_prepared {
+            self.geometry_fingerprint = self.pending_geometry_fingerprint;
+        }
+        self.abort_geometry();
     }
 }
 
@@ -972,6 +1013,7 @@ mod tests {
                 max_output_bytes: 128,
             },
             text_mutations: super::super::semantic_wire::TextMutationBatch::empty(),
+            geometry: super::super::semantic_wire::GeometryBatch::empty(),
         }
     }
 

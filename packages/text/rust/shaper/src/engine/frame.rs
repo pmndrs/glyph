@@ -9,6 +9,33 @@ pub(crate) const SHAPE_POLYGON: u8 = 2;
 pub(crate) const WRITING_HORIZONTAL_TB: u8 = 1;
 pub(crate) const WRITING_VERTICAL_RL: u8 = 2;
 pub(crate) const WRITING_VERTICAL_LR: u8 = 3;
+pub(crate) const ORIENTATION_MIXED: u8 = 1;
+pub(crate) const ORIENTATION_UPRIGHT: u8 = 2;
+pub(crate) const ORIENTATION_SIDEWAYS: u8 = 3;
+pub(crate) const AXIS_UNCONSTRAINED: u8 = 1;
+pub(crate) const AXIS_AT_MOST: u8 = 2;
+pub(crate) const AXIS_EXACT: u8 = 3;
+pub(crate) const WRAP_NONE: u8 = 1;
+pub(crate) const WRAP_WORD: u8 = 2;
+pub(crate) const WRAP_CHARACTER: u8 = 3;
+pub(crate) const ALIGN_START: u8 = 1;
+pub(crate) const ALIGN_CENTER: u8 = 2;
+pub(crate) const ALIGN_END: u8 = 3;
+pub(crate) const ALIGN_JUSTIFY: u8 = 4;
+pub(crate) const OVERFLOW_VISIBLE: u8 = 1;
+pub(crate) const OVERFLOW_CLIP: u8 = 2;
+pub(crate) const OVERFLOW_ELLIPSIS: u8 = 3;
+pub(crate) const BLOCK_ALIGN_START: u8 = 1;
+pub(crate) const BLOCK_ALIGN_CENTER: u8 = 2;
+pub(crate) const BLOCK_ALIGN_END: u8 = 3;
+pub(crate) const EXCLUSION_WRAP_BOTH: u8 = 1;
+pub(crate) const EXCLUSION_WRAP_INLINE_START: u8 = 2;
+pub(crate) const EXCLUSION_WRAP_INLINE_END: u8 = 3;
+pub(crate) const EXCLUSION_WRAP_LARGEST: u8 = 4;
+pub(crate) const BASELINE_ALPHABETIC: u8 = 1;
+pub(crate) const BASELINE_TEXT_TOP: u8 = 2;
+pub(crate) const BASELINE_MIDDLE: u8 = 3;
+pub(crate) const BASELINE_TEXT_BOTTOM: u8 = 4;
 pub(crate) const DEFAULT_SESSION_TEXT_CAPACITY: u32 = 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,6 +48,7 @@ pub(crate) struct UpdateRequest<'a> {
     pub capability_set: u32,
     pub limits: UpdateLimits,
     pub text_mutations: super::semantic_wire::TextMutationBatch<'a>,
+    pub geometry: super::semantic_wire::GeometryBatch<'a>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
