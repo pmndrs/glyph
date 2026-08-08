@@ -915,6 +915,14 @@ boundaries; character wrapping admits every safe grapheme boundary; no-wrap stil
 hard break produces the trailing empty line. Width accumulation remains `f64`. This is a kernel proof only: region-band
 resolution has not yet connected it to production frame output, so it carries no end-to-end timing or Wasm-size claim.
 
+Declarative flow input now crosses from validated compiler-mapped request bytes into retained A/B Rust state in the
+production transaction. Constraints, ordered regions, exclusions, and rebased polygon vertices are owned by the session;
+no request pointer survives the call. The rectangle band fast path reuses two bounded slot vectors and subtracts
+intersecting exclusion rectangles according to their wrap side, rejecting output beyond `max_slots_per_band`. An exact
+fixture resolves a `0..100` region around a `20..40` exclusion to `[0..20, 40..100]`. Polygon intersection and driving
+the line cursor remain open. Optimized Wasm is 1,016,720 / 384,593 / 297,049 raw/gzip/Brotli bytes (+2,143 / +5,083 /
++1,341 from the last production Wasm checkpoint); compressed deltas are recorded as transport evidence only.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a

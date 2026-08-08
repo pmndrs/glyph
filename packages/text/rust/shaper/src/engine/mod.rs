@@ -4,6 +4,8 @@
 //! pointer validation stay in the target-gated transport module.
 
 mod cluster_state;
+#[cfg_attr(not(test), allow(dead_code))]
+mod flow_geometry;
 pub mod font_binding;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod font_binding_wire;

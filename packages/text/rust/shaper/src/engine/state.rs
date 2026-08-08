@@ -8,6 +8,7 @@ use crate::{
 
 use super::{
     cluster_state::ClusterArena,
+    flow_geometry::FlowGeometryArena,
     font_binding::FontRenderBinding,
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
     policy::{CapabilitySetId, ValidatedPolicy},
@@ -94,6 +95,8 @@ struct EngineSession {
     pending_shape: ShapeArena,
     clusters: ClusterArena,
     pending_clusters: ClusterArena,
+    geometry: FlowGeometryArena,
+    pending_geometry: FlowGeometryArena,
     fallback_spans: Vec<FallbackSpan>,
     pending_fallback_spans: Vec<FallbackSpan>,
     fallback_span_scratch: Vec<FallbackSpan>,
@@ -1118,12 +1121,14 @@ impl EngineSession {
         geometry
             .validate_text_length(text_length)
             .map_err(|_| EngineError::InvalidRequest)?;
+        self.pending_geometry.build(geometry)?;
         self.pending_geometry_fingerprint = geometry.fingerprint();
         self.geometry_prepared = true;
         Ok(())
     }
 
     fn abort_geometry(&mut self) {
+        self.pending_geometry.clear();
         self.pending_geometry_fingerprint = 0;
         self.geometry_prepared = false;
     }
@@ -1131,6 +1136,7 @@ impl EngineSession {
     fn commit_geometry(&mut self) {
         if self.geometry_prepared {
             self.geometry_fingerprint = self.pending_geometry_fingerprint;
+            core::mem::swap(&mut self.geometry, &mut self.pending_geometry);
         }
         self.abort_geometry();
     }

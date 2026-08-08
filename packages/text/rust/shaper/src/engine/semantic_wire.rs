@@ -94,6 +94,71 @@ pub(crate) struct GeometryBatch<'a> {
     inline_objects: &'a [u8],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FlowConstraint {
+    pub flow_thread_id: u32,
+    pub width: f32,
+    pub height: f32,
+    pub viewport_block_start: f32,
+    pub viewport_block_end: f32,
+    pub resume_block_offset: f32,
+    pub max_lines: u32,
+    pub region_start: u32,
+    pub resume_cluster: u32,
+    pub region_count: u16,
+    pub resume_region: u16,
+    pub width_mode: u8,
+    pub height_mode: u8,
+    pub wrap: u8,
+    pub align: u8,
+    pub overflow: u8,
+    pub block_align: u8,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FlowRegion {
+    pub id: u32,
+    pub geometry_revision: u32,
+    pub vertices_offset: u32,
+    pub vertex_count: u16,
+    pub exclusion_start: u16,
+    pub exclusion_count: u16,
+    pub shape: u8,
+    pub writing_mode: u8,
+    pub text_orientation: u8,
+    pub inline_start: f32,
+    pub block_start: f32,
+    pub inline_end: f32,
+    pub block_end: f32,
+    pub clip_inline_start: f32,
+    pub clip_block_start: f32,
+    pub clip_inline_end: f32,
+    pub clip_block_end: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FlowExclusion {
+    pub id: u32,
+    pub region_id: u32,
+    pub geometry_revision: u32,
+    pub vertices_offset: u32,
+    pub vertex_count: u16,
+    pub shape: u8,
+    pub wrap_side: u8,
+    pub inline_start: f32,
+    pub block_start: f32,
+    pub inline_end: f32,
+    pub block_end: f32,
+    pub margin_inline: f32,
+    pub margin_block: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FlowVertex {
+    pub inline: f32,
+    pub block: f32,
+}
+
 impl GeometryBatch<'_> {
     pub(crate) const fn empty() -> Self {
         Self {
@@ -127,6 +192,91 @@ impl GeometryBatch<'_> {
             previous_offset = Some(offset);
         }
         Ok(())
+    }
+
+    pub(crate) fn constraint_count(self) -> usize {
+        self.constraints.len() / abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize
+    }
+
+    pub(crate) fn constraint(self, index: usize) -> Option<FlowConstraint> {
+        let record = record_at(self.constraints, abi::ENGINE_CONSTRAINT_RECORD_SIZE, index)?;
+        Some(FlowConstraint {
+            flow_thread_id: read_u32(record, abi::ENGINE_CONSTRAINT_FLOW_THREAD_ID).ok()?,
+            width: read_f32(record, abi::ENGINE_CONSTRAINT_WIDTH).ok()?,
+            height: read_f32(record, abi::ENGINE_CONSTRAINT_HEIGHT).ok()?,
+            viewport_block_start: read_f32(record, abi::ENGINE_CONSTRAINT_VIEWPORT_BLOCK_START)
+                .ok()?,
+            viewport_block_end: read_f32(record, abi::ENGINE_CONSTRAINT_VIEWPORT_BLOCK_END).ok()?,
+            resume_block_offset: read_f32(record, abi::ENGINE_CONSTRAINT_RESUME_BLOCK_OFFSET)
+                .ok()?,
+            max_lines: read_u32(record, abi::ENGINE_CONSTRAINT_MAX_LINES).ok()?,
+            region_start: read_u32(record, abi::ENGINE_CONSTRAINT_REGION_START).ok()?,
+            resume_cluster: read_u32(record, abi::ENGINE_CONSTRAINT_RESUME_CLUSTER).ok()?,
+            region_count: read_u16(record, abi::ENGINE_CONSTRAINT_REGION_COUNT).ok()?,
+            resume_region: read_u16(record, abi::ENGINE_CONSTRAINT_RESUME_REGION).ok()?,
+            width_mode: record[abi::ENGINE_CONSTRAINT_WIDTH_MODE],
+            height_mode: record[abi::ENGINE_CONSTRAINT_HEIGHT_MODE],
+            wrap: record[abi::ENGINE_CONSTRAINT_WRAP],
+            align: record[abi::ENGINE_CONSTRAINT_ALIGN],
+            overflow: record[abi::ENGINE_CONSTRAINT_OVERFLOW],
+            block_align: record[abi::ENGINE_CONSTRAINT_BLOCK_ALIGN],
+        })
+    }
+
+    pub(crate) fn region(self, index: usize) -> Option<FlowRegion> {
+        let record = record_at(self.regions, abi::ENGINE_REGION_RECORD_SIZE, index)?;
+        Some(FlowRegion {
+            id: read_u32(record, abi::ENGINE_REGION_ID).ok()?,
+            geometry_revision: read_u32(record, abi::ENGINE_REGION_GEOMETRY_REVISION).ok()?,
+            vertices_offset: read_u32(record, abi::ENGINE_REGION_VERTICES_OFFSET).ok()?,
+            vertex_count: read_u16(record, abi::ENGINE_REGION_VERTEX_COUNT).ok()?,
+            exclusion_start: read_u16(record, abi::ENGINE_REGION_EXCLUSION_START).ok()?,
+            exclusion_count: read_u16(record, abi::ENGINE_REGION_EXCLUSION_COUNT).ok()?,
+            shape: record[abi::ENGINE_REGION_SHAPE],
+            writing_mode: record[abi::ENGINE_REGION_WRITING_MODE],
+            text_orientation: record[abi::ENGINE_REGION_TEXT_ORIENTATION],
+            inline_start: read_f32(record, abi::ENGINE_REGION_INLINE_START).ok()?,
+            block_start: read_f32(record, abi::ENGINE_REGION_BLOCK_START).ok()?,
+            inline_end: read_f32(record, abi::ENGINE_REGION_INLINE_END).ok()?,
+            block_end: read_f32(record, abi::ENGINE_REGION_BLOCK_END).ok()?,
+            clip_inline_start: read_f32(record, abi::ENGINE_REGION_CLIP_INLINE_START).ok()?,
+            clip_block_start: read_f32(record, abi::ENGINE_REGION_CLIP_BLOCK_START).ok()?,
+            clip_inline_end: read_f32(record, abi::ENGINE_REGION_CLIP_INLINE_END).ok()?,
+            clip_block_end: read_f32(record, abi::ENGINE_REGION_CLIP_BLOCK_END).ok()?,
+        })
+    }
+
+    pub(crate) fn exclusion(self, index: usize) -> Option<FlowExclusion> {
+        let record = record_at(self.exclusions, abi::ENGINE_EXCLUSION_RECORD_SIZE, index)?;
+        Some(FlowExclusion {
+            id: read_u32(record, abi::ENGINE_EXCLUSION_ID).ok()?,
+            region_id: read_u32(record, abi::ENGINE_EXCLUSION_REGION_ID).ok()?,
+            geometry_revision: read_u32(record, abi::ENGINE_EXCLUSION_GEOMETRY_REVISION).ok()?,
+            vertices_offset: read_u32(record, abi::ENGINE_EXCLUSION_VERTICES_OFFSET).ok()?,
+            vertex_count: read_u16(record, abi::ENGINE_EXCLUSION_VERTEX_COUNT).ok()?,
+            shape: record[abi::ENGINE_EXCLUSION_SHAPE],
+            wrap_side: record[abi::ENGINE_EXCLUSION_WRAP_SIDE],
+            inline_start: read_f32(record, abi::ENGINE_EXCLUSION_INLINE_START).ok()?,
+            block_start: read_f32(record, abi::ENGINE_EXCLUSION_BLOCK_START).ok()?,
+            inline_end: read_f32(record, abi::ENGINE_EXCLUSION_INLINE_END).ok()?,
+            block_end: read_f32(record, abi::ENGINE_EXCLUSION_BLOCK_END).ok()?,
+            margin_inline: read_f32(record, abi::ENGINE_EXCLUSION_MARGIN_INLINE).ok()?,
+            margin_block: read_f32(record, abi::ENGINE_EXCLUSION_MARGIN_BLOCK).ok()?,
+        })
+    }
+
+    pub(crate) fn vertex(self, offset: u32, index: usize) -> Option<FlowVertex> {
+        let stride = usize::try_from(abi::ENGINE_FLOW_VERTEX_RECORD_SIZE).ok()?;
+        let byte_offset = usize::try_from(offset)
+            .ok()?
+            .checked_add(index.checked_mul(stride)?)?;
+        let record = self
+            .request
+            .get(byte_offset..byte_offset.checked_add(stride)?)?;
+        Some(FlowVertex {
+            inline: read_f32(record, abi::ENGINE_FLOW_VERTEX_INLINE).ok()?,
+            block: read_f32(record, abi::ENGINE_FLOW_VERTEX_BLOCK).ok()?,
+        })
     }
 
     pub(crate) fn fingerprint(self) -> u64 {
@@ -873,6 +1023,12 @@ fn record_table(
     array(request, offset, count, stride, alignment)
 }
 
+fn record_at(records: &[u8], stride: u32, index: usize) -> Option<&[u8]> {
+    let stride = usize::try_from(stride).ok()?;
+    let start = index.checked_mul(stride)?;
+    records.get(start..start.checked_add(stride)?)
+}
+
 fn validate_constraints(
     constraints: &[u8],
     region_count: u32,
@@ -1370,6 +1526,7 @@ fn mix_vertex_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::flow_geometry::{FlowGeometryArena, InlineSlot, InlineSlotArena};
     use crate::{
         abi_contract::{
             ENGINE_TEXT_MUTATION_DELETE_COUNT, ENGINE_TEXT_MUTATION_ENCODING,
@@ -1554,6 +1711,10 @@ mod tests {
         let geometry = parse_valid_geometry(&bytes).unwrap();
         geometry.validate_text_length(0).unwrap();
         assert_ne!(geometry.fingerprint(), 0);
+        assert_eq!(geometry.constraint_count(), 1);
+        assert_eq!(geometry.constraint(0).unwrap().flow_thread_id, 1);
+        assert_eq!(geometry.region(0).unwrap().inline_end, 100.0);
+        assert_eq!(geometry.exclusion(0).unwrap().region_id, 1);
 
         let mut polygon = bytes.clone();
         polygon.resize(
@@ -1585,6 +1746,38 @@ mod tests {
         }
         let polygon_geometry = parse_valid_geometry(&polygon).unwrap();
         assert_ne!(polygon_geometry.fingerprint(), geometry.fingerprint());
+        let mut retained = FlowGeometryArena::default();
+        retained.build(polygon_geometry).unwrap();
+        assert_eq!(retained.constraints.len(), 1);
+        assert_eq!(retained.regions.len(), 1);
+        assert_eq!(retained.exclusions.len(), 1);
+        assert_eq!(retained.vertices.len(), 3);
+        assert_eq!(retained.regions[0].vertex_start, 0);
+        assert_eq!(
+            retained.vertices[2],
+            FlowVertex {
+                inline: 0.0,
+                block: 100.0
+            }
+        );
+        let mut rectangle = FlowGeometryArena::default();
+        rectangle.build(geometry).unwrap();
+        let mut slots = InlineSlotArena::default();
+        assert_eq!(
+            slots
+                .resolve_rectangle_band(&rectangle, 0, 20.0, 30.0, 4)
+                .unwrap(),
+            [
+                InlineSlot {
+                    start: 0.0,
+                    end: 20.0,
+                },
+                InlineSlot {
+                    start: 40.0,
+                    end: 100.0,
+                },
+            ]
+        );
         let mut relocated_polygon = polygon[..GEOMETRY_LENGTH].to_vec();
         relocated_polygon.resize(GEOMETRY_LENGTH + 8, 0);
         relocated_polygon.extend_from_slice(&polygon[GEOMETRY_LENGTH..]);
