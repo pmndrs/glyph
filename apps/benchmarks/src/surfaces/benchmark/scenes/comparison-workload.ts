@@ -606,7 +606,7 @@ async function createComparisonWorkloadRuntime(
         initialIconWindow?.scrollX ?? (workloadChanged ? 0 : -scene.position.x),
         initialIconWindow?.scrollY ?? (workloadChanged ? 0 : scene.position.y),
       );
-      const nextRoot = createBatchRoot(next.workload, activeFont().loaded);
+      const nextRoot = createBatchRoot(next.workload);
       const scheduledAt = performance.now();
       try {
         // The staged root is published off-scene: a TextGroup shapes, lays out, and packs its whole workload inside
@@ -1085,12 +1085,11 @@ async function createComparisonWorkloadRuntime(
  * batch that owns one set of GPU resources. A single-paragraph workload gets a plain Group and keeps its own implicit
  * batch of one, which is what it already was.
  */
-function createBatchRoot(workload: ComparisonWorkloadId, font: WorkloadFont): THREE.Object3D {
+function createBatchRoot(workload: ComparisonWorkloadId): THREE.Object3D {
   if (comparisonWorkloadDefinition(workload).batching === 'standalone') return new THREE.Group();
   // `grow` keeps one buffer per physical resource. A chunked batch would split a paragraph's glyph run at every chunk
   // boundary and turn one draw into several, which would make the batched lanes look worse than the standalone one.
   return new TextGroup<AnyRasterTechnique>({
-    technique: font.technique,
     capacity: { size: 4_096, policy: 'grow' },
   });
 }

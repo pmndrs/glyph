@@ -10,7 +10,7 @@ declare const mtsdfFont: LoadedFont<typeof msdf>;
 
 const inline = createElement(Text<typeof bitmap>, { paint: { color: '#ff00ff' } }, 'span');
 const label = createElement(Text<typeof bitmap>, { font: bitmapFont }, 'Typed ', inline);
-const labels = createElement(TextGroup<typeof bitmap>, { technique: bitmap }, label);
+const labels = createElement(TextGroup<typeof bitmap>, null, label);
 
 function FontConsumer(): null {
   const loaded: LoadedFont<typeof bitmap> = useFont({

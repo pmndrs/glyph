@@ -128,7 +128,7 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
       const scene = new THREE.Scene();
       // One group so every case packs through the same batch the live workload uses, rather than through a
       // standalone-Text path the workload never takes.
-      const group = new TextGroup<AnyRasterTechnique>({ technique: bitmap, capacity: { size: 4_096, policy: 'grow' } });
+      const group = new TextGroup<AnyRasterTechnique>({ capacity: { size: 4_096, policy: 'grow' } });
       scene.add(group);
       const evidence = new Map<RichTextCaseId, CaseEvidence>();
       try {

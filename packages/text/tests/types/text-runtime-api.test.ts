@@ -17,15 +17,16 @@ declare const bitmapFallback: LoadedFont<typeof bitmap>;
 declare const mtsdfFont: LoadedFont<typeof msdf>;
 
 const uiFont = createFontStack(bitmapFont, bitmapFallback);
-
-// @ts-expect-error A FontStack cannot mix raster techniques.
-createFontStack(bitmapFont, mtsdfFont);
+const mixedRasterFont = createFontStack(bitmapFont, mtsdfFont);
 
 const labels = runtime.createParagraphBatch({
   technique: bitmap,
   capacity: { size: 128, policy: 'fixed' },
   renderVariant: 'plain' as 'plain' | 'warning',
 });
+
+// @ts-expect-error The legacy renderer-neutral batch still owns one raster technique.
+labels.add({ font: mixedRasterFont, text: 'Mixed techniques require a render-plan integration' });
 
 const warning = span(bitmapFallback, { color: '#ff00ff', fontSize: 18 });
 const label: Paragraph<typeof bitmap, 'plain' | 'warning'> = labels.add({

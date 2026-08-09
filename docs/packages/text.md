@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:57721f96d448668e6e1382d7e3db7bf01d288dbc93a5d4828ae3f88c11689536'
+source_digest: 'sha256:9dfe0999d0f417e5e8b3ec5756fdf0e3e3a51a830538b3ea0f44c1ca2f4e94fe'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -921,9 +921,19 @@ standalone `Text` owns the same path with a private session. Rust receives parag
 publishes one command-buffer delta, and compatible group children become one indexed draw under the group root. The
 executor retains only renderer resources needed to apply later deltas. It does not receive paragraph layout arrays;
 Three's old layout, glyph-snapshot, and glyph-origin override surface is removed. Any later interaction or measurement
-API must query retained Rust layout state separately and on demand. Focused integration covers mixed-font spans, custom material factories, two-child
-indexed batching, renderer-local transform updates, reparenting, and disposal. R3F, TypeGPU, the portable legacy core,
-and mixed-technique public font stacks still own the remaining cutover and deletion work.
+API must query retained Rust layout state separately and on demand. Focused integration covers mixed-font spans, custom
+material factories, two-child indexed batching, renderer-local transform updates, reparenting, and disposal. R3F,
+TypeGPU, and the portable legacy core still own the remaining cutover and deletion work.
+
+Public font stacks no longer repeat a raster technique or require every fallback font to share one. Their generic type
+is the union of the concrete loaded-font techniques, while runtime construction still requires one text-runtime domain,
+unique font identities, and live font leases. Public Three `TextGroup` likewise has no authored technique: its retained
+Rust session resolves each selected glyph's actual font binding and the policy partitions the plan by supported
+technique, resource, program, material, and transform. A compiled-Wasm public lifecycle fixture uses one paragraph with
+a Bitmap root stack and an explicit MSDF span, observes both canonical material contexts, and realizes two draws from
+one Rust publication. The older renderer-neutral `ParagraphBatch` remains deliberately single-technique until it is
+removed; its type and runtime boundary reject a heterogeneous stack rather than silently selecting the primary font's
+technique.
 
 The executor now bounds CPU/GPU realization residency from Rust retirement records. Retiring a physical buffer disposes
 only materials that depend on its exact generation; retiring a plan resource disposes its technique texture only after
