@@ -274,6 +274,8 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 
 | D-207 | Paragraph lifecycle identity does not determine presentation order. The frame ABI carries a separate 12-byte paragraph-control record that explicitly upserts ordered batch membership or removes retained state. The decoder rejects zero and duplicate IDs, duplicate declared orders, noncanonical removals, forged section overlap, and counts above the frame paragraph limit. Text, style, constraint, and inline-object records continue to name their owning paragraph independently. The production compiler emits control records before paragraph-owned semantics; the transitional single-child state rejects removal until the retained-child consumer lands. The reachable validation path changes optimized Wasm from 1,070,673 / 402,177 / 319,722 to 1,073,123 / 403,431 / 320,917 raw/gzip/Brotli bytes. | Accepted |
 
+| D-208 | Batch-global and paragraph-local state have distinct Rust owners before multiple children are admitted. `EngineSession` retains revision/fence state, the pinned policy identity, and the shared render-plan compiler. `ParagraphState` owns text/style mutation scratch and every retained Unicode, bidi, shaping, cluster, flow, and positioned-glyph A/B arena. The first checkpoint preserves the existing single child and exact transaction behavior; 124 Rust unit tests pass. Optimized Wasm changes from 1,073,123 / 403,431 / 320,917 to 1,073,179 / 403,475 / 321,149 raw/gzip/Brotli bytes. | Accepted |
+
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
 ## Verification and optimization

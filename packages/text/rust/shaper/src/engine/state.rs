@@ -85,6 +85,11 @@ struct EngineSession {
     acknowledged_publication_generation: u32,
     policy_binding: Option<PolicyBinding>,
     plan: RenderPlanCompiler,
+    paragraph: ParagraphState,
+}
+
+#[derive(Default)]
+struct ParagraphState {
     text: Vec<u16>,
     pending_text: Vec<u16>,
     text_unit_ids: Vec<u32>,
@@ -346,23 +351,27 @@ impl TextEngine {
             return Err(EngineError::SessionConflict);
         }
         let mut session = EngineSession::default();
-        session.styles.reserve_default()?;
-        session.pending_styles.reserve_default()?;
-        session.resolved_styles.reserve_default()?;
-        session.pending_resolved_styles.reserve_default()?;
+        session.paragraph.styles.reserve_default()?;
+        session.paragraph.pending_styles.reserve_default()?;
+        session.paragraph.resolved_styles.reserve_default()?;
+        session.paragraph.pending_resolved_styles.reserve_default()?;
         session
+            .paragraph
             .style_mutation_scratch
             .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
             .map_err(|_| EngineError::ResultTooLarge)?;
         session
+            .paragraph
             .style_order_scratch
             .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
             .map_err(|_| EngineError::ResultTooLarge)?;
         session
+            .paragraph
             .style_nesting_scratch
             .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
             .map_err(|_| EngineError::ResultTooLarge)?;
         session
+            .paragraph
             .style_resolution_scratch
             .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
             .map_err(|_| EngineError::ResultTooLarge)?;
@@ -383,36 +392,37 @@ impl TextEngine {
             .sessions
             .get_mut(&handle)
             .ok_or(EngineError::SessionMissing)?;
-        reserve_text_buffer(&mut session.text, capacity)?;
-        reserve_text_buffer(&mut session.pending_text, capacity)?;
-        reserve_vec(&mut session.text_unit_ids, capacity)?;
-        reserve_vec(&mut session.pending_text_unit_ids, capacity)?;
-        session.unicode.reserve(capacity).map_err(unicode_error)?;
-        session
+        let paragraph = &mut session.paragraph;
+        reserve_text_buffer(&mut paragraph.text, capacity)?;
+        reserve_text_buffer(&mut paragraph.pending_text, capacity)?;
+        reserve_vec(&mut paragraph.text_unit_ids, capacity)?;
+        reserve_vec(&mut paragraph.pending_text_unit_ids, capacity)?;
+        paragraph.unicode.reserve(capacity).map_err(unicode_error)?;
+        paragraph
             .pending_unicode
             .reserve(capacity)
             .map_err(unicode_error)?;
-        session.bidi.reserve(capacity).map_err(bidi_error)?;
-        session.pending_bidi.reserve(capacity).map_err(bidi_error)?;
-        session.shaping_runs.reserve(capacity)?;
-        session.pending_shaping_runs.reserve(capacity)?;
+        paragraph.bidi.reserve(capacity).map_err(bidi_error)?;
+        paragraph.pending_bidi.reserve(capacity).map_err(bidi_error)?;
+        paragraph.shaping_runs.reserve(capacity)?;
+        paragraph.pending_shaping_runs.reserve(capacity)?;
         let glyph_capacity = capacity.saturating_mul(2);
-        session.shape.reserve(glyph_capacity)?;
-        session.pending_shape.reserve(glyph_capacity)?;
-        session.clusters.reserve(capacity)?;
-        session.pending_clusters.reserve(capacity)?;
-        session.flow_layout.reserve(capacity, 1)?;
-        session.pending_flow_layout.reserve(capacity, 1)?;
-        session.positioned.reserve(glyph_capacity)?;
-        session.pending_positioned.reserve(glyph_capacity)?;
-        session
+        paragraph.shape.reserve(glyph_capacity)?;
+        paragraph.pending_shape.reserve(glyph_capacity)?;
+        paragraph.clusters.reserve(capacity)?;
+        paragraph.pending_clusters.reserve(capacity)?;
+        paragraph.flow_layout.reserve(capacity, 1)?;
+        paragraph.pending_flow_layout.reserve(capacity, 1)?;
+        paragraph.positioned.reserve(glyph_capacity)?;
+        paragraph.pending_positioned.reserve(glyph_capacity)?;
+        paragraph
             .glyph_identity_index
             .prepare(glyph_capacity)
             .map_err(|_| EngineError::ResultTooLarge)?;
-        reserve_vec(&mut session.fallback_spans, capacity)?;
-        reserve_vec(&mut session.pending_fallback_spans, capacity)?;
-        reserve_vec(&mut session.fallback_span_scratch, capacity)?;
-        reserve_vec(&mut session.fallback_cluster_scratch, glyph_capacity)?;
+        reserve_vec(&mut paragraph.fallback_spans, capacity)?;
+        reserve_vec(&mut paragraph.pending_fallback_spans, capacity)?;
+        reserve_vec(&mut paragraph.fallback_span_scratch, capacity)?;
+        reserve_vec(&mut paragraph.fallback_cluster_scratch, glyph_capacity)?;
         Ok(())
     }
 
@@ -427,7 +437,7 @@ impl TextEngine {
     pub(crate) fn session_text(&self, handle: u32) -> Result<&[u16], EngineError> {
         self.sessions
             .get(&handle)
-            .map(|session| session.text.as_slice())
+            .map(|session| session.paragraph.text.as_slice())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -435,7 +445,7 @@ impl TextEngine {
     pub(crate) fn session_style_count(&self, handle: u32) -> Result<usize, EngineError> {
         self.sessions
             .get(&handle)
-            .map(|session| session.styles.len())
+            .map(|session| session.paragraph.styles.len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -443,7 +453,7 @@ impl TextEngine {
     pub(crate) fn session_style_segment_count(&self, handle: u32) -> Result<usize, EngineError> {
         self.sessions
             .get(&handle)
-            .map(|session| session.resolved_styles.segments().len())
+            .map(|session| session.paragraph.resolved_styles.segments().len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -451,7 +461,7 @@ impl TextEngine {
     pub(crate) fn session_shaping_run_count(&self, handle: u32) -> Result<usize, EngineError> {
         self.sessions
             .get(&handle)
-            .map(|session| session.shaping_runs.runs().len())
+            .map(|session| session.paragraph.shaping_runs.runs().len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -542,70 +552,71 @@ impl TextEngine {
         // A completed renderer fence is external monotonic state. It remains accepted even if
         // plan preparation or publication later aborts.
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
-        session.prepare_text(request.text_mutations)?;
-        if let Err(error) = session.prepare_styles(request.style_mutations, |handle| {
+        let paragraph = &mut session.paragraph;
+        paragraph.prepare_text(request.text_mutations)?;
+        if let Err(error) = paragraph.prepare_styles(request.style_mutations, |handle| {
             font_stacks
                 .binary_search_by_key(&handle, |stack| stack.handle)
                 .is_ok()
         }) {
-            session.abort_text();
+            paragraph.abort_text();
             return Err(error);
         }
-        if let Err(error) = session.prepare_unicode() {
-            session.abort_text();
-            session.abort_styles();
+        if let Err(error) = paragraph.prepare_unicode() {
+            paragraph.abort_text();
+            paragraph.abort_styles();
             return Err(error);
         }
-        if let Err(error) = session.prepare_bidi() {
-            session.abort_text();
-            session.abort_styles();
-            session.abort_unicode();
+        if let Err(error) = paragraph.prepare_bidi() {
+            paragraph.abort_text();
+            paragraph.abort_styles();
+            paragraph.abort_unicode();
             return Err(error);
         }
-        if let Err(error) = session.prepare_shaping_runs() {
-            session.abort_text();
-            session.abort_styles();
-            session.abort_unicode();
-            session.abort_bidi();
+        if let Err(error) = paragraph.prepare_shaping_runs() {
+            paragraph.abort_text();
+            paragraph.abort_styles();
+            paragraph.abort_unicode();
+            paragraph.abort_bidi();
             return Err(error);
         }
         if let Some(shaper) = shaper.as_deref_mut() {
-            if let Err(error) = session.prepare_shape(shaper, font_stacks, font_bindings) {
-                session.abort_text();
-                session.abort_styles();
-                session.abort_unicode();
-                session.abort_bidi();
-                session.abort_shaping_runs();
+            if let Err(error) = paragraph.prepare_shape(shaper, font_stacks, font_bindings) {
+                paragraph.abort_text();
+                paragraph.abort_styles();
+                paragraph.abort_unicode();
+                paragraph.abort_bidi();
+                paragraph.abort_shaping_runs();
                 return Err(error);
             }
-            if let Err(error) = session.prepare_clusters(shaper) {
-                session.abort_text();
-                session.abort_styles();
-                session.abort_unicode();
-                session.abort_bidi();
-                session.abort_shaping_runs();
-                session.abort_shape();
-                session.abort_clusters();
+            if let Err(error) = paragraph.prepare_clusters(shaper) {
+                paragraph.abort_text();
+                paragraph.abort_styles();
+                paragraph.abort_unicode();
+                paragraph.abort_bidi();
+                paragraph.abort_shaping_runs();
+                paragraph.abort_shape();
+                paragraph.abort_clusters();
                 return Err(error);
             }
         }
-        if let Err(error) = session.prepare_geometry(request.geometry) {
-            session.abort_text();
-            session.abort_styles();
-            session.abort_unicode();
-            session.abort_bidi();
-            session.abort_shaping_runs();
-            session.abort_shape();
-            session.abort_clusters();
+        if let Err(error) = paragraph.prepare_geometry(request.geometry) {
+            paragraph.abort_text();
+            paragraph.abort_styles();
+            paragraph.abort_unicode();
+            paragraph.abort_bidi();
+            paragraph.abort_shaping_runs();
+            paragraph.abort_shape();
+            paragraph.abort_clusters();
             return Err(error);
         }
-        let flow_changed = session.clusters_prepared
-            || session.geometry_prepared
-            || session.style_invalidation.metrics;
-        let positioned_changed = flow_changed || session.style_invalidation.positioning;
+        let flow_changed = paragraph.clusters_prepared
+            || paragraph.geometry_prepared
+            || paragraph.style_invalidation.metrics;
+        let positioned_changed = flow_changed || paragraph.style_invalidation.positioning;
         if let Some(shaper) = shaper {
             if flow_changed
-                && let Err(error) = session.prepare_flow_layout(
+                && let Err(error) = paragraph.prepare_flow_layout(
                     shaper,
                     font_stacks,
                     font_bindings,
@@ -613,28 +624,28 @@ impl TextEngine {
                     request.limits.max_slots_per_band,
                 )
             {
-                session.abort_text();
-                session.abort_styles();
-                session.abort_unicode();
-                session.abort_bidi();
-                session.abort_shaping_runs();
-                session.abort_shape();
-                session.abort_clusters();
-                session.abort_geometry();
-                session.abort_flow_layout();
+                paragraph.abort_text();
+                paragraph.abort_styles();
+                paragraph.abort_unicode();
+                paragraph.abort_bidi();
+                paragraph.abort_shaping_runs();
+                paragraph.abort_shape();
+                paragraph.abort_clusters();
+                paragraph.abort_geometry();
+                paragraph.abort_flow_layout();
                 return Err(error);
             }
-            if positioned_changed && let Err(error) = session.prepare_positioned(shaper) {
-                session.abort_text();
-                session.abort_styles();
-                session.abort_unicode();
-                session.abort_bidi();
-                session.abort_shaping_runs();
-                session.abort_shape();
-                session.abort_clusters();
-                session.abort_geometry();
-                session.abort_flow_layout();
-                session.abort_positioned();
+            if positioned_changed && let Err(error) = paragraph.prepare_positioned(shaper) {
+                paragraph.abort_text();
+                paragraph.abort_styles();
+                paragraph.abort_unicode();
+                paragraph.abort_bidi();
+                paragraph.abort_shaping_runs();
+                paragraph.abort_shape();
+                paragraph.abort_clusters();
+                paragraph.abort_geometry();
+                paragraph.abort_flow_layout();
+                paragraph.abort_positioned();
                 return Err(error);
             }
         }
@@ -647,10 +658,10 @@ impl TextEngine {
         let plan_result = if reuse_ordered_plan {
             session.plan.prepare_reuse()
         } else {
-            let positioned = if session.positioned_prepared {
-                &session.pending_positioned
+            let positioned = if paragraph.positioned_prepared {
+                &paragraph.pending_positioned
             } else {
-                &session.positioned
+                &paragraph.positioned
             };
             let semantic_f32 = positioned.semantic_f32();
             let semantic_u32 = positioned.semantic_u32();
@@ -671,16 +682,16 @@ impl TextEngine {
                         .map(|binding| &binding.binding)
                 },
             ) {
-                session.abort_text();
-                session.abort_styles();
-                session.abort_unicode();
-                session.abort_bidi();
-                session.abort_shaping_runs();
-                session.abort_shape();
-                session.abort_clusters();
-                session.abort_geometry();
-                session.abort_flow_layout();
-                session.abort_positioned();
+                paragraph.abort_text();
+                paragraph.abort_styles();
+                paragraph.abort_unicode();
+                paragraph.abort_bidi();
+                paragraph.abort_shaping_runs();
+                paragraph.abort_shape();
+                paragraph.abort_clusters();
+                paragraph.abort_geometry();
+                paragraph.abort_flow_layout();
+                paragraph.abort_positioned();
                 return Err(gather_error(error));
             }
             let gathered = gather.view();
@@ -694,16 +705,16 @@ impl TextEngine {
             )
         };
         if let Err(error) = plan_result {
-            session.abort_text();
-            session.abort_styles();
-            session.abort_unicode();
-            session.abort_bidi();
-            session.abort_shaping_runs();
-            session.abort_shape();
-            session.abort_clusters();
-            session.abort_geometry();
-            session.abort_flow_layout();
-            session.abort_positioned();
+            paragraph.abort_text();
+            paragraph.abort_styles();
+            paragraph.abort_unicode();
+            paragraph.abort_bidi();
+            paragraph.abort_shaping_runs();
+            paragraph.abort_shape();
+            paragraph.abort_clusters();
+            paragraph.abort_geometry();
+            paragraph.abort_flow_layout();
+            paragraph.abort_positioned();
             return Err(plan_error(error));
         }
         Ok(PreparedUpdate {
@@ -749,16 +760,16 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         session.plan.abort();
-        session.abort_text();
-        session.abort_styles();
-        session.abort_unicode();
-        session.abort_bidi();
-        session.abort_shaping_runs();
-        session.abort_shape();
-        session.abort_clusters();
-        session.abort_geometry();
-        session.abort_flow_layout();
-        session.abort_positioned();
+        session.paragraph.abort_text();
+        session.paragraph.abort_styles();
+        session.paragraph.abort_unicode();
+        session.paragraph.abort_bidi();
+        session.paragraph.abort_shaping_runs();
+        session.paragraph.abort_shape();
+        session.paragraph.abort_clusters();
+        session.paragraph.abort_geometry();
+        session.paragraph.abort_flow_layout();
+        session.paragraph.abort_positioned();
         Ok(())
     }
 
@@ -774,16 +785,16 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         session.plan.commit().map_err(plan_error)?;
-        session.commit_text();
-        session.commit_styles();
-        session.commit_unicode();
-        session.commit_bidi();
-        session.commit_shaping_runs();
-        session.commit_shape();
-        session.commit_clusters();
-        session.commit_geometry();
-        session.commit_flow_layout();
-        session.commit_positioned();
+        session.paragraph.commit_text();
+        session.paragraph.commit_styles();
+        session.paragraph.commit_unicode();
+        session.paragraph.commit_bidi();
+        session.paragraph.commit_shaping_runs();
+        session.paragraph.commit_shape();
+        session.paragraph.commit_clusters();
+        session.paragraph.commit_geometry();
+        session.paragraph.commit_flow_layout();
+        session.paragraph.commit_positioned();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
@@ -801,7 +812,7 @@ impl TextEngine {
     }
 }
 
-impl EngineSession {
+impl ParagraphState {
     fn prepare_text(
         &mut self,
         mutations: super::semantic_wire::TextMutationBatch<'_>,
@@ -2074,12 +2085,16 @@ mod tests {
         assert!(engine.session_text(4).unwrap().is_empty());
         engine.commit_update(prepared).unwrap();
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
-        assert_eq!(engine.sessions.get(&4).unwrap().text_unit_ids, [1, 2, 3, 4]);
+        assert_eq!(
+            engine.sessions.get(&4).unwrap().paragraph.text_unit_ids,
+            [1, 2, 3, 4]
+        );
         assert_eq!(
             engine
                 .sessions
                 .get(&4)
                 .unwrap()
+                .paragraph
                 .unicode
                 .grapheme_boundaries(),
             &[0, 1, 2, 3, 4]
@@ -2094,8 +2109,8 @@ mod tests {
         engine.abort_update(prepared).unwrap();
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
         let session = engine.sessions.get(&4).unwrap();
-        assert_eq!(session.text_unit_ids, [1, 2, 3, 4]);
-        assert_eq!(session.next_text_unit_id, 5);
+        assert_eq!(session.paragraph.text_unit_ids, [1, 2, 3, 4]);
+        assert_eq!(session.paragraph.next_text_unit_id, 5);
 
         let retry = engine.prepare_update(edit, 2).unwrap();
         engine.commit_update(retry).unwrap();
@@ -2104,13 +2119,16 @@ mod tests {
             &[0x61, 0x58, 0x59, 0x63, 0x64, 0x21]
         );
         assert_eq!(
-            engine.sessions.get(&4).unwrap().text_unit_ids,
+            engine.sessions.get(&4).unwrap().paragraph.text_unit_ids,
             [1, 5, 6, 3, 4, 7]
         );
 
         let settled_capacities = {
             let session = engine.sessions.get(&4).unwrap();
-            [session.text.capacity(), session.pending_text.capacity()]
+            [
+                session.paragraph.text.capacity(),
+                session.paragraph.pending_text.capacity(),
+            ]
         };
         let warm_bytes = text_mutation_bytes(&[(0, 1, &[0x7a])]);
         let warm_batch =
@@ -2120,9 +2138,12 @@ mod tests {
         let prepared = engine.prepare_update(warm, 3).unwrap();
         engine.commit_update(prepared).unwrap();
         let session = engine.sessions.get(&4).unwrap();
-        assert_eq!(session.text_unit_ids, [8, 5, 6, 3, 4, 7]);
+        assert_eq!(session.paragraph.text_unit_ids, [8, 5, 6, 3, 4, 7]);
         assert_eq!(
-            [session.pending_text.capacity(), session.text.capacity()],
+            [
+                session.paragraph.pending_text.capacity(),
+                session.paragraph.text.capacity(),
+            ],
             settled_capacities
         );
     }
@@ -2144,9 +2165,9 @@ mod tests {
             Err(EngineError::InvalidRequest)
         );
         let session = engine.sessions.get(&4).unwrap();
-        assert!(session.text.is_empty());
-        assert!(session.unicode.grapheme_boundaries().is_empty());
-        assert!(session.bidi.levels.is_empty());
+        assert!(session.paragraph.text.is_empty());
+        assert!(session.paragraph.unicode.grapheme_boundaries().is_empty());
+        assert!(session.paragraph.bidi.levels.is_empty());
     }
 
     #[test]
@@ -2164,16 +2185,43 @@ mod tests {
             parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         let prepared = engine.prepare_update(text, 1).unwrap();
         engine.commit_update(prepared).unwrap();
-        assert_eq!(engine.sessions.get(&4).unwrap().bidi.paragraph_levels, &[0]);
+        assert_eq!(
+            engine
+                .sessions
+                .get(&4)
+                .unwrap()
+                .paragraph
+                .bidi
+                .paragraph_levels,
+            &[0]
+        );
 
         let root_bytes = root_style_bytes_with_direction(7, DIRECTION_RTL);
         let mut root = update(1, 1, 1);
         root.style_mutations =
             parse_style_mutations(&root_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         let prepared = engine.prepare_update(root, 2).unwrap();
-        assert_eq!(engine.sessions.get(&4).unwrap().bidi.paragraph_levels, &[0]);
+        assert_eq!(
+            engine
+                .sessions
+                .get(&4)
+                .unwrap()
+                .paragraph
+                .bidi
+                .paragraph_levels,
+            &[0]
+        );
         engine.commit_update(prepared).unwrap();
-        assert_eq!(engine.sessions.get(&4).unwrap().bidi.paragraph_levels, &[1]);
+        assert_eq!(
+            engine
+                .sessions
+                .get(&4)
+                .unwrap()
+                .paragraph
+                .bidi
+                .paragraph_levels,
+            &[1]
+        );
     }
 
     #[test]
