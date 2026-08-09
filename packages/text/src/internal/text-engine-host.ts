@@ -1,5 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
+import { RenderWireIdentityRegistry } from './render-policy-wire.js';
 
 const MAX_U32 = 0xffff_ffff;
 
@@ -52,6 +53,7 @@ export class TextEngineStatusError extends Error {
 
 /** Internal lifecycle owner for retained policy, font-stack, and session state in a RuntimeShaper's Wasm instance. */
 export class TextEngineHost {
+  readonly wireIdentities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry();
   readonly #exports;
   readonly #sessions = new Set<TextEngineSession>();
   readonly #policies = new Set<number>();

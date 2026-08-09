@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { TextEngineHost } from '../../dist/internal/text-engine-host.js';
+import {
+  firstPartyTechniqueWireIds,
+  firstPartyThreeRenderPolicyBytes,
+} from '../../dist/internal/render-policy-wire.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
 
@@ -56,5 +60,38 @@ test('production text-engine host publishes borrowed A/B plans through the runti
 
   host.dispose();
   assert.throws(() => session.update(firstRequest), /disposed/);
+  shaper.dispose();
+});
+
+test('one deterministic Three policy registers Bitmap, MSDF, and Slug with material-directed draws', async () => {
+  const [wasm, abi] = await Promise.all([readFile(wasmUrl), readFile(abiUrl, 'utf8').then(JSON.parse)]);
+  assert.deepEqual(firstPartyTechniqueWireIds, {
+    bitmap: 0x1775_3b8c,
+    msdf: 0xf9a7_e4fd,
+    slug: 0xf22c_7908,
+  });
+  const bytes = firstPartyThreeRenderPolicyBytes();
+  const request = abi.layouts.policyRequest;
+  const program = abi.layouts.policyProgram;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  assert.equal(view.getUint32(request.programCount, true), 3);
+  const programsOffset = view.getUint32(request.programsOffset, true);
+  const expectedTechniques = [
+    firstPartyTechniqueWireIds.bitmap,
+    firstPartyTechniqueWireIds.msdf,
+    firstPartyTechniqueWireIds.slug,
+  ];
+  for (const [index, techniqueId] of expectedTechniques.entries()) {
+    const offset = programsOffset + index * program.size;
+    assert.equal(view.getUint32(offset + program.techniqueId, true), techniqueId);
+    assert.equal(view.getUint32(offset + program.programId, true), index + 1);
+    assert.ok(view.getUint32(offset + program.drawKeyMask, true) & abi.policy.batchFields.material);
+    assert.equal(view.getUint32(offset + program.storageKeyMask, true) & abi.policy.batchFields.material, 0);
+  }
+
+  const shaper = await createRuntimeShaper({ wasm });
+  const host = new TextEngineHost(shaper);
+  host.registerPolicy(12, bytes);
+  host.dispose();
   shaper.dispose();
 });
