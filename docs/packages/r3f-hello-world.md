@@ -1,0 +1,55 @@
+---
+type: Workspace Package
+title: '@pmndrs/text-r3f-hello-world'
+description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Slug, and font-stack fallback.
+resource: ../../apps/r3f-hello-world
+workspace_package: '@pmndrs/text-r3f-hello-world'
+documentation_type: reference
+source_digest: 'sha256:44849706fcd065b4c335e90265bc73fe89c8ef0f96407d93a2d2ddb88773b35c'
+tags: [package, example, react, react-three-fiber, vite]
+sources:
+  - id: manifest
+    resource: ../../apps/r3f-hello-world/package.json
+    title: Example application manifest
+  - id: scene
+    resource: ../../apps/r3f-hello-world/src/technique-scene.tsx
+    title: Public R3F technique and fallback example
+  - id: asset-generator
+    resource: ../../apps/r3f-hello-world/scripts/generate-fonts.mts
+    title: Reproducible subset and multi-technique bake
+  - id: asset-manifest
+    resource: ../../apps/r3f-hello-world/assets/manifest.json
+    title: Authenticated checked-in example assets
+generated:
+  by: openai-codex/gpt-5.6
+  at: '2026-08-09T18:38:19Z'
+---
+
+# Package reference: `@pmndrs/text-r3f-hello-world`
+
+This private Vite application is the minimal product-shaped React Three Fiber example. One full-page canvas renders
+`Hello world` through the public `@pmndrs/text/r3f` `Text` component and resolves a Font Awesome globe through an ordered
+font stack. In-canvas MSDF controls replace the rendered text component between Bitmap, MSDF, and Slug; the example does
+not retain a second renderer path or manually pack glyph data.
+
+The checked-in assets are deliberately bounded at source before baking:
+
+- Inter contains Basic Latin `U+0020–U+007E`.
+- Font Awesome contains six globe and earth PUA scalars, including the displayed `U+F0AC` glyph.
+
+Each GLB embeds Bitmap, MSDF, and Slug raster resources for its subset. The manifest authenticates the exact artifacts,
+and `assets:check` uses pinned HarfBuzz 14.2.0 to subset and rebake both fonts in temporary storage before requiring
+byte-identical output. Vite emits the public shaper Wasm URL and a combined Inter/Font Awesome notice file. Three, React,
+and React Three Fiber remain ordinary workspace peers rather than part of the core package-size graph.
+
+## Commands
+
+```sh
+mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world dev
+mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world check
+```
+
+The check runs TypeScript 7 isolated typechecking, Oxlint with warnings denied, Oxfmt, deterministic asset rebaking, and a
+production Vite build. Live acceptance additionally clicks all three in-canvas controls on a real WebGPU canvas and
+requires thirteen rendered glyphs, zero missing glyphs, and two Rust-planned meshes: one for Latin and one for the icon
+fallback resource.
