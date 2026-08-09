@@ -9,8 +9,12 @@ use crate::{
         PRIMITIVE_GLYPH, PRIMITIVE_INLINE_OBJECT, PRIMITIVE_POLICY, PatchRecord, PrimitiveRecord,
         RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_BUFFER,
         RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView, ResourceRecord,
-        RetirementRecord, SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT,
-        SEMANTIC_INSERTED_GLYPH, SEMANTIC_LINE, SEMANTIC_RUN, SEMANTIC_SELECTION, SemanticRecord,
+        RetirementRecord,
+    },
+    engine::semantic_view::{
+        SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT, SEMANTIC_INSERTED_GLYPH,
+        SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SEMANTIC_RUN, SEMANTIC_SELECTION,
+        SemanticRecord,
     },
 };
 
@@ -26,7 +30,7 @@ pub(crate) struct TableSpan {
 pub(crate) struct EncodedPlanLayout {
     pub byte_length: u32,
     pub payload_offset: u32,
-    pub semantics: TableSpan,
+    pub semantic_views: TableSpan,
     pub resources: TableSpan,
     pub buffers: TableSpan,
     pub patches: TableSpan,
@@ -36,11 +40,20 @@ pub(crate) struct EncodedPlanLayout {
     pub diagnostics: TableSpan,
 }
 
+#[cfg(test)]
 pub(crate) fn encode_plan(
     plan: RenderPlanView<'_>,
     output: &mut [u8],
 ) -> Result<EncodedPlanLayout, u32> {
-    let layout = plan_layout(plan)?;
+    encode_publication(plan, &[], output)
+}
+
+pub(crate) fn encode_publication(
+    plan: RenderPlanView<'_>,
+    semantic_views: &[SemanticRecord],
+    output: &mut [u8],
+) -> Result<EncodedPlanLayout, u32> {
+    let layout = publication_layout(plan, semantic_views)?;
     let byte_length = usize::try_from(layout.byte_length).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
     let bytes = output
         .get_mut(..byte_length)
@@ -52,9 +65,9 @@ pub(crate) fn encode_plan(
     }
     write_records(
         bytes,
-        layout.semantics,
+        layout.semantic_views,
         SEMANTIC_RECORD_SIZE,
-        plan.semantics,
+        semantic_views,
         write_semantic,
     );
     write_records(
@@ -103,8 +116,16 @@ pub(crate) fn encode_plan(
     Ok(layout)
 }
 
+#[cfg(test)]
 pub(crate) fn plan_layout(plan: RenderPlanView<'_>) -> Result<EncodedPlanLayout, u32> {
-    validate_plan(plan)?;
+    publication_layout(plan, &[])
+}
+
+pub(crate) fn publication_layout(
+    plan: RenderPlanView<'_>,
+    semantic_views: &[SemanticRecord],
+) -> Result<EncodedPlanLayout, u32> {
+    validate_plan(plan, semantic_views)?;
     let mut cursor = ENGINE_RESULT_HEADER_SIZE;
     let payload_offset = if plan.payload.is_empty() {
         0
@@ -114,9 +135,9 @@ pub(crate) fn plan_layout(plan: RenderPlanView<'_>) -> Result<EncodedPlanLayout,
         cursor = add_bytes(cursor, plan.payload.len(), 1)?;
         offset
     };
-    let semantics = add_table(
+    let semantic_views = add_table(
         &mut cursor,
-        plan.semantics.len(),
+        semantic_views.len(),
         SEMANTIC_RECORD_SIZE,
         SEMANTIC_RECORD_ALIGNMENT,
     )?;
@@ -165,7 +186,7 @@ pub(crate) fn plan_layout(plan: RenderPlanView<'_>) -> Result<EncodedPlanLayout,
     Ok(EncodedPlanLayout {
         byte_length: cursor,
         payload_offset,
-        semantics,
+        semantic_views,
         resources,
         buffers,
         patches,
@@ -176,11 +197,11 @@ pub(crate) fn plan_layout(plan: RenderPlanView<'_>) -> Result<EncodedPlanLayout,
     })
 }
 
-fn validate_plan(plan: RenderPlanView<'_>) -> Result<(), u32> {
+fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) -> Result<(), u32> {
     if plan.policy_handle == 0 {
         return Err(STATUS_INVALID_REQUEST);
     }
-    for record in plan.semantics {
+    for record in semantic_views {
         if record.id == 0
             || !matches!(
                 record.kind,
@@ -191,6 +212,7 @@ fn validate_plan(plan: RenderPlanView<'_>) -> Result<(), u32> {
                     | SEMANTIC_CARET
                     | SEMANTIC_SELECTION
                     | SEMANTIC_INSERTED_GLYPH
+                    | SEMANTIC_PARAGRAPH_MEASUREMENT
             )
             || record.text_start > record.text_end
             || !finite4(
@@ -647,7 +669,6 @@ mod tests {
             policy_handle: 15,
             capability_set: 16,
             policy_fingerprint: 17,
-            semantics: &semantic,
             resources: &resource,
             buffers: &buffer,
             patches: &patch,
@@ -657,9 +678,9 @@ mod tests {
             diagnostics: &diagnostic,
             payload: &[0xaa, 0xbb, 0xcc, 0xdd, 0xee],
         };
-        let expected = plan_layout(plan).unwrap();
+        let expected = publication_layout(plan, &semantic).unwrap();
         let mut bytes = vec![0x7f; expected.byte_length as usize + 16];
-        let layout = encode_plan(plan, &mut bytes).unwrap();
+        let layout = encode_publication(plan, &semantic, &mut bytes).unwrap();
         assert_eq!(layout, expected);
         assert_eq!(layout.payload_offset % PAYLOAD_ALIGNMENT, 0);
         assert_eq!(

@@ -24,7 +24,8 @@ use crate::{
     engine::{
         frame::{CommittedUpdate, RESULT_FLAG_CHECKPOINT, SessionRevision},
         render_plan::RenderPlanView,
-        render_plan_wire::{EncodedPlanLayout, encode_plan},
+        render_plan_wire::{EncodedPlanLayout, encode_publication},
+        semantic_view::SemanticRecord,
     },
     wire::write_u32,
 };
@@ -108,9 +109,18 @@ impl FrameTransport {
             .ok_or(STATUS_RESULT_TOO_LARGE)
     }
 
+    #[cfg(test)]
     pub fn stage_plan(&mut self, plan: RenderPlanView<'_>) -> Result<StagedPlan, u32> {
+        self.stage_publication(plan, &[])
+    }
+
+    pub fn stage_publication(
+        &mut self,
+        plan: RenderPlanView<'_>,
+        semantic_views: &[SemanticRecord],
+    ) -> Result<StagedPlan, u32> {
         let slot = self.inactive_slot();
-        let layout = encode_plan(plan, self.outputs[slot].bytes_mut())?;
+        let layout = encode_publication(plan, semantic_views, self.outputs[slot].bytes_mut())?;
         Ok(StagedPlan {
             slot,
             policy_handle: plan.policy_handle,
@@ -236,7 +246,7 @@ impl FrameTransport {
             bytes,
             ENGINE_RESULT_SEMANTICS_OFFSET,
             ENGINE_RESULT_SEMANTICS_COUNT,
-            values.layout.semantics,
+            values.layout.semantic_views,
         );
         write_span(
             bytes,

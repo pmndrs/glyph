@@ -19,6 +19,7 @@ mod identity_index;
 #[cfg(feature = "kernel-lab")]
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) mod kernel_lab;
+pub(crate) mod layout_query;
 #[cfg_attr(not(test), allow(dead_code))]
 mod line_composition;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -35,6 +36,7 @@ mod positioning;
 pub mod render_plan;
 pub mod render_plan_compiler;
 pub(crate) mod render_plan_wire;
+pub(crate) mod semantic_view;
 mod semantic_wire;
 mod shaping_state;
 #[cfg_attr(not(test), allow(dead_code))]

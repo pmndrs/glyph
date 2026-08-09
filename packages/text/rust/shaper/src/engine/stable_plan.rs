@@ -16,9 +16,9 @@ use super::{
         record_alignment, take_allocation,
     },
     policy::{
-        ALLOCATION_STABLE_INDIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE,
-        BufferId, BufferSchema, CapabilitySetId, PolicyExecutionError, ScalarType, TechniqueId,
-        ValidatedPolicy,
+        ALLOCATION_STABLE_INDIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BUFFER_USAGE_COPY_DST,
+        BUFFER_USAGE_STORAGE, BufferId, BufferSchema, CapabilitySetId, PolicyExecutionError,
+        ScalarType, TechniqueId, ValidatedPolicy,
     },
     render_plan::{
         BUFFER_STABLE_INDIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
@@ -1362,7 +1362,11 @@ impl StablePlanCompiler {
                 material_id: if split_material { first.material_id } else { 0 },
                 clip_id: first.clip_id,
                 depth_key: first.depth_key,
-                transform_id: if split_transform { first.transform_id } else { 0 },
+                transform_id: if split_transform {
+                    first.transform_id
+                } else {
+                    0
+                },
                 primitive_start: u32::try_from(primitive_start)
                     .map_err(|_| StablePlanError::ArithmeticOverflow)?,
                 primitive_count: 1,

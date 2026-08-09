@@ -7,23 +7,10 @@ export interface RenderPlanTable {
   readonly stride: number;
 }
 
-type TableName =
-  | 'semantics'
-  | 'resources'
-  | 'buffers'
-  | 'patches'
-  | 'primitives'
-  | 'draws'
-  | 'retirements'
-  | 'diagnostics';
+type TableName = 'resources' | 'buffers' | 'patches' | 'primitives' | 'draws' | 'retirements' | 'diagnostics';
 
 const resultLayout = textShaperAbi.layouts.engineResult;
 const tableLayouts = {
-  semantics: {
-    offset: resultLayout.semanticsOffset,
-    count: resultLayout.semanticsCount,
-    record: textShaperAbi.layouts.engineSemantic,
-  },
   resources: {
     offset: resultLayout.resourcesOffset,
     count: resultLayout.resourceCount,
