@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:b5fd776878341789eab7d0278040cd126f038f96c47f98a28b47de8d73f4747b'
+source_digest: 'sha256:6b2f912f6c6b1e60d9ca2f562b6ee335054f48bdd55222d2eba9656d9907bdf6'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -781,6 +781,16 @@ objects. Its `DataView` spans the complete Wasm memory and is replaced only when
 ordinary A/B publication swaps update only the base offset. A real compiled-Wasm fixture shapes and lays out Inter in
 one frame and proves every renderer table is nonempty and directly addressable. GPU buffer and draw realization remain
 open, so this checkpoint claims neither public Three cutover nor end-to-end rendering performance.
+
+The public Three batch semantics require multiple independent paragraphs in one Rust session and one plan publication.
+Multiple flow constraints inside one paragraph remain sequential/alternate regions for that prose; they are not a
+substitute for separate `Text` state. The Rust gather workspace now supports a one-reservation `begin` followed by
+allocation-free appends of independent positioned SoA inputs. A focused test proves two layouts retain exact order and
+semantic fields in the combined plan input. Paragraph-keyed wire records, retained child state, session-wide stable ID
+allocation, and atomic shared-plan commit remain in progress; no per-text-session shortcut is shipped. Adjacent
+8-warmup/31-sample Bitmap column-resize medians are 4.083 ms before and 4.078 ms after the rebuilt module, with 5.8% and
+6.1% RSD; this supports no speedup claim and exposes no material regression. Optimized Wasm is 1,070,685 / 402,154 /
+319,914 raw/gzip/Brotli bytes, +105 / +40 / +252 from D-205.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

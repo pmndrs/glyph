@@ -1238,6 +1238,16 @@ offsets, counts, strides, alignment, and publication bounds are validated once p
 lowerer can apply patches and draws by fixed offsets. A real compiled-Wasm fixture produces nonempty resource, buffer,
 patch, primitive, and draw tables through this view. GPU realization and the public Three import remain open.
 
+The Three cutover must also preserve the existing batch meaning: one `TextGroup` contains multiple independent
+paragraphs. Current Rust constraints describe multiple region flows over one retained prose stream, so assigning one
+session to each `Text` would multiply boundary calls and physical buffers rather than preserve batching. One engine
+session therefore retains paragraph-keyed child state and one shared planner/publication. Stable glyph/content IDs come
+from session-wide monotonic namespaces, and Rust appends each child's positioned SoA into one pre-reserved gather
+workspace. The append kernel is allocation-free after `begin(total_records)` and has an exact two-layout proof;
+paragraph-keyed mutation/removal and atomic child commit remain the next implementation slice. Adjacent rebuilt-Wasm
+Bitmap column-resize medians are 4.083 and 4.078 ms at 8 warmups/31 samples with 5.8%/6.1% RSD, so this slice makes no
+speedup claim and shows no material regression. Optimized Wasm is 1,070,685 / 402,154 / 319,914 raw/gzip/Brotli bytes.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement
