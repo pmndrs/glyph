@@ -2,6 +2,13 @@
 
 ## 2026-08-09
 
+- **Made Presentation workflow failures and command-buffer work observable** — The workflow runner now rejects Vitexec
+  browser/page errors even when its process exits zero. Stale stats cannot erase a retained-scene update failure, grouped
+  draw/glyph telemetry reads the realized batch root, and the 27-cell sweep requires positive counts. Every
+  Bitmap/MTSDF/Slug transition passes. The truthful result identifies Icon Grid's remaining policy gap: 2,926–3,021
+  glyphs are split into 476 draws and run at 30.8–47.0 FPS despite only 0.27–0.76 ms median submit and 0.57–2.02 ms GPU
+  time; this is open batching work, not an accepted performance result.
+
 - **Made multi-workload Rust sessions recycle storage without recycling semantics** — Frame admission now covers removal
   plus insertion records rather than only final paragraph count. A recycled paragraph clears every semantic arena and
   identity marker while retaining its allocations, and one session prewarms one reusable paragraph instead of applying a

@@ -4,6 +4,8 @@ import { promisify } from 'node:util';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { hasVitexecFailure } from './workflow-output.mts';
+
 const execute = promisify(execFile);
 const workflowScript = fileURLToPath(new URL('workflows.mts', import.meta.url));
 
@@ -23,4 +25,10 @@ test('describes requirements, writes, and source for one workflow', async () => 
   assert.match(stdout, /Requires: GPU-enabled Chromium and authenticated benchmark fixtures\./);
   assert.match(stdout, /Writes: Ignored browser caches only\./);
   assert.match(stdout, /Source: apps\/benchmarks\/scripts\/run-presentation-workload-matrix\.mts/);
+});
+
+test('treats Vitexec browser and injected-module errors as workflow failures', () => {
+  assert.equal(hasVitexecFailure('logs:\n[log] presentation-ready'), false);
+  assert.equal(hasVitexecFailure('logs:\n[error] injected probe failed'), true);
+  assert.equal(hasVitexecFailure('logs:\n[page error] renderer failed'), true);
 });

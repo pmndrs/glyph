@@ -3,6 +3,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { hasVitexecFailure } from './workflow-output.mts';
+
 interface Workflow {
   readonly args?: readonly string[];
   readonly name: string;
@@ -146,11 +148,28 @@ async function runWorkflow(workflow: IndexedWorkflow, extraArguments: readonly s
       ? [file, ...(workflow.args ?? []), ...extraArguments]
       : [...(workflow.args ?? []), file, ...extraArguments];
   await new Promise<void>((resolveRun, reject) => {
-    const child = spawn(executable, commandArguments, { cwd: workflow.cwd, stdio: 'inherit' });
+    const captureVitexec = runner === 'vitexec';
+    const child = spawn(executable, commandArguments, {
+      cwd: workflow.cwd,
+      stdio: captureVitexec ? ['inherit', 'pipe', 'pipe'] : 'inherit',
+    });
+    let output = '';
+    if (captureVitexec) {
+      child.stdout?.on('data', (chunk: Buffer) => {
+        output += chunk.toString();
+        process.stdout.write(chunk);
+      });
+      child.stderr?.on('data', (chunk: Buffer) => {
+        output += chunk.toString();
+        process.stderr.write(chunk);
+      });
+    }
     child.once('error', reject);
     child.once('close', (code) => {
-      if (code === 0) resolveRun();
-      else reject(new Error(`${workflow.name} exited with ${String(code)}`));
+      if (code !== 0) reject(new Error(`${workflow.name} exited with ${String(code)}`));
+      else if (captureVitexec && hasVitexecFailure(output))
+        reject(new Error(`${workflow.name} reported a browser error`));
+      else resolveRun();
     });
   });
 }

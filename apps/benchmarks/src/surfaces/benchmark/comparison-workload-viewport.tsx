@@ -218,11 +218,12 @@ export function ComparisonWorkloadViewport({
   const publishStats = useEffectEvent((next: ComparisonWorkloadStats) => {
     finishBakeProgress();
     onStats(next);
-    setError(undefined);
+    if (next.workload === workload && next.appliedFontFixture === fontFixture) setError(undefined);
   });
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return;
     finishBakeProgress();
+    console.error('comparison workload update failed', caught);
     setError(caught instanceof Error ? caught.message : String(caught));
   });
   const currentConfiguration = useEffectEvent(
