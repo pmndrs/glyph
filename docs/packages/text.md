@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:ee4e160e44f8228c16af088e2d1a9cce2a2984ab5c90fc37731f3045ade082d5'
+source_digest: 'sha256:22e86ee00399f97762ddb73b63577863719a7be53335bb4a5e5dfcd7c18a45ca'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -868,6 +868,12 @@ describes resources, physical buffers, dirty patches, primitives, draws, and ret
 `GPUCommandBuffer` nor a TypeScript object batch. Public Three GPU realization remains open. The optimized shaper is
 1,082,551 raw / 407,787 gzip / 324,499 Brotli bytes at this checkpoint; all 128 Rust unit tests and the focused compiled-
 Wasm fixture pass, with no end-to-end renderer latency claim yet.
+
+The Three coordinator retains a reverse first-party resource registry keyed by the exact numeric `referenceId` emitted
+in Rust resource records. Validated Bitmap pages, MTSDF atlas data, and Slug analytic pages enter it once when their font
+binding is first registered. Command-buffer execution can therefore resolve the authenticated renderer resource with
+one map lookup rather than searching fonts or re-partitioning glyphs. The registry rejects one numeric identity crossing
+techniques. Buffer patches and draws are not yet realized by this checkpoint.
 
 The replacement Rust engine now owns retained Unicode analysis for its frame transaction. The existing Unicode 17 generator emits both TypeScript and compact Rust Script/Script_Extensions partitions from one source. A no-std `unicode-segmentation` 1.13.3 iterator supplies extended grapheme boundaries; the engine maps them back to the public UTF-16 coordinate space, resolves contextual scripts in reusable flat arrays, and commits or aborts that derived arena with text and styles. Session reservation prewarms active and pending analysis storage, while unchanged text skips analysis. Retained UAX #9 products now form equal-level runs, and one interval sweep intersects them with resolved style and script items while skipping hard-break controls. Root direction remains paragraph-level state; nested stated directions carry a distinct override bit and force run parity. Primary-font HarfRust shaping consumes those runs inside `text_update` through borrowed retained language/features and writes glyph SoA directly into an A/B session arena; the legacy batch export shares the same prewarmed buffer and reusable feature scratch. A real-Inter compiled-Wasm test observes the shape-plan cache created by the frame call. The optimized shaper is 973,367 raw, 364,517 gzip, and 287,942 Brotli bytes at this checkpoint. Ordered fallback, layout, and nonempty plan output remain open, so this size evidence carries no complete-path frame latency claim.
 
