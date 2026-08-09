@@ -11,10 +11,10 @@ import {
 } from '../loaded-font.js';
 import type {
   GlyphBufferCapacity,
+  ParagraphBaseProperties,
   ParagraphContentBox,
   ParagraphProperties,
   ParagraphStyle,
-  ParagraphUpdate,
 } from '../index.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
@@ -37,69 +37,62 @@ import {
 } from './engine-runtime.js';
 import type { ThreeTextMaterial } from './material.js';
 
-export interface ThreeRenderVariant {
-  readonly effects?: readonly unknown[];
-}
-
-export type TextSpan<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = ParagraphSpan<
-  Technique,
-  Variant
-> &
+export type TextSpan<Technique extends AnyRasterTechnique> = Omit<ParagraphSpan<Technique>, 'renderVariant'> &
   Readonly<{ material?: ThreeTextMaterial }>;
 
-export type TextProperties<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = ParagraphProperties<
-  Technique,
-  Variant
-> &
+type TextBaseProperties<Technique extends AnyRasterTechnique> = Omit<
+  ParagraphBaseProperties<Technique>,
+  'renderVariant'
+>;
+
+type TextContentProperties<Technique extends AnyRasterTechnique> =
+  | Readonly<{ text: string; spans?: readonly TextSpan<Technique>[] }>
+  | Readonly<{ text: FormattedText<Technique>; spans?: never }>;
+
+export type TextProperties<Technique extends AnyRasterTechnique> = TextBaseProperties<Technique> &
+  TextContentProperties<Technique> &
   Readonly<{ material?: ThreeTextMaterial }>;
 
-export type StandaloneTextProperties<
-  Technique extends AnyRasterTechnique,
-  Variant = ThreeRenderVariant,
-> = TextProperties<Technique, Variant> & Readonly<{ capacity?: GlyphBufferCapacity }>;
+export type StandaloneTextProperties<Technique extends AnyRasterTechnique> = TextProperties<Technique> &
+  Readonly<{ capacity?: GlyphBufferCapacity }>;
 
-export type TextUpdate<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = ParagraphUpdate<
-  Technique,
-  Variant
-> &
-  Readonly<{ material?: ThreeTextMaterial }>;
+export type TextUpdate<Technique extends AnyRasterTechnique> =
+  | (Partial<TextBaseProperties<Technique>> &
+      Readonly<{ text?: string; spans?: readonly TextSpan<Technique>[]; material?: ThreeTextMaterial }>)
+  | (Partial<TextBaseProperties<Technique>> &
+      Readonly<{ text: FormattedText<Technique>; spans?: never; material?: ThreeTextMaterial }>);
 
-export interface TextGroupOptions<
-  _Technique extends AnyRasterTechnique = AnyRasterTechnique,
-  Variant = ThreeRenderVariant,
-> {
+export interface TextGroupOptions {
   readonly capacity?: GlyphBufferCapacity;
   readonly renderOrder?: number;
-  readonly renderVariant?: Variant;
   readonly material?: ThreeTextMaterial;
 }
 
-interface DesiredTextState<Technique extends AnyRasterTechnique, Variant> {
+interface DesiredTextState<Technique extends AnyRasterTechnique> {
   readonly font: FontSelection<Technique>;
   readonly text: string;
-  readonly spans: readonly TextSpan<Technique, Variant>[];
+  readonly spans: readonly TextSpan<Technique>[];
   readonly contentBox: ParagraphContentBox;
   readonly style: ParagraphStyle;
   readonly paint: GlyphPaintInput;
   readonly rasterPixelRatio?: number;
-  readonly renderVariant?: Variant;
   readonly material?: ThreeTextMaterial;
 }
 
-export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> extends THREE.Object3D {
+export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   readonly #runtime: TextRuntime;
-  #desired: DesiredTextState<Technique, Variant>;
+  #desired: DesiredTextState<Technique>;
   #leasedFonts: readonly LoadedFont<Technique>[];
   #standaloneCapacity: GlyphBufferCapacity;
-  #binding: ThreeTextBatchBinding<Variant> | undefined;
-  #textGroup: TextGroup<AnyRasterTechnique, Variant> | undefined;
+  #binding: ThreeTextBatchBinding | undefined;
+  #textGroup: TextGroup | undefined;
   #desiredRevision = 0;
   #appliedRevision = -1;
   #disposed = false;
   #error: unknown;
   onError: ((error: unknown) => void) | undefined;
 
-  constructor(properties: StandaloneTextProperties<Technique, Variant>) {
+  constructor(properties: StandaloneTextProperties<Technique>) {
     super();
     const normalized = normalizeDesired(properties);
     const primary = concreteFonts(normalized.font)[0];
@@ -110,7 +103,7 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
     this.#standaloneCapacity = normalizeCapacity(properties.capacity ?? { size: 256, policy: 'grow' });
   }
 
-  get textGroup(): TextGroup<AnyRasterTechnique, Variant> | undefined {
+  get textGroup(): TextGroup | undefined {
     return this.#textGroup;
   }
   get bound(): boolean {
@@ -135,12 +128,12 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
     return this.#desired.text;
   }
   set text(value: TextInput<Technique>) {
-    this.set({ text: value } as TextUpdate<Technique, Variant>);
+    this.set({ text: value } as TextUpdate<Technique>);
   }
-  get spans(): readonly TextSpan<Technique, Variant>[] {
+  get spans(): readonly TextSpan<Technique>[] {
     return this.#desired.spans;
   }
-  set spans(value: readonly TextSpan<Technique, Variant>[]) {
+  set spans(value: readonly TextSpan<Technique>[]) {
     this.set({ spans: value });
   }
   get contentBox(): ParagraphContentBox {
@@ -167,25 +160,16 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
   set rasterPixelRatio(value: number) {
     this.set({ rasterPixelRatio: value });
   }
-  get renderVariant(): Variant | undefined {
-    return this.#desired.renderVariant;
-  }
   get material(): ThreeTextMaterial | undefined {
     return this.#desired.material;
   }
   set material(value: ThreeTextMaterial | undefined) {
-    this.set({ material: value } as TextUpdate<Technique, Variant>);
-  }
-  set renderVariant(value: Variant | undefined) {
-    this.set({ renderVariant: value } as TextUpdate<Technique, Variant>);
+    this.set({ material: value } as TextUpdate<Technique>);
   }
 
-  set(update: TextUpdate<Technique, Variant>): void {
+  set(update: TextUpdate<Technique>): void {
     this.#assertActive();
-    const next = normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<
-      Technique,
-      Variant
-    >);
+    const next = normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<Technique>);
     const fonts = selectedFonts(next);
     acquireFonts(fonts, this.#runtime);
     releaseFonts(this.#leasedFonts);
@@ -194,7 +178,7 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
     this.#desiredRevision += 1;
   }
 
-  setSpan(index: number, span: TextSpan<Technique, Variant>): void {
+  setSpan(index: number, span: TextSpan<Technique>): void {
     const spans = [...this.spans];
     if (!Number.isSafeInteger(index) || index < 0 || index >= spans.length)
       throw new RangeError('span index is outside the text');
@@ -225,7 +209,7 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
       super.updateMatrixWorld(force);
       return;
     }
-    const boundary = nearestTextGroup<Technique, Variant>(this);
+    const boundary = nearestTextGroup(this);
     if (boundary?.disposed) {
       this.#unbind();
     } else if (boundary !== undefined) {
@@ -257,7 +241,7 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
     this.#leasedFonts = [];
   }
 
-  coreProperties(): ParagraphProperties<Technique, Variant> {
+  coreProperties(): ParagraphProperties<Technique> {
     return {
       ...this.#desired,
       order: this.renderOrder,
@@ -270,13 +254,13 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
   markApplied(): void {
     this.#appliedRevision = this.#desiredRevision;
   }
-  bind(binding: ThreeTextBatchBinding<Variant>, group: TextGroup<AnyRasterTechnique, Variant> | undefined): void {
+  bind(binding: ThreeTextBatchBinding, group: TextGroup | undefined): void {
     if (this.#binding !== binding) this.#unbind();
     this.#binding = binding;
     this.#textGroup = group;
     this.#appliedRevision = this.#desiredRevision;
   }
-  unbindFrom(binding: ThreeTextBatchBinding<Variant>): void {
+  unbindFrom(binding: ThreeTextBatchBinding): void {
     if (this.#binding !== binding) return;
     this.#binding = undefined;
     this.#textGroup = undefined;
@@ -297,22 +281,17 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
   }
 }
 
-export class TextGroup<
-  Technique extends AnyRasterTechnique = AnyRasterTechnique,
-  Variant = ThreeRenderVariant,
-> extends THREE.Object3D {
+export class TextGroup extends THREE.Object3D {
   #capacity: GlyphBufferCapacity;
-  #renderVariant: Variant | undefined;
   #material: ThreeTextMaterial | undefined;
-  #binding: ThreeTextBatchBinding<Variant> | undefined;
+  #binding: ThreeTextBatchBinding | undefined;
   #disposed = false;
   #error: unknown;
   onError: ((error: unknown) => void) | undefined;
 
-  constructor(options: TextGroupOptions<Technique, Variant> = {}) {
+  constructor(options: TextGroupOptions = {}) {
     super();
     this.#capacity = normalizeCapacity(options.capacity ?? { size: 4_096, policy: 'chunk' });
-    this.#renderVariant = options.renderVariant;
     this.#material = options.material;
     if (options.renderOrder !== undefined) this.renderOrder = options.renderOrder;
   }
@@ -331,16 +310,6 @@ export class TextGroup<
   get gpuBytes(): number {
     return this.#binding?.gpuBytes ?? 0;
   }
-  get renderVariant(): Variant | undefined {
-    return this.#renderVariant;
-  }
-  set renderVariant(value: Variant | undefined) {
-    this.#renderVariant = value;
-    this.#binding?.setRenderVariant(value);
-  }
-  setRenderVariant(value: Variant | undefined): void {
-    this.renderVariant = value;
-  }
   get material(): ThreeTextMaterial | undefined {
     return this.#material;
   }
@@ -352,7 +321,7 @@ export class TextGroup<
   override add(...children: THREE.Object3D[]): this {
     this.#assertActive();
     for (const child of children)
-      if (child instanceof Text) validateText(child as Text<AnyRasterTechnique, Variant>);
+      if (child instanceof Text) validateText(child as Text<AnyRasterTechnique>);
     return super.add(...children);
   }
   setCapacity(capacity: GlyphBufferCapacity): void {
@@ -373,7 +342,7 @@ export class TextGroup<
 
   override updateMatrixWorld(force?: boolean): void {
     if (!this.#disposed) {
-      const texts = collectTextDescendants<Technique, Variant>(this);
+      const texts = collectTextDescendants(this);
       if (texts.length !== 0) {
         const first = texts[0]!;
         validateText(first);
@@ -400,7 +369,7 @@ export class TextGroup<
     super.updateMatrixWorld(force);
   }
 
-  bindText(text: Text<AnyRasterTechnique, Variant>): void {
+  bindText(text: Text<AnyRasterTechnique>): void {
     if (this.#disposed) return;
     validateText(text);
   }
@@ -426,14 +395,14 @@ interface RetainedEngineParagraph {
   materialLeases: ThreeTextMaterialLease[];
 }
 
-class ThreeTextBatchBinding<Variant> {
+class ThreeTextBatchBinding {
   readonly #runtime: TextRuntime;
-  readonly #group: TextGroup<AnyRasterTechnique, Variant> | undefined;
+  readonly #group: TextGroup | undefined;
   readonly #coordinator: ThreeTextEngineCoordinator;
   readonly #session: TextEngineSession;
   readonly #target: ThreeTextRenderPlanExecutor;
-  readonly #paragraphs = new Map<Text<AnyRasterTechnique, Variant>, RetainedEngineParagraph>();
-  readonly #textsByParagraph = new Map<number, Text<AnyRasterTechnique, Variant>>();
+  readonly #paragraphs = new Map<Text<AnyRasterTechnique>, RetainedEngineParagraph>();
+  readonly #textsByParagraph = new Map<number, Text<AnyRasterTechnique>>();
   readonly #removed: RetainedEngineParagraph[] = [];
   #nextParagraphId = 1;
   #engineRevision = 0;
@@ -449,7 +418,7 @@ class ThreeTextBatchBinding<Variant> {
   constructor(
     runtime: TextRuntime,
     capacity: GlyphBufferCapacity,
-    group: TextGroup<AnyRasterTechnique, Variant> | undefined,
+    group: TextGroup | undefined,
   ) {
     this.#runtime = runtime;
     this.#group = group;
@@ -489,12 +458,12 @@ class ThreeTextBatchBinding<Variant> {
   get renderOrderBase(): number {
     return this.#group?.renderOrder ?? 0;
   }
-  reconcile(texts: readonly Text<AnyRasterTechnique, Variant>[]): void {
+  reconcile(texts: readonly Text<AnyRasterTechnique>[]): void {
     const desired = new Set(texts);
     for (const text of [...this.#paragraphs.keys()]) if (!desired.has(text)) this.removeText(text);
     for (const text of texts) this.#ensureText(text, this.#group);
   }
-  reconcileStandalone(text: Text<AnyRasterTechnique, Variant>): void {
+  reconcileStandalone(text: Text<AnyRasterTechnique>): void {
     this.#ensureText(text, undefined);
   }
   synchronize(): void {
@@ -624,9 +593,6 @@ class ThreeTextBatchBinding<Variant> {
     this.#textCapacity = Math.max(this.#textCapacity, value.size);
     this.#session.reserve(this.#requestCapacity, this.#resultCapacity, this.#textCapacity);
   }
-  setRenderVariant(_value: Variant | undefined): void {
-    // Removed with the legacy target state machine. Renderer material IDs replace variants.
-  }
   invalidateMaterial(): void {
     this.#materialInvalidated = true;
   }
@@ -637,7 +603,7 @@ class ThreeTextBatchBinding<Variant> {
     this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
     this.#lastPublication = undefined;
   }
-  removeText(text: Text<AnyRasterTechnique, Variant>): void {
+  removeText(text: Text<AnyRasterTechnique>): void {
     const paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined) return;
     this.#paragraphs.delete(text);
@@ -660,8 +626,8 @@ class ThreeTextBatchBinding<Variant> {
     this.#removed.length = 0;
   }
   #ensureText(
-    text: Text<AnyRasterTechnique, Variant>,
-    group: TextGroup<AnyRasterTechnique, Variant> | undefined,
+    text: Text<AnyRasterTechnique>,
+    group: TextGroup | undefined,
   ): void {
     validateBinding(this.#runtime, text);
     let paragraph = this.#paragraphs.get(text);
@@ -696,17 +662,17 @@ class ThreeTextBatchBinding<Variant> {
   }
 }
 
-function compileEngineStyles<Technique extends AnyRasterTechnique, Variant>(
+function compileEngineStyles<Technique extends AnyRasterTechnique>(
   coordinator: ThreeTextEngineCoordinator,
   paragraphId: number,
-  properties: ParagraphProperties<Technique, Variant>,
+  properties: ParagraphProperties<Technique>,
   groupMaterial: ThreeTextMaterial | undefined,
   leases: ThreeTextEngineStackLease[],
   materialLeases: ThreeTextMaterialLease[],
 ): TextEngineStyleMutation[] {
   const text = properties.text as string;
   const rootStack = acquireEngineStack(coordinator, properties.font, leases);
-  const rootMaterial = (properties as TextProperties<Technique, Variant>).material ?? groupMaterial;
+  const rootMaterial = (properties as TextProperties<Technique>).material ?? groupMaterial;
   const rootMaterialId = acquireEngineMaterial(coordinator, rootMaterial, materialLeases);
   const styles: TextEngineStyleMutation[] = [
     {
@@ -729,7 +695,7 @@ function compileEngineStyles<Technique extends AnyRasterTechnique, Variant>(
     const fontStackHandle = span.font === undefined ? undefined : acquireEngineStack(coordinator, span.font, leases);
     const materialId = acquireEngineMaterial(
       coordinator,
-      (span as TextSpan<Technique, Variant>).material,
+      (span as TextSpan<Technique>).material,
       materialLeases,
     );
     styles.push({
@@ -925,34 +891,33 @@ function ownPublication(publication: TextEnginePublication): TextEnginePublicati
  * against unrelated text, so an update that replaces text without stating spans
  * clears the ones it replaced.
  */
-function replacedContent<Technique extends AnyRasterTechnique, Variant>(
-  update: TextUpdate<Technique, Variant>,
-): TextUpdate<Technique, Variant> {
+function replacedContent<Technique extends AnyRasterTechnique>(
+  update: TextUpdate<Technique>,
+): TextUpdate<Technique> {
   if (!('text' in update) || 'spans' in update) return update;
-  return { ...update, spans: [] } as TextUpdate<Technique, Variant>;
+  return { ...update, spans: [] } as TextUpdate<Technique>;
 }
 
-function normalizeDesired<Technique extends AnyRasterTechnique, Variant>(
-  properties: TextProperties<Technique, Variant>,
-): DesiredTextState<Technique, Variant> {
+function normalizeDesired<Technique extends AnyRasterTechnique>(
+  properties: TextProperties<Technique>,
+): DesiredTextState<Technique> {
   if (properties === undefined) throw new TypeError('Text properties are required');
   const formatted = typeof properties.text === 'string' ? undefined : (properties.text as FormattedText<Technique>);
   return Object.freeze({
     font: properties.font,
     text: formatted?.text ?? (properties.text as string),
     spans: Object.freeze([
-      ...((formatted?.spans as readonly TextSpan<Technique, Variant>[]) ?? properties.spans ?? []),
+      ...((formatted?.spans as readonly TextSpan<Technique>[]) ?? properties.spans ?? []),
     ]),
     contentBox: Object.freeze({ ...(properties.contentBox ?? {}) }),
     style: Object.freeze({ ...(properties.style ?? {}) }),
     paint: Object.freeze({ ...(properties.paint ?? {}) }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
-    ...(properties.renderVariant === undefined ? {} : { renderVariant: properties.renderVariant }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
   });
 }
-function selectedFonts<Technique extends AnyRasterTechnique, Variant>(
-  state: DesiredTextState<Technique, Variant>,
+function selectedFonts<Technique extends AnyRasterTechnique>(
+  state: DesiredTextState<Technique>,
 ): readonly LoadedFont<Technique>[] {
   const fonts = new Set<LoadedFont<Technique>>(concreteFonts(state.font));
   for (const span of state.spans)
@@ -984,40 +949,33 @@ function normalizeCapacity(value: GlyphBufferCapacity): GlyphBufferCapacity {
     throw new TypeError('glyph capacity policy is invalid');
   return Object.freeze({ size: value.size, policy: value.policy });
 }
-function nearestTextGroup<Technique extends AnyRasterTechnique, Variant>(
-  object: THREE.Object3D,
-): TextGroup<AnyRasterTechnique, Variant> | undefined {
+function nearestTextGroup(object: THREE.Object3D): TextGroup | undefined {
   let parent = object.parent;
   while (parent !== null) {
-    if (parent instanceof TextGroup) return parent as TextGroup<AnyRasterTechnique, Variant>;
+    if (parent instanceof TextGroup) return parent;
     parent = parent.parent;
   }
   return undefined;
 }
-function eraseTextTechnique<Technique extends AnyRasterTechnique, Variant>(
-  text: Text<Technique, Variant>,
-): Text<AnyRasterTechnique, Variant> {
-  return text as unknown as Text<AnyRasterTechnique, Variant>;
+function eraseTextTechnique<Technique extends AnyRasterTechnique>(
+  text: Text<Technique>,
+): Text<AnyRasterTechnique> {
+  return text as unknown as Text<AnyRasterTechnique>;
 }
-function collectTextDescendants<Technique extends AnyRasterTechnique, Variant>(
-  group: TextGroup<Technique, Variant>,
-): Text<AnyRasterTechnique, Variant>[] {
-  const texts: Text<AnyRasterTechnique, Variant>[] = [];
+function collectTextDescendants(group: TextGroup): Text<AnyRasterTechnique>[] {
+  const texts: Text<AnyRasterTechnique>[] = [];
   for (const child of group.children) collect(child, texts);
   return texts;
-  function collect(object: THREE.Object3D, result: Text<AnyRasterTechnique, Variant>[]): void {
+  function collect(object: THREE.Object3D, result: Text<AnyRasterTechnique>[]): void {
     if (object instanceof TextGroup) return;
-    if (object instanceof Text) result.push(object as Text<AnyRasterTechnique, Variant>);
+    if (object instanceof Text) result.push(object as Text<AnyRasterTechnique>);
     for (const child of object.children) collect(child, result);
   }
 }
-function validateText<Variant>(text: Text<AnyRasterTechnique, Variant>): void {
+function validateText(text: Text<AnyRasterTechnique>): void {
   validateBinding(text.runtime, text);
 }
-function validateBinding<Variant>(
-  runtime: TextRuntime,
-  text: Text<AnyRasterTechnique, Variant>,
-): void {
+function validateBinding(runtime: TextRuntime, text: Text<AnyRasterTechnique>): void {
   if (text.disposed) throw new TypeError('disposed text cannot be attached');
   if (text.runtime !== runtime) throw new TypeError('text belongs to another Three font-cache domain');
   assertFontSelectionForRuntime(text.font, text.runtime);

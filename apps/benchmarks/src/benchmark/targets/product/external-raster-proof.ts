@@ -36,7 +36,7 @@ interface ExternalRasterResources {
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
   readonly text: Text<typeof glyphExample>;
-  readonly textGroup: TextGroup<typeof glyphExample>;
+  readonly textGroup: TextGroup;
   readonly font: LoadedFont<typeof glyphExample>;
   readonly orderingGeometry: THREE.PlaneGeometry;
   readonly orderingMaterial: THREE.MeshBasicNodeMaterial;
@@ -102,7 +102,7 @@ async function createResources(
   const renderer = borrowedRenderer ?? ownedRenderer!;
   let target: THREE.RenderTarget | undefined;
   let text: Text<typeof glyphExample> | undefined;
-  let textGroup: TextGroup<typeof glyphExample> | undefined;
+  let textGroup: TextGroup | undefined;
   let font: LoadedFont<typeof glyphExample> | undefined;
   let orderingGeometry: THREE.PlaneGeometry | undefined;
   let orderingMaterial: THREE.MeshBasicNodeMaterial | undefined;

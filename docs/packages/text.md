@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:9dfe0999d0f417e5e8b3ec5756fdf0e3e3a51a830538b3ea0f44c1ca2f4e94fe'
+source_digest: 'sha256:c5708dd665b5ede78cde985af8dea48c4c5474fd745104310822f133b7313eb4'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -913,7 +913,9 @@ instances and Three owns their disposal. The compiled-Wasm fixture proves distin
 storage, reorder and coalescing reuse cached materials, and the same selected factory is instantiated once for each of
 Bitmap, MSDF, and Slug. Public `Text`, inherited `TextGroup`, and explicit span material properties now acquire those
 numeric identities and flow through the same Rust publication; an unchanged frame retains both its draw and realized
-material. Fence-bounded retirement remains part of the live backend gate.
+material. Imperative Three and R3F expose only `material`; their obsolete `renderVariant` generic, properties, setters,
+and span cascade are removed rather than remaining as no-op compatibility state. Fence-bounded retirement remains part
+of the live backend gate.
 
 The imperative Three binding no longer constructs a TypeScript `ParagraphBatch` or drives the attachment
 `prepare`/`commit` state machine. One `TextGroup` owns one retained Rust session for all descendant text paragraphs;

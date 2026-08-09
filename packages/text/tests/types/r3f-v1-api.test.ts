@@ -2,15 +2,17 @@ import { createElement } from 'react';
 
 import type { LoadedFont } from '../../src/index.js';
 import { Text, TextGroup, useFont } from '../../src/r3f.js';
+import type { ThreeTextMaterial } from '../../src/three.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
 
 declare const bitmapFont: LoadedFont<typeof bitmap>;
 declare const mtsdfFont: LoadedFont<typeof msdf>;
+declare const material: ThreeTextMaterial;
 
 const inline = createElement(Text<typeof bitmap>, { paint: { color: '#ff00ff' } }, 'span');
-const label = createElement(Text<typeof bitmap>, { font: bitmapFont }, 'Typed ', inline);
-const labels = createElement(TextGroup<typeof bitmap>, null, label);
+const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material }, 'Typed ', inline);
+const labels = createElement(TextGroup, { material }, label);
 
 function FontConsumer(): null {
   const loaded: LoadedFont<typeof bitmap> = useFont({
@@ -23,6 +25,9 @@ function FontConsumer(): null {
 
 // @ts-expect-error The selected font technique must match the Text technique.
 createElement(Text<typeof bitmap>, { font: mtsdfFont }, 'wrong technique');
+
+// @ts-expect-error Material replaced the obsolete renderer-variant surface.
+createElement(Text<typeof bitmap>, { font: bitmapFont, renderVariant: 'old' }, 'old API');
 
 void labels;
 void FontConsumer;
