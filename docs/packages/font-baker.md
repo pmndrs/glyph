@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: '@pmndrs/text-font-baker'
 documentation_type: reference
-source_digest: 'sha256:80fb2bd14e5b3ad0f8f9e87bd455057998c0a1c7f9e5acda51b45815857d480c'
+source_digest: 'sha256:d85b56b06a26945e220248f487e87465027376929238e1a8206a78c5880d1700'
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest

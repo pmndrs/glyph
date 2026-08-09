@@ -1,0 +1,37 @@
+{
+  "name": "@pmndrs/text-r3f-hello-world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "assets:generate": "node ./scripts/generate-fonts.mts",
+    "assets:check": "node ./scripts/generate-fonts.mts --check",
+    "build": "vite build",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm assets:check && pnpm build",
+    "dev": "vite",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --deny-warnings .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pmndrs/text": "workspace:*",
+    "@react-three/fiber": "10.0.0-alpha.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@babel/core": "8.0.1",
+    "@rolldown/plugin-babel": "0.2.3",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.185.1",
+    "@vitejs/plugin-react": "6.0.1",
+    "babel-plugin-react-compiler": "1.0.0",
+    "oxfmt": "0.35.0",
+    "oxlint": "1.75.0",
+    "typescript": "7.0.2",
+    "vite": "8.1.5"
+  }
+}
