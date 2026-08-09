@@ -1,0 +1,36 @@
+import type { Node, NodeMaterial } from 'three/webgpu';
+
+import type { ThreeBitmapShaderOutput } from './bitmap-shader.js';
+import type { ThreeMsdfShaderOutput } from './msdf-shader.js';
+import type { ThreeSlugShaderOutput } from './slug-shader.js';
+
+export type ThreeTextMaterialContext =
+  | Readonly<{
+      technique: 'pmndrs.bitmap';
+      shader: ThreeBitmapShaderOutput;
+      /** Final renderer-local position including policy-selected transform indirection. */
+      position: Node<'vec3'>;
+      createDefaultMaterial(): NodeMaterial;
+    }>
+  | Readonly<{
+      technique: 'pmndrs.msdf';
+      shader: ThreeMsdfShaderOutput;
+      position: Node<'vec3'>;
+      createDefaultMaterial(): NodeMaterial;
+    }>
+  | Readonly<{
+      technique: 'pmndrs.slug';
+      shader: ThreeSlugShaderOutput;
+      position: Node<'vec3'>;
+      createDefaultMaterial(): NodeMaterial;
+    }>;
+
+export interface ThreeTextMaterial {
+  create(context: ThreeTextMaterialContext): NodeMaterial;
+}
+
+/** Define one renderer-owned material factory carried through Rust as a numeric `materialId`. */
+export function defineTextMaterial(create: ThreeTextMaterial['create']): ThreeTextMaterial {
+  if (typeof create !== 'function') throw new TypeError('text material create must be a function');
+  return Object.freeze({ create });
+}

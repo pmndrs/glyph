@@ -4,6 +4,7 @@ import type { Node } from 'three/webgpu';
 
 import {
   bitmapShader,
+  defineTextMaterial,
   msdfShader,
   slugShader,
   type ThreeBitmapInstanceNodes,
@@ -24,6 +25,13 @@ declare const slugResources: ThreeSlugShaderResources;
 const bitmapOutput = bitmapShader(bitmapInstance, bitmapResources);
 const mtsdfOutput = msdfShader(mtsdfInstance, mtsdfResources);
 const slugOutput = slugShader(slugInstance, slugResources);
+
+const customMaterial = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.depthTest = true;
+  if (context.technique === 'pmndrs.slug') material.opacityNode = context.shader.opacity;
+  return material;
+});
 
 // Each technique publishes its coverage as a float a custom program may weight or threshold itself.
 const bitmapCoverage: Node<'float'> = bitmapOutput.coverage;
@@ -53,10 +61,14 @@ const wrongColor: Node<'float'> = bitmapOutput.color;
 // @ts-expect-error Slug addresses are unsigned integers; a float storage read cannot stand in for one.
 slugShader({ ...slugInstance, curveBaseTexel: slugOutput.coverage }, slugResources);
 
+// @ts-expect-error Material factories must return a Three NodeMaterial.
+defineTextMaterial(() => ({}));
+
 void bitmapCoverage;
 void mtsdfOutlineCoverage;
 void slugCoverage;
 void material;
 void bitmapMaterial;
 void wrongColor;
+void customMaterial;
 void mtsdfOutput;

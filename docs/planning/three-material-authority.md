@@ -3,7 +3,7 @@ type: Research Concept
 title: Three material authority for text draws
 description: Defines user-owned material factories carried from text and span properties through numeric Rust render-plan material identities.
 documentation_type: reference
-status: draft
+status: stable
 tags: [planning, threejs, tsl, materials, render-plan]
 sources:
   - id: three-api
@@ -40,27 +40,36 @@ This boundary keeps layout and shaping renderer-neutral. Rust never stores a Jav
 or interprets a Three material. It uses `material_id` only as policy-directed draw compatibility data and writes it into
 the fixed render-plan draw record as `materialId`.
 
-## Provisional public shape
+## Public construction shape
 
 ```ts
-interface ThreeTextMaterialContext<Shader extends AnyThreeRasterShader> {
-  /** The package-owned canonical Bitmap, MTSDF, or Slug shader for this exact technique. */
-  readonly shader: Shader;
-  /** Exact resource and instance accessors for the draw being realized. */
-  readonly resource: ThreeRasterResourceContextOf<Shader>;
-  readonly instance: ThreeRasterInstanceContextOf<Shader>;
-  /** Builds the same default material used when no application material is supplied. */
-  createDefaultMaterial(): ThreeRasterMaterialOf<Shader>;
+type ThreeTextMaterialContext =
+  | {
+      readonly technique: 'pmndrs.bitmap';
+      readonly shader: ThreeBitmapShaderOutput;
+      readonly position: Node<'vec3'>;
+      createDefaultMaterial(): THREE.NodeMaterial;
+    }
+  | {
+      readonly technique: 'pmndrs.msdf';
+      readonly shader: ThreeMsdfShaderOutput;
+      readonly position: Node<'vec3'>;
+      createDefaultMaterial(): THREE.NodeMaterial;
+    }
+  | {
+      readonly technique: 'pmndrs.slug';
+      readonly shader: ThreeSlugShaderOutput;
+      readonly position: Node<'vec3'>;
+      createDefaultMaterial(): THREE.NodeMaterial;
+    };
+
+interface ThreeTextMaterial {
+  create(context: ThreeTextMaterialContext): THREE.NodeMaterial;
 }
 
-interface ThreeTextMaterial<Shader extends AnyThreeRasterShader> {
-  create(context: ThreeTextMaterialContext<Shader>): THREE.NodeMaterial;
-}
-
-declare function defineTextMaterial<Shader extends AnyThreeRasterShader>(
-  shader: Shader,
-  create: (context: ThreeTextMaterialContext<Shader>) => THREE.NodeMaterial,
-): ThreeTextMaterial<Shader>;
+declare function defineTextMaterial(
+  create: (context: ThreeTextMaterialContext) => THREE.NodeMaterial,
+): ThreeTextMaterial;
 
 interface TextGroupOptions {
   readonly material?: ThreeTextMaterial<ThreeRasterShaderOfFont>;
@@ -75,16 +84,18 @@ interface TextSpan {
 }
 ```
 
-The exact conditional types remain technique-specific in the public declaration. The abbreviated aliases above state
-ownership, not a new universal shader context.
+`position` is the exact renderer-local position after policy-selected transform indirection. This is distinct from the
+canonical shader's paragraph-local position and prevents a custom material from accidentally bypassing indexed
+transforms. The discriminant narrows the exact Bitmap, MSDF, or Slug shader output without a universal union record in
+Rust or Wasm.
 
 ```ts
-const etched = defineTextMaterial(slugShader, ({ shader, resource, instance }) => {
-  const raster = shader({ resource, instance });
+const etched = defineTextMaterial(({ technique, shader, position }) => {
+  if (technique !== 'pmndrs.slug') return createFallbackMaterial({ shader, position });
   const material = new THREE.MeshStandardNodeMaterial({ transparent: true });
-  material.positionNode = raster.position;
-  material.colorNode = mix(raster.color, sheen, raster.coverage);
-  material.opacityNode = raster.opacity;
+  material.positionNode = position;
+  material.colorNode = mix(shader.color, sheen, shader.coverage);
+  material.opacityNode = shader.opacity;
   return material;
 });
 
@@ -96,6 +107,10 @@ text.setSpan(0, { start: 0, end: 3, material: warning });
 placement, coverage, color, and opacity nodes. Creating another `NodeMaterial` is the low-level path for lighting,
 shadows, depth writes/tests, and other standard Three behavior. Neither path may replace or duplicate the technique's
 glyph coverage algorithm unless the application registers a complete custom raster program.
+
+The construction function, runtime-scoped identity registry, and command-buffer executor are implemented. The public
+`TextGroup`/`Text`/span `material` properties land with the atomic Rust-session cutover; until then callers cannot yet
+author a material through those objects even though the executor route is tested.
 
 ## Identity and render-plan route
 

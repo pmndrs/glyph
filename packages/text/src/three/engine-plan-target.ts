@@ -13,6 +13,7 @@ import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engi
 import { msdfShader } from './msdf-shader.js';
 import { invalidatePboTexture } from './retained-target.js';
 import { slugShader, type ThreeSlugPageResources } from './slug-shader.js';
+import type { ThreeTextMaterialContext } from './material.js';
 
 type ScalarArray = Float32Array | Uint32Array | Uint16Array;
 
@@ -55,7 +56,8 @@ export class ThreeTextEnginePlanTarget {
   readonly #bitmapTextures = new Map<number, THREE.DataTexture>();
   readonly #msdfAtlases = new Map<number, THREE.DataArrayTexture>();
   readonly #slugPages = new Map<number, RetainedSlugPage>();
-  readonly #materials = new Map<string, THREE.MeshBasicNodeMaterial>();
+  readonly #materials = new Map<string, THREE.NodeMaterial>();
+  readonly #ownedMaterials = new WeakSet<THREE.NodeMaterial>();
   readonly #activeTransformIndices = new Set<number>();
   readonly #rootInverse = new THREE.Matrix4();
   readonly #relativeTransform = new THREE.Matrix4();
@@ -364,7 +366,7 @@ export class ThreeTextEnginePlanTarget {
     resource: RetainedResource,
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
-  ): THREE.MeshBasicNodeMaterial {
+  ): THREE.NodeMaterial {
     const resolved = this.#coordinator.resolveResource(resource.referenceId);
     if (resolved.technique !== bitmap.id) {
       throw new Error('this Three plan target checkpoint realizes Bitmap draws only');
@@ -403,21 +405,18 @@ export class ThreeTextEnginePlanTarget {
       },
       { page: texture },
     );
-    material = new THREE.MeshBasicNodeMaterial({
-      depthTest: false,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      transparent: true,
-    });
-    material.positionNode = indexedTransformPosition(
+    const position = indexedTransformPosition(
       shader.position,
       transformIndices.attribute,
       this.#transformAttribute,
       instance,
     );
-    material.vertexNode = shader.clipPosition;
-    material.colorNode = shader.color;
-    material.opacityNode = shader.opacity;
+    material = this.#createMaterial(materialId, {
+      technique: bitmap.id,
+      shader,
+      position,
+      createDefaultMaterial: () => bitmapMaterial(shader, position),
+    });
     this.#materials.set(key, material);
     return material;
   }
@@ -426,7 +425,7 @@ export class ThreeTextEnginePlanTarget {
     resource: RetainedResource,
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
-  ): THREE.MeshBasicNodeMaterial {
+  ): THREE.NodeMaterial {
     const resolved = this.#coordinator.resolveResource(resource.referenceId);
     if (resolved.technique === bitmap.id) return this.#bitmapMaterial(resource, buffers, materialId);
     if (resolved.technique === msdf.id) return this.#msdfMaterial(resource, buffers, materialId);
@@ -438,7 +437,7 @@ export class ThreeTextEnginePlanTarget {
     resource: RetainedResource,
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
-  ): THREE.MeshBasicNodeMaterial {
+  ): THREE.NodeMaterial {
     const data = msdfData(this.#coordinator.resolveResource(resource.referenceId));
     const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
       const buffer = buffers.get(id);
@@ -480,20 +479,18 @@ export class ThreeTextEnginePlanTarget {
         pixelRange: data.pixelRange,
       },
     );
-    material = new THREE.MeshBasicNodeMaterial({
-      depthTest: false,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      transparent: true,
-    });
-    material.positionNode = indexedTransformPosition(
+    const position = indexedTransformPosition(
       shader.position,
       transformIndices.attribute,
       this.#transformAttribute,
       instance,
     );
-    material.colorNode = shader.color;
-    material.opacityNode = shader.opacity;
+    material = this.#createMaterial(materialId, {
+      technique: msdf.id,
+      shader,
+      position,
+      createDefaultMaterial: () => coverageMaterial(shader, position),
+    });
     this.#materials.set(key, material);
     return material;
   }
@@ -540,7 +537,7 @@ export class ThreeTextEnginePlanTarget {
     resource: RetainedResource,
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
-  ): THREE.MeshBasicNodeMaterial {
+  ): THREE.NodeMaterial {
     const page = slugPage(this.#coordinator.resolveResource(resource.referenceId));
     const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
       const buffer = buffers.get(id);
@@ -594,16 +591,13 @@ export class ThreeTextEnginePlanTarget {
         modelViewProjection,
       },
     );
-    material = new THREE.MeshBasicNodeMaterial({
-      blending: THREE.NormalBlending,
-      depthTest: false,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      transparent: true,
+    const position = transform.position(shader.position);
+    material = this.#createMaterial(materialId, {
+      technique: slug.id,
+      shader,
+      position,
+      createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    material.positionNode = transform.position(shader.position);
-    material.colorNode = shader.color;
-    material.opacityNode = shader.opacity;
     this.#materials.set(key, material);
     return material;
   }
@@ -647,6 +641,18 @@ export class ThreeTextEnginePlanTarget {
     return page;
   }
 
+  #createMaterial(materialId: number, context: ThreeTextMaterialContext): THREE.NodeMaterial {
+    const definition = this.#coordinator.resolveMaterial(materialId);
+    const material = definition?.create(context) ?? context.createDefaultMaterial();
+    if (material?.isNodeMaterial !== true)
+      throw new TypeError('text material factory must return a Three NodeMaterial');
+    if (this.#ownedMaterials.has(material)) {
+      throw new TypeError('text material factory must return a fresh unowned NodeMaterial');
+    }
+    this.#ownedMaterials.add(material);
+    return material;
+  }
+
   #applyRetirements(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
     const layout = textShaperAbi.layouts.engineRetirement;
     for (let index = 0; index < table.count; index += 1) {
@@ -673,6 +679,43 @@ export class ThreeTextEnginePlanTarget {
     }
     this.#draws = [];
   }
+}
+
+function bitmapMaterial(
+  shader: Readonly<{
+    clipPosition: THREE.Node<'vec4'>;
+    color: THREE.Node<'vec3'>;
+    opacity: THREE.Node<'float'>;
+  }>,
+  position: THREE.Node<'vec3'>,
+): THREE.MeshBasicNodeMaterial {
+  const material = baseTextMaterial();
+  material.positionNode = position;
+  material.vertexNode = shader.clipPosition;
+  material.colorNode = shader.color;
+  material.opacityNode = shader.opacity;
+  return material;
+}
+
+function coverageMaterial(
+  shader: Readonly<{ color: THREE.Node<'vec3'>; opacity: THREE.Node<'float'> }>,
+  position: THREE.Node<'vec3'>,
+): THREE.MeshBasicNodeMaterial {
+  const material = baseTextMaterial();
+  material.positionNode = position;
+  material.colorNode = shader.color;
+  material.opacityNode = shader.opacity;
+  return material;
+}
+
+function baseTextMaterial(): THREE.MeshBasicNodeMaterial {
+  return new THREE.MeshBasicNodeMaterial({
+    blending: THREE.NormalBlending,
+    depthTest: false,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    transparent: true,
+  });
 }
 
 function bitmapPage(resource: ThreeTextEngineResource): BitmapPageData {
