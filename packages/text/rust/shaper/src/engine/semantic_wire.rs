@@ -28,10 +28,23 @@ use crate::{
         STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
         TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD,
         WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
+        PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT,
     },
     valid_language_bytes, valid_tag,
     wire::{array, read_f32, read_u16, read_u32},
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ParagraphMutationBatch<'a> {
+    request: &'a [u8],
+    records: &'a [u8],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ParagraphMutation {
+    Upsert { paragraph_id: u32, order: u32 },
+    Remove { paragraph_id: u32 },
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct TextMutationBatch<'a> {
@@ -361,6 +374,55 @@ impl GeometryBatch<'_> {
     }
 }
 
+impl<'a> ParagraphMutationBatch<'a> {
+    pub(crate) const fn empty() -> Self {
+        Self {
+            request: &[],
+            records: &[],
+        }
+    }
+
+    pub(crate) fn len(self) -> usize {
+        self.records.len() / abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize
+    }
+
+    pub(crate) fn get(self, index: usize) -> Option<ParagraphMutation> {
+        let record = record_at(
+            self.records,
+            abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
+            index,
+        )?;
+        let paragraph_id = read_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID).ok()?;
+        match record[abi::ENGINE_PARAGRAPH_MUTATION_OPCODE] {
+            PARAGRAPH_MUTATION_UPSERT => Some(ParagraphMutation::Upsert {
+                paragraph_id,
+                order: read_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_ORDER).ok()?,
+            }),
+            PARAGRAPH_MUTATION_REMOVE => Some(ParagraphMutation::Remove { paragraph_id }),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn validate_disjoint_semantics(
+        self,
+        text: TextMutationBatch<'_>,
+        styles: StyleMutationBatch<'_>,
+        geometry: GeometryBatch<'_>,
+    ) -> Result<(), u32> {
+        if self.records.is_empty() {
+            return Ok(());
+        }
+        let range = byte_range(self.request, self.records)?;
+        if text.overlaps_range(range)?
+            || styles.overlaps_range(range)?
+            || geometry.overlaps_range(range)?
+        {
+            return Err(STATUS_INVALID_REQUEST);
+        }
+        Ok(())
+    }
+}
+
 impl<'a> TextMutationBatch<'a> {
     pub(crate) const fn empty() -> Self {
         Self {
@@ -567,6 +629,25 @@ impl<'a> StyleMutationBatch<'a> {
             }
         }
         Ok(())
+    }
+
+    fn overlaps_range(self, range: (usize, usize)) -> Result<bool, u32> {
+        if !self.records.is_empty() && overlaps(range, byte_range(self.request, self.records)?) {
+            return Ok(true);
+        }
+        for record in self
+            .records
+            .chunks_exact(abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize)
+        {
+            if style_payload_ranges(self.request, record)?
+                .into_iter()
+                .flatten()
+                .any(|payload| overlaps(range, payload))
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }
 
@@ -884,6 +965,69 @@ fn validate_decoration(record: &[u8], field_mask: u32) -> Result<(), u32> {
         return Err(STATUS_INVALID_REQUEST);
     }
     Ok(())
+}
+
+pub(crate) fn parse_paragraph_mutations(
+    request: &[u8],
+    offset: u32,
+    count: u32,
+) -> Result<ParagraphMutationBatch<'_>, u32> {
+    if count == 0 {
+        return if offset == 0 {
+            Ok(ParagraphMutationBatch::empty())
+        } else {
+            Err(STATUS_INVALID_REQUEST)
+        };
+    }
+    if offset < ENGINE_UPDATE_REQUEST_HEADER_SIZE {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let records = array(
+        request,
+        offset,
+        count,
+        abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
+        abi::ENGINE_PARAGRAPH_MUTATION_RECORD_ALIGNMENT,
+    )?;
+    for (index, record) in records
+        .chunks_exact(abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize)
+        .enumerate()
+    {
+        let opcode = byte(record, abi::ENGINE_PARAGRAPH_MUTATION_OPCODE)?;
+        let paragraph_id = read_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID)?;
+        let order = read_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_ORDER)?;
+        if paragraph_id == 0
+            || byte(record, abi::ENGINE_PARAGRAPH_MUTATION_FLAGS)? != 0
+            || read_u16(record, abi::ENGINE_PARAGRAPH_MUTATION_RESERVED0)? != 0
+            || !matches!(opcode, PARAGRAPH_MUTATION_UPSERT | PARAGRAPH_MUTATION_REMOVE)
+            || (opcode == PARAGRAPH_MUTATION_REMOVE && order != 0)
+            || prior_u32_duplicate(
+                records,
+                abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
+                abi::ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
+                index,
+                paragraph_id,
+            )?
+            || (opcode == PARAGRAPH_MUTATION_UPSERT
+                && prior_upsert_order_duplicate(records, index, order)?)
+        {
+            return Err(STATUS_INVALID_REQUEST);
+        }
+    }
+    Ok(ParagraphMutationBatch { request, records })
+}
+
+fn prior_upsert_order_duplicate(records: &[u8], index: usize, order: u32) -> Result<bool, u32> {
+    for record in records[..index * abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize]
+        .chunks_exact(abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize)
+    {
+        if byte(record, abi::ENGINE_PARAGRAPH_MUTATION_OPCODE)? == PARAGRAPH_MUTATION_UPSERT
+            && read_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_ORDER)? == order
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 pub(crate) fn parse_text_mutations(
@@ -1585,6 +1729,62 @@ mod tests {
     use alloc::vec;
 
     #[test]
+    fn validates_explicit_paragraph_order_and_removal_records() {
+        let offset = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let stride = abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize;
+        let mut bytes = vec![0; offset + 2 * stride];
+        bytes[offset + abi::ENGINE_PARAGRAPH_MUTATION_OPCODE] = PARAGRAPH_MUTATION_UPSERT;
+        write_u32(
+            &mut bytes,
+            offset + abi::ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
+            7,
+        );
+        write_u32(
+            &mut bytes,
+            offset + abi::ENGINE_PARAGRAPH_MUTATION_ORDER,
+            3,
+        );
+        let second = offset + stride;
+        bytes[second + abi::ENGINE_PARAGRAPH_MUTATION_OPCODE] = PARAGRAPH_MUTATION_REMOVE;
+        write_u32(
+            &mut bytes,
+            second + abi::ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
+            8,
+        );
+        let batch = parse_paragraph_mutations(&bytes, offset as u32, 2).unwrap();
+        assert_eq!(
+            batch.get(0),
+            Some(ParagraphMutation::Upsert {
+                paragraph_id: 7,
+                order: 3,
+            })
+        );
+        assert_eq!(
+            batch.get(1),
+            Some(ParagraphMutation::Remove { paragraph_id: 8 })
+        );
+
+        write_u32(
+            &mut bytes,
+            second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER,
+            1,
+        );
+        assert!(parse_paragraph_mutations(&bytes, offset as u32, 2).is_err());
+        write_u32(
+            &mut bytes,
+            second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER,
+            0,
+        );
+        bytes[second + abi::ENGINE_PARAGRAPH_MUTATION_OPCODE] = PARAGRAPH_MUTATION_UPSERT;
+        write_u32(
+            &mut bytes,
+            second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER,
+            3,
+        );
+        assert!(parse_paragraph_mutations(&bytes, offset as u32, 2).is_err());
+    }
+
+    #[test]
     fn validates_borrowed_style_snapshots_and_canonical_removals() {
         let bytes = valid_style_bytes();
         let batch = parse_style_mutations(&bytes, STYLE_OFFSET as u32, 1).unwrap();
@@ -1980,6 +2180,7 @@ mod tests {
 
     fn limits() -> UpdateLimits {
         UpdateLimits {
+            max_paragraphs: 4,
             max_clusters: 16,
             max_lines: 16,
             max_regions: 4,

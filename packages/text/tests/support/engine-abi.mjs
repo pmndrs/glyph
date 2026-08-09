@@ -79,6 +79,7 @@ export function engineUpdateBytes(
   view.setUint32(layout.policyHandle, policyHandle, true);
   view.setUint32(layout.capabilitySet, 1, true);
   for (const field of [
+    'maxParagraphs',
     'maxClusters',
     'maxLines',
     'maxRegions',
@@ -127,11 +128,15 @@ export function engineFrameUpdateBytes(
   },
 ) {
   const request = abi.layouts.engineUpdateRequest;
+  const paragraphRecord = abi.layouts.engineParagraphMutation;
   const textRecord = abi.layouts.engineTextMutation;
   const styleRecord = abi.layouts.engineStyleMutation;
   const constraint = abi.layouts.engineConstraint;
   const region = abi.layouts.engineRegion;
   let cursor = request.size;
+  const hasParagraph = textMutation !== undefined || style !== undefined || geometry !== undefined;
+  const paragraphRecordOffset = hasParagraph ? align(cursor, paragraphRecord.alignment) : 0;
+  if (hasParagraph) cursor = paragraphRecordOffset + paragraphRecord.size;
   const textRecordOffset = textMutation === undefined ? 0 : cursor;
   if (textMutation !== undefined) cursor += textRecord.size;
   const styleRecordOffset = style === undefined ? 0 : align(cursor, styleRecord.alignment);
@@ -152,6 +157,7 @@ export function engineFrameUpdateBytes(
   view.setUint32(request.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
   view.setUint32(request.policyHandle, policyHandle, true);
   view.setUint32(request.capabilitySet, 1, true);
+  view.setUint32(request.maxParagraphs, 1, true);
   view.setUint32(request.maxClusters, limits.maxClusters, true);
   view.setUint32(request.maxLines, limits.maxLines, true);
   view.setUint32(request.maxRegions, 1, true);
@@ -159,6 +165,8 @@ export function engineFrameUpdateBytes(
   view.setUint32(request.maxInlineObjects, 1, true);
   view.setUint32(request.maxSlotsPerBand, 1, true);
   view.setUint32(request.maxOutputBytes, limits.maxOutputBytes, true);
+  view.setUint32(request.paragraphMutationsOffset, paragraphRecordOffset, true);
+  view.setUint32(request.paragraphMutationCount, hasParagraph ? 1 : 0, true);
   view.setUint32(request.textMutationsOffset, textRecordOffset, true);
   view.setUint32(request.textMutationCount, textMutation === undefined ? 0 : 1, true);
   view.setUint32(request.styleMutationsOffset, styleRecordOffset, true);
@@ -167,6 +175,12 @@ export function engineFrameUpdateBytes(
   view.setUint32(request.constraintCount, geometry === undefined ? 0 : 1, true);
   view.setUint32(request.regionsOffset, regionOffset, true);
   view.setUint32(request.regionCount, geometry === undefined ? 0 : 1, true);
+
+  if (hasParagraph) {
+    view.setUint8(paragraphRecordOffset + paragraphRecord.opcode, abi.engine.paragraphMutationOpcodes.upsert);
+    view.setUint32(paragraphRecordOffset + paragraphRecord.paragraphId, 1, true);
+    view.setUint32(paragraphRecordOffset + paragraphRecord.order, 0, true);
+  }
 
   if (textMutation !== undefined) {
     view.setUint8(textRecordOffset + textRecord.opcode, abi.engine.textMutationOpcodes.replaceUtf16);

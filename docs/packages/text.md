@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:4774636e57780e33b8013d420aa2b0af9f0be235428fd4d73fd1d13d9e403086'
+source_digest: 'sha256:5588a018d8d9306184385c082648762af3d5dbc164a5cb70494e139cab364134'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -793,7 +793,13 @@ state before the retained-child cutover. Text replacements reuse their former re
 inline-object records each grow by four bytes. The optimized Wasm measures 1,070,673 raw / 402,177 gzip / 319,722
 Brotli bytes, versus 1,070,685 / 402,154 / 319,914 at the preceding batching checkpoint; this does not establish a
 material size change. Retained child state, session-wide stable ID allocation, and atomic shared-plan commit remain in
-progress; no per-text-session shortcut is shipped. Adjacent
+progress; no per-text-session shortcut is shipped. Paragraph identity is deliberately separate from presentation
+order. A compact 12-byte paragraph-control record now declares an upsert's explicit batch order or removes a retained
+paragraph; the decoder rejects duplicate IDs, duplicate declared orders, noncanonical removals, forged overlaps, and a
+count above the frame's paragraph limit. The production frame compiler emits this table before all paragraph-owned
+semantic records. The reachable validation path changes optimized Wasm to 1,073,123 raw / 403,431 gzip / 320,917
+Brotli bytes (+2,450 / +1,254 / +1,195 over the keyed-record checkpoint). The retained-state consumer is the next
+checkpoint, so removal is currently rejected before mutation rather than falsely accepted. Adjacent
 8-warmup/31-sample Bitmap column-resize medians are 4.083 ms before and 4.078 ms after the rebuilt module, with 5.8% and
 6.1% RSD; this supports no speedup claim and exposes no material regression. Optimized Wasm is 1,070,685 / 402,154 /
 319,914 raw/gzip/Brotli bytes, +105 / +40 / +252 from D-205.

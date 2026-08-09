@@ -30,11 +30,13 @@ test('production frame compiler preserves the established benchmark request byte
     acknowledgedPublicationGeneration: 0,
     limits: {
       ...limits,
+      maxParagraphs: 1,
       maxRegions: 1,
       maxExclusions: 1,
       maxInlineObjects: 1,
       maxSlotsPerBand: 1,
     },
+    paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
     textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: text }],
     styleMutations: [
       {
@@ -105,6 +107,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
     acknowledgedPublicationGeneration: 5,
     semanticViewMask: 6,
     limits: {
+      maxParagraphs: 4,
       maxClusters: 32,
       maxLines: 16,
       maxRegions: 2,
@@ -113,6 +116,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
       maxSlotsPerBand: 3,
       maxOutputBytes: 1_048_576,
     },
+    paragraphMutations: [{ opcode: 'upsert', paragraphId: 3, order: 2 }],
     styleMutations: [
       {
         opcode: 'upsert',

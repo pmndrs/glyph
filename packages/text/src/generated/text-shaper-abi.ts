@@ -94,6 +94,10 @@ export const textShaperAbi = {
       "ellipsis": 3,
       "visible": 1
     },
+    "paragraphMutationOpcodes": {
+      "remove": 2,
+      "upsert": 1
+    },
     "patchOpcodes": {
       "allocateOrResize": 1,
       "copy": 4,
@@ -363,6 +367,15 @@ export const textShaperAbi = {
       "size": 60,
       "textOffset": 8
     },
+    "engineParagraphMutation": {
+      "alignment": 4,
+      "flags": 1,
+      "opcode": 0,
+      "order": 8,
+      "paragraphId": 4,
+      "reserved0": 2,
+      "size": 12
+    },
     "enginePatch": {
       "alignment": 4,
       "bufferGeneration": 8,
@@ -565,8 +578,11 @@ export const textShaperAbi = {
       "maxInlineObjects": 56,
       "maxLines": 44,
       "maxOutputBytes": 64,
+      "maxParagraphs": 124,
       "maxRegions": 48,
       "maxSlotsPerBand": 60,
+      "paragraphMutationCount": 132,
+      "paragraphMutationsOffset": 128,
       "policyHandle": 24,
       "policyParametersLength": 120,
       "policyParametersOffset": 116,
@@ -574,7 +590,7 @@ export const textShaperAbi = {
       "regionsOffset": 92,
       "semanticViewMask": 36,
       "sessionId": 8,
-      "size": 124,
+      "size": 136,
       "styleMutationCount": 80,
       "styleMutationsOffset": 76,
       "textMutationCount": 72,
