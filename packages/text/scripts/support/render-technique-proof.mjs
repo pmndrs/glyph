@@ -4,18 +4,18 @@ const ABSENT_PAGE = 0xffff;
 const MISSING_RESOURCE = 0xffff_ffff;
 const TECHNIQUE_ID = 1;
 
-export function techniqueProof(abi, name, raster) {
-  if (name === 'bitmap') return bitmapProof(abi, raster);
-  if (name === 'mtsdf') return mtsdfProof(abi, raster);
-  if (name === 'slug') return slugProof(abi, raster);
+export function techniqueProof(abi, name, raster, allocation = 'ordered') {
+  if (name === 'bitmap') return bitmapProof(abi, raster, allocation);
+  if (name === 'mtsdf') return mtsdfProof(abi, raster, allocation);
+  if (name === 'slug') return slugProof(abi, raster, allocation);
   throw new RangeError(`unknown render technique ${name}`);
 }
 
-function bitmapProof(abi, raster) {
+function bitmapProof(abi, raster, allocation) {
   const strike = raster.strikes[0];
   const view = recordView(strike.records);
   const fields = denseAtlasFields(view, raster.glyphCount, strike.planeUnitsPerEm, strike.pages);
-  return proof(abi, bitmapProgram(abi, 'strike'), {
+  return proof(abi, bitmapProgram(abi, 'strike'), allocation, {
     glyphCount: raster.glyphCount,
     strikes: [strike.ppem],
     resources: strike.pages.map(resource),
@@ -24,7 +24,7 @@ function bitmapProof(abi, raster) {
   });
 }
 
-function mtsdfProof(abi, raster) {
+function mtsdfProof(abi, raster, allocation) {
   const extension = raster.document.extensions.PMNDRS_font_distance_field;
   const view = recordView(raster.records);
   const fields = denseAtlasFields(view, raster.glyphCount, extension.planeUnitsPerEm, raster.pages);
@@ -42,7 +42,7 @@ function mtsdfProof(abi, raster) {
       return view.getUint16(record + 14, true) / height;
     }),
   );
-  return proof(abi, mtsdfProgram(abi), {
+  return proof(abi, mtsdfProgram(abi), allocation, {
     glyphCount: raster.glyphCount,
     strikes: [0],
     resources: [{ id: 1, generation: 1, kind: 1, reference: 1 }],
@@ -52,7 +52,7 @@ function mtsdfProof(abi, raster) {
   });
 }
 
-function slugProof(abi, raster) {
+function slugProof(abi, raster, allocation) {
   const extension = raster.document.extensions.PMNDRS_font_slug;
   const view = recordView(raster.records);
   const units = extension.planeUnitsPerEm;
@@ -85,7 +85,7 @@ function slugProof(abi, raster) {
     horizontalBands,
     verticalBands,
   ];
-  return proof(abi, slugProgram(abi), {
+  return proof(abi, slugProgram(abi), allocation, {
     glyphCount: raster.glyphCount,
     strikes: [0],
     resources: raster.pages.map(resource),
@@ -102,11 +102,16 @@ function slugProof(abi, raster) {
   });
 }
 
-function proof(abi, descriptor, binding) {
+function proof(abi, descriptor, allocation, binding) {
+  const allocationStrategy =
+    allocation === 'stable'
+      ? abi.policy.allocationStrategies.stableIndirect
+      : abi.policy.allocationStrategies.orderedDirect;
+  const selected = { ...descriptor, allocationStrategy };
   return {
-    policyBytes: renderPolicyBytesFromPrograms(abi, [descriptor]),
+    policyBytes: renderPolicyBytesFromPrograms(abi, [selected]),
     bindingBytes: fontBindingBytes(abi, { techniqueId: TECHNIQUE_ID, ...binding }),
-    outputBytesPerGlyph: descriptor.buffers.reduce(
+    outputBytesPerGlyph: selected.buffers.reduce(
       (sum, buffer) => sum + buffer.vectorWidth * scalarBytes(abi, buffer.scalar),
       0,
     ),

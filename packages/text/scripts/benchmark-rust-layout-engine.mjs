@@ -33,7 +33,7 @@ const [wasm, abi, artifact] = await Promise.all([
 ]);
 const validated = await validateFontArtifact(artifact);
 const raster = await validateRaster(options.technique, artifact, validated);
-const technique = techniqueProof(abi, options.technique, raster);
+const technique = techniqueProof(abi, options.technique, raster, options.allocation);
 const outputCapacity = technique.outputBytesPerGlyph > 48 ? 8 * 1024 * 1024 : 4 * 1024 * 1024;
 const instance = await WebAssembly.instantiate(await WebAssembly.compile(wasm), {});
 const memory = instance.exports[abi.memory];
@@ -66,11 +66,11 @@ const initial = updateBytes({
 let sessionMemory;
 
 console.log(
-  `technique=${options.technique} output=${technique.outputBytesPerGlyph} bytes/glyph · memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
+  `technique=${options.technique} allocation=${options.allocation} output=${technique.outputBytesPerGlyph} bytes/glyph · memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
 );
 
 const reports = [];
-const cases = ['cold', 'no-op', 'font-size', 'column-resize', 'suffix-edit', 'localized-edit'];
+const cases = ['cold', 'no-op', 'font-size', 'column-resize', 'suffix-edit', 'localized-edit', 'localized-splice'];
 for (const name of options.case === undefined ? cases : [options.case]) {
   reports.push(name === 'cold' ? measureCold() : measureWarm(name));
 }
@@ -98,6 +98,8 @@ function measureWarm(name) {
   let state = execute(initial, true);
   const liveGlyphCount = state.glyphCount;
   const localizedText = [...utf16];
+  const spliceStart = Math.floor(utf16.length / 2);
+  let spliceInserted = false;
   let suffixLength = utf16.length;
   const samples = [];
   const plans = [];
@@ -140,6 +142,17 @@ function measureWarm(name) {
       bytes = updateBytes({
         ...common,
         textMutation: { start, deleteCount: 1, insert: [replacement] },
+        geometry: baseGeometry,
+      });
+    } else if (name === 'localized-splice') {
+      const insert = spliceInserted ? [] : [0x61];
+      const deleteCount = spliceInserted ? 1 : 0;
+      spliceInserted = !spliceInserted;
+      const textEnd = utf16.length + Number(spliceInserted);
+      bytes = updateBytes({
+        ...common,
+        textMutation: { start: spliceStart, deleteCount, insert },
+        style: { ...baseStyle, textEnd },
         geometry: baseGeometry,
       });
     } else {
@@ -312,7 +325,9 @@ function printReport(caseReports) {
     );
   }
   console.log('column-resize is the existing layout-width case: one fully active column is reflowed end to end.');
-  console.log('suffix-edit matches the TypeScript text benchmark; localized-edit is an additional one-code-unit edit.');
+  console.log(
+    'suffix-edit matches the TypeScript text benchmark; localized-edit replaces one code unit; localized-splice alternates one middle insertion/deletion.',
+  );
   console.log(`Wasm memory after retained high-water mark: ${(memory.buffer.byteLength / 1024 / 1024).toFixed(2)} MiB`);
 }
 
@@ -335,6 +350,7 @@ function parseArguments(arguments_) {
   };
   return {
     technique: normalizeTechnique(readString('--technique', 'bitmap')),
+    allocation: readAllocation('--allocation'),
     wasm: readString('--wasm'),
     case: readCase('--case'),
     glyphs: read('--glyphs', 22_000),
@@ -352,10 +368,18 @@ function parseArguments(arguments_) {
     const value = readString(name);
     if (
       value !== undefined &&
-      !['cold', 'no-op', 'font-size', 'column-resize', 'suffix-edit', 'localized-edit'].includes(value)
+      !['cold', 'no-op', 'font-size', 'column-resize', 'suffix-edit', 'localized-edit', 'localized-splice'].includes(
+        value,
+      )
     ) {
       throw new RangeError(`unknown benchmark case: ${value}`);
     }
+    return value;
+  }
+
+  function readAllocation(name) {
+    const value = readString(name, 'ordered');
+    if (value !== 'ordered' && value !== 'stable') throw new RangeError(`unknown allocation strategy: ${value}`);
     return value;
   }
 }

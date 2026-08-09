@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:5756368cd2774be1f5ed202ef33c8a7c9aa16c872637aed881f5c272fafe5d3c'
+source_digest: 'sha256:45bd229154c46ae55792637f90932ef600fa7ad524fa3b680338cf13f4f28161'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -244,6 +244,13 @@ identity; the first storage mismatch falls back to complete batch discovery. Thr
 1.164/5.761, 1.153/5.740, and 1.155/5.738 ms median/p95, versus the preceding 1.314/5.863 ms checkpoint. The optimized
 shaper is 1,157,311 raw bytes, a 4,189-byte increase, and retained high-water memory is 79.81 MiB. The repeated median gain
 is established; the roughly 5.74 ms p95 and 81.4–81.6% RSD still fail the tail-latency gate.
+
+The direct benchmark now also keeps an independent middle-splice lane. Alternating one UTF-16 insertion/deletion through
+ordered-direct storage measures 9.119 ms median / 10.016 ms p95 and writes 511.3 KiB because following physical records
+move. Stable-indirect reduces that publication to 452 B, but its current compiler measures 10.776/51.067 ms; even its
+equal-length replacement path measures 2.903/19.312 ms. This establishes the storage-policy tradeoff without changing the
+default: stable planning and Three shader indirection remain optimization/correctness work, and chunk-local text storage
+cannot be claimed as the dominant splice fix while the physical plan has this cost.
 
 ## Merge gates still open
 
