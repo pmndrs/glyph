@@ -43,10 +43,7 @@ const loadedFontState = new WeakMap<LoadedFont<AnyRasterTechnique>, LoadedFontSt
 export function createFontStack<
   Primary extends AnyRasterTechnique,
   const Fallback extends readonly LoadedFont<AnyRasterTechnique>[],
->(
-  primary: LoadedFont<Primary>,
-  ...fallback: Fallback
-): FontStack<Primary | TechniqueOfLoadedFont<Fallback[number]>> {
+>(primary: LoadedFont<Primary>, ...fallback: Fallback): FontStack<Primary | TechniqueOfLoadedFont<Fallback[number]>> {
   type Technique = Primary | TechniqueOfLoadedFont<Fallback[number]>;
   const fonts = [primary, ...fallback] as unknown as [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
   assertLoadedFont(primary);

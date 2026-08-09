@@ -10,7 +10,7 @@ const MAX_U32 = 0xffff_ffff;
 const ABSENT_PAGE = 0xffff;
 const MISSING_RESOURCE = 0xffff_ffff;
 
-interface BindingResource {
+export interface BindingResource {
   readonly key: RasterResourceId;
   readonly id: number;
   readonly generation: number;
@@ -18,24 +18,24 @@ interface BindingResource {
   readonly reference: number;
 }
 
-interface FieldTable {
+export interface FontBindingFieldTable {
   readonly rows: number;
   readonly fields: readonly ((row: number) => number)[];
 }
 
-interface FontBindingDescriptor {
+export interface FontBindingDescriptor {
   readonly techniqueId: number;
   readonly programVariant: number;
   readonly glyphCount: number;
   readonly strikes: readonly number[];
   readonly resources: readonly BindingResource[];
   readonly resourceIndex: (row: number) => number;
-  readonly glyphF32: FieldTable;
-  readonly glyphU32: FieldTable;
-  readonly strikeF32: FieldTable;
-  readonly strikeU32: FieldTable;
-  readonly resourceF32: FieldTable;
-  readonly resourceU32: FieldTable;
+  readonly glyphF32: FontBindingFieldTable;
+  readonly glyphU32: FontBindingFieldTable;
+  readonly strikeF32: FontBindingFieldTable;
+  readonly strikeU32: FontBindingFieldTable;
+  readonly resourceF32: FontBindingFieldTable;
+  readonly resourceU32: FontBindingFieldTable;
 }
 
 /** Compile one first-party loaded font into the Rust engine's field-major immutable binding. */
@@ -106,7 +106,7 @@ function compileBitmap(
   identities: RenderWireIdentityRegistry,
 ): Uint8Array {
   const entries = data.strikes.flatMap((strike) => strike.pages.map((page) => page.resource));
-  const { resources, indexFor } = bindingResources(entries, identities);
+  const { resources, indexFor } = fontBindingResources(entries, identities);
   const views = data.strikes.map((strike) => recordView(strike.records));
   const rows = checkedProduct(glyphCount, data.strikes.length, 'bitmap strike rows');
   const strikeRecord = (row: number): { readonly view: DataView; readonly record: number; readonly strike: number } => {
@@ -128,7 +128,7 @@ function compileBitmap(
       : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) /
           data.strikes[strike]!.pages[page]![dimension];
   };
-  return compileBinding({
+  return compileFontBinding({
     techniqueId,
     programVariant: 0,
     glyphCount,
@@ -139,8 +139,8 @@ function compileBitmap(
       const page = view.getUint16(record + 16, true);
       return page === ABSENT_PAGE ? MISSING_RESOURCE : indexFor(data.strikes[strike]!.pages[page]!.resource);
     },
-    glyphF32: emptyTable(glyphCount),
-    glyphU32: emptyTable(glyphCount),
+    glyphF32: emptyFontBindingTable(glyphCount),
+    glyphU32: emptyFontBindingTable(glyphCount),
     strikeF32: {
       rows,
       fields: [
@@ -170,9 +170,9 @@ function compileBitmap(
         (row) => span(row, 10, 14, 'height'),
       ],
     },
-    strikeU32: emptyTable(rows),
-    resourceF32: emptyTable(resources.length),
-    resourceU32: emptyTable(resources.length),
+    strikeU32: emptyFontBindingTable(rows),
+    resourceF32: emptyFontBindingTable(resources.length),
+    resourceU32: emptyFontBindingTable(resources.length),
   });
 }
 
@@ -182,7 +182,7 @@ function compileMsdf(
   techniqueId: number,
   identities: RenderWireIdentityRegistry,
 ): Uint8Array {
-  const { resources, indexFor } = bindingResources([data.resource], identities);
+  const { resources, indexFor } = fontBindingResources([data.resource], identities);
   const view = recordView(data.records);
   const rowRecord = (row: number): number => row * 20;
   const pageAt = (row: number): number => view.getUint16(rowRecord(row) + 16, true);
@@ -197,7 +197,7 @@ function compileMsdf(
       ? 0
       : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) / data.pages[page]![dimension];
   };
-  return compileBinding({
+  return compileFontBinding({
     techniqueId,
     programVariant: 0,
     glyphCount,
@@ -223,10 +223,10 @@ function compileMsdf(
       ],
     },
     glyphU32: { rows: glyphCount, fields: [(row) => pageAt(row)] },
-    strikeF32: emptyTable(glyphCount),
-    strikeU32: emptyTable(glyphCount),
-    resourceF32: emptyTable(resources.length),
-    resourceU32: emptyTable(resources.length),
+    strikeF32: emptyFontBindingTable(glyphCount),
+    strikeU32: emptyFontBindingTable(glyphCount),
+    resourceF32: emptyFontBindingTable(resources.length),
+    resourceU32: emptyFontBindingTable(resources.length),
   });
 }
 
@@ -236,7 +236,7 @@ function compileSlug(
   techniqueId: number,
   identities: RenderWireIdentityRegistry,
 ): Uint8Array {
-  const { resources, indexFor } = bindingResources(
+  const { resources, indexFor } = fontBindingResources(
     data.pages.map((page) => page.resource),
     identities,
   );
@@ -251,7 +251,7 @@ function compileSlug(
   const verticalBands = (row: number): number => view.getUint16(record(row) + 12, true);
   const bandScaleX = (row: number): number => (width(row) === 0 ? 0 : verticalBands(row) / width(row));
   const bandScaleY = (row: number): number => (height(row) === 0 ? 0 : horizontalBands(row) / height(row));
-  return compileBinding({
+  return compileFontBinding({
     techniqueId,
     programVariant: 0,
     glyphCount,
@@ -285,14 +285,14 @@ function compileSlug(
         (row) => verticalBands(row),
       ],
     },
-    strikeF32: emptyTable(glyphCount),
-    strikeU32: emptyTable(glyphCount),
-    resourceF32: emptyTable(resources.length),
-    resourceU32: emptyTable(resources.length),
+    strikeF32: emptyFontBindingTable(glyphCount),
+    strikeU32: emptyFontBindingTable(glyphCount),
+    resourceF32: emptyFontBindingTable(resources.length),
+    resourceU32: emptyFontBindingTable(resources.length),
   });
 }
 
-function bindingResources(
+export function fontBindingResources(
   keys: readonly RasterResourceId[],
   identities: RenderWireIdentityRegistry,
 ): {
@@ -323,7 +323,7 @@ function bindingResources(
   };
 }
 
-function compileBinding(descriptor: FontBindingDescriptor): Uint8Array {
+export function compileFontBinding(descriptor: FontBindingDescriptor): Uint8Array {
   const request = textShaperAbi.layouts.fontBindingRequest;
   const strike = textShaperAbi.layouts.fontBindingStrike;
   const resource = textShaperAbi.layouts.fontBindingResource;
@@ -399,7 +399,7 @@ function compileBinding(descriptor: FontBindingDescriptor): Uint8Array {
   return bytes;
 }
 
-function emptyTable(rows: number): FieldTable {
+export function emptyFontBindingTable(rows: number): FontBindingFieldTable {
   return { rows, fields: [] };
 }
 

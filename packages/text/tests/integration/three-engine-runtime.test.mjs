@@ -382,6 +382,16 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(target.syncTransforms(), 1);
   assert.equal(transformTableAttribute.version, unchangedTransformVersion + 1);
   assert.equal(transformTableAttribute.array[1 * 16 + 12], 4);
+  paragraphObjects.get(1).visible = false;
+  assert.equal(target.syncTransforms(), 1);
+  assert.deepEqual(
+    Array.from(transformTableAttribute.array.subarray(16, 32)),
+    Array(16).fill(0),
+    'indexed draws suppress only the hidden Text instances without splitting the shared draw',
+  );
+  paragraphObjects.get(1).visible = true;
+  assert.equal(target.syncTransforms(), 1);
+  assert.equal(transformTableAttribute.array[1 * 16 + 12], 4);
 
   const reorderedPublication = session.update(
     compileTextEngineFrameUpdate({
@@ -653,6 +663,12 @@ test('Three coordinator shares shaping data across technique bindings and refere
   paragraphObjects.get(2).position.x = 9;
   assert.equal(directTarget.syncTransforms(), 1);
   assert.equal(directTarget.draws[1].matrix.elements[12], 9);
+  paragraphObjects.get(2).visible = false;
+  assert.equal(directTarget.syncTransforms(), 1);
+  assert.equal(directTarget.draws[1].visible, false);
+  paragraphObjects.get(2).visible = true;
+  assert.equal(directTarget.syncTransforms(), 1);
+  assert.equal(directTarget.draws[1].visible, true);
   directTarget.dispose();
   directSession.dispose();
 

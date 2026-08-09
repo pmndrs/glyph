@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:c5708dd665b5ede78cde985af8dea48c4c5474fd745104310822f133b7313eb4'
+source_digest: 'sha256:36708c3ebe0e3ee71edc3df4355bd7e68986f64597152fabd7ce196c0b5ac1c7'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -190,7 +190,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-08T23:04:50Z'
+  at: '2026-08-09T06:36:53Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -745,8 +745,10 @@ changes while emitting the draw partitions its backend requires. Production font
 bitmap strikes, MTSDF glyph records, and Slug bands directly into one field-major request allocation. Exact integration
 tests compare every emitted lane with the established real-font renderer-parity tables. Public string technique and
 resource IDs lower through deterministic UTF-8 FNV-1a into the wire's nonzero `u32` namespace, and one runtime-scoped
-registry rejects any collision before Rust registration. The policy and binding bytes are still package-internal;
-public third-party policy authoring and Three render-plan consumption remain open.
+registry rejects any collision before Rust registration. First-party policy and binding compilation share their exact
+wire compiler with the public Three plan-program registry. A third-party program supplies static validated policy data,
+one cold font-binding compiler, and one renderer material factory; it cannot insert a hot JavaScript callback into Rust
+planning. Three render-plan consumption is the public imperative and R3F rendering path.
 
 Frame-request serialization is also production code rather than a benchmark helper. One final `Uint8Array` carries
 text replacements; root and span style mutations; language and OpenType feature payloads; material, paint, decoration,
@@ -925,7 +927,16 @@ executor retains only renderer resources needed to apply later deltas. It does n
 Three's old layout, glyph-snapshot, and glyph-origin override surface is removed. Any later interaction or measurement
 API must query retained Rust layout state separately and on demand. Focused integration covers mixed-font spans, custom
 material factories, two-child indexed batching, renderer-local transform updates, reparenting, and disposal. R3F,
-TypeGPU, and the portable legacy core still own the remaining cutover and deletion work.
+which constructs the same imperative objects, is cut over as well. TypeGPU and the portable legacy core still own the
+remaining cutover and deletion work.
+
+Third-party Three techniques use the same Rust planner instead of reviving the removed target transaction. Public
+`registerThreeRasterPlanProgram` accepts a static policy descriptor, a cold compiler that lowers the package's validated
+font data into one binding, and a material factory that receives exact policy buffers and transform authority. The
+glyph-example package proves this contract without importing text internals or duplicating instance packing. Its
+compiled-Wasm lifecycle retains mesh and geometry identity over a text mutation. Its live WebGPU and forced-WebGL2
+frames are deterministic and byte-identical across backends. Individual visibility does not split an indexed draw or
+cross into Wasm: the renderer zeros only that text's matrix-sidecar slot; direct-policy draws mirror object visibility.
 
 Public font stacks no longer repeat a raster technique or require every fallback font to share one. Their generic type
 is the union of the concrete loaded-font techniques, while runtime construction still requires one text-runtime domain,

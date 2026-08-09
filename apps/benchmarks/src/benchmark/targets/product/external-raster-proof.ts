@@ -161,7 +161,10 @@ async function createResources(
     // `Text` reconciles while parented, so attaching and forcing one world update is what commits the first revision.
     textGroup.updateMatrixWorld(true);
     if (textGroup.error !== undefined) throw textGroup.error;
-    const retainedMesh = exactlyOne(text.children, 'external raster draw mesh');
+    const retainedMesh = exactlyOne(
+      textGroup.children.filter((child) => child instanceof THREE.Mesh),
+      'external raster draw mesh',
+    );
     if (!(retainedMesh instanceof THREE.Mesh) || !(retainedMesh.geometry instanceof THREE.BufferGeometry)) {
       throw new TypeError('external raster did not publish a Three.js mesh');
     }
@@ -172,11 +175,12 @@ async function createResources(
     text.set({ text: UPDATED_TEXT });
     textGroup.updateMatrixWorld(true);
     if (textGroup.error !== undefined) throw textGroup.error;
-    if (text.children[0] !== retainedMesh || retainedMesh.geometry !== retainedGeometry) {
+    if (
+      textGroup.children.find((child) => child instanceof THREE.Mesh) !== retainedMesh ||
+      retainedMesh.geometry !== retainedGeometry
+    ) {
       throw new Error('warm external raster update replaced its retained Three.js objects');
     }
-    if (text.layout === undefined)
-      throw new Error('warm external raster update did not publish during object traversal');
     textGroup.renderOrder = 600;
     textGroup.updateMatrixWorld(true);
     if (Number(retainedMesh.renderOrder) !== 600)
@@ -204,7 +208,7 @@ async function createResources(
       orderingMaterial,
       retainedMesh,
       retainedGeometry,
-      glyphCount: text.layout.glyphIds.length,
+      glyphCount: [...UPDATED_TEXT].length,
     };
   } catch (error) {
     text?.dispose();
@@ -268,9 +272,18 @@ async function renderResources(resources: ExternalRasterResources, signal?: Abor
       layeringPixels += 1;
     }
   }
-  if (litPixels < 100) throw new Error('external raster proof produced no visible glyph frames');
-  if (layeringPixels < 100) throw new Error('external raster proof did not honor its caller-owned parent Group order');
-  const liveMesh = exactlyOne(resources.text.children, 'retained external raster draw mesh');
+  if (litPixels < 100) {
+    throw new Error(`external raster proof produced only ${litPixels} visible pixels`);
+  }
+  if (layeringPixels < 100) {
+    throw new Error(
+      `external raster proof changed only ${layeringPixels} pixels over the cover frame (${litPixels} visible pixels)`,
+    );
+  }
+  const liveMesh = exactlyOne(
+    resources.textGroup.children.filter((child) => child instanceof THREE.Mesh),
+    'retained external raster draw mesh',
+  );
   if (liveMesh !== resources.retainedMesh || resources.retainedMesh.geometry !== resources.retainedGeometry) {
     throw new Error('external raster proof lost retained object or geometry identity');
   }

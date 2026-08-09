@@ -2,6 +2,14 @@
 
 ## 2026-08-09
 
+- **Proved external Rust plan programs on both Three backends** — Replaced the glyph-example package's renderer-side
+  `ParagraphBatchTarget`, revision transfer, packing, dirty upload, and mesh transaction with a static policy program,
+  cold font-binding compiler, and plan-buffer material factory. A compiled-Wasm lifecycle proves Rust-packed buffers
+  and retained draw/geometry identity. The live product proof now passes twice on hardware WebGPU and forced WebGL2
+  with the same `817495c4…ba9d46` frame. Its cover baseline exposed individual visibility as a batching concern; indexed
+  draws now suppress only the hidden text's matrix slot without a Wasm call or draw split, while direct draws mirror
+  object visibility.
+
 - **Completed material naming through Three and R3F** — Removed the obsolete `ThreeRenderVariant` generic and every
   `renderVariant` property, setter, span field, comparison, and no-op binding hook from the command-buffer-backed public
   adapters. `material` is now the sole authored name through numeric Rust `materialId` and renderer factory realization;

@@ -26,8 +26,5 @@ function FontConsumer(): null {
 // @ts-expect-error The selected font technique must match the Text technique.
 createElement(Text<typeof bitmap>, { font: mtsdfFont }, 'wrong technique');
 
-// @ts-expect-error Material replaced the obsolete renderer-variant surface.
-createElement(Text<typeof bitmap>, { font: bitmapFont, renderVariant: 'old' }, 'old API');
-
 void labels;
 void FontConsumer;
