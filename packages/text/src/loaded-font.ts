@@ -16,9 +16,10 @@ export interface LoadedFont<Technique extends AnyRasterTechnique> {
 export type FontSelection<Technique extends AnyRasterTechnique> = LoadedFont<Technique> | FontStack<Technique>;
 
 export interface FontStack<Technique extends AnyRasterTechnique> {
-  readonly technique: Technique;
   readonly fonts: readonly [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
 }
+
+type TechniqueOfLoadedFont<Font> = Font extends LoadedFont<infer Technique> ? Technique : never;
 
 export class FontLeaseError extends Error {
   readonly leaseCount: number;
@@ -39,11 +40,15 @@ interface LoadedFontState {
 
 const loadedFontState = new WeakMap<LoadedFont<AnyRasterTechnique>, LoadedFontState>();
 
-export function createFontStack<Technique extends AnyRasterTechnique>(
-  primary: LoadedFont<Technique>,
-  ...fallback: readonly LoadedFont<NoInfer<Technique>>[]
-): FontStack<Technique> {
-  const fonts = [primary, ...fallback] as [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
+export function createFontStack<
+  Primary extends AnyRasterTechnique,
+  const Fallback extends readonly LoadedFont<AnyRasterTechnique>[],
+>(
+  primary: LoadedFont<Primary>,
+  ...fallback: Fallback
+): FontStack<Primary | TechniqueOfLoadedFont<Fallback[number]>> {
+  type Technique = Primary | TechniqueOfLoadedFont<Fallback[number]>;
+  const fonts = [primary, ...fallback] as unknown as [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
   assertLoadedFont(primary);
   const unique = new Set<LoadedFont<AnyRasterTechnique>>([primary]);
   for (const font of fallback) {
@@ -52,10 +57,8 @@ export function createFontStack<Technique extends AnyRasterTechnique>(
     unique.add(font);
     if (font.runtime !== primary.runtime)
       throw new TypeError('font stack members must belong to the same text runtime');
-    if (font.technique !== primary.technique)
-      throw new TypeError('font stack members must use the same raster technique');
   }
-  return Object.freeze({ technique: primary.technique, fonts: Object.freeze(fonts) });
+  return Object.freeze({ fonts: Object.freeze(fonts) });
 }
 
 export class LoadedFontImpl<Technique extends AnyRasterTechnique> implements LoadedFont<Technique> {
@@ -119,6 +122,24 @@ export function acquireFontSelection<Technique extends AnyRasterTechnique>(
   }
 }
 
+/** @internal Acquire one renderer lease without imposing a single raster technique on the selection. */
+export function acquireFontSelectionForRuntime(
+  selection: FontSelection<AnyRasterTechnique>,
+  runtime: TextRuntime,
+): void {
+  const acquired: LoadedFont<AnyRasterTechnique>[] = [];
+  try {
+    for (const font of concreteFonts(selection)) {
+      assertFontForRuntime(font, runtime);
+      stateOf(font).leases += 1;
+      acquired.push(font);
+    }
+  } catch (error) {
+    for (const font of acquired) stateOf(font).leases -= 1;
+    throw error;
+  }
+}
+
 /** @internal Release one retained paragraph lease from every concrete font. */
 export function releaseFontSelection<Technique extends AnyRasterTechnique>(selection: FontSelection<Technique>): void {
   for (const font of concreteFonts(selection)) {
@@ -134,10 +155,15 @@ export function assertFontSelection<Technique extends AnyRasterTechnique>(
   runtime: TextRuntime,
   technique: Technique,
 ): void {
-  if (isFontStack(selection) && selection.technique !== technique) {
-    throw new TypeError('font stack does not use the paragraph batch technique');
-  }
   for (const font of concreteFonts(selection)) assertCompatibleFont(font, runtime, technique);
+}
+
+/** @internal Validate renderer ownership without imposing a single raster technique on the selection. */
+export function assertFontSelectionForRuntime(
+  selection: FontSelection<AnyRasterTechnique>,
+  runtime: TextRuntime,
+): void {
+  for (const font of concreteFonts(selection)) assertFontForRuntime(font, runtime);
 }
 
 /** @internal Return the immutable concrete fallback order. */
@@ -184,9 +210,13 @@ function assertCompatibleFont<Technique extends AnyRasterTechnique>(
   runtime: TextRuntime,
   technique: Technique,
 ): void {
+  assertFontForRuntime(font, runtime);
+  if (font.technique !== technique) throw new TypeError('font does not use the paragraph batch technique');
+}
+
+function assertFontForRuntime(font: LoadedFont<AnyRasterTechnique>, runtime: TextRuntime): void {
   assertLoadedFont(font);
   if (font.runtime !== runtime) throw new TypeError('font belongs to another text runtime');
-  if (font.technique !== technique) throw new TypeError('font does not use the paragraph batch technique');
 }
 
 function assertLoadedFont(font: LoadedFont<AnyRasterTechnique>): void {

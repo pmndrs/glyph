@@ -146,7 +146,6 @@ export function TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeR
   const onErrorRef = useRef(properties.onError);
   const createObject = useEffectEvent(() => {
     const created = new ThreeTextGroup<Technique, Variant>({
-      technique: properties.technique,
       ...(properties.capacity === undefined ? {} : { capacity: properties.capacity }),
       ...(properties.renderOrder === undefined ? {} : { renderOrder: properties.renderOrder }),
       ...(properties.renderVariant === undefined ? {} : { renderVariant: properties.renderVariant }),
@@ -168,13 +167,11 @@ export function TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeR
 
   useLayoutEffect(() => {
     if (object === undefined) return;
-    if (properties.technique !== object.technique)
-      throw new TypeError('changing an R3F TextGroup technique requires a new keyed component');
     if (properties.capacity !== undefined && !sameCapacity(properties.capacity, object))
       object.setCapacity(properties.capacity);
     object.setRenderVariant(properties.renderVariant);
     invalidate();
-  }, [invalidate, object, properties.capacity, properties.renderVariant, properties.technique]);
+  }, [invalidate, object, properties.capacity, properties.renderVariant]);
 
   useLayoutEffect(() => {
     onErrorRef.current = properties.onError;
@@ -352,7 +349,7 @@ function groupObjectProperties<Technique extends AnyRasterTechnique, Variant>(
   properties: R3fTextGroupProps<Technique, Variant>,
 ): Object3DProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['technique', 'capacity', 'renderVariant', 'children', 'onError', 'ref']) delete object[key];
+  for (const key of ['capacity', 'renderVariant', 'children', 'onError', 'ref']) delete object[key];
   return object as Object3DProps;
 }
 

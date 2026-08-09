@@ -151,7 +151,7 @@ async function createResources(
     // The caller-owned parent stays a plain `THREE.Group`: Three derives a render list's `groupOrder` from `isGroup`,
     // so this is the boundary that must order the whole text above the cover. The `TextGroup` inside it owns only the
     // text-local render-order base, which is a separate contract this target also checks.
-    textGroup = new TextGroup({ technique: glyphExample, renderOrder: 200 });
+    textGroup = new TextGroup({ renderOrder: 200 });
     textGroup.add(text);
     const callerGroup = new THREE.Group();
     callerGroup.renderOrder = 200;

@@ -14,7 +14,7 @@ import {
 } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
 import { msdf } from '@pmndrs/text/three/msdf';
-import { Text, TextGroup } from '@pmndrs/text/three';
+import { defineTextMaterial, Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 const interUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -189,7 +189,7 @@ test('Three Text shapes and draws a formatted literal through the real render li
   const [inter, devanagari] = await Promise.all([loadInter(runtime), loadDevanagari(runtime)]);
 
   const scene = new THREE.Scene();
-  const group = new TextGroup({ technique: bitmap });
+  const group = new TextGroup();
   const warning = span(devanagari, { color: '#ff00ff', fontSize: 18 });
   const label = new Text({ font: createFontStack(inter, devanagari), text: txt`Alert ${warning`देव`}!` });
   group.add(label);
@@ -234,6 +234,41 @@ test('Three Text shapes and draws a formatted literal through the real render li
   label.dispose();
   inter.dispose();
   devanagari.dispose();
+  runtime.dispose();
+});
+
+test('Three realizes mixed raster techniques from one Rust-planned paragraph', async () => {
+  const runtime = await createBitmapRuntime();
+  const [bitmapInter, msdfInter] = await Promise.all([loadInter(runtime), loadMsdfInter(runtime)]);
+  const techniques = [];
+  const material = defineTextMaterial((context) => {
+    techniques.push(context.technique);
+    return context.createDefaultMaterial();
+  });
+  const label = new Text({
+    font: createFontStack(bitmapInter, msdfInter),
+    text: 'AB',
+    spans: [{ start: 1, end: 2, font: msdfInter }],
+    material,
+  });
+  const group = new TextGroup();
+  group.add(label);
+  const scene = new THREE.Scene();
+  scene.add(group);
+  scene.updateMatrixWorld();
+
+  assert.equal(group.error, undefined);
+  assert.deepEqual(new Set(techniques), new Set([bitmap.id, msdf.id]));
+  assert.equal(
+    group.children.filter((child) => child.isMesh).length,
+    2,
+    'the Rust plan must split one paragraph into renderer draws for both selected techniques',
+  );
+
+  group.dispose();
+  label.dispose();
+  bitmapInter.dispose();
+  msdfInter.dispose();
   runtime.dispose();
 });
 

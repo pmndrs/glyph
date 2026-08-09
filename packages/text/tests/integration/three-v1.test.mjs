@@ -22,7 +22,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   });
 
   const scene = new THREE.Scene();
-  const group = new TextGroup({ technique: bitmap, renderOrder: 12 });
+  const group = new TextGroup({ renderOrder: 12 });
   const container = new THREE.Object3D();
   const label = new Text({ font, text: 'First frame' });
   container.add(label);
@@ -98,7 +98,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   const scene = new THREE.Scene();
-  const group = new TextGroup({ technique: bitmap, renderOrder: 3 });
+  const group = new TextGroup({ renderOrder: 3 });
   const left = new Text({ font, text: 'AB' });
   const right = new Text({ font, text: 'CD' });
   left.position.x = 2;

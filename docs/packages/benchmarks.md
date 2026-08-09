@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:d618b88fc753aa8e14d913555e6332bee03d2033e23264b0c42d9437eb738297'
+source_digest: 'sha256:39a7e521f9c8c5fd9732e49a7688ff8a1695e95d96bac53d3c61a398370af032'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -283,15 +283,16 @@ already produced, so no comparison scene names or loads a raster module. Type er
 `LoadedFont` is covariant in its technique, so a concrete `LoadedFont<typeof bitmap>` widens to
 `LoadedFont<AnyRasterTechnique>` and every `Text`, `TextGroup`, and `TextUpdate` downstream is uniformly erased without a
 cast. Erasing at the `Text` instead does not compile: the `set` method and the `font` accessor make `Text` invariant in
-its technique.
+its technique. `TextGroup` no longer receives the selected technique at construction; its shared Rust session and
+renderer policy derive each draw's technique from the loaded font binding.
 
 Batching is a per-workload policy on the definition rather than a host-wide rule. Text ladder, Zoom text, Icon grid,
 Off-axis / 3D, Dynamic layout, and Paint & effects mount under one shared `TextGroup`, so every paragraph in the workload
-prepares and packs into a single batch owning one set of GPU resources; Icon grid's recycled icon and label Texts share
-that batch across two font fixtures because both load through the one registry-scoped runtime. Paragraph stress stays
-standalone: it is a single `Text` holding a large repeated-ipsum body, already a batch of one, and keeping it standalone
-holds both adapter paths under test. The group takes a `grow` capacity because a chunked batch would split a paragraph's
-glyph run at each chunk boundary and turn one draw into several.
+enters one Rust frame transaction and shared render plan; compatible policy packets may share physical storage and one
+draw. Icon grid's recycled icon and label Texts share that session across two font fixtures because both load through
+the one registry-scoped runtime. Paragraph stress stays standalone: it is a single `Text` holding a large repeated-ipsum
+body, already a session of one, and keeping it standalone holds both adapter paths under test. The group takes a `grow`
+capacity so its retained staging and output regions settle for the workload rather than repeatedly growing.
 
 Batching shares preparation and GPU resources, not draws. Target-v1 emits one mesh per packed glyph run and a run never
 spans paragraphs, so the shared group leaves the draw topology of each paragraph exactly as it was. Measured at the
