@@ -11,7 +11,6 @@ import { slug, type SlugPageData } from '../raster/slug-technique.js';
 import { bitmapShader } from './bitmap-shader.js';
 import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-runtime.js';
 import { msdfShader } from './msdf-shader.js';
-import { invalidatePboTexture } from './retained-target.js';
 import { slugShader, type ThreeSlugPageResources } from './slug-shader.js';
 import type { ThreeTextMaterialContext } from './material.js';
 import type { ThreePlanProgramBuffer } from './plan-program-registry.js';
@@ -1239,6 +1238,11 @@ function markOriginRanges(ranges: ReadonlyMap<RetainedBuffer, readonly [number, 
   for (const [buffer, [start, end]] of ranges) {
     markUpdated(buffer, start * buffer.array.BYTES_PER_ELEMENT, (end - start) * buffer.array.BYTES_PER_ELEMENT, true);
   }
+}
+
+function invalidatePboTexture(attribute: THREE.StorageInstancedBufferAttribute): void {
+  const pbo = (attribute as THREE.StorageInstancedBufferAttribute & { pbo?: THREE.DataTexture }).pbo;
+  if (pbo !== undefined) pbo.needsUpdate = true;
 }
 
 function unitQuad(): THREE.InstancedBufferGeometry {

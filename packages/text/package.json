@@ -14,11 +14,7 @@
     "!dist/internal/raster-baker-profile.js"
   ],
   "type": "module",
-  "sideEffects": [
-    "./dist/three/bitmap.js",
-    "./dist/three/msdf.js",
-    "./dist/three/slug.js"
-  ],
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

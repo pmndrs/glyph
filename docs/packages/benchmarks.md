@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:7781a56401ad8744d121c3c5635163d37e25a575bf4422c47d75f06ca549a673'
+source_digest: 'sha256:229e0b516533ab53e674b7907037769a07845260521ed2f505425071583749f3'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -214,10 +214,10 @@ when a visibly populated draw claims no GPU residency, so the accessor is proven
 a unit fixture. The Worker proof distinguishes call-time snapshots, later desired state, supersession, abort, progress,
 and one reusable module Worker.
 
-A fifth proof covers composition over the exported canonical technique shaders. It renders one paragraph through the
-pre-registered Bitmap program, then through a third-party program that owns its own attributes, geometry, and material and
-composes only its final colour over `bitmapShader`. The verification compares the two passes on the same page rather than
-against a stored golden: an identical lit-pixel set proves the composed program inherited the canonical placement,
+A fifth proof covers material customization over the canonical Bitmap command-buffer path. It renders one paragraph with
+the default Bitmap material, then renders the same Rust-produced draw with a `defineTextMaterial` factory that starts from
+`createDefaultMaterial()` and changes only its final colour. The verification compares the two passes on the same page
+rather than against a stored golden: an identical lit-pixel set proves the custom material inherited canonical placement,
 snapping, and coverage, and an empty green channel proves it still emitted its own output.
 
 The finite Bitmap conformance lane now drives that adapter directly. `bitmap-finite-scene` builds its paragraph with the
