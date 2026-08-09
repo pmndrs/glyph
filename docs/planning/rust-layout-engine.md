@@ -1275,6 +1275,15 @@ Wasm memory and publication of exact plan bytes, but not Three patch application
 process reaches 86.50/100.88/101.69 MiB Wasm high-water marks; isolated warm sessions still reach 64.75/77.75/78.56
 MiB. Both latency and memory right-sizing remain foundation gates rather than accepted release costs.
 
+The first product-scale command-buffer scene exposed a missing cold-capacity transition rather than a layout error:
+MTSDF paragraph stress required a 1,382,592-byte publication while the retained result arena was smaller. The request's
+64 MiB output safety ceiling is now independent of arena capacity. Rust reports the exact watermark after aborting the
+prepared update; the host reserves both result slots, re-pins and recopies the request, and retries once. A compiled-Wasm
+test forces this path from a header-sized arena, and the live scene publishes 11,510 glyphs in one draw. Warm frames retain
+the required one crossing. A three-run settled WebGPU comparison also rejected a policy experiment that split MTSDF
+origin and size into separate `vec2` buffers: CPU submission was unchanged, while the additional binding slightly worsened
+median GPU time, so the existing packed `vec4` remains.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement

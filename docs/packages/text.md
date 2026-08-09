@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:8098207158fd7bf3bbe4f7c17b68fdbbde4bcaae415503857b145e74a85434e7'
+source_digest: 'sha256:f847d77312d4439847462a8d6969bf9b5725f320d1bb9ee3951a8d1f95d11c85'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -190,7 +190,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-09T06:36:53Z'
+  at: '2026-08-09T09:19:33Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -963,6 +963,15 @@ fixture's 25,515 positioned glyphs. Bitmap/MTSDF/Slug column-resize medians are 
 4.156/4.951/5.679 ms. The same TypeScript width path measures 8.33 ms median. Rust therefore beats TypeScript, but no
 technique yet passes the required sub-4 ms p95 gate; the measurement also stops before Three patch application and GPU
 submission. Isolated warm-session Wasm high-water marks of 64.75/77.75/78.56 MiB likewise remain an optimization gate.
+
+Cold result growth is now a negotiated frame-ABI path rather than a renderer failure. Three declares the engine's 64 MiB
+output safety ceiling independently from the smaller retained A/B arenas. If a publication does not fit, Rust aborts the
+prepared state and returns the exact required watermark; the host reserves once, re-resolves and recopies the request
+after possible Wasm-memory detachment, and retries without advancing a revision. A compiled-Wasm fixture begins with only
+the result header and publishes a nonempty plan. In the product benchmark, this changes MTSDF paragraph stress from status
+7 at 1,382,592 required bytes to one live draw containing 11,510 glyphs. Three settled hardware-WebGPU A/B samples retain
+the seven-`vec4` MTSDF policy: splitting origin and size did not improve CPU submission and trended from 0.748 to 0.767 ms
+average median GPU time by adding an eighth storage binding.
 
 Public font stacks no longer repeat a raster technique or require every fallback font to share one. Their generic type
 is the union of the concrete loaded-font techniques, while runtime construction still requires one text-runtime domain,
