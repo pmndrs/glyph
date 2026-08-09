@@ -164,9 +164,11 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
 
 function profileUpdate(update: () => void): UpdateProfile {
   const durations = new Map<ThreeTextProfilePhase, number>();
-  setThreeTextProfiler((phase, startedMs, endedMs) => {
-    durations.set(phase, (durations.get(phase) ?? 0) + endedMs - startedMs);
-  });
+  if (options.profilePhases) {
+    setThreeTextProfiler((phase, startedMs, endedMs) => {
+      durations.set(phase, (durations.get(phase) ?? 0) + endedMs - startedMs);
+    });
+  }
   const started = performance.now();
   try {
     update();
@@ -232,6 +234,7 @@ function parseArguments(argv: readonly string[]) {
     cases: (cases === undefined ? ['cold', 'font-size', 'layout-width', 'text'] : cases.split(',')) as CaseName[],
     warmup: Number.parseInt(read('--warmup') ?? String(DEFAULT_WARMUP), 10),
     repetitions: Number.parseInt(read('--reps') ?? String(DEFAULT_REPETITIONS), 10),
+    profilePhases: read('--profile-phases') !== '0',
     jsonPath: read('--json'),
   };
 }
