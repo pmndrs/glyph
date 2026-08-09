@@ -191,6 +191,46 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   runtime.dispose();
 });
 
+test('TextGroup atomically replaces child paragraphs without multiplying retained text capacity', async () => {
+  const registry = new FontRegistry();
+  const shaper = await createRuntimeShaper({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const runtime = await createTextRuntime({ registry, shaper });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup({ capacity: { size: 4_096, policy: 'grow' } });
+  const first = [new Text({ font, text: 'A' }), new Text({ font, text: 'B' })];
+  group.add(...first);
+  scene.add(group);
+  scene.updateMatrixWorld();
+
+  const second = ['C', 'D', 'E'].map((text) => new Text({ font, text }));
+  group.remove(...first);
+  group.add(...second);
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined);
+  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
+  assert.equal(group.children.find((child) => child.isMesh).geometry.instanceCount, 3);
+
+  const third = ['Y', 'Z'].map((text) => new Text({ font, text }));
+  group.remove(...second);
+  group.add(...third);
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined, 'a recycled Rust paragraph must not retain its previous semantic contents');
+  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
+  assert.equal(group.children.find((child) => child.isMesh).geometry.instanceCount, 2);
+
+  group.dispose();
+  for (const text of [...first, ...second, ...third]) text.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 }

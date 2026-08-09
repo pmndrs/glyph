@@ -13,7 +13,7 @@ tags:
   - abi
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-08T07:00:00Z'
+  at: '2026-08-09T10:04:42Z'
 sources:
   - id: layout-benchmark
     resource: ../../packages/text/scripts/benchmark-paragraph-layout.mts
@@ -1283,6 +1283,18 @@ test forces this path from a header-sized arena, and the live scene publishes 11
 the required one crossing. A three-run settled WebGPU comparison also rejected a policy experiment that split MTSDF
 origin and size into separate `vec2` buffers: CPU submission was unchanged, while the additional binding slightly worsened
 median GPU time, so the existing packed `vec4` remains.
+
+The first multi-workload retained-session sweep then exposed two independent paragraph-lifecycle bugs. Host limits had
+treated `maxParagraphs` as only the final live count even though the wire table contains removals plus insertions, and
+Rust recycled one removed paragraph's allocation without clearing its semantic contents. Both are now exact: admission
+covers actual lifecycle and semantic mutation record counts, while a recycled state clears every committed and pending
+semantic arena but retains its vector capacities. The same sweep exposed that the 4,096-glyph group capacity had been
+multiplied into a 4,096-unit reserve for each of 476 icon-grid paragraphs. A session now prewarms one reusable paragraph;
+additional children allocate from their actual content rather than multiplying a batch budget. A Rust regression proves
+semantic reset plus capacity identity, a public Three fixture performs two atomic child-set replacements, and a complete
+27-cell Bitmap/MTSDF/Slug WebGPU workload-transition sweep exits cleanly. The optimized shaper is 1,090,859 raw / 411,106
+gzip / 325,149 Brotli bytes. Benchmark draw/glyph telemetry for grouped command-buffer draws is corrected separately and
+is not part of this transition proof.
 
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 

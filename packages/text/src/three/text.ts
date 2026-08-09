@@ -27,7 +27,11 @@ import {
   type TextEngineStyleValue,
   type TextEngineTextMutation,
 } from '../internal/engine-frame-wire.js';
-import type { TextEnginePublication, TextEngineSession } from '../internal/text-engine-host.js';
+import {
+  TextEngineStatusError,
+  type TextEnginePublication,
+  type TextEngineSession,
+} from '../internal/text-engine-host.js';
 import { readTextEngineLayouts, readTextEngineMeasurements } from '../internal/layout-query-view.js';
 import type { ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
@@ -619,27 +623,39 @@ class ThreeTextBatchBinding {
       }
       const totalTextLength = [...this.#paragraphs.keys()].reduce((total, text) => total + text.text.length, 0);
       const limits = engineLimits(
-        this.#paragraphs.size,
+        Math.max(this.#paragraphs.size, paragraphMutations.length),
         totalTextLength,
         Math.max(regions.length, this.#paragraphs.size),
         MAX_TEXT_ENGINE_OUTPUT_BYTES,
+        Math.max(textMutations.length, styleMutations.length),
       );
-      const publication = this.#session.update(
-        compileTextEngineFrameUpdate({
-          sessionId: this.#session.handle,
-          policyHandle: this.#coordinator.policyHandle,
-          capabilitySet: 1,
-          expectedEngineRevision: this.#engineRevision,
-          consumedPlanRevision: this.#planRevision,
-          acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
-          limits,
-          paragraphMutations,
-          textMutations,
-          styleMutations,
-          constraints,
-          regions,
-        }),
-      );
+      const frame = compileTextEngineFrameUpdate({
+        sessionId: this.#session.handle,
+        policyHandle: this.#coordinator.policyHandle,
+        capabilitySet: 1,
+        expectedEngineRevision: this.#engineRevision,
+        consumedPlanRevision: this.#planRevision,
+        acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
+        limits,
+        paragraphMutations,
+        textMutations,
+        styleMutations,
+        constraints,
+        regions,
+      });
+      let publication: TextEnginePublication;
+      try {
+        publication = this.#session.update(frame);
+      } catch (error) {
+        if (error instanceof TextEngineStatusError) {
+          error.message +=
+            ` (paragraphs=${this.#paragraphs.size}, paragraph mutations=${paragraphMutations.length},` +
+            ` text mutations=${textMutations.length}, style mutations=${styleMutations.length},` +
+            ` constraints=${constraints.length}, regions=${regions.length}, text units=${totalTextLength},` +
+            ` limits=${JSON.stringify(limits)})`;
+        }
+        throw error;
+      }
       this.#engineRevision = publication.engineRevision;
       this.#planRevision = publication.planRevision;
       for (const removed of this.#removed) releaseStackLeases(removed.stackLeases);
@@ -948,10 +964,11 @@ function engineLimits(
   textLength: number,
   regionCount: number,
   maxOutputBytes: number,
+  mutationRecordCount = 0,
 ): TextEngineFrameLimits {
   return {
     maxParagraphs: Math.max(1, paragraphCount),
-    maxClusters: Math.max(1, textLength * 2),
+    maxClusters: Math.max(1, textLength * 2, mutationRecordCount),
     maxLines: Math.max(1, textLength),
     maxRegions: Math.max(1, regionCount),
     maxExclusions: 1,

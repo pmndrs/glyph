@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:f847d77312d4439847462a8d6969bf9b5725f320d1bb9ee3951a8d1f95d11c85'
+source_digest: 'sha256:372d0c9c9a307344c22020acf9a7f8ce295070b17b77e5ae5f13c8cdaf49475a'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -190,7 +190,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-09T09:19:33Z'
+  at: '2026-08-09T10:04:42Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -228,6 +228,14 @@ binding compilation, and material realization. Rust interprets the policy while 
 the command buffer; no JavaScript callback runs in that hot path. The Three executor owns only resource tables, GPU
 objects, synchronization, and reversible presentation overrides. It does not retain a candidate/current paragraph target
 or independently derive layout and render state. An unregistered technique fails during engine setup with its identifier.
+
+One retained session prewarms one reusable paragraph state rather than multiplying `TextGroup`'s total glyph capacity
+through every child. Additional paragraphs grow their Unicode-through-positioning arenas from actual content. When Rust
+recycles removed storage, it clears all committed and pending semantics, identity counters, fingerprints, and preparation
+flags while preserving vector capacities. Three sizes frame limits from both the final paragraph set and the actual
+removal/insertion and text/style mutation tables. Public integration replaces a group's complete child set twice through
+one session, and the Rust regression proves the recycled paragraph contains only its new text at the same allocation
+capacity.
 
 `/three` also exports each canonical technique shader as `bitmapShader`, `mtsdfShader`, and `slugShader`.[^three-v1] Each
 takes one glyph instance's resolved nodes plus that batch's bound GPU resources and returns a named readonly output:
