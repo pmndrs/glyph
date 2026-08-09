@@ -160,6 +160,7 @@ struct ParagraphState {
     pending_shaping_runs: ShapingRunArena,
     shape: ShapeArena,
     pending_shape: ShapeArena,
+    incremental_shape_source_run: Option<u32>,
     clusters: ClusterArena,
     pending_clusters: ClusterArena,
     glyph_identity_index: IdentityIndex,
@@ -1212,6 +1213,7 @@ impl ParagraphState {
         self.pending_shaping_runs.clear();
         self.shape.clear();
         self.pending_shape.clear();
+        self.incremental_shape_source_run = None;
         self.clusters.clear();
         self.pending_clusters.clear();
         self.geometry.clear();
@@ -1963,6 +1965,7 @@ impl ParagraphState {
             });
         }
         self.boundary_shape_scratch.clear();
+        self.incremental_shape_source_run = Some(affected_source_run);
         Ok(true)
     }
 
@@ -1971,6 +1974,7 @@ impl ParagraphState {
         self.pending_fallback_spans.clear();
         self.fallback_span_scratch.clear();
         self.fallback_cluster_scratch.clear();
+        self.incremental_shape_source_run = None;
         self.shape_prepared = false;
     }
 
@@ -2021,21 +2025,44 @@ impl ParagraphState {
             self.clusters_prepared = true;
             return Ok(());
         }
-        self.pending_clusters.build(
-            ClusterBuildInput {
-                text,
-                text_unit_ids,
-                unicode,
-                styles,
-                runs,
-                shape: if self.shape_prepared {
-                    &self.pending_shape
-                } else {
-                    &self.shape
-                },
-            },
-            |handle| shaper.font_metrics(handle),
-        )?;
+        let shape = if self.shape_prepared {
+            &self.pending_shape
+        } else {
+            &self.shape
+        };
+        let build_input = || ClusterBuildInput {
+            text,
+            text_unit_ids,
+            unicode,
+            styles,
+            runs,
+            shape,
+        };
+        if let Some(source_run) = self.incremental_shape_source_run
+            && let Some((cluster_start, cluster_end)) = self
+                .pending_clusters
+                .rebuild_source_run_if_topology_is_stable(
+                    &self.clusters,
+                    build_input(),
+                    source_run,
+                    |handle| shaper.font_metrics(handle),
+                )?
+        {
+            if let Err(error) = self.pending_clusters.assign_stable_glyph_ids_in_range(
+                &self.clusters,
+                cluster_start,
+                cluster_end,
+                &mut self.glyph_identity_index,
+                next_glyph_id,
+            ) {
+                self.abort_clusters();
+                return Err(error);
+            }
+            self.clusters_prepared = true;
+            return Ok(());
+        }
+        self.pending_clusters
+            .build(build_input(), |handle| shaper.font_metrics(handle))?;
         if let Err(error) = self.pending_clusters.assign_stable_glyph_ids(
             &self.clusters,
             &mut self.glyph_identity_index,

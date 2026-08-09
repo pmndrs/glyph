@@ -2,6 +2,13 @@
 
 ## 2026-08-09
 
+- **Rebuilt clusters only for the incrementally shaped source run** — Exact grapheme/glyph topology now permits the
+  cluster builder to retain all other SoA lanes and rebuild the changed run's advances, bindings, glyph adjacency,
+  safe/break flags, and identities. The affected window includes its predecessor break because that decision depends on
+  the changed run's first safe-concatenation flag; any mismatch falls back cold. A field-for-field cold oracle covers
+  every retained lane. On 101 optimized updates, median/p95 improve from 6.894/9.314 to 5.881/8.406 ms with the same
+  five roughly 1.2 KiB patches. Optimized Wasm grows 7,633 raw bytes to 1,147,200; the p95 contract remains unmet.
+
 - **Narrowed content-revision work to the recomposed line** — The line-convergence proof now carries exact old/new
   glyph spans into positioning. Retained prefix and suffix records preserve their revisions and publish zero semantic
   change masks; only the changed span compares fields or looks up stable identities. A focused test proves revisions

@@ -1049,6 +1049,14 @@ field comparison and identity lookup. On the same 101-update optimized workload 
 p95 to 6.894 / 9.314 ms. The 9.7% median reduction admits the range optimization, while the effectively unchanged p95
 does not support a tail-latency claim. Optimized Wasm grows 1,693 raw bytes to 1,139,567.
 
+The incremental shaping splice now identifies its affected source run for cluster aggregation. When grapheme and glyph
+topology are exact, Rust copies retained cluster lanes, rebuilds only that run's advances, bindings, adjacency, safety,
+break flags, and stable glyph identities, and also recomputes the predecessor break whose legality depends on the
+run's first safe boundary. Any topology mismatch uses the cold builder. A field-for-field oracle proves the retained
+result equals an independent cold rebuild. The same 101-update optimized workload improves from 6.894 / 9.314 ms
+median/p95 to 5.881 / 8.406 ms, with five roughly 1.2 KiB patches. Optimized Wasm grows 7,633 raw bytes to 1,147,200.
+This admits the retained aggregation path but remains above the 4 ms p95 contract.
+
 The renderer's 25% instance slack is not the edit-storage design. Editing requires the selected ABI-private
 64-cluster semantic chunks to reserve a small bounded gap so insert, delete, and replacement operations move only the
 affected chunk before summaries and downstream line state resume. The current production text, shape, cluster, and
