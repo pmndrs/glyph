@@ -81,8 +81,9 @@ impl UnicodeAnalysis {
         self.line_breaks.breaks()
     }
 
-    fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.utf8.clear();
+        self.line_breaks.clear();
         self.grapheme_boundaries.clear();
         self.grapheme_scripts.clear();
         self.candidate_offsets.clear();

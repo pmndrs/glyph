@@ -54,14 +54,18 @@ pub struct LineBreakAnalysis {
 }
 
 impl LineBreakAnalysis {
+    pub(crate) fn clear(&mut self) {
+        self.characters.clear();
+        self.breaks.clear();
+    }
+
     pub fn reserve(&mut self, capacity: usize) -> Result<(), UnicodeError> {
         reserve(&mut self.characters, capacity)?;
         reserve(&mut self.breaks, capacity.saturating_add(1))
     }
 
     pub fn analyze(&mut self, text: &[u16]) -> Result<(), UnicodeError> {
-        self.characters.clear();
-        self.breaks.clear();
+        self.clear();
         self.reserve(text.len())?;
         let mut offset = 0usize;
         while offset < text.len() {

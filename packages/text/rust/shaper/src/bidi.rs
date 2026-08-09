@@ -115,7 +115,7 @@ impl BidiAnalysis {
         reserve(&mut self.paragraph_levels, paragraph_capacity)
     }
 
-    fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.levels.clear();
         self.classes.clear();
         self.paragraph_starts.clear();

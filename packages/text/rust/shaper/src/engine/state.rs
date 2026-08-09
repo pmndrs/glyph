@@ -89,7 +89,6 @@ struct EngineSession {
     pending_next_glyph_id: u32,
     next_content_revision: u32,
     pending_next_content_revision: u32,
-    text_capacity: usize,
     spare_paragraph: Option<ParagraphState>,
     paragraphs: Vec<RetainedParagraph>,
     ordered_paragraphs: Vec<ParagraphOrder>,
@@ -396,10 +395,6 @@ impl TextEngine {
         if let Some(paragraph) = session.spare_paragraph.as_mut() {
             paragraph.reserve_text(capacity)?;
         }
-        for paragraph in &mut session.paragraphs {
-            paragraph.state.reserve_text(capacity)?;
-        }
-        session.text_capacity = session.text_capacity.max(capacity);
         Ok(())
     }
 
@@ -949,19 +944,15 @@ impl EngineSession {
                 Ok(())
             }
             Err(index) => {
-                let mut state = if let Some(spare) = self.spare_paragraph.take() {
+                let state = if let Some(spare) = self.spare_paragraph.take() {
+                    let mut spare = spare;
+                    spare.reset_for_reuse();
                     spare
                 } else {
                     let mut state = ParagraphState::default();
                     state.initialize()?;
                     state
                 };
-                if let Err(error) = state.reserve_text(self.text_capacity) {
-                    if self.spare_paragraph.is_none() {
-                        self.spare_paragraph = Some(state);
-                    }
-                    return Err(error);
-                }
                 self.paragraphs.insert(
                     index,
                     RetainedParagraph {
@@ -1056,6 +1047,58 @@ impl EngineSession {
 }
 
 impl ParagraphState {
+    /// Clears paragraph identity and committed/pending semantics while retaining every allocation.
+    #[inline(never)]
+    fn reset_for_reuse(&mut self) {
+        self.text.clear();
+        self.pending_text.clear();
+        self.text_unit_ids.clear();
+        self.pending_text_unit_ids.clear();
+        self.next_text_unit_id = 0;
+        self.pending_next_text_unit_id = 0;
+        self.text_prepared = false;
+        self.styles.clear();
+        self.pending_styles.clear();
+        self.resolved_styles.clear();
+        self.pending_resolved_styles.clear();
+        self.unicode.clear();
+        self.pending_unicode.clear();
+        self.bidi.clear();
+        self.pending_bidi.clear();
+        self.shaping_runs.clear();
+        self.pending_shaping_runs.clear();
+        self.shape.clear();
+        self.pending_shape.clear();
+        self.clusters.clear();
+        self.pending_clusters.clear();
+        self.geometry.clear();
+        self.pending_geometry.clear();
+        self.flow_layout.clear();
+        self.pending_flow_layout.clear();
+        self.positioned.clear();
+        self.pending_positioned.clear();
+        self.fallback_spans.clear();
+        self.pending_fallback_spans.clear();
+        self.fallback_span_scratch.clear();
+        self.fallback_cluster_scratch.clear();
+        self.style_mutation_scratch.clear();
+        self.style_order_scratch.clear();
+        self.style_nesting_scratch.clear();
+        self.style_resolution_scratch.clear();
+        self.styles_prepared = false;
+        self.style_invalidation = StyleInvalidation::default();
+        self.unicode_prepared = false;
+        self.bidi_prepared = false;
+        self.shaping_runs_prepared = false;
+        self.shape_prepared = false;
+        self.clusters_prepared = false;
+        self.geometry_fingerprint = 0;
+        self.pending_geometry_fingerprint = 0;
+        self.geometry_prepared = false;
+        self.flow_layout_prepared = false;
+        self.positioned_prepared = false;
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn prepare(
         &mut self,
@@ -2733,6 +2776,30 @@ mod tests {
         assert!(session.paragraph(1).is_none());
         assert_eq!(session.paragraph(2).unwrap().state.text, [0x63, 0x64]);
         assert!(session.spare_paragraph.is_some());
+
+        let spare_text_capacity = session.spare_paragraph.as_ref().unwrap().text.capacity();
+        let replacement_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 3, 1)]);
+        let replacement_text = paragraph_text_mutation_bytes(&[(3, 0, 0, &[0x7a])]);
+        let mut replacement = update(3, 3, 3);
+        replacement.limits.max_paragraphs = 2;
+        replacement.paragraph_mutations =
+            parse_paragraph_mutations(&replacement_lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        replacement.text_mutations =
+            parse_text_mutations(&replacement_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(replacement, 4).unwrap();
+        engine.commit_update(prepared).unwrap();
+        let recycled = &engine.sessions.get(&4).unwrap().paragraph(3).unwrap().state;
+        assert_eq!(
+            recycled.text,
+            [0x7a],
+            "a recycled paragraph must begin semantically empty"
+        );
+        assert_eq!(
+            recycled.text.capacity(),
+            spare_text_capacity,
+            "paragraph recycling must retain its reserved text allocation"
+        );
     }
 
     #[test]
