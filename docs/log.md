@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- **Cut imperative Three rendering over to the Rust command buffer** — Replaced the public binding's private
+  `ParagraphBatch` plus attachment `prepare`/`commit` state machine with one retained Rust session and renderer
+  executor. A `TextGroup` now submits every descendant paragraph in one update and owns shared draws; standalone text
+  uses the same path with its own root. Public `material` definitions resolve through Rust `materialId`, while scene
+  transforms and render-order bases remain renderer-local. Focused compiled-Wasm tests prove mixed-font spans, one
+  indexed draw across two public text transforms, retained custom material realization, reparenting, and disposal.
+  Rendering deliberately does not publish layout arrays, and the old Three layout/snapshot/origin surface is removed;
+  a future interaction or measurement query remains separate.
+
 - **Executed both policy-selected transform modes in Three** — Generalized the command-buffer target across indexed
   and direct transform realizations for Bitmap, MSDF, and Slug. The same compiled-Wasm fixture now registers a direct
   first-party policy: Rust emits draw transforms `[1,2]`, omits transform buffers, and Three updates retained draw

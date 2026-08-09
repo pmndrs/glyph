@@ -34,9 +34,11 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(label.bound, true);
   assert.equal(label.textGroup, group);
   assert.equal(group.textCount, 1);
-  assert.ok(label.layout.glyphIds.length > 0);
-  const firstDraws = label.children.filter((child) => child.isMesh);
+  assert.equal(label.layout, undefined, 'rendering must not materialize layout readback');
+  assert.equal(group.error, undefined);
+  const firstDraws = group.children.filter((child) => child.isMesh);
   assert.ok(firstDraws.length > 0);
+  assert.equal(firstDraws[0].geometry.instanceCount, 10, 'the GPU plan omits the non-rendering space glyph');
   assert.equal(firstDraws[0].renderOrder, 12);
 
   group.renderOrder = 20;
@@ -45,15 +47,15 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
 
   label.renderOrder = 7;
   scene.updateMatrixWorld();
-  assert.equal(label.children.filter((child) => child.isMesh)[0].renderOrder, 20);
-  assert.equal(label.layout.glyphIds.length, 11, 'render-order-only updates must preserve the shaped paragraph');
+  assert.equal(group.children.filter((child) => child.isMesh)[0].renderOrder, 20);
+  assert.equal(firstDraws[0].geometry.instanceCount, 10, 'render-order-only updates must preserve the Rust plan');
 
   label.text = 'Only the final desired value';
   label.text = 'Updated';
   scene.updateMatrixWorld();
-  assert.equal(label.layout.glyphIds.length, 7);
-  assert.ok(label.children.some((child) => child.isMesh));
-  assert.equal(label.children.filter((child) => child.isMesh)[0], firstDraws[0]);
+  assert.equal(label.layout, undefined);
+  assert.ok(group.children.some((child) => child.isMesh));
+  assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
   assert.equal(
     firstDraws[0].geometry.instanceCount,
     7,
@@ -80,6 +82,52 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
 
   label.removeFromParent();
   label.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
+test('TextGroup realizes two public Text objects as one indexed Rust draw', async () => {
+  const registry = new FontRegistry();
+  const shaper = await createRuntimeShaper({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const runtime = await createTextRuntime({ registry, shaper });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup({ technique: bitmap, renderOrder: 3 });
+  const left = new Text({ font, text: 'AB' });
+  const right = new Text({ font, text: 'CD' });
+  left.position.x = 2;
+  right.position.x = 5;
+  group.add(left, right);
+  scene.add(group);
+  scene.updateMatrixWorld();
+
+  assert.equal(group.error, undefined);
+  const draws = group.children.filter((child) => child.isMesh);
+  assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
+  assert.equal(draws[0].geometry.instanceCount, 4);
+  const start = draws[0].userData.pmndrsTextRunStart;
+  const indices = draws[0].geometry.getAttribute('_pmndrsText_15').array;
+  assert.deepEqual(Array.from(indices.subarray(start, start + 4)), [1, 1, 2, 2]);
+  const transforms = draws[0].geometry.getAttribute('_pmndrsTextTransforms');
+  assert.equal(transforms.array[1 * 16 + 12], 2);
+  assert.equal(transforms.array[2 * 16 + 12], 5);
+
+  const version = transforms.version;
+  right.position.x = 7;
+  scene.updateMatrixWorld();
+  assert.equal(group.children.filter((child) => child.isMesh)[0], draws[0]);
+  assert.equal(transforms.version, version + 1);
+  assert.equal(transforms.array[2 * 16 + 12], 7);
+
+  group.dispose();
+  left.dispose();
+  right.dispose();
   font.dispose();
   runtime.dispose();
 });
