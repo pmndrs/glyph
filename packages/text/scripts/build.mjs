@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { captureCommand } from '../../font-baker/scripts/capture-command.mjs';
@@ -17,9 +18,27 @@ if (shaperSimdSetting !== undefined && shaperSimdSetting !== '0' && shaperSimdSe
   throw new Error('PMNDRS_TEXT_SHAPER_SIMD must be 0 or 1');
 }
 const shaperSimd = shaperSimdSetting !== '0';
+const shaperTargetDirectory = fileURLToPath(
+  new URL(`../rust/shaper/target/wasm-${shaperSimd ? 'simd128' : 'scalar'}/`, import.meta.url),
+);
+const mtsdfArtifactTargetDirectory = fileURLToPath(
+  new URL('../rust/mtsdf-baker/target/artifact-baker-wasm/', import.meta.url),
+);
+const slugArtifactTargetDirectory = fileURLToPath(
+  new URL('../rust/slug-baker/target/artifact-baker-wasm/', import.meta.url),
+);
 const shaperRustEnvironment = {
   ...rustEnvironment,
+  CARGO_TARGET_DIR: shaperTargetDirectory,
   CARGO_ENCODED_RUSTFLAGS: `${rustEnvironment.CARGO_ENCODED_RUSTFLAGS}\u001f-C\u001ftarget-feature=${shaperSimd ? '+simd128' : '-simd128'}`,
+};
+const mtsdfArtifactRustEnvironment = {
+  ...rustEnvironment,
+  CARGO_TARGET_DIR: mtsdfArtifactTargetDirectory,
+};
+const slugArtifactRustEnvironment = {
+  ...rustEnvironment,
+  CARGO_TARGET_DIR: slugArtifactTargetDirectory,
 };
 const executable = process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt';
 const wasmOpt = fileURLToPath(new URL(`../node_modules/.bin/${executable}`, import.meta.url));
@@ -27,17 +46,11 @@ const rustWasm = fileURLToPath(
   new URL('../rust/bitmap-baker/target/wasm32-unknown-unknown/release/pmndrs_text_bitmap_baker.wasm', import.meta.url),
 );
 const distributedWasm = fileURLToPath(new URL('../dist/bitmap_baker.wasm', import.meta.url));
-const shaperWasm = fileURLToPath(
-  new URL('../rust/shaper/target/wasm32-unknown-unknown/release/pmndrs_text_shaper.wasm', import.meta.url),
-);
+const shaperWasm = join(shaperTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_text_shaper.wasm');
 const distributedShaperWasm = fileURLToPath(new URL('../dist/text_shaper.wasm', import.meta.url));
-const mtsdfWasm = fileURLToPath(
-  new URL('../rust/mtsdf-baker/target/wasm32-unknown-unknown/release/pmndrs_text_mtsdf_baker.wasm', import.meta.url),
-);
+const mtsdfWasm = join(mtsdfArtifactTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_text_mtsdf_baker.wasm');
 const distributedMtsdfWasm = fileURLToPath(new URL('../dist/mtsdf_baker.wasm', import.meta.url));
-const slugWasm = fileURLToPath(
-  new URL('../rust/slug-baker/target/wasm32-unknown-unknown/release/pmndrs_text_slug_baker.wasm', import.meta.url),
-);
+const slugWasm = join(slugArtifactTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_text_slug_baker.wasm');
 const distributedSlugWasm = fileURLToPath(new URL('../dist/slug_baker.wasm', import.meta.url));
 
 const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson, slugAbiJson] = await Promise.all([
@@ -133,7 +146,7 @@ await run(
     '--features',
     'artifact-baker',
   ],
-  rustEnvironment,
+  slugArtifactRustEnvironment,
 );
 await run(
   'cargo',
@@ -149,7 +162,7 @@ await run(
     '--features',
     'artifact-baker',
   ],
-  rustEnvironment,
+  mtsdfArtifactRustEnvironment,
 );
 await run(
   'cargo',
@@ -166,11 +179,9 @@ await run(
   ],
   shaperRustEnvironment,
 );
-await run(tsc, ['-p', 'tsconfig.build.json']);
+await rm(new URL('../dist/', import.meta.url), { recursive: true, force: true });
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
-await rm(new URL('../dist/font_baker.wasm', import.meta.url), { force: true });
-await rm(new URL('../dist/mtsdf-baker-abi-v0.json', import.meta.url), { force: true });
-await rm(new URL('../dist/slug-baker-abi-v1.json', import.meta.url), { force: true });
+await run(tsc, ['-p', 'tsconfig.build.json']);
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',
@@ -204,6 +215,10 @@ await run(wasmOpt, [
   '-o',
   distributedSlugWasm,
 ]);
+await Promise.all([
+  assertMtsdfArtifactBakerExports(distributedMtsdfWasm, mtsdfAbiJson),
+  assertSlugArtifactBakerExports(distributedSlugWasm, slugAbiJson),
+]);
 await writeFile(new URL('../dist/bitmap-baker-abi-v0.json', import.meta.url), bitmapAbiJson);
 await writeFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), shaperAbiJson);
 await writeFile(new URL('../dist/mtsdf-baker-abi-v1.json', import.meta.url), mtsdfAbiJson);
@@ -225,4 +240,28 @@ function run(command, args, environment = process.env) {
 
 function runCapture(command, args) {
   return captureCommand(command, args, { cwd: packageRoot });
+}
+
+async function assertMtsdfArtifactBakerExports(wasmPath, abiJson) {
+  const abi = JSON.parse(abiJson);
+  await assertWasmExports(wasmPath, Object.values(abi.artifactBaker.functions), 'MTSDF');
+}
+
+async function assertSlugArtifactBakerExports(wasmPath, abiJson) {
+  const abi = JSON.parse(abiJson);
+  await assertWasmExports(
+    wasmPath,
+    [...Object.values(abi.functions), ...Object.values(abi.segmented.functions)],
+    'Slug',
+  );
+}
+
+async function assertWasmExports(wasmPath, functions, label) {
+  const module = await WebAssembly.compile(await readFile(wasmPath));
+  const exports = new Set(WebAssembly.Module.exports(module).map(({ name }) => name));
+  for (const definition of functions) {
+    if (!exports.has(definition.export)) {
+      throw new Error(`${label} distributable Wasm is missing artifact-baker export ${definition.export}`);
+    }
+  }
 }

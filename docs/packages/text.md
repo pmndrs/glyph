@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:cadece5952b3f3f57222acdf576b45cf1d27c76d1d082e3d338be2cb78f16082'
+source_digest: 'sha256:13d1410aa9a8d392875c94b0d5360e7ab1c7769e6cfbee8d45a998410b6b154f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -66,13 +66,13 @@ Status: foundation cutover in progress; publishing-feature stacks follow after m
 
 The package owns five runtime layers:
 
-| Layer | Owner | Responsibility |
-| --- | --- | --- |
-| Font and raster loading | TypeScript core | Validate portable GLB assets, register shaping payloads, decode selected raster resources, and retain font identity. |
-| Shaping and layout | Rust/Wasm | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state. |
-| Policy and render plan | Rust/Wasm | Interpret a validated renderer policy, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer. |
-| Three.js integration | `@pmndrs/text/three` | Compile policy programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
-| React integration | `@pmndrs/text/r3f` | Reconcile React values into the same imperative `Text` and `TextGroup` objects. |
+| Layer                   | Owner                | Responsibility                                                                                                                         |
+| ----------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Font and raster loading | TypeScript core      | Validate portable GLB assets, register shaping payloads, decode selected raster resources, and retain font identity.                   |
+| Shaping and layout      | Rust/Wasm            | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                     |
+| Policy and render plan  | Rust/Wasm            | Interpret a validated renderer policy, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.     |
+| Three.js integration    | `@pmndrs/text/three` | Compile policy programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
+| React integration       | `@pmndrs/text/r3f`   | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                        |
 
 Rust remains `no_std + alloc` with the package allocator contract. It uses the existing compile-time direct-memory mapping
 for font registrations and the single `text_update(requestOffset, requestLength)` export for retained engine sessions.
@@ -80,16 +80,16 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 
 ## Public package surfaces
 
-| Subpath | Purpose |
-| --- | --- |
-| `@pmndrs/text` | Font/raster contracts, loading, fallback stacks, formatting helpers, paragraph inputs, layout-query values, and portable bakers. |
-| `@pmndrs/text/three` | Three `FontLoader`, `Text`, `TextGroup`, material factories, profiling, and policy registration. |
-| `@pmndrs/text/three/bitmap` | Bitmap technique, policy program, and canonical TSL shader. |
-| `@pmndrs/text/three/msdf` | MSDF technique, policy program, and canonical TSL shader. |
-| `@pmndrs/text/three/slug` | Slug technique, policy program, and canonical TSL shader. |
-| `@pmndrs/text/r3f` | React Three Fiber `<Text>`, `<TextGroup>`, and `useFont`. |
-| `@pmndrs/text/raster/*` | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts. |
-| `@pmndrs/text/bakers/*` | Optional portable raster bakers and validators. |
+| Subpath                     | Purpose                                                                                                                          |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `@pmndrs/text`              | Font/raster contracts, loading, fallback stacks, formatting helpers, paragraph inputs, layout-query values, and portable bakers. |
+| `@pmndrs/text/three`        | Three `FontLoader`, `Text`, `TextGroup`, material factories, and policy registration.                                            |
+| `@pmndrs/text/three/bitmap` | Bitmap technique, policy program, and canonical TSL shader.                                                                      |
+| `@pmndrs/text/three/msdf`   | MSDF technique, policy program, and canonical TSL shader.                                                                        |
+| `@pmndrs/text/three/slug`   | Slug technique, policy program, and canonical TSL shader.                                                                        |
+| `@pmndrs/text/r3f`          | React Three Fiber `<Text>`, `<TextGroup>`, and `useFont`.                                                                        |
+| `@pmndrs/text/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                 |
+| `@pmndrs/text/bakers/*`     | Optional portable raster bakers and validators.                                                                                  |
 
 `@pmndrs/text/typegpu`, the TypeScript paragraph engine, paragraph batches/attachments, direct shaping exports, and the
 text-preparation Worker are removed. TypeGPU is a later adapter stack built against the Rust render plan; it is not a
@@ -165,6 +165,13 @@ partial revision.
 WebGPU may alias compatible Wasm-backed typed arrays. Three's WebGL2 PBO path owns a padded array and therefore requires
 one retained copy. The architecture does not add complexity to pretend WebGL2 can preserve a Wasm alias it replaces.
 
+Each raster baker's Rust contract generator emits both published JSON and an exact typed TypeScript constant. Bitmap,
+MTSDF, and Slug may own different internal ABI shapes—MTSDF exposes both its glyph generator and artifact baker—but their
+TypeScript hosts consume those generated constants directly and validate the declared exports once during construction.
+There are no instance-ignoring runtime ABI readers. Package builds isolate the distributable MTSDF and Slug
+`artifact-baker` feature sets from kernel-only test targets and reject an optimized module missing any contract-declared
+artifact export, preventing Cargo's shared top-level artifact path from silently publishing a smaller test variant.
+
 Asynchronous Worker execution is a follow-on host concern. Transfer buffers must return to the Worker when retired so
 their final collection occurs in the owning realm. It does not restore the deleted TypeScript shaping Worker.
 
@@ -190,9 +197,9 @@ centered glyph row, content height, and complete layout hash exactly; no runtime
 
 The latest checked package-size record before final cleanup reports:
 
-| Graph | Raw | gzip | Brotli |
-| --- | ---: | ---: | ---: |
-| Core JavaScript plus shaper Wasm | 1,211,173 B | 440,875 B | 349,703 B |
+| Graph                                   |         Raw |      gzip |    Brotli |
+| --------------------------------------- | ----------: | --------: | --------: |
+| Core JavaScript plus shaper Wasm        | 1,211,173 B | 440,875 B | 349,703 B |
 | Three adapter plus core and shaper Wasm | 1,454,561 B | 479,863 B | 381,897 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
@@ -202,9 +209,9 @@ The public Three benchmark now supports an outside-only mode that leaves the int
 one `updateMatrixWorld()` call with a host timer. An eight-warmup/31-sample run over 25,515 positioned glyphs measured
 17.68/6.13/5.66/16.37 ms median and 18.11/6.32/6.53/16.57 ms p95 for cold/font-size/width/text updates. Those values cover
 frame preparation, the complete Rust transaction and render-plan publication, and Three plan application; they exclude
-GPU submission. An adjacent phase-instrumented run was indistinguishable within process noise, but the current published
-Three graph still contains inactive profiler calls and branches. The production publishing build must remove those hooks,
-while benchmark/development instrumentation remains separate.
+GPU submission. An adjacent phase-instrumented run was indistinguishable within process noise. Those temporary profiler
+exports, calls, branches, and clock reads are now absent from the package source and clean publishing output; benchmark
+workload markers and the direct Wasm timer remain outside the shipped library.
 
 The canonical direct benchmark loads the packaged `dist/text_shaper.wasm`: Cargo release optimization, LTO, one codegen
 unit, default-on `simd128`, stripping, and `wasm-opt -Oz --enable-simd` have already run. On the identical Rust artifact,

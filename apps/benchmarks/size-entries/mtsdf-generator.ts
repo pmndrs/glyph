@@ -2,5 +2,5 @@ export {
   MtsdfGenerationError,
   createMtsdfGenerator,
   createMtsdfGeneratorFromInstance,
-  readMtsdfGeneratorAbi,
+  mtsdfGeneratorAbi,
 } from '../../../packages/text/dist/internal/mtsdf-generator.js';

@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { createTextRuntime, FontRegistry } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
-import { setThreeTextProfiler, Text, TextGroup } from '@pmndrs/text/three';
+import { Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -32,10 +32,6 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   const group = new TextGroup({ renderOrder: 12 });
   const container = new THREE.Object3D();
   const label = new Text({ font, text: 'First frame' });
-  let originIndexBuilds = 0;
-  setThreeTextProfiler((phase) => {
-    if (phase === 'origins.index') originIndexBuilds += 1;
-  });
   container.add(label);
   group.add(container);
   scene.add(group);
@@ -47,7 +43,6 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(group.textCount, 1);
   assert.equal(label.layout, undefined, 'rendering must not materialize layout readback');
   assert.equal(group.error, undefined);
-  assert.equal(originIndexBuilds, 0, 'rendering must not index glyph origins until the presentation API needs them');
   const firstDraws = group.children.filter((child) => child.isMesh);
   assert.ok(firstDraws.length > 0);
   assert.equal(firstDraws[0].geometry.instanceCount, 10, 'the GPU plan omits the non-rendering space glyph');
@@ -73,7 +68,6 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
 
   const origins = label.snapshotGlyphOrigins();
-  assert.equal(originIndexBuilds, 1, 'the first presentation query builds the retained origin index once');
   assert.equal(origins.layout, inspection);
   assert.deepEqual(origins.displayedX, origins.shapedX);
   assert.deepEqual(origins.displayedY, origins.shapedY);
@@ -85,7 +79,6 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(presented.displayedX[0], origins.shapedX[0] + 3);
   label.clearGlyphOriginOverrides();
   assert.deepEqual(label.snapshotGlyphOrigins().displayedX, origins.shapedX);
-  setThreeTextProfiler(undefined);
 
   group.renderOrder = 20;
   scene.updateMatrixWorld();
@@ -136,10 +129,8 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
 
 test('TextGroup realizes two public Text objects as one indexed Rust draw', async () => {
   const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
-  });
+  const instrumented = await createInstrumentedRuntime(registry);
+  const runtime = instrumented.runtime;
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
@@ -169,30 +160,23 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   const initialRightMeasurement = right.measureLayout();
   assert.ok(initialLeftMeasurement);
   assert.ok(initialRightMeasurement);
-  let updateCrossings = 0;
-  setThreeTextProfiler((phase) => {
-    if (phase === 'engine.update') updateCrossings += 1;
-  });
-  try {
-    left.set({});
-    assert.equal(left.measureLayout(), initialLeftMeasurement, 'an empty update must preserve the cached measurement');
-    scene.updateMatrixWorld();
-    assert.equal(updateCrossings, 0, 'an empty update and cached measurement must not cross into Rust');
+  instrumented.reset();
+  left.set({});
+  assert.equal(left.measureLayout(), initialLeftMeasurement, 'an empty update must preserve the cached measurement');
+  scene.updateMatrixWorld();
+  assert.equal(instrumented.crossings, 0, 'an empty update and cached measurement must not cross into Rust');
 
-    left.contentBox = { width: { mode: 'exact', size: 100 }, wrap: 'word' };
-    const resizedMeasurement = left.measureLayout();
-    assert.ok(resizedMeasurement, 'a pending mutation must produce its requested measurement');
-    assert.notEqual(resizedMeasurement, initialLeftMeasurement);
-    assert.deepEqual(
-      right.measureLayout(),
-      initialRightMeasurement,
-      'one requested semantic publication must populate every retained paragraph',
-    );
-    scene.updateMatrixWorld();
-  } finally {
-    setThreeTextProfiler(undefined);
-  }
-  assert.equal(updateCrossings, 1, 'mutation, render plan, and demanded measurement must share one text_update');
+  left.contentBox = { width: { mode: 'exact', size: 100 }, wrap: 'word' };
+  const resizedMeasurement = left.measureLayout();
+  assert.ok(resizedMeasurement, 'a pending mutation must produce its requested measurement');
+  assert.notEqual(resizedMeasurement, initialLeftMeasurement);
+  assert.deepEqual(
+    right.measureLayout(),
+    initialRightMeasurement,
+    'one requested semantic publication must populate every retained paragraph',
+  );
+  scene.updateMatrixWorld();
+  assert.equal(instrumented.crossings, 1, 'mutation, render plan, and demanded measurement must share one text_update');
 
   const leftOrigins = left.snapshotGlyphOrigins();
   const rightOrigins = right.snapshotGlyphOrigins();
@@ -226,19 +210,12 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
     'an authoritative command-buffer update must retire the previous presentation override',
   );
 
-  updateCrossings = 0;
-  setThreeTextProfiler((phase) => {
-    if (phase === 'engine.update') updateCrossings += 1;
-  });
-  try {
-    left.text = 'ABC';
-    const replacedMeasurement = left.measureLayout();
-    assert.equal(replacedMeasurement?.glyphCount, 3);
-    scene.updateMatrixWorld();
-  } finally {
-    setThreeTextProfiler(undefined);
-  }
-  assert.equal(updateCrossings, 1, 'text replacement and demanded measurement must share one text_update');
+  instrumented.reset();
+  left.text = 'ABC';
+  const replacedMeasurement = left.measureLayout();
+  assert.equal(replacedMeasurement?.glyphCount, 3);
+  scene.updateMatrixWorld();
+  assert.equal(instrumented.crossings, 1, 'text replacement and demanded measurement must share one text_update');
   const replacedDraws = group.children.filter((child) => child.isMesh);
   assert.equal(replacedDraws.length, 1);
   assert.equal(replacedDraws[0].geometry.instanceCount, 5, 'the published command buffer must include the new glyph');
@@ -249,6 +226,38 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   font.dispose();
   runtime.dispose();
 });
+
+async function createInstrumentedRuntime(registry) {
+  const wasm = await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url));
+  const abi = JSON.parse(await readFile(new URL('../../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8'));
+  const originalInstantiate = WebAssembly.instantiate;
+  let crossings = 0;
+  WebAssembly.instantiate = async (source, imports) => {
+    const instance = await originalInstantiate(source, imports);
+    const exports = { ...instance.exports };
+    const update = exports[abi.functions.textUpdate];
+    assert.equal(typeof update, 'function', 'instrumented shaper must export text_update');
+    exports[abi.functions.textUpdate] = (...arguments_) => {
+      crossings += 1;
+      return update(...arguments_);
+    };
+    return { exports };
+  };
+  try {
+    const runtime = await createTextRuntime({ registry, wasm });
+    return {
+      runtime,
+      get crossings() {
+        return crossings;
+      },
+      reset() {
+        crossings = 0;
+      },
+    };
+  } finally {
+    WebAssembly.instantiate = originalInstantiate;
+  }
+}
 
 test('Bitmap strike changes fully initialize a replacement indexed batch', async () => {
   const registry = new FontRegistry();

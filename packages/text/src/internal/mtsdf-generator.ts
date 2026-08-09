@@ -1,3 +1,7 @@
+import { mtsdfBakerAbi, type MtsdfBakerAbi } from '../generated/mtsdf-baker-abi.js';
+
+export const mtsdfGeneratorAbi: MtsdfBakerAbi = mtsdfBakerAbi;
+
 export type MtsdfGeneratorWasmSource = BufferSource | WebAssembly.Module;
 
 export type MtsdfOutlineCommand =
@@ -83,17 +87,18 @@ export async function createMtsdfGenerator(source: MtsdfGeneratorWasmSource): Pr
 }
 
 export function createMtsdfGeneratorFromInstance(instance: WebAssembly.Instance): MtsdfGenerator {
-  const abi = readMtsdfGeneratorAbi(instance);
-  const exports = readExports(instance.exports, abi);
+  const exports = readExports(instance.exports, mtsdfGeneratorAbi);
   return {
     generate(request) {
-      const encoded = encodeRequest(request, abi);
+      const encoded = encodeRequest(request, mtsdfGeneratorAbi);
       const pointer = exports.allocate(encoded.byteLength);
       if (pointer === 0) throw new RangeError('MTSDF generator Wasm allocation failed');
       try {
         copyToMemory(exports.memory, pointer, encoded);
         const status = exports.generate(pointer, encoded.byteLength);
-        if (status !== abi.status.ok) throw new MtsdfGenerationError(statusCode(status, abi));
+        if (status !== mtsdfGeneratorAbi.status.ok) {
+          throw new MtsdfGenerationError(statusCode(status, mtsdfGeneratorAbi));
+        }
 
         const width = checkedDimension(request.region.innerWidth, request.region.paddingX, 'width');
         const height = checkedDimension(request.region.innerHeight, request.region.paddingY, 'height');
@@ -113,11 +118,6 @@ export function createMtsdfGeneratorFromInstance(instance: WebAssembly.Instance)
       }
     },
   };
-}
-
-export function readMtsdfGeneratorAbi(instance: WebAssembly.Instance): MtsdfGeneratorAbiV1 {
-  readExports(instance.exports, mtsdfBakerAbi);
-  return mtsdfBakerAbi;
 }
 
 function encodeRequest(request: MtsdfGlyphRequest, abi: MtsdfGeneratorAbiV1): Uint8Array {
@@ -282,5 +282,3 @@ function checkedSum(...values: number[]): number {
   }
   return sum;
 }
-
-import { mtsdfBakerAbi, type MtsdfBakerAbi } from '../generated/mtsdf-baker-abi.js';

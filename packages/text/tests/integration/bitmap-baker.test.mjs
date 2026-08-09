@@ -4,10 +4,10 @@ import test from 'node:test';
 
 import { RasterCoverageError } from '@pmndrs/text';
 import {
+  bitmapBakerAbi,
   bitmapBakerFromCore,
   createBitmapBaker,
   createBitmapBakerFromInstance,
-  readBitmapBakerAbi,
 } from '@pmndrs/text/bakers/bitmap';
 import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
 import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
@@ -45,17 +45,16 @@ async function bake(core, source, pages) {
 }
 
 test('ships one generated progress import and bundles its generated ABI in TypeScript', async () => {
-  const { module, instance } = await setup();
+  const { module } = await setup();
   assert.deepEqual(WebAssembly.Module.imports(module), [
     { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
   ]);
-  const generated = readBitmapBakerAbi(instance);
-  assert.deepEqual(generated, publishedAbi);
+  assert.deepEqual(bitmapBakerAbi, publishedAbi);
   assert.equal(
     WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
     false,
   );
-  assert.deepEqual(generated.versions, {
+  assert.deepEqual(bitmapBakerAbi.versions, {
     bitmapFormat: 0,
     generator: '0.0.0',
     ktx2: '0.5.0',

@@ -43,7 +43,6 @@ import {
   type ThreeTextEngineStackLease,
 } from './engine-runtime.js';
 import type { ThreeTextMaterial } from './material.js';
-import { textProfileBegin, textProfileEnd } from './profiler.js';
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const TEXT_CHANGE = 1 << 0;
@@ -561,7 +560,6 @@ class ThreeTextBatchBinding {
   }
   synchronize(semanticViewMask = 0): void {
     if (this.#disposed) return;
-    const frameStarted = textProfileBegin();
     const ordered = [...this.#paragraphs.entries()].sort(
       ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
     );
@@ -574,16 +572,12 @@ class ThreeTextBatchBinding {
         : [];
     });
     if (changed.length === 0 && this.#removed.length === 0) {
-      const transformsStarted = textProfileBegin();
       this.#target.syncTransforms();
-      textProfileEnd('transforms.sync', transformsStarted);
       if (semanticViewMask !== 0 && !this.#hasSemanticViews(semanticViewMask)) {
         this.#retainSemanticViews(this.#querySemanticViews(semanticViewMask), semanticViewMask);
       }
-      textProfileEnd('frame.total', frameStarted);
       return;
     }
-    const preparingStarted = textProfileBegin();
     const paragraphMutations = [
       ...this.#removed.map((paragraph) => ({ opcode: 'remove' as const, paragraphId: paragraph.id })),
       ...changed.map(({ paragraph, order }) => ({
@@ -661,12 +655,9 @@ class ThreeTextBatchBinding {
         constraints,
         regions,
       });
-      textProfileEnd('frame.prepare', preparingStarted);
       let publication: TextEnginePublication;
       try {
-        const updateStarted = textProfileBegin();
         publication = this.#session.update(frame);
-        textProfileEnd('engine.update', updateStarted);
       } catch (error) {
         if (error instanceof TextEngineStatusError) {
           error.message +=
@@ -704,9 +695,7 @@ class ThreeTextBatchBinding {
       this.#layoutInspections.clear();
       committed = true;
       try {
-        const applyStarted = textProfileBegin();
         this.#target.apply(publication);
-        textProfileEnd('plan.apply', applyStarted);
         this.#lastPublication = undefined;
       } catch (error) {
         this.#lastPublication = ownPublication(publication);
@@ -714,7 +703,6 @@ class ThreeTextBatchBinding {
       }
       this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
       this.#retainSemanticViews(publication, semanticViewMask);
-      textProfileEnd('frame.total', frameStarted);
     } catch (error) {
       if (!committed) {
         for (const leases of pendingLeases.values()) releaseStackLeases(leases);
@@ -798,7 +786,6 @@ class ThreeTextBatchBinding {
 
   #querySemanticViews(semanticViewMask: number): TextEnginePublication {
     const totalTextLength = [...this.#paragraphs.keys()].reduce((total, entry) => total + entry.text.length, 0);
-    const updateStarted = textProfileBegin();
     const publication = this.#session.update(
       compileTextEngineFrameUpdate({
         sessionId: this.#session.handle,
@@ -817,7 +804,6 @@ class ThreeTextBatchBinding {
         ),
       }),
     );
-    textProfileEnd('engine.update', updateStarted);
     this.#engineRevision = publication.engineRevision;
     this.#planRevision = publication.planRevision;
     return publication;
@@ -835,7 +821,6 @@ class ThreeTextBatchBinding {
 
   #retainSemanticViews(publication: TextEnginePublication, semanticViewMask: number): void {
     if (semanticViewMask === 0) return;
-    const readingStarted = textProfileBegin();
     if (semanticViewMask === textShaperAbi.engine.semanticViewMasks.measurement) {
       for (const [paragraphId, measurement] of readTextEngineMeasurements(publication)) {
         const measuredText = this.#textsByParagraph.get(paragraphId);
@@ -853,7 +838,6 @@ class ThreeTextBatchBinding {
       throw new RangeError(`unsupported semantic view mask ${semanticViewMask}`);
     }
     this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
-    textProfileEnd('semantic.read', readingStarted);
   }
 }
 

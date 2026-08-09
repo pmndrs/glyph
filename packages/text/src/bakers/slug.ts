@@ -20,6 +20,8 @@ import {
 } from '../internal/slug-contract.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
 
+export { slugBakerAbi } from '../generated/slug-baker-abi.js';
+
 export type SlugBakerOptions = undefined;
 
 export interface SlugBakerRequestV0 {
@@ -84,7 +86,7 @@ export async function createSlugBaker(source: SlugBakerWasmSource): Promise<Slug
 export function createSlugBakerFromInstance(instance: WebAssembly.Instance): SlugBakerCore {
   return createDirectRasterBakerFromInstance<SlugBakerRequestV0, typeof SLUG_KIND>(
     instance,
-    readSlugBakerAbi(instance) satisfies DirectRasterBakerAbi,
+    slugBakerAbi satisfies DirectRasterBakerAbi,
     {
       label: 'Slug baker',
       kind: SLUG_KIND,
@@ -94,11 +96,6 @@ export function createSlugBakerFromInstance(instance: WebAssembly.Instance): Slu
       createError: (error) => new SlugBakeError(error),
     },
   );
-}
-
-export function readSlugBakerAbi(instance: WebAssembly.Instance): SlugBakerAbiV0 {
-  void instance;
-  return slugBakerAbi;
 }
 
 export function slugBakerFromCore(

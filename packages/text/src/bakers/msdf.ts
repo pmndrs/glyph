@@ -23,6 +23,8 @@ import {
   type MsdfDescriptorV0,
 } from '../internal/msdf-contract.js';
 
+export { mtsdfBakerAbi as msdfBakerAbi } from '../generated/mtsdf-baker-abi.js';
+
 export type MsdfBakerOptions = MsdfOptions | undefined;
 
 export interface MsdfBakerRequestV0 {
@@ -86,7 +88,7 @@ export async function createMsdfBaker(source: MsdfBakerWasmSource): Promise<Msdf
 }
 
 export function createMsdfBakerFromInstance(instance: WebAssembly.Instance): MsdfBakerCore {
-  const abi = readMsdfBakerAbi(instance);
+  const abi = msdfBakerAbi;
   const directAbi: DirectRasterBakerAbi = {
     memory: abi.memory,
     functions: {
@@ -126,11 +128,6 @@ export function createMsdfBakerFromInstance(instance: WebAssembly.Instance): Msd
     pageFormat: 'rgba8unorm',
     createError: (error) => new MsdfBakeError(error),
   });
-}
-
-export function readMsdfBakerAbi(instance: WebAssembly.Instance): MsdfBakerAbiV1 {
-  void instance;
-  return msdfBakerAbi;
 }
 
 export function msdfBakerFromCore(core: MsdfBakerCore): RasterBakerModule<'msdf', MsdfBakerOptions, MsdfDescriptorV0> {

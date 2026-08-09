@@ -1,14 +1,12 @@
 /* @workflow {
   "name": "text:layout-benchmark",
-  "summary": "Profiles public TextGroup updates from frame preparation through Rust text_update and Three render-plan application.",
+  "summary": "Measures public TextGroup updates externally through Rust text_update and Three render-plan application.",
   "requirements": "Built package: pnpm --filter @pmndrs/text build. Accepts --glyphs, --reps, --warmup, --case, --json.",
   "writes": "stdout only, or the JSON report path passed to --json"
 } */
 import { writeFile } from 'node:fs/promises';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
-
-import { setThreeTextProfiler, type ThreeTextProfilePhase } from '../dist/three.js';
 
 import {
   createBenchmarkParagraph,
@@ -45,11 +43,6 @@ type CaseName = 'cold' | 'font-size' | 'layout-width' | 'text';
 
 interface UpdateProfile {
   readonly wallMs: number;
-  readonly frameMs: number;
-  readonly prepareMs: number;
-  readonly engineMs: number;
-  readonly applyMs: number;
-  readonly transformsMs: number;
 }
 
 interface Sample extends UpdateProfile {
@@ -67,11 +60,6 @@ interface CaseReport {
   readonly rsdPercent: number;
   readonly perGlyphUs: number;
   readonly bytesPerUpdate: number;
-  readonly frameMedianMs: number;
-  readonly prepareMedianMs: number;
-  readonly engineMedianMs: number;
-  readonly applyMedianMs: number;
-  readonly transformsMedianMs: number;
 }
 
 const options = parseArguments(process.argv.slice(2));
@@ -154,43 +142,17 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
     rsdPercent: mean === 0 ? 0 : (Math.sqrt(variance) / mean) * 100,
     perGlyphUs: glyphs === 0 ? 0 : (median * 1000) / glyphs,
     bytesPerUpdate: bytes,
-    frameMedianMs: medianOf(sorted(samples, 'frameMs')),
-    prepareMedianMs: medianOf(sorted(samples, 'prepareMs')),
-    engineMedianMs: medianOf(sorted(samples, 'engineMs')),
-    applyMedianMs: medianOf(sorted(samples, 'applyMs')),
-    transformsMedianMs: medianOf(sorted(samples, 'transformsMs')),
   };
 }
 
 function profileUpdate(update: () => void): UpdateProfile {
-  const durations = new Map<ThreeTextProfilePhase, number>();
-  if (options.profilePhases) {
-    setThreeTextProfiler((phase, startedMs, endedMs) => {
-      durations.set(phase, (durations.get(phase) ?? 0) + endedMs - startedMs);
-    });
-  }
   const started = performance.now();
-  try {
-    update();
-  } finally {
-    setThreeTextProfiler(undefined);
-  }
-  return {
-    wallMs: performance.now() - started,
-    frameMs: durations.get('frame.total') ?? 0,
-    prepareMs: durations.get('frame.prepare') ?? 0,
-    engineMs: durations.get('engine.update') ?? 0,
-    applyMs: durations.get('plan.apply') ?? 0,
-    transformsMs: durations.get('transforms.sync') ?? 0,
-  };
+  update();
+  return { wallMs: performance.now() - started };
 }
 
 function sorted<Key extends keyof UpdateProfile>(samples: readonly Sample[], key: Key): number[] {
   return samples.map((sample) => sample[key]).sort((left, right) => left - right);
-}
-
-function medianOf(values: readonly number[]): number {
-  return values[Math.floor(values.length / 2)] ?? 0;
 }
 
 function applyChange(name: CaseName, paragraph: ParagraphHandle, repetition: number, text: string): void {
@@ -210,12 +172,12 @@ function printReport(rows: readonly CaseReport[]): void {
     `\nwarmup ${options.warmup} discarded · ${options.repetitions} recorded repetitions · budget ${budget60.toFixed(2)}ms @60Hz · ${budget120.toFixed(2)}ms @120Hz\n`,
   );
   console.log(
-    `${'case'.padEnd(13)}${'glyphs'.padStart(8)}${'prepare'.padStart(10)}${'engine'.padStart(10)}${'apply'.padStart(10)}${'frame'.padStart(10)}${'wall'.padStart(10)}${'wall p95'.padStart(11)}${'rsd'.padStart(7)}  budget`,
+    `${'case'.padEnd(13)}${'glyphs'.padStart(8)}${'outside'.padStart(10)}${'p95'.padStart(11)}${'min'.padStart(10)}${'rsd'.padStart(7)}  budget`,
   );
   for (const row of rows) {
     const over = row.medianMs / budget120;
     console.log(
-      `${row.name.padEnd(13)}${String(row.glyphs).padStart(8)}${`${row.prepareMedianMs.toFixed(2)}ms`.padStart(10)}${`${row.engineMedianMs.toFixed(2)}ms`.padStart(10)}${`${row.applyMedianMs.toFixed(2)}ms`.padStart(10)}${`${row.frameMedianMs.toFixed(2)}ms`.padStart(10)}${`${row.medianMs.toFixed(2)}ms`.padStart(10)}${`${row.p95Ms.toFixed(2)}ms`.padStart(11)}${`${row.rsdPercent.toFixed(1)}%`.padStart(7)}  ${over <= 1 ? 'within 120Hz' : `${over.toFixed(1)}x over 120Hz`}`,
+      `${row.name.padEnd(13)}${String(row.glyphs).padStart(8)}${`${row.medianMs.toFixed(2)}ms`.padStart(10)}${`${row.p95Ms.toFixed(2)}ms`.padStart(11)}${`${row.minMs.toFixed(2)}ms`.padStart(10)}${`${row.rsdPercent.toFixed(1)}%`.padStart(7)}  ${over <= 1 ? 'within 120Hz' : `${over.toFixed(1)}x over 120Hz`}`,
     );
   }
   console.log('\nThis public Three diagnostic is not the canonical Rust-vs-TypeScript comparison.');
@@ -234,7 +196,6 @@ function parseArguments(argv: readonly string[]) {
     cases: (cases === undefined ? ['cold', 'font-size', 'layout-width', 'text'] : cases.split(',')) as CaseName[],
     warmup: Number.parseInt(read('--warmup') ?? String(DEFAULT_WARMUP), 10),
     repetitions: Number.parseInt(read('--reps') ?? String(DEFAULT_REPETITIONS), 10),
-    profilePhases: read('--profile-phases') !== '0',
     jsonPath: read('--json'),
   };
 }
