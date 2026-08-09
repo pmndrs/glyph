@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:5588a018d8d9306184385c082648762af3d5dbc164a5cb70494e139cab364134'
+source_digest: 'sha256:6d1fd8d4b1d3f4ace288388723ae75556602c8aefabe25527e2fec64b2b699aa'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -800,6 +800,12 @@ count above the frame's paragraph limit. The production frame compiler emits thi
 semantic records. The reachable validation path changes optimized Wasm to 1,073,123 raw / 403,431 gzip / 320,917
 Brotli bytes (+2,450 / +1,254 / +1,195 over the keyed-record checkpoint). The retained-state consumer is the next
 checkpoint, so removal is currently rejected before mutation rather than falsely accepted. Adjacent
+session ownership is now split without changing behavior: batch revision, policy binding, and render-plan compilation
+remain on `EngineSession`, while the full text/style/Unicode/bidi/shaping/cluster/flow/positioning transaction lives in
+one `ParagraphState`. This preserves the existing single child while making the next map conversion explicit and
+testable. All 124 Rust unit tests pass. The optimized Wasm is 1,073,179 raw / 403,475 gzip / 321,149 Brotli bytes,
++56 / +44 / +232 over the paragraph-control checkpoint; no latency claim is attached to this ownership-only move.
+Adjacent
 8-warmup/31-sample Bitmap column-resize medians are 4.083 ms before and 4.078 ms after the rebuilt module, with 5.8% and
 6.1% RSD; this supports no speedup claim and exposes no material regression. Optimized Wasm is 1,070,685 / 402,154 /
 319,914 raw/gzip/Brotli bytes, +105 / +40 / +252 from D-205.
