@@ -2,6 +2,14 @@
 
 ## 2026-08-09
 
+- **Bounded localized reshaping to one stable shaping run** — A retained UTF-16 edit whose style, script, bidi level,
+  direction, and fallback topology remain stable now copies unchanged shaped runs and reshapes only the affected run;
+  hard breaks, style boundaries, script changes, and bidi changes are therefore explicit correctness boundaries rather
+  than heuristic byte windows. On the production optimized SIMD Wasm and the unchanged 22,000-glyph Bitmap fixture,
+  complete Rust `text_update` plus render-plan publication fell from 16.223 ms to 9.372 ms median over 31 measured edits.
+  This checkpoint is not a budget claim: cluster construction, composition, positioning, and plan gathering still scan
+  globally, p95 remains 9.723 ms, and the strict eight-warmup lane still detects later Wasm memory growth.
+
 - **Added narrow paragraph editing without exposing engine complexity** — Three `Text` now provides `insertText`,
   `deleteText`, and `replaceText` over DOM-compatible UTF-16 offsets; direct `text` assignment derives the smallest
   scalar-aligned replacement. Multiple edits queue into the same next-frame Rust transaction, surrogate-pair splits fail

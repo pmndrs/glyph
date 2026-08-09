@@ -81,6 +81,13 @@ struct ClusterRecord {
     missing: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TextEdit {
+    old_start: usize,
+    old_end: usize,
+    new_end: usize,
+}
+
 #[derive(Clone, Copy)]
 struct BoundaryCandidate {
     source_run: usize,
@@ -139,6 +146,7 @@ struct ParagraphState {
     next_text_unit_id: u32,
     pending_next_text_unit_id: u32,
     text_prepared: bool,
+    text_edit: Option<TextEdit>,
     styles: StyleArena,
     pending_styles: StyleArena,
     resolved_styles: ResolvedStyleArena,
@@ -1189,6 +1197,7 @@ impl ParagraphState {
         self.next_text_unit_id = 0;
         self.pending_next_text_unit_id = 0;
         self.text_prepared = false;
+        self.text_edit = None;
         self.styles.clear();
         self.pending_styles.clear();
         self.resolved_styles.clear();
@@ -1347,7 +1356,7 @@ impl ParagraphState {
         self.intrinsic_flow_layout_scratch.reserve(capacity, 1)?;
         self.boundary_shape.reserve(capacity.min(64))?;
         self.pending_boundary_shape.reserve(capacity.min(64))?;
-        self.boundary_shape_scratch.reserve(8)?;
+        self.boundary_shape_scratch.reserve(glyph_capacity)?;
         self.ellipsis_shape_scratch.reserve(4)?;
         if self.ellipsis_text_scratch.capacity() == 0 {
             self.ellipsis_text_scratch
@@ -1413,6 +1422,7 @@ impl ParagraphState {
             self.abort_text();
             return Err(EngineError::InvalidRequest);
         }
+        self.text_edit = changed_identity_range(&self.text_unit_ids, &self.pending_text_unit_ids);
         self.text_prepared = true;
         Ok(())
     }
@@ -1422,6 +1432,7 @@ impl ParagraphState {
         self.pending_text_unit_ids.clear();
         self.pending_next_text_unit_id = 0;
         self.text_prepared = false;
+        self.text_edit = None;
     }
 
     fn prepare_styles(
@@ -1620,6 +1631,10 @@ impl ParagraphState {
         if !self.shaping_runs_prepared {
             return Ok(());
         }
+        if self.try_prepare_incremental_shape(shaper)? {
+            self.shape_prepared = true;
+            return Ok(());
+        }
         let text = if self.text_prepared {
             self.pending_text.as_slice()
         } else {
@@ -1781,6 +1796,141 @@ impl ParagraphState {
             );
         }
         Err(EngineError::InvalidRequest)
+    }
+
+    fn try_prepare_incremental_shape(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+    ) -> Result<bool, EngineError> {
+        let Some(edit) = self.text_edit else {
+            return Ok(false);
+        };
+        let old_runs = self.shaping_runs.runs();
+        let new_runs = self.pending_shaping_runs.runs();
+        if old_runs.len() != new_runs.len() || old_runs.is_empty() {
+            return Ok(false);
+        }
+        let Some(old_run_index) = containing_run(old_runs, edit.old_start, edit.old_end) else {
+            return Ok(false);
+        };
+        let Some(new_run_index) = containing_run(new_runs, edit.old_start, edit.new_end) else {
+            return Ok(false);
+        };
+        if old_run_index != new_run_index
+            || !same_edit_run_topology(old_runs, new_runs, edit, old_run_index)?
+        {
+            return Ok(false);
+        }
+        let old_run = old_runs[old_run_index];
+        let new_run = new_runs[new_run_index];
+        let affected_source_run =
+            u32::try_from(old_run_index).map_err(|_| EngineError::ResultTooLarge)?;
+        let mut affected_fallbacks = self
+            .fallback_spans
+            .iter()
+            .copied()
+            .filter(|span| span.source_run == affected_source_run);
+        let Some(fallback) = affected_fallbacks.next() else {
+            return Ok(false);
+        };
+        if affected_fallbacks.next().is_some()
+            || fallback.font_index != 0
+            || fallback.text_start != old_run.text_start
+            || fallback.text_end != old_run.text_end
+        {
+            return Ok(false);
+        }
+        if self
+            .shape
+            .runs
+            .iter()
+            .filter(|run| run.source_run == affected_source_run)
+            .count()
+            != 1
+        {
+            return Ok(false);
+        }
+        let delta = edit_delta(edit)?;
+        let styles = if self.styles_prepared {
+            &self.pending_styles
+        } else {
+            &self.styles
+        };
+        self.boundary_shape_scratch.clear();
+        let scratch = &mut self.boundary_shape_scratch;
+        shaper
+            .with_shaped_run(
+                fallback.font_handle,
+                &self.pending_text,
+                ShapeRunRef {
+                    text_start: new_run.text_start,
+                    text_end: new_run.text_end,
+                    script: new_run.script,
+                    language: styles.resolved_language(new_run.style),
+                    features: styles.resolved_features(new_run.style),
+                    direction: new_run.direction,
+                    cluster_level: 0,
+                    flags: 0x40,
+                },
+                |shaped| {
+                    scratch.append(
+                        old_run_index,
+                        fallback.font_handle,
+                        fallback.binding_handle,
+                        new_run.text_start,
+                        new_run.text_end,
+                        shaped,
+                    )
+                },
+            )
+            .map_err(shaper_error)?;
+        if self.boundary_shape_scratch.glyph_ids.contains(&0) {
+            self.boundary_shape_scratch.clear();
+            return Ok(false);
+        }
+        for (shape_run_index, shaped_run) in self.shape.runs.iter().copied().enumerate() {
+            if shaped_run.source_run == affected_source_run {
+                self.pending_shape.append_text_range_from(
+                    &self.boundary_shape_scratch,
+                    0,
+                    affected_source_run,
+                    new_run.text_start,
+                    new_run.text_end,
+                    0,
+                )?;
+                continue;
+            }
+            let run_delta = if shaped_run.text_start >= old_run.text_end {
+                delta
+            } else {
+                0
+            };
+            self.pending_shape.append_text_range_from(
+                &self.shape,
+                shape_run_index,
+                shaped_run.source_run,
+                shaped_run.text_start,
+                shaped_run.text_end,
+                run_delta,
+            )?;
+        }
+        for span in self.fallback_spans.iter().copied() {
+            let (text_start, text_end) = if span.source_run == affected_source_run {
+                (new_run.text_start, new_run.text_end)
+            } else {
+                (
+                    map_old_offset(span.text_start, edit)?,
+                    map_old_offset(span.text_end, edit)?,
+                )
+            };
+            self.pending_fallback_spans.push(FallbackSpan {
+                text_start,
+                text_end,
+                ..span
+            });
+        }
+        self.boundary_shape_scratch.clear();
+        Ok(true)
     }
 
     fn abort_shape(&mut self) {
@@ -2369,6 +2519,31 @@ fn apply_text_mutation(
     Ok(())
 }
 
+fn changed_identity_range(previous: &[u32], next: &[u32]) -> Option<TextEdit> {
+    let shared = previous.len().min(next.len());
+    let mut start = 0usize;
+    while start < shared && previous[start] == next[start] {
+        start += 1;
+    }
+    if start == previous.len() && start == next.len() {
+        return None;
+    }
+    let mut previous_end = previous.len();
+    let mut next_end = next.len();
+    while previous_end > start
+        && next_end > start
+        && previous[previous_end - 1] == next[next_end - 1]
+    {
+        previous_end -= 1;
+        next_end -= 1;
+    }
+    Some(TextEdit {
+        old_start: start,
+        old_end: previous_end,
+        new_end: next_end,
+    })
+}
+
 fn apply_text_identity_mutation(
     identities: &mut Vec<u32>,
     next_identity: &mut u32,
@@ -2424,6 +2599,87 @@ fn unicode_error(error: UnicodeError) -> EngineError {
         UnicodeError::InvalidUtf16 => EngineError::InvalidRequest,
         UnicodeError::ResultTooLarge => EngineError::ResultTooLarge,
     }
+}
+
+fn same_shaping_properties(left: ShapingRun, right: ShapingRun) -> bool {
+    left.script == right.script
+        && left.direction == right.direction
+        && left.bidi_level == right.bidi_level
+        && left.style == right.style
+}
+
+fn containing_run(runs: &[ShapingRun], start: usize, end: usize) -> Option<usize> {
+    let start = u32::try_from(start).ok()?;
+    let end = u32::try_from(end).ok()?;
+    runs.iter().position(|run| {
+        run.text_start <= start
+            && end <= run.text_end
+            && (start < end || (run.text_start < start && start < run.text_end))
+    })
+}
+
+fn edit_delta(edit: TextEdit) -> Result<i64, EngineError> {
+    i64::try_from(edit.new_end)
+        .and_then(|new_end| i64::try_from(edit.old_end).map(|old_end| new_end - old_end))
+        .map_err(|_| EngineError::ResultTooLarge)
+}
+
+fn map_old_offset(offset: u32, edit: TextEdit) -> Result<u32, EngineError> {
+    let old_start = u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?;
+    let old_end = u32::try_from(edit.old_end).map_err(|_| EngineError::ResultTooLarge)?;
+    if offset <= old_start {
+        Ok(offset)
+    } else if offset >= old_end {
+        shifted_text_offset(offset, edit_delta(edit)?)
+    } else {
+        Err(EngineError::InvalidRequest)
+    }
+}
+
+fn same_edit_run_topology(
+    old_runs: &[ShapingRun],
+    new_runs: &[ShapingRun],
+    edit: TextEdit,
+    affected: usize,
+) -> Result<bool, EngineError> {
+    for (index, (&old, &new)) in old_runs.iter().zip(new_runs).enumerate() {
+        if !same_shaping_properties(old, new) {
+            return Ok(false);
+        }
+        let expected_start = map_old_offset(old.text_start, edit);
+        let expected_end = map_old_offset(old.text_end, edit);
+        if index == affected {
+            let delta = edit_delta(edit)?;
+            let old_start =
+                u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?;
+            let old_end = u32::try_from(edit.old_end).map_err(|_| EngineError::ResultTooLarge)?;
+            let start = if old.text_start <= old_start {
+                old.text_start
+            } else {
+                shifted_text_offset(old.text_start, delta)?
+            };
+            let end = if old.text_end >= old_end {
+                shifted_text_offset(old.text_end, delta)?
+            } else {
+                old.text_end
+            };
+            if new.text_start != start || new.text_end != end {
+                return Ok(false);
+            }
+        } else if expected_start.ok() != Some(new.text_start)
+            || expected_end.ok() != Some(new.text_end)
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn shifted_text_offset(value: u32, delta: i64) -> Result<u32, EngineError> {
+    let shifted = i64::from(value)
+        .checked_add(delta)
+        .ok_or(EngineError::ResultTooLarge)?;
+    u32::try_from(shifted).map_err(|_| EngineError::ResultTooLarge)
 }
 
 fn bidi_error(error: BidiError) -> EngineError {
@@ -2829,7 +3085,55 @@ fn gather_error(error: GatherError) -> EngineError {
 
 #[cfg(test)]
 mod tests {
+    use crate::engine::style_state::ResolvedStyle;
+
     use super::*;
+
+    #[test]
+    fn retained_edit_range_and_run_topology_track_insertions_without_crossing_run_boundaries() {
+        let edit = changed_identity_range(&[1, 2, 3, 4], &[1, 5, 6, 2, 3, 4]).unwrap();
+        assert_eq!(
+            edit,
+            TextEdit {
+                old_start: 1,
+                old_end: 1,
+                new_end: 3,
+            }
+        );
+        let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
+        let old = [
+            ShapingRun {
+                text_start: 0,
+                text_end: 4,
+                script: 1,
+                direction: 0,
+                bidi_level: 0,
+                style,
+            },
+            ShapingRun {
+                text_start: 5,
+                text_end: 9,
+                script: 1,
+                direction: 0,
+                bidi_level: 0,
+                style,
+            },
+        ];
+        let new = [
+            ShapingRun {
+                text_end: 6,
+                ..old[0]
+            },
+            ShapingRun {
+                text_start: 7,
+                text_end: 11,
+                ..old[1]
+            },
+        ];
+        assert_eq!(containing_run(&old, edit.old_start, edit.old_end), Some(0));
+        assert_eq!(containing_run(&new, edit.old_start, edit.new_end), Some(0));
+        assert!(same_edit_run_topology(&old, &new, edit, 0).unwrap());
+    }
     use crate::{
         abi_contract::{
             self as abi, ENGINE_TEXT_MUTATION_DELETE_COUNT, ENGINE_TEXT_MUTATION_ENCODING,
