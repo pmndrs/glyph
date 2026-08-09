@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:d7194a0ca57aa340e386cefe1b7fbf553b7e38cc75c6646b17130a8e83f38ead'
+source_digest: 'sha256:b5fd776878341789eab7d0278040cd126f038f96c47f98a28b47de8d73f4747b'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -128,6 +128,9 @@ sources:
   - id: text-engine-host
     resource: ../../packages/text/src/internal/text-engine-host.ts
     title: Retained frame host
+  - id: render-plan-view
+    resource: ../../packages/text/src/internal/render-plan-view.ts
+    title: Zero-copy render-plan reader
   - id: engine-frame-wire
     resource: ../../packages/text/src/internal/engine-frame-wire.ts
     title: Complete retained-frame request compiler
@@ -771,6 +774,13 @@ reversed fallback order does not. Last release disposes the Rust stack, and mono
 reusing a retired identity. A real-fixture integration binds Bitmap and MTSDF to one retained Inter shaping font and
 proves these lifecycle rules. This coordinator is not imported by the public Three entry until the batch/session
 render-plan cutover, so this checkpoint alone changes no shipping entry graph.
+
+Three render-plan consumption begins with a reusable validated view over the borrowed Wasm publication. The view reads
+fixed Rust resource, buffer, patch, primitive, and draw records without converting glyphs or tables into JavaScript
+objects. Its `DataView` spans the complete Wasm memory and is replaced only when the memory buffer identity changes;
+ordinary A/B publication swaps update only the base offset. A real compiled-Wasm fixture shapes and lays out Inter in
+one frame and proves every renderer table is nonempty and directly addressable. GPU buffer and draw realization remain
+open, so this checkpoint claims neither public Three cutover nor end-to-end rendering performance.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

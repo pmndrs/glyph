@@ -7,6 +7,8 @@ import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
 
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
+import { compileTextEngineFrameUpdate } from '../../dist/internal/engine-frame-wire.js';
+import { TextEngineRenderPlanView } from '../../dist/internal/render-plan-view.js';
 import { FontRegistry } from '../../dist/loader.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
 import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
@@ -88,6 +90,94 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const reversed = coordinator.acquireFontStack([msdfFont, bitmapFont]);
   assert.equal(shared.handle, first.handle);
   assert.notEqual(reversed.handle, first.handle, 'fallback order is part of stack identity');
+  const session = coordinator.createSession({ requestCapacity: 4_096, resultCapacity: 1024 * 1024, textCapacity: 16 });
+  const publication = session.update(
+    compileTextEngineFrameUpdate({
+      sessionId: session.handle,
+      policyHandle: coordinator.policyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: 0,
+      consumedPlanRevision: 0,
+      acknowledgedPublicationGeneration: 0,
+      limits: {
+        maxClusters: 16,
+        maxLines: 8,
+        maxRegions: 1,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      textMutations: [{ start: 0, deleteCount: 0, insert: 'abc' }],
+      styleMutations: [
+        {
+          opcode: 'upsert',
+          styleId: 1,
+          cascadeOrder: 0,
+          start: 0,
+          end: 3,
+          root: true,
+          value: {
+            fontStackHandle: first.handle,
+            materialId: 7,
+            fontSize: 16,
+            rasterPixelRatio: 1,
+            foregroundRgba: 0xffff_ffff,
+          },
+        },
+      ],
+      constraints: [
+        {
+          flowThreadId: 1,
+          geometryRevision: 1,
+          width: 256,
+          height: 128,
+          viewportBlockStart: 0,
+          viewportBlockEnd: 128,
+          resumeBlockOffset: 0,
+          maxLines: 8,
+          regionStart: 0,
+          resumeCluster: 0,
+          regionCount: 1,
+          resumeRegion: 0,
+          widthMode: 'at-most',
+          heightMode: 'at-most',
+          wrap: 'word',
+          align: 'start',
+          overflow: 'visible',
+          blockAlign: 'start',
+        },
+      ],
+      regions: [
+        {
+          id: 1,
+          geometryRevision: 1,
+          shape: 'rectangle',
+          exclusionStart: 0,
+          exclusionCount: 0,
+          writingMode: 'horizontal-tb',
+          textOrientation: 'mixed',
+          inlineStart: 0,
+          blockStart: 0,
+          inlineEnd: 256,
+          blockEnd: 128,
+          clipInlineStart: 0,
+          clipBlockStart: 0,
+          clipInlineEnd: 256,
+          clipBlockEnd: 128,
+        },
+      ],
+    }),
+  );
+  const plan = new TextEngineRenderPlanView().bind(publication);
+  for (const name of ['resources', 'buffers', 'patches', 'primitives', 'draws']) {
+    assert.ok(plan.table(name).count > 0, `${name} must come from the Rust publication`);
+  }
+  const patches = plan.table('patches');
+  const firstPatch = plan.record(patches, 0);
+  assert.ok(plan.u16(firstPatch) > 0);
+  assert.throws(() => plan.record(patches, patches.count), /outside its table/);
+  session.dispose();
   first.release();
   first.release();
   const stillShared = coordinator.acquireFontStack([bitmapFont, msdfFont]);
