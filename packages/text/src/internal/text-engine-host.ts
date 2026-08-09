@@ -91,6 +91,14 @@ export class TextEngineHost {
     this.#fontStacks.add(handle);
   }
 
+  disposeFontStack(handle: number): void {
+    this.#assertActive();
+    uint32Handle(handle, 'font stack handle');
+    if (!this.#fontStacks.has(handle)) throw new Error(`font stack ${handle} is not owned by this text engine host`);
+    requireStatus(this.#exports.disposeFontStack(handle), 'dispose font stack');
+    this.#fontStacks.delete(handle);
+  }
+
   registerPolicy(handle: number, bytes: Uint8Array): void {
     this.#assertActive();
     uint32Handle(handle, 'policy handle');

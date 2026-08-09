@@ -152,7 +152,7 @@ function bitmapProgram(techniqueId: number, programId: number): PolicyProgram {
     [4, [13, 14]],
     [5, [3, 4, 5, 6]],
   ]);
-  return program(techniqueId, programId, context, floatBuffers([2, 2, 2, 2, 4]));
+  return createProgram(techniqueId, programId, context, floatBuffers([2, 2, 2, 2, 4]));
 }
 
 function msdfProgram(techniqueId: number, programId: number): PolicyProgram {
@@ -177,7 +177,7 @@ function msdfProgram(techniqueId: number, programId: number): PolicyProgram {
     [6, [25, 25, 25, 25]],
     [7, [25, 25, 25, 24]],
   ]);
-  return program(techniqueId, programId, context, floatBuffers([4, 4, 4, 4, 4, 4, 4]));
+  return createProgram(techniqueId, programId, context, floatBuffers([4, 4, 4, 4, 4, 4, 4]));
 }
 
 function slugProgram(techniqueId: number, programId: number): PolicyProgram {
@@ -204,7 +204,7 @@ function slugProgram(techniqueId: number, programId: number): PolicyProgram {
     [6, [21, 22, 23, 24]],
     [7, [25, 26, 29, 29]],
   ]);
-  return program(techniqueId, programId, context, [...floatBuffers([4, 4, 4, 4, 4]), ...u32Buffers([4, 4], 6)]);
+  return createProgram(techniqueId, programId, context, [...floatBuffers([4, 4, 4, 4, 4]), ...u32Buffers([4, 4], 6)]);
 }
 
 interface ProgramContext {
@@ -287,7 +287,7 @@ function programContext(
   };
 }
 
-function program(
+function createProgram(
   techniqueId: number,
   programId: number,
   context: ProgramContext,

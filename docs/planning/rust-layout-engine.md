@@ -1225,6 +1225,13 @@ are 4.217/4.791/5.633 ms for Bitmap/MTSDF/Slug versus 4.120/4.646/5.622 ms at D-
 not establish a regression. Optimized Wasm is 1,070,580 raw / 402,114 gzip / 319,662 Brotli bytes, +607 / -3,774 / +104
 bytes from D-203.
 
+The production Three ownership layer is lazy and runtime-scoped. It keeps the all-technique policy and first-party
+binding compilers out of renderer-neutral `TextRuntime`, allocates monotonic binding/stack/session handles, and
+reference-counts exact ordered stack sequences. Last release disposes the Rust stack; reverse fallback order has a
+distinct identity; retired handles are not immediately reused. A real Inter fixture registers Bitmap and MTSDF against
+one shaping handle and proves the lifecycle in compiled Wasm. The coordinator is not yet referenced by the public Three
+entry, so this slice establishes cold ownership without claiming the batch/session cutover or a shipping graph change.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement
