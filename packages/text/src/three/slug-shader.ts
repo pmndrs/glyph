@@ -1,7 +1,7 @@
 import * as TSL from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
 
-import { slugDilate, slugRender, type SlugRenderOptions } from '../internal/slug-shaders/index.js';
+import { slugDilate, slugDilateMatrix, slugRender, type SlugRenderOptions } from '../internal/slug-shaders/index.js';
 
 /**
  * One glyph instance's canonical Slug fields, already resolved to nodes. The address and count fields locate the
@@ -52,15 +52,29 @@ export interface ThreeSlugFillRule {
  * The GPU resources one Slug glyph batch binds. The clip-space rows and viewport drive the analytic half-pixel
  * dilation, so they must describe the same draw the returned position node feeds.
  */
-export interface ThreeSlugShaderResources {
+interface ThreeSlugShaderResourceBase {
   readonly page: ThreeSlugPageResources;
   /** Drawing-buffer size in device pixels. */
   readonly viewport: Node<'vec2'>;
+  readonly fillRule?: ThreeSlugFillRule;
+}
+
+interface ThreeSlugShaderRowResources extends ThreeSlugShaderResourceBase {
   readonly modelViewProjectionRow0: Node<'vec4'>;
   readonly modelViewProjectionRow1: Node<'vec4'>;
   readonly modelViewProjectionRow3: Node<'vec4'>;
-  readonly fillRule?: ThreeSlugFillRule;
+  readonly modelViewProjection?: never;
 }
+
+interface ThreeSlugShaderMatrixResources extends ThreeSlugShaderResourceBase {
+  /** Exact MVP selected per glyph when a renderer batches multiple model transforms into one draw. */
+  readonly modelViewProjection: Node<'mat4'>;
+  readonly modelViewProjectionRow0?: never;
+  readonly modelViewProjectionRow1?: never;
+  readonly modelViewProjectionRow3?: never;
+}
+
+export type ThreeSlugShaderResources = ThreeSlugShaderRowResources | ThreeSlugShaderMatrixResources;
 
 /**
  * Everything the canonical Slug graph produces, so a program can consume a stage or compose over its final output.
@@ -107,16 +121,26 @@ export function slugShader(
       instance.emOrigin.x.add(TSL.positionLocal.x.mul(instance.emSize.x)),
       instance.emOrigin.y.sub(TSL.positionLocal.y.mul(instance.emSize.y)),
     );
-    const dilated = slugDilate(
-      localPosition,
-      outwardNormal,
-      emCoordinate,
-      instance.inverseScale,
-      resources.modelViewProjectionRow0,
-      resources.modelViewProjectionRow1,
-      resources.modelViewProjectionRow3,
-      resources.viewport,
-    );
+    const dilated =
+      resources.modelViewProjection === undefined
+        ? slugDilate(
+            localPosition,
+            outwardNormal,
+            emCoordinate,
+            instance.inverseScale,
+            resources.modelViewProjectionRow0,
+            resources.modelViewProjectionRow1,
+            resources.modelViewProjectionRow3,
+            resources.viewport,
+          )
+        : slugDilateMatrix(
+            localPosition,
+            outwardNormal,
+            emCoordinate,
+            instance.inverseScale,
+            resources.modelViewProjection,
+            resources.viewport,
+          );
     renderCoordinate.assign(dilated.textureCoordinate);
     return TSL.vec3(dilated.position.x, dilated.position.y, 0);
   })();

@@ -4,10 +4,12 @@ import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
+import { read as readKtx2 } from 'ktx-parse';
 import * as THREE from 'three/webgpu';
 
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
+import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { compileTextEngineFrameUpdate } from '../../dist/internal/engine-frame-wire.js';
 import { TextEngineRenderPlanView } from '../../dist/internal/render-plan-view.js';
@@ -15,6 +17,7 @@ import { FontRegistry } from '../../dist/loader.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
 import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
 import { defineRasterResourceId } from '../../dist/raster-technique.js';
+import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 import { ThreeTextEnginePlanTarget } from '../../dist/three/engine-plan-target.js';
@@ -23,17 +26,21 @@ const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', i
 const wasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
 
 test('Three coordinator shares shaping data across technique bindings and reference-counts stack handles', async () => {
-  const [bitmapBytes, compressedMsdf, wasm] = await Promise.all([
+  const [bitmapBytes, compressedMsdf, compressedSlug, wasm] = await Promise.all([
     readFile(new URL('inter-bitmap-16.font.glb', fixtureRoot)),
     readFile(new URL('inter-mtsdf.font.glb.gz', fixtureRoot)),
+    readFile(new URL('inter-slug.font.glb.gz', fixtureRoot)),
     readFile(wasmUrl),
   ]);
   const msdfBytes = gunzipSync(compressedMsdf);
-  const [bitmapCore, msdfCore] = await Promise.all([
+  const slugBytes = gunzipSync(compressedSlug);
+  const [bitmapCore, msdfCore, slugCore] = await Promise.all([
     validateFontArtifact(bitmapBytes),
     validateFontArtifact(msdfBytes),
+    validateFontArtifact(slugBytes),
   ]);
   assert.equal(bitmapCore.shapingHash, msdfCore.shapingHash);
+  assert.equal(bitmapCore.shapingHash, slugCore.shapingHash);
   const registry = new FontRegistry();
   const registered = await registry.registerAsset(bitmapBytes);
   const shaper = await createRuntimeShaper({ registry, wasm });
@@ -50,6 +57,13 @@ test('Three coordinator shares shaping data across technique bindings and refere
     rasterKey: msdfCore.document.extensions.PMNDRS_font.rasters[0].rasterKey,
     shapingHash: msdfCore.shapingHash,
     glyphCount: msdfCore.glyphCount,
+    glyphIdWidth: 16,
+  });
+  const slugRaster = await validateSlugArtifact(slugBytes, {
+    descriptor: slugDescriptor(),
+    rasterKey: slugCore.document.extensions.PMNDRS_font.rasters[0].rasterKey,
+    shapingHash: slugCore.shapingHash,
+    glyphCount: slugCore.glyphCount,
     glyphIdWidth: 16,
   });
   const bitmapFont = {
@@ -91,6 +105,33 @@ test('Three coordinator shares shaping data across technique bindings and refere
     },
     disposed: false,
   };
+  const slugExtension = slugRaster.document.extensions.PMNDRS_font_slug;
+  const slugFont = {
+    runtime: undefined,
+    font: registered,
+    technique: slug,
+    raster: undefined,
+    data: {
+      planeUnitsPerEm: slugExtension.planeUnitsPerEm,
+      records: slugRaster.records,
+      pages: slugRaster.pages.map((page, pageIndex) => ({
+        resource: defineRasterResourceId(`coordinator.slug.${pageIndex}`),
+        curveWidth: page.curveWidth,
+        curveHeight: page.curveHeight,
+        curveBytes: readKtx2(page.curve.bytes).levels[0].levelData.slice(),
+        headerCount: page.headerCount,
+        headerWidth: page.headerWidth,
+        headerHeight: page.headerHeight,
+        headerBytes: page.headers.bytes.slice(),
+        referenceCount: page.referenceCount,
+        referenceWidth: page.referenceWidth,
+        referenceHeight: page.referenceHeight,
+        referenceBytes: page.references.bytes.slice(),
+      })),
+      bindings: [],
+    },
+    disposed: false,
+  };
   const coordinator = new ThreeTextEngineCoordinator({ shaper });
   const first = coordinator.acquireFontStack([bitmapFont, msdfFont]);
   const bitmapReference = coordinator.host.wireIdentities.resolve(bitmapFont.data.strikes[0].pages[0].resource);
@@ -99,6 +140,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(coordinator.resolveResource(msdfReference).technique, msdf.id);
   const shared = coordinator.acquireFontStack([bitmapFont, msdfFont]);
   const reversed = coordinator.acquireFontStack([msdfFont, bitmapFont]);
+  const slugFirst = coordinator.acquireFontStack([slugFont, msdfFont, bitmapFont]);
   assert.equal(shared.handle, first.handle);
   assert.notEqual(reversed.handle, first.handle, 'fallback order is part of stack identity');
   const session = coordinator.createSession({ requestCapacity: 4_096, resultCapacity: 1024 * 1024, textCapacity: 16 });
@@ -474,6 +516,54 @@ test('Three coordinator shares shaping data across technique bindings and refere
     assert.ok(target.draws[0].geometry.getAttribute(`_pmndrsText_${policyBufferId}`));
   }
   assert.ok(target.gpuBytes > bitmapGpuBytes, 'MSDF atlas residency is included in command-buffer accounting');
+  const msdfGpuBytes = target.gpuBytes;
+  const slugPublication = session.update(
+    compileTextEngineFrameUpdate({
+      sessionId: session.handle,
+      policyHandle: coordinator.policyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: msdfPublication.engineRevision,
+      consumedPlanRevision: msdfPublication.planRevision,
+      acknowledgedPublicationGeneration: 0,
+      limits: {
+        maxParagraphs: 2,
+        maxClusters: 16,
+        maxLines: 8,
+        maxRegions: 2,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      styleMutations: [2, 1].map((paragraphId) => ({
+        opcode: 'upsert',
+        paragraphId,
+        styleId: 1,
+        cascadeOrder: 0,
+        start: 0,
+        end: 3,
+        root: true,
+        value: {
+          fontStackHandle: slugFirst.handle,
+          materialId: 7,
+          fontSize: 16,
+          rasterPixelRatio: 1,
+          foregroundRgba: 0xffff_ffff,
+        },
+      })),
+    }),
+  );
+  const slugPlan = plan.bind(slugPublication);
+  const slugDraws = slugPlan.table('draws');
+  assert.equal(slugDraws.count, 1);
+  assert.equal(slugPlan.u32(slugPlan.record(slugDraws, 0) + drawLayout.programId), 3);
+  target.apply(slugPublication);
+  assert.equal(target.draws.length, 1);
+  assert.equal(target.draws[0].geometry.instanceCount, 6);
+  for (const policyBufferId of [1, 2, 3, 4, 5, 6, 7, 15]) {
+    assert.ok(target.draws[0].geometry.getAttribute(`_pmndrsText_${policyBufferId}`));
+  }
+  assert.ok(target.gpuBytes > msdfGpuBytes, 'Slug page residency is included in command-buffer accounting');
   assert.ok(target.gpuBytes > 0);
   target.dispose();
   session.dispose();
@@ -487,6 +577,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.notEqual(replacement.handle, first.handle, 'a retired stack handle is not immediately reused');
   replacement.release();
   reversed.release();
+  slugFirst.release();
   coordinator.dispose();
   assert.throws(() => coordinator.acquireFontStack([bitmapFont]), /disposed/);
   shaper.dispose();

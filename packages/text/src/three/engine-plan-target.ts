@@ -7,10 +7,12 @@ import { FIRST_PARTY_TRANSFORM_BUFFER_ID } from '../internal/render-policy-wire.
 import { TextEngineRenderPlanView, type RenderPlanTable } from '../internal/render-plan-view.js';
 import { bitmap, type BitmapPageData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
+import { slug, type SlugPageData } from '../raster/slug-technique.js';
 import { bitmapShader } from './bitmap-shader.js';
 import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-runtime.js';
 import { msdfShader } from './msdf-shader.js';
 import { invalidatePboTexture } from './retained-target.js';
+import { slugShader, type ThreeSlugPageResources } from './slug-shader.js';
 
 type ScalarArray = Float32Array | Uint32Array | Uint16Array;
 
@@ -32,6 +34,11 @@ interface RetainedResource {
   readonly referenceId: number;
 }
 
+interface RetainedSlugPage extends ThreeSlugPageResources {
+  readonly byteLength: number;
+  dispose(): void;
+}
+
 export interface ThreeTextEnginePlanOwner {
   readonly drawRoot: THREE.Object3D;
   objectForTransform(transformId: number): THREE.Object3D;
@@ -47,6 +54,7 @@ export class ThreeTextEnginePlanTarget {
   readonly #resources = new Map<number, RetainedResource>();
   readonly #bitmapTextures = new Map<number, THREE.DataTexture>();
   readonly #msdfAtlases = new Map<number, THREE.DataArrayTexture>();
+  readonly #slugPages = new Map<number, RetainedSlugPage>();
   readonly #materials = new Map<string, THREE.MeshBasicNodeMaterial>();
   readonly #activeTransformIndices = new Set<number>();
   readonly #rootInverse = new THREE.Matrix4();
@@ -77,6 +85,7 @@ export class ThreeTextEnginePlanTarget {
       const data = atlas.image.data as ArrayBufferView | undefined;
       bytes += data?.byteLength ?? 0;
     }
+    for (const page of this.#slugPages.values()) bytes += page.byteLength;
     return bytes;
   }
 
@@ -134,9 +143,11 @@ export class ThreeTextEnginePlanTarget {
     for (const material of this.#materials.values()) material.dispose();
     for (const texture of this.#bitmapTextures.values()) texture.dispose();
     for (const atlas of this.#msdfAtlases.values()) atlas.dispose();
+    for (const page of this.#slugPages.values()) page.dispose();
     this.#materials.clear();
     this.#bitmapTextures.clear();
     this.#msdfAtlases.clear();
+    this.#slugPages.clear();
     this.#buffers.clear();
     this.#resources.clear();
     this.#activeTransformIndices.clear();
@@ -419,7 +430,8 @@ export class ThreeTextEnginePlanTarget {
     const resolved = this.#coordinator.resolveResource(resource.referenceId);
     if (resolved.technique === bitmap.id) return this.#bitmapMaterial(resource, buffers, materialId);
     if (resolved.technique === msdf.id) return this.#msdfMaterial(resource, buffers, materialId);
-    throw new Error('this Three plan target checkpoint does not yet realize Slug draws');
+    if (resolved.technique === slug.id) return this.#slugMaterial(resource, buffers, materialId);
+    throw new Error('this Three plan target does not recognize the draw technique');
   }
 
   #msdfMaterial(
@@ -524,6 +536,117 @@ export class ThreeTextEnginePlanTarget {
     return atlas;
   }
 
+  #slugMaterial(
+    resource: RetainedResource,
+    buffers: ReadonlyMap<number, RetainedBuffer>,
+    materialId: number,
+  ): THREE.MeshBasicNodeMaterial {
+    const page = slugPage(this.#coordinator.resolveResource(resource.referenceId));
+    const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
+      const buffer = buffers.get(id);
+      if (buffer === undefined) throw new Error(`Slug draw is missing policy buffer ${id}`);
+      return buffer;
+    });
+    const transformIndices = buffers.get(FIRST_PARTY_TRANSFORM_BUFFER_ID);
+    if (transformIndices === undefined) throw new Error('Slug draw is missing its transform-index buffer');
+    const key = `slug:${resource.id}:${resource.generation}:${materialId}:${required
+      .map((buffer) => `${buffer.id}:${buffer.generation}`)
+      .join(',')}:${transformIndices.id}:${transformIndices.generation}:transform:${this.#transformGeneration}`;
+    let material = this.#materials.get(key);
+    if (material !== undefined) return material;
+    const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
+      ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
+    );
+    const instance = TSL.instanceIndex.add(runStart);
+    const floatFields = required
+      .slice(0, 5)
+      .map((buffer) => TSL.storage(buffer.attribute, 'vec4', buffer.attribute.count).setPBO(true).element(instance));
+    const addresses = TSL.storage(required[5]!.attribute, 'uvec4', required[5]!.attribute.count)
+      .setPBO(true)
+      .element(instance);
+    const counts = TSL.storage(required[6]!.attribute, 'uvec4', required[6]!.attribute.count)
+      .setPBO(true)
+      .element(instance);
+    const transform = indexedTransformNodes(transformIndices.attribute, this.#transformAttribute, instance);
+    const modelViewProjection = TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix).mul(transform.matrix);
+    const viewport = TSL.uniform(new THREE.Vector2(1, 1)).onRenderUpdate(({ renderer }, self) =>
+      renderer?.getDrawingBufferSize(self.value),
+    );
+    const shader = slugShader(
+      {
+        origin: floatFields[0]!.xy,
+        size: floatFields[0]!.zw,
+        emOrigin: floatFields[1]!.xy,
+        emSize: floatFields[1]!.zw,
+        bandTransform: floatFields[2]!,
+        color: floatFields[3]!,
+        inverseScale: floatFields[4]!.x,
+        curveBaseTexel: addresses.x,
+        horizontalHeaderBase: addresses.y,
+        verticalHeaderBase: addresses.z,
+        referenceBase: addresses.w,
+        horizontalBandCount: counts.x,
+        verticalBandCount: counts.y,
+      },
+      {
+        page: this.#slugPage(resource.referenceId, page),
+        viewport,
+        modelViewProjection,
+      },
+    );
+    material = new THREE.MeshBasicNodeMaterial({
+      blending: THREE.NormalBlending,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      transparent: true,
+    });
+    material.positionNode = transform.position(shader.position);
+    material.colorNode = shader.color;
+    material.opacityNode = shader.opacity;
+    this.#materials.set(key, material);
+    return material;
+  }
+
+  #slugPage(referenceId: number, data: SlugPageData): RetainedSlugPage {
+    let page = this.#slugPages.get(referenceId);
+    if (page !== undefined) return page;
+    const curves = ownedUint16(data.curveBytes);
+    const headers = ownedUint32(data.headerBytes);
+    const references = packReferencePairs(ownedUint16(data.referenceBytes), data.referenceWidth);
+    const curveTexture = dataTexture(curves, data.curveWidth, data.curveHeight, THREE.RGBAFormat, THREE.HalfFloatType);
+    const headerTexture = dataTexture(
+      headers,
+      data.headerWidth,
+      data.headerHeight,
+      THREE.RedIntegerFormat,
+      THREE.UnsignedIntType,
+    );
+    const referenceTexture = dataTexture(
+      references.data,
+      references.width,
+      references.height,
+      THREE.RedIntegerFormat,
+      THREE.UnsignedIntType,
+    );
+    page = {
+      curveTexture,
+      curveWidth: data.curveWidth,
+      headerTexture,
+      headerWidth: data.headerWidth,
+      referenceTexture,
+      referenceWidth: references.width,
+      byteLength: curves.byteLength + headers.byteLength + references.data.byteLength,
+      dispose() {
+        curveTexture.dispose();
+        headerTexture.dispose();
+        referenceTexture.dispose();
+      },
+    };
+    this.#slugPages.set(referenceId, page);
+    return page;
+  }
+
   #applyRetirements(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
     const layout = textShaperAbi.layouts.engineRetirement;
     for (let index = 0; index < table.count; index += 1) {
@@ -566,6 +689,13 @@ function msdfData(resource: ThreeTextEngineResource): MsdfData {
   return resource.data;
 }
 
+function slugPage(resource: ThreeTextEngineResource): SlugPageData {
+  if (resource.technique !== slug.id || !('page' in resource)) {
+    throw new Error('Three Slug draw references an incompatible resource');
+  }
+  return resource.page as SlugPageData;
+}
+
 function scalarArray(scalarType: number, byteLength: number): ScalarArray {
   const scalar = textShaperAbi.policy.scalarTypes;
   if (scalarType === scalar.f32) return new Float32Array(byteLength / 4);
@@ -593,16 +723,72 @@ function indexedTransformPosition(
   transforms: THREE.StorageInstancedBufferAttribute,
   instance: THREE.Node<'uint'>,
 ): THREE.Node<'vec3'> {
+  return indexedTransformNodes(indexAttribute, transforms, instance).position(position);
+}
+
+function indexedTransformNodes(
+  indexAttribute: THREE.StorageInstancedBufferAttribute,
+  transforms: THREE.StorageInstancedBufferAttribute,
+  instance: THREE.Node<'uint'>,
+): {
+  readonly matrix: THREE.Node<'mat4'>;
+  readonly position: (position: THREE.Node<'vec3'>) => THREE.Node<'vec3'>;
+} {
   const transformIndex = TSL.storage(indexAttribute, 'uint', indexAttribute.count).setPBO(true).element(instance);
   const firstColumn = transformIndex.mul(4);
   const table = TSL.storage(transforms, 'vec4', transforms.count).setPBO(true);
-  const local = TSL.vec4(position, 1);
-  return table
-    .element(firstColumn)
-    .mul(local.x)
-    .add(table.element(firstColumn.add(1)).mul(local.y))
-    .add(table.element(firstColumn.add(2)).mul(local.z))
-    .add(table.element(firstColumn.add(3)).mul(local.w)).xyz;
+  const column0 = table.element(firstColumn);
+  const column1 = table.element(firstColumn.add(1));
+  const column2 = table.element(firstColumn.add(2));
+  const column3 = table.element(firstColumn.add(3));
+  return {
+    matrix: TSL.mat4(column0, column1, column2, column3),
+    position(position) {
+      const local = TSL.vec4(position, 1);
+      return column0.mul(local.x).add(column1.mul(local.y)).add(column2.mul(local.z)).add(column3.mul(local.w)).xyz;
+    },
+  };
+}
+
+function dataTexture(
+  data: Uint16Array | Uint32Array,
+  width: number,
+  height: number,
+  format: THREE.PixelFormat,
+  type: THREE.TextureDataType,
+): THREE.DataTexture {
+  const texture = new THREE.DataTexture(data, width, height, format, type);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.flipY = false;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function ownedUint16(bytes: Uint8Array): Uint16Array {
+  const copy = bytes.slice();
+  return new Uint16Array(copy.buffer, copy.byteOffset, copy.byteLength / 2);
+}
+
+function ownedUint32(bytes: Uint8Array): Uint32Array {
+  const copy = bytes.slice();
+  return new Uint32Array(copy.buffer, copy.byteOffset, copy.byteLength / 4);
+}
+
+function packReferencePairs(
+  references: Uint16Array,
+  preferredWidth: number,
+): { readonly data: Uint32Array; readonly width: number; readonly height: number } {
+  const texelCount = Math.ceil(references.length / 2);
+  const width = Math.min(preferredWidth, texelCount);
+  const height = Math.ceil(texelCount / width);
+  const data = new Uint32Array(width * height);
+  for (let index = 0; index < references.length; index += 1) {
+    data[index >> 1] = (data[index >> 1] ?? 0) | (references[index]! << ((index & 1) * 16));
+  }
+  return { data, width, height };
 }
 
 function markUpdated(buffer: RetainedBuffer, byteOffset: number, byteLength: number, firstPatch: boolean): void {
