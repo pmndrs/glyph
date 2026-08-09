@@ -218,6 +218,35 @@ impl GeometryBatch<'_> {
         self.inline_objects.len() / abi::ENGINE_INLINE_OBJECT_RECORD_SIZE as usize
     }
 
+    pub(crate) fn take_paragraph(
+        self,
+        paragraph_id: u32,
+        constraint_cursor: &mut usize,
+        inline_object_cursor: &mut usize,
+    ) -> Result<Self, u32> {
+        let constraints = take_records(
+            self.constraints,
+            abi::ENGINE_CONSTRAINT_RECORD_SIZE,
+            abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
+            paragraph_id,
+            constraint_cursor,
+        )?;
+        let inline_objects = take_records(
+            self.inline_objects,
+            abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
+            abi::ENGINE_INLINE_OBJECT_PARAGRAPH_ID,
+            paragraph_id,
+            inline_object_cursor,
+        )?;
+        Ok(Self {
+            request: self.request,
+            constraints,
+            regions: self.regions,
+            exclusions: self.exclusions,
+            inline_objects,
+        })
+    }
+
     pub(crate) fn paragraph_id(self, index: usize) -> Option<u32> {
         if index < self.constraint_count() {
             let record = record_at(self.constraints, abi::ENGINE_CONSTRAINT_RECORD_SIZE, index)?;
@@ -464,6 +493,23 @@ impl<'a> TextMutationBatch<'a> {
         self.get(index).map(|mutation| mutation.paragraph_id)
     }
 
+    pub(crate) fn take_paragraph(
+        self,
+        paragraph_id: u32,
+        cursor: &mut usize,
+    ) -> Result<Self, u32> {
+        Ok(Self {
+            request: self.request,
+            records: take_records(
+                self.records,
+                ENGINE_TEXT_MUTATION_RECORD_SIZE,
+                ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
+                paragraph_id,
+                cursor,
+            )?,
+        })
+    }
+
     pub(crate) fn validate_disjoint_geometry(self, geometry: GeometryBatch<'_>) -> Result<(), u32> {
         if !self.records.is_empty()
             && geometry.overlaps_range(byte_range(self.request, self.records)?)?
@@ -590,6 +636,23 @@ impl<'a> StyleMutationBatch<'a> {
             StyleMutation::Remove { paragraph_id, .. }
             | StyleMutation::Upsert(StyleValue { paragraph_id, .. }) => Some(paragraph_id),
         }
+    }
+
+    pub(crate) fn take_paragraph(
+        self,
+        paragraph_id: u32,
+        cursor: &mut usize,
+    ) -> Result<Self, u32> {
+        Ok(Self {
+            request: self.request,
+            records: take_records(
+                self.records,
+                abi::ENGINE_STYLE_MUTATION_RECORD_SIZE,
+                abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+                paragraph_id,
+                cursor,
+            )?,
+        })
     }
 
     pub(crate) fn feature(value: StyleValue<'_>, index: usize) -> Option<FeatureRecord> {
@@ -1214,6 +1277,36 @@ fn record_at(records: &[u8], stride: u32, index: usize) -> Option<&[u8]> {
     let stride = usize::try_from(stride).ok()?;
     let start = index.checked_mul(stride)?;
     records.get(start..start.checked_add(stride)?)
+}
+
+fn take_records<'a>(
+    records: &'a [u8],
+    stride: u32,
+    paragraph_field: usize,
+    paragraph_id: u32,
+    cursor: &mut usize,
+) -> Result<&'a [u8], u32> {
+    let stride = usize::try_from(stride).map_err(|_| STATUS_INVALID_REQUEST)?;
+    let count = records.len() / stride;
+    if *cursor > count {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let start = *cursor;
+    while *cursor < count {
+        let record = record_at(
+            records,
+            u32::try_from(stride).map_err(|_| STATUS_INVALID_REQUEST)?,
+            *cursor,
+        )
+        .ok_or(STATUS_INVALID_REQUEST)?;
+        if read_u32(record, paragraph_field)? != paragraph_id {
+            break;
+        }
+        *cursor += 1;
+    }
+    records
+        .get(start * stride..*cursor * stride)
+        .ok_or(STATUS_INVALID_REQUEST)
 }
 
 fn validate_constraints(
@@ -1949,6 +2042,56 @@ mod tests {
                 insert_utf16_le: &[0x61, 0x00, 0x3d, 0xd8],
             })
         );
+    }
+
+    #[test]
+    fn consumes_contiguous_paragraph_spans_without_copying_records() {
+        let offset = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let stride = ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
+        let mut bytes = vec![0; offset + 3 * stride];
+        for (index, paragraph_id) in [7, 7, 9].into_iter().enumerate() {
+            let record = offset + index * stride;
+            bytes[record + ENGINE_TEXT_MUTATION_OPCODE] = TEXT_MUTATION_REPLACE_UTF16;
+            bytes[record + ENGINE_TEXT_MUTATION_ENCODING] = TEXT_ENCODING_UTF16_LE;
+            write_u32(
+                &mut bytes,
+                record + ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
+                paragraph_id,
+            );
+        }
+        let batch = parse_text_mutations(&bytes, offset as u32, 3).unwrap();
+        let mut cursor = 0;
+        let first = batch.take_paragraph(7, &mut cursor).unwrap();
+        assert_eq!(first.len(), 2);
+        assert_eq!(cursor, 2);
+        let empty = batch.take_paragraph(8, &mut cursor).unwrap();
+        assert_eq!(empty.len(), 0);
+        assert_eq!(cursor, 2);
+        let last = batch.take_paragraph(9, &mut cursor).unwrap();
+        assert_eq!(last.len(), 1);
+        assert_eq!(cursor, 3);
+
+        let style_bytes = valid_style_bytes();
+        let styles = parse_style_mutations(&style_bytes, STYLE_OFFSET as u32, 1).unwrap();
+        let mut style_cursor = 0;
+        assert_eq!(styles.take_paragraph(2, &mut style_cursor).unwrap().len(), 0);
+        assert_eq!(styles.take_paragraph(1, &mut style_cursor).unwrap().len(), 1);
+        assert_eq!(style_cursor, 1);
+
+        let geometry_bytes = valid_geometry_bytes();
+        let geometry = parse_valid_geometry(&geometry_bytes).unwrap();
+        let (mut constraint_cursor, mut inline_cursor) = (0, 0);
+        let absent = geometry
+            .take_paragraph(2, &mut constraint_cursor, &mut inline_cursor)
+            .unwrap();
+        assert_eq!(absent.constraint_count(), 0);
+        assert_eq!(absent.inline_object_count(), 0);
+        let present = geometry
+            .take_paragraph(1, &mut constraint_cursor, &mut inline_cursor)
+            .unwrap();
+        assert_eq!(present.constraint_count(), 1);
+        assert_eq!(present.inline_object_count(), 1);
+        assert_eq!((constraint_cursor, inline_cursor), (1, 1));
     }
 
     #[test]

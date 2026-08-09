@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:7a8fc766c273b8e0eb5fa8c2b6367a0dedc25e3ea99684e10e696bd25b7ef103'
+source_digest: 'sha256:6616c7c15a04a52faf40f5e0d4d3c3df73bed49f879e93eb2657b5db79cffe9c'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -810,6 +810,12 @@ Stable glyph IDs and semantic content revisions now allocate from transaction-lo
 but no longer owns counter namespaces, preventing equal child-local ordinals from aliasing in one planner. The
 single-child behavior remains byte-identical; the optimized Wasm is 1,073,074 raw / 403,537 gzip / 321,046 Brotli bytes
 (-105 / +62 / -103 versus the ownership split), which is compression/code-layout noise rather than a size claim.
+Validated text, style, constraint, and inline-object tables now expose borrowed per-paragraph span cursors. Each cursor
+advances only across the current paragraph's contiguous fixed records, returns an empty borrowed slice when that
+paragraph has no records, and lets the transaction reject any unclaimed tail. The current single child consumes these
+views in production, so the multi-child loop will not need per-record maps, record copies, or a second decode. An exact
+fixture consumes present and absent spans across every keyed semantic table. Optimized Wasm is 1,074,464 raw / 404,058
+gzip / 321,156 Brotli bytes (+1,390 / +521 / +110 over the session-identity checkpoint).
 Adjacent
 8-warmup/31-sample Bitmap column-resize medians are 4.083 ms before and 4.078 ms after the rebuilt module, with 5.8% and
 6.1% RSD; this supports no speedup claim and exposes no material regression. Optimized Wasm is 1,070,685 / 402,154 /

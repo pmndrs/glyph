@@ -554,9 +554,39 @@ impl TextEngine {
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
         let mut next_glyph_id = session.next_glyph_id.max(1);
         let mut next_content_revision = session.next_content_revision.max(1);
+        let (text_mutations, style_mutations, geometry) = if let Some(paragraph_id) = paragraph_id {
+            let (mut text_cursor, mut style_cursor) = (0, 0);
+            let (mut constraint_cursor, mut inline_object_cursor) = (0, 0);
+            let text = request
+                .text_mutations
+                .take_paragraph(paragraph_id, &mut text_cursor)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let styles = request
+                .style_mutations
+                .take_paragraph(paragraph_id, &mut style_cursor)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let geometry = request
+                .geometry
+                .take_paragraph(
+                    paragraph_id,
+                    &mut constraint_cursor,
+                    &mut inline_object_cursor,
+                )
+                .map_err(|_| EngineError::InvalidRequest)?;
+            if text_cursor != request.text_mutations.len()
+                || style_cursor != request.style_mutations.len()
+                || constraint_cursor != request.geometry.constraint_count()
+                || inline_object_cursor != request.geometry.inline_object_count()
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+            (text, styles, geometry)
+        } else {
+            (request.text_mutations, request.style_mutations, request.geometry)
+        };
         let paragraph = &mut session.paragraph;
-        paragraph.prepare_text(request.text_mutations)?;
-        if let Err(error) = paragraph.prepare_styles(request.style_mutations, |handle| {
+        paragraph.prepare_text(text_mutations)?;
+        if let Err(error) = paragraph.prepare_styles(style_mutations, |handle| {
             font_stacks
                 .binary_search_by_key(&handle, |stack| stack.handle)
                 .is_ok()
@@ -602,7 +632,7 @@ impl TextEngine {
                 return Err(error);
             }
         }
-        if let Err(error) = paragraph.prepare_geometry(request.geometry) {
+        if let Err(error) = paragraph.prepare_geometry(geometry) {
             paragraph.abort_text();
             paragraph.abort_styles();
             paragraph.abort_unicode();
