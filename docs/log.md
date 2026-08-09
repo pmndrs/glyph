@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- **Retained policy inputs and rebuilt only from the first storage mismatch** — Gathered field-major policy inputs now
+  commit under the exact session revision, policy fingerprint, and capability set. A one-byte selection lane skips
+  binding/resource/policy work for zero-change glyphs; changed records update only reachable fields. Identity replacement
+  stays in the same physical topology, while technique, program, resource, transform, material, clip, or depth changes
+  retain the verified prefix and fully gather the suffix. Commit/abort and disposal tests cover cache lifecycle, and an
+  oracle proves identity/field updates plus a material-triggered suffix rebuild. The unchanged optimized 101-update lane
+  improves from 2.607/6.184 to 1.314/5.863 ms median/p95 with five roughly 1.2 KiB patches. RSD remains 76.2%, so the
+  break-sensitive tail is open. Optimized Wasm grows 5,856 bytes to 1,153,122; retained high-water memory is 80.19 MiB.
+
 - **Continued recomposition until the edited line cursor actually converges** — The first retained-line proof required
   a whole recomposed line to equal its predecessor, which made convergence after a shifted line boundary impossible.
   Rust now recomposes consecutive old bands until cursor, height, and baseline return to the retained ending state, then

@@ -58,12 +58,21 @@ pub enum GatherError {
     SourceFieldMissing,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RetainedGather {
+    Complete,
+    RebuildFrom(usize),
+}
+
 #[derive(Default)]
 pub struct PolicyGatherWorkspace {
     glyphs: Vec<PlanGlyph>,
+    source_selected: Vec<u8>,
     semantic_change_masks: Vec<u16>,
     f32_fields: Vec<AlignedField<f32>>,
     u32_fields: Vec<AlignedField<u32>>,
+    retained_cursor: usize,
+    retained_source_cursor: usize,
 }
 
 #[repr(C, align(16))]
@@ -88,6 +97,7 @@ pub struct GatheredPlanInput<'a> {
 impl PolicyGatherWorkspace {
     pub fn reserve_records(&mut self, record_capacity: usize) -> Result<(), GatherError> {
         reserve(&mut self.glyphs, record_capacity)?;
+        reserve(&mut self.source_selected, record_capacity)?;
         reserve(&mut self.semantic_change_masks, record_capacity)
     }
 
@@ -142,17 +152,199 @@ impl PolicyGatherWorkspace {
         Ok(())
     }
 
+    pub fn begin_retained(
+        &mut self,
+        policy: &ValidatedPolicy,
+        record_capacity: usize,
+    ) -> Result<bool, GatherError> {
+        self.reserve_policy(policy, record_capacity)?;
+        self.retained_cursor = 0;
+        self.retained_source_cursor = 0;
+        let retained_len = self.glyphs.len();
+        Ok(self.semantic_change_masks.len() == retained_len
+            && self
+                .f32_fields
+                .iter()
+                .all(|field| field.len == retained_len)
+            && self
+                .u32_fields
+                .iter()
+                .all(|field| field.len == retained_len))
+    }
+
+    pub fn append_retained<'binding>(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        input: LayoutPlanInput<'_>,
+        mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+    ) -> Result<RetainedGather, GatherError> {
+        validate_semantic_shape(input)?;
+        let mut cursor = self.retained_cursor;
+        let mut source_cursor = self.retained_source_cursor;
+        let mut cached_font_handle = None;
+        let mut cached_binding = None;
+        let mut cached_program = None;
+        for glyph_index in 0..input.glyphs.len() {
+            let glyph = input.glyphs[glyph_index];
+            let Some(was_selected) = self.source_selected.get(source_cursor).copied() else {
+                self.retained_cursor = cursor;
+                self.retained_source_cursor = source_cursor;
+                return Ok(RetainedGather::RebuildFrom(glyph_index));
+            };
+            source_cursor += 1;
+            let change_mask = input
+                .semantic_change_masks
+                .get(glyph_index)
+                .copied()
+                .unwrap_or(0);
+            if change_mask == 0 {
+                if was_selected != 0 {
+                    let Some(previous) = self.glyphs.get(cursor) else {
+                        self.retained_cursor = cursor;
+                        self.retained_source_cursor = source_cursor - 1;
+                        return Ok(RetainedGather::RebuildFrom(glyph_index));
+                    };
+                    if previous.stable_id != glyph.stable_id
+                        || previous.transform_id != input.transform_id
+                    {
+                        self.retained_cursor = cursor;
+                        self.retained_source_cursor = source_cursor - 1;
+                        return Ok(RetainedGather::RebuildFrom(glyph_index));
+                    }
+                    self.semantic_change_masks[cursor] = 0;
+                    cursor += 1;
+                }
+                continue;
+            }
+            let binding = if cached_font_handle == Some(glyph.binding_handle) {
+                cached_binding.ok_or(GatherError::FontBindingMissing)?
+            } else {
+                let binding = binding_for_font(glyph.binding_handle)
+                    .ok_or(GatherError::FontBindingMissing)?;
+                cached_font_handle = Some(glyph.binding_handle);
+                cached_binding = Some(binding);
+                binding
+            };
+            let selected =
+                binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio);
+            if selected.is_some() != (was_selected != 0) {
+                self.retained_cursor = cursor;
+                self.retained_source_cursor = source_cursor - 1;
+                return Ok(RetainedGather::RebuildFrom(glyph_index));
+            }
+            let Some(selected) = selected else {
+                continue;
+            };
+            let technique = binding.technique();
+            let variant = binding.program_variant();
+            let program = match cached_program {
+                Some((cached_technique, cached_variant, program))
+                    if cached_technique == technique && cached_variant == variant =>
+                {
+                    program
+                }
+                _ => {
+                    let program = policy
+                        .program(capability_set, technique, variant)
+                        .ok_or(GatherError::ProgramMissing)?;
+                    cached_program = Some((technique, variant, program));
+                    program
+                }
+            };
+            let next = plan_glyph(input, glyph, binding, selected)?;
+            let Some(previous) = self.glyphs.get(cursor).copied() else {
+                self.retained_cursor = cursor;
+                self.retained_source_cursor = source_cursor - 1;
+                return Ok(RetainedGather::RebuildFrom(glyph_index));
+            };
+            if !same_storage_topology(previous, next) {
+                self.retained_cursor = cursor;
+                self.retained_source_cursor = source_cursor - 1;
+                return Ok(RetainedGather::RebuildFrom(glyph_index));
+            }
+            let selection_changed = change_mask & RESOURCE_SELECTION_CHANGES != 0;
+            let (f32_inputs, u32_inputs) = policy
+                .input_masks_for_changes(
+                    capability_set,
+                    technique,
+                    variant,
+                    change_mask,
+                    selection_changed,
+                )
+                .ok_or(GatherError::ProgramMissing)?;
+            self.update_fields(
+                cursor,
+                input,
+                glyph_index,
+                binding,
+                selected,
+                program,
+                f32_inputs,
+                u32_inputs,
+            )?;
+            self.glyphs[cursor] = next;
+            self.semantic_change_masks[cursor] = change_mask;
+            cursor += 1;
+        }
+        self.retained_cursor = cursor;
+        self.retained_source_cursor = source_cursor;
+        Ok(RetainedGather::Complete)
+    }
+
+    pub fn finish_retained(&self) -> bool {
+        self.retained_cursor == self.glyphs.len()
+            && self.retained_source_cursor == self.source_selected.len()
+    }
+
+    pub fn truncate_to_retained_prefix(&mut self) {
+        self.glyphs.truncate(self.retained_cursor);
+        self.source_selected.truncate(self.retained_source_cursor);
+        self.semantic_change_masks.truncate(self.retained_cursor);
+        for field in &mut self.f32_fields {
+            field.truncate(self.retained_cursor);
+        }
+        for field in &mut self.u32_fields {
+            field.truncate(self.retained_cursor);
+        }
+    }
+
     pub fn append<'binding>(
         &mut self,
         policy: &ValidatedPolicy,
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         force_all_inputs: bool,
+        binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+    ) -> Result<(), GatherError> {
+        self.append_from(
+            policy,
+            capability_set,
+            input,
+            0,
+            force_all_inputs,
+            binding_for_font,
+        )
+    }
+
+    pub fn append_from<'binding>(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        input: LayoutPlanInput<'_>,
+        source_start: usize,
+        force_all_inputs: bool,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
         validate_semantic_shape(input)?;
-        let required = self.glyphs.len().saturating_add(input.glyphs.len());
+        let remaining = input.glyphs.len().saturating_sub(source_start);
+        if source_start > input.glyphs.len() {
+            return Err(GatherError::InvalidSemanticShape);
+        }
+        let required = self.glyphs.len().saturating_add(remaining);
+        let source_required = self.source_selected.len().saturating_add(remaining);
         if self.glyphs.capacity() < required
+            || self.source_selected.capacity() < source_required
             || self.semantic_change_masks.capacity() < required
             || self
                 .f32_fields
@@ -178,7 +370,7 @@ impl PolicyGatherWorkspace {
         let mut cached_font_handle = None;
         let mut cached_binding = None;
         let mut cached_program = None;
-        for glyph_index in 0..input.glyphs.len() {
+        for glyph_index in source_start..input.glyphs.len() {
             let glyph = input.glyphs[glyph_index];
             let binding = if cached_font_handle == Some(glyph.binding_handle) {
                 cached_binding.ok_or(GatherError::FontBindingMissing)?
@@ -189,9 +381,10 @@ impl PolicyGatherWorkspace {
                 cached_binding = Some(binding);
                 binding
             };
-            let Some(selected) =
-                binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio)
-            else {
+            let selected =
+                binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio);
+            self.source_selected.push(u8::from(selected.is_some()));
+            let Some(selected) = selected else {
                 continue;
             };
             let technique = binding.technique();
@@ -228,32 +421,8 @@ impl PolicyGatherWorkspace {
                 f32_inputs,
                 u32_inputs,
             )?;
-            let resource = binding
-                .resources()
-                .get(
-                    usize::try_from(selected.resource)
-                        .map_err(|_| GatherError::ResourceBindingMissing)?,
-                )
-                .ok_or(GatherError::ResourceBindingMissing)?;
-            self.glyphs.push(PlanGlyph {
-                stable_id: glyph.stable_id,
-                content_revision: glyph.content_revision,
-                technique: binding.technique(),
-                program_variant: binding.program_variant(),
-                resource_id: resource.id,
-                resource_generation: resource.generation,
-                resource_kind: resource.kind,
-                resource_reference: resource.reference,
-                semantic_id: glyph.semantic_id,
-                transform_id: input.transform_id,
-                material_id: glyph.material_id,
-                clip_id: glyph.clip_id,
-                depth_key: glyph.depth_key,
-                inline_start: glyph.inline_start,
-                block_start: glyph.block_start,
-                inline_extent: glyph.inline_extent,
-                block_extent: glyph.block_extent,
-            });
+            self.glyphs
+                .push(plan_glyph(input, glyph, binding, selected)?);
             self.semantic_change_masks.push(
                 input
                     .semantic_change_masks
@@ -331,8 +500,58 @@ impl PolicyGatherWorkspace {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn update_fields(
+        &mut self,
+        output_index: usize,
+        input: LayoutPlanInput<'_>,
+        glyph_index: usize,
+        binding: &FontRenderBinding,
+        selected: SelectedGlyphBinding,
+        program: &ProgramDescriptor,
+        required_f32: u32,
+        required_u32: u32,
+    ) -> Result<(), GatherError> {
+        let f32_count = usize::from(program.f32_input_count);
+        let u32_count = usize::from(program.u32_input_count);
+        for field in 0..f32_count {
+            if required_f32 & (1 << field) == 0 {
+                continue;
+            }
+            let source = program.inputs[field];
+            let value = source_f32(
+                source.scope,
+                source.field,
+                input,
+                glyph_index,
+                binding,
+                selected,
+            )?;
+            self.f32_fields[field].set(output_index, value)?;
+        }
+        for field in 0..u32_count {
+            if required_u32 & (1 << field) == 0 {
+                continue;
+            }
+            let source = program.inputs[f32_count + field];
+            let value = source_u32(
+                source.scope,
+                source.field,
+                input,
+                glyph_index,
+                binding,
+                selected,
+            )?;
+            self.u32_fields[field].set(output_index, value)?;
+        }
+        Ok(())
+    }
+
     fn clear(&mut self) {
+        self.retained_cursor = 0;
+        self.retained_source_cursor = 0;
         self.glyphs.clear();
+        self.source_selected.clear();
         self.semantic_change_masks.clear();
         for field in &mut self.f32_fields {
             field.clear();
@@ -382,6 +601,19 @@ impl<T: Copy + Default> AlignedField<T> {
         Ok(())
     }
 
+    fn set(&mut self, index: usize, value: T) -> Result<(), GatherError> {
+        if index >= self.len {
+            return Err(GatherError::InvalidSemanticShape);
+        }
+        self.blocks[index / 4].values[index % 4] = value;
+        Ok(())
+    }
+
+    fn truncate(&mut self, len: usize) {
+        self.blocks.truncate(len.div_ceil(4));
+        self.len = self.len.min(len);
+    }
+
     fn clear(&mut self) {
         self.blocks.clear();
         self.len = 0;
@@ -429,6 +661,50 @@ fn validate_semantic_shape(input: LayoutPlanInput<'_>) -> Result<(), GatherError
         return Err(GatherError::InvalidSemanticShape);
     }
     Ok(())
+}
+
+fn plan_glyph(
+    input: LayoutPlanInput<'_>,
+    glyph: LayoutGlyph,
+    binding: &FontRenderBinding,
+    selected: SelectedGlyphBinding,
+) -> Result<PlanGlyph, GatherError> {
+    let resource = binding
+        .resources()
+        .get(usize::try_from(selected.resource).map_err(|_| GatherError::ResourceBindingMissing)?)
+        .ok_or(GatherError::ResourceBindingMissing)?;
+    Ok(PlanGlyph {
+        stable_id: glyph.stable_id,
+        content_revision: glyph.content_revision,
+        technique: binding.technique(),
+        program_variant: binding.program_variant(),
+        resource_id: resource.id,
+        resource_generation: resource.generation,
+        resource_kind: resource.kind,
+        resource_reference: resource.reference,
+        semantic_id: glyph.semantic_id,
+        transform_id: input.transform_id,
+        material_id: glyph.material_id,
+        clip_id: glyph.clip_id,
+        depth_key: glyph.depth_key,
+        inline_start: glyph.inline_start,
+        block_start: glyph.block_start,
+        inline_extent: glyph.inline_extent,
+        block_extent: glyph.block_extent,
+    })
+}
+
+fn same_storage_topology(previous: PlanGlyph, next: PlanGlyph) -> bool {
+    previous.technique == next.technique
+        && previous.program_variant == next.program_variant
+        && previous.resource_id == next.resource_id
+        && previous.resource_generation == next.resource_generation
+        && previous.resource_kind == next.resource_kind
+        && previous.resource_reference == next.resource_reference
+        && previous.transform_id == next.transform_id
+        && previous.material_id == next.material_id
+        && previous.clip_id == next.clip_id
+        && previous.depth_key == next.depth_key
 }
 
 fn source_f32(
@@ -675,6 +951,106 @@ mod tests {
             );
         }
         assert_eq!(workspace.capacities(), capacities);
+    }
+
+    #[test]
+    fn retained_gather_updates_changed_fields_and_rejects_storage_topology_changes() {
+        let binding = binding();
+        let policy = policy();
+        let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
+        let initial_x = [10.0, 20.0];
+        let semantic_kind = [100, 200];
+        let mut workspace = PolicyGatherWorkspace::default();
+        workspace
+            .gather(
+                &policy,
+                CAPABILITY,
+                LayoutPlanInput {
+                    transform_id: 1,
+                    glyphs: &glyphs,
+                    semantic_change_masks: &[],
+                    semantic_f32: &[&initial_x],
+                    semantic_u32: &[&semantic_kind],
+                },
+                true,
+                |_| Some(&binding),
+            )
+            .unwrap();
+
+        let changed_x = [999.0, 25.0];
+        let mut changed_glyphs = glyphs;
+        changed_glyphs[1].stable_id = 3;
+        changed_glyphs[1].content_revision = 2;
+        assert!(workspace.begin_retained(&policy, 2).unwrap());
+        assert_eq!(
+            workspace
+                .append_retained(
+                    &policy,
+                    CAPABILITY,
+                    LayoutPlanInput {
+                        transform_id: 1,
+                        glyphs: &changed_glyphs,
+                        semantic_change_masks: &[0, 1],
+                        semantic_f32: &[&changed_x],
+                        semantic_u32: &[&semantic_kind],
+                    },
+                    |_| Some(&binding),
+                )
+                .unwrap(),
+            RetainedGather::Complete
+        );
+        assert!(workspace.finish_retained());
+        let gathered = workspace.view();
+        let input = gathered.plan_input();
+        assert_eq!(input.glyphs[1].stable_id, 3);
+        assert_eq!(input.f32_fields[0], [10.0, 25.0]);
+        assert_eq!(input.f32_fields[1], [1.0, 2.0]);
+
+        let mut changed_topology = changed_glyphs;
+        changed_topology[1].material_id = 7;
+        assert!(workspace.begin_retained(&policy, 2).unwrap());
+        assert_eq!(
+            workspace
+                .append_retained(
+                    &policy,
+                    CAPABILITY,
+                    LayoutPlanInput {
+                        transform_id: 1,
+                        glyphs: &changed_topology,
+                        semantic_change_masks: &[
+                            0,
+                            super::super::positioning::ALL_SEMANTIC_CHANGES
+                        ],
+                        semantic_f32: &[&changed_x],
+                        semantic_u32: &[&semantic_kind],
+                    },
+                    |_| Some(&binding),
+                )
+                .unwrap(),
+            RetainedGather::RebuildFrom(1)
+        );
+        workspace.truncate_to_retained_prefix();
+        workspace
+            .append_from(
+                &policy,
+                CAPABILITY,
+                LayoutPlanInput {
+                    transform_id: 1,
+                    glyphs: &changed_topology,
+                    semantic_change_masks: &[0, crate::engine::positioning::ALL_SEMANTIC_CHANGES],
+                    semantic_f32: &[&changed_x],
+                    semantic_u32: &[&semantic_kind],
+                },
+                1,
+                true,
+                |_| Some(&binding),
+            )
+            .unwrap();
+        let gathered = workspace.view();
+        let input = gathered.plan_input();
+        assert_eq!(input.glyphs.len(), 2);
+        assert_eq!(input.glyphs[1].material_id, 7);
+        assert_eq!(input.f32_fields[0], [10.0, 25.0]);
     }
 
     #[test]

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:430487ab5eff88d211cc0eb9d998c40893e7e63751380d0d3b7c3e1796d6456e'
+source_digest: 'sha256:7f665fbe53b5942b4c6624c4dae010936fbafd8ae9a888dcf29ae8bd7fe72b21'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -179,7 +179,7 @@ their final collection occurs in the owning realm. It does not restore the delet
 
 The foundation currently has:
 
-- 148 passing Rust engine tests, including exact retained-cluster, revision-range, immediate line-convergence, and
+- 149 passing Rust engine tests, including exact retained-cluster, revision-range, immediate line-convergence, and
   later cursor-convergence regressions;
 - the package JavaScript/integration gate passing through the single-path public exports;
 - exact retained Amiri bidi, policy, ellipsis, clipping, UIKit-layout, and CJK contracts exercised by the browser
@@ -224,12 +224,19 @@ unit, default-on `simd128`, stripping, and `wasm-opt -Oz --enable-simd` have alr
 Binaryen `-O3` and `-O4` added 11,976 and 13,661 raw bytes without a demonstrated latency improvement, so `-Oz` remains
 the evidence-backed setting. The `<4 ms` warm-path target and stable p95 closure remain open.
 
-The latest unchanged 22,000-glyph localized-edit lane measures the complete production `text_update` plus Bitmap render
+The preceding unchanged 22,000-glyph localized-edit lane measured the complete production `text_update` plus Bitmap render
 plan at 2.607 ms median / 6.184 ms p95 after 40 warmups over 101 updates. The fast ASCII-letter path reuses Unicode and
 bidi state and recomposes until the line cursor converges; punctuation and spacing edits deliberately retain the full
 break-sensitive path, so the 42.4% RSD describes remaining workload classes rather than a completed latency result. The
 optimized SIMD shaper is 1,147,266 raw bytes. Five patches write roughly 1.2 KiB per update, and the retained high-water
 mark remains 80.38 MiB. Median is now below 4 ms, but p95 and memory-growth gates remain open.
+
+Policy gather now retains complete prior input lanes by committed session/policy/capability revision. Zero-change glyphs
+reuse them without binding or policy work; changed glyphs update only reachable lanes. A resource or draw-storage key
+change retains the verified prefix and fully rebuilds the suffix, preserving correct replacement-buffer inputs without
+double-scanning the prefix. The same production lane now measures 1.314 ms median / 5.863 ms p95 with 76.2% RSD, five
+patches, and roughly 1.2 KiB written. The 1,153,122-byte optimized shaper is 5,856 bytes larger than the prior checkpoint,
+and retained high-water memory is 80.19 MiB. The fast class approaches 1 ms; the break-sensitive p95 remains open.
 
 ## Merge gates still open
 
