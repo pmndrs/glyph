@@ -44,6 +44,8 @@
 
 ## Rendering analysis
 
+- [Adaptive dirty-range uploads](dirty-range-upload-research.md) — three-flatland comparison, existing Rust upload-cost
+  model, backend behavior, remaining per-buffer work, and measurement gate.
 - [MTSDF generation research](mtsdf-generation-research.md) — primary literature, implementation/license survey, owned Rust boundary, and data-oriented optimization gates.
 - [Grayscale bitmap hinting research](bitmap-hinting-research.md) — native pixel placement, hinted strikes, and four-phase grayscale packing gates.
 - [Renderer capabilities](renderer-capabilities.md) — feature matrix and developer guidance.

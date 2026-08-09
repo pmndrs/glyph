@@ -8,6 +8,14 @@ import { setThreeTextProfiler, Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
+const densityFontUrl = new URL(
+  '../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16-32.font.glb',
+  import.meta.url,
+);
+const amiriFontUrl = new URL(
+  '../../../../apps/benchmarks/fixtures/rendering/amiri-bitmap-16.font.glb',
+  import.meta.url,
+);
 
 test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async () => {
   const registry = new FontRegistry();
@@ -25,6 +33,10 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   const group = new TextGroup({ renderOrder: 12 });
   const container = new THREE.Object3D();
   const label = new Text({ font, text: 'First frame' });
+  let originIndexBuilds = 0;
+  setThreeTextProfiler((phase) => {
+    if (phase === 'origins.index') originIndexBuilds += 1;
+  });
   container.add(label);
   group.add(container);
   scene.add(group);
@@ -36,6 +48,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(group.textCount, 1);
   assert.equal(label.layout, undefined, 'rendering must not materialize layout readback');
   assert.equal(group.error, undefined);
+  assert.equal(originIndexBuilds, 0, 'rendering must not index glyph origins until the presentation API needs them');
   const firstDraws = group.children.filter((child) => child.isMesh);
   assert.ok(firstDraws.length > 0);
   assert.equal(firstDraws[0].geometry.instanceCount, 10, 'the GPU plan omits the non-rendering space glyph');
@@ -61,6 +74,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
 
   const origins = label.snapshotGlyphOrigins();
+  assert.equal(originIndexBuilds, 1, 'the first presentation query builds the retained origin index once');
   assert.equal(origins.layout, inspection);
   assert.deepEqual(origins.displayedX, origins.shapedX);
   assert.deepEqual(origins.displayedY, origins.shapedY);
@@ -72,6 +86,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(presented.displayedX[0], origins.shapedX[0] + 3);
   label.clearGlyphOriginOverrides();
   assert.deepEqual(label.snapshotGlyphOrigins().displayedX, origins.shapedX);
+  setThreeTextProfiler(undefined);
 
   group.renderOrder = 20;
   scene.updateMatrixWorld();
@@ -237,6 +252,133 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   runtime.dispose();
 });
 
+test('Bitmap strike changes fully initialize a replacement indexed batch', async () => {
+  const registry = new FontRegistry();
+  const shaper = await createRuntimeShaper({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const runtime = await createTextRuntime({ registry, shaper });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(densityFontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16, 32] } },
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup();
+  const label = new Text({
+    font,
+    rasterPixelRatio: 2,
+    text: 'AB',
+    style: { fontSize: 8 },
+    contentBox: { width: { mode: 'exact', size: 80 }, wrap: 'word' },
+  });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined);
+
+  label.style = { ...label.style, fontSize: 16 };
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined, 'crossing from the 16 ppem strike to 32 ppem must publish successfully');
+  const draw = group.children.find((child) => child.isMesh);
+  assert.ok(draw);
+  const start = draw.userData.pmndrsTextRunStart;
+  const transforms = draw.geometry.getAttribute('_pmndrsText_15').array;
+  assert.deepEqual(Array.from(transforms.subarray(start, start + draw.geometry.instanceCount)), [1, 1]);
+
+  label.contentBox = { ...label.contentBox, width: { mode: 'exact', size: 40 } };
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined, 'width-only reflow must retain the initialized transform stream');
+
+  group.dispose();
+  label.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
+test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () => {
+  const registry = new FontRegistry();
+  const shaper = await createRuntimeShaper({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const runtime = await createTextRuntime({ registry, shaper });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(amiriFontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const text = 'مرحبا بالعالم';
+  const textUtf16 = Uint16Array.from({ length: text.length }, (_, index) => text.charCodeAt(index));
+  const shapingRequest = {
+    textUtf16,
+    features: [],
+    runs: [
+      {
+        font: font.font.handle,
+        textStart: 0,
+        textEnd: textUtf16.length,
+        direction: 'rtl',
+        script: 'Arab',
+        language: 'ar',
+        clusterLevel: 0,
+        flags: 0x40,
+        featureStart: 0,
+        featureCount: 0,
+      },
+    ],
+  };
+  const broad = ownedShape(shaper.shapeBatch(shapingRequest));
+  const narrowed = ownedShape(
+    shaper.reshapeRanges({
+      ...shapingRequest,
+      ranges: [
+        {
+          run: 0,
+          itemStart: 0,
+          itemEnd: 3,
+          contextStart: 0,
+          contextEnd: 3,
+          flags: 0x43,
+        },
+      ],
+    }),
+  );
+  assert.notDeepEqual(
+    shapeSignature(broad, 0, 3),
+    shapeSignature(narrowed, 0, 3),
+    'the fixture must fail if the retained whole-run shape is reused at the unsafe boundary',
+  );
+
+  const scene = new THREE.Scene();
+  const label = new Text({
+    font,
+    text,
+    style: { fontSize: 16 },
+    contentBox: {
+      width: { mode: 'exact', size: 37 },
+      maxLines: 1,
+      wrap: 'none',
+      overflow: 'ellipsis',
+    },
+  });
+  scene.add(label);
+  scene.updateMatrixWorld();
+  assert.equal(label.error, undefined);
+  const inspection = label.inspectLayout();
+  assert.ok(inspection);
+  assert.equal(inspection.lineTextEnds[0], 3, 'the fixed width must preserve the unsafe-boundary fixture');
+  assert.equal(inspection.clusters.at(-1), 3, 'the ellipsis is anchored at the truncation boundary');
+  assert.deepEqual(
+    shapeSignature(inspection, 0, 3),
+    shapeSignature(narrowed, 0, 3),
+    'Rust positioning must consume the narrowed boundary shape, not the retained whole-run glyphs',
+  );
+
+  label.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
 test('TextGroup atomically replaces child paragraphs without multiplying retained text capacity', async () => {
   const registry = new FontRegistry();
   const shaper = await createRuntimeShaper({
@@ -279,4 +421,15 @@ test('TextGroup atomically replaces child paragraphs without multiplying retaine
 
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
+}
+
+function ownedShape(shape) {
+  return { glyphIds: [...shape.glyphIds], clusters: [...shape.clusters] };
+}
+
+function shapeSignature(shape, start, end) {
+  return [...shape.glyphIds].flatMap((glyphId, index) => {
+    const cluster = shape.clusters[index];
+    return cluster >= start && cluster < end ? [[glyphId, cluster]] : [];
+  });
 }

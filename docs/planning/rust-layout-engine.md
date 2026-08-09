@@ -13,7 +13,7 @@ tags:
   - abi
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T10:04:42Z'
+  at: '2026-08-09T13:43:37Z'
 sources:
   - id: layout-benchmark
     resource: ../../packages/text/scripts/benchmark-paragraph-layout.mts
@@ -96,6 +96,9 @@ sources:
   - id: renderer-capabilities
     resource: renderer-capabilities.md
     title: Renderer capability matrix
+  - id: dirty-range-uploads
+    resource: dirty-range-upload-research.md
+    title: Adaptive dirty-range upload research
   - id: payload-budget
     resource: payload-budget.md
     title: Font and raster payload budget
@@ -720,6 +723,13 @@ mask, and one of the two allocation strategies. Physical streams own explicit al
 capacity class.
 All reserved bits and fields are zero and unknown flags fail registration.
 
+The upload model is informed by three-flatland's fixed 256-instance dirty buckets and per-buffer ranged/full cutovers,
+but the retained text engine already has a more precise input: exact changed record spans for the complete transaction.
+The [dirty-range upload research](dirty-range-upload-research.md) therefore keeps range selection in the Rust plan
+compiler, identifies per-physical-buffer costing and stable-order coalescing as the remaining planner work, and reserves
+Flatland-style bucket trackers for renderer-local transform and presentation-origin writes that never cross
+`text_update`. Its thresholds remain a benchmark candidate, not evidence that three or five ranges are optimal for text.
+
 V0 does not alias several logical stores into one mutable interleaved byte span. Augmentation instead combines semantic
 fields into independently bindable `vec2`/`vec4` or integer-vector records, including the existing MSDF and Slug
 WebGL-compatible packing. This keeps executor borrows disjoint, avoids another aliasing grammar in the native ABI, and
@@ -1295,6 +1305,23 @@ semantic reset plus capacity identity, a public Three fixture performs two atomi
 27-cell Bitmap/MTSDF/Slug WebGPU workload-transition sweep exits cleanly. The optimized shaper is 1,090,859 raw / 411,106
 gzip / 325,149 Brotli bytes. Benchmark draw/glyph telemetry for grouped command-buffer draws is corrected separately and
 is not part of this transition proof.
+
+Ellipsis now closes the first deliberate narrowed-context shaping case. A flow thread requests it only when text remains
+after its final visible region/line or a complete no-wrap line exceeds its final slot. Rust selects U+2026 through the
+font stack, repeatedly evaluates the candidate width while trimming clusters, and reshapes only the final contiguous
+same-font tail with pre-context clipped to the line and post-context clipped to the truncation boundary. The retained
+whole-paragraph shape remains authoritative everywhere else, so normal reflow retains the zero-boundary-reshape
+invariant. Source replacement and ellipsis glyphs live in a paragraph-transactional boundary arena and enter the same
+positioning, identity, semantic, policy, and render-plan pipeline as ordinary glyphs. The Amiri public Three regression
+first proves broad and narrowed glyph identities differ at the chosen unsafe joining boundary and then proves the Rust
+output matches the narrowed result; a separate no-wrap regression covers complete-but-too-wide lines. The checkpoint
+passes 136 Rust library tests and all 204 package tests. Same-machine detached `4adbbebc` comparison over two complete
+22,000-target-glyph Bitmap runs measures baseline/current column-resize medians of 4.041/4.056 and 4.102/4.189 ms, while
+cold medians are 15.490/15.569 and 15.212/15.358 ms. These small mixed-direction differences and the noisier current
+samples establish performance adjacency, not a speedup or material regression. The complete checkpoint also contains
+the lazy Three origin-index and Bitmap resource-selection fixes, so its optimized Wasm movement from
+1,101,079 / 414,917 / 328,164 to 1,114,718 / 420,714 / 333,743 raw/gzip/Brotli bytes is an aggregate checkpoint cost,
+not an ellipsis-only attribution.
 
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 

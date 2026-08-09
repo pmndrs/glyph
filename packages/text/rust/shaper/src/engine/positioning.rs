@@ -11,7 +11,7 @@ use super::{
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
     policy_gather::LayoutGlyph,
-    shaping_state::{ShapeArena, ShapingRun},
+    shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun},
     style_state::StyleSegment,
 };
 
@@ -85,6 +85,7 @@ impl PositionedGlyphArena {
         clusters: &ClusterArena,
         runs: &[ShapingRun],
         shape: &ShapeArena,
+        boundary_shape: &BoundaryShapeArena,
         styles: &[StyleSegment],
         bidi: &BidiAnalysis,
         identity_index: &mut IdentityIndex,
@@ -130,6 +131,7 @@ impl PositionedGlyphArena {
                     clusters,
                     runs,
                     shape,
+                    boundary_shape,
                     styles,
                     bidi,
                     visually_ltr,
@@ -205,6 +207,7 @@ impl PositionedGlyphArena {
         clusters: &ClusterArena,
         runs: &[ShapingRun],
         shape: &ShapeArena,
+        boundary_shape: &BoundaryShapeArena,
         styles: &[StyleSegment],
         bidi: &BidiAnalysis,
         visually_ltr: bool,
@@ -215,9 +218,24 @@ impl PositionedGlyphArena {
             .map_err(|_| EngineError::InvalidRequest)?;
         let cluster_end =
             usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let boundary = if fragment.boundary_index == super::flow_composition::NO_BOUNDARY {
+            None
+        } else {
+            Some(
+                boundary_shape
+                    .record(fragment.boundary_index)
+                    .ok_or(EngineError::InvalidRequest)?,
+            )
+        };
+        let retained_cluster_end = boundary.map_or(cluster_end, |boundary| {
+            usize::try_from(boundary.cluster_start).unwrap_or(usize::MAX)
+        });
+        if retained_cluster_end > cluster_end {
+            return Err(EngineError::InvalidRequest);
+        }
         let visual_start = self.visual_clusters.len();
         if !visually_ltr {
-            for cluster in cluster_start..cluster_end {
+            for cluster in cluster_start..retained_cluster_end {
                 if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
                     continue;
                 }
@@ -259,7 +277,7 @@ impl PositionedGlyphArena {
         let mut cursor = fragment.slot_start + offset;
         let baseline = line.block_start + line.baseline;
         let visual_count = if visually_ltr {
-            cluster_end.saturating_sub(cluster_start)
+            retained_cluster_end.saturating_sub(cluster_start)
         } else {
             self.visual_clusters.len().saturating_sub(visual_start)
         };
@@ -389,7 +407,235 @@ impl PositionedGlyphArena {
                 cursor += per_space;
             }
         }
+        if let Some(boundary) = boundary {
+            let _ = self.position_boundary(
+                line,
+                boundary,
+                cursor,
+                baseline,
+                text,
+                clusters,
+                runs,
+                boundary_shape,
+                metrics_for,
+                extents_for,
+            )?;
+        }
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn position_boundary(
+        &mut self,
+        line: FlowLine,
+        boundary: BoundaryShape,
+        mut cursor: f64,
+        baseline: f64,
+        text: &[u16],
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        arena: &BoundaryShapeArena,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+    ) -> Result<f64, EngineError> {
+        let run = *runs
+            .get(usize::try_from(boundary.source_run).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        let style = run.style;
+        let source_cluster =
+            usize::try_from(boundary.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+        let ellipsis_cluster = usize::try_from(boundary.cluster_end)
+            .map_err(|_| EngineError::InvalidRequest)?
+            .saturating_sub(1)
+            .max(source_cluster)
+            .min(clusters.starts.len().saturating_sub(1));
+        cursor = self.position_boundary_span(
+            line,
+            cursor,
+            baseline,
+            boundary.source_glyph_start,
+            boundary.source_glyph_count,
+            boundary.source_binding_handle,
+            boundary.source_font_handle,
+            None,
+            source_cluster,
+            style,
+            arena,
+            text,
+            clusters,
+            metrics_for,
+            extents_for,
+        )?;
+        self.position_boundary_span(
+            line,
+            cursor,
+            baseline,
+            boundary.ellipsis_glyph_start,
+            boundary.ellipsis_glyph_count,
+            boundary.ellipsis_binding_handle,
+            boundary.ellipsis_font_handle,
+            Some(boundary.text_end),
+            ellipsis_cluster,
+            style,
+            arena,
+            text,
+            clusters,
+            metrics_for,
+            extents_for,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn position_boundary_span(
+        &mut self,
+        line: FlowLine,
+        mut cursor: f64,
+        baseline: f64,
+        glyph_start: u32,
+        glyph_count: u32,
+        binding_handle: u32,
+        font_handle: u32,
+        cluster_override: Option<u32>,
+        fallback_cluster: usize,
+        style: super::style_state::ResolvedStyle,
+        arena: &BoundaryShapeArena,
+        text: &[u16],
+        clusters: &ClusterArena,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+    ) -> Result<f64, EngineError> {
+        let metrics = metrics_for(font_handle).ok_or(EngineError::InvalidRequest)?;
+        if font_handle == 0 || metrics.units_per_em == 0 {
+            return Err(EngineError::InvalidRequest);
+        }
+        let scale = f64::from(style.font_size) / f64::from(metrics.units_per_em);
+        let start = usize::try_from(glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+        let end = start
+            .checked_add(usize::try_from(glyph_count).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        for glyph in start..end {
+            let glyph_id = u32::from(
+                *arena
+                    .shape
+                    .glyph_ids
+                    .get(glyph)
+                    .ok_or(EngineError::InvalidRequest)?,
+            );
+            let shaped_cluster = *arena
+                .shape
+                .clusters
+                .get(glyph)
+                .ok_or(EngineError::InvalidRequest)?;
+            let cluster = cluster_override.unwrap_or(shaped_cluster);
+            let cluster_index = if cluster_override.is_some() {
+                fallback_cluster
+            } else {
+                clusters
+                    .starts
+                    .binary_search(&shaped_cluster)
+                    .unwrap_or(fallback_cluster)
+            };
+            let semantic_id = *clusters
+                .stable_ids
+                .get(cluster_index)
+                .ok_or(EngineError::InvalidRequest)?;
+            let x_advance = f64::from(
+                arena
+                    .shape
+                    .x_advances
+                    .get(glyph)
+                    .copied()
+                    .ok_or(EngineError::InvalidRequest)?,
+            )
+            .abs()
+                * scale;
+            let x_offset = f64::from(
+                arena
+                    .shape
+                    .x_offsets
+                    .get(glyph)
+                    .copied()
+                    .ok_or(EngineError::InvalidRequest)?,
+            ) * scale;
+            let y_offset = f64::from(
+                arena
+                    .shape
+                    .y_offsets
+                    .get(glyph)
+                    .copied()
+                    .ok_or(EngineError::InvalidRequest)?,
+            ) * scale;
+            let stable_id = *arena
+                .stable_ids
+                .get(glyph)
+                .ok_or(EngineError::InvalidRequest)?;
+            let flags = *arena
+                .shape
+                .glyph_flags
+                .get(glyph)
+                .ok_or(EngineError::InvalidRequest)?;
+            let origin_inline = cursor + x_offset;
+            let origin_block = baseline - y_offset - f64::from(style.baseline_shift);
+            self.semantic_glyphs.push(SemanticGlyph {
+                stable_id,
+                font_handle,
+                cluster,
+                glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
+                flags,
+                font_size: style.font_size,
+                inline_origin: finite_f32(origin_inline)?,
+                block_origin: finite_f32(origin_block)?,
+            });
+            if let Some(extents) = extents_for(font_handle, glyph_id) {
+                let inline_start = origin_inline + f64::from(extents.x_min) * scale;
+                let block_start = origin_block - f64::from(extents.y_max) * scale;
+                let inline_extent = f64::from(extents.x_max - extents.x_min) * scale;
+                let block_extent = f64::from(extents.y_max - extents.y_min) * scale;
+                self.push_glyph(
+                    LayoutGlyph {
+                        stable_id,
+                        content_revision: 0,
+                        binding_handle,
+                        font_handle,
+                        glyph_id,
+                        semantic_id,
+                        material_id: style.material_id,
+                        clip_id: line.clip_id,
+                        depth_key: 0,
+                        font_size: style.font_size,
+                        raster_pixel_ratio: style.raster_pixel_ratio,
+                        inline_start: finite_f32(inline_start)?,
+                        block_start: finite_f32(block_start)?,
+                        inline_extent: nonnegative_f32(inline_extent)?,
+                        block_extent: nonnegative_f32(block_extent)?,
+                    },
+                    style.foreground_rgba,
+                    semantic_id,
+                    line.region_id,
+                    line.flow_thread_id,
+                    line.transform_index,
+                );
+            }
+            cursor += x_advance;
+            if cluster_override.is_none() {
+                let next_cluster = (glyph + 1 < end)
+                    .then(|| arena.shape.clusters.get(glyph + 1).copied())
+                    .flatten();
+                if next_cluster != Some(shaped_cluster) {
+                    cursor += f64::from(style.letter_spacing);
+                    if clusters
+                        .starts
+                        .get(cluster_index)
+                        .and_then(|start| usize::try_from(*start).ok())
+                        .and_then(|start| text.get(start))
+                        == Some(&0x20)
+                    {
+                        cursor += f64::from(style.word_spacing);
+                    }
+                }
+            }
+        }
+        Ok(cursor)
     }
 
     fn push_glyph(
@@ -722,8 +968,8 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
 mod tests {
     use super::*;
     use crate::engine::{
-        cluster_state::CLUSTER_SAFE_BEFORE, line_composition::ComposedLine,
-        style_state::ResolvedStyle,
+        cluster_state::CLUSTER_SAFE_BEFORE, flow_composition::NO_BOUNDARY,
+        line_composition::ComposedLine, style_state::ResolvedStyle,
     };
     use alloc::vec;
 
@@ -838,7 +1084,9 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                boundary_index: NO_BOUNDARY,
             }],
+            ..FlowLayoutArena::default()
         };
         let metrics = |_| {
             Some(FontMetrics {
@@ -867,6 +1115,7 @@ mod tests {
                 &clusters,
                 &runs,
                 &shape,
+                &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
                 &mut index,
@@ -893,6 +1142,7 @@ mod tests {
                 &clusters,
                 &runs,
                 &shape,
+                &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
                 &mut index,
@@ -915,6 +1165,7 @@ mod tests {
                 &clusters,
                 &runs,
                 &shape,
+                &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
                 &mut index,

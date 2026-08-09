@@ -4,6 +4,7 @@ export type ThreeTextProfilePhase =
   | 'frame.prepare'
   | 'engine.update'
   | 'plan.apply'
+  | 'origins.index'
   | 'semantic.read'
   | 'transforms.sync';
 

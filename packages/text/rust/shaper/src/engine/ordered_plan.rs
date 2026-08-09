@@ -1108,8 +1108,8 @@ impl OrderedPlanCompiler {
                         break;
                     }
                 }
-                let count = u16::try_from(end - start)
-                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+                let count =
+                    u16::try_from(end - start).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
                 let (inline_start, block_start, inline_extent, block_extent) = indexed_span_bounds(
                     context.input.glyphs,
                     instances[start..end]
