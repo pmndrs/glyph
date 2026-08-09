@@ -278,6 +278,8 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 
 | D-209 | Stable glyph IDs and semantic content revisions are session-wide monotonic namespaces because one shared planner cannot distinguish equal paragraph-local ordinals. Paragraph identity indexes remain child-local, but prepare borrows transaction-local counters initialized from the session; abort discards them and successful shared-plan commit advances the session counters. The single-child checkpoint preserves exact behavior and all 124 Rust unit tests. Optimized Wasm changes from 1,073,179 / 403,475 / 321,149 to 1,073,074 / 403,537 / 321,046 raw/gzip/Brotli bytes, a size-neutral code-layout movement. | Accepted |
 
+| D-210 | Multi-paragraph frame consumption uses forward-only borrowed spans, not per-record maps or copied semantic arrays. Validated text, style, constraint, and inline-object tables expose a cursor that consumes only contiguous records for the current paragraph, returns an empty borrowed view when absent, and leaves an exact final cursor check to reject skipped or repeated ownership. The existing single-child production transaction now uses the same path. An exact fixture covers present/absent spans in every keyed table. Optimized Wasm changes from 1,073,074 / 403,537 / 321,046 to 1,074,464 / 404,058 / 321,156 raw/gzip/Brotli bytes. | Accepted |
+
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
 ## Verification and optimization
