@@ -5,7 +5,7 @@ import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } fr
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 
 import {
-  committedTextLayout,
+  committedTextMetrics,
   exactWidth,
   paintColor,
   publishWorkloadTexts,
@@ -167,7 +167,7 @@ export function layoutDynamicLayoutEntries(
   const inset = 20;
   const laneHeight = viewportHeight / Math.max(1, entries.length);
   for (const [index, entry] of entries.entries()) {
-    const layout = committedTextLayout(entry.text);
+    const layout = committedTextMetrics(entry.text);
     const x =
       entry.alignment === 'end'
         ? viewportWidth - inset - layout.width

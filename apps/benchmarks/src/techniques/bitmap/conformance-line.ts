@@ -50,7 +50,7 @@ export function createBitmapConformanceLine(
   try {
     object.updateMatrixWorld(true);
     if (object.error !== undefined) throw object.error;
-    const layout = object.layout;
+    const layout = object.inspectLayout();
     if (layout === undefined) throw new Error('target-v1 Text did not commit a bitmap layout');
     const missingGlyphCount = layout.glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0);
     if (missingGlyphCount !== 0) throw new Error(`benchmark specimen contains ${missingGlyphCount} missing glyphs`);

@@ -1,4 +1,5 @@
-import type { FontFeature, GlyphOriginUpdate, GlyphSnapshot, ParagraphLayout } from '@pmndrs/text';
+import type { FontFeature, ParagraphLayoutInspection } from '@pmndrs/text';
+import type { TextGlyphOriginSnapshot, TextGlyphOriginUpdate } from '@pmndrs/text/three';
 
 /**
  * The part of a committed target-v1 `Text` this helper needs. Core owns glyph snapshots and topology-guarded
@@ -6,9 +7,9 @@ import type { FontFeature, GlyphOriginUpdate, GlyphSnapshot, ParagraphLayout } f
  * and interpolation live here — in the application — and every live technique scene shares this one implementation.
  */
 export interface TransitionableText {
-  readonly layout: ParagraphLayout | undefined;
-  snapshotGlyphs(): GlyphSnapshot;
-  setGlyphOrigins(update: GlyphOriginUpdate): void;
+  inspectLayout(): ParagraphLayoutInspection | undefined;
+  snapshotGlyphOrigins(): TextGlyphOriginSnapshot | undefined;
+  setGlyphOrigins(update: TextGlyphOriginUpdate): void;
   clearGlyphOriginOverrides(): void;
 }
 
@@ -57,7 +58,7 @@ export interface GlyphOriginPresentation {
  */
 export function snapGlyphOrigins(text: TransitionableText): GlyphOriginPresentation {
   text.clearGlyphOriginOverrides();
-  return { transitioned: false, matchedGlyphs: 0, targetGlyphs: text.layout?.glyphIds.length ?? 0 };
+  return { transitioned: false, matchedGlyphs: 0, targetGlyphs: text.inspectLayout()?.glyphIds.length ?? 0 };
 }
 
 /** Displayed glyph origins copied out of one committed paragraph. It retains no renderer or core resources. */
@@ -85,10 +86,12 @@ const EMPTY_SNAPSHOT: GlyphOriginSnapshot = { glyphCount: 0, origins: new Map() 
  * which is a normal first-frame state rather than a failure, so it yields an empty snapshot that matches nothing.
  */
 export function captureGlyphOrigins(text: TransitionableText): GlyphOriginSnapshot {
-  const layout = text.layout;
+  const layout = text.inspectLayout();
   if (layout === undefined) return EMPTY_SNAPSHOT;
-  const glyphs = text.snapshotGlyphs();
-  const identities = glyphIdentityKeys(layout, glyphs);
+  const glyphs = text.snapshotGlyphOrigins();
+  if (glyphs === undefined || glyphs.layout !== layout)
+    throw new TypeError('glyph origin snapshot lost its inspection');
+  const identities = glyphIdentityKeys(layout);
   const origins = new Map<string, readonly [number, number]>();
   for (let index = 0; index < identities.length; index += 1) {
     origins.set(identities[index]!, [glyphs.displayedX[index]!, glyphs.displayedY[index]!]);
@@ -105,10 +108,12 @@ export function createGlyphOriginTransition(
   text: TransitionableText,
   from: GlyphOriginSnapshot,
 ): GlyphOriginTransition {
-  const layout = text.layout;
+  const layout = text.inspectLayout();
   if (layout === undefined) throw new TypeError('glyph-origin transition requires a committed paragraph');
-  const glyphs = text.snapshotGlyphs();
-  const identities = glyphIdentityKeys(layout, glyphs);
+  const glyphs = text.snapshotGlyphOrigins();
+  if (glyphs === undefined || glyphs.layout !== layout)
+    throw new TypeError('glyph origin snapshot lost its inspection');
+  const identities = glyphIdentityKeys(layout);
   const targetGlyphs = identities.length;
   const fromX = glyphs.shapedX.slice();
   const fromY = glyphs.shapedY.slice();
@@ -120,7 +125,6 @@ export function createGlyphOriginTransition(
     fromY[index] = origin[1];
     matchedGlyphs += 1;
   }
-  const topology = glyphs.topology;
   const targetX = glyphs.shapedX;
   const targetY = glyphs.shapedY;
   const displayedX = new Float32Array(targetGlyphs);
@@ -133,7 +137,7 @@ export function createGlyphOriginTransition(
     }
     // A reflow publishes a new layout object and a new topology together, which is exactly when interpolating between
     // the old and new glyph arrays would be meaningless. Report it as staleness, the way a superseded update reads.
-    if (disposed || text.layout !== layout) {
+    if (disposed || text.inspectLayout() !== layout) {
       throw new DOMException('The glyph-origin transition is stale', 'AbortError');
     }
     for (let index = 0; index < targetGlyphs; index += 1) {
@@ -142,7 +146,7 @@ export function createGlyphOriginTransition(
       displayedX[index] = startX + (targetX[index]! - startX) * nextProgress;
       displayedY[index] = startY + (targetY[index]! - startY) * nextProgress;
     }
-    text.setGlyphOrigins({ topology, x: displayedX, y: displayedY });
+    text.setGlyphOrigins({ layout, x: displayedX, y: displayedY });
     progress = nextProgress;
   };
   return {
@@ -233,18 +237,18 @@ function sameFontFeatures(previous: readonly FontFeature[], next: readonly FontF
  * Reproduces the identity merged-v0 matched on: font handle, glyph id, cluster, exact font size, and the occurrence
  * index that separates otherwise identical glyphs within one paragraph.
  */
-function glyphIdentityKeys(layout: ParagraphLayout, glyphs: GlyphSnapshot): readonly string[] {
-  assertParallelGlyphIdentity(layout, glyphs);
+function glyphIdentityKeys(layout: ParagraphLayoutInspection): readonly string[] {
+  assertParallelGlyphIdentity(layout);
   const counts = new Map<string, number>();
   const keys: string[] = [];
-  for (let index = 0; index < glyphs.glyphIds.length; index += 1) {
-    const fontHandle = layout.fontHandles[glyphs.fontSlots[index]!];
+  for (let index = 0; index < layout.glyphIds.length; index += 1) {
+    const fontHandle = layout.fontHandles[layout.glyphFontSlots[index]!];
     if (fontHandle === undefined) throw new TypeError('paragraph layout references a missing font slot');
     // Font size is deliberately absent. The merged renderer keyed on it, which made a glyph fail to match itself across
     // the one change the transition exists to animate, so a size change reported every glyph as new and interpolated
     // nothing. Font handle, glyph id, cluster, and occurrence still identify a glyph, and a uniform scale preserves
     // visual order, so matching across a resize recovers exactly the glyph that moved.
-    const baseKey = `${fontHandle}:${glyphs.glyphIds[index]!}:${glyphs.clusters[index]!}`;
+    const baseKey = `${fontHandle}:${layout.glyphIds[index]!}:${layout.clusters[index]!}`;
     const occurrence = counts.get(baseKey) ?? 0;
     counts.set(baseKey, occurrence + 1);
     keys.push(`${baseKey}:${occurrence}`);
@@ -252,15 +256,14 @@ function glyphIdentityKeys(layout: ParagraphLayout, glyphs: GlyphSnapshot): read
   return keys;
 }
 
-function assertParallelGlyphIdentity(layout: ParagraphLayout, glyphs: GlyphSnapshot): void {
-  const glyphCount = glyphs.glyphIds.length;
+function assertParallelGlyphIdentity(layout: ParagraphLayoutInspection): void {
+  const glyphCount = layout.glyphIds.length;
   for (const values of [
-    glyphs.clusters,
-    glyphs.fontSlots,
-    glyphs.shapedX,
-    glyphs.shapedY,
-    glyphs.displayedX,
-    glyphs.displayedY,
+    layout.glyphStableIds,
+    layout.clusters,
+    layout.glyphFontSlots,
+    layout.x,
+    layout.y,
     layout.glyphFontSizes,
   ]) {
     if (values.length !== glyphCount) throw new TypeError('paragraph glyph identity arrays are not parallel');

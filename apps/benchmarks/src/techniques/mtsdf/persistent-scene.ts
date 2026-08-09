@@ -3,7 +3,7 @@ import {
   type FontFeature,
   type LoadedFont,
   type ParagraphContentBox,
-  type ParagraphLayout,
+  type ParagraphLayoutSummary,
   type ParagraphStyle,
   type RegisteredFont,
 } from '@pmndrs/text';
@@ -462,7 +462,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         drawCount: drawCount(resources.line),
         layoutWidth: layout.width,
         layoutHeight: layout.height,
-        lineCount: layout.lineGlyphCounts.length,
+        lineCount: layout.lineCount,
         atlasGpuBytes,
         framebufferGpuBytes,
         totalGpuBytes: atlasGpuBytes + framebufferGpuBytes,
@@ -675,14 +675,14 @@ function positionLiveLine(
   line.position.set(x, y, 0);
 }
 
-function committedLayout(line: Text<typeof mtsdf>): ParagraphLayout {
-  const layout = line.layout;
+function committedLayout(line: Text<typeof mtsdf>): ParagraphLayoutSummary {
+  const layout = line.measureLayout();
   if (layout === undefined) throw new Error('live MSDF Text lost its committed layout');
   return layout;
 }
 
-function missingGlyphCount(layout: ParagraphLayout): number {
-  return layout.glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0);
+function missingGlyphCount(layout: ParagraphLayoutSummary): number {
+  return layout.missingGlyphCount;
 }
 
 function positiveViewportSize(value: number, name: string): number {

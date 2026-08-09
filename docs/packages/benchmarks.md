@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:9856ec47cea3a348fd12bb1678d3c51bde7982569a2d443eedacb1a36ffd00b9'
+source_digest: 'sha256:7781a56401ad8744d121c3c5635163d37e25a575bf4422c47d75f06ca549a673'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -232,8 +232,8 @@ bounds, so the oracle changed renderer without changing what counts as correct. 
 The three live technique scenes moved to target-v1 next. `techniques/{bitmap,mtsdf,slug}/persistent-scene.ts` now build a
 standalone `Text` — an implicit batch of one, deliberately left off `TextGroup` so the single-paragraph adapter path stays
 exercised and their `drawCount` stays directly comparable with merged v0 — from the `LoadedFont` that
-`workloads/font-assets` already produced, commit it by parenting and forcing `updateMatrixWorld`, and read `error` and
-`layout` instead of awaiting readiness. Flat merged-v0 properties become nested `contentBox`, `style`, and `paint`, with
+`workloads/font-assets` already produced, commit it by parenting and forcing `updateMatrixWorld`, and read `error` plus
+explicit `measureLayout()` or `inspectLayout()` results instead of awaiting readiness. Flat merged-v0 properties become nested `contentBox`, `style`, and `paint`, with
 the paragraph measure expressed as an exact width constraint and the live colour as `#ffffff`, which resolves through the
 same transfer function as the numeric constant it replaces. Because a rejected generation would otherwise leave the failed
 candidate font leased and undisposable, each scene commits through one apply-or-roll-back step that restores the previously
@@ -241,10 +241,10 @@ committed inputs before rethrowing.
 
 Their presentation transitions are now owned by the application. Merged v0 exported `captureBitmapGlyphPositions` and
 `createBitmapGlyphPositionTransition`, which packaged glyph identity matching and interpolation together for Bitmap only.
-Target-v1 core deliberately stops at owned glyph snapshots and topology-guarded displayed-origin writes, so
-`techniques/shared/glyph-origin-transition.ts` reimplements the policy once for all three techniques: it matches glyphs on
-the identity merged v0 used — font handle, glyph id, cluster, exact font size, and occurrence index — interpolates toward
-the shaped origins rather than the current displayed ones, writes through `setGlyphOrigins`, clears the overrides when
+Target-v1 exposes explicit Rust inspection and topology-guarded renderer presentation writes, so
+`techniques/shared/glyph-origin-transition.ts` owns the application policy once for all three techniques: it matches glyphs on
+font handle, glyph id, cluster, and occurrence index, interpolates toward the shaped origins rather than the current
+displayed ones, writes through `setGlyphOrigins`, clears the overrides when
 settled, and reports `matchedGlyphs` so the existing viewport telemetry keeps its meaning. Bitmap keeps its host-driven
 progress because its React viewport already animates the timeline; MTSDF and Slug, whose surfaces do not drive progress,
 advance the same smoothstep from their own frame clock and gain the transition they previously lacked.

@@ -1,4 +1,4 @@
-import { FontRegistry, type AnyRasterTechnique, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
+import { FontRegistry, type ParagraphLayoutSummary, type RegisteredFont } from '@pmndrs/text';
 import { TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/text/three/bitmap';
@@ -33,7 +33,7 @@ import type {
   ComparisonWorkloadId,
 } from '../../../workloads/comparison/contracts';
 import {
-  committedTextLayout,
+  committedTextMetrics,
   exactWidth,
   publishWorkloadTexts,
   type ComparisonWorkloadEntry,
@@ -1552,8 +1552,8 @@ function measureVisibleEntries(
     if (!entry.node.visible) continue;
     geometries.clear();
     measureVisibleObject(entry.node, metrics, geometries);
-    measureVisibleLayout(committedTextLayout(entry.text), zoomScale, metrics);
-    if (entry.labelText !== undefined) measureVisibleLayout(committedTextLayout(entry.labelText), zoomScale, metrics);
+    measureVisibleLayout(committedTextMetrics(entry.text), zoomScale, metrics);
+    if (entry.labelText !== undefined) measureVisibleLayout(committedTextMetrics(entry.labelText), zoomScale, metrics);
     metrics.sourceTextLength += entry.sourceText.length;
   }
 }
@@ -1574,11 +1574,15 @@ function measureVisibleObject(
   for (const child of object.children) measureVisibleObject(child, metrics, geometries);
 }
 
-function measureVisibleLayout(layout: ParagraphLayout, scale: number, metrics: MutableVisibleEntryMetrics): void {
+function measureVisibleLayout(
+  layout: ParagraphLayoutSummary,
+  scale: number,
+  metrics: MutableVisibleEntryMetrics,
+): void {
   metrics.layoutWidth = Math.max(metrics.layoutWidth, layout.width * scale);
   metrics.layoutHeight += layout.height * scale;
-  metrics.lineCount += layout.lineGlyphCounts.length;
-  for (const glyphId of layout.glyphIds) if (glyphId === 0) metrics.missingGlyphCount += 1;
+  metrics.lineCount += layout.lineCount;
+  metrics.missingGlyphCount += layout.missingGlyphCount;
 }
 
 function positive(value: number, label: string): number {

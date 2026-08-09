@@ -99,6 +99,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     flowThreadId: 3,
     foregroundRgba: 0,
     regionId: 2,
+    stableGlyphId: 5,
     transformIndex: 4,
   });
   assert.equal(fn.createSession(sessionId, requestLayout.size, resultLayout.size, 0), abi.status.ok);

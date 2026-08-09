@@ -11,6 +11,7 @@ pub const SEMANTIC_CARET: u16 = 5;
 pub const SEMANTIC_SELECTION: u16 = 6;
 pub const SEMANTIC_INSERTED_GLYPH: u16 = 7;
 pub const SEMANTIC_PARAGRAPH_MEASUREMENT: u16 = 8;
+pub const SEMANTIC_GLYPH: u16 = 9;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

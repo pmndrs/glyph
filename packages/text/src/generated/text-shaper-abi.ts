@@ -146,6 +146,7 @@ export const textShaperAbi = {
       "caret": 5,
       "cluster": 4,
       "fragment": 2,
+      "glyph": 9,
       "insertedGlyph": 7,
       "line": 1,
       "paragraphMeasurement": 8,
@@ -157,10 +158,12 @@ export const textShaperAbi = {
       "flowThreadId": 3,
       "foregroundRgba": 0,
       "regionId": 2,
+      "stableGlyphId": 5,
       "transformIndex": 4
     },
     "semanticViewMasks": {
-      "all": 1,
+      "all": 3,
+      "layoutInspection": 2,
       "measurement": 1
     },
     "styleFields": {

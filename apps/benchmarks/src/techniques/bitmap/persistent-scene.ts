@@ -3,7 +3,7 @@ import {
   type FontFeature,
   type LoadedFont,
   type ParagraphContentBox,
-  type ParagraphLayout,
+  type ParagraphLayoutSummary,
   type ParagraphStyle,
   type RegisteredFont,
 } from '@pmndrs/text';
@@ -242,8 +242,8 @@ function updateBitmapDrawVisibility(object: THREE.Object3D): void {
   object.visible = glyphCount > 0;
 }
 
-function countMissingGlyphs(layout: ParagraphLayout): number {
-  return layout.glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0);
+function countMissingGlyphs(layout: ParagraphLayoutSummary): number {
+  return layout.missingGlyphCount;
 }
 
 function bitmapContentBox(width: number, textAlign: 'start' | 'center'): ParagraphContentBox {
@@ -432,8 +432,8 @@ async function activateBitmapTextPersistentScene(
     activeText.updateMatrixWorld(true);
     if (activeText.error !== undefined) throw activeText.error;
     const readyAt = performance.now();
-    const committedLayout = (): ParagraphLayout => {
-      const layout = activeText.layout;
+    const committedLayout = (): ParagraphLayoutSummary => {
+      const layout = activeText.measureLayout();
       if (layout === undefined) throw new Error('live bitmap Text lost its committed layout');
       return layout;
     };
@@ -523,7 +523,7 @@ async function activateBitmapTextPersistentScene(
         revision: presentation.revision,
         presentationProgress: presentation.kind === 'settled' ? 1 : presentation.progress,
         glyphCount: countRenderedGlyphs(activeText),
-        lineCount: layout.lineGlyphCounts.length,
+        lineCount: layout.lineCount,
         layoutWidth: layout.width,
         layoutHeight: layout.height,
       };
@@ -724,7 +724,7 @@ async function activateBitmapTextPersistentScene(
           drawCount: countDraws(activeText),
           layoutWidth: layout.width,
           layoutHeight: layout.height,
-          lineCount: layout.lineGlyphCounts.length,
+          lineCount: layout.lineCount,
           strikePpem,
           cssFontSize: currentFontSize,
           renderedPpem: currentFontSize * viewport.dpr,

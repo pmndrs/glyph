@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:aa033b7909cfedec42bced6bd5e9b6b69d4c7fc7490a1f85e4277858498bee23'
+source_digest: 'sha256:34af8782a43930eebccf5c1fe5c045ecfb26caf7b88c548bd99dc4c8d1d9b595'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -924,11 +924,11 @@ The imperative Three binding no longer constructs a TypeScript `ParagraphBatch` 
 standalone `Text` owns the same path with a private session. Rust receives paragraph/text/style/constraint mutations,
 publishes one command-buffer delta, and compatible group children become one indexed draw under the group root. The
 executor retains only renderer resources needed to apply later deltas. It does not receive paragraph layout arrays;
-Three's old layout, glyph-snapshot, and glyph-origin override surface is removed. Any later interaction or measurement
-API must query retained Rust layout state separately and on demand. Focused integration covers mixed-font spans, custom
-material factories, two-child indexed batching, renderer-local transform updates, reparenting, and disposal. R3F,
-which constructs the same imperative objects, is cut over as well. TypeGPU and the portable legacy core still own the
-remaining cutover and deletion work.
+Three's old implicit `layout` and renderer-owned glyph snapshot surface is removed. Interaction and measurement APIs
+query retained Rust layout state separately and on demand. Focused integration covers mixed-font spans, custom material
+factories, two-child indexed batching, renderer-local transform updates, reparenting, and disposal. R3F, which constructs
+the same imperative objects, is cut over as well. TypeGPU and the portable legacy core still own the remaining cutover
+and deletion work.
 
 Third-party Three techniques use the same Rust planner instead of reviving the removed target transaction. Public
 `registerThreeRasterPlanProgram` accepts a static policy descriptor, a cold compiler that lowers the package's validated
@@ -944,6 +944,19 @@ cache. A normal rendering update requests no semantic records, and the command-b
 sidecar. A semantic edit clears the cache; repeated measurement of the same committed layout returns the same frozen
 object without another crossing. Rust tests cover exact and at-most box resolution plus overflow, and the compiled-Wasm
 Three fixture proves measurement retains the existing mesh while the removed `Text.layout` arrays remain absent.
+
+`Text.inspectLayout()` is a separate explicit mask for consumers that actually need lines and semantic glyphs. It copies
+stable glyph IDs, font handles, glyph IDs, clusters, sizes, flags, and shaped origins—including non-rendering spaces—but
+none of those arrays enter an ordinary render publication. Presentation motion is instead a directed policy
+augmentation: the first-party programs write one stable `u32` glyph ID per renderable record in buffer 14, and Three
+pairs that stream with the technique's existing origin buffer. `snapshotGlyphOrigins`, `setGlyphOrigins`, and
+`clearGlyphOriginOverrides` operate only on renderer-local displayed values guarded by the exact inspection object.
+Before any later Rust plan is applied, the executor restores its captured target values, allowing the authoritative
+patch/retirement transaction to proceed without a parallel candidate/current target state machine. A shared two-text
+fixture proves session-global IDs isolate overrides inside one indexed draw; a semantic resize publishes a new inspection
+and clears the old presentation override. The complete optimized shaper at this checkpoint measures 1,089,889 raw,
+414,204 gzip, and 325,805 Brotli bytes on the canonical Darwin arm64 host; deletion of the remaining legacy TypeScript
+path and a deliberate Rust size pass remain required before release acceptance.
 
 Public font stacks no longer repeat a raster technique or require every fallback font to share one. Their generic type
 is the union of the concrete loaded-font techniques, while runtime construction still requires one text-runtime domain,

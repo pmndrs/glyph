@@ -4,7 +4,7 @@ import type { RasterTechnique } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
-  committedTextLayout,
+  committedTextMetrics,
   exactWidth,
   paintColor,
   type ComparisonWorkloadEntry,
@@ -135,7 +135,7 @@ export function layoutPaintEffectsEntries(
 ): void {
   const entry = entries[0];
   if (entry === undefined) return;
-  const layout = committedTextLayout(entry.text);
+  const layout = committedTextMetrics(entry.text);
   entry.text.position.set(
     Math.max(12, (viewportWidth - layout.width) / 2),
     -Math.max(18, (viewportHeight - layout.height) / 2),

@@ -291,9 +291,10 @@ function requiredCoreText(reference: React.RefObject<BitmapTextObject | null>): 
   return reference.current;
 }
 
-function requiredLayout(core: BitmapTextObject): NonNullable<BitmapTextObject['layout']> {
-  if (core.layout === undefined) throw new Error('React Text layout is unavailable');
-  return core.layout;
+function requiredLayout(core: BitmapTextObject): ParagraphLayout {
+  const layout = core.inspectLayout();
+  if (layout === undefined) throw new Error('React Text layout inspection is unavailable');
+  return layout;
 }
 
 function countDraws(object: BitmapTextObject): number {

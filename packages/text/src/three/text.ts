@@ -28,8 +28,8 @@ import {
   type TextEngineTextMutation,
 } from '../internal/engine-frame-wire.js';
 import type { TextEnginePublication, TextEngineSession } from '../internal/text-engine-host.js';
-import { readTextEngineMeasurements } from '../internal/layout-query-view.js';
-import type { ParagraphMeasurement } from '../layout.js';
+import { readTextEngineLayouts, readTextEngineMeasurements } from '../internal/layout-query-view.js';
+import type { ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import {
@@ -69,6 +69,20 @@ export interface TextGroupOptions {
   readonly capacity?: GlyphBufferCapacity;
   readonly renderOrder?: number;
   readonly material?: ThreeTextMaterial;
+}
+
+export interface TextGlyphOriginSnapshot {
+  readonly layout: ParagraphLayoutInspection;
+  readonly shapedX: Float32Array;
+  readonly shapedY: Float32Array;
+  readonly displayedX: Float32Array;
+  readonly displayedY: Float32Array;
+}
+
+export interface TextGlyphOriginUpdate {
+  readonly layout: ParagraphLayoutInspection;
+  readonly x: Float32Array;
+  readonly y: Float32Array;
 }
 
 interface DesiredTextState<Technique extends AnyRasterTechnique> {
@@ -207,9 +221,27 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     this.#binding?.retry();
   }
   /** Performs one explicit Rust query when this committed layout has not already been measured. */
-  measureLayout(): ParagraphMeasurement | undefined {
+  measureLayout(): ParagraphLayoutSummary | undefined {
     this.#assertActive();
     return this.#binding?.measurement(eraseTextTechnique(this));
+  }
+  /** Copies the committed per-line and per-glyph Rust layout only when explicitly requested. */
+  inspectLayout(): ParagraphLayoutInspection | undefined {
+    this.#assertActive();
+    return this.#binding?.layoutInspection(eraseTextTechnique(this));
+  }
+  snapshotGlyphOrigins(): TextGlyphOriginSnapshot | undefined {
+    this.#assertActive();
+    return this.#binding?.glyphOriginSnapshot(eraseTextTechnique(this));
+  }
+  setGlyphOrigins(update: TextGlyphOriginUpdate): void {
+    this.#assertActive();
+    if (this.#binding === undefined) throw new Error('glyph origins require a bound Text');
+    this.#binding.setGlyphOrigins(eraseTextTechnique(this), update);
+  }
+  clearGlyphOriginOverrides(): void {
+    this.#assertActive();
+    this.#binding?.clearGlyphOrigins(eraseTextTechnique(this));
   }
 
   override updateMatrixWorld(force?: boolean): void {
@@ -414,7 +446,8 @@ class ThreeTextBatchBinding {
   readonly #paragraphs = new Map<Text<AnyRasterTechnique>, RetainedEngineParagraph>();
   readonly #textsByParagraph = new Map<number, Text<AnyRasterTechnique>>();
   readonly #removed: RetainedEngineParagraph[] = [];
-  readonly #measurements = new Map<Text<AnyRasterTechnique>, ParagraphMeasurement>();
+  readonly #measurements = new Map<Text<AnyRasterTechnique>, ParagraphLayoutSummary>();
+  readonly #layoutInspections = new Map<Text<AnyRasterTechnique>, ParagraphLayoutInspection>();
   #nextParagraphId = 1;
   #engineRevision = 0;
   #planRevision = 0;
@@ -465,26 +498,12 @@ class ThreeTextBatchBinding {
   get renderOrderBase(): number {
     return this.#group?.renderOrder ?? 0;
   }
-  measurement(text: Text<AnyRasterTechnique>): ParagraphMeasurement | undefined {
+  measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary | undefined {
     if (!this.#paragraphs.has(text)) return undefined;
     this.synchronize();
     const cached = this.#measurements.get(text);
     if (cached !== undefined) return cached;
-    const totalTextLength = [...this.#paragraphs.keys()].reduce((total, entry) => total + entry.text.length, 0);
-    const publication = this.#session.update(
-      compileTextEngineFrameUpdate({
-        sessionId: this.#session.handle,
-        policyHandle: this.#coordinator.policyHandle,
-        capabilitySet: 1,
-        expectedEngineRevision: this.#engineRevision,
-        consumedPlanRevision: this.#planRevision,
-        acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
-        semanticViewMask: textShaperAbi.engine.semanticViewMasks.measurement,
-        limits: engineLimits(this.#paragraphs.size, totalTextLength, this.#paragraphs.size, this.#resultCapacity),
-      }),
-    );
-    this.#engineRevision = publication.engineRevision;
-    this.#planRevision = publication.planRevision;
+    const publication = this.#querySemanticViews(textShaperAbi.engine.semanticViewMasks.measurement);
     const measurements = readTextEngineMeasurements(publication);
     this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
     for (const [paragraphId, measurement] of measurements) {
@@ -493,6 +512,41 @@ class ThreeTextBatchBinding {
       this.#measurements.set(measuredText, measurement);
     }
     return this.#measurements.get(text);
+  }
+  layoutInspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection | undefined {
+    if (!this.#paragraphs.has(text)) return undefined;
+    this.synchronize();
+    const cached = this.#layoutInspections.get(text);
+    if (cached !== undefined) return cached;
+    const publication = this.#querySemanticViews(textShaperAbi.engine.semanticViewMasks.layoutInspection);
+    const layouts = readTextEngineLayouts(publication);
+    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
+    for (const [paragraphId, layout] of layouts) {
+      const inspectedText = this.#textsByParagraph.get(paragraphId);
+      if (inspectedText === undefined) throw new Error(`text engine inspected unknown paragraph ${paragraphId}`);
+      this.#measurements.set(inspectedText, layout);
+      this.#layoutInspections.set(inspectedText, layout);
+    }
+    return this.#layoutInspections.get(text);
+  }
+  glyphOriginSnapshot(text: Text<AnyRasterTechnique>): TextGlyphOriginSnapshot | undefined {
+    const layout = this.layoutInspection(text);
+    if (layout === undefined) return undefined;
+    return { layout, ...this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y) };
+  }
+  setGlyphOrigins(text: Text<AnyRasterTechnique>, update: TextGlyphOriginUpdate): void {
+    const layout = this.layoutInspection(text);
+    if (layout === undefined || update.layout !== layout) {
+      throw new TypeError('glyph origins do not match the committed layout inspection');
+    }
+    if (update.x.length !== layout.glyphStableIds.length || update.y.length !== layout.glyphStableIds.length) {
+      throw new RangeError('glyph origin arrays do not match the inspected glyph count');
+    }
+    this.#target.setGlyphOriginOverrides(layout.glyphStableIds, update.x, update.y);
+  }
+  clearGlyphOrigins(text: Text<AnyRasterTechnique>): void {
+    const layout = this.#layoutInspections.get(text);
+    if (layout !== undefined) this.#target.clearGlyphOriginOverrides(layout.glyphStableIds);
   }
   reconcile(texts: readonly Text<AnyRasterTechnique>[]): void {
     const desired = new Set(texts);
@@ -607,6 +661,7 @@ class ThreeTextBatchBinding {
       }
       this.#materialInvalidated = false;
       this.#measurements.clear();
+      this.#layoutInspections.clear();
       committed = true;
       try {
         this.#target.apply(publication);
@@ -661,6 +716,7 @@ class ThreeTextBatchBinding {
     this.#paragraphs.clear();
     this.#textsByParagraph.clear();
     this.#measurements.clear();
+    this.#layoutInspections.clear();
     this.#removed.length = 0;
   }
   #ensureText(text: Text<AnyRasterTechnique>, group: TextGroup | undefined): void {
@@ -694,6 +750,25 @@ class ThreeTextBatchBinding {
   #renderOrderBase(): number {
     if (this.#group !== undefined) return this.#group.renderOrder;
     return this.#paragraphs.keys().next().value?.renderOrder ?? 0;
+  }
+
+  #querySemanticViews(semanticViewMask: number): TextEnginePublication {
+    const totalTextLength = [...this.#paragraphs.keys()].reduce((total, entry) => total + entry.text.length, 0);
+    const publication = this.#session.update(
+      compileTextEngineFrameUpdate({
+        sessionId: this.#session.handle,
+        policyHandle: this.#coordinator.policyHandle,
+        capabilitySet: 1,
+        expectedEngineRevision: this.#engineRevision,
+        consumedPlanRevision: this.#planRevision,
+        acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
+        semanticViewMask,
+        limits: engineLimits(this.#paragraphs.size, totalTextLength, this.#paragraphs.size, this.#resultCapacity),
+      }),
+    );
+    this.#engineRevision = publication.engineRevision;
+    this.#planRevision = publication.planRevision;
+    return publication;
   }
 }
 

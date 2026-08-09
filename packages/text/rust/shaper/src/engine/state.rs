@@ -661,7 +661,13 @@ impl TextEngine {
                     )
                     .map_err(plan_error)?;
             }
-            if request.semantic_view_mask & super::frame::SEMANTIC_VIEW_MEASUREMENT != 0 {
+            let include_layout_inspection =
+                request.semantic_view_mask & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION != 0;
+            if request.semantic_view_mask
+                & (super::frame::SEMANTIC_VIEW_MEASUREMENT
+                    | super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION)
+                != 0
+            {
                 let mut records = core::mem::take(&mut session.semantic_records);
                 let query = (|| {
                     for order_index in 0..session.active_order().len() {
@@ -690,6 +696,13 @@ impl TextEngine {
                         } else {
                             &state.flow_layout
                         };
+                        let positioned = if state.positioned_prepared {
+                            &state.pending_positioned
+                        } else {
+                            &state.positioned
+                        };
+                        let (line_glyph_starts, line_glyph_counts) =
+                            positioned.semantic_line_glyph_spans();
                         super::layout_query::append_measurement(
                             &mut records,
                             paragraph_id,
@@ -697,6 +710,10 @@ impl TextEngine {
                             clusters.starts.len(),
                             geometry,
                             flow,
+                            positioned.semantic_glyphs(),
+                            line_glyph_starts,
+                            line_glyph_counts,
+                            include_layout_inspection,
                         )?;
                     }
                     Ok(())

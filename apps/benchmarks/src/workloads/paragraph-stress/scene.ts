@@ -6,7 +6,7 @@ import { paragraphStressScrollProgress } from '../../benchmark/paragraph-stress-
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
-  committedTextLayout,
+  committedTextMetrics,
   exactWidth,
   paintColor,
   type ComparisonWorkloadEntry,
@@ -73,7 +73,7 @@ export function layoutParagraphStressEntries(
 ): void {
   const entry = entries[0];
   if (entry === undefined) return;
-  const layout = committedTextLayout(entry.text);
+  const layout = committedTextMetrics(entry.text);
   entry.text.position.set(
     Math.max(12, (viewportWidth - layout.width) / 2),
     -Math.max(12, (viewportHeight - layout.height) / 2),
@@ -90,7 +90,7 @@ export function animateParagraphStressScene(
 ): void {
   const entry = entries[0];
   if (entry === undefined) return;
-  const layout = committedTextLayout(entry.text);
+  const layout = committedTextMetrics(entry.text);
   const scrollProgress = paragraphStressScrollProgress(elapsedMs, configuration.animationSpeed);
   const maximumScrollY = Math.max(0, layout.height - viewportHeight + 24);
   scene.position.y = maximumScrollY * scrollProgress;

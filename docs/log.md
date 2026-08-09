@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- **Kept layout inspection and presentation outside rendering authority** — Added an explicit Rust semantic-glyph
+  inspection mask alongside measurement; ordinary rendering still publishes no layout arrays. First-party policy
+  programs now carry one stable glyph ID per renderable instance so Three can direct optional Bitmap/MTSDF/Slug origin
+  presentation without reconstructing glyph topology. The executor restores authoritative origins before every later
+  command-buffer update and retains only resource tables plus reversible overrides, eliminating any need to revive the
+  candidate/current target state machine. Compiled-Wasm fixtures cover semantic spaces, shared two-paragraph batching,
+  isolated overrides, transform-only retention, and semantic-update retirement. The refreshed canonical checkpoint is
+  1,089,889 raw / 414,204 gzip / 325,805 Brotli shaper bytes; legacy-path deletion and a Rust size pass remain open.
+
 - **Separated semantic measurement from the render plan** — Activated the existing `semanticViewMask` for an explicit
   retained-Rust measurement query while ordinary rendering continues to request zero semantic records. The first view
   publishes one paragraph summary plus its line records in the immutable A/B sidecar; Three's command-buffer executor
