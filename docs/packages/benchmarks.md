@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:cedbf0466d5682351c98761d2e874f9dcf8955b5eec88a548f9144efedf0d338'
+source_digest: 'sha256:56aa4878fd9c8f00d50483bddd9759e97a808c89b3c0cfd5128d84306487df7f'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -204,8 +204,8 @@ sources:
     resource: ../../apps/benchmarks/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-08-09T12:24:43Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-09T17:57:28Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -219,6 +219,12 @@ than treating first pixels as sufficient evidence. Each raster proof also report
 when a visibly populated draw claims no GPU residency, so the accessor is proven against live engine resources rather than
 a unit fixture. The Worker proof distinguishes call-time snapshots, later desired state, supersession, abort, progress,
 and one reusable module Worker.
+
+The public paragraph-contract target now passes its complete exact matrix through the retained Rust path: two bidi
+layouts, nine line-policy layouts, twelve CJK layouts, and one UIKit-shaped measurement/layout seam. The UIKit fixture
+models the frame ABI's f32 style input rather than the deleted TypeScript engine's JavaScript-double input. Its final-line
+baseline and centered glyph row are derived independently from the f32 line box followed by f64 accumulation and one final
+f32 publication; the exact full-layout hash remains a deterministic byte contract rather than a tolerance assertion.
 
 A fifth proof covers material customization over the canonical Bitmap command-buffer path. It renders one paragraph with
 the default Bitmap material, then renders the same Rust-produced draw with a `defineTextMaterial` factory that starts from
