@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:22e86ee00399f97762ddb73b63577863719a7be53335bb4a5e5dfcd7c18a45ca'
+source_digest: 'sha256:25a3f6a830826d54b422a22a446a429b8ab4537e2d962410467e9cc60a8a8539'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -874,6 +874,18 @@ in Rust resource records. Validated Bitmap pages, MTSDF atlas data, and Slug ana
 binding is first registered. Command-buffer execution can therefore resolve the authenticated renderer resource with
 one map lookup rather than searching fonts or re-partitioning glyphs. The registry rejects one numeric identity crossing
 techniques. Buffer patches and draws are not yet realized by this checkpoint.
+
+The first Three command-buffer executor realizes Bitmap buffer declarations, minimal write/fill/copy patches, resource
+bindings, glyph primitives, ordered draws, and buffer retirements from the Rust publication. Transform handling is a
+program policy rather than a global split: a transform-keyed program receives a nonzero draw `transformId`, while the
+first-party indexed programs pack one `u32 transformIndex` per instance in policy buffer 15 and publish draw-level zero.
+Three owns the compact matrix sidecar and may update its dirty matrix ranges without calling Wasm or invalidating
+layout. Flow regions carry the stable sidecar slot independently from local geometry; visible overflow carries no clip
+identity. A compiled-Wasm fixture keeps distinct materials as two draws, then changes both retained paragraphs to one
+material and observes one six-instance draw over transform slots `[2,2,2,1,1,1]`. The executor is still Bitmap-only and
+not connected to the public `Text` lifecycle, so MSDF/Slug realization, browser pixels, public cutover, and end-to-end
+latency remain open. The optimized shaper is 1,083,255 raw / 411,409 gzip / 324,539 Brotli bytes at this checkpoint; all
+129 Rust tests and the focused compiled-Wasm/Three integration test pass.
 
 The replacement Rust engine now owns retained Unicode analysis for its frame transaction. The existing Unicode 17 generator emits both TypeScript and compact Rust Script/Script_Extensions partitions from one source. A no-std `unicode-segmentation` 1.13.3 iterator supplies extended grapheme boundaries; the engine maps them back to the public UTF-16 coordinate space, resolves contextual scripts in reusable flat arrays, and commits or aborts that derived arena with text and styles. Session reservation prewarms active and pending analysis storage, while unchanged text skips analysis. Retained UAX #9 products now form equal-level runs, and one interval sweep intersects them with resolved style and script items while skipping hard-break controls. Root direction remains paragraph-level state; nested stated directions carry a distinct override bit and force run parity. Primary-font HarfRust shaping consumes those runs inside `text_update` through borrowed retained language/features and writes glyph SoA directly into an A/B session arena; the legacy batch export shares the same prewarmed buffer and reusable feature scratch. A real-Inter compiled-Wasm test observes the shape-plan cache created by the frame call. The optimized shaper is 973,367 raw, 364,517 gzip, and 287,942 Brotli bytes at this checkpoint. Ordered fallback, layout, and nonempty plan output remain open, so this size evidence carries no complete-path frame latency claim.
 

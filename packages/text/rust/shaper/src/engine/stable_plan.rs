@@ -16,7 +16,7 @@ use super::{
         record_alignment, take_allocation,
     },
     policy::{
-        ALLOCATION_STABLE_INDIRECT, BATCH_MATERIAL, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE,
+        ALLOCATION_STABLE_INDIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE,
         BufferId, BufferSchema, CapabilitySetId, PolicyExecutionError, ScalarType, TechniqueId,
         ValidatedPolicy,
     },
@@ -1295,6 +1295,7 @@ impl StablePlanCompiler {
                 )
                 .ok_or(StablePlanError::ProgramMissing)?;
             let split_material = program.draw_key_mask & BATCH_MATERIAL != 0;
+            let split_transform = program.draw_key_mask & BATCH_TRANSFORM != 0;
             let first_record = self.input_order_records[input_index];
             let mut end = input_index + 1;
             while end < context.input.glyphs.len()
@@ -1306,6 +1307,7 @@ impl StablePlanCompiler {
                     pending_index,
                     first_record,
                     split_material,
+                    split_transform,
                 )
             {
                 end += 1;
@@ -1360,7 +1362,7 @@ impl StablePlanCompiler {
                 material_id: if split_material { first.material_id } else { 0 },
                 clip_id: first.clip_id,
                 depth_key: first.depth_key,
-                transform_id: first.transform_id,
+                transform_id: if split_transform { first.transform_id } else { 0 },
                 primitive_start: u32::try_from(primitive_start)
                     .map_err(|_| StablePlanError::ArithmeticOverflow)?,
                 primitive_count: 1,
@@ -1390,6 +1392,7 @@ impl StablePlanCompiler {
         pending_index: usize,
         first_record: u32,
         split_material: bool,
+        split_transform: bool,
     ) -> bool {
         let first = glyphs[start];
         let glyph = glyphs[next];
@@ -1402,7 +1405,7 @@ impl StablePlanCompiler {
             && (!split_material || glyph.material_id == first.material_id)
             && glyph.clip_id == first.clip_id
             && glyph.depth_key == first.depth_key
-            && glyph.transform_id == first.transform_id
+            && (!split_transform || glyph.transform_id == first.transform_id)
     }
 
     fn next_buffer_identity(

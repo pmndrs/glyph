@@ -479,8 +479,9 @@ rendering/batching owner; flow is never inferred from group child order.
 
 - changing a region object's world transform updates rendering only;
 - changing local region shape, writing mode, or exclusion geometry sends one flow-geometry mutation to Rust;
-- render plans carry a region index/ID, and the Three/TSL policy reads a small `vec4`-record region-transform buffer on
-  both WebGPU and the WebGL PBO fallback; and
+- render plans carry a region's stable compact transform slot; an indexed Three/TSL program packs that slot per
+  instance and reads a small `vec4`-record region-transform buffer on both WebGPU and the WebGL PBO fallback, while a
+  policy program that cannot use indirection may instead include transform in its draw key; and
 - disposing or reordering a region changes the flow-thread revision without changing text or broad shaping state.
 
 The canonical geometry inputs are rectangles and bounded simple polygons. Public helpers construct rectangles and

@@ -604,6 +604,7 @@ mod tests {
         FlowRegion {
             id: 1,
             geometry_revision: 1,
+            transform_index: 1,
             vertices_offset: 0,
             vertex_count,
             exclusion_start: 0,

@@ -16,7 +16,7 @@ use super::{
 };
 
 pub(crate) const SEMANTIC_F32_FIELD_COUNT: usize = 6;
-pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 4;
+pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 5;
 pub(crate) const ALL_SEMANTIC_CHANGES: u16 =
     (1 << (SEMANTIC_F32_FIELD_COUNT + SEMANTIC_U32_FIELD_COUNT)) - 1;
 
@@ -302,7 +302,7 @@ impl PositionedGlyphArena {
                             glyph_id,
                             semantic_id: clusters.stable_ids[cluster],
                             material_id: style.material_id,
-                            clip_id: line.region_id,
+                            clip_id: line.clip_id,
                             depth_key: 0,
                             font_size: style.font_size,
                             raster_pixel_ratio: style.raster_pixel_ratio,
@@ -315,6 +315,7 @@ impl PositionedGlyphArena {
                         clusters.stable_ids[cluster],
                         line.region_id,
                         line.flow_thread_id,
+                        line.transform_index,
                     );
                 }
                 cursor += x_advance;
@@ -334,6 +335,7 @@ impl PositionedGlyphArena {
         cluster: u32,
         region: u32,
         flow_thread: u32,
+        transform_index: u32,
     ) {
         self.glyphs.push(glyph);
         let f32_values = [
@@ -347,7 +349,7 @@ impl PositionedGlyphArena {
         for (field, value) in self.semantic_f32.iter_mut().zip(f32_values) {
             field.push(value);
         }
-        let u32_values = [foreground, cluster, region, flow_thread];
+        let u32_values = [foreground, cluster, region, flow_thread, transform_index];
         for (field, value) in self.semantic_u32.iter_mut().zip(u32_values) {
             field.push(value);
         }
@@ -745,6 +747,8 @@ mod tests {
             lines: vec![FlowLine {
                 flow_thread_id: 7,
                 region_id: 9,
+                transform_index: 9,
+                clip_id: 9,
                 fragment_start: 0,
                 fragment_count: 1,
                 align: ALIGN_CENTER,

@@ -46,7 +46,7 @@ const BATCH_FIELDS: u32 = BATCH_TECHNIQUE
     | BATCH_TRANSFORM;
 const STORAGE_KEY_FIELDS: u32 = BATCH_FIELDS & !(BATCH_ORDER | BATCH_TRANSFORM);
 const REQUIRED_STORAGE_KEYS: u32 = BATCH_TECHNIQUE | BATCH_RESOURCE | BATCH_PROGRAM;
-const REQUIRED_DRAW_KEYS: u32 = REQUIRED_STORAGE_KEYS | BATCH_ORDER | BATCH_TRANSFORM;
+const REQUIRED_DRAW_KEYS: u32 = REQUIRED_STORAGE_KEYS | BATCH_ORDER;
 
 pub const BUFFER_USAGE_VERTEX: u32 = 1 << 0;
 pub const BUFFER_USAGE_STORAGE: u32 = 1 << 1;
@@ -955,7 +955,7 @@ fn f32_input_dependency(source: InputSource) -> u16 {
 }
 
 fn u32_input_dependency(source: InputSource) -> u16 {
-    if source.scope == InputScope::Semantic && source.field < 4 {
+    if source.scope == InputScope::Semantic && source.field < 5 {
         1 << (6 + source.field)
     } else {
         0

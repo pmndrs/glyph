@@ -2,6 +2,7 @@ import { textShaperAbi } from '../generated/text-shaper-abi.js';
 
 const MAX_U32 = 0xffff_ffff;
 const encoder = new TextEncoder();
+export const FIRST_PARTY_TRANSFORM_BUFFER_ID = 15;
 
 type PolicyInputScope = keyof typeof textShaperAbi.policy.inputScopes;
 
@@ -137,8 +138,9 @@ function threeCapabilitySet(): PolicyCapabilitySet {
 
 function bitmapProgram(techniqueId: number, programId: number): PolicyProgram {
   const context = programContext('strike', 8, 0);
-  const { loadF32, binary, storeF32 } = context;
+  const { loadF32, loadU32, binary, storeF32, storeU32 } = context;
   loadF32(15);
+  loadU32(31, 0);
   binary('multiplyF32', 15, 7, 2);
   binary('addF32', 16, 0, 15);
   binary('multiplyF32', 17, 8, 2);
@@ -152,14 +154,16 @@ function bitmapProgram(techniqueId: number, programId: number): PolicyProgram {
     [4, [13, 14]],
     [5, [3, 4, 5, 6]],
   ]);
-  return createProgram(techniqueId, programId, context, floatBuffers([2, 2, 2, 2, 4]));
+  storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
+  return createProgram(techniqueId, programId, context, [...floatBuffers([2, 2, 2, 2, 4]), transformIndexBuffer()]);
 }
 
 function msdfProgram(techniqueId: number, programId: number): PolicyProgram {
   const context = programContext('glyph', 10, 1);
-  const { operations, loadF32, loadU32, binary, constantF32, storeF32 } = context;
+  const { operations, loadF32, loadU32, binary, constantF32, storeF32, storeU32 } = context;
   loadF32(17);
-  loadU32(17, 0);
+  loadU32(17, 1);
+  loadU32(31, 0);
   binary('multiplyF32', 18, 7, 2);
   binary('addF32', 19, 0, 18);
   binary('multiplyF32', 20, 8, 2);
@@ -177,14 +181,19 @@ function msdfProgram(techniqueId: number, programId: number): PolicyProgram {
     [6, [25, 25, 25, 25]],
     [7, [25, 25, 25, 24]],
   ]);
-  return createProgram(techniqueId, programId, context, floatBuffers([4, 4, 4, 4, 4, 4, 4]));
+  storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
+  return createProgram(techniqueId, programId, context, [
+    ...floatBuffers([4, 4, 4, 4, 4, 4, 4]),
+    transformIndexBuffer(),
+  ]);
 }
 
 function slugProgram(techniqueId: number, programId: number): PolicyProgram {
   const context = programContext('glyph', 8, 6, true);
   const { loadF32, loadU32, binary, constantF32, constantU32, storeF32, storeU32 } = context;
   loadF32(16);
-  for (let field = 0; field < 6; field += 1) loadU32(21 + field, field);
+  loadU32(31, 0);
+  for (let field = 0; field < 6; field += 1) loadU32(21 + field, field + 1);
   binary('multiplyF32', 16, 8, 2);
   binary('addF32', 17, 0, 16);
   binary('multiplyF32', 18, 9, 2);
@@ -204,7 +213,12 @@ function slugProgram(techniqueId: number, programId: number): PolicyProgram {
     [6, [21, 22, 23, 24]],
     [7, [25, 26, 29, 29]],
   ]);
-  return createProgram(techniqueId, programId, context, [...floatBuffers([4, 4, 4, 4, 4]), ...u32Buffers([4, 4], 6)]);
+  storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
+  return createProgram(techniqueId, programId, context, [
+    ...floatBuffers([4, 4, 4, 4, 4]),
+    ...u32Buffers([4, 4], 6),
+    transformIndexBuffer(),
+  ]);
 }
 
 interface ProgramContext {
@@ -234,6 +248,7 @@ function programContext(
 ): ProgramContext {
   const operations: PolicyOperation[] = [];
   const semantic = textShaperAbi.engine.semanticF32Fields;
+  const semanticU32 = textShaperAbi.engine.semanticU32Fields;
   const inputs: PolicyInput[] = [
     { scope: 'semantic', field: semantic.inlineStart },
     { scope: 'semantic', field: semantic.blockStart },
@@ -244,13 +259,14 @@ function programContext(
     { scope: 'semantic', field: semantic.foregroundAlpha },
     ...(inverseFontSize ? [{ scope: 'semantic' as const, field: semantic.inverseFontSize }] : []),
     ...Array.from({ length: bindingF32Count }, (_, field) => ({ scope: bindingScope, field })),
+    { scope: 'semantic', field: semanticU32.transformIndex },
     ...Array.from({ length: bindingU32Count }, (_, field) => ({ scope: bindingScope, field })),
   ];
   return {
     inputs,
     operations,
     f32InputCount: 7 + (inverseFontSize ? 1 : 0) + bindingF32Count,
-    u32InputCount: bindingU32Count,
+    u32InputCount: bindingU32Count + 1,
     loadF32(count) {
       for (let field = 0; field < count; field += 1) {
         operations.push({ opcode: textShaperAbi.policy.opcodes.loadF32, target: field, operand0: field });
@@ -304,14 +320,7 @@ function createProgram(
     operations: context.operations,
     storageKeyMask: batch.technique | batch.program | batch.resource,
     drawKeyMask:
-      batch.technique |
-      batch.program |
-      batch.resource |
-      batch.material |
-      batch.clip |
-      batch.depth |
-      batch.order |
-      batch.transform,
+      batch.technique | batch.program | batch.resource | batch.material | batch.clip | batch.depth | batch.order,
   };
 }
 
@@ -338,6 +347,14 @@ function u32Buffers(widths: readonly number[], firstId: number): PolicyBuffer[] 
     scalar: textShaperAbi.policy.scalarTypes.u32,
     vectorWidth,
   }));
+}
+
+function transformIndexBuffer(): PolicyBuffer {
+  return {
+    id: FIRST_PARTY_TRANSFORM_BUFFER_ID,
+    scalar: textShaperAbi.policy.scalarTypes.u32,
+    vectorWidth: 1,
+  };
 }
 
 function compilePolicy(descriptor: PolicyDescriptor): Uint8Array {

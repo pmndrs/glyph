@@ -102,6 +102,8 @@ export interface TextEngineFlowVertex {
 export interface TextEngineRegion {
   readonly id: number;
   readonly geometryRevision: number;
+  /** Stable compact slot in the renderer-owned region transform table. Defaults to `id`. */
+  readonly transformIndex?: number;
   readonly shape: 'rectangle' | 'polygon';
   readonly vertices?: readonly TextEngineFlowVertex[];
   readonly exclusionStart: number;
@@ -479,6 +481,11 @@ function writeRegions(
     const offset = tableOffset + index * layout.size;
     view.setUint32(offset + layout.id, u32(value.id, 'region ID'), true);
     view.setUint32(offset + layout.geometryRevision, u32(value.geometryRevision, 'region geometry revision'), true);
+    view.setUint32(
+      offset + layout.transformIndex,
+      u32(value.transformIndex ?? value.id, 'region transform index'),
+      true,
+    );
     view.setUint32(offset + layout.verticesOffset, vertexOffsets[index]!, true);
     view.setUint16(offset + layout.vertexCount, u16(value.vertices?.length ?? 0, 'region vertex count'), true);
     view.setUint16(offset + layout.exclusionStart, u16(value.exclusionStart, 'region exclusion start'), true);

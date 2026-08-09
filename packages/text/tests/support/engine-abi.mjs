@@ -232,6 +232,7 @@ export function engineFrameUpdateBytes(
 
     view.setUint32(regionOffset + region.id, 1, true);
     view.setUint32(regionOffset + region.geometryRevision, geometry.revision, true);
+    view.setUint32(regionOffset + region.transformIndex, 1, true);
     view.setUint8(regionOffset + region.shape, abi.engine.flowShapeKinds.rectangle);
     view.setUint8(regionOffset + region.writingMode, abi.engine.writingModes.horizontalTb);
     view.setUint8(regionOffset + region.textOrientation, abi.engine.textOrientations.mixed);
