@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:4b2ff74a52d39457b541c3ab2e31c67ce6055de053dfa845bf16b8f48f2f1a54'
+source_digest: 'sha256:2fa07b0d9260a1cb1096d738142cefe19292fd5106044b7c1a134089a7e63379'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -856,6 +856,18 @@ Roadmap item 7.2 adds an optional presentation seam to this bitmap subpath witho
 The canonical composed Inter fixture proves GLB → registry → public `Text` → HarfRust → paragraph layout → bitmap decode → GPU upload → instanced draw in the benchmark product. The five-lane benchmark ipsum produces 120 visible glyphs, zero missing glyphs, and one draw on both backends. Density fixtures carry 16 and 32 ppem strikes; exact-strike rendering keeps public geometry at 16 CSS px while selecting 16 device pixels at 1× and 32 device pixels at 2×. A record-level Rust invariant proves atlas and native plane dimensions are identical. The benchmark independently CPU-composes decoded atlas texels at snapped placements and requires every normalized GPU byte to match for both the full frame and a resized, intentionally clipped frame; WebGPU and WebGL2 produce the same full-frame hash at each DPR. Bitmap accepts fill and opacity but rejects outline and shadow through the optional raster paint-validation seam instead of silently discarding them. Hinted grayscale and four-phase coverage packing remain measured research, while LCD/ClearType rendering is an explicit non-goal. The [roadmap](../roadmap/roadmap.md) remains the only completion ledger.
 
 The five-line, 120-glyph text above is the bounded conformance specimen. The separate live benchmark ipsum exceeds 1,000 characters and renders 1,150 glyphs through the same one-draw public `Text` path.
+
+One engine session now retains an ordered set of stable-ID paragraph states and publishes one shared Rust render plan.
+Paragraph lifecycle records create, reorder, or remove children transactionally; semantic records are consumed as
+forward-only borrowed paragraph spans, and absent spans retain prior child state. The final child order feeds one
+pre-sized allocation-free policy gather. Each child's retained geometry compacts only its referenced regions,
+exclusions, and vertices instead of keeping unrelated global table prefixes. A compiled-Wasm coordinator fixture
+creates two independent paragraphs, observes adjacent material groups `[7, 8]`, then sends only lifecycle records and
+observes `[8, 7]` in the next publication. The publication is a retained renderer-neutral command-buffer delta: it
+describes resources, physical buffers, dirty patches, primitives, draws, and retirement, but it is neither a native
+`GPUCommandBuffer` nor a TypeScript object batch. Public Three GPU realization remains open. The optimized shaper is
+1,082,551 raw / 407,787 gzip / 324,499 Brotli bytes at this checkpoint; all 128 Rust unit tests and the focused compiled-
+Wasm fixture pass, with no end-to-end renderer latency claim yet.
 
 The replacement Rust engine now owns retained Unicode analysis for its frame transaction. The existing Unicode 17 generator emits both TypeScript and compact Rust Script/Script_Extensions partitions from one source. A no-std `unicode-segmentation` 1.13.3 iterator supplies extended grapheme boundaries; the engine maps them back to the public UTF-16 coordinate space, resolves contextual scripts in reusable flat arrays, and commits or aborts that derived arena with text and styles. Session reservation prewarms active and pending analysis storage, while unchanged text skips analysis. Retained UAX #9 products now form equal-level runs, and one interval sweep intersects them with resolved style and script items while skipping hard-break controls. Root direction remains paragraph-level state; nested stated directions carry a distinct override bit and force run parity. Primary-font HarfRust shaping consumes those runs inside `text_update` through borrowed retained language/features and writes glyph SoA directly into an A/B session arena; the legacy batch export shares the same prewarmed buffer and reusable feature scratch. A real-Inter compiled-Wasm test observes the shape-plan cache created by the frame call. The optimized shaper is 973,367 raw, 364,517 gzip, and 287,942 Brotli bytes at this checkpoint. Ordered fallback, layout, and nonempty plan output remain open, so this size evidence carries no complete-path frame latency claim.
 

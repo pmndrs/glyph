@@ -80,7 +80,6 @@ struct ClusterRecord {
 
 #[derive(Default)]
 struct EngineSession {
-    paragraph_id: Option<u32>,
     revision: SessionRevision,
     acknowledged_publication_generation: u32,
     policy_binding: Option<PolicyBinding>,
@@ -89,7 +88,29 @@ struct EngineSession {
     pending_next_glyph_id: u32,
     next_content_revision: u32,
     pending_next_content_revision: u32,
-    paragraph: ParagraphState,
+    text_capacity: usize,
+    spare_paragraph: Option<ParagraphState>,
+    paragraphs: Vec<RetainedParagraph>,
+    ordered_paragraphs: Vec<ParagraphOrder>,
+    pending_ordered_paragraphs: Vec<ParagraphOrder>,
+    lifecycle_prepared: bool,
+    lifecycle_changed: bool,
+}
+
+struct RetainedParagraph {
+    id: u32,
+    order: u32,
+    pending_order: Option<u32>,
+    pending_remove: bool,
+    created: bool,
+    positioned_changed: bool,
+    state: ParagraphState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ParagraphOrder {
+    order: u32,
+    id: u32,
 }
 
 #[derive(Default)]
@@ -351,7 +372,9 @@ impl TextEngine {
             return Err(EngineError::SessionConflict);
         }
         let mut session = EngineSession::default();
-        session.paragraph.initialize()?;
+        let mut spare = ParagraphState::default();
+        spare.initialize()?;
+        session.spare_paragraph = Some(spare);
         self.sessions.insert(handle, session);
         Ok(())
     }
@@ -369,7 +392,14 @@ impl TextEngine {
             .sessions
             .get_mut(&handle)
             .ok_or(EngineError::SessionMissing)?;
-        session.paragraph.reserve_text(capacity)
+        if let Some(paragraph) = session.spare_paragraph.as_mut() {
+            paragraph.reserve_text(capacity)?;
+        }
+        for paragraph in &mut session.paragraphs {
+            paragraph.state.reserve_text(capacity)?;
+        }
+        session.text_capacity = session.text_capacity.max(capacity);
+        Ok(())
     }
 
     pub(crate) fn session_revision(&self, handle: u32) -> Result<SessionRevision, EngineError> {
@@ -383,7 +413,8 @@ impl TextEngine {
     pub(crate) fn session_text(&self, handle: u32) -> Result<&[u16], EngineError> {
         self.sessions
             .get(&handle)
-            .map(|session| session.paragraph.text.as_slice())
+            .and_then(EngineSession::first_paragraph_state)
+            .map(|paragraph| paragraph.text.as_slice())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -391,7 +422,8 @@ impl TextEngine {
     pub(crate) fn session_style_count(&self, handle: u32) -> Result<usize, EngineError> {
         self.sessions
             .get(&handle)
-            .map(|session| session.paragraph.styles.len())
+            .and_then(EngineSession::first_paragraph_state)
+            .map(|paragraph| paragraph.styles.len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -399,7 +431,8 @@ impl TextEngine {
     pub(crate) fn session_style_segment_count(&self, handle: u32) -> Result<usize, EngineError> {
         self.sessions
             .get(&handle)
-            .map(|session| session.paragraph.resolved_styles.segments().len())
+            .and_then(EngineSession::first_paragraph_state)
+            .map(|paragraph| paragraph.resolved_styles.segments().len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -407,7 +440,8 @@ impl TextEngine {
     pub(crate) fn session_shaping_run_count(&self, handle: u32) -> Result<usize, EngineError> {
         self.sessions
             .get(&handle)
-            .map(|session| session.paragraph.shaping_runs.runs().len())
+            .and_then(EngineSession::first_paragraph_state)
+            .map(|paragraph| paragraph.shaping_runs.runs().len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -442,7 +476,6 @@ impl TextEngine {
         if !request.limits.all_nonzero() {
             return Err(EngineError::InvalidRequest);
         }
-        let paragraph_id = request_paragraph_id(request)?;
         let policy = self
             .policies
             .get(&request.policy_handle)
@@ -461,12 +494,6 @@ impl TextEngine {
             .sessions
             .get_mut(&request.session_id)
             .ok_or(EngineError::SessionMissing)?;
-        if session.paragraph_id.is_some()
-            && paragraph_id.is_some()
-            && session.paragraph_id != paragraph_id
-        {
-            return Err(EngineError::InvalidRequest);
-        }
         if session.policy_binding.is_some_and(|binding| {
             binding.handle != request.policy_handle || binding.fingerprint != policy_fingerprint
         }) {
@@ -500,25 +527,53 @@ impl TextEngine {
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
         let mut next_glyph_id = session.next_glyph_id.max(1);
         let mut next_content_revision = session.next_content_revision.max(1);
-        let (text_mutations, style_mutations, geometry) = if let Some(paragraph_id) = paragraph_id {
+        let implicit_paragraph =
+            if request.paragraph_mutations.len() == 0 && session.paragraphs.is_empty() {
+                request_semantic_paragraph_id(request)?
+            } else {
+                None
+            };
+        let preparation = (|| {
+            session.prepare_lifecycle(
+                request.paragraph_mutations,
+                implicit_paragraph,
+                request.limits.max_paragraphs,
+            )?;
             let (mut text_cursor, mut style_cursor) = (0, 0);
             let (mut constraint_cursor, mut inline_object_cursor) = (0, 0);
-            let text = request
-                .text_mutations
-                .take_paragraph(paragraph_id, &mut text_cursor)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let styles = request
-                .style_mutations
-                .take_paragraph(paragraph_id, &mut style_cursor)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let geometry = request
-                .geometry
-                .take_paragraph(
-                    paragraph_id,
-                    &mut constraint_cursor,
-                    &mut inline_object_cursor,
-                )
-                .map_err(|_| EngineError::InvalidRequest)?;
+            for order_index in 0..session.active_order().len() {
+                let paragraph_id = session.active_order()[order_index].id;
+                let text = request
+                    .text_mutations
+                    .take_paragraph(paragraph_id, &mut text_cursor)
+                    .map_err(|_| EngineError::InvalidRequest)?;
+                let styles = request
+                    .style_mutations
+                    .take_paragraph(paragraph_id, &mut style_cursor)
+                    .map_err(|_| EngineError::InvalidRequest)?;
+                let geometry = request
+                    .geometry
+                    .take_paragraph(
+                        paragraph_id,
+                        &mut constraint_cursor,
+                        &mut inline_object_cursor,
+                    )
+                    .map_err(|_| EngineError::InvalidRequest)?;
+                let paragraph = session
+                    .paragraph_mut(paragraph_id)
+                    .ok_or(EngineError::InvalidRequest)?;
+                paragraph.positioned_changed = paragraph.state.prepare(
+                    shaper.as_deref_mut(),
+                    font_stacks,
+                    font_bindings,
+                    text,
+                    styles,
+                    geometry,
+                    request.limits,
+                    &mut next_glyph_id,
+                    &mut next_content_revision,
+                )?;
+            }
             if text_cursor != request.text_mutations.len()
                 || style_cursor != request.style_mutations.len()
                 || constraint_cursor != request.geometry.constraint_count()
@@ -526,123 +581,91 @@ impl TextEngine {
             {
                 return Err(EngineError::InvalidRequest);
             }
-            (text, styles, geometry)
-        } else {
-            (request.text_mutations, request.style_mutations, request.geometry)
-        };
-        let paragraph = &mut session.paragraph;
-        paragraph.prepare_text(text_mutations)?;
-        if let Err(error) = paragraph.prepare_styles(style_mutations, |handle| {
-            font_stacks
-                .binary_search_by_key(&handle, |stack| stack.handle)
-                .is_ok()
-        }) {
-            paragraph.abort_all();
-            return Err(error);
-        }
-        if let Err(error) = paragraph.prepare_unicode() {
-            paragraph.abort_all();
-            return Err(error);
-        }
-        if let Err(error) = paragraph.prepare_bidi() {
-            paragraph.abort_all();
-            return Err(error);
-        }
-        if let Err(error) = paragraph.prepare_shaping_runs() {
-            paragraph.abort_all();
-            return Err(error);
-        }
-        if let Some(shaper) = shaper.as_deref_mut() {
-            if let Err(error) = paragraph.prepare_shape(shaper, font_stacks, font_bindings) {
-                paragraph.abort_all();
-                return Err(error);
-            }
-            if let Err(error) = paragraph.prepare_clusters(shaper, &mut next_glyph_id) {
-                paragraph.abort_all();
-                return Err(error);
-            }
-        }
-        if let Err(error) = paragraph.prepare_geometry(geometry) {
-            paragraph.abort_all();
-            return Err(error);
-        }
-        let flow_changed = paragraph.clusters_prepared
-            || paragraph.geometry_prepared
-            || paragraph.style_invalidation.metrics;
-        let positioned_changed = flow_changed || paragraph.style_invalidation.positioning;
-        if let Some(shaper) = shaper {
-            if flow_changed
-                && let Err(error) = paragraph.prepare_flow_layout(
-                    shaper,
-                    font_stacks,
-                    font_bindings,
-                    request.limits.max_lines,
-                    request.limits.max_slots_per_band,
-                )
-            {
-                paragraph.abort_all();
-                return Err(error);
-            }
-            if positioned_changed
-                && let Err(error) =
-                    paragraph.prepare_positioned(shaper, &mut next_content_revision)
-            {
-                paragraph.abort_all();
-                return Err(error);
-            }
-        }
-        let reuse_ordered_plan = !checkpoint
-            && !positioned_changed
-            && policy
-                .programs()
-                .iter()
-                .all(|program| program.allocation_strategy == ALLOCATION_ORDERED_DIRECT);
-        let plan_result = if reuse_ordered_plan {
-            session.plan.prepare_reuse()
-        } else {
-            let positioned = if paragraph.positioned_prepared {
-                &paragraph.pending_positioned
+            let positioned_changed = session.lifecycle_changed
+                || session
+                    .paragraphs
+                    .iter()
+                    .any(|paragraph| paragraph.positioned_changed);
+            let reuse_ordered_plan = !checkpoint
+                && !positioned_changed
+                && policy
+                    .programs()
+                    .iter()
+                    .all(|program| program.allocation_strategy == ALLOCATION_ORDERED_DIRECT);
+            if reuse_ordered_plan {
+                session.plan.prepare_reuse().map_err(plan_error)?;
             } else {
-                &paragraph.positioned
-            };
-            let semantic_f32 = positioned.semantic_f32();
-            let semantic_u32 = positioned.semantic_u32();
-            if let Err(error) = gather.gather(
-                policy,
-                CapabilitySetId(request.capability_set),
-                LayoutPlanInput {
-                    glyphs: positioned.glyphs(),
-                    semantic_change_masks: positioned.semantic_change_masks(),
-                    semantic_f32: &semantic_f32,
-                    semantic_u32: &semantic_u32,
-                },
-                checkpoint || !positioned_changed,
-                |handle| {
-                    font_bindings
+                let record_count =
+                    session
+                        .active_order()
                         .iter()
-                        .find(|binding| binding.handle == handle)
-                        .map(|binding| &binding.binding)
-                },
-            ) {
-                paragraph.abort_all();
-                return Err(gather_error(error));
+                        .try_fold(0usize, |total, ordered| {
+                            let paragraph = session
+                                .paragraph(ordered.id)
+                                .ok_or(EngineError::InvalidRequest)?;
+                            let positioned = if paragraph.state.positioned_prepared {
+                                &paragraph.state.pending_positioned
+                            } else {
+                                &paragraph.state.positioned
+                            };
+                            total
+                                .checked_add(positioned.glyphs().len())
+                                .ok_or(EngineError::ResultTooLarge)
+                        })?;
+                gather.begin(policy, record_count).map_err(gather_error)?;
+                for order_index in 0..session.active_order().len() {
+                    let paragraph_id = session.active_order()[order_index].id;
+                    let paragraph = session
+                        .paragraph(paragraph_id)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    let positioned = if paragraph.state.positioned_prepared {
+                        &paragraph.state.pending_positioned
+                    } else {
+                        &paragraph.state.positioned
+                    };
+                    let semantic_f32 = positioned.semantic_f32();
+                    let semantic_u32 = positioned.semantic_u32();
+                    gather
+                        .append(
+                            policy,
+                            CapabilitySetId(request.capability_set),
+                            LayoutPlanInput {
+                                glyphs: positioned.glyphs(),
+                                semantic_change_masks: positioned.semantic_change_masks(),
+                                semantic_f32: &semantic_f32,
+                                semantic_u32: &semantic_u32,
+                            },
+                            checkpoint || !paragraph.positioned_changed,
+                            |handle| {
+                                font_bindings
+                                    .iter()
+                                    .find(|binding| binding.handle == handle)
+                                    .map(|binding| &binding.binding)
+                            },
+                        )
+                        .map_err(gather_error)?;
+                }
+                let gathered = gather.view();
+                session
+                    .plan
+                    .prepare(
+                        policy,
+                        CapabilitySetId(request.capability_set),
+                        gathered.plan_input(),
+                        checkpoint,
+                        publication_generation,
+                        request.acknowledged_publication_generation,
+                    )
+                    .map_err(plan_error)?;
             }
-            let gathered = gather.view();
-            session.plan.prepare(
-                policy,
-                CapabilitySetId(request.capability_set),
-                gathered.plan_input(),
-                checkpoint,
-                publication_generation,
-                request.acknowledged_publication_generation,
-            )
-        };
-        if let Err(error) = plan_result {
-            paragraph.abort_all();
-            return Err(plan_error(error));
+            session.pending_next_glyph_id = next_glyph_id;
+            session.pending_next_content_revision = next_content_revision;
+            Ok(())
+        })();
+        if let Err(error) = preparation {
+            session.abort_pending();
+            return Err(error);
         }
-        session.pending_next_glyph_id = next_glyph_id;
-        session.pending_next_content_revision = next_content_revision;
         Ok(PreparedUpdate {
             session_id: request.session_id,
             previous: session.revision,
@@ -652,7 +675,6 @@ impl TextEngine {
             policy_handle: request.policy_handle,
             capability_set: request.capability_set,
             policy_fingerprint,
-            paragraph_id,
         })
     }
 
@@ -685,10 +707,7 @@ impl TextEngine {
         if session.revision != prepared.previous {
             return Err(EngineError::RevisionConflict);
         }
-        session.plan.abort();
-        session.paragraph.abort_all();
-        session.pending_next_glyph_id = 0;
-        session.pending_next_content_revision = 0;
+        session.abort_pending();
         Ok(())
     }
 
@@ -704,7 +723,7 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         session.plan.commit().map_err(plan_error)?;
-        session.paragraph.commit_all();
+        session.commit_paragraphs();
         session.next_glyph_id = session.pending_next_glyph_id;
         session.next_content_revision = session.pending_next_content_revision;
         session.pending_next_glyph_id = 0;
@@ -713,9 +732,6 @@ impl TextEngine {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
         });
-        if session.paragraph_id.is_none() {
-            session.paragraph_id = prepared.paragraph_id;
-        }
         session.revision = prepared.next;
         Ok(CommittedUpdate {
             session_id: prepared.session_id,
@@ -726,7 +742,289 @@ impl TextEngine {
     }
 }
 
+impl EngineSession {
+    #[cfg(test)]
+    fn first_paragraph_state(&self) -> Option<&ParagraphState> {
+        self.ordered_paragraphs
+            .first()
+            .and_then(|ordered| self.paragraph(ordered.id))
+            .map(|paragraph| &paragraph.state)
+            .or_else(|| self.paragraphs.first().map(|paragraph| &paragraph.state))
+            .or(self.spare_paragraph.as_ref())
+    }
+
+    fn paragraph(&self, id: u32) -> Option<&RetainedParagraph> {
+        self.paragraphs
+            .binary_search_by_key(&id, |paragraph| paragraph.id)
+            .ok()
+            .map(|index| &self.paragraphs[index])
+    }
+
+    fn paragraph_mut(&mut self, id: u32) -> Option<&mut RetainedParagraph> {
+        self.paragraphs
+            .binary_search_by_key(&id, |paragraph| paragraph.id)
+            .ok()
+            .map(|index| &mut self.paragraphs[index])
+    }
+
+    fn prepare_lifecycle(
+        &mut self,
+        mutations: super::semantic_wire::ParagraphMutationBatch<'_>,
+        implicit_paragraph: Option<u32>,
+        max_paragraphs: u32,
+    ) -> Result<(), EngineError> {
+        if self.lifecycle_prepared {
+            return Err(EngineError::InvalidRequest);
+        }
+        if mutations.len() == 0 && implicit_paragraph.is_none() {
+            return Ok(());
+        }
+        self.lifecycle_prepared = true;
+        let result = (|| {
+            let mut creates =
+                usize::from(implicit_paragraph.is_some_and(|id| self.paragraph(id).is_none()));
+            let mut removals = 0usize;
+            for index in 0..mutations.len() {
+                match mutations.get(index).ok_or(EngineError::InvalidRequest)? {
+                    super::semantic_wire::ParagraphMutation::Upsert { paragraph_id, .. } => {
+                        creates += usize::from(self.paragraph(paragraph_id).is_none());
+                    }
+                    super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => {
+                        if self.paragraph(paragraph_id).is_none() {
+                            return Err(EngineError::InvalidRequest);
+                        }
+                        removals += 1;
+                    }
+                }
+            }
+            let final_count = self
+                .paragraphs
+                .len()
+                .checked_add(creates)
+                .and_then(|count| count.checked_sub(removals))
+                .ok_or(EngineError::InvalidRequest)?;
+            if final_count
+                > usize::try_from(max_paragraphs).map_err(|_| EngineError::InvalidRequest)?
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+            self.paragraphs
+                .try_reserve(creates)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            self.pending_ordered_paragraphs
+                .try_reserve(final_count)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+
+            for index in 0..mutations.len() {
+                match mutations.get(index).ok_or(EngineError::InvalidRequest)? {
+                    super::semantic_wire::ParagraphMutation::Upsert {
+                        paragraph_id,
+                        order,
+                    } => self.prepare_upsert(paragraph_id, order)?,
+                    super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => {
+                        self.paragraph_mut(paragraph_id)
+                            .ok_or(EngineError::InvalidRequest)?
+                            .pending_remove = true;
+                    }
+                }
+            }
+            if let Some(paragraph_id) = implicit_paragraph
+                && self.paragraph(paragraph_id).is_none()
+            {
+                self.prepare_upsert(paragraph_id, 0)?;
+            }
+
+            self.pending_ordered_paragraphs.clear();
+            for paragraph in &self.paragraphs {
+                if paragraph.pending_remove {
+                    continue;
+                }
+                self.pending_ordered_paragraphs.push(ParagraphOrder {
+                    order: paragraph.pending_order.unwrap_or(paragraph.order),
+                    id: paragraph.id,
+                });
+            }
+            self.pending_ordered_paragraphs
+                .sort_unstable_by_key(|paragraph| (paragraph.order, paragraph.id));
+            if self
+                .pending_ordered_paragraphs
+                .windows(2)
+                .any(|pair| pair[0].order == pair[1].order)
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+            self.lifecycle_changed = self.pending_ordered_paragraphs != self.ordered_paragraphs;
+            Ok(())
+        })();
+        if result.is_err() {
+            self.abort_lifecycle();
+        }
+        result
+    }
+
+    fn prepare_upsert(&mut self, id: u32, order: u32) -> Result<(), EngineError> {
+        match self
+            .paragraphs
+            .binary_search_by_key(&id, |paragraph| paragraph.id)
+        {
+            Ok(index) => {
+                self.paragraphs[index].pending_order = Some(order);
+                Ok(())
+            }
+            Err(index) => {
+                let mut state = if let Some(spare) = self.spare_paragraph.take() {
+                    spare
+                } else {
+                    let mut state = ParagraphState::default();
+                    state.initialize()?;
+                    state
+                };
+                if let Err(error) = state.reserve_text(self.text_capacity) {
+                    if self.spare_paragraph.is_none() {
+                        self.spare_paragraph = Some(state);
+                    }
+                    return Err(error);
+                }
+                self.paragraphs.insert(
+                    index,
+                    RetainedParagraph {
+                        id,
+                        order,
+                        pending_order: Some(order),
+                        pending_remove: false,
+                        created: true,
+                        positioned_changed: false,
+                        state,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    fn active_order(&self) -> &[ParagraphOrder] {
+        if self.lifecycle_prepared {
+            &self.pending_ordered_paragraphs
+        } else {
+            &self.ordered_paragraphs
+        }
+    }
+
+    fn abort_pending(&mut self) {
+        self.plan.abort();
+        for paragraph in &mut self.paragraphs {
+            paragraph.state.abort_all();
+            paragraph.positioned_changed = false;
+        }
+        self.abort_lifecycle();
+        self.pending_next_glyph_id = 0;
+        self.pending_next_content_revision = 0;
+    }
+
+    fn abort_lifecycle(&mut self) {
+        let mut index = 0;
+        while index < self.paragraphs.len() {
+            if self.paragraphs[index].created {
+                let mut paragraph = self.paragraphs.remove(index);
+                paragraph.state.abort_all();
+                if self.spare_paragraph.is_none() {
+                    self.spare_paragraph = Some(paragraph.state);
+                }
+            } else {
+                let paragraph = &mut self.paragraphs[index];
+                paragraph.pending_order = None;
+                paragraph.pending_remove = false;
+                paragraph.positioned_changed = false;
+                index += 1;
+            }
+        }
+        self.pending_ordered_paragraphs.clear();
+        self.lifecycle_prepared = false;
+        self.lifecycle_changed = false;
+    }
+
+    fn commit_paragraphs(&mut self) {
+        for paragraph in &mut self.paragraphs {
+            paragraph.state.commit_all();
+            paragraph.positioned_changed = false;
+        }
+        if !self.lifecycle_prepared {
+            return;
+        }
+        let mut index = 0;
+        while index < self.paragraphs.len() {
+            if self.paragraphs[index].pending_remove {
+                let paragraph = self.paragraphs.remove(index);
+                if self.spare_paragraph.is_none() {
+                    self.spare_paragraph = Some(paragraph.state);
+                }
+            } else {
+                let paragraph = &mut self.paragraphs[index];
+                if let Some(order) = paragraph.pending_order.take() {
+                    paragraph.order = order;
+                }
+                paragraph.created = false;
+                index += 1;
+            }
+        }
+        core::mem::swap(
+            &mut self.ordered_paragraphs,
+            &mut self.pending_ordered_paragraphs,
+        );
+        self.pending_ordered_paragraphs.clear();
+        self.lifecycle_prepared = false;
+        self.lifecycle_changed = false;
+    }
+}
+
 impl ParagraphState {
+    #[allow(clippy::too_many_arguments)]
+    fn prepare(
+        &mut self,
+        mut shaper: Option<&mut ShaperRegistry>,
+        font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
+        text_mutations: super::semantic_wire::TextMutationBatch<'_>,
+        style_mutations: super::semantic_wire::StyleMutationBatch<'_>,
+        geometry: super::semantic_wire::GeometryBatch<'_>,
+        limits: super::frame::UpdateLimits,
+        next_glyph_id: &mut u32,
+        next_content_revision: &mut u32,
+    ) -> Result<bool, EngineError> {
+        self.prepare_text(text_mutations)?;
+        self.prepare_styles(style_mutations, |handle| {
+            font_stacks
+                .binary_search_by_key(&handle, |stack| stack.handle)
+                .is_ok()
+        })?;
+        self.prepare_unicode()?;
+        self.prepare_bidi()?;
+        self.prepare_shaping_runs()?;
+        if let Some(shaper) = shaper.as_deref_mut() {
+            self.prepare_shape(shaper, font_stacks, font_bindings)?;
+            self.prepare_clusters(shaper, next_glyph_id)?;
+        }
+        self.prepare_geometry(geometry)?;
+        let flow_changed =
+            self.clusters_prepared || self.geometry_prepared || self.style_invalidation.metrics;
+        let positioned_changed = flow_changed || self.style_invalidation.positioning;
+        if let Some(shaper) = shaper {
+            if flow_changed {
+                self.prepare_flow_layout(
+                    shaper,
+                    font_stacks,
+                    font_bindings,
+                    limits.max_lines,
+                    limits.max_slots_per_band,
+                )?;
+            }
+            if positioned_changed {
+                self.prepare_positioned(shaper, next_content_revision)?;
+            }
+        }
+        Ok(positioned_changed)
+    }
+
     fn abort_all(&mut self) {
         self.abort_text();
         self.abort_styles();
@@ -1311,6 +1609,9 @@ impl ParagraphState {
         geometry: super::semantic_wire::GeometryBatch<'_>,
     ) -> Result<(), EngineError> {
         self.abort_geometry();
+        if geometry.is_empty() {
+            return Ok(());
+        }
         let text_length = if self.text_prepared {
             self.pending_text.len()
         } else {
@@ -1685,28 +1986,19 @@ fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineErro
     Ok(())
 }
 
-fn request_paragraph_id(request: UpdateRequest<'_>) -> Result<Option<u32>, EngineError> {
-    let mut declared_id = None;
-    for index in 0..request.paragraph_mutations.len() {
-        match request
-            .paragraph_mutations
-            .get(index)
-            .ok_or(EngineError::InvalidRequest)?
-        {
-            super::semantic_wire::ParagraphMutation::Upsert { paragraph_id, .. } => {
-                merge_paragraph_id(&mut declared_id, Some(paragraph_id))?;
-            }
-            super::semantic_wire::ParagraphMutation::Remove { .. } => {
-                return Err(EngineError::InvalidRequest);
-            }
-        }
-    }
+fn request_semantic_paragraph_id(request: UpdateRequest<'_>) -> Result<Option<u32>, EngineError> {
     let mut paragraph_id = None;
     for index in 0..request.text_mutations.len() {
-        merge_paragraph_id(&mut paragraph_id, request.text_mutations.paragraph_id(index))?;
+        merge_paragraph_id(
+            &mut paragraph_id,
+            request.text_mutations.paragraph_id(index),
+        )?;
     }
     for index in 0..request.style_mutations.len() {
-        merge_paragraph_id(&mut paragraph_id, request.style_mutations.paragraph_id(index))?;
+        merge_paragraph_id(
+            &mut paragraph_id,
+            request.style_mutations.paragraph_id(index),
+        )?;
     }
     let geometry_count = request
         .geometry
@@ -1716,10 +2008,7 @@ fn request_paragraph_id(request: UpdateRequest<'_>) -> Result<Option<u32>, Engin
     for index in 0..geometry_count {
         merge_paragraph_id(&mut paragraph_id, request.geometry.paragraph_id(index))?;
     }
-    if declared_id.is_some() && paragraph_id.is_some() && declared_id != paragraph_id {
-        return Err(EngineError::InvalidRequest);
-    }
-    Ok(declared_id.or(paragraph_id))
+    Ok(paragraph_id)
 }
 
 fn merge_paragraph_id(
@@ -1768,8 +2057,8 @@ mod tests {
             self as abi, ENGINE_TEXT_MUTATION_DELETE_COUNT, ENGINE_TEXT_MUTATION_ENCODING,
             ENGINE_TEXT_MUTATION_INSERT_COUNT, ENGINE_TEXT_MUTATION_INSERT_OFFSET,
             ENGINE_TEXT_MUTATION_OPCODE, ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
-            ENGINE_TEXT_MUTATION_RECORD_SIZE,
-            ENGINE_TEXT_MUTATION_TEXT_START, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            ENGINE_TEXT_MUTATION_RECORD_SIZE, ENGINE_TEXT_MUTATION_TEXT_START,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
         },
         bidi::DIRECTION_RTL,
         engine::{
@@ -1777,10 +2066,10 @@ mod tests {
                 FieldTable, FontRenderBinding, FontResource, FontStrike, MISSING_RESOURCE_INDEX,
             },
             frame::{
-                STYLE_FIELD_DIRECTION, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
-                STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FLAG_ROOT,
-                STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
-                TEXT_MUTATION_REPLACE_UTF16,
+                PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT, STYLE_FIELD_DIRECTION,
+                STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_LINE_HEIGHT,
+                STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE,
+                STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16,
             },
             policy::{
                 ALLOCATION_ORDERED_DIRECT, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE,
@@ -1788,7 +2077,9 @@ mod tests {
                 BufferSchema, CAP_ORDERED_DIRECT, CapabilitySet, Operation, PolicyDescriptor,
                 ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType, TechniqueId,
             },
-            semantic_wire::{parse_style_mutations, parse_text_mutations},
+            semantic_wire::{
+                parse_paragraph_mutations, parse_style_mutations, parse_text_mutations,
+            },
         },
         wire::write_u32,
     };
@@ -2069,7 +2360,13 @@ mod tests {
         engine.commit_update(prepared).unwrap();
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
         assert_eq!(
-            engine.sessions.get(&4).unwrap().paragraph.text_unit_ids,
+            engine
+                .sessions
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .text_unit_ids,
             [1, 2, 3, 4]
         );
         assert_eq!(
@@ -2077,7 +2374,8 @@ mod tests {
                 .sessions
                 .get(&4)
                 .unwrap()
-                .paragraph
+                .first_paragraph_state()
+                .unwrap()
                 .unicode
                 .grapheme_boundaries(),
             &[0, 1, 2, 3, 4]
@@ -2092,8 +2390,9 @@ mod tests {
         engine.abort_update(prepared).unwrap();
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
         let session = engine.sessions.get(&4).unwrap();
-        assert_eq!(session.paragraph.text_unit_ids, [1, 2, 3, 4]);
-        assert_eq!(session.paragraph.next_text_unit_id, 5);
+        let paragraph = session.first_paragraph_state().unwrap();
+        assert_eq!(paragraph.text_unit_ids, [1, 2, 3, 4]);
+        assert_eq!(paragraph.next_text_unit_id, 5);
 
         let retry = engine.prepare_update(edit, 2).unwrap();
         engine.commit_update(retry).unwrap();
@@ -2102,16 +2401,20 @@ mod tests {
             &[0x61, 0x58, 0x59, 0x63, 0x64, 0x21]
         );
         assert_eq!(
-            engine.sessions.get(&4).unwrap().paragraph.text_unit_ids,
+            engine
+                .sessions
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .text_unit_ids,
             [1, 5, 6, 3, 4, 7]
         );
 
         let settled_capacities = {
             let session = engine.sessions.get(&4).unwrap();
-            [
-                session.paragraph.text.capacity(),
-                session.paragraph.pending_text.capacity(),
-            ]
+            let paragraph = session.first_paragraph_state().unwrap();
+            [paragraph.text.capacity(), paragraph.pending_text.capacity()]
         };
         let warm_bytes = text_mutation_bytes(&[(0, 1, &[0x7a])]);
         let warm_batch =
@@ -2121,12 +2424,10 @@ mod tests {
         let prepared = engine.prepare_update(warm, 3).unwrap();
         engine.commit_update(prepared).unwrap();
         let session = engine.sessions.get(&4).unwrap();
-        assert_eq!(session.paragraph.text_unit_ids, [8, 5, 6, 3, 4, 7]);
+        let paragraph = session.first_paragraph_state().unwrap();
+        assert_eq!(paragraph.text_unit_ids, [8, 5, 6, 3, 4, 7]);
         assert_eq!(
-            [
-                session.paragraph.pending_text.capacity(),
-                session.paragraph.text.capacity(),
-            ],
+            [paragraph.pending_text.capacity(), paragraph.text.capacity(),],
             settled_capacities
         );
     }
@@ -2148,9 +2449,10 @@ mod tests {
             Err(EngineError::InvalidRequest)
         );
         let session = engine.sessions.get(&4).unwrap();
-        assert!(session.paragraph.text.is_empty());
-        assert!(session.paragraph.unicode.grapheme_boundaries().is_empty());
-        assert!(session.paragraph.bidi.levels.is_empty());
+        let paragraph = session.first_paragraph_state().unwrap();
+        assert!(paragraph.text.is_empty());
+        assert!(paragraph.unicode.grapheme_boundaries().is_empty());
+        assert!(paragraph.bidi.levels.is_empty());
     }
 
     #[test]
@@ -2173,7 +2475,8 @@ mod tests {
                 .sessions
                 .get(&4)
                 .unwrap()
-                .paragraph
+                .first_paragraph_state()
+                .unwrap()
                 .bidi
                 .paragraph_levels,
             &[0]
@@ -2189,7 +2492,8 @@ mod tests {
                 .sessions
                 .get(&4)
                 .unwrap()
-                .paragraph
+                .first_paragraph_state()
+                .unwrap()
                 .bidi
                 .paragraph_levels,
             &[0]
@@ -2200,7 +2504,8 @@ mod tests {
                 .sessions
                 .get(&4)
                 .unwrap()
-                .paragraph
+                .first_paragraph_state()
+                .unwrap()
                 .bidi
                 .paragraph_levels,
             &[1]
@@ -2276,6 +2581,197 @@ mod tests {
     }
 
     #[test]
+    fn ordered_paragraphs_commit_reorder_and_remove_as_one_session() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        engine.reserve_session_text(4, 8).unwrap();
+
+        let lifecycle_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+        ]);
+        let text_bytes =
+            paragraph_text_mutation_bytes(&[(1, 0, 0, &[0x61, 0x62]), (2, 0, 0, &[0x63, 0x64])]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        initial.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let session = engine.sessions.get(&4).unwrap();
+        assert_eq!(
+            session
+                .ordered_paragraphs
+                .iter()
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>(),
+            [1, 2]
+        );
+        assert_eq!(session.paragraph(1).unwrap().state.text, [0x61, 0x62]);
+        assert_eq!(session.paragraph(2).unwrap().state.text, [0x63, 0x64]);
+
+        let reorder_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 0),
+        ]);
+        let mut reorder = update(1, 1, 1);
+        reorder.limits.max_paragraphs = 2;
+        reorder.paragraph_mutations =
+            parse_paragraph_mutations(&reorder_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        let prepared = engine.prepare_update(reorder, 2).unwrap();
+        engine.commit_update(prepared).unwrap();
+        let session = engine.sessions.get(&4).unwrap();
+        assert_eq!(
+            session
+                .ordered_paragraphs
+                .iter()
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>(),
+            [2, 1]
+        );
+        assert_eq!(session.paragraph(1).unwrap().state.text, [0x61, 0x62]);
+        assert_eq!(session.paragraph(2).unwrap().state.text, [0x63, 0x64]);
+
+        let remove_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 1, 0)]);
+        let mut remove = update(2, 2, 2);
+        remove.limits.max_paragraphs = 2;
+        remove.paragraph_mutations =
+            parse_paragraph_mutations(&remove_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(remove, 3).unwrap();
+        engine.commit_update(prepared).unwrap();
+        let session = engine.sessions.get(&4).unwrap();
+        assert_eq!(
+            session.ordered_paragraphs,
+            [ParagraphOrder { order: 0, id: 2 }]
+        );
+        assert!(session.paragraph(1).is_none());
+        assert_eq!(session.paragraph(2).unwrap().state.text, [0x63, 0x64]);
+        assert!(session.spare_paragraph.is_some());
+    }
+
+    #[test]
+    fn a_later_paragraph_failure_rolls_back_every_child_and_lifecycle_change() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        let lifecycle_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let initial_text = paragraph_text_mutation_bytes(&[(1, 0, 0, &[0x61]), (2, 0, 0, &[0x62])]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        initial.text_mutations =
+            parse_text_mutations(&initial_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let reorder_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 0),
+        ]);
+        let invalid_text = paragraph_text_mutation_bytes(&[(1, 0, 1, &[0x78]), (2, 9, 0, &[0x79])]);
+        let mut invalid = update(1, 1, 1);
+        invalid.limits.max_paragraphs = 2;
+        invalid.paragraph_mutations =
+            parse_paragraph_mutations(&reorder_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        invalid.text_mutations =
+            parse_text_mutations(&invalid_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        assert_eq!(
+            engine.prepare_update(invalid, 2),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let session = engine.sessions.get(&4).unwrap();
+        assert_eq!(session.revision, SessionRevision { engine: 1, plan: 1 });
+        assert_eq!(
+            session
+                .ordered_paragraphs
+                .iter()
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>(),
+            [1, 2]
+        );
+        assert_eq!(session.paragraph(1).unwrap().state.text, [0x61]);
+        assert_eq!(session.paragraph(2).unwrap().state.text, [0x62]);
+        assert!(!session.lifecycle_prepared);
+    }
+
+    #[test]
+    fn paragraph_limits_unknown_semantics_and_order_collisions_are_atomic() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        let lifecycle_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let mut too_many = update(0, 0, 0);
+        too_many.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        assert_eq!(
+            engine.prepare_update(too_many, 1),
+            Err(EngineError::InvalidRequest)
+        );
+        assert!(engine.sessions.get(&4).unwrap().paragraphs.is_empty());
+
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let collision_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 1, 1)]);
+        let mut collision = update(1, 1, 1);
+        collision.limits.max_paragraphs = 2;
+        collision.paragraph_mutations =
+            parse_paragraph_mutations(&collision_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        assert_eq!(
+            engine.prepare_update(collision, 2),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let unknown_text = paragraph_text_mutation_bytes(&[(3, 0, 0, &[0x61])]);
+        let mut unknown = update(1, 1, 1);
+        unknown.limits.max_paragraphs = 2;
+        unknown.text_mutations =
+            parse_text_mutations(&unknown_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            engine.prepare_update(unknown, 2),
+            Err(EngineError::InvalidRequest)
+        );
+        let session = engine.sessions.get(&4).unwrap();
+        assert_eq!(
+            session
+                .ordered_paragraphs
+                .iter()
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>(),
+            [1, 2]
+        );
+    }
+
+    #[test]
     fn single_paragraph_session_rejects_mixed_and_rebound_paragraph_ids() {
         let mut engine = TextEngine::default();
         engine
@@ -2284,19 +2780,15 @@ mod tests {
         engine.create_session(4).unwrap();
 
         let mut mixed_bytes = text_mutation_bytes(&[(0, 0, &[0x61]), (1, 0, &[0x62])]);
-        let second = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
-            + ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
+        let second =
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
         write_u32(
             &mut mixed_bytes,
             second + ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
             2,
         );
-        let mixed = parse_text_mutations(
-            &mixed_bytes,
-            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
-            2,
-        )
-        .unwrap();
+        let mixed =
+            parse_text_mutations(&mixed_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
         let mut request = update(0, 0, 0);
         request.text_mutations = mixed;
         assert_eq!(
@@ -2306,12 +2798,8 @@ mod tests {
 
         let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61])]);
         let mut initial = update(0, 0, 0);
-        initial.text_mutations = parse_text_mutations(
-            &initial_bytes,
-            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
-            1,
-        )
-        .unwrap();
+        initial.text_mutations =
+            parse_text_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         let prepared = engine.prepare_update(initial, 1).unwrap();
         engine.commit_update(prepared).unwrap();
 
@@ -2322,12 +2810,8 @@ mod tests {
             2,
         );
         let mut rebound = update(1, 1, 1);
-        rebound.text_mutations = parse_text_mutations(
-            &rebound_bytes,
-            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
-            1,
-        )
-        .unwrap();
+        rebound.text_mutations =
+            parse_text_mutations(&rebound_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         assert_eq!(
             engine.prepare_update(rebound, 2),
             Err(EngineError::InvalidRequest)
@@ -2555,6 +3039,66 @@ mod tests {
             record + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
             1,
         );
+        bytes
+    }
+
+    fn paragraph_mutation_bytes(records: &[(u8, u32, u32)]) -> Vec<u8> {
+        let record_offset = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let mut bytes =
+            vec![
+                0;
+                record_offset + records.len() * abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize
+            ];
+        for (index, &(opcode, paragraph_id, order)) in records.iter().enumerate() {
+            let start = record_offset + index * abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize;
+            let record =
+                &mut bytes[start..start + abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize];
+            record[abi::ENGINE_PARAGRAPH_MUTATION_OPCODE] = opcode;
+            write_u32(
+                record,
+                abi::ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
+                paragraph_id,
+            );
+            write_u32(record, abi::ENGINE_PARAGRAPH_MUTATION_ORDER, order);
+        }
+        bytes
+    }
+
+    fn paragraph_text_mutation_bytes(records: &[(u32, u32, u32, &[u16])]) -> Vec<u8> {
+        let record_offset = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let records_length = records.len() * ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
+        let payload_length = records
+            .iter()
+            .map(|(_, _, _, insert)| insert.len() * 2)
+            .sum::<usize>();
+        let mut bytes = vec![0; record_offset + records_length + payload_length];
+        let mut payload_offset = record_offset + records_length;
+        for (index, &(paragraph_id, text_start, delete_count, insert)) in records.iter().enumerate()
+        {
+            let start = record_offset + index * ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
+            let record = &mut bytes[start..start + ENGINE_TEXT_MUTATION_RECORD_SIZE as usize];
+            record[ENGINE_TEXT_MUTATION_OPCODE] = TEXT_MUTATION_REPLACE_UTF16;
+            record[ENGINE_TEXT_MUTATION_ENCODING] = TEXT_ENCODING_UTF16_LE;
+            write_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID, paragraph_id);
+            write_u32(record, ENGINE_TEXT_MUTATION_TEXT_START, text_start);
+            write_u32(record, ENGINE_TEXT_MUTATION_DELETE_COUNT, delete_count);
+            if !insert.is_empty() {
+                write_u32(
+                    record,
+                    ENGINE_TEXT_MUTATION_INSERT_OFFSET,
+                    u32::try_from(payload_offset).unwrap(),
+                );
+                write_u32(
+                    record,
+                    ENGINE_TEXT_MUTATION_INSERT_COUNT,
+                    u32::try_from(insert.len()).unwrap(),
+                );
+                for &unit in insert {
+                    bytes[payload_offset..payload_offset + 2].copy_from_slice(&unit.to_le_bytes());
+                    payload_offset += 2;
+                }
+            }
+        }
         bytes
     }
 
