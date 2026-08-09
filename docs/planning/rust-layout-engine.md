@@ -761,7 +761,7 @@ Bitmap uses `vec2`/`vec4` records and MSDF and Slug use `vec4`/`uvec4` records, 
 consumer proves schema, patch, revision, and retirement semantics without claiming another renderer integration.
 
 The V0 wire checkpoint uses a 144-byte, 16-byte-aligned result header followed by compiler-mapped little-endian tables:
-44-byte semantic, 40-byte resource, 36-byte physical-buffer, 36-byte patch, 64-byte primitive, 60-byte draw, 24-byte
+44-byte semantic, 40-byte resource, 36-byte physical-buffer, 36-byte patch, 64-byte primitive, 64-byte draw, 24-byte
 retirement, and 24-byte diagnostic records. Resource kind and create/update/retain action are separate. Buffer strategy
 is an explicit ordered-direct or stable-indirect tag. Variable patch payload bytes are part of the same immutable
 publication; write patches rebase their checked payload span to an absolute result offset. Other patch opcodes carry no

@@ -304,7 +304,14 @@ function createProgram(
     operations: context.operations,
     storageKeyMask: batch.technique | batch.program | batch.resource,
     drawKeyMask:
-      batch.technique | batch.program | batch.resource | batch.material | batch.clip | batch.depth | batch.order,
+      batch.technique |
+      batch.program |
+      batch.resource |
+      batch.material |
+      batch.clip |
+      batch.depth |
+      batch.order |
+      batch.transform,
   };
 }
 

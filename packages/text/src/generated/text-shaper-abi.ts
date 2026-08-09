@@ -303,23 +303,24 @@ export const textShaperAbi = {
     },
     "engineDraw": {
       "alignment": 4,
-      "bufferCount": 36,
-      "bufferStart": 32,
+      "bufferCount": 40,
+      "bufferStart": 36,
       "clipId": 16,
       "depthKey": 20,
       "flags": 10,
       "id": 0,
-      "indirectBufferId": 52,
-      "indirectOffset": 56,
+      "indirectBufferId": 56,
+      "indirectOffset": 60,
       "materialId": 12,
-      "orderToken": 48,
-      "primitiveCount": 28,
-      "primitiveStart": 24,
+      "orderToken": 52,
+      "primitiveCount": 32,
+      "primitiveStart": 28,
       "programId": 4,
       "programVariant": 8,
-      "resourceCount": 44,
-      "resourceStart": 40,
-      "size": 60
+      "resourceCount": 48,
+      "resourceStart": 44,
+      "size": 64,
+      "transformId": 24
     },
     "engineExclusion": {
       "alignment": 4,
@@ -810,7 +811,8 @@ export const textShaperAbi = {
       "order": 64,
       "program": 4,
       "resource": 2,
-      "technique": 1
+      "technique": 1,
+      "transform": 128
     },
     "bufferUsage": {
       "copyDst": 4,

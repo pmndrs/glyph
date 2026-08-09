@@ -448,7 +448,8 @@ export function renderPolicyBytesFromPrograms(abi, programs) {
         abi.policy.batchFields.technique |
           abi.policy.batchFields.program |
           abi.policy.batchFields.resource |
-          abi.policy.batchFields.order,
+          abi.policy.batchFields.order |
+          abi.policy.batchFields.transform,
       true,
     );
     view.setUint16(offset + programLayout.variant, descriptor.variant ?? 0, true);

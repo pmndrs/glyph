@@ -28,12 +28,13 @@ use crate::engine::frame::{
 };
 use crate::engine::policy::{
     ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
-    BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
-    BUFFER_USAGE_STORAGE, BUFFER_USAGE_VERTEX, CAP_ALIAS_VEC2, CAP_ALIAS_VEC4, CAP_INDIRECT_DRAWS,
-    CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT, CAP_STORAGE_BUFFERS, INPUT_GLYPH, INPUT_RESOURCE,
-    INPUT_SEMANTIC, INPUT_STRIKE, OP_ADD_F32, OP_CONSTANT_F32, OP_CONSTANT_U32,
-    OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32, OP_LOAD_U32, OP_MULTIPLY_F32,
-    OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32, OP_SUBTRACT_F32, ScalarType,
+    BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BATCH_TRANSFORM,
+    BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BUFFER_USAGE_VERTEX, CAP_ALIAS_VEC2,
+    CAP_ALIAS_VEC4, CAP_INDIRECT_DRAWS, CAP_ORDERED_DIRECT, CAP_STABLE_INDIRECT,
+    CAP_STORAGE_BUFFERS, INPUT_GLYPH, INPUT_RESOURCE, INPUT_SEMANTIC, INPUT_STRIKE, OP_ADD_F32,
+    OP_CONSTANT_F32, OP_CONSTANT_U32, OP_CONVERT_U32_TO_F32, OP_LESS_THAN_F32, OP_LOAD_F32,
+    OP_LOAD_U32, OP_MULTIPLY_F32, OP_SELECT_F32, OP_STORE_F32, OP_STORE_U16, OP_STORE_U32,
+    OP_SUBTRACT_F32, ScalarType,
 };
 use crate::engine::render_plan::{
     BUFFER_ORDERED_DIRECT, BUFFER_STABLE_INDIRECT, BufferRecord, DiagnosticRecord, DrawRecord,
@@ -1828,6 +1829,7 @@ field_offset!(DRAW_FLAGS, DrawRecord, flags);
 field_offset!(DRAW_MATERIAL_ID, DrawRecord, material_id);
 field_offset!(DRAW_CLIP_ID, DrawRecord, clip_id);
 field_offset!(DRAW_DEPTH_KEY, DrawRecord, depth_key);
+field_offset!(DRAW_TRANSFORM_ID, DrawRecord, transform_id);
 field_offset!(DRAW_PRIMITIVE_START, DrawRecord, primitive_start);
 field_offset!(DRAW_PRIMITIVE_COUNT, DrawRecord, primitive_count);
 field_offset!(DRAW_BUFFER_START, DrawRecord, buffer_start);
@@ -2454,6 +2456,7 @@ pub fn json() -> String {
                 "materialId": DRAW_MATERIAL_ID,
                 "clipId": DRAW_CLIP_ID,
                 "depthKey": DRAW_DEPTH_KEY,
+                "transformId": DRAW_TRANSFORM_ID,
                 "primitiveStart": DRAW_PRIMITIVE_START,
                 "primitiveCount": DRAW_PRIMITIVE_COUNT,
                 "bufferStart": DRAW_BUFFER_START,
@@ -2577,7 +2580,8 @@ pub fn json() -> String {
                 "material": BATCH_MATERIAL,
                 "clip": BATCH_CLIP,
                 "depth": BATCH_DEPTH,
-                "order": BATCH_ORDER
+                "order": BATCH_ORDER,
+                "transform": BATCH_TRANSFORM
             },
             "bufferUsage": {
                 "vertex": BUFFER_USAGE_VERTEX,

@@ -140,6 +140,8 @@ pub struct DrawRecord {
     pub clip_id: u32,
     /// Caller-defined sortable depth bucket; logical order remains authoritative within a bucket.
     pub depth_key: u32,
+    /// Renderer-owned transform/object identity shared by this packet.
+    pub transform_id: u32,
     pub primitive_start: u32,
     pub primitive_count: u32,
     pub buffer_start: u32,
@@ -197,6 +199,6 @@ const _: () = assert!(core::mem::size_of::<ResourceRecord>() == 40);
 const _: () = assert!(core::mem::size_of::<BufferRecord>() == 36);
 const _: () = assert!(core::mem::size_of::<PatchRecord>() == 36);
 const _: () = assert!(core::mem::size_of::<PrimitiveRecord>() == 64);
-const _: () = assert!(core::mem::size_of::<DrawRecord>() == 60);
+const _: () = assert!(core::mem::size_of::<DrawRecord>() == 64);
 const _: () = assert!(core::mem::size_of::<RetirementRecord>() == 24);
 const _: () = assert!(core::mem::size_of::<DiagnosticRecord>() == 24);

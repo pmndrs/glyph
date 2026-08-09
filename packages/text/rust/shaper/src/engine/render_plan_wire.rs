@@ -492,6 +492,7 @@ fn write_draw(bytes: &mut [u8], at: usize, value: DrawRecord) {
     u32_at(bytes, at, DRAW_MATERIAL_ID, value.material_id);
     u32_at(bytes, at, DRAW_CLIP_ID, value.clip_id);
     u32_at(bytes, at, DRAW_DEPTH_KEY, value.depth_key);
+    u32_at(bytes, at, DRAW_TRANSFORM_ID, value.transform_id);
     u32_at(bytes, at, DRAW_PRIMITIVE_START, value.primitive_start);
     u32_at(bytes, at, DRAW_PRIMITIVE_COUNT, value.primitive_count);
     u32_at(bytes, at, DRAW_BUFFER_START, value.buffer_start);

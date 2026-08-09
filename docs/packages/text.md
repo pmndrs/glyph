@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:2fa07b0d9260a1cb1096d738142cefe19292fd5106044b7c1a134089a7e63379'
+source_digest: 'sha256:ee4e160e44f8228c16af088e2d1a9cce2a2984ab5c90fc37731f3045ade082d5'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -425,7 +425,7 @@ at its deliberately stale checked package-size snapshot; this stage records the 
 that unrelated historical evidence.
 
 The render-plan wire layer now gives those result tables concrete compiler-mapped records: semantic 44 bytes, resource
-40, physical buffer 36, patch 36, primitive 64, draw 60, retirement 24, and diagnostic 24. Resource kind is independent
+40, physical buffer 36, patch 36, primitive 64, draw 64, retirement 24, and diagnostic 24. Resource kind is independent
 from create/update/retain action, and ordered-direct versus stable-indirect allocation is a dedicated buffer strategy.
 Patch payload bytes live inside the same immutable publication and write records carry absolute rebased spans; allocate/
 resize, fill, copy, and retire records do not carry a payload address. Serialization is allocation-free, canonical

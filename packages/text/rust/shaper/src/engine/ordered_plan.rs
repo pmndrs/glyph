@@ -1011,7 +1011,14 @@ impl OrderedPlanCompiler {
                 logical_order: u32::try_from(input_index)
                     .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
                 clip_id: first.clip_id,
-                semantic_id: first.semantic_id,
+                semantic_id: if context.input.glyphs[input_index..end]
+                    .iter()
+                    .all(|glyph| glyph.semantic_id == first.semantic_id)
+                {
+                    first.semantic_id
+                } else {
+                    0
+                },
                 inline_start,
                 block_start,
                 inline_extent,
@@ -1026,6 +1033,7 @@ impl OrderedPlanCompiler {
                 material_id: if split_material { first.material_id } else { 0 },
                 clip_id: first.clip_id,
                 depth_key: first.depth_key,
+                transform_id: first.transform_id,
                 primitive_start: u32::try_from(primitive_start)
                     .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
                 primitive_count: 1,
@@ -1068,7 +1076,7 @@ impl OrderedPlanCompiler {
             && (!split_material || glyph.material_id == first.material_id)
             && glyph.clip_id == first.clip_id
             && glyph.depth_key == first.depth_key
-            && glyph.semantic_id == first.semantic_id
+            && glyph.transform_id == first.transform_id
     }
 
     fn prepare_removed_batches(
@@ -1562,6 +1570,7 @@ mod tests {
             resource_kind: 1,
             resource_reference: 99,
             semantic_id: 1,
+            transform_id: 1,
             material_id: 1,
             clip_id: 0,
             depth_key: 0,
@@ -1614,7 +1623,8 @@ mod tests {
                     | BATCH_PROGRAM
                     | BATCH_RESOURCE
                     | BATCH_MATERIAL
-                    | BATCH_ORDER,
+                    | BATCH_ORDER
+                    | crate::engine::policy::BATCH_TRANSFORM,
                 allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,
