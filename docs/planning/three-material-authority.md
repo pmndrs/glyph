@@ -21,9 +21,9 @@ sources:
   - id: render-plan
     resource: ../../packages/text/rust/shaper/src/engine/render_plan.rs
     title: Rust render-plan records
-  - id: bitmap-target
-    resource: ../../packages/text/src/three/bitmap-target.ts
-    title: Three Bitmap target and current program-owned material
+  - id: plan-executor
+    resource: ../../packages/text/src/three/engine-plan-target.ts
+    title: Three command-buffer executor and material realization
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-08-08T00:00:00Z'
@@ -106,11 +106,10 @@ text.setSpan(0, { start: 0, end: 3, material: warning });
 `createDefaultMaterial()` is the DRY path for changing ordinary material state while retaining the package's canonical
 placement, coverage, color, and opacity nodes. Creating another `NodeMaterial` is the low-level path for lighting,
 shadows, depth writes/tests, and other standard Three behavior. Neither path may replace or duplicate the technique's
-glyph coverage algorithm unless the application registers a complete custom raster program.
+glyph coverage algorithm unless the application registers a complete custom raster plan program.
 
-The construction function, runtime-scoped identity registry, and command-buffer executor are implemented. The public
-`TextGroup`/`Text`/span `material` properties land with the atomic Rust-session cutover; until then callers cannot yet
-author a material through those objects even though the executor route is tested.
+The construction function, runtime-scoped identity registry, command-buffer executor, and public `TextGroup`/`Text`/span
+`material` properties are implemented through the atomic Rust-session path.
 
 ## Identity and render-plan route
 
@@ -168,14 +167,13 @@ ordinary Three/TSL code outside the text core contract.
 
 - batch, text, and nested-span material cascade reaches exact `materialId` draw records without shaping/layout work;
 - two materials over one resource share physical glyph buffers and produce ordered draw spans;
-- Bitmap, MTSDF, and Slug factories consume the exact canonical shaders used by their default targets;
+- Bitmap, MTSDF, and Slug factories consume the exact canonical shaders used by the command-buffer executor;
 - WebGPURenderer and its WebGL2 fallback preserve placement and coverage for default and custom materials;
 - replacement, failure, cache eviction, renderer retirement, and disposal preserve the previous complete frame;
 - a lit/depth-writing material proves standard Three lighting, depth, and shadow participation where Three supports it;
 - untouched text pays no material-factory call, allocation, pipeline rebuild, or extra package import; and
 - package raw/minified/gzip/Brotli and first-pipeline costs are reported before the API is marked implemented.
 
-The numeric `material_id` route, material-directed draw compatibility, shared physical glyph storage, and rejection of a
-second effects vocabulary are settled inputs to the Rust plan. The exact Three factory types above remain provisional for
-the later material-design pass. Until its gates pass, the current first-party Three targets remain the implementation
-gap; documentation must not describe the factory as already shipped.
+The numeric `material_id` route, material-directed draw compatibility, shared physical glyph storage, rejection of a
+second effects vocabulary, and the exact Three factory types above are implemented inputs to the Rust plan. The remaining
+evidence bullets are release gates for broadening material behavior, not authority for a parallel renderer target.

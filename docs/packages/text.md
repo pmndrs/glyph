@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:34af8782a43930eebccf5c1fe5c045ecfb26caf7b88c548bd99dc4c8d1d9b595'
+source_digest: 'sha256:daaf3807f91b929a868a11d00f29a98b4259ccdb8fd4d229449f14d54777e69a'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -210,10 +210,10 @@ than allocating a glyph-sized set each time; a technique that needs a field beyo
 decode and authenticate CPU resources without importing Three, explicitly omit absent records, select stable physical
 bindings, and pack positive-down paragraph origins plus technique fields into typed canonical arrays. Bitmap selects a
 strike/page per glyph and retains R8 pages; MTSDF retains one RGBA8 atlas-array binding per font; Slug retains its original
-RGBA16F curve, R32 header, and R16 reference bytes so Three's R16-to-R32 workaround remains target-owned. Focused package
+RGBA16F curve, R32 header, and R16 reference bytes so Three's R16-to-R32 workaround remains executor-owned. Focused package
 tests prove selection, range writes, binding identity, coordinates, paint, and analytic addresses. The merged-v0 Bitmap and
 Slug renderer modules, the `/raster/msdf` spelling, the merged-v0 `Text`, and the `/react` binding are deleted; `/raster/bitmap`, `/raster/mtsdf`, `/raster/slug`, `/three`, `/r3f`, and `/typegpu` are the whole renderer surface. The
-Bitmap conformance lane no longer needs a fallback: driven by the target-v1 `Text`, `ThreeBitmapTarget`, and
+Bitmap conformance lane no longer needs a fallback: driven by command-buffer-backed `Text`, the Three executor, and
 `LoadedFont` raster data, it reproduces the benchmark's independent CPU atlas compositor in zero mismatched bytes and
 returns the same pinned full-frame hash `a47930d3…e893`, the same 5,930 lit and 3,473 half-coverage pixels, and the same
 `[68, 18, 313, 112]` ink bounds the merged-v0 renderer produced. Reaching that required two corrections to the exported
@@ -222,38 +222,36 @@ inherited merged-v0's vertical atlas flip, which belongs to that renderer's `fli
 target-v1 pages, and it had dropped the physical-pixel snap the strike's integer placement depends on. Every Presentation
 surface now renders through the target-v1 techniques and the `/three` adapter.
 
-The `/three` adapter resolves each technique's target through a program registry keyed by the technique's stable
-identifier rather than its object identity, and pre-registers the three first-party programs. Identifier keying preserves
-the public raster extension boundary proven in milestone 10: a third party registers a Three program for its own technique
-through `registerThreeRasterProgram`, and an application may wrap a first-party technique to instrument its runtime baker
-without the wrapper losing its program. An unregistered technique fails at batch construction with a typed error naming
-the identifier instead of rendering nothing. `registerThreeRasterProgram` infers that technique, so a program may type its
-prepared batches, storage, and binding concretely; the registry itself stays heterogeneous and holds the erased form after
-the pairing is proven at the registration call.
+The `/three` adapter registers each raster technique through `registerThreeRasterPlanProgram`, keyed by the technique's
+stable identifier rather than object identity. A registration contributes static policy bytecode, cold font/resource
+binding compilation, and material realization. Rust interprets the policy while shaping, laying out, packing, and emitting
+the command buffer; no JavaScript callback runs in that hot path. The Three executor owns only resource tables, GPU
+objects, synchronization, and reversible presentation overrides. It does not retain a candidate/current paragraph target
+or independently derive layout and render state. An unregistered technique fails during engine setup with its identifier.
 
 `/three` also exports each canonical technique shader as `bitmapShader`, `mtsdfShader`, and `slugShader`.[^three-v1] Each
 takes one glyph instance's resolved nodes plus that batch's bound GPU resources and returns a named readonly output:
 position, coverage, resolved colour, opacity, and the intermediate stages the technique produces, such as MTSDF's separate
 fill, outline-ring, and shadow coverage or Slug's dilated render coordinate. These are not a parallel copy maintained for
-external use. `ThreeBitmapTarget`, `ThreeMtsdfTarget`, and `ThreeSlugTarget` build their materials from exactly these
-functions, so a composed program cannot drift from what the first-party path renders and deleting an export breaks the
-built-in target rather than an unused mirror. Each function reads `positionLocal` and `uv()` from the technique's unit
-quad, so a program supplying its own geometry owns that correspondence.
+external use. The command-buffer executor builds the first-party Bitmap, MTSDF, and Slug materials from exactly these
+functions. `defineTextMaterial` receives that same canonical shader result and a `createDefaultMaterial()` factory, so
+customization does not need to own packing, geometry, or layout. Each function reads `positionLocal` and `uv()` from the
+executor's unit quad.
 
-`bitmapShader` additionally publishes `clipPosition`, the projected quad rounded to whole physical pixels, which a program
+`bitmapShader` additionally publishes `clipPosition`, the projected quad rounded to whole physical pixels, which the executor
 assigns to `material.vertexNode`. Bitmap coverage is authored at one atlas texel per device pixel, so an unsnapped quad
 resamples the strike rather than reproducing it, and placing that snap in the exported shader rather than in the built-in
-target is what makes a composed program inherit it by construction instead of by convention. The output carries no other
+executor is what makes a custom material inherit it by construction instead of by convention. The output carries no other
 route to a vertex stage, so the seam cannot be silently skipped. MTSDF and Slug deliberately publish no such member: a
 distance field reconstructs its edge from the screen-space gradient and Slug integrates coverage analytically from
 outlines, so both are correct at any subpixel placement and must keep the default projection. Bitmap pages upload in the
 atlas's own top-down row order with `flipY` disabled, and `atlasUv` addresses that same space directly, so the sampled row
 is the baked row on both backends.
 
-The composed-program proof renders one paragraph twice on native WebGPU and forced WebGL2: once through the pre-registered
-Bitmap program, then through a third-party program that owns its own attributes, geometry, and material and composes only
-its final colour over `bitmapShader`. Both passes light an identical 2,616-pixel set while the composed pass emits no green
-channel, so the custom program inherited the canonical placement, snapping, and coverage instead of reimplementing them.
+The custom-material proof renders one paragraph twice on native WebGPU and forced WebGL2: once with the default Bitmap
+material, then with a `defineTextMaterial` factory that begins from `createDefaultMaterial()` and changes only final colour.
+Both passes light an identical 2,616-pixel set while the customized pass emits no green channel, so it inherited canonical
+placement, snapping, coverage, policy packing, and command-buffer batching instead of reimplementing them.
 The retained proof pages light 2,606 pixels for Bitmap, 1,935 for MTSDF, and 1,510 for Slug on both backends.
 
 Two target-v1 raster defects surfaced when the benchmark began driving these programs against the exact conformance

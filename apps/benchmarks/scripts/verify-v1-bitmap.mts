@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 /* @workflow
 {
   "name": "benchmark:v1-bitmap",
-  "summary": "Render the target-v1 core, Three Bitmap/MTSDF/Slug, and a composed third-party program on WebGPU and WebGL2.",
+  "summary": "Render the Rust command-buffer path for Three Bitmap/MTSDF/Slug and a custom material on WebGPU and WebGL2.",
   "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures.",
   "writes": "No repository files."
 }
@@ -99,7 +99,7 @@ try {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`http://127.0.0.1:5177/v1-msdf.html?backend=${expected}`, {
+    await page.goto(`http://127.0.0.1:5177/v1-mtsdf.html?backend=${expected}`, {
       waitUntil: 'domcontentloaded',
     });
     const result = await page.evaluate(
@@ -162,11 +162,11 @@ try {
     if (result.drawCount < 1 || result.glyphCount !== 16 || result.canonicalGreenPixels !== result.canonicalLitPixels)
       throw new Error(`compose proof did not establish a canonical baseline: ${JSON.stringify(result)}`);
     // Composing over the exported shader may repaint the glyphs but must not move or reshape them: an identical lit set
-    // proves the custom program inherited the canonical position and coverage rather than reimplementing them.
+    // proves the custom material inherited the canonical position and coverage rather than reimplementing them.
     if (result.litPixels !== result.canonicalLitPixels || result.redPixels !== result.canonicalLitPixels)
-      throw new Error(`composed program did not reproduce the canonical coverage: ${JSON.stringify(result)}`);
+      throw new Error(`custom material did not reproduce the canonical coverage: ${JSON.stringify(result)}`);
     if (result.greenPixels !== 0)
-      throw new Error(`composed program did not apply its own final output: ${JSON.stringify(result)}`);
+      throw new Error(`custom material did not apply its own final output: ${JSON.stringify(result)}`);
     process.stdout.write(`${expected} compose: ${JSON.stringify(result)}\n`);
     await page.close();
   }

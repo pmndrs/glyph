@@ -42,7 +42,7 @@ export interface ThreeBitmapShaderOutput {
 }
 
 /**
- * Builds the canonical Bitmap node graph. This is the exact graph `ThreeBitmapTarget` renders, so a program that
+ * Builds the canonical Bitmap node graph. This is the exact graph the command-buffer executor renders, so a program that
  * composes over the returned nodes inherits the technique's coverage sampling and pixel snapping instead of
  * reimplementing them.
  *

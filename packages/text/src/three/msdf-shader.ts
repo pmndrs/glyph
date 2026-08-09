@@ -58,7 +58,7 @@ export interface ThreeMsdfShaderOutput {
 }
 
 /**
- * Builds the canonical MSDF node graph. This is the exact graph `ThreeMsdfTarget` renders, so a program that composes
+ * Builds the canonical MSDF node graph. This is the exact graph the command-buffer executor renders, so a program that composes
  * over the returned nodes inherits the technique's median distance decode, screen-space range, and layer compositing.
  *
  * The graph reads `positionLocal` and `uv()` from the technique's unit quad: both must span `[0, 1]` with the origin at

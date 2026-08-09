@@ -94,7 +94,7 @@ export interface ThreeSlugShaderOutput {
 }
 
 /**
- * Builds the canonical Slug node graph. This is the exact graph `ThreeSlugTarget` renders, so a program that composes
+ * Builds the canonical Slug node graph. This is the exact graph the command-buffer executor renders, so a program that composes
  * over the returned nodes inherits the technique's band walk, quadratic solve, and antialiasing footprint.
  *
  * `position` and `coverage` are two halves of one graph: the vertex half writes the varying the fragment half
