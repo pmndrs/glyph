@@ -276,6 +276,8 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 
 | D-208 | Batch-global and paragraph-local state have distinct Rust owners before multiple children are admitted. `EngineSession` retains revision/fence state, the pinned policy identity, and the shared render-plan compiler. `ParagraphState` owns text/style mutation scratch and every retained Unicode, bidi, shaping, cluster, flow, and positioned-glyph A/B arena. The first checkpoint preserves the existing single child and exact transaction behavior; 124 Rust unit tests pass. Optimized Wasm changes from 1,073,123 / 403,431 / 320,917 to 1,073,179 / 403,475 / 321,149 raw/gzip/Brotli bytes. | Accepted |
 
+| D-209 | Stable glyph IDs and semantic content revisions are session-wide monotonic namespaces because one shared planner cannot distinguish equal paragraph-local ordinals. Paragraph identity indexes remain child-local, but prepare borrows transaction-local counters initialized from the session; abort discards them and successful shared-plan commit advances the session counters. The single-child checkpoint preserves exact behavior and all 124 Rust unit tests. Optimized Wasm changes from 1,073,179 / 403,475 / 321,149 to 1,073,074 / 403,537 / 321,046 raw/gzip/Brotli bytes, a size-neutral code-layout movement. | Accepted |
+
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
 ## Verification and optimization
