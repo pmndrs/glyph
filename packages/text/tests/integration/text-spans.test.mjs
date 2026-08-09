@@ -204,18 +204,9 @@ test('Three Text shapes and draws a formatted literal through the real render li
     [{ start: 6, end: 9, font: devanagari, style: { fontSize: 18 }, paint: { color: '#ff00ff' } }],
   );
 
-  const layout = label.layout;
-  assert.deepEqual([...layout.fontHandles], [inter.font.handle, devanagari.font.handle]);
-  assert.deepEqual(
-    [...layout.glyphFontSlots],
-    [0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
-    'only the span range may shape from the span font',
-  );
-  assert.deepEqual([...layout.glyphFontSizes], [16, 16, 16, 16, 16, 16, 18, 18, 18, 16]);
-  assert.deepEqual([...layout.clusters], [0, 1, 2, 3, 4, 5, 6, 6, 8, 9]);
-  assert.equal(layout.glyphIds.includes(0), false, 'every span glyph must resolve in its selected font');
-
-  const draws = label.children.filter((child) => child.isMesh);
+  assert.equal(label.layout, undefined, 'the render lifecycle must not request layout readback');
+  assert.equal(group.error, undefined);
+  const draws = group.children.filter((child) => child.isMesh);
   assert.deepEqual(
     draws.map((mesh) => [mesh.userData.pmndrsTextRunStart, mesh.geometry.instanceCount]),
     [
@@ -231,11 +222,10 @@ test('Three Text shapes and draws a formatted literal through the real render li
   label.text = 'Alert';
   scene.updateMatrixWorld();
   assert.deepEqual(label.spans, []);
-  assert.deepEqual([...label.layout.fontHandles], [inter.font.handle]);
-  assert.equal(label.layout.glyphIds.length, 5);
+  assert.equal(label.layout, undefined);
   assert.equal(group.error, undefined);
   assert.deepEqual(
-    label.children.filter((child) => child.isMesh).map((mesh) => mesh.geometry.instanceCount),
+    group.children.filter((child) => child.isMesh).map((mesh) => mesh.geometry.instanceCount),
     [5],
   );
 

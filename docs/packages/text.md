@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:b6dce9879ae98132ac2c7f11b3f0fba957ffee93af5698a01ee4c65c994e299f'
+source_digest: 'sha256:57721f96d448668e6e1382d7e3db7bf01d288dbc93a5d4828ae3f88c11689536'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -911,8 +911,19 @@ missing. The context carries the exact canonical shader output, the final render
 transforms, and a function that constructs the canonical default material. Factories must return fresh `NodeMaterial`
 instances and Three owns their disposal. The compiled-Wasm fixture proves distinct material draws share physical glyph
 storage, reorder and coalescing reuse cached materials, and the same selected factory is instantiated once for each of
-Bitmap, MSDF, and Slug. The `TextGroup`/`Text`/span property route and fence-bounded retirement remain part of public
-cutover, so this checkpoint does not claim that authored materials are available from `Text` yet.
+Bitmap, MSDF, and Slug. Public `Text`, inherited `TextGroup`, and explicit span material properties now acquire those
+numeric identities and flow through the same Rust publication; an unchanged frame retains both its draw and realized
+material. Fence-bounded retirement remains part of the live backend gate.
+
+The imperative Three binding no longer constructs a TypeScript `ParagraphBatch` or drives the attachment
+`prepare`/`commit` state machine. One `TextGroup` owns one retained Rust session for all descendant text paragraphs;
+standalone `Text` owns the same path with a private session. Rust receives paragraph/text/style/constraint mutations,
+publishes one command-buffer delta, and compatible group children become one indexed draw under the group root. The
+executor retains only renderer resources needed to apply later deltas. It does not receive paragraph layout arrays;
+Three's old layout, glyph-snapshot, and glyph-origin override surface is removed. Any later interaction or measurement
+API must query retained Rust layout state separately and on demand. Focused integration covers mixed-font spans, custom material factories, two-child
+indexed batching, renderer-local transform updates, reparenting, and disposal. R3F, TypeGPU, the portable legacy core,
+and mixed-technique public font stacks still own the remaining cutover and deletion work.
 
 The executor now bounds CPU/GPU realization residency from Rust retirement records. Retiring a physical buffer disposes
 only materials that depend on its exact generation; retiring a plan resource disposes its technique texture only after

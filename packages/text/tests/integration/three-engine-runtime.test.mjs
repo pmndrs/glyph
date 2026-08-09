@@ -21,7 +21,7 @@ import { defineRasterResourceId } from '../../dist/raster-technique.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
-import { ThreeTextEnginePlanTarget } from '../../dist/three/engine-plan-target.js';
+import { ThreeTextRenderPlanExecutor } from '../../dist/three/engine-plan-target.js';
 import { defineTextMaterial } from '../../dist/three/material.js';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
@@ -330,7 +330,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   ]);
   paragraphObjects.get(1).position.x = 3;
   paragraphObjects.get(2).position.x = 7;
-  const target = new ThreeTextEnginePlanTarget(coordinator, {
+  const target = new ThreeTextRenderPlanExecutor(coordinator, {
     drawRoot,
     renderOrderBase: 10,
     objectForTransform(transformId) {
@@ -632,7 +632,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
     [1, 2],
     'the direct policy makes transform identity an authoritative Rust draw boundary',
   );
-  const directTarget = new ThreeTextEnginePlanTarget(coordinator, {
+  const directTarget = new ThreeTextRenderPlanExecutor(coordinator, {
     drawRoot,
     renderOrderBase: 20,
     objectForTransform(transformId) {
@@ -643,11 +643,11 @@ test('Three coordinator shares shaping data across technique bindings and refere
   });
   directTarget.apply(directPublication);
   assert.equal(directTarget.draws.length, 2);
-  for (const [index, draw] of directTarget.draws.entries()) {
-    assert.equal(draw.geometry.getAttribute('_pmndrsText_15'), undefined);
-    assert.equal(draw.geometry.getAttribute('_pmndrsTextTransforms'), undefined);
-    assert.equal(draw.matrixAutoUpdate, false);
-    assert.equal(draw.matrix.elements[12], index === 0 ? 4 : 7);
+  for (const [index, directDraw] of directTarget.draws.entries()) {
+    assert.equal(directDraw.geometry.getAttribute('_pmndrsText_15'), undefined);
+    assert.equal(directDraw.geometry.getAttribute('_pmndrsTextTransforms'), undefined);
+    assert.equal(directDraw.matrixAutoUpdate, false);
+    assert.equal(directDraw.matrix.elements[12], index === 0 ? 4 : 7);
   }
   assert.equal(directTarget.syncTransforms(), 0);
   paragraphObjects.get(2).position.x = 9;
@@ -675,7 +675,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   hybridRequestView.setUint32(requestLayout.sessionId, hybridSession.handle, true);
   hybridRequestView.setUint32(requestLayout.policyHandle, hybridPolicyHandle, true);
   const hybridInitialPublication = hybridSession.update(hybridRequest);
-  const hybridTarget = new ThreeTextEnginePlanTarget(coordinator, {
+  const hybridTarget = new ThreeTextRenderPlanExecutor(coordinator, {
     drawRoot,
     renderOrderBase: 30,
     objectForTransform(transformId) {

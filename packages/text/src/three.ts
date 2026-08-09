@@ -9,8 +9,7 @@ export type {
   UnboundSpanTag,
 } from './formatted-text.js';
 export type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
-export type { GlyphBufferCapacity, GlyphOriginUpdate, GlyphSnapshot, ParagraphContentBox } from './paragraph-batch.js';
-export type { ParagraphLayout } from './layout.js';
+export type { GlyphBufferCapacity, ParagraphContentBox } from './paragraph-batch.js';
 export type { ParagraphStyle } from './paragraph.js';
 export { bitmapShader } from './three/bitmap-shader.js';
 export type {

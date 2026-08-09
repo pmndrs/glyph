@@ -58,7 +58,7 @@ export interface ThreeTextEnginePlanOwner {
 }
 
 /** Applies retained Rust command-buffer deltas to Three storage attributes and draw objects. */
-export class ThreeTextEnginePlanTarget {
+export class ThreeTextRenderPlanExecutor {
   readonly #coordinator: ThreeTextEngineCoordinator;
   readonly #owner: ThreeTextEnginePlanOwner;
   readonly #view = new TextEngineRenderPlanView();
@@ -130,6 +130,9 @@ export class ThreeTextEnginePlanTarget {
 
   /** Upload changed scene transforms without crossing into Wasm or invalidating text layout. */
   syncTransforms(): number {
+    for (const [index, draw] of this.#draws.entries()) {
+      draw.renderOrder = this.#owner.renderOrderBase + index;
+    }
     const hasDirectTransforms = this.#draws.some((draw) => directTransformId(draw) !== 0);
     if (this.#activeTransformIndices.size === 0 && !hasDirectTransforms) return 0;
     this.#owner.drawRoot.updateWorldMatrix(true, false);

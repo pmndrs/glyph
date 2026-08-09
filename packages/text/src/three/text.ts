@@ -11,24 +11,31 @@ import {
 } from '../loaded-font.js';
 import type {
   GlyphBufferCapacity,
-  GlyphOriginUpdate,
-  GlyphSnapshot,
-  Paragraph,
-  ParagraphBatch,
   ParagraphContentBox,
-  ParagraphLayout,
   ParagraphProperties,
   ParagraphStyle,
   ParagraphUpdate,
 } from '../index.js';
-import type { ParagraphBatchTarget, ParagraphBatchTargetRevision } from '../paragraph-batch-attachment.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import {
-  threeRasterProgram,
-  type ThreeRasterTargetAccounting,
-  type ThreeRasterTargetOwner,
-} from './program-registry.js';
+  compileTextEngineFrameUpdate,
+  type TextEngineConstraint,
+  type TextEngineFrameLimits,
+  type TextEngineRegion,
+  type TextEngineStyleMutation,
+  type TextEngineStyleValue,
+  type TextEngineTextMutation,
+} from '../internal/engine-frame-wire.js';
+import type { TextEnginePublication, TextEngineSession } from '../internal/text-engine-host.js';
+import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
+import {
+  threeTextEngineCoordinator,
+  type ThreeTextMaterialLease,
+  type ThreeTextEngineCoordinator,
+  type ThreeTextEngineStackLease,
+} from './engine-runtime.js';
+import type { ThreeTextMaterial } from './material.js';
 
 export interface ThreeRenderVariant {
   readonly effects?: readonly unknown[];
@@ -37,12 +44,14 @@ export interface ThreeRenderVariant {
 export type TextSpan<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = ParagraphSpan<
   Technique,
   Variant
->;
+> &
+  Readonly<{ material?: ThreeTextMaterial }>;
 
 export type TextProperties<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = ParagraphProperties<
   Technique,
   Variant
->;
+> &
+  Readonly<{ material?: ThreeTextMaterial }>;
 
 export type StandaloneTextProperties<
   Technique extends AnyRasterTechnique,
@@ -52,13 +61,15 @@ export type StandaloneTextProperties<
 export type TextUpdate<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = ParagraphUpdate<
   Technique,
   Variant
->;
+> &
+  Readonly<{ material?: ThreeTextMaterial }>;
 
 export interface TextGroupOptions<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> {
   readonly technique: Technique;
   readonly capacity?: GlyphBufferCapacity;
   readonly renderOrder?: number;
   readonly renderVariant?: Variant;
+  readonly material?: ThreeTextMaterial;
 }
 
 type SameType<Left, Right> = [Left] extends [Right] ? ([Right] extends [Left] ? true : false) : false;
@@ -85,6 +96,7 @@ interface DesiredTextState<Technique extends AnyRasterTechnique, Variant> {
   readonly paint: GlyphPaintInput;
   readonly rasterPixelRatio?: number;
   readonly renderVariant?: Variant;
+  readonly material?: ThreeTextMaterial;
 }
 
 export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> extends THREE.Object3D {
@@ -94,7 +106,6 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
   #leasedFonts: readonly LoadedFont<Technique>[];
   #standaloneCapacity: GlyphBufferCapacity;
   #binding: ThreeTextBatchBinding<Technique, Variant> | undefined;
-  #paragraph: Paragraph<Technique, Variant> | undefined;
   #textGroup: TextGroup<Technique, Variant> | undefined;
   #desiredRevision = 0;
   #appliedRevision = -1;
@@ -118,13 +129,10 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
     return this.#textGroup;
   }
   get bound(): boolean {
-    return this.#paragraph !== undefined;
+    return this.#binding !== undefined;
   }
   get disposed(): boolean {
     return this.#disposed;
-  }
-  get layout(): ParagraphLayout | undefined {
-    return this.#paragraph?.committed?.layout;
   }
   get error(): unknown {
     return this.#error ?? this.#binding?.error;
@@ -177,6 +185,12 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
   get renderVariant(): Variant | undefined {
     return this.#desired.renderVariant;
   }
+  get material(): ThreeTextMaterial | undefined {
+    return this.#desired.material;
+  }
+  set material(value: ThreeTextMaterial | undefined) {
+    this.set({ material: value } as TextUpdate<Technique, Variant>);
+  }
   set renderVariant(value: Variant | undefined) {
     this.set({ renderVariant: value } as TextUpdate<Technique, Variant>);
   }
@@ -209,21 +223,6 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
       throw new RangeError('span index is outside the text');
     spans.splice(index, 1);
     this.spans = spans;
-  }
-
-  snapshotGlyphs(): GlyphSnapshot {
-    this.#assertActive();
-    if (this.#paragraph === undefined) throw new Error('text is not bound to a prepared paragraph');
-    return this.#paragraph.snapshotGlyphs();
-  }
-  setGlyphOrigins(update: GlyphOriginUpdate): void {
-    this.#assertActive();
-    if (this.#paragraph === undefined) throw new Error('text is not bound to a prepared paragraph');
-    this.#paragraph.setGlyphOrigins(update);
-  }
-  clearGlyphOriginOverrides(): void {
-    this.#assertActive();
-    this.#paragraph?.clearGlyphOriginOverrides();
   }
 
   setCapacity(capacity: GlyphBufferCapacity): void {
@@ -286,25 +285,16 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
   markApplied(): void {
     this.#appliedRevision = this.#desiredRevision;
   }
-  bind(
-    binding: ThreeTextBatchBinding<Technique, Variant>,
-    paragraph: Paragraph<Technique, Variant>,
-    group: TextGroup<Technique, Variant> | undefined,
-  ): void {
+  bind(binding: ThreeTextBatchBinding<Technique, Variant>, group: TextGroup<Technique, Variant> | undefined): void {
     if (this.#binding !== binding) this.#unbind();
     this.#binding = binding;
-    this.#paragraph = paragraph;
     this.#textGroup = group;
     this.#appliedRevision = this.#desiredRevision;
   }
   unbindFrom(binding: ThreeTextBatchBinding<Technique, Variant>): void {
     if (this.#binding !== binding) return;
     this.#binding = undefined;
-    this.#paragraph = undefined;
     this.#textGroup = undefined;
-  }
-  setParagraph(paragraph: Paragraph<Technique, Variant>): void {
-    this.#paragraph = paragraph;
   }
   get runtime(): TextRuntime {
     return this.#runtime;
@@ -316,7 +306,6 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
     const binding = this.#binding;
     const standalone = binding !== undefined && this.#textGroup === undefined;
     this.#binding = undefined;
-    this.#paragraph = undefined;
     this.#textGroup = undefined;
     if (standalone) binding.dispose();
     else binding?.removeText(this);
@@ -330,6 +319,7 @@ export class TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeRend
   readonly technique: Technique;
   #capacity: GlyphBufferCapacity;
   #renderVariant: Variant | undefined;
+  #material: ThreeTextMaterial | undefined;
   #binding: ThreeTextBatchBinding<Technique, Variant> | undefined;
   #disposed = false;
   #error: unknown;
@@ -341,6 +331,7 @@ export class TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeRend
     this.technique = options.technique;
     this.#capacity = normalizeCapacity(options.capacity ?? { size: 4_096, policy: 'chunk' });
     this.#renderVariant = options.renderVariant;
+    this.#material = options.material;
     if (options.renderOrder !== undefined) this.renderOrder = options.renderOrder;
   }
   get capacity(): GlyphBufferCapacity {
@@ -367,6 +358,13 @@ export class TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeRend
   }
   setRenderVariant(value: Variant | undefined): void {
     this.renderVariant = value;
+  }
+  get material(): ThreeTextMaterial | undefined {
+    return this.#material;
+  }
+  set material(value: ThreeTextMaterial | undefined) {
+    this.#material = value;
+    this.#binding?.invalidateMaterial();
   }
 
   override add<const Children extends readonly THREE.Object3D[]>(
@@ -436,77 +434,80 @@ export class TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeRend
   }
 }
 
-interface ThreeTargetRevision {
-  readonly sourceRevision: number;
-  setRenderOrderBase(base: number): void;
-  dispose(): void;
+interface RetainedEngineParagraph {
+  readonly id: number;
+  textLength: number;
+  styleCount: number;
+  order: number;
+  geometryRevision: number;
+  created: boolean;
+  stackLeases: ThreeTextEngineStackLease[];
+  materialLeases: ThreeTextMaterialLease[];
 }
 
-interface ThreeTargetAttachment {
-  readonly error: unknown;
-  prepare(): void;
-  commit(): ThreeTargetRevision | undefined;
-  retry(): void;
-  dispose(): void;
-}
-
-class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant> implements ThreeRasterTargetOwner {
+class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant> {
   readonly #runtime: TextRuntime;
   readonly #group: TextGroup<Technique, Variant> | undefined;
-  readonly #batch: ParagraphBatch<Technique, Variant>;
-  readonly #paragraphs = new Map<Text<Technique, Variant>, Paragraph<Technique, Variant>>();
+  readonly #coordinator: ThreeTextEngineCoordinator;
+  readonly #session: TextEngineSession;
+  readonly #target: ThreeTextRenderPlanExecutor;
+  readonly #paragraphs = new Map<Text<Technique, Variant>, RetainedEngineParagraph>();
   readonly #textsByParagraph = new Map<number, Text<Technique, Variant>>();
-  readonly #renderOrders = new Map<Text<Technique, Variant>, number>();
-  readonly #target: ThreeRasterTargetAccounting;
-  readonly #attachment: ThreeTargetAttachment;
+  readonly #removed: RetainedEngineParagraph[] = [];
+  #nextParagraphId = 1;
+  #engineRevision = 0;
+  #planRevision = 0;
+  #acknowledgedPublicationGeneration = 0;
+  #lastPublication: TextEnginePublication | undefined;
+  #requestCapacity: number;
+  #resultCapacity: number;
+  #textCapacity: number;
+  #materialInvalidated = false;
   #disposed = false;
 
   constructor(
     runtime: TextRuntime,
-    technique: Technique,
+    _technique: Technique,
     capacity: GlyphBufferCapacity,
     group: TextGroup<Technique, Variant> | undefined,
   ) {
     this.#runtime = runtime;
     this.#group = group;
-    this.#batch = runtime.createParagraphBatch<Technique, Variant>({
-      technique,
-      capacity,
-      ...(group?.renderVariant === undefined ? {} : { renderVariant: group.renderVariant }),
+    this.#coordinator = threeTextEngineCoordinator(runtime);
+    this.#requestCapacity = Math.max(64 * 1024, capacity.size * 32);
+    this.#resultCapacity = Math.max(256 * 1024, capacity.size * 160);
+    this.#textCapacity = capacity.size;
+    this.#session = this.#coordinator.createSession({
+      requestCapacity: this.#requestCapacity,
+      resultCapacity: this.#resultCapacity,
+      textCapacity: this.#textCapacity,
     });
-    const program = threeRasterProgram(technique);
-    if (program === undefined) {
-      throw new TypeError(
-        `no Three raster program is registered for "${technique.id}"; register one with registerThreeRasterProgram`,
-      );
-    }
-    const target = program(this);
-    const attached = target as unknown as ParagraphBatchTarget<
-      AnyRasterTechnique,
-      Variant,
-      ParagraphBatchTargetRevision
-    >;
-    const batch = this.#batch as unknown as ParagraphBatch<AnyRasterTechnique, Variant>;
-    this.#target = target;
-    this.#attachment = batch.attach(attached) as unknown as ThreeTargetAttachment;
+    const owner = this;
+    this.#target = new ThreeTextRenderPlanExecutor(this.#coordinator, {
+      get drawRoot() {
+        return owner.#drawRoot();
+      },
+      get renderOrderBase() {
+        return owner.#renderOrderBase();
+      },
+      objectForTransform(transformId) {
+        const text = owner.#textsByParagraph.get(transformId);
+        if (text === undefined) throw new Error(`Three command buffer references unknown transform ${transformId}`);
+        return text;
+      },
+    });
   }
   get textCount(): number {
     return this.#paragraphs.size;
   }
   get error(): unknown {
-    return this.#batch.preparationError ?? this.#attachment.error;
+    return undefined;
   }
   get gpuBytes(): number {
-    const bytes = this.#target.gpuBytes;
-    return typeof bytes === 'number' ? bytes : 0;
+    return this.#target.gpuBytes;
   }
   get renderOrderBase(): number {
     return this.#group?.renderOrder ?? 0;
-  }
-  objectForParagraph(id: number): THREE.Object3D {
-    const text = this.#textsByParagraph.get(id);
-    if (text === undefined) throw new Error('Three target cannot resolve a paragraph transform');
-    return text;
   }
   reconcile(texts: readonly Text<Technique, Variant>[]): void {
     const desired = new Set(texts);
@@ -518,58 +519,421 @@ class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant> imple
   }
   synchronize(): void {
     if (this.#disposed) return;
-    for (const [text, paragraph] of this.#paragraphs) {
-      if (text.needsApply()) {
-        paragraph.set(text.coreProperties() as ParagraphUpdate<Technique, Variant>);
-        text.markApplied();
-      }
-      if (this.#renderOrders.get(text) !== text.renderOrder) {
-        paragraph.order = text.renderOrder;
-        this.#renderOrders.set(text, text.renderOrder);
-      }
+    const ordered = [...this.#paragraphs.entries()].sort(
+      ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
+    );
+    const changed = ordered.flatMap(([text, paragraph], order) =>
+      paragraph.created || this.#materialInvalidated || text.needsApply() || paragraph.order !== order
+        ? [{ text, paragraph, order }]
+        : [],
+    );
+    if (changed.length === 0 && this.#removed.length === 0) {
+      this.#target.syncTransforms();
+      return;
     }
-    this.#runtime.update();
-    this.#attachment.prepare();
-    this.#attachment.commit()?.setRenderOrderBase(this.renderOrderBase);
+    const paragraphMutations = [
+      ...this.#removed.map((paragraph) => ({ opcode: 'remove' as const, paragraphId: paragraph.id })),
+      ...changed.map(({ paragraph, order }) => ({
+        opcode: 'upsert' as const,
+        paragraphId: paragraph.id,
+        order,
+      })),
+    ];
+    const textMutations: TextEngineTextMutation[] = [];
+    const styleMutations: TextEngineStyleMutation[] = [];
+    const constraints: TextEngineConstraint[] = [];
+    const regions: TextEngineRegion[] = [];
+    const pendingLeases = new Map<RetainedEngineParagraph, ThreeTextEngineStackLease[]>();
+    const pendingMaterials = new Map<RetainedEngineParagraph, ThreeTextMaterialLease[]>();
+    let committed = false;
+    try {
+      for (const { text, paragraph } of changed) {
+        const properties = text.coreProperties();
+        const content = properties.text as string;
+        textMutations.push({
+          paragraphId: paragraph.id,
+          start: 0,
+          deleteCount: paragraph.textLength,
+          insert: content,
+        });
+        const leases: ThreeTextEngineStackLease[] = [];
+        const materials: ThreeTextMaterialLease[] = [];
+        pendingLeases.set(paragraph, leases);
+        pendingMaterials.set(paragraph, materials);
+        const styles = compileEngineStyles(
+          this.#coordinator,
+          paragraph.id,
+          properties,
+          this.#group?.material,
+          leases,
+          materials,
+        );
+        styleMutations.push(...styles);
+        for (let styleId = styles.length + 1; styleId <= paragraph.styleCount; styleId += 1) {
+          styleMutations.push({ opcode: 'remove', paragraphId: paragraph.id, styleId });
+        }
+        const geometry = compileEngineGeometry(paragraph, properties.contentBox, regions.length, content.length);
+        constraints.push(geometry.constraint);
+        regions.push(geometry.region);
+      }
+      const totalTextLength = [...this.#paragraphs.keys()].reduce((total, text) => total + text.text.length, 0);
+      const limits = engineLimits(
+        this.#paragraphs.size,
+        totalTextLength,
+        Math.max(regions.length, this.#paragraphs.size),
+        this.#resultCapacity,
+      );
+      const publication = this.#session.update(
+        compileTextEngineFrameUpdate({
+          sessionId: this.#session.handle,
+          policyHandle: this.#coordinator.policyHandle,
+          capabilitySet: 1,
+          expectedEngineRevision: this.#engineRevision,
+          consumedPlanRevision: this.#planRevision,
+          acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
+          limits,
+          paragraphMutations,
+          textMutations,
+          styleMutations,
+          constraints,
+          regions,
+        }),
+      );
+      this.#engineRevision = publication.engineRevision;
+      this.#planRevision = publication.planRevision;
+      for (const removed of this.#removed) releaseStackLeases(removed.stackLeases);
+      for (const removed of this.#removed) releaseMaterialLeases(removed.materialLeases);
+      this.#removed.length = 0;
+      for (const [order, [text, paragraph]] of ordered.entries()) {
+        if (!pendingLeases.has(paragraph) && paragraph.order === order) continue;
+        const nextLeases = pendingLeases.get(paragraph);
+        if (nextLeases !== undefined) {
+          releaseStackLeases(paragraph.stackLeases);
+          releaseMaterialLeases(paragraph.materialLeases);
+          paragraph.stackLeases = nextLeases;
+          paragraph.materialLeases = pendingMaterials.get(paragraph) ?? [];
+          paragraph.textLength = text.text.length;
+          paragraph.styleCount = 1 + text.spans.length;
+          paragraph.geometryRevision += 1;
+          paragraph.created = false;
+          text.markApplied();
+        }
+        paragraph.order = order;
+      }
+      this.#materialInvalidated = false;
+      committed = true;
+      try {
+        this.#target.apply(publication);
+        this.#lastPublication = undefined;
+      } catch (error) {
+        this.#lastPublication = ownPublication(publication);
+        throw error;
+      }
+      this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
+    } catch (error) {
+      if (!committed) {
+        for (const leases of pendingLeases.values()) releaseStackLeases(leases);
+        for (const leases of pendingMaterials.values()) releaseMaterialLeases(leases);
+      }
+      throw error;
+    }
   }
   setCapacity(value: GlyphBufferCapacity): void {
-    this.#batch.setCapacity(value);
+    this.#requestCapacity = Math.max(this.#requestCapacity, value.size * 32);
+    this.#resultCapacity = Math.max(this.#resultCapacity, value.size * 160);
+    this.#textCapacity = Math.max(this.#textCapacity, value.size);
+    this.#session.reserve(this.#requestCapacity, this.#resultCapacity, this.#textCapacity);
   }
-  setRenderVariant(value: Variant | undefined): void {
-    this.#batch.renderVariant = value;
+  setRenderVariant(_value: Variant | undefined): void {
+    // Removed with the legacy target state machine. Renderer material IDs replace variants.
+  }
+  invalidateMaterial(): void {
+    this.#materialInvalidated = true;
   }
   retry(): void {
-    this.#attachment.retry();
+    const publication = this.#lastPublication;
+    if (publication === undefined) return;
+    this.#target.apply(publication);
+    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
+    this.#lastPublication = undefined;
   }
   removeText(text: Text<Technique, Variant>): void {
     const paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined) return;
     this.#paragraphs.delete(text);
     this.#textsByParagraph.delete(paragraph.id);
-    this.#renderOrders.delete(text);
-    paragraph.dispose();
+    this.#removed.push(paragraph);
     text.unbindFrom(this);
   }
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
     for (const text of this.#paragraphs.keys()) text.unbindFrom(this);
-    this.#batch.dispose();
+    this.#target.dispose();
+    this.#session.dispose();
+    for (const paragraph of this.#paragraphs.values()) releaseStackLeases(paragraph.stackLeases);
+    for (const paragraph of this.#removed) releaseStackLeases(paragraph.stackLeases);
+    for (const paragraph of this.#paragraphs.values()) releaseMaterialLeases(paragraph.materialLeases);
+    for (const paragraph of this.#removed) releaseMaterialLeases(paragraph.materialLeases);
     this.#paragraphs.clear();
     this.#textsByParagraph.clear();
-    this.#renderOrders.clear();
+    this.#removed.length = 0;
   }
   #ensureText(text: Text<Technique, Variant>, group: TextGroup<Technique, Variant> | undefined): void {
-    validateBinding(this.#runtime, this.#batch.technique, text);
+    validateBinding(this.#runtime, text.technique, text);
     let paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined) {
-      paragraph = this.#batch.add(text.coreProperties());
+      const id = this.#nextParagraphId++;
+      paragraph = {
+        id,
+        textLength: 0,
+        styleCount: 0,
+        order: -1,
+        geometryRevision: 0,
+        created: true,
+        stackLeases: [],
+        materialLeases: [],
+      };
       this.#paragraphs.set(text, paragraph);
-      this.#textsByParagraph.set(paragraph.id, text);
-      this.#renderOrders.set(text, text.renderOrder);
-      text.bind(this, paragraph, group);
+      this.#textsByParagraph.set(id, text);
+      text.bind(this, group);
     }
   }
+
+  #drawRoot(): THREE.Object3D {
+    if (this.#group !== undefined) return this.#group;
+    const text = this.#paragraphs.keys().next().value as Text<Technique, Variant> | undefined;
+    if (text === undefined) throw new Error('standalone text command buffer has no draw root');
+    return text;
+  }
+
+  #renderOrderBase(): number {
+    if (this.#group !== undefined) return this.#group.renderOrder;
+    return this.#paragraphs.keys().next().value?.renderOrder ?? 0;
+  }
+}
+
+function compileEngineStyles<Technique extends AnyRasterTechnique, Variant>(
+  coordinator: ThreeTextEngineCoordinator,
+  paragraphId: number,
+  properties: ParagraphProperties<Technique, Variant>,
+  groupMaterial: ThreeTextMaterial | undefined,
+  leases: ThreeTextEngineStackLease[],
+  materialLeases: ThreeTextMaterialLease[],
+): TextEngineStyleMutation[] {
+  const text = properties.text as string;
+  const rootStack = acquireEngineStack(coordinator, properties.font, leases);
+  const rootMaterial = (properties as TextProperties<Technique, Variant>).material ?? groupMaterial;
+  const rootMaterialId = acquireEngineMaterial(coordinator, rootMaterial, materialLeases);
+  const styles: TextEngineStyleMutation[] = [
+    {
+      opcode: 'upsert',
+      paragraphId,
+      styleId: 1,
+      cascadeOrder: 0,
+      start: 0,
+      end: text.length,
+      root: true,
+      value: engineStyleValue(properties.style ?? {}, properties.paint, 0, text.length, {
+        fontStackHandle: rootStack,
+        ...(rootMaterialId === undefined ? {} : { materialId: rootMaterialId }),
+        fontSize: properties.style?.fontSize ?? 16,
+        rasterPixelRatio: properties.rasterPixelRatio ?? 1,
+      }),
+    },
+  ];
+  for (const [index, span] of (properties.spans ?? []).entries()) {
+    const fontStackHandle = span.font === undefined ? undefined : acquireEngineStack(coordinator, span.font, leases);
+    const materialId = acquireEngineMaterial(
+      coordinator,
+      (span as TextSpan<Technique, Variant>).material,
+      materialLeases,
+    );
+    styles.push({
+      opcode: 'upsert',
+      paragraphId,
+      styleId: index + 2,
+      cascadeOrder: index + 1,
+      start: span.start,
+      end: span.end,
+      value: engineStyleValue(span.style ?? {}, span.paint, span.start, span.end, {
+        ...(fontStackHandle === undefined ? {} : { fontStackHandle }),
+        ...(materialId === undefined ? {} : { materialId }),
+      }),
+    });
+  }
+  return styles;
+}
+
+function acquireEngineMaterial(
+  coordinator: ThreeTextEngineCoordinator,
+  material: ThreeTextMaterial | undefined,
+  leases: ThreeTextMaterialLease[],
+): number | undefined {
+  if (material === undefined) return undefined;
+  const lease = coordinator.acquireMaterial(material);
+  leases.push(lease);
+  return lease.id;
+}
+
+function acquireEngineStack<Technique extends AnyRasterTechnique>(
+  coordinator: ThreeTextEngineCoordinator,
+  selection: FontSelection<Technique>,
+  leases: ThreeTextEngineStackLease[],
+): number {
+  const fonts = concreteFonts(selection) as readonly [
+    LoadedFont<AnyRasterTechnique>,
+    ...LoadedFont<AnyRasterTechnique>[],
+  ];
+  const lease = coordinator.acquireFontStack(fonts);
+  leases.push(lease);
+  return lease.handle;
+}
+
+function engineStyleValue(
+  style: ParagraphStyle,
+  paint: GlyphPaintInput | undefined,
+  start: number,
+  end: number,
+  base: TextEngineStyleValue,
+): TextEngineStyleValue {
+  return {
+    ...base,
+    ...(style.fontSize === undefined ? {} : { fontSize: style.fontSize }),
+    ...(style.lineHeight === undefined ? {} : { lineHeight: style.lineHeight }),
+    ...(style.letterSpacing === undefined ? {} : { letterSpacing: style.letterSpacing }),
+    ...(style.language === undefined ? {} : { language: style.language }),
+    ...(style.direction === undefined ? {} : { direction: style.direction }),
+    ...(style.features === undefined
+      ? {}
+      : {
+          features: style.features.map((feature) => ({
+            tag: feature.tag,
+            value: feature.value ?? 1,
+            start: feature.start ?? start,
+            end: feature.end ?? end,
+          })),
+        }),
+    ...(paint === undefined ? {} : { foregroundRgba: packedForeground(paint) }),
+  };
+}
+
+function compileEngineGeometry(
+  paragraph: RetainedEngineParagraph,
+  contentBox: ParagraphContentBox | undefined,
+  regionStart: number,
+  textLength: number,
+): { readonly constraint: TextEngineConstraint; readonly region: TextEngineRegion } {
+  const width = axis(contentBox?.width);
+  const height = axis(contentBox?.height);
+  const inlineEnd = width.mode === 'unconstrained' ? 0x01_00_00_00 : width.size;
+  const blockEnd = height.mode === 'unconstrained' ? 0x01_00_00_00 : height.size;
+  const maxLines = contentBox?.maxLines ?? Math.max(1, textLength);
+  const geometryRevision = paragraph.geometryRevision + 1;
+  return {
+    constraint: {
+      paragraphId: paragraph.id,
+      flowThreadId: paragraph.id,
+      geometryRevision,
+      width: width.size,
+      height: height.size,
+      viewportBlockStart: 0,
+      viewportBlockEnd: blockEnd,
+      resumeBlockOffset: 0,
+      maxLines,
+      regionStart,
+      resumeCluster: 0,
+      regionCount: 1,
+      resumeRegion: 0,
+      widthMode: width.mode,
+      heightMode: height.mode,
+      wrap: contentBox?.wrap ?? 'word',
+      align: contentBox?.align ?? 'start',
+      overflow: contentBox?.overflow ?? 'visible',
+      blockAlign: 'start',
+    },
+    region: {
+      id: paragraph.id,
+      geometryRevision,
+      transformIndex: paragraph.id,
+      shape: 'rectangle',
+      exclusionStart: 0,
+      exclusionCount: 0,
+      writingMode: 'horizontal-tb',
+      textOrientation: 'mixed',
+      inlineStart: 0,
+      blockStart: 0,
+      inlineEnd,
+      blockEnd,
+      clipInlineStart: 0,
+      clipBlockStart: 0,
+      clipInlineEnd: inlineEnd,
+      clipBlockEnd: blockEnd,
+    },
+  };
+}
+
+function axis(value: ParagraphContentBox['width'] | undefined): {
+  readonly mode: 'unconstrained' | 'at-most' | 'exact';
+  readonly size: number;
+} {
+  if (value === undefined || value.mode === 'unconstrained') return { mode: 'unconstrained', size: 0 };
+  return { mode: value.mode, size: value.size };
+}
+
+function engineLimits(
+  paragraphCount: number,
+  textLength: number,
+  regionCount: number,
+  maxOutputBytes: number,
+): TextEngineFrameLimits {
+  return {
+    maxParagraphs: Math.max(1, paragraphCount),
+    maxClusters: Math.max(1, textLength * 2),
+    maxLines: Math.max(1, textLength),
+    maxRegions: Math.max(1, regionCount),
+    maxExclusions: 1,
+    maxInlineObjects: 1,
+    maxSlotsPerBand: 8,
+    maxOutputBytes,
+  };
+}
+
+function packedForeground(paint: GlyphPaintInput): number {
+  const opacity = paint.opacity ?? 1;
+  if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
+    throw new RangeError('opacity must be in [0, 1]');
+  }
+  const input = paint.color ?? '#ffffff';
+  const rgba = typeof input === 'string' ? parseHexColor(input) : input;
+  const channel = (value: number): number => Math.round(Math.min(1, Math.max(0, value)) * 255);
+  return (
+    (channel(rgba[0]) | (channel(rgba[1]) << 8) | (channel(rgba[2]) << 16) | (channel(rgba[3] * opacity) << 24)) >>> 0
+  );
+}
+
+function parseHexColor(value: string): readonly [number, number, number, number] {
+  const match = /^#([0-9a-f]{6}|[0-9a-f]{8})$/iu.exec(value);
+  if (match === null) throw new TypeError('colors must be #rrggbb, #rrggbbaa, or linear RGBA');
+  const hex = match[1]!;
+  const linear = (at: number): number => {
+    const srgb = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+  };
+  return [linear(0), linear(2), linear(4), hex.length === 8 ? Number.parseInt(hex.slice(6), 16) / 255 : 1];
+}
+
+function releaseStackLeases(leases: readonly ThreeTextEngineStackLease[]): void {
+  for (const lease of leases) lease.release();
+}
+
+function releaseMaterialLeases(leases: readonly ThreeTextMaterialLease[]): void {
+  for (const lease of leases) lease.release();
+}
+
+function ownPublication(publication: TextEnginePublication): TextEnginePublication {
+  const bytes = publication.bytes.slice();
+  return { ...publication, bytes, memoryBuffer: bytes.buffer, memoryGrew: false };
 }
 
 /**
@@ -601,6 +965,7 @@ function normalizeDesired<Technique extends AnyRasterTechnique, Variant>(
     paint: Object.freeze({ ...(properties.paint ?? {}) }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
     ...(properties.renderVariant === undefined ? {} : { renderVariant: properties.renderVariant }),
+    ...(properties.material === undefined ? {} : { material: properties.material }),
   });
 }
 function selectedFonts<Technique extends AnyRasterTechnique, Variant>(
