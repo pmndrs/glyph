@@ -19,6 +19,7 @@ use super::{
     policy::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedPolicy},
     policy_gather::{
         DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput, PolicyGatherWorkspace,
+        RetainedGather,
     },
     positioning::PositionedGlyphArena,
     render_plan::RenderPlanView,
@@ -51,6 +52,8 @@ pub struct TextEngine {
     font_stacks: Vec<RegisteredFontStack>,
     sessions: BTreeMap<u32, EngineSession>,
     gather: PolicyGatherWorkspace,
+    gather_cache: Option<GatherCacheKey>,
+    prepared_gather_cache: Option<GatherCacheKey>,
 }
 
 struct RegisteredFontBinding {
@@ -210,7 +213,21 @@ struct PolicyBinding {
     fingerprint: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct GatherCacheKey {
+    session_id: u32,
+    revision: SessionRevision,
+    policy_handle: u32,
+    policy_fingerprint: u64,
+    capability_set: u32,
+}
+
 impl TextEngine {
+    fn invalidate_gather_cache(&mut self) {
+        self.gather_cache = None;
+        self.prepared_gather_cache = None;
+    }
+
     pub fn initialize(&mut self) -> Result<(), EngineError> {
         self.gather
             .reserve_records(DEFAULT_GATHER_RECORD_CAPACITY)
@@ -246,6 +263,7 @@ impl TextEngine {
             shaping_handle,
             binding,
         });
+        self.invalidate_gather_cache();
         Ok(())
     }
 
@@ -256,6 +274,7 @@ impl TextEngine {
             .position(|binding| binding.handle == handle)
         {
             self.font_bindings.swap_remove(index);
+            self.invalidate_gather_cache();
         }
     }
 
@@ -278,8 +297,12 @@ impl TextEngine {
     }
 
     pub fn dispose_bindings_for_shaping_font(&mut self, shaping_handle: u32) {
+        let previous_len = self.font_bindings.len();
         self.font_bindings
             .retain(|binding| binding.shaping_handle != shaping_handle);
+        if self.font_bindings.len() != previous_len {
+            self.invalidate_gather_cache();
+        }
     }
 
     pub fn font_binding_count(&self) -> u32 {
@@ -384,14 +407,16 @@ impl TextEngine {
             .reserve_policy(&policy, DEFAULT_GATHER_RECORD_CAPACITY)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.policies.insert(handle, policy);
+        self.invalidate_gather_cache();
         Ok(())
     }
 
     pub fn dispose_policy(&mut self, handle: u32) -> Result<(), EngineError> {
         self.policies
             .remove(&handle)
-            .map(|_| ())
-            .ok_or(EngineError::PolicyMissing)
+            .ok_or(EngineError::PolicyMissing)?;
+        self.invalidate_gather_cache();
+        Ok(())
     }
 
     pub fn policy(&self, handle: u32) -> Result<&ValidatedPolicy, EngineError> {
@@ -420,8 +445,17 @@ impl TextEngine {
     pub fn dispose_session(&mut self, handle: u32) -> Result<(), EngineError> {
         self.sessions
             .remove(&handle)
-            .map(|_| ())
-            .ok_or(EngineError::SessionMissing)
+            .ok_or(EngineError::SessionMissing)?;
+        if self
+            .gather_cache
+            .is_some_and(|cache| cache.session_id == handle)
+            || self
+                .prepared_gather_cache
+                .is_some_and(|cache| cache.session_id == handle)
+        {
+            self.invalidate_gather_cache();
+        }
+        Ok(())
     }
 
     pub fn reserve_session_text(&mut self, handle: u32, capacity: u32) -> Result<(), EngineError> {
@@ -521,9 +555,12 @@ impl TextEngine {
             return Err(EngineError::InvalidRequest);
         }
         let policy_fingerprint = policy.fingerprint();
+        let cached_gather = self.gather_cache;
         let font_bindings = &self.font_bindings;
         let font_stacks = &self.font_stacks;
         let gather = &mut self.gather;
+        let gather_cache = &mut self.gather_cache;
+        let prepared_gather_cache = &mut self.prepared_gather_cache;
         let session = self
             .sessions
             .get_mut(&request.session_id)
@@ -554,6 +591,17 @@ impl TextEngine {
                 .checked_add(1)
                 .ok_or(EngineError::RevisionExhausted)?,
         };
+        let current_gather_key = GatherCacheKey {
+            session_id: request.session_id,
+            revision: session.revision,
+            policy_handle: request.policy_handle,
+            policy_fingerprint,
+            capability_set: request.capability_set,
+        };
+        let next_gather_key = GatherCacheKey {
+            revision: next,
+            ..current_gather_key
+        };
         let checkpoint =
             session.revision.plan == 0 || request.consumed_plan_revision != session.revision.plan;
         // A completed renderer fence is external monotonic state. It remains accepted even if
@@ -567,6 +615,7 @@ impl TextEngine {
             } else {
                 None
             };
+        let mut gather_output_matches_next = false;
         let preparation = (|| {
             session.semantic_records.clear();
             session.prepare_lifecycle(
@@ -630,6 +679,7 @@ impl TextEngine {
                     .all(|program| program.allocation_strategy == ALLOCATION_ORDERED_DIRECT);
             if reuse_ordered_plan {
                 session.plan.prepare_reuse().map_err(plan_error)?;
+                gather_output_matches_next = cached_gather == Some(current_gather_key);
             } else {
                 let record_count =
                     session
@@ -648,39 +698,36 @@ impl TextEngine {
                                 .checked_add(positioned.glyphs().len())
                                 .ok_or(EngineError::ResultTooLarge)
                         })?;
-                gather.begin(policy, record_count).map_err(gather_error)?;
-                for order_index in 0..session.active_order().len() {
-                    let paragraph_id = session.active_order()[order_index].id;
-                    let paragraph = session
-                        .paragraph(paragraph_id)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    let positioned = if paragraph.state.positioned_prepared {
-                        &paragraph.state.pending_positioned
-                    } else {
-                        &paragraph.state.positioned
-                    };
-                    let semantic_f32 = positioned.semantic_f32();
-                    let semantic_u32 = positioned.semantic_u32();
-                    gather
-                        .append(
-                            policy,
-                            CapabilitySetId(request.capability_set),
-                            LayoutPlanInput {
-                                transform_id: paragraph_id,
-                                glyphs: positioned.glyphs(),
-                                semantic_change_masks: positioned.semantic_change_masks(),
-                                semantic_f32: &semantic_f32,
-                                semantic_u32: &semantic_u32,
-                            },
-                            checkpoint || !paragraph.positioned_changed,
-                            |handle| {
-                                font_bindings
-                                    .iter()
-                                    .find(|binding| binding.handle == handle)
-                                    .map(|binding| &binding.binding)
-                            },
-                        )
+                *gather_cache = None;
+                *prepared_gather_cache = None;
+                let capability_set = CapabilitySetId(request.capability_set);
+                let attempted_retained = cached_gather == Some(current_gather_key);
+                let retained = attempted_retained
+                    && gather
+                        .begin_retained(policy, record_count)
                         .map_err(gather_error)?;
+                if retained {
+                    append_session_gather(
+                        gather,
+                        session,
+                        policy,
+                        capability_set,
+                        font_bindings,
+                        true,
+                        checkpoint,
+                    )?;
+                }
+                if !retained {
+                    gather.begin(policy, record_count).map_err(gather_error)?;
+                    append_session_gather(
+                        gather,
+                        session,
+                        policy,
+                        capability_set,
+                        font_bindings,
+                        false,
+                        checkpoint,
+                    )?;
                 }
                 let gathered = gather.view();
                 let mut plan_input = gathered.plan_input();
@@ -696,6 +743,7 @@ impl TextEngine {
                         request.acknowledged_publication_generation,
                     )
                     .map_err(plan_error)?;
+                gather_output_matches_next = true;
             }
             let include_layout_inspection =
                 request.semantic_view_mask & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION != 0;
@@ -865,6 +913,9 @@ impl TextEngine {
             session.abort_pending();
             return Err(error);
         }
+        if gather_output_matches_next {
+            *prepared_gather_cache = Some(next_gather_key);
+        }
         Ok(PreparedUpdate {
             session_id: request.session_id,
             previous: session.revision,
@@ -913,6 +964,7 @@ impl TextEngine {
     }
 
     pub(crate) fn abort_update(&mut self, prepared: PreparedUpdate) -> Result<(), EngineError> {
+        let next_gather_key = prepared_gather_key(prepared, prepared.next);
         let session = self
             .sessions
             .get_mut(&prepared.session_id)
@@ -921,6 +973,9 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         session.abort_pending();
+        if self.prepared_gather_cache == Some(next_gather_key) {
+            self.prepared_gather_cache = None;
+        }
         Ok(())
     }
 
@@ -928,6 +983,8 @@ impl TextEngine {
         &mut self,
         prepared: PreparedUpdate,
     ) -> Result<CommittedUpdate, EngineError> {
+        let previous_gather_key = prepared_gather_key(prepared, prepared.previous);
+        let next_gather_key = prepared_gather_key(prepared, prepared.next);
         let session = self
             .sessions
             .get_mut(&prepared.session_id)
@@ -947,6 +1004,12 @@ impl TextEngine {
             fingerprint: prepared.policy_fingerprint,
         });
         session.revision = prepared.next;
+        if self.prepared_gather_cache == Some(next_gather_key) {
+            self.gather_cache = Some(next_gather_key);
+            self.prepared_gather_cache = None;
+        } else if self.gather_cache == Some(previous_gather_key) {
+            self.gather_cache = Some(next_gather_key);
+        }
         Ok(CommittedUpdate {
             session_id: prepared.session_id,
             revision: prepared.next,
@@ -954,6 +1017,95 @@ impl TextEngine {
             checkpoint: prepared.checkpoint,
         })
     }
+}
+
+fn prepared_gather_key(prepared: PreparedUpdate, revision: SessionRevision) -> GatherCacheKey {
+    GatherCacheKey {
+        session_id: prepared.session_id,
+        revision,
+        policy_handle: prepared.policy_handle,
+        policy_fingerprint: prepared.policy_fingerprint,
+        capability_set: prepared.capability_set,
+    }
+}
+
+fn append_session_gather(
+    gather: &mut PolicyGatherWorkspace,
+    session: &EngineSession,
+    policy: &ValidatedPolicy,
+    capability_set: CapabilitySetId,
+    font_bindings: &[RegisteredFontBinding],
+    retained: bool,
+    checkpoint: bool,
+) -> Result<(), EngineError> {
+    let incremental = retained;
+    let mut retaining = retained;
+    for ordered in session.active_order() {
+        let paragraph = session
+            .paragraph(ordered.id)
+            .ok_or(EngineError::InvalidRequest)?;
+        let positioned = if paragraph.state.positioned_prepared {
+            &paragraph.state.pending_positioned
+        } else {
+            &paragraph.state.positioned
+        };
+        let semantic_f32 = positioned.semantic_f32();
+        let semantic_u32 = positioned.semantic_u32();
+        let semantic_change_masks = if retaining && !paragraph.positioned_changed {
+            &[][..]
+        } else {
+            positioned.semantic_change_masks()
+        };
+        let input = LayoutPlanInput {
+            transform_id: ordered.id,
+            glyphs: positioned.glyphs(),
+            semantic_change_masks,
+            semantic_f32: &semantic_f32,
+            semantic_u32: &semantic_u32,
+        };
+        let binding_for_font = |handle| {
+            font_bindings
+                .iter()
+                .find(|binding| binding.handle == handle)
+                .map(|binding| &binding.binding)
+        };
+        if retaining {
+            match gather
+                .append_retained(policy, capability_set, input, binding_for_font)
+                .map_err(gather_error)?
+            {
+                RetainedGather::Complete => {}
+                RetainedGather::RebuildFrom(source_start) => {
+                    gather.truncate_to_retained_prefix();
+                    gather
+                        .append_from(
+                            policy,
+                            capability_set,
+                            input,
+                            source_start,
+                            true,
+                            binding_for_font,
+                        )
+                        .map_err(gather_error)?;
+                    retaining = false;
+                }
+            }
+        } else {
+            gather
+                .append(
+                    policy,
+                    capability_set,
+                    input,
+                    incremental || checkpoint || !paragraph.positioned_changed,
+                    binding_for_font,
+                )
+                .map_err(gather_error)?;
+        }
+    }
+    if retaining && !gather.finish_retained() {
+        gather.truncate_to_retained_prefix();
+    }
+    Ok(())
 }
 
 impl EngineSession {
@@ -3452,11 +3604,27 @@ mod tests {
         assert!(first.checkpoint);
         assert_eq!(first.required_base_revision, 0);
         assert_eq!(first.revision, SessionRevision { engine: 1, plan: 1 });
+        assert_eq!(
+            engine.gather_cache.map(|cache| cache.revision),
+            Some(first.revision)
+        );
 
         let second = engine.prepare_update(update(1, 1, 1), 2).unwrap();
+        assert_eq!(
+            engine.gather_cache.map(|cache| cache.revision),
+            Some(first.revision)
+        );
+        assert_eq!(
+            engine.prepared_gather_cache.map(|cache| cache.revision),
+            Some(SessionRevision { engine: 2, plan: 2 })
+        );
         let second = engine.commit_update(second).unwrap();
         assert!(!second.checkpoint);
         assert_eq!(second.required_base_revision, 1);
+        assert_eq!(
+            engine.gather_cache.map(|cache| cache.revision),
+            Some(second.revision)
+        );
 
         assert_eq!(
             engine.prepare_update(update(1, 2, 1), 3),
@@ -3533,7 +3701,10 @@ mod tests {
             .unwrap();
         engine.create_session(4).unwrap();
         let prepared = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        assert!(engine.prepared_gather_cache.is_some());
         engine.abort_update(prepared).unwrap();
+        assert!(engine.gather_cache.is_none());
+        assert!(engine.prepared_gather_cache.is_none());
         assert_eq!(
             engine.session_revision(4).unwrap(),
             SessionRevision::default()

@@ -1070,6 +1070,20 @@ split to 42.4%, while five roughly 1.2 KiB patches remain. The 1,147,266-byte op
 the retained-cluster checkpoint. The median meets the 4 ms ceiling, but the break-sensitive p95 does not; retained
 policy gathering, plan compilation, and chunk-local insert/delete storage remain open.
 
+Policy gathering now retains its validated field-major inputs under an exact session revision, policy fingerprint, and
+capability-set key. A one-byte source-selection lane lets zero-change positioned glyphs reuse the prior plan record
+without font-resource selection or policy interpretation. A changed glyph rereads only inputs reachable from its
+semantic change mask. Stable glyph identity may change without invalidating physical topology; technique, program,
+resource, transform, material, clip, and depth keys remain exact fallback boundaries. When selection topology changes,
+the gather keeps the verified prefix, truncates at the first mismatch, and completely gathers only that suffix and later
+paragraphs, so a new allocation still has every input it needs without a second prefix scan. Cache state promotes only
+with the engine transaction, abort cannot publish it, and font-binding/policy disposal invalidates it. An oracle changes
+identity and one policy field in place, then changes material and proves the suffix rebuild matches a complete input.
+On the unchanged 40-warmup/101-update production run, median/p95 improve from 2.607 / 6.184 ms to 1.314 / 5.863 ms;
+five roughly 1.2 KiB patches remain. RSD is 76.2%, so the fast class is near the 1 ms design target but break-sensitive
+edits still miss the p95 contract. Optimized Wasm grows 5,856 raw bytes to 1,153,122, and the retained high-water mark is
+80.19 MiB. Ordered-plan compilation and chunk-local insert/delete storage remain open.
+
 The renderer's 25% instance slack is not the edit-storage design. Editing requires the selected ABI-private
 64-cluster semantic chunks to reserve a small bounded gap so insert, delete, and replacement operations move only the
 affected chunk before summaries and downstream line state resume. The current production text, shape, cluster, and
