@@ -1027,6 +1027,23 @@ that shaping alone cannot meet the contract: cluster rebuilding, line compositio
 remain global, and the ordinary eight-warmup lane still catches a later 1,114,112-byte memory growth. Both are open
 failures, not reasons to weaken the gates.
 
+The next checkpoint adds an exact one-line convergence proof for same-length localized edits. With geometry, font
+metrics, limits, and ellipsis behavior unchanged, Rust recomposes the line containing the edit and compares its ending
+cluster cursor, metrics, slots, fragments, hard-break state, and stable boundary identities with the retained line. A
+match permits the prefix and suffix lines—and their positioned glyph records—to be retained; any mismatch discards the
+partial result and runs the complete composer. A 101-update production run after 40 warmups improves the same workload
+from the preceding 9.372 ms checkpoint to 7.668 ms median, an 18.2% end-to-end reduction, with 9.620 ms p95 and five
+roughly 1.2 KiB command-buffer patches. The optimized Wasm grows from 1,131,457 to 1,138,394 raw bytes (+6,937). This
+remains above budget. Cluster reconstruction, revision assignment, and plan gathering remain broad, and the retained
+high-water mark is still 80.38 MiB.
+
+The renderer's 25% instance slack is not the edit-storage design. Editing requires the selected ABI-private
+64-cluster semantic chunks to reserve a small bounded gap so insert, delete, and replacement operations move only the
+affected chunk before summaries and downstream line state resume. The current production text, shape, cluster, and
+position arenas still use flat transactional A/B vectors, so they copy or scan far more state than a localized edit
+requires. That implementation gap must close before this stack can claim the retained-storage decision or the edit
+latency target.
+
 The benchmark reports phases and retained-output costs separately:
 
 - Unicode/style invalidation, shaping, composition, positioning, semantic geometry, plan compilation;

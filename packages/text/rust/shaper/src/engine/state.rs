@@ -12,8 +12,8 @@ use super::{
     flow_geometry::FlowGeometryArena,
     font_binding::FontRenderBinding,
     frame::{
-        CommittedUpdate, OVERFLOW_CLIP, OVERFLOW_VISIBLE, PreparedUpdate, SessionRevision,
-        UpdateRequest,
+        CommittedUpdate, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, PreparedUpdate,
+        SessionRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
     policy::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedPolicy},
@@ -2109,13 +2109,56 @@ impl ParagraphState {
         } else {
             &self.geometry
         };
+        let max_slots_per_band =
+            usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?;
+        let max_lines = usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?;
+        if !self.geometry_prepared
+            && !self.style_invalidation.metrics
+            && self.boundary_shape.records.is_empty()
+            && geometry
+                .constraints
+                .iter()
+                .all(|constraint| constraint.overflow != OVERFLOW_ELLIPSIS)
+            && let Some(edit) = self.text_edit
+            && edit.old_end.saturating_sub(edit.old_start)
+                == edit.new_end.saturating_sub(edit.old_start)
+            && self
+                .pending_flow_layout
+                .rebuild_one_line_if_state_converges(
+                    &self.flow_layout,
+                    geometry,
+                    &self.clusters,
+                    clusters,
+                    styles,
+                    &mut self.flow_slot_scratch,
+                    u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?,
+                    max_lines,
+                    max_slots_per_band,
+                    |handle| shaper.font_metrics(handle),
+                    |stack_handle| {
+                        font_stacks
+                            .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                            .ok()
+                            .and_then(|index| font_stacks[index].fonts.first().copied())
+                            .and_then(|handle| {
+                                font_bindings
+                                    .iter()
+                                    .find(|binding| binding.handle == handle)
+                                    .map(|binding| binding.shaping_handle)
+                            })
+                    },
+                )?
+        {
+            self.flow_layout_prepared = true;
+            return Ok(());
+        }
         self.pending_flow_layout.build(
             geometry,
             clusters,
             styles,
             &mut self.flow_slot_scratch,
-            usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?,
-            usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?,
+            max_lines,
+            max_slots_per_band,
             |handle| shaper.font_metrics(handle),
             |stack_handle| {
                 font_stacks
