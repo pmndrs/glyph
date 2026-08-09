@@ -43,6 +43,7 @@ export interface EngineFrameUpdateFields {
     readonly revision: number;
   };
   readonly limits: {
+    readonly maxParagraphs?: number;
     readonly maxClusters: number;
     readonly maxLines: number;
     readonly maxOutputBytes: number;

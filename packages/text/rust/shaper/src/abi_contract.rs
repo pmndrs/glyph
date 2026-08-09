@@ -11,7 +11,8 @@ use crate::engine::frame::{
     DECORATION_UNDERLINE, DECORATION_WAVY, DEFAULT_SESSION_TEXT_CAPACITY, EXCLUSION_WRAP_BOTH,
     EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST,
     ORIENTATION_MIXED, ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS,
-    OVERFLOW_VISIBLE, RESULT_FLAG_CHECKPOINT, SEMANTIC_F32_BLOCK_EXTENT, SEMANTIC_F32_BLOCK_START,
+    OVERFLOW_VISIBLE, PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT,
+    RESULT_FLAG_CHECKPOINT, SEMANTIC_F32_BLOCK_EXTENT, SEMANTIC_F32_BLOCK_START,
     SEMANTIC_F32_FONT_SIZE, SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE,
     SEMANTIC_F32_FOREGROUND_GREEN, SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INLINE_EXTENT,
     SEMANTIC_F32_INLINE_START, SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_RASTER_PIXEL_RATIO,
@@ -241,6 +242,18 @@ struct EngineUpdateRequestHeader {
     inline_object_count: u32,
     policy_parameters_offset: u32,
     policy_parameters_length: u32,
+    max_paragraphs: u32,
+    paragraph_mutations_offset: u32,
+    paragraph_mutation_count: u32,
+}
+
+#[repr(C)]
+struct EngineParagraphMutationRecord {
+    opcode: u8,
+    flags: u8,
+    reserved0: u16,
+    paragraph_id: u32,
+    order: u32,
 }
 
 #[repr(C)]
@@ -551,6 +564,11 @@ layout!(
     ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
     EngineUpdateRequestHeader
+);
+layout!(
+    ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
+    ENGINE_PARAGRAPH_MUTATION_RECORD_ALIGNMENT,
+    EngineParagraphMutationRecord
 );
 layout!(
     ENGINE_TEXT_MUTATION_RECORD_SIZE,
@@ -1133,6 +1151,46 @@ field_offset!(
     ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH,
     EngineUpdateRequestHeader,
     policy_parameters_length
+);
+field_offset!(
+    ENGINE_UPDATE_MAX_PARAGRAPHS,
+    EngineUpdateRequestHeader,
+    max_paragraphs
+);
+field_offset!(
+    ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET,
+    EngineUpdateRequestHeader,
+    paragraph_mutations_offset
+);
+field_offset!(
+    ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT,
+    EngineUpdateRequestHeader,
+    paragraph_mutation_count
+);
+field_offset!(
+    ENGINE_PARAGRAPH_MUTATION_OPCODE,
+    EngineParagraphMutationRecord,
+    opcode
+);
+field_offset!(
+    ENGINE_PARAGRAPH_MUTATION_FLAGS,
+    EngineParagraphMutationRecord,
+    flags
+);
+field_offset!(
+    ENGINE_PARAGRAPH_MUTATION_RESERVED0,
+    EngineParagraphMutationRecord,
+    reserved0
+);
+field_offset!(
+    ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
+    EngineParagraphMutationRecord,
+    paragraph_id
+);
+field_offset!(
+    ENGINE_PARAGRAPH_MUTATION_ORDER,
+    EngineParagraphMutationRecord,
+    order
 );
 field_offset!(
     ENGINE_TEXT_MUTATION_OPCODE,
@@ -2115,7 +2173,19 @@ pub fn json() -> String {
                 "inlineObjectsOffset": ENGINE_UPDATE_INLINE_OBJECTS_OFFSET,
                 "inlineObjectCount": ENGINE_UPDATE_INLINE_OBJECT_COUNT,
                 "policyParametersOffset": ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
-                "policyParametersLength": ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH
+                "policyParametersLength": ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH,
+                "maxParagraphs": ENGINE_UPDATE_MAX_PARAGRAPHS,
+                "paragraphMutationsOffset": ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET,
+                "paragraphMutationCount": ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT
+            },
+            "engineParagraphMutation": {
+                "size": ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE,
+                "alignment": ENGINE_PARAGRAPH_MUTATION_RECORD_ALIGNMENT,
+                "opcode": ENGINE_PARAGRAPH_MUTATION_OPCODE,
+                "flags": ENGINE_PARAGRAPH_MUTATION_FLAGS,
+                "reserved0": ENGINE_PARAGRAPH_MUTATION_RESERVED0,
+                "paragraphId": ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
+                "order": ENGINE_PARAGRAPH_MUTATION_ORDER
             },
             "engineTextMutation": {
                 "size": ENGINE_TEXT_MUTATION_RECORD_SIZE,
@@ -2565,6 +2635,10 @@ pub fn json() -> String {
                 "clusterId": SEMANTIC_U32_CLUSTER_ID,
                 "regionId": SEMANTIC_U32_REGION_ID,
                 "flowThreadId": SEMANTIC_U32_FLOW_THREAD_ID
+            },
+            "paragraphMutationOpcodes": {
+                "upsert": PARAGRAPH_MUTATION_UPSERT,
+                "remove": PARAGRAPH_MUTATION_REMOVE
             },
             "textMutationOpcodes": {
                 "replaceUtf16": TEXT_MUTATION_REPLACE_UTF16

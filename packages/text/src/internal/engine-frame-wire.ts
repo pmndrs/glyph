@@ -4,6 +4,7 @@ const MAX_U32 = 0xffff_ffff;
 const encoder = new TextEncoder();
 
 export interface TextEngineFrameLimits {
+  readonly maxParagraphs: number;
   readonly maxClusters: number;
   readonly maxLines: number;
   readonly maxRegions: number;
@@ -12,6 +13,10 @@ export interface TextEngineFrameLimits {
   readonly maxSlotsPerBand: number;
   readonly maxOutputBytes: number;
 }
+
+export type TextEngineParagraphMutation =
+  | { readonly opcode: 'upsert'; readonly paragraphId: number; readonly order: number }
+  | { readonly opcode: 'remove'; readonly paragraphId: number };
 
 export interface TextEngineTextMutation {
   readonly paragraphId: number;
@@ -155,6 +160,7 @@ export interface TextEngineFrameUpdate {
   readonly acknowledgedPublicationGeneration: number;
   readonly semanticViewMask?: number;
   readonly limits: TextEngineFrameLimits;
+  readonly paragraphMutations?: readonly TextEngineParagraphMutation[];
   readonly textMutations?: readonly TextEngineTextMutation[];
   readonly styleMutations?: readonly TextEngineStyleMutation[];
   readonly constraints?: readonly TextEngineConstraint[];
@@ -168,6 +174,7 @@ export interface TextEngineFrameUpdate {
 export function compileTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint8Array {
   const abi = textShaperAbi;
   const request = abi.layouts.engineUpdateRequest;
+  const paragraphMutations = frame.paragraphMutations ?? [];
   const textMutations = frame.textMutations ?? [];
   const styleMutations = frame.styleMutations ?? [];
   const constraints = frame.constraints ?? [];
@@ -181,6 +188,12 @@ export function compileTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint
     cursor = checkedAdd(offset, checkedProduct(count, stride, label), label);
     return offset;
   };
+  const paragraphOffset = allocate(
+    paragraphMutations.length,
+    abi.layouts.engineParagraphMutation.size,
+    abi.layouts.engineParagraphMutation.alignment,
+    'paragraph mutations',
+  );
   const textOffset = allocate(textMutations.length, abi.layouts.engineTextMutation.size, 4, 'text mutations');
   const styleOffset = allocate(styleMutations.length, abi.layouts.engineStyleMutation.size, 4, 'style mutations');
   const constraintOffset = allocate(constraints.length, abi.layouts.engineConstraint.size, 4, 'constraints');
@@ -215,6 +228,7 @@ export function compileTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint
 
   writeHeader(view, frame, bytes.length, {
     textOffset,
+    paragraphOffset,
     styleOffset,
     constraintOffset,
     regionOffset,
@@ -222,6 +236,7 @@ export function compileTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint
     inlineObjectOffset,
     policyParametersOffset,
   });
+  writeParagraphMutations(view, paragraphOffset, paragraphMutations);
   writeTextMutations(view, textOffset, textMutations, textPayloads);
   writeStyleMutations(view, bytes, styleOffset, styleMutations, languageBytes, languageOffsets, featureOffsets);
   writeConstraints(view, constraintOffset, constraints);
@@ -233,6 +248,7 @@ export function compileTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint
 }
 
 interface HeaderOffsets {
+  readonly paragraphOffset: number;
   readonly textOffset: number;
   readonly styleOffset: number;
   readonly constraintOffset: number;
@@ -255,6 +271,7 @@ function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: n
     ['policyHandle', frame.policyHandle],
     ['capabilitySet', frame.capabilitySet],
     ['semanticViewMask', frame.semanticViewMask ?? 0],
+    ['maxParagraphs', limits.maxParagraphs],
     ['maxClusters', limits.maxClusters],
     ['maxLines', limits.maxLines],
     ['maxRegions', limits.maxRegions],
@@ -262,6 +279,8 @@ function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: n
     ['maxInlineObjects', limits.maxInlineObjects],
     ['maxSlotsPerBand', limits.maxSlotsPerBand],
     ['maxOutputBytes', limits.maxOutputBytes],
+    ['paragraphMutationsOffset', offsets.paragraphOffset],
+    ['paragraphMutationCount', frame.paragraphMutations?.length ?? 0],
     ['textMutationsOffset', offsets.textOffset],
     ['textMutationCount', frame.textMutations?.length ?? 0],
     ['styleMutationsOffset', offsets.styleOffset],
@@ -278,6 +297,23 @@ function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: n
     ['policyParametersLength', frame.policyParameters?.length ?? 0],
   ] as const) {
     view.setUint32(layout[field], u32(value, field), true);
+  }
+}
+
+function writeParagraphMutations(
+  view: DataView,
+  tableOffset: number,
+  mutations: readonly TextEngineParagraphMutation[],
+): void {
+  const layout = textShaperAbi.layouts.engineParagraphMutation;
+  const opcodes = textShaperAbi.engine.paragraphMutationOpcodes;
+  for (const [index, mutation] of mutations.entries()) {
+    const offset = tableOffset + index * layout.size;
+    view.setUint8(offset + layout.opcode, opcodes[mutation.opcode]);
+    view.setUint32(offset + layout.paragraphId, u32(mutation.paragraphId, 'paragraph ID'), true);
+    if (mutation.opcode === 'upsert') {
+      view.setUint32(offset + layout.order, u32(mutation.order, 'paragraph order'), true);
+    }
   }
 }
 

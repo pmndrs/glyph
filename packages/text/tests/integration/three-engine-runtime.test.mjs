@@ -100,6 +100,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
       consumedPlanRevision: 0,
       acknowledgedPublicationGeneration: 0,
       limits: {
+        maxParagraphs: 1,
         maxClusters: 16,
         maxLines: 8,
         maxRegions: 1,
@@ -108,6 +109,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
         maxSlotsPerBand: 2,
         maxOutputBytes: 1024 * 1024,
       },
+      paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
       textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'abc' }],
       styleMutations: [
         {

@@ -1692,6 +1692,21 @@ fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineErro
 }
 
 fn request_paragraph_id(request: UpdateRequest<'_>) -> Result<Option<u32>, EngineError> {
+    let mut declared_id = None;
+    for index in 0..request.paragraph_mutations.len() {
+        match request
+            .paragraph_mutations
+            .get(index)
+            .ok_or(EngineError::InvalidRequest)?
+        {
+            super::semantic_wire::ParagraphMutation::Upsert { paragraph_id, .. } => {
+                merge_paragraph_id(&mut declared_id, Some(paragraph_id))?;
+            }
+            super::semantic_wire::ParagraphMutation::Remove { .. } => {
+                return Err(EngineError::InvalidRequest);
+            }
+        }
+    }
     let mut paragraph_id = None;
     for index in 0..request.text_mutations.len() {
         merge_paragraph_id(&mut paragraph_id, request.text_mutations.paragraph_id(index))?;
@@ -1707,7 +1722,10 @@ fn request_paragraph_id(request: UpdateRequest<'_>) -> Result<Option<u32>, Engin
     for index in 0..geometry_count {
         merge_paragraph_id(&mut paragraph_id, request.geometry.paragraph_id(index))?;
     }
-    Ok(paragraph_id)
+    if declared_id.is_some() && paragraph_id.is_some() && declared_id != paragraph_id {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(declared_id.or(paragraph_id))
 }
 
 fn merge_paragraph_id(
@@ -2417,6 +2435,7 @@ mod tests {
             policy_handle: 9,
             capability_set: 1,
             limits: super::super::frame::UpdateLimits {
+                max_paragraphs: 1,
                 max_clusters: 1,
                 max_lines: 1,
                 max_regions: 1,
@@ -2425,6 +2444,7 @@ mod tests {
                 max_slots_per_band: 1,
                 max_output_bytes: 128,
             },
+            paragraph_mutations: super::super::semantic_wire::ParagraphMutationBatch::empty(),
             text_mutations: super::super::semantic_wire::TextMutationBatch::empty(),
             style_mutations: super::super::semantic_wire::StyleMutationBatch::empty(),
             geometry: super::super::semantic_wire::GeometryBatch::empty(),

@@ -15,8 +15,10 @@ use crate::{
         ENGINE_UPDATE_EXPECTED_ENGINE_REVISION, ENGINE_UPDATE_FLAGS,
         ENGINE_UPDATE_INLINE_OBJECT_COUNT, ENGINE_UPDATE_INLINE_OBJECTS_OFFSET,
         ENGINE_UPDATE_MAX_CLUSTERS, ENGINE_UPDATE_MAX_EXCLUSIONS, ENGINE_UPDATE_MAX_INLINE_OBJECTS,
-        ENGINE_UPDATE_MAX_LINES, ENGINE_UPDATE_MAX_OUTPUT_BYTES, ENGINE_UPDATE_MAX_REGIONS,
-        ENGINE_UPDATE_MAX_SLOTS_PER_BAND, ENGINE_UPDATE_POLICY_HANDLE,
+        ENGINE_UPDATE_MAX_LINES, ENGINE_UPDATE_MAX_OUTPUT_BYTES, ENGINE_UPDATE_MAX_PARAGRAPHS,
+        ENGINE_UPDATE_MAX_REGIONS, ENGINE_UPDATE_MAX_SLOTS_PER_BAND,
+        ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT, ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET,
+        ENGINE_UPDATE_POLICY_HANDLE,
         ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH, ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
         ENGINE_UPDATE_REGION_COUNT, ENGINE_UPDATE_REGIONS_OFFSET,
         ENGINE_UPDATE_REQUEST_HEADER_SIZE, ENGINE_UPDATE_SEMANTIC_VIEW_MASK,
@@ -26,7 +28,7 @@ use crate::{
     },
     engine::{
         frame::{UpdateLimits, UpdateRequest},
-        semantic_wire::{parse_geometry, parse_text_mutations},
+        semantic_wire::{parse_geometry, parse_paragraph_mutations, parse_text_mutations},
     },
     wire::read_u32,
 };
@@ -57,6 +59,7 @@ pub(crate) fn parse_update_request(
         }
     }
     let limits = UpdateLimits {
+        max_paragraphs: positive(bytes, ENGINE_UPDATE_MAX_PARAGRAPHS)?,
         max_clusters: positive(bytes, ENGINE_UPDATE_MAX_CLUSTERS)?,
         max_lines: positive(bytes, ENGINE_UPDATE_MAX_LINES)?,
         max_regions: positive(bytes, ENGINE_UPDATE_MAX_REGIONS)?,
@@ -71,6 +74,15 @@ pub(crate) fn parse_update_request(
     {
         return Err(STATUS_INVALID_REQUEST);
     }
+    let paragraph_mutation_count = read_u32(bytes, ENGINE_UPDATE_PARAGRAPH_MUTATION_COUNT)?;
+    if paragraph_mutation_count > limits.max_paragraphs {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let paragraph_mutations = parse_paragraph_mutations(
+        bytes,
+        read_u32(bytes, ENGINE_UPDATE_PARAGRAPH_MUTATIONS_OFFSET)?,
+        paragraph_mutation_count,
+    )?;
     let text_mutation_count = read_u32(bytes, ENGINE_UPDATE_TEXT_MUTATION_COUNT)?;
     if text_mutation_count > limits.max_clusters {
         return Err(STATUS_INVALID_REQUEST);
@@ -107,7 +119,9 @@ pub(crate) fn parse_update_request(
     )?;
     text_mutations.validate_disjoint_geometry(geometry)?;
     style_mutations.validate_disjoint_semantics(text_mutations, geometry)?;
-    if text_mutation_count == 0
+    paragraph_mutations.validate_disjoint_semantics(text_mutations, style_mutations, geometry)?;
+    if paragraph_mutation_count == 0
+        && text_mutation_count == 0
         && style_mutation_count == 0
         && constraint_count == 0
         && region_count == 0
@@ -128,6 +142,7 @@ pub(crate) fn parse_update_request(
         policy_handle: read_u32(bytes, ENGINE_UPDATE_POLICY_HANDLE)?,
         capability_set: positive(bytes, ENGINE_UPDATE_CAPABILITY_SET)?,
         limits,
+        paragraph_mutations,
         text_mutations,
         style_mutations,
         geometry,
@@ -185,6 +200,7 @@ mod tests {
         write_u32(&mut bytes, ENGINE_UPDATE_POLICY_HANDLE, 9);
         write_u32(&mut bytes, ENGINE_UPDATE_CAPABILITY_SET, 1);
         for offset in [
+            ENGINE_UPDATE_MAX_PARAGRAPHS,
             ENGINE_UPDATE_MAX_CLUSTERS,
             ENGINE_UPDATE_MAX_LINES,
             ENGINE_UPDATE_MAX_REGIONS,

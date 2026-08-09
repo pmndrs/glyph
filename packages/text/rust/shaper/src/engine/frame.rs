@@ -78,6 +78,8 @@ pub(crate) const SEMANTIC_U32_FOREGROUND_RGBA: u8 = 0;
 pub(crate) const SEMANTIC_U32_CLUSTER_ID: u8 = 1;
 pub(crate) const SEMANTIC_U32_REGION_ID: u8 = 2;
 pub(crate) const SEMANTIC_U32_FLOW_THREAD_ID: u8 = 3;
+pub(crate) const PARAGRAPH_MUTATION_UPSERT: u8 = 1;
+pub(crate) const PARAGRAPH_MUTATION_REMOVE: u8 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct UpdateRequest<'a> {
@@ -88,6 +90,7 @@ pub(crate) struct UpdateRequest<'a> {
     pub policy_handle: u32,
     pub capability_set: u32,
     pub limits: UpdateLimits,
+    pub paragraph_mutations: super::semantic_wire::ParagraphMutationBatch<'a>,
     pub text_mutations: super::semantic_wire::TextMutationBatch<'a>,
     pub style_mutations: super::semantic_wire::StyleMutationBatch<'a>,
     pub geometry: super::semantic_wire::GeometryBatch<'a>,
@@ -95,6 +98,7 @@ pub(crate) struct UpdateRequest<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct UpdateLimits {
+    pub max_paragraphs: u32,
     pub max_clusters: u32,
     pub max_lines: u32,
     pub max_regions: u32,
@@ -106,7 +110,8 @@ pub(crate) struct UpdateLimits {
 
 impl UpdateLimits {
     pub fn all_nonzero(self) -> bool {
-        self.max_clusters != 0
+        self.max_paragraphs != 0
+            && self.max_clusters != 0
             && self.max_lines != 0
             && self.max_regions != 0
             && self.max_exclusions != 0
