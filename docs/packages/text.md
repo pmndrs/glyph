@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:52739ee05c6056275b8899dc371771186cc210a99e265198567c0a3aaefec2e6'
+source_digest: 'sha256:04c42b4aa41023fc4f7945ffcd76ac40b28848db5e0f1686e8a88b6d4e754281'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -190,7 +190,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T13:51:48Z'
+  at: '2026-08-09T13:57:12Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -1033,9 +1033,11 @@ attributed to ellipsis alone.
 
 Dirty-range refinement begins with one stride-specific Rust coalescing primitive. It costs gaps, backend-call penalty,
 fragmentation, and full-live promotion for one physical buffer and rejects zero-stride or overflowing arithmetic.
-Focused tests prove that identical record ranges make different decisions for 16-byte and 64-byte streams. Existing
-ordered and stable publishers still call the program-wide compatibility wrapper at this checkpoint, so this is a
-tested implementation seam rather than a claimed upload or frame-time improvement.
+Focused tests prove that identical record ranges make different decisions for 16-byte and 64-byte streams. Ordered and
+stable physical publishers now retain fixed per-buffer range scratch, derive liveness through exact semantic dependency
+masks, align each stream independently, and pack only the selected physical buffer for its chosen spans. The stable
+logical-order buffer is not migrated at this checkpoint, and no upload or frame-time improvement is claimed before
+complete-path measurement.
 
 Live Paragraph Stress profiling also found two renderer-integration defects independent of shaping invalidation. The
 Three executor rebuilt a per-glyph origin lookup object graph after every plan application even though only presentation

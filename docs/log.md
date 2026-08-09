@@ -7,6 +7,11 @@
   stride, and overflow. Existing ordered/stable callers remain on the compatibility wrapper until the next atomic
   checkpoint, so no upload or frame-time gain is claimed.
 
+- **Moved ordered and stable physical writes onto per-buffer range plans** — Each compiler retains fixed reusable scratch
+  for the policy buffer ceiling, applies semantic dependency liveness before range selection, aligns by the concrete
+  stream stride, and packs the independently chosen spans. The order buffer and end-to-end timing remain open, so this
+  checkpoint claims correct ownership and bounded allocation rather than a speedup.
+
 - **Moved ellipsis and its real boundary reshape into the Rust frame transaction** — Only truncated flow threads build a
   retained boundary arena; ordinary reflow retains zero boundary reshapes. Font-stack ellipsis selection, complete
   no-wrap overflow, narrowed final-tail context, spacing, stable glyph identity, positioning, semantic inspection, and
