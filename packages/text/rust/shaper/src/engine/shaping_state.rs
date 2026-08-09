@@ -366,6 +366,92 @@ impl ShapeArena {
         );
         Ok((glyph_start, run.glyph_count))
     }
+
+    pub(crate) fn append_text_range_from(
+        &mut self,
+        source: &Self,
+        run_index: usize,
+        source_run: u32,
+        text_start: u32,
+        text_end: u32,
+        text_delta: i64,
+    ) -> Result<(), EngineError> {
+        if text_start > text_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        if text_start == text_end {
+            return Ok(());
+        }
+        let run = *source
+            .runs
+            .get(run_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let run_start =
+            usize::try_from(run.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+        let run_end = run_start
+            .checked_add(usize::try_from(run.glyph_count).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        let mut selected_start = None;
+        let mut selected_end = 0usize;
+        let mut selection_finished = false;
+        for glyph in run_start..run_end {
+            let cluster = *source
+                .clusters
+                .get(glyph)
+                .ok_or(EngineError::InvalidRequest)?;
+            if cluster >= text_start && cluster < text_end {
+                if selection_finished {
+                    return Err(EngineError::InvalidRequest);
+                }
+                selected_start.get_or_insert(glyph);
+                selected_end = glyph + 1;
+            } else if selected_start.is_some() {
+                selection_finished = true;
+            }
+        }
+        let (selected_start, selected_end) =
+            selected_start.map_or((run_start, run_start), |start| (start, selected_end));
+        let glyph_start =
+            u32::try_from(self.glyph_ids.len()).map_err(|_| EngineError::ResultTooLarge)?;
+        let glyph_count = u32::try_from(selected_end - selected_start)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.reserve(
+            self.glyph_ids
+                .len()
+                .saturating_add(selected_end - selected_start),
+        )?;
+        self.runs.push(ShapedRun {
+            source_run,
+            text_start: shifted_offset(text_start, text_delta)?,
+            text_end: shifted_offset(text_end, text_delta)?,
+            glyph_start,
+            glyph_count,
+            ..run
+        });
+        self.glyph_ids
+            .extend_from_slice(&source.glyph_ids[selected_start..selected_end]);
+        for &cluster in &source.clusters[selected_start..selected_end] {
+            self.clusters.push(shifted_offset(cluster, text_delta)?);
+        }
+        self.x_advances
+            .extend_from_slice(&source.x_advances[selected_start..selected_end]);
+        self.y_advances
+            .extend_from_slice(&source.y_advances[selected_start..selected_end]);
+        self.x_offsets
+            .extend_from_slice(&source.x_offsets[selected_start..selected_end]);
+        self.y_offsets
+            .extend_from_slice(&source.y_offsets[selected_start..selected_end]);
+        self.glyph_flags
+            .extend_from_slice(&source.glyph_flags[selected_start..selected_end]);
+        Ok(())
+    }
+}
+
+fn shifted_offset(value: u32, delta: i64) -> Result<u32, EngineError> {
+    let shifted = i64::from(value)
+        .checked_add(delta)
+        .ok_or(EngineError::ResultTooLarge)?;
+    u32::try_from(shifted).map_err(|_| EngineError::ResultTooLarge)
 }
 
 impl BoundaryShapeArena {
@@ -454,6 +540,48 @@ mod tests {
                 .map(|run| (run.text_start, run.text_end, run.direction, run.bidi_level))
                 .collect::<Vec<_>>(),
             vec![(0, 3, 0, 0), (4, 7, 0, 2)]
+        );
+    }
+
+    #[test]
+    fn copies_and_rebases_one_contiguous_text_range_in_shaping_order() {
+        let source = ShapeArena {
+            runs: vec![ShapedRun {
+                source_run: 7,
+                binding_handle: 11,
+                font_handle: 13,
+                text_start: 0,
+                text_end: 4,
+                glyph_start: 0,
+                glyph_count: 4,
+            }],
+            glyph_ids: vec![30, 20, 10, 0],
+            clusters: vec![3, 2, 1, 0],
+            x_advances: vec![3, 2, 1, 0],
+            y_advances: vec![0; 4],
+            x_offsets: vec![0; 4],
+            y_offsets: vec![0; 4],
+            glyph_flags: vec![0, 2, 0, 0],
+        };
+        let mut destination = ShapeArena::default();
+        destination
+            .append_text_range_from(&source, 0, 5, 1, 3, 2)
+            .unwrap();
+        assert_eq!(destination.glyph_ids, [20, 10]);
+        assert_eq!(destination.clusters, [4, 3]);
+        assert_eq!(destination.x_advances, [2, 1]);
+        assert_eq!(destination.glyph_flags, [2, 0]);
+        assert_eq!(
+            destination.runs,
+            [ShapedRun {
+                source_run: 5,
+                binding_handle: 11,
+                font_handle: 13,
+                text_start: 3,
+                text_end: 5,
+                glyph_start: 0,
+                glyph_count: 2,
+            }]
         );
     }
 }

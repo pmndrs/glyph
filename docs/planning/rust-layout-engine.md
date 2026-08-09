@@ -1017,6 +1017,16 @@ p95 ≤ 1.0 ms for localized edits and retained constraint changes that converge
 lowering and CPU-side upload submission are reported separately and must also fit the application's total 4 ms UI
 budget; neither target is justified by a best-case median.
 
+The first retained-edit checkpoint deliberately uses shaping-run boundaries as its conservative invalidation unit. If a
+localized edit preserves the complete run topology and the affected run's font fallback, Rust copies every other shaped
+run and reshapes the affected run from its original independent context. This is broader than an unsafe-concat window,
+but it is exact for the same reason the cold path shapes those runs independently. On the unchanged 22,000-glyph Bitmap
+fixture, production optimized SIMD Wasm improved from 16.223 ms to 9.372 ms median (31 measured updates after 40 warmups),
+with 9.723 ms p95 and about 1 KiB of command-buffer writes. This isolates a roughly 6.85 ms shaping win. It also proves
+that shaping alone cannot meet the contract: cluster rebuilding, line composition, positioning, and plan gathering
+remain global, and the ordinary eight-warmup lane still catches a later 1,114,112-byte memory growth. Both are open
+failures, not reasons to weaken the gates.
+
 The benchmark reports phases and retained-output costs separately:
 
 - Unicode/style invalidation, shaping, composition, positioning, semantic geometry, plan compilation;
