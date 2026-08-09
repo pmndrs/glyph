@@ -375,20 +375,11 @@ fn shape_segment_inner(
         .map(|value| parse_language(value).ok_or(STATUS_INVALID_REQUEST))
         .transpose()?;
     shape_features(run, range, features)?;
-    let key = PlanKey {
-        direction: run.direction,
-        script: run.script,
-        language: language.as_ref().map(|value| value.as_bytes().to_vec()),
-        features: features
-            .iter()
-            .map(|feature| PlanFeatureKey {
-                tag: u32::from_be_bytes(feature.tag.to_be_bytes()),
-                value: feature.value,
-                global: feature.start == 0 && feature.end == u32::MAX,
-            })
-            .collect(),
-    };
-    if let Some(index) = font.plans.iter().position(|cached| cached.key == key) {
+    if let Some(index) = font
+        .plans
+        .iter()
+        .position(|cached| plan_key_matches(&cached.key, run, language.as_ref(), features))
+    {
         let cached = font.plans.remove(index);
         font.plans.push(cached);
     } else {
@@ -404,6 +395,19 @@ fn shape_segment_inner(
         if font.plans.len() == MAX_CACHED_PLANS_PER_FONT {
             font.plans.remove(0);
         }
+        let key = PlanKey {
+            direction: run.direction,
+            script: run.script,
+            language: language.as_ref().map(|value| value.as_bytes().to_vec()),
+            features: features
+                .iter()
+                .map(|feature| PlanFeatureKey {
+                    tag: u32::from_be_bytes(feature.tag.to_be_bytes()),
+                    value: feature.value,
+                    global: feature.start == 0 && feature.end == u32::MAX,
+                })
+                .collect(),
+        };
         font.plans.push(CachedPlan { key, plan });
     }
 
@@ -438,6 +442,23 @@ fn shape_segment_inner(
     buffer.set_flags(BufferFlags::from_bits(range.flags).ok_or(STATUS_INVALID_REQUEST)?);
 
     Ok(())
+}
+
+fn plan_key_matches(
+    key: &PlanKey,
+    run: ShapeRunRef<'_>,
+    language: Option<&Language>,
+    features: &[Feature],
+) -> bool {
+    key.direction == run.direction
+        && key.script == run.script
+        && key.language.as_deref() == language.map(Language::as_bytes)
+        && key.features.len() == features.len()
+        && key.features.iter().zip(features).all(|(cached, feature)| {
+            cached.tag == u32::from_be_bytes(feature.tag.to_be_bytes())
+                && cached.value == feature.value
+                && cached.global == (feature.start == 0 && feature.end == u32::MAX)
+        })
 }
 
 fn shape_features(
