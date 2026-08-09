@@ -43,7 +43,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
       abi.layouts.engineExclusion.size,
       abi.layouts.engineInlineObject.size,
     ],
-    [24, 92, 56, 8, 56, 48, 60],
+    [24, 92, 56, 8, 60, 48, 60],
   );
   assert.equal(abi.layouts.engineInlineObject.alignment, 4);
   assert.equal(abi.layouts.engineInlineObject.baselineAlignment, 52);
@@ -99,6 +99,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     flowThreadId: 3,
     foregroundRgba: 0,
     regionId: 2,
+    transformIndex: 4,
   });
   assert.equal(fn.createSession(sessionId, requestLayout.size, resultLayout.size, 0), abi.status.ok);
   assert.equal(fn.sessionCount(), 1);
@@ -345,6 +346,7 @@ function geometryRequestBytes(abi, expectedEngineRevision, consumedPlanRevision,
 
   view.setUint32(regionOffset + region.id, 1, true);
   view.setUint32(regionOffset + region.geometryRevision, 1, true);
+  view.setUint32(regionOffset + region.transformIndex, 1, true);
   view.setUint16(regionOffset + region.exclusionCount, 1, true);
   view.setUint8(regionOffset + region.shape, abi.engine.flowShapeKinds.rectangle);
   view.setUint8(regionOffset + region.writingMode, abi.engine.writingModes.horizontalTb);

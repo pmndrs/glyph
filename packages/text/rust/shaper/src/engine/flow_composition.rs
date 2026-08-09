@@ -6,7 +6,7 @@ use super::{
     EngineError,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
     flow_geometry::{FlowGeometryArena, InlineSlotArena},
-    frame::WRITING_HORIZONTAL_TB,
+    frame::{OVERFLOW_VISIBLE, WRITING_HORIZONTAL_TB},
     line_composition::{ComposedLine, LineCursor, layout_next_line},
     style_state::StyleSegment,
 };
@@ -15,6 +15,8 @@ use super::{
 pub(crate) struct FlowLine {
     pub flow_thread_id: u32,
     pub region_id: u32,
+    pub transform_index: u32,
+    pub clip_id: u32,
     pub fragment_start: u32,
     pub fragment_count: u16,
     pub align: u8,
@@ -140,6 +142,12 @@ impl FlowLayoutArena {
                         region_index,
                         constraint.flow_thread_id,
                         region.record.id,
+                        region.record.transform_index,
+                        if constraint.overflow == OVERFLOW_VISIBLE {
+                            0
+                        } else {
+                            region.record.id
+                        },
                         clusters,
                         styles,
                         slots,
@@ -169,6 +177,8 @@ impl FlowLayoutArena {
         region_index: usize,
         flow_thread_id: u32,
         region_id: u32,
+        transform_index: u32,
+        clip_id: u32,
         clusters: &ClusterArena,
         styles: &[StyleSegment],
         slot_arena: &mut InlineSlotArena,
@@ -245,6 +255,8 @@ impl FlowLayoutArena {
             self.lines.push(FlowLine {
                 flow_thread_id,
                 region_id,
+                transform_index,
+                clip_id,
                 fragment_start: u32::try_from(fragment_start)
                     .map_err(|_| EngineError::ResultTooLarge)?,
                 fragment_count: u16::try_from(fragment_count)
@@ -598,6 +610,7 @@ mod tests {
         FlowRegion {
             id: 7,
             geometry_revision: 1,
+            transform_index: 7,
             vertices_offset: 0,
             vertex_count: 0,
             exclusion_start: 0,

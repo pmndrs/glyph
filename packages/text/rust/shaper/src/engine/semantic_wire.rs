@@ -134,6 +134,7 @@ pub(crate) struct FlowConstraint {
 pub(crate) struct FlowRegion {
     pub id: u32,
     pub geometry_revision: u32,
+    pub transform_index: u32,
     pub vertices_offset: u32,
     pub vertex_count: u16,
     pub exclusion_start: u16,
@@ -303,6 +304,7 @@ impl GeometryBatch<'_> {
         Some(FlowRegion {
             id: read_u32(record, abi::ENGINE_REGION_ID).ok()?,
             geometry_revision: read_u32(record, abi::ENGINE_REGION_GEOMETRY_REVISION).ok()?,
+            transform_index: read_u32(record, abi::ENGINE_REGION_TRANSFORM_INDEX).ok()?,
             vertices_offset: read_u32(record, abi::ENGINE_REGION_VERTICES_OFFSET).ok()?,
             vertex_count: read_u16(record, abi::ENGINE_REGION_VERTEX_COUNT).ok()?,
             exclusion_start: read_u16(record, abi::ENGINE_REGION_EXCLUSION_START).ok()?,
@@ -1433,7 +1435,9 @@ fn validate_regions(
         .enumerate()
     {
         let id = read_u32(record, abi::ENGINE_REGION_ID)?;
+        let transform_index = read_u32(record, abi::ENGINE_REGION_TRANSFORM_INDEX)?;
         if id == 0
+            || transform_index == 0
             || prior_u32_duplicate(
                 regions,
                 abi::ENGINE_REGION_RECORD_SIZE,
@@ -2413,6 +2417,11 @@ mod tests {
         write_u32(
             &mut bytes,
             REGION_OFFSET + abi::ENGINE_REGION_GEOMETRY_REVISION,
+            1,
+        );
+        write_u32(
+            &mut bytes,
+            REGION_OFFSET + abi::ENGINE_REGION_TRANSFORM_INDEX,
             1,
         );
         write_u16(

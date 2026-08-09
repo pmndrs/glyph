@@ -78,6 +78,7 @@ pub(crate) const SEMANTIC_U32_FOREGROUND_RGBA: u8 = 0;
 pub(crate) const SEMANTIC_U32_CLUSTER_ID: u8 = 1;
 pub(crate) const SEMANTIC_U32_REGION_ID: u8 = 2;
 pub(crate) const SEMANTIC_U32_FLOW_THREAD_ID: u8 = 3;
+pub(crate) const SEMANTIC_U32_TRANSFORM_INDEX: u8 = 4;
 pub(crate) const PARAGRAPH_MUTATION_UPSERT: u8 = 1;
 pub(crate) const PARAGRAPH_MUTATION_REMOVE: u8 = 2;
 

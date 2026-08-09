@@ -15,7 +15,7 @@ use super::{
         record_alignment, take_allocation,
     },
     policy::{
-        ALLOCATION_ORDERED_DIRECT, BATCH_MATERIAL, BufferSchema, CapabilitySetId,
+        ALLOCATION_ORDERED_DIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BufferSchema, CapabilitySetId,
         PolicyExecutionError, TechniqueId, ValidatedPolicy,
     },
     render_plan::{
@@ -968,6 +968,7 @@ impl OrderedPlanCompiler {
                 )
                 .ok_or(OrderedPlanError::ProgramMissing)?;
             let split_material = program.draw_key_mask & BATCH_MATERIAL != 0;
+            let split_transform = program.draw_key_mask & BATCH_TRANSFORM != 0;
             let mut end = input_index + 1;
             while end < context.input.glyphs.len()
                 && end - input_index < usize::from(u16::MAX)
@@ -978,6 +979,7 @@ impl OrderedPlanCompiler {
                     batch_index,
                     first_slot,
                     split_material,
+                    split_transform,
                 )
             {
                 end += 1;
@@ -1033,7 +1035,7 @@ impl OrderedPlanCompiler {
                 material_id: if split_material { first.material_id } else { 0 },
                 clip_id: first.clip_id,
                 depth_key: first.depth_key,
-                transform_id: first.transform_id,
+                transform_id: if split_transform { first.transform_id } else { 0 },
                 primitive_start: u32::try_from(primitive_start)
                     .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
                 primitive_count: 1,
@@ -1064,6 +1066,7 @@ impl OrderedPlanCompiler {
         batch_index: usize,
         first_slot: u32,
         split_material: bool,
+        split_transform: bool,
     ) -> bool {
         let first = glyphs[start];
         let glyph = glyphs[next];
@@ -1076,7 +1079,7 @@ impl OrderedPlanCompiler {
             && (!split_material || glyph.material_id == first.material_id)
             && glyph.clip_id == first.clip_id
             && glyph.depth_key == first.depth_key
-            && glyph.transform_id == first.transform_id
+            && (!split_transform || glyph.transform_id == first.transform_id)
     }
 
     fn prepare_removed_batches(
@@ -1462,6 +1465,28 @@ mod tests {
     }
 
     #[test]
+    fn policy_selects_draw_split_or_instance_transform_indirection() {
+        let mut glyphs = [glyph(1, 1), glyph(2, 1)];
+        glyphs[1].transform_id = 2;
+        for (split_transform, expected) in [(true, &[1, 2][..]), (false, &[0][..])] {
+            let policy = policy_with_options(false, 1024, split_transform);
+            let mut compiler = OrderedPlanCompiler::default();
+            prepare(&mut compiler, &policy, &glyphs, &[1.0, 2.0], true);
+            let plan = compiler
+                .plan_view(7, CAPABILITY, policy.fingerprint())
+                .unwrap();
+            assert_eq!(
+                plan.draws
+                    .iter()
+                    .map(|draw| draw.transform_id)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(plan.primitives.iter().map(|item| item.record_count).sum::<u16>(), 2);
+        }
+    }
+
+    #[test]
     fn policy_can_partition_physical_storage_by_material() {
         let policy = policy_with_material_storage(true);
         let mut compiler = OrderedPlanCompiler::default();
@@ -1590,6 +1615,14 @@ mod tests {
     }
 
     fn policy_with_limits(partition_materials: bool, max_buffer_bytes: u32) -> ValidatedPolicy {
+        policy_with_options(partition_materials, max_buffer_bytes, true)
+    }
+
+    fn policy_with_options(
+        partition_materials: bool,
+        max_buffer_bytes: u32,
+        split_transform: bool,
+    ) -> ValidatedPolicy {
         ValidatedPolicy::new(PolicyDescriptor {
             capability_sets: vec![CapabilitySet {
                 id: CAPABILITY,
@@ -1624,7 +1657,7 @@ mod tests {
                     | BATCH_RESOURCE
                     | BATCH_MATERIAL
                     | BATCH_ORDER
-                    | crate::engine::policy::BATCH_TRANSFORM,
+                    | if split_transform { BATCH_TRANSFORM } else { 0 },
                 allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,

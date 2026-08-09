@@ -17,6 +17,7 @@ use crate::engine::frame::{
     SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INLINE_EXTENT, SEMANTIC_F32_INLINE_START,
     SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_RASTER_PIXEL_RATIO, SEMANTIC_U32_CLUSTER_ID,
     SEMANTIC_U32_FLOW_THREAD_ID, SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_REGION_ID,
+    SEMANTIC_U32_TRANSFORM_INDEX,
     SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION,
     STYLE_FIELD_DIRECTION, STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
     STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING,
@@ -334,6 +335,7 @@ struct EngineFlowVertexRecord {
 struct EngineRegionRecord {
     id: u32,
     geometry_revision: u32,
+    transform_index: u32,
     vertices_offset: u32,
     vertex_count: u16,
     exclusion_start: u16,
@@ -1453,6 +1455,11 @@ field_offset!(
     geometry_revision
 );
 field_offset!(
+    ENGINE_REGION_TRANSFORM_INDEX,
+    EngineRegionRecord,
+    transform_index
+);
+field_offset!(
     ENGINE_REGION_VERTICES_OFFSET,
     EngineRegionRecord,
     vertices_offset
@@ -2267,6 +2274,7 @@ pub fn json() -> String {
                 "alignment": ENGINE_REGION_RECORD_ALIGNMENT,
                 "id": ENGINE_REGION_ID,
                 "geometryRevision": ENGINE_REGION_GEOMETRY_REVISION,
+                "transformIndex": ENGINE_REGION_TRANSFORM_INDEX,
                 "verticesOffset": ENGINE_REGION_VERTICES_OFFSET,
                 "vertexCount": ENGINE_REGION_VERTEX_COUNT,
                 "exclusionStart": ENGINE_REGION_EXCLUSION_START,
@@ -2638,7 +2646,8 @@ pub fn json() -> String {
                 "foregroundRgba": SEMANTIC_U32_FOREGROUND_RGBA,
                 "clusterId": SEMANTIC_U32_CLUSTER_ID,
                 "regionId": SEMANTIC_U32_REGION_ID,
-                "flowThreadId": SEMANTIC_U32_FLOW_THREAD_ID
+                "flowThreadId": SEMANTIC_U32_FLOW_THREAD_ID,
+                "transformIndex": SEMANTIC_U32_TRANSFORM_INDEX
             },
             "paragraphMutationOpcodes": {
                 "upsert": PARAGRAPH_MUTATION_UPSERT,
