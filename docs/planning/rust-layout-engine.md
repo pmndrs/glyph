@@ -13,7 +13,7 @@ tags:
   - abi
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T13:43:37Z'
+  at: '2026-08-09T14:25:40Z'
 sources:
   - id: layout-benchmark
     resource: ../../packages/text/scripts/benchmark-paragraph-layout.mts
@@ -66,6 +66,9 @@ sources:
   - id: pretext
     resource: https://github.com/chenglou/pretext
     title: Pretext incremental per-line text layout
+  - id: paragraph-query-preparation
+    resource: paragraph-query-preparation.md
+    title: Paragraph-scoped preparation and synchronous layout queries
   - id: webrender
     resource: https://firefox-source-docs.mozilla.org/gfx/RenderingOverview.html
     title: Firefox rendering overview and display lists
@@ -770,6 +773,11 @@ plus its line records. The separately requested inspection view adds semantic gl
 flags, and shaped origins, including glyphs such as spaces that deliberately produce no render instance. Both masks are
 zero on ordinary rendering updates. Caret, selection, hit testing, accessibility, and diagnostics must each prove a
 bounded record shape before admission.
+
+The current semantic query measures committed state or rides a complete pending frame. A separate
+[paragraph-scoped prepare/query design](paragraph-query-preparation.md) records the bounded follow-up for synchronously
+measuring one pending paragraph, retaining its prepared result, and adopting it into the next full frame without
+compiling a render plan during the query or adding a third full buffer.
 
 A policy may request a renderer augmentation without moving semantic layout into the plan. The first-party Three policy
 writes each renderable glyph's session-global stable ID to one compact `u32` stream beside the technique's existing

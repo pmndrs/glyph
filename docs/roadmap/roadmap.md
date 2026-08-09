@@ -22,10 +22,13 @@ sources:
   - id: 'engine-integration-plan'
     resource: '../planning/engine-integration-boundary.md'
     title: 'Renderer-neutral extraction plan'
+  - id: 'paragraph-query-preparation'
+    resource: '../planning/paragraph-query-preparation.md'
+    title: 'Paragraph-scoped preparation and synchronous layout queries'
 
 generated:
-  by: anthropic-claude/opus-5
-  at: '2026-08-07T19:05:00Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-09T14:25:40Z'
 ---
 
 # Canonical implementation roadmap
@@ -154,7 +157,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 11.14 |   ⬜   | Add the professional typography the editorial showcase requires: `wordSpacing`, first-line indent, paragraph space before/after, and justification controls covering minimum/maximum word-space ratio, letter-space expansion, and last-line policy.                            |  L   | 11.12–11.13 |
 | 11.15 |   ⬜   | Settle Three material authority, so applications supply their own `NodeMaterial` and gain lighting, shadows, and depth-composited effects without implementing a raster program. Resolve the open edges in the [material authority concept](../planning/three-material-authority.md) first; it is a recorded proposal, not an accepted design. |  M   | 11.6       |
 | 11.16 |   🟡   | Replace duplicate TypeScript shaping, layout, packing, and dirty-plan work with one retained Rust/Wasm frame transaction, validated renderer policy, and incremental render plan; land the Rust, policy/plan, and Three adapter PRs as one coordinated stack after exact Bitmap/MSDF/Slug, benchmark-app, size, and browser parity. |  XL  | 11.6       |
-| 11.17 |   ⬜   | Complete the Rust engine's realtime publishing set over that proven path: spacing, decorations, interaction geometry, horizontal and vertical writing, one-call exclusions and sequential regions, bounded CJK tailoring, and optional color-emoji fallback, excluding every explicitly cut unbounded solver or second authored text stream. |  XL  | 11.16      |
+| 11.17 |   ⬜   | Add paragraph-scoped synchronous prepare/query and candidate adoption: measure one pending paragraph per call without compiling a render plan, retain one session transaction with linear identity reservation, and reuse its paragraph-keyed results in the next full frame without a third full buffer. |  L   | 11.16      |
+| 11.18 |   ⬜   | Complete the Rust engine's realtime publishing set over that proven path: spacing, decorations, interaction geometry, horizontal and vertical writing, one-call exclusions and sequential regions, bounded CJK tailoring, and optional color-emoji fallback, excluding every explicitly cut unbounded solver or second authored text stream. |  XL  | 11.16      |
 
 ## Milestone 0 — accept contracts and versions
 
