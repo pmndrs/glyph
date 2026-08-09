@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:7f665fbe53b5942b4c6624c4dae010936fbafd8ae9a888dcf29ae8bd7fe72b21'
+source_digest: 'sha256:5756368cd2774be1f5ed202ef33c8a7c9aa16c872637aed881f5c272fafe5d3c'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -179,7 +179,7 @@ their final collection occurs in the owning realm. It does not restore the delet
 
 The foundation currently has:
 
-- 149 passing Rust engine tests, including exact retained-cluster, revision-range, immediate line-convergence, and
+- 150 passing Rust engine tests, including exact retained-cluster, revision-range, immediate line-convergence, and
   later cursor-convergence regressions;
 - the package JavaScript/integration gate passing through the single-path public exports;
 - exact retained Amiri bidi, policy, ellipsis, clipping, UIKit-layout, and CJK contracts exercised by the browser
@@ -237,6 +237,13 @@ change retains the verified prefix and fully rebuilds the suffix, preserving cor
 double-scanning the prefix. The same production lane now measures 1.314 ms median / 5.863 ms p95 with 76.2% RSD, five
 patches, and roughly 1.2 KiB written. The 1,153,122-byte optimized shaper is 5,856 bytes larger than the prior checkpoint,
 and retained high-water memory is 80.19 MiB. The fast class approaches 1 ms; the break-sensitive p95 remains open.
+
+The ordered-direct compiler additionally retains committed glyph-to-batch and glyph-to-slot topology while policy,
+capability, glyph count, and every physical storage key remain compatible. It still validates every glyph and stable
+identity; the first storage mismatch falls back to complete batch discovery. Three consecutive optimized runs measured
+1.164/5.761, 1.153/5.740, and 1.155/5.738 ms median/p95, versus the preceding 1.314/5.863 ms checkpoint. The optimized
+shaper is 1,157,311 raw bytes, a 4,189-byte increase, and retained high-water memory is 79.81 MiB. The repeated median gain
+is established; the roughly 5.74 ms p95 and 81.4–81.6% RSD still fail the tail-latency gate.
 
 ## Merge gates still open
 

@@ -82,6 +82,7 @@ struct BatchKey {
     resource_id: u32,
     resource_generation: u32,
     resource_kind: u16,
+    storage_key_mask: u32,
     resource_reference: u32,
     material_id: u32,
     clip_id: u32,
@@ -154,9 +155,15 @@ pub struct OrderedPlanCompiler {
     payload: Vec<u8>,
     next_buffer_id: u32,
     pending_next_buffer_id: u32,
+    policy_fingerprint: u64,
+    pending_policy_fingerprint: u64,
+    capability_set: u32,
+    pending_capability_set: u32,
     buffer_id_limit: u32,
     publish_bindings: bool,
     prepared: bool,
+    #[cfg(test)]
+    retained_topology_preparations: u32,
 }
 
 impl OrderedPlanCompiler {
@@ -223,99 +230,18 @@ impl OrderedPlanCompiler {
             .ok_or(OrderedPlanError::CapabilitySetMissing)?;
         validate_input(input)?;
         self.reset_pending();
-        reserve(&mut self.input_batches, input.glyphs.len())?;
-        reserve(&mut self.input_slots, input.glyphs.len())?;
-        reserve(&mut self.pending_instances, input.glyphs.len())?;
-        self.input_batches.resize(input.glyphs.len(), NONE);
-        self.input_batches.fill(NONE);
-        self.input_slots.resize(input.glyphs.len(), 0);
-        self.prepare_identity_set(input.glyphs.len())?;
-
-        for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
-            validate_glyph(glyph)?;
-            if !self.insert_identity(glyph.stable_id) {
-                return Err(OrderedPlanError::DuplicateIdentity);
-            }
-            let program = policy
-                .program(capability_set, glyph.technique, glyph.program_variant)
-                .ok_or(OrderedPlanError::ProgramMissing)?;
-            if program.allocation_strategy != ALLOCATION_ORDERED_DIRECT {
-                if strict_strategy {
-                    return Err(OrderedPlanError::UnsupportedStrategy);
-                }
-                continue;
-            }
-            let resource_bit = 1_u32
-                .checked_shl(u32::from(glyph.resource_kind - 1))
-                .ok_or(OrderedPlanError::InvalidResource)?;
-            if program.resource_kind_mask & resource_bit == 0 {
-                return Err(OrderedPlanError::InvalidResource);
-            }
-            let key = BatchKey {
-                technique: glyph.technique,
-                program_variant: glyph.program_variant,
-                program_id: program.id.0,
-                resource_id: glyph.resource_id,
-                resource_generation: glyph.resource_generation,
-                resource_kind: glyph.resource_kind,
-                resource_reference: glyph.resource_reference,
-                material_id: if program.storage_key_mask & BATCH_MATERIAL != 0 {
-                    glyph.material_id
-                } else {
-                    0
-                },
-                clip_id: if program.storage_key_mask & super::policy::BATCH_CLIP != 0 {
-                    glyph.clip_id
-                } else {
-                    0
-                },
-                depth_key: if program.storage_key_mask & super::policy::BATCH_DEPTH != 0 {
-                    glyph.depth_key
-                } else {
-                    0
-                },
-            };
-            let batch_index = match self
-                .pending_batches
-                .iter()
-                .position(|batch| batch.state.key == key)
-            {
-                Some(index) => index,
-                None => {
-                    reserve(&mut self.pending_batches, 1)?;
-                    let prior_index = self
-                        .batches
-                        .iter()
-                        .position(|batch| batch.key == key)
-                        .map(|index| index as u32);
-                    self.pending_batches.push(PendingBatch {
-                        state: BatchState {
-                            key,
-                            instance_start: 0,
-                            instance_count: 0,
-                            buffer_start: 0,
-                            buffer_count: 0,
-                        },
-                        prior_index,
-                        capacity: 0,
-                        buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
-                        buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
-                    });
-                    self.pending_batches.len() - 1
-                }
-            };
-            self.pending_batches[batch_index].state.instance_count = self.pending_batches
-                [batch_index]
-                .state
-                .instance_count
-                .checked_add(1)
-                .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-            self.input_batches[input_index] =
-                u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+        let retained_topology =
+            !checkpoint && self.prepare_retained_topology(policy, capability_set, input)?;
+        #[cfg(test)]
+        if retained_topology {
+            self.retained_topology_preparations += 1;
         }
-
-        self.layout_pending_instances(input)?;
+        if !retained_topology {
+            self.prepare_complete_topology(policy, capability_set, input, strict_strategy)?;
+        }
         self.pending_next_buffer_id = self.next_buffer_id;
+        self.pending_policy_fingerprint = policy.fingerprint();
+        self.pending_capability_set = capability_set.0;
         let context = PrepareContext {
             policy,
             capability_set,
@@ -449,6 +375,8 @@ impl OrderedPlanCompiler {
         mem::swap(&mut self.live_draws, &mut self.draws);
         self.draws.clear();
         self.next_buffer_id = self.pending_next_buffer_id;
+        self.policy_fingerprint = self.pending_policy_fingerprint;
+        self.capability_set = self.pending_capability_set;
         self.prepared = false;
         Ok(())
     }
@@ -529,6 +457,179 @@ impl OrderedPlanCompiler {
             }
             slot = (slot + 1) & mask;
         }
+    }
+
+    fn prepare_complete_topology(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        input: OrderedPlanInput<'_>,
+        strict_strategy: bool,
+    ) -> Result<(), OrderedPlanError> {
+        reserve(&mut self.input_batches, input.glyphs.len())?;
+        reserve(&mut self.input_slots, input.glyphs.len())?;
+        reserve(&mut self.pending_instances, input.glyphs.len())?;
+        self.input_batches.resize(input.glyphs.len(), NONE);
+        self.input_batches.fill(NONE);
+        self.input_slots.resize(input.glyphs.len(), 0);
+        self.prepare_identity_set(input.glyphs.len())?;
+
+        for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
+            validate_glyph(glyph)?;
+            if !self.insert_identity(glyph.stable_id) {
+                return Err(OrderedPlanError::DuplicateIdentity);
+            }
+            let program = policy
+                .program(capability_set, glyph.technique, glyph.program_variant)
+                .ok_or(OrderedPlanError::ProgramMissing)?;
+            if program.allocation_strategy != ALLOCATION_ORDERED_DIRECT {
+                if strict_strategy {
+                    return Err(OrderedPlanError::UnsupportedStrategy);
+                }
+                continue;
+            }
+            let resource_bit = 1_u32
+                .checked_shl(u32::from(glyph.resource_kind - 1))
+                .ok_or(OrderedPlanError::InvalidResource)?;
+            if program.resource_kind_mask & resource_bit == 0 {
+                return Err(OrderedPlanError::InvalidResource);
+            }
+            let key = batch_key(program, glyph);
+            let batch_index = match self
+                .pending_batches
+                .iter()
+                .position(|batch| batch.state.key == key)
+            {
+                Some(index) => index,
+                None => {
+                    reserve(&mut self.pending_batches, 1)?;
+                    let prior_index = self
+                        .batches
+                        .iter()
+                        .position(|batch| batch.key == key)
+                        .map(|index| index as u32);
+                    self.pending_batches.push(PendingBatch {
+                        state: BatchState {
+                            key,
+                            instance_start: 0,
+                            instance_count: 0,
+                            buffer_start: 0,
+                            buffer_count: 0,
+                        },
+                        prior_index,
+                        capacity: 0,
+                        buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
+                        buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
+                    });
+                    self.pending_batches.len() - 1
+                }
+            };
+            self.pending_batches[batch_index].state.instance_count = self.pending_batches
+                [batch_index]
+                .state
+                .instance_count
+                .checked_add(1)
+                .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+            self.input_batches[input_index] =
+                u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+        }
+        self.layout_pending_instances(input)
+    }
+
+    fn prepare_retained_topology(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        input: OrderedPlanInput<'_>,
+    ) -> Result<bool, OrderedPlanError> {
+        if self.policy_fingerprint != policy.fingerprint()
+            || self.capability_set != capability_set.0
+            || self.input_batches.len() != input.glyphs.len()
+            || self.input_slots.len() != input.glyphs.len()
+            || self.instances.len() != input.glyphs.len()
+        {
+            return Ok(false);
+        }
+        self.prepare_identity_set(input.glyphs.len())?;
+        for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
+            validate_glyph(glyph)?;
+            if !self.insert_identity(glyph.stable_id) {
+                return Err(OrderedPlanError::DuplicateIdentity);
+            }
+            let batch_index = self.input_batches[input_index];
+            if batch_index == NONE {
+                return Ok(false);
+            }
+            let batch_index =
+                usize::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+            let Some(batch) = self.batches.get(batch_index).copied() else {
+                return Ok(false);
+            };
+            if !batch_key_matches(batch.key, glyph) {
+                return Ok(false);
+            }
+            let slot = self.input_slots[input_index];
+            if slot >= batch.instance_count {
+                return Ok(false);
+            }
+            let instance_index = batch
+                .instance_start
+                .checked_add(slot)
+                .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+            if self
+                .instances
+                .get(
+                    usize::try_from(instance_index)
+                        .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
+                )
+                .is_none_or(|instance| instance.input_index != input_index as u32)
+            {
+                return Ok(false);
+            }
+        }
+
+        reserve(&mut self.pending_batches, self.batches.len())?;
+        for (batch_index, batch) in self.batches.iter().copied().enumerate() {
+            let buffers = self
+                .buffers
+                .get(range(batch.buffer_start, u32::from(batch.buffer_count))?)
+                .ok_or(OrderedPlanError::InvalidIdentity)?;
+            let mut pending = PendingBatch {
+                state: batch,
+                prior_index: Some(
+                    u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
+                ),
+                capacity: buffers.first().map_or(0, |buffer| buffer.capacity),
+                buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
+                buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
+            };
+            for (buffer_index, buffer) in buffers.iter().enumerate() {
+                pending.buffer_ids[buffer_index] = buffer.id;
+                pending.buffer_generations[buffer_index] = buffer.generation;
+            }
+            self.pending_batches.push(pending);
+        }
+        reserve(&mut self.pending_instances, self.instances.len())?;
+        self.pending_instances
+            .resize(self.instances.len(), InstanceState::default());
+        for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
+            let batch_index = self.input_batches[input_index] as usize;
+            let destination = self.batches[batch_index]
+                .instance_start
+                .checked_add(self.input_slots[input_index])
+                .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+            self.pending_instances[destination as usize] = InstanceState {
+                stable_id: glyph.stable_id,
+                content_revision: glyph.content_revision,
+                input_index: input_index as u32,
+                semantic_change_mask: input
+                    .semantic_change_masks
+                    .get(input_index)
+                    .copied()
+                    .unwrap_or(super::positioning::ALL_SEMANTIC_CHANGES),
+            };
+        }
+        Ok(true)
     }
 
     fn layout_pending_instances(
@@ -1394,6 +1495,47 @@ fn range(start: u32, count: u32) -> Result<core::ops::Range<usize>, OrderedPlanE
     Ok(start as usize..end as usize)
 }
 
+fn batch_key(program: &super::policy::ProgramDescriptor, glyph: OrderedGlyph) -> BatchKey {
+    BatchKey {
+        technique: glyph.technique,
+        program_variant: glyph.program_variant,
+        program_id: program.id.0,
+        resource_id: glyph.resource_id,
+        resource_generation: glyph.resource_generation,
+        resource_kind: glyph.resource_kind,
+        storage_key_mask: program.storage_key_mask,
+        resource_reference: glyph.resource_reference,
+        material_id: if program.storage_key_mask & BATCH_MATERIAL != 0 {
+            glyph.material_id
+        } else {
+            0
+        },
+        clip_id: if program.storage_key_mask & super::policy::BATCH_CLIP != 0 {
+            glyph.clip_id
+        } else {
+            0
+        },
+        depth_key: if program.storage_key_mask & super::policy::BATCH_DEPTH != 0 {
+            glyph.depth_key
+        } else {
+            0
+        },
+    }
+}
+
+fn batch_key_matches(key: BatchKey, glyph: OrderedGlyph) -> bool {
+    key.technique == glyph.technique
+        && key.program_variant == glyph.program_variant
+        && key.resource_id == glyph.resource_id
+        && key.resource_generation == glyph.resource_generation
+        && key.resource_kind == glyph.resource_kind
+        && key.resource_reference == glyph.resource_reference
+        && (key.storage_key_mask & BATCH_MATERIAL == 0 || key.material_id == glyph.material_id)
+        && (key.storage_key_mask & super::policy::BATCH_CLIP == 0 || key.clip_id == glyph.clip_id)
+        && (key.storage_key_mask & super::policy::BATCH_DEPTH == 0
+            || key.depth_key == glyph.depth_key)
+}
+
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), OrderedPlanError> {
     values
         .try_reserve(additional)
@@ -1708,6 +1850,43 @@ mod tests {
         assert_eq!(plan.draws.len(), 2);
         assert_ne!(plan.draws[0].buffer_start, plan.draws[1].buffer_start);
         assert!(plan_layout(plan).is_ok());
+    }
+
+    #[test]
+    fn retained_topology_requires_unchanged_physical_storage_membership() {
+        let policy = policy_with_material_storage(true);
+        let mut compiler = OrderedPlanCompiler::default();
+        let initial = [glyph(1, 1), glyph(2, 1)];
+        prepare(&mut compiler, &policy, &initial, &[1.0, 2.0], true);
+        compiler.commit().unwrap();
+
+        let content_changed = [glyph(1, 2), glyph(2, 1)];
+        prepare(
+            &mut compiler,
+            &policy,
+            &content_changed,
+            &[10.0, 2.0],
+            false,
+        );
+        assert_eq!(compiler.retained_topology_preparations, 1);
+        compiler.commit().unwrap();
+
+        let mut moved_material = glyph(2, 2);
+        moved_material.material_id = 2;
+        let storage_changed = [glyph(1, 2), moved_material];
+        prepare(
+            &mut compiler,
+            &policy,
+            &storage_changed,
+            &[10.0, 20.0],
+            false,
+        );
+        assert_eq!(compiler.retained_topology_preparations, 1);
+        let plan = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        assert_eq!(plan.buffers.len(), 2);
+        assert_eq!(plan.draws.len(), 2);
     }
 
     #[test]
