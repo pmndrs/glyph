@@ -1262,6 +1262,19 @@ paragraph-keyed mutation/removal and atomic child commit remain the next impleme
 Bitmap column-resize medians are 4.083 and 4.078 ms at 8 warmups/31 samples with 5.8%/6.1% RSD, so this slice makes no
 speedup claim and shows no material regression. Optimized Wasm is 1,070,685 / 402,154 / 319,914 raw/gzip/Brotli bytes.
 
+After the public Three command-buffer cutover and deletion of its parallel target transaction, the canonical
+`--glyphs 22000` workload was revalidated with five warmups and 11 samples. The benchmark now sums glyph primitive
+`recordCount` values from the published Rust plan and rejects a workload below 95% of the requested target; the former
+`primitiveCount` label counted primitive-table rows and misleadingly reported one. The unchanged fixture produces 25,515
+positioned TypeScript glyphs and 21,805 Rust renderable records. TypeScript cold/font-size/width/text medians are
+61.29/11.40/8.33/39.15 ms. Complete Rust `text_update` plus Bitmap plan publication measures
+14.77/4.95/3.78/14.43 ms for cold/font-size/column-resize/suffix-edit, MTSDF measures
+15.37/5.35/4.35/14.84 ms, and Slug measures 15.43/6.11/5.08/15.61 ms. All three beat the TypeScript implementation;
+none closes the required resize p95 below 4 ms (4.16/4.95/5.68 ms). This scope includes request copying into retained
+Wasm memory and publication of exact plan bytes, but not Three patch application or GPU submission. The sequential
+process reaches 86.50/100.88/101.69 MiB Wasm high-water marks; isolated warm sessions still reach 64.75/77.75/78.56
+MiB. Both latency and memory right-sizing remain foundation gates rather than accepted release costs.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement

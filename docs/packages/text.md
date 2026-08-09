@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:daaf3807f91b929a868a11d00f29a98b4259ccdb8fd4d229449f14d54777e69a'
+source_digest: 'sha256:8098207158fd7bf3bbe4f7c17b68fdbbde4bcaae415503857b145e74a85434e7'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -955,6 +955,14 @@ fixture proves session-global IDs isolate overrides inside one indexed draw; a s
 and clears the old presentation override. The complete optimized shaper at this checkpoint measures 1,089,889 raw,
 414,204 gzip, and 325,805 Brotli bytes on the canonical Darwin arm64 host; deletion of the remaining legacy TypeScript
 path and a deliberate Rust size pass remain required before release acceptance.
+
+The canonical Rust benchmark now derives its glyph workload from the published plan's glyph primitive record counts and
+rejects an undersized run; `primitiveCount` is the number of primitive-table rows, not glyphs. With the unchanged
+`--glyphs 22000` fixture, five warmups, and 11 samples, Rust produces 21,805 renderable records from the TypeScript
+fixture's 25,515 positioned glyphs. Bitmap/MTSDF/Slug column-resize medians are 3.779/4.345/5.082 ms and p95 values are
+4.156/4.951/5.679 ms. The same TypeScript width path measures 8.33 ms median. Rust therefore beats TypeScript, but no
+technique yet passes the required sub-4 ms p95 gate; the measurement also stops before Three patch application and GPU
+submission. Isolated warm-session Wasm high-water marks of 64.75/77.75/78.56 MiB likewise remain an optimization gate.
 
 Public font stacks no longer repeat a raster technique or require every fallback font to share one. Their generic type
 is the union of the concrete loaded-font techniques, while runtime construction still requires one text-runtime domain,
