@@ -195,15 +195,20 @@ centered glyph row, content height, and complete layout hash exactly; no runtime
 
 ## Current size and performance evidence
 
-The latest checked package-size record before final cleanup reports:
+The latest checked package-size record after the baker ABI cleanup reports:
 
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
-| Core JavaScript plus shaper Wasm        | 1,211,173 B | 440,875 B | 349,703 B |
-| Three adapter plus core and shaper Wasm | 1,454,561 B | 479,863 B | 381,897 B |
+| Core JavaScript plus shaper Wasm        | 1,224,539 B | 447,121 B | 353,986 B |
+| Three adapter plus core and shaper Wasm | 1,466,450 B | 485,864 B | 385,930 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
+
+Relative to the preceding checked record, browser-core JavaScript is effectively flat (+96 raw, +7 gzip, -5 Brotli),
+the Three adapter shrinks by 1,381 raw / 238 gzip / 255 Brotli bytes, and the shaper Wasm grows by 13,270 raw / 6,239
+gzip / 4,288 Brotli bytes. The corrected complete MTSDF baker is 552,025 raw / 215,030 gzip / 168,758 Brotli bytes;
+the earlier 52 KiB observation was a kernel-only test artifact that reused the distributable Cargo target directory.
 
 The public Three benchmark now supports an outside-only mode that leaves the internal phase collector disabled and wraps
 one `updateMatrixWorld()` call with a host timer. An eight-warmup/31-sample run over 25,515 positioned glyphs measured
