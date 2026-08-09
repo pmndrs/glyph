@@ -27,7 +27,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   const requestLayout = abi.layouts.engineUpdateRequest;
   const resultLayout = abi.layouts.engineResult;
   assert.equal(resultLayout.size, 144);
-  assert.equal(requestLayout.size, 124);
+  assert.equal(requestLayout.size, 136);
   assert.equal(resultLayout.alignment, 16);
   assert.equal(abi.layouts.engineBuffer.size, 36);
   assert.equal(abi.layouts.enginePatch.size, 36);
@@ -42,7 +42,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
       abi.layouts.engineExclusion.size,
       abi.layouts.engineInlineObject.size,
     ],
-    [24, 88, 52, 8, 56, 48, 56],
+    [24, 92, 56, 8, 56, 48, 60],
   );
   assert.equal(abi.layouts.engineInlineObject.alignment, 4);
   assert.equal(abi.layouts.engineInlineObject.baselineAlignment, 52);
@@ -328,6 +328,7 @@ function geometryRequestBytes(abi, expectedEngineRevision, consumedPlanRevision,
     view.setUint32(request[countField], 1, true);
   }
 
+  view.setUint32(constraintOffset + constraint.paragraphId, 1, true);
   view.setUint32(constraintOffset + constraint.flowThreadId, 1, true);
   view.setFloat32(constraintOffset + constraint.width, 100, true);
   view.setFloat32(constraintOffset + constraint.height, 100, true);
@@ -361,6 +362,7 @@ function geometryRequestBytes(abi, expectedEngineRevision, consumedPlanRevision,
   view.setFloat32(exclusionOffset + exclusion.inlineEnd, 40, true);
   view.setFloat32(exclusionOffset + exclusion.blockEnd, 40, true);
 
+  view.setUint32(inlineObjectOffset + inlineObject.paragraphId, 1, true);
   view.setUint32(inlineObjectOffset + inlineObject.id, 3, true);
   view.setUint32(inlineObjectOffset + inlineObject.contentRevision, 1, true);
   view.setUint32(inlineObjectOffset + inlineObject.textOffset, 1, true);

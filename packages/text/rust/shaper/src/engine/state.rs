@@ -537,55 +537,33 @@ impl TextEngine {
                 .binary_search_by_key(&handle, |stack| stack.handle)
                 .is_ok()
         }) {
-            paragraph.abort_text();
+            paragraph.abort_all();
             return Err(error);
         }
         if let Err(error) = paragraph.prepare_unicode() {
-            paragraph.abort_text();
-            paragraph.abort_styles();
+            paragraph.abort_all();
             return Err(error);
         }
         if let Err(error) = paragraph.prepare_bidi() {
-            paragraph.abort_text();
-            paragraph.abort_styles();
-            paragraph.abort_unicode();
+            paragraph.abort_all();
             return Err(error);
         }
         if let Err(error) = paragraph.prepare_shaping_runs() {
-            paragraph.abort_text();
-            paragraph.abort_styles();
-            paragraph.abort_unicode();
-            paragraph.abort_bidi();
+            paragraph.abort_all();
             return Err(error);
         }
         if let Some(shaper) = shaper.as_deref_mut() {
             if let Err(error) = paragraph.prepare_shape(shaper, font_stacks, font_bindings) {
-                paragraph.abort_text();
-                paragraph.abort_styles();
-                paragraph.abort_unicode();
-                paragraph.abort_bidi();
-                paragraph.abort_shaping_runs();
+                paragraph.abort_all();
                 return Err(error);
             }
             if let Err(error) = paragraph.prepare_clusters(shaper, &mut next_glyph_id) {
-                paragraph.abort_text();
-                paragraph.abort_styles();
-                paragraph.abort_unicode();
-                paragraph.abort_bidi();
-                paragraph.abort_shaping_runs();
-                paragraph.abort_shape();
-                paragraph.abort_clusters();
+                paragraph.abort_all();
                 return Err(error);
             }
         }
         if let Err(error) = paragraph.prepare_geometry(geometry) {
-            paragraph.abort_text();
-            paragraph.abort_styles();
-            paragraph.abort_unicode();
-            paragraph.abort_bidi();
-            paragraph.abort_shaping_runs();
-            paragraph.abort_shape();
-            paragraph.abort_clusters();
+            paragraph.abort_all();
             return Err(error);
         }
         let flow_changed = paragraph.clusters_prepared
@@ -602,31 +580,14 @@ impl TextEngine {
                     request.limits.max_slots_per_band,
                 )
             {
-                paragraph.abort_text();
-                paragraph.abort_styles();
-                paragraph.abort_unicode();
-                paragraph.abort_bidi();
-                paragraph.abort_shaping_runs();
-                paragraph.abort_shape();
-                paragraph.abort_clusters();
-                paragraph.abort_geometry();
-                paragraph.abort_flow_layout();
+                paragraph.abort_all();
                 return Err(error);
             }
             if positioned_changed
                 && let Err(error) =
                     paragraph.prepare_positioned(shaper, &mut next_content_revision)
             {
-                paragraph.abort_text();
-                paragraph.abort_styles();
-                paragraph.abort_unicode();
-                paragraph.abort_bidi();
-                paragraph.abort_shaping_runs();
-                paragraph.abort_shape();
-                paragraph.abort_clusters();
-                paragraph.abort_geometry();
-                paragraph.abort_flow_layout();
-                paragraph.abort_positioned();
+                paragraph.abort_all();
                 return Err(error);
             }
         }
@@ -663,16 +624,7 @@ impl TextEngine {
                         .map(|binding| &binding.binding)
                 },
             ) {
-                paragraph.abort_text();
-                paragraph.abort_styles();
-                paragraph.abort_unicode();
-                paragraph.abort_bidi();
-                paragraph.abort_shaping_runs();
-                paragraph.abort_shape();
-                paragraph.abort_clusters();
-                paragraph.abort_geometry();
-                paragraph.abort_flow_layout();
-                paragraph.abort_positioned();
+                paragraph.abort_all();
                 return Err(gather_error(error));
             }
             let gathered = gather.view();
@@ -686,16 +638,7 @@ impl TextEngine {
             )
         };
         if let Err(error) = plan_result {
-            paragraph.abort_text();
-            paragraph.abort_styles();
-            paragraph.abort_unicode();
-            paragraph.abort_bidi();
-            paragraph.abort_shaping_runs();
-            paragraph.abort_shape();
-            paragraph.abort_clusters();
-            paragraph.abort_geometry();
-            paragraph.abort_flow_layout();
-            paragraph.abort_positioned();
+            paragraph.abort_all();
             return Err(plan_error(error));
         }
         session.pending_next_glyph_id = next_glyph_id;
@@ -743,16 +686,7 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         session.plan.abort();
-        session.paragraph.abort_text();
-        session.paragraph.abort_styles();
-        session.paragraph.abort_unicode();
-        session.paragraph.abort_bidi();
-        session.paragraph.abort_shaping_runs();
-        session.paragraph.abort_shape();
-        session.paragraph.abort_clusters();
-        session.paragraph.abort_geometry();
-        session.paragraph.abort_flow_layout();
-        session.paragraph.abort_positioned();
+        session.paragraph.abort_all();
         session.pending_next_glyph_id = 0;
         session.pending_next_content_revision = 0;
         Ok(())
@@ -770,16 +704,7 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         session.plan.commit().map_err(plan_error)?;
-        session.paragraph.commit_text();
-        session.paragraph.commit_styles();
-        session.paragraph.commit_unicode();
-        session.paragraph.commit_bidi();
-        session.paragraph.commit_shaping_runs();
-        session.paragraph.commit_shape();
-        session.paragraph.commit_clusters();
-        session.paragraph.commit_geometry();
-        session.paragraph.commit_flow_layout();
-        session.paragraph.commit_positioned();
+        session.paragraph.commit_all();
         session.next_glyph_id = session.pending_next_glyph_id;
         session.next_content_revision = session.pending_next_content_revision;
         session.pending_next_glyph_id = 0;
@@ -802,6 +727,32 @@ impl TextEngine {
 }
 
 impl ParagraphState {
+    fn abort_all(&mut self) {
+        self.abort_text();
+        self.abort_styles();
+        self.abort_unicode();
+        self.abort_bidi();
+        self.abort_shaping_runs();
+        self.abort_shape();
+        self.abort_clusters();
+        self.abort_geometry();
+        self.abort_flow_layout();
+        self.abort_positioned();
+    }
+
+    fn commit_all(&mut self) {
+        self.commit_text();
+        self.commit_styles();
+        self.commit_unicode();
+        self.commit_bidi();
+        self.commit_shaping_runs();
+        self.commit_shape();
+        self.commit_clusters();
+        self.commit_geometry();
+        self.commit_flow_layout();
+        self.commit_positioned();
+    }
+
     fn initialize(&mut self) -> Result<(), EngineError> {
         self.styles.reserve_default()?;
         self.pending_styles.reserve_default()?;
