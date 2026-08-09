@@ -12,6 +12,7 @@ import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { compileTextEngineFrameUpdate } from '../../dist/internal/engine-frame-wire.js';
+import { firstPartyThreeRenderPolicyBytes } from '../../dist/internal/render-policy-wire.js';
 import { TextEngineRenderPlanView } from '../../dist/internal/render-plan-view.js';
 import { FontRegistry } from '../../dist/loader.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
@@ -160,148 +161,147 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(shared.handle, first.handle);
   assert.notEqual(reversed.handle, first.handle, 'fallback order is part of stack identity');
   const session = coordinator.createSession({ requestCapacity: 4_096, resultCapacity: 1024 * 1024, textCapacity: 16 });
-  const publication = session.update(
-    compileTextEngineFrameUpdate({
-      sessionId: session.handle,
-      policyHandle: coordinator.policyHandle,
-      capabilitySet: 1,
-      expectedEngineRevision: 0,
-      consumedPlanRevision: 0,
-      acknowledgedPublicationGeneration: 0,
-      limits: {
-        maxParagraphs: 2,
-        maxClusters: 16,
-        maxLines: 8,
-        maxRegions: 2,
-        maxExclusions: 1,
-        maxInlineObjects: 1,
-        maxSlotsPerBand: 2,
-        maxOutputBytes: 1024 * 1024,
+  const initialRequest = compileTextEngineFrameUpdate({
+    sessionId: session.handle,
+    policyHandle: coordinator.policyHandle,
+    capabilitySet: 1,
+    expectedEngineRevision: 0,
+    consumedPlanRevision: 0,
+    acknowledgedPublicationGeneration: 0,
+    limits: {
+      maxParagraphs: 2,
+      maxClusters: 16,
+      maxLines: 8,
+      maxRegions: 2,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 2,
+      maxOutputBytes: 1024 * 1024,
+    },
+    paragraphMutations: [
+      { opcode: 'upsert', paragraphId: 1, order: 0 },
+      { opcode: 'upsert', paragraphId: 2, order: 1 },
+    ],
+    textMutations: [
+      { paragraphId: 1, start: 0, deleteCount: 0, insert: 'abc' },
+      { paragraphId: 2, start: 0, deleteCount: 0, insert: 'def' },
+    ],
+    styleMutations: [
+      {
+        opcode: 'upsert',
+        paragraphId: 1,
+        styleId: 1,
+        cascadeOrder: 0,
+        start: 0,
+        end: 3,
+        root: true,
+        value: {
+          fontStackHandle: first.handle,
+          materialId: primaryMaterial.id,
+          fontSize: 16,
+          rasterPixelRatio: 1,
+          foregroundRgba: 0xffff_ffff,
+        },
       },
-      paragraphMutations: [
-        { opcode: 'upsert', paragraphId: 1, order: 0 },
-        { opcode: 'upsert', paragraphId: 2, order: 1 },
-      ],
-      textMutations: [
-        { paragraphId: 1, start: 0, deleteCount: 0, insert: 'abc' },
-        { paragraphId: 2, start: 0, deleteCount: 0, insert: 'def' },
-      ],
-      styleMutations: [
-        {
-          opcode: 'upsert',
-          paragraphId: 1,
-          styleId: 1,
-          cascadeOrder: 0,
-          start: 0,
-          end: 3,
-          root: true,
-          value: {
-            fontStackHandle: first.handle,
-            materialId: primaryMaterial.id,
-            fontSize: 16,
-            rasterPixelRatio: 1,
-            foregroundRgba: 0xffff_ffff,
-          },
+      {
+        opcode: 'upsert',
+        paragraphId: 2,
+        styleId: 1,
+        cascadeOrder: 0,
+        start: 0,
+        end: 3,
+        root: true,
+        value: {
+          fontStackHandle: first.handle,
+          materialId: secondaryMaterial.id,
+          fontSize: 16,
+          rasterPixelRatio: 1,
+          foregroundRgba: 0xffff_ffff,
         },
-        {
-          opcode: 'upsert',
-          paragraphId: 2,
-          styleId: 1,
-          cascadeOrder: 0,
-          start: 0,
-          end: 3,
-          root: true,
-          value: {
-            fontStackHandle: first.handle,
-            materialId: secondaryMaterial.id,
-            fontSize: 16,
-            rasterPixelRatio: 1,
-            foregroundRgba: 0xffff_ffff,
-          },
-        },
-      ],
-      constraints: [
-        {
-          paragraphId: 1,
-          flowThreadId: 1,
-          geometryRevision: 1,
-          width: 256,
-          height: 128,
-          viewportBlockStart: 0,
-          viewportBlockEnd: 128,
-          resumeBlockOffset: 0,
-          maxLines: 8,
-          regionStart: 0,
-          resumeCluster: 0,
-          regionCount: 1,
-          resumeRegion: 0,
-          widthMode: 'at-most',
-          heightMode: 'at-most',
-          wrap: 'word',
-          align: 'start',
-          overflow: 'visible',
-          blockAlign: 'start',
-        },
-        {
-          paragraphId: 2,
-          flowThreadId: 2,
-          geometryRevision: 1,
-          width: 256,
-          height: 128,
-          viewportBlockStart: 0,
-          viewportBlockEnd: 128,
-          resumeBlockOffset: 0,
-          maxLines: 8,
-          regionStart: 1,
-          resumeCluster: 0,
-          regionCount: 1,
-          resumeRegion: 0,
-          widthMode: 'at-most',
-          heightMode: 'at-most',
-          wrap: 'word',
-          align: 'start',
-          overflow: 'visible',
-          blockAlign: 'start',
-        },
-      ],
-      regions: [
-        {
-          id: 1,
-          geometryRevision: 1,
-          shape: 'rectangle',
-          exclusionStart: 0,
-          exclusionCount: 0,
-          writingMode: 'horizontal-tb',
-          textOrientation: 'mixed',
-          inlineStart: 0,
-          blockStart: 0,
-          inlineEnd: 256,
-          blockEnd: 128,
-          clipInlineStart: 0,
-          clipBlockStart: 0,
-          clipInlineEnd: 256,
-          clipBlockEnd: 128,
-        },
-        {
-          id: 2,
-          geometryRevision: 1,
-          shape: 'rectangle',
-          exclusionStart: 0,
-          exclusionCount: 0,
-          writingMode: 'horizontal-tb',
-          textOrientation: 'mixed',
-          inlineStart: 0,
-          blockStart: 0,
-          inlineEnd: 256,
-          blockEnd: 128,
-          clipInlineStart: 0,
-          clipBlockStart: 0,
-          clipInlineEnd: 256,
-          clipBlockEnd: 128,
-        },
-      ],
-    }),
-  );
+      },
+    ],
+    constraints: [
+      {
+        paragraphId: 1,
+        flowThreadId: 1,
+        geometryRevision: 1,
+        width: 256,
+        height: 128,
+        viewportBlockStart: 0,
+        viewportBlockEnd: 128,
+        resumeBlockOffset: 0,
+        maxLines: 8,
+        regionStart: 0,
+        resumeCluster: 0,
+        regionCount: 1,
+        resumeRegion: 0,
+        widthMode: 'at-most',
+        heightMode: 'at-most',
+        wrap: 'word',
+        align: 'start',
+        overflow: 'visible',
+        blockAlign: 'start',
+      },
+      {
+        paragraphId: 2,
+        flowThreadId: 2,
+        geometryRevision: 1,
+        width: 256,
+        height: 128,
+        viewportBlockStart: 0,
+        viewportBlockEnd: 128,
+        resumeBlockOffset: 0,
+        maxLines: 8,
+        regionStart: 1,
+        resumeCluster: 0,
+        regionCount: 1,
+        resumeRegion: 0,
+        widthMode: 'at-most',
+        heightMode: 'at-most',
+        wrap: 'word',
+        align: 'start',
+        overflow: 'visible',
+        blockAlign: 'start',
+      },
+    ],
+    regions: [
+      {
+        id: 1,
+        geometryRevision: 1,
+        shape: 'rectangle',
+        exclusionStart: 0,
+        exclusionCount: 0,
+        writingMode: 'horizontal-tb',
+        textOrientation: 'mixed',
+        inlineStart: 0,
+        blockStart: 0,
+        inlineEnd: 256,
+        blockEnd: 128,
+        clipInlineStart: 0,
+        clipBlockStart: 0,
+        clipInlineEnd: 256,
+        clipBlockEnd: 128,
+      },
+      {
+        id: 2,
+        geometryRevision: 1,
+        shape: 'rectangle',
+        exclusionStart: 0,
+        exclusionCount: 0,
+        writingMode: 'horizontal-tb',
+        textOrientation: 'mixed',
+        inlineStart: 0,
+        blockStart: 0,
+        inlineEnd: 256,
+        blockEnd: 128,
+        clipInlineStart: 0,
+        clipBlockStart: 0,
+        clipInlineEnd: 256,
+        clipBlockEnd: 128,
+      },
+    ],
+  });
+  const publication = session.update(initialRequest);
   const plan = new TextEngineRenderPlanView().bind(publication);
   for (const name of ['resources', 'buffers', 'patches', 'primitives', 'draws']) {
     assert.ok(plan.table(name).count > 0, `${name} must come from the Rust publication`);
@@ -606,6 +606,56 @@ test('Three coordinator shares shaping data across technique bindings and refere
     'primary:pmndrs.slug',
   ]);
   assert.ok(target.gpuBytes > 0);
+
+  const directPolicyHandle = 2;
+  coordinator.host.registerPolicy(
+    directPolicyHandle,
+    firstPartyThreeRenderPolicyBytes(coordinator.host.wireIdentities, 'direct'),
+  );
+  const directSession = coordinator.createSession({
+    requestCapacity: 4_096,
+    resultCapacity: 1024 * 1024,
+    textCapacity: 16,
+  });
+  const directRequest = initialRequest.slice();
+  const requestLayout = textShaperAbi.layouts.engineUpdateRequest;
+  const directRequestView = new DataView(directRequest.buffer, directRequest.byteOffset, directRequest.byteLength);
+  directRequestView.setUint32(requestLayout.sessionId, directSession.handle, true);
+  directRequestView.setUint32(requestLayout.policyHandle, directPolicyHandle, true);
+  const directPublication = directSession.update(directRequest);
+  const directPlan = plan.bind(directPublication);
+  const directDraws = directPlan.table('draws');
+  assert.deepEqual(
+    Array.from({ length: directDraws.count }, (_, index) =>
+      directPlan.u32(directPlan.record(directDraws, index) + drawLayout.transformId),
+    ),
+    [1, 2],
+    'the direct policy makes transform identity an authoritative Rust draw boundary',
+  );
+  const directTarget = new ThreeTextEnginePlanTarget(coordinator, {
+    drawRoot,
+    renderOrderBase: 20,
+    objectForTransform(transformId) {
+      const object = paragraphObjects.get(transformId);
+      if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
+      return object;
+    },
+  });
+  directTarget.apply(directPublication);
+  assert.equal(directTarget.draws.length, 2);
+  for (const [index, draw] of directTarget.draws.entries()) {
+    assert.equal(draw.geometry.getAttribute('_pmndrsText_15'), undefined);
+    assert.equal(draw.geometry.getAttribute('_pmndrsTextTransforms'), undefined);
+    assert.equal(draw.matrixAutoUpdate, false);
+    assert.equal(draw.matrix.elements[12], index === 0 ? 4 : 7);
+  }
+  assert.equal(directTarget.syncTransforms(), 0);
+  paragraphObjects.get(2).position.x = 9;
+  assert.equal(directTarget.syncTransforms(), 1);
+  assert.equal(directTarget.draws[1].matrix.elements[12], 9);
+  directTarget.dispose();
+  directSession.dispose();
+
   target.dispose();
   session.dispose();
   first.release();

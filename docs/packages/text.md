@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:ec1e94bdf0433862dd3c8bc9c9df6e2eef1d5c943f4cbdf46e65e36f7f092452'
+source_digest: 'sha256:51054483c8717b0cdc059992ce1c7d732f304071b5c85931660d0fe03e9a2559'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -893,6 +893,14 @@ remains valid for transform-split targets. The compiled-Wasm fixture republishes
 program-3 draw without resending text or geometry. Browser shader compilation/pixels, retirement-bounded caches,
 material factories, public cutover, and end-to-end latency remain open. The optimized shaper remains 1,083,255 raw /
 411,409 gzip / 324,539 Brotli bytes; all 129 Rust tests and the focused compiled-Wasm/Three integration test pass.
+
+The executor also realizes transform-split programs without an indexed sidecar. A direct first-party policy includes
+transform in its draw key, so Rust emits nonzero draw-level IDs and omits policy buffer 15. Three retains each resulting
+mesh under the shared draw root, disables automatic local-matrix composition, and updates its relative matrix from the
+corresponding scene object without a Wasm call. Bitmap and MSDF use the ordinary model transform; Slug supplies the
+ordinary model-view-projection matrix to its dilation graph. The compiled-Wasm fixture proves direct IDs `[1,2]`, no
+transform-index/table geometry attributes, exact initial matrices, and one changed retained matrix after a scene-only
+transform update. Indexed and direct are policy program contracts; the target does not reinterpret or merge them.
 
 Three material definitions now have one public construction function and one runtime-scoped numeric identity registry.
 The executor resolves Rust's `materialId` to a factory only when a compatible technique/program/resource material is
