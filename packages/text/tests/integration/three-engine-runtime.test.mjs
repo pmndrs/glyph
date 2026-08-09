@@ -78,7 +78,11 @@ test('Three coordinator shares shaping data across technique bindings and refere
     raster: undefined,
     data: {
       resource: defineRasterResourceId('coordinator.mtsdf'),
-      binding: {},
+      binding: {
+        width: Math.max(...msdfRaster.pages.map((page) => page.width)),
+        height: Math.max(...msdfRaster.pages.map((page) => page.height)),
+        layers: msdfRaster.pages.length,
+      },
       emSize: extension.emSize,
       pixelRange: extension.pixelRange,
       planeUnitsPerEm: extension.planeUnitsPerEm,
@@ -422,6 +426,54 @@ test('Three coordinator shares shaping data across technique bindings and refere
     Array.from(coalescedTransformIndices.subarray(coalescedStart, coalescedStart + 6)),
     [2, 2, 2, 1, 1, 1],
   );
+  const bitmapGpuBytes = target.gpuBytes;
+  const msdfPublication = session.update(
+    compileTextEngineFrameUpdate({
+      sessionId: session.handle,
+      policyHandle: coordinator.policyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: coalescedPublication.engineRevision,
+      consumedPlanRevision: coalescedPublication.planRevision,
+      acknowledgedPublicationGeneration: 0,
+      limits: {
+        maxParagraphs: 2,
+        maxClusters: 16,
+        maxLines: 8,
+        maxRegions: 2,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      styleMutations: [2, 1].map((paragraphId) => ({
+        opcode: 'upsert',
+        paragraphId,
+        styleId: 1,
+        cascadeOrder: 0,
+        start: 0,
+        end: 3,
+        root: true,
+        value: {
+          fontStackHandle: reversed.handle,
+          materialId: 7,
+          fontSize: 16,
+          rasterPixelRatio: 1,
+          foregroundRgba: 0xffff_ffff,
+        },
+      })),
+    }),
+  );
+  const msdfPlan = plan.bind(msdfPublication);
+  const msdfDraws = msdfPlan.table('draws');
+  assert.equal(msdfDraws.count, 1);
+  assert.equal(msdfPlan.u32(msdfPlan.record(msdfDraws, 0) + drawLayout.programId), 2);
+  target.apply(msdfPublication);
+  assert.equal(target.draws.length, 1);
+  assert.equal(target.draws[0].geometry.instanceCount, 6);
+  for (const policyBufferId of [1, 2, 3, 4, 5, 6, 7, 15]) {
+    assert.ok(target.draws[0].geometry.getAttribute(`_pmndrsText_${policyBufferId}`));
+  }
+  assert.ok(target.gpuBytes > bitmapGpuBytes, 'MSDF atlas residency is included in command-buffer accounting');
   assert.ok(target.gpuBytes > 0);
   target.dispose();
   session.dispose();
