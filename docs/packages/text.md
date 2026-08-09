@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:7543198f3107315061bd1615a4cfb50356c9e96441e3a5e701d28bab6b682515'
+source_digest: 'sha256:cadece5952b3f3f57222acdf576b45cf1d27c76d1d082e3d338be2cb78f16082'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -55,7 +55,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T18:30:00Z'
+  at: '2026-08-09T17:49:53Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -196,11 +196,18 @@ The latest checked package-size record before final cleanup reports:
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
-A five-sample smoke run of the newly ported end-to-end Node layout benchmark realized 29,160 glyphs and measured 6.93 ms
-for font-size updates and 6.48 ms for width updates, while cold creation measured 24.11 ms and text replacement 18.65 ms.
-This run proves the benchmark now drives `Text`/`TextGroup`, Rust, render-plan packing, and Three application; its small
-sample count is not release evidence. The `<4 ms` target and same-work comparison against the retained TypeScript baseline
-remain open.
+The public Three benchmark now supports an outside-only mode that leaves the internal phase collector disabled and wraps
+one `updateMatrixWorld()` call with a host timer. An eight-warmup/31-sample run over 25,515 positioned glyphs measured
+17.68/6.13/5.66/16.37 ms median and 18.11/6.32/6.53/16.57 ms p95 for cold/font-size/width/text updates. Those values cover
+frame preparation, the complete Rust transaction and render-plan publication, and Three plan application; they exclude
+GPU submission. An adjacent phase-instrumented run was indistinguishable within process noise, but the current published
+Three graph still contains inactive profiler calls and branches. The production publishing build must remove those hooks,
+while benchmark/development instrumentation remains separate.
+
+The canonical direct benchmark loads the packaged `dist/text_shaper.wasm`: Cargo release optimization, LTO, one codegen
+unit, default-on `simd128`, stripping, and `wasm-opt -Oz --enable-simd` have already run. On the identical Rust artifact,
+Binaryen `-O3` and `-O4` added 11,976 and 13,661 raw bytes without a demonstrated latency improvement, so `-Oz` remains
+the evidence-backed setting. The `<4 ms` warm-path target and stable p95 closure remain open.
 
 ## Merge gates still open
 

@@ -2,6 +2,12 @@
 
 ## 2026-08-09
 
+- **Separated final customer timing from temporary phase instrumentation** — The public Three workload can now retain a
+  single outside timer while disabling its internal phase collector. A 25,515-glyph, 31-sample release-artifact run
+  measures complete frame preparation, Rust update/render-plan publication, and Three application without internal clock
+  calls. The packaged shaper is Cargo release + LTO + SIMD followed by Binaryen `-Oz`; adjacent `-O3`/`-O4` artifacts cost
+  more bytes without a demonstrated speed gain. Production profiling hooks remain an explicit removal gate.
+
 - **Specified paragraph-scoped synchronous preparation without triple buffering** — Current `measureLayout()` either
   returns committed cache or drives a complete session update and plan. The reviewed follow-up design retains one
   speculative session transaction with paragraph-keyed pending states, linear identity reservation, explicit
