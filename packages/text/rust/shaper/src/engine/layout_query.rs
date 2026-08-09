@@ -218,7 +218,7 @@ fn finite_nonnegative_f32(value: f64) -> Result<f32, EngineError> {
 mod tests {
     use super::*;
     use crate::engine::{
-        flow_composition::{FlowFragment, FlowLine},
+        flow_composition::{FlowFragment, FlowLine, NO_BOUNDARY},
         line_composition::ComposedLine,
         semantic_wire::FlowConstraint,
     };
@@ -253,7 +253,9 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 20.0,
+                boundary_index: NO_BOUNDARY,
             }],
+            ..FlowLayoutArena::default()
         };
         let mut records = vec![];
         let positioned = [layout_glyph(3), layout_glyph(0)];
@@ -341,7 +343,9 @@ mod tests {
                 },
                 slot_start: 0.0,
                 slot_end: 6.0,
+                boundary_index: NO_BOUNDARY,
             }],
+            ..FlowLayoutArena::default()
         };
         let mut records = vec![];
         append_measurement(

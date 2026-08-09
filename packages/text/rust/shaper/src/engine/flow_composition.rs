@@ -6,7 +6,7 @@ use super::{
     EngineError,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
     flow_geometry::{FlowGeometryArena, InlineSlotArena},
-    frame::{OVERFLOW_VISIBLE, WRITING_HORIZONTAL_TB},
+    frame::{OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, WRITING_HORIZONTAL_TB},
     line_composition::{ComposedLine, LineCursor, layout_next_line},
     style_state::StyleSegment,
 };
@@ -30,6 +30,24 @@ pub(crate) struct FlowFragment {
     pub line: ComposedLine,
     pub slot_start: f64,
     pub slot_end: f64,
+    pub boundary_index: u32,
+}
+
+pub(crate) const NO_BOUNDARY: u32 = u32::MAX;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct EllipsisTarget {
+    pub fragment_index: u32,
+    pub line_cluster_start: u32,
+    pub boundary_cluster_start: u32,
+    pub cluster_end: u32,
+    pub text_end: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct EllipsisReplacement {
+    pub cluster_start: usize,
+    pub advance_adjustment: f64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -53,6 +71,7 @@ impl LineExtents {
 pub(crate) struct FlowLayoutArena {
     pub lines: Vec<FlowLine>,
     pub fragments: Vec<FlowFragment>,
+    pub(crate) ellipsis_threads: Vec<u32>,
 }
 
 impl FlowLayoutArena {
@@ -65,7 +84,8 @@ impl FlowLayoutArena {
         reserve(
             &mut self.fragments,
             line_capacity.saturating_mul(max_slots_per_band),
-        )
+        )?;
+        reserve(&mut self.ellipsis_threads, line_capacity)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -166,6 +186,24 @@ impl FlowLayoutArena {
                     }
                 }
             }
+            if constraint.overflow == OVERFLOW_ELLIPSIS {
+                let final_fragment_overflows = self.lines.last().is_some_and(|line| {
+                    line.flow_thread_id == constraint.flow_thread_id
+                        && usize::try_from(line.fragment_start)
+                            .ok()
+                            .and_then(|start| start.checked_add(usize::from(line.fragment_count)))
+                            .and_then(|end| end.checked_sub(1))
+                            .and_then(|index| self.fragments.get(index))
+                            .is_some_and(|fragment| {
+                                fragment.line.advance > fragment.slot_end - fragment.slot_start
+                            })
+                });
+                if (!cursor.is_complete(clusters.starts.len()) || final_fragment_overflows)
+                    && self.lines.len() > thread_line_start
+                {
+                    self.ellipsis_threads.push(constraint.flow_thread_id);
+                }
+            }
         }
         Ok(())
     }
@@ -233,6 +271,7 @@ impl FlowLayoutArena {
                     line,
                     slot_start: slot.start,
                     slot_end: slot.end,
+                    boundary_index: NO_BOUNDARY,
                 });
                 composed = true;
                 if line.hard_break || cursor.is_complete(clusters.starts.len()) {
@@ -274,7 +313,104 @@ impl FlowLayoutArena {
     pub(crate) fn clear(&mut self) {
         self.lines.clear();
         self.fragments.clear();
+        self.ellipsis_threads.clear();
     }
+
+    pub(crate) fn ellipsis_threads(&self) -> &[u32] {
+        &self.ellipsis_threads
+    }
+
+    pub(crate) fn truncate_for_ellipsis(
+        &mut self,
+        flow_thread_id: u32,
+        clusters: &ClusterArena,
+        mut replacement_at: impl FnMut(usize, u32) -> Result<EllipsisReplacement, EngineError>,
+    ) -> Result<Option<EllipsisTarget>, EngineError> {
+        let Some(line) = self
+            .lines
+            .iter()
+            .rev()
+            .find(|line| line.flow_thread_id == flow_thread_id)
+            .copied()
+        else {
+            return Ok(None);
+        };
+        let fragment_start =
+            usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
+        let fragment_end = fragment_start
+            .checked_add(usize::from(line.fragment_count))
+            .ok_or(EngineError::InvalidRequest)?;
+        let fragment_index = fragment_end
+            .checked_sub(1)
+            .ok_or(EngineError::InvalidRequest)?;
+        let fragment = self
+            .fragments
+            .get_mut(fragment_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let cluster_count = clusters.starts.len();
+        let consumed =
+            usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let available = fragment.slot_end - fragment.slot_start;
+        if consumed >= cluster_count && fragment.line.advance <= available {
+            return Ok(None);
+        }
+        let cluster_start = usize::try_from(fragment.line.cluster_start)
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let mut cluster_end = consumed.min(cluster_count);
+        let mut source_advance = fragment.line.advance;
+        while cluster_end > cluster_start
+            && clusters.flags[cluster_end - 1] & CLUSTER_HARD_BREAK != 0
+        {
+            cluster_end -= 1;
+            source_advance -= clusters.advances[cluster_end];
+        }
+        let mut text_end = cluster_text_end(clusters, cluster_end);
+        let mut replacement = replacement_at(cluster_end, text_end)?;
+        if replacement.cluster_start < cluster_start
+            || replacement.cluster_start > cluster_end
+            || !replacement.advance_adjustment.is_finite()
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        while cluster_end > cluster_start
+            && source_advance + replacement.advance_adjustment > available
+        {
+            cluster_end -= 1;
+            source_advance -= clusters.advances[cluster_end];
+            text_end = cluster_text_end(clusters, cluster_end);
+            replacement = replacement_at(cluster_end, text_end)?;
+            if replacement.cluster_start < cluster_start
+                || replacement.cluster_start > cluster_end
+                || !replacement.advance_adjustment.is_finite()
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+        }
+        fragment.line.cluster_end =
+            u32::try_from(cluster_end).map_err(|_| EngineError::ResultTooLarge)?;
+        fragment.line.text_end = text_end;
+        fragment.line.advance = (source_advance + replacement.advance_adjustment).max(0.0);
+        fragment.line.hard_break = false;
+        Ok(Some(EllipsisTarget {
+            fragment_index: u32::try_from(fragment_index)
+                .map_err(|_| EngineError::ResultTooLarge)?,
+            line_cluster_start: u32::try_from(cluster_start)
+                .map_err(|_| EngineError::ResultTooLarge)?,
+            boundary_cluster_start: u32::try_from(replacement.cluster_start)
+                .map_err(|_| EngineError::ResultTooLarge)?,
+            cluster_end: u32::try_from(cluster_end).map_err(|_| EngineError::ResultTooLarge)?,
+            text_end,
+        }))
+    }
+}
+
+fn cluster_text_end(clusters: &ClusterArena, cluster_end: usize) -> u32 {
+    clusters
+        .starts
+        .get(cluster_end)
+        .copied()
+        .or_else(|| clusters.ends.last().copied())
+        .unwrap_or(0)
 }
 
 fn cluster_for_offset(clusters: &ClusterArena, offset: u32) -> Result<usize, EngineError> {
@@ -429,7 +565,7 @@ mod tests {
         flow_geometry::{RetainedExclusion, RetainedRegion},
         frame::{
             ALIGN_START, AXIS_EXACT, BLOCK_ALIGN_START, EXCLUSION_WRAP_BOTH, ORIENTATION_MIXED,
-            OVERFLOW_VISIBLE, SHAPE_RECTANGLE, WRAP_CHARACTER,
+            OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, SHAPE_RECTANGLE, WRAP_CHARACTER, WRAP_NONE,
         },
         semantic_wire::{FlowConstraint, FlowExclusion, FlowRegion},
         style_state::ResolvedStyle,
@@ -581,6 +717,119 @@ mod tests {
             [1, 2, 2, 2]
         );
         assert_eq!(layout.fragments.last().unwrap().line.cluster_end, 4);
+    }
+
+    #[test]
+    fn ellipsis_truncation_reuses_the_final_slot_and_removes_only_required_clusters() {
+        let clusters = ClusterArena {
+            starts: vec![0, 1, 2, 3],
+            ends: vec![1, 2, 3, 4],
+            advances: vec![3.0; 4],
+            flags: vec![CLUSTER_SAFE_BEFORE; 4],
+            ..ClusterArena::default()
+        };
+        let mut layout = FlowLayoutArena {
+            lines: vec![FlowLine {
+                flow_thread_id: 7,
+                region_id: 1,
+                transform_index: 0,
+                clip_id: 1,
+                fragment_start: 0,
+                fragment_count: 1,
+                align: ALIGN_START,
+                block_start: 0.0,
+                baseline: 8.0,
+                height: 10.0,
+            }],
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 0,
+                    cluster_end: 2,
+                    text_start: 0,
+                    text_end: 2,
+                    advance: 6.0,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 10.0,
+                boundary_index: NO_BOUNDARY,
+            }],
+            ..FlowLayoutArena::default()
+        };
+
+        let target = layout
+            .truncate_for_ellipsis(7, &clusters, |cluster_end, _| {
+                Ok(EllipsisReplacement {
+                    cluster_start: cluster_end,
+                    advance_adjustment: 5.0,
+                })
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.line_cluster_start, 0);
+        assert_eq!(target.boundary_cluster_start, 1);
+        assert_eq!(target.cluster_end, 1);
+        assert_eq!(target.text_end, 1);
+        assert_eq!(layout.fragments[0].line.cluster_end, 1);
+        assert_eq!(layout.fragments[0].line.text_end, 1);
+        assert_eq!(layout.fragments[0].line.advance, 8.0);
+    }
+
+    #[test]
+    fn complete_no_wrap_line_still_requests_ellipsis_when_its_slot_overflows() {
+        let clusters = ClusterArena {
+            starts: vec![0, 1, 2],
+            ends: vec![1, 2, 3],
+            advances: vec![3.0; 3],
+            flags: vec![CLUSTER_SAFE_BEFORE; 3],
+            style_indexes: vec![0; 3],
+            source_runs: vec![0; 3],
+            font_handles: vec![1; 3],
+            index_at: vec![0, 1, 2, 3],
+            ..ClusterArena::default()
+        };
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 3,
+            style: ResolvedStyle::test_typography(10.0, 0.0, 0.0),
+        }];
+        let mut constraint = constraint();
+        constraint.overflow = OVERFLOW_ELLIPSIS;
+        constraint.wrap = WRAP_NONE;
+        let mut constrained_region = region();
+        constrained_region.inline_end = 4.0;
+        constrained_region.clip_inline_end = 4.0;
+        constrained_region.exclusion_count = 0;
+        let geometry = FlowGeometryArena {
+            constraints: vec![constraint],
+            regions: vec![RetainedRegion {
+                record: constrained_region,
+                vertex_start: 0,
+            }],
+            ..FlowGeometryArena::default()
+        };
+        let mut layout = FlowLayoutArena::default();
+        layout
+            .build(
+                &geometry,
+                &clusters,
+                &styles,
+                &mut InlineSlotArena::default(),
+                4,
+                1,
+                |_| {
+                    Some(FontMetrics {
+                        units_per_em: 1_000,
+                        ascender: 800,
+                        descender: -200,
+                        line_gap: 0,
+                    })
+                },
+                |_| Some(1),
+            )
+            .unwrap();
+        assert_eq!(layout.fragments[0].line.cluster_end, 3);
+        assert_eq!(layout.ellipsis_threads(), [constraint.flow_thread_id]);
     }
 
     fn constraint() -> FlowConstraint {

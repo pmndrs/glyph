@@ -2,6 +2,25 @@
 
 ## 2026-08-09
 
+- **Moved ellipsis and its real boundary reshape into the Rust frame transaction** — Only truncated flow threads build a
+  retained boundary arena; ordinary reflow retains zero boundary reshapes. Font-stack ellipsis selection, complete
+  no-wrap overflow, narrowed final-tail context, spacing, stable glyph identity, positioning, semantic inspection, and
+  render-plan publication now share the one Rust update. A public Amiri/Three regression proves the result differs from
+  incorrect whole-run reuse and matches the narrowed shaping oracle. All 136 Rust library tests and 204 package tests
+  pass. Same-machine detached-baseline comparison finds column-resize medians within 0.15 ms and mixed cold results, so
+  the checkpoint is recorded as performance-adjacent rather than assigned a speedup. Its aggregate optimized Wasm delta,
+  including adjacent renderer-integration fixes, is +13,639 raw / +5,797 gzip / +5,579 Brotli bytes.
+
+- **Recorded the Paragraph Stress integration defects without changing shaping invalidation** — Origin lookup indexing is
+  now lazy and Bitmap strike replacement initializes every required input stream. The observed 11,510-glyph MTSDF probe
+  moved `plan.apply` from about 1.02 ms to 0.14 ms and total retained update from about 6.89 ms to 4.63 ms, with differing
+  sample histories explicitly preventing a universal speedup claim. Focused public Three fixtures cover both defects.
+
+- **Queued adaptive dirty-range upload refinement from three-flatland evidence** — The research finds that Rust already
+  generalizes Flatland's dirty buckets through exact spans, gap costs, fragmentation limits, and a full-live cutover.
+  Follow-on work will calibrate per-physical-buffer costing and stable-order coalescing; TypeScript will not duplicate the
+  planner. Renderer-local transform/origin edits remain the only candidate for a Flatland-style retained tracker.
+
 - **Made semantic queries share the retained update that invalidated them** — Three now sends only changed text, style,
   or geometry sections; an empty update and cached query make no Rust call, while pending measurement or inspection rides
   on the same `text_update`. A two-paragraph compiled-Wasm regression proves all-paragraph semantic retention and exact

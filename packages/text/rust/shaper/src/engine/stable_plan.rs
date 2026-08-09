@@ -1415,8 +1415,8 @@ impl StablePlanCompiler {
                 .ok_or(StablePlanError::ProgramMissing)?;
             let split_material = program.draw_key_mask & BATCH_MATERIAL != 0;
             let split_transform = program.draw_key_mask & BATCH_TRANSFORM != 0;
-            let input_indices = &self.batch_input_indices
-                [range(pending.item_start, pending.item_count)?];
+            let input_indices =
+                &self.batch_input_indices[range(pending.item_start, pending.item_count)?];
             let mut start = 0_usize;
             while start < input_indices.len() {
                 let first_input = input_indices[start] as usize;
@@ -1426,8 +1426,7 @@ impl StablePlanCompiler {
                 while end < input_indices.len() && end - start < usize::from(u16::MAX) {
                     let input_index = input_indices[end] as usize;
                     let glyph = context.input.glyphs[input_index];
-                    if self.input_order_records[input_index]
-                        == first_record + (end - start) as u32
+                    if self.input_order_records[input_index] == first_record + (end - start) as u32
                         && draw_fields_compatible(first, glyph, split_material, split_transform)
                     {
                         end += 1;
@@ -1435,8 +1434,8 @@ impl StablePlanCompiler {
                         break;
                     }
                 }
-                let count = u16::try_from(end - start)
-                    .map_err(|_| StablePlanError::ArithmeticOverflow)?;
+                let count =
+                    u16::try_from(end - start).map_err(|_| StablePlanError::ArithmeticOverflow)?;
                 let (inline_start, block_start, inline_extent, block_extent) = indexed_span_bounds(
                     context.input.glyphs,
                     input_indices[start..end]

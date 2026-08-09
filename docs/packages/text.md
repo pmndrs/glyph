@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:8af3dbc1edd2172625a7c0bca81eef92524e0f7c499d1c9a227a1cc0307fa4ab'
+source_digest: 'sha256:dcec3be38cc1cc058965b8e7593cedea1683c5594b4465a221100fe2cec724ce'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -189,8 +189,8 @@ sources:
     resource: ../../packages/text/src/internal/unicode.ts
     title: Unicode analysis implementation
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-08-09T12:24:43Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-09T13:43:37Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -1014,6 +1014,32 @@ remain crossing-free. The focused two-paragraph compiled-Wasm lifecycle proves e
 geometry and text mutation plus measurement, all-paragraph measurement retention, and exact five-instance command-buffer
 output after a text replacement. Optional Three phase profiling is inactive by default and can emit User Timing spans
 for frame preparation, Rust update, plan application, semantic readback, transform synchronization, and total time.
+
+Rust now owns ellipsis shaping and positioning rather than treating truncation as a TypeScript-only layout artifact.
+Only a flow thread that leaves text unconsumed or whose complete no-wrap line exceeds its final slot enters this path.
+The engine selects the ellipsis through the authored font stack, trims the final slot, and reshapes only the final
+same-font source tail with context ending at the truncation boundary; ordinary reflow still performs zero boundary
+reshapes. A retained boundary arena carries the replacement source and ellipsis glyphs directly into positioning,
+preserves glyph identities across warm truncation updates, includes letter and word spacing, and commits or aborts with
+the paragraph transaction. The public Three regression uses Amiri at a joining boundary where whole-run and narrowed
+glyph IDs are provably different, then requires the Rust inspection output to match the narrowed result. The complete
+package gate passes 204 tests and the Rust library passes 136 tests. Against detached commit `4adbbebc` on the same
+machine, two 22,000-target-glyph Bitmap runs measured 4.041/4.056 ms median for baseline column resize and
+4.102/4.189 ms for this checkpoint; cold medians were 15.490/15.569 ms and 15.212/15.358 ms respectively. The overlap,
+run noise, and sub-0.15 ms differences support only a performance-adjacent claim. The complete checkpoint, including
+the adjacent lazy-origin-index and Bitmap resource-selection fixes, changes optimized Wasm from
+1,101,079 / 414,917 / 328,164 to 1,114,718 / 420,714 / 333,743 raw/gzip/Brotli bytes; that aggregate delta is not
+attributed to ellipsis alone.
+
+Live Paragraph Stress profiling also found two renderer-integration defects independent of shaping invalidation. The
+Three executor rebuilt a per-glyph origin lookup object graph after every plan application even though only presentation
+queries use it; the index is now lazy and invalidated by a new plan. In the observed 11,510-glyph MTSDF run,
+`plan.apply` moved from roughly 1.02 ms to 0.14 ms and the retained update from roughly 6.89 ms to 4.63 ms, but the sample
+histories were not identical and this remains a scoped diagnostic rather than a universal speedup claim. Separately,
+font-size or raster-density changes can select a different Bitmap strike and therefore a replacement physical batch.
+Policy gather now retains every input lane for those selection changes so unchanged transform data initializes the new
+batch; dependency-directed buffer writes remain selective when the resource does not change. A 16-to-32 ppem public
+Three fixture proves the replacement transform stream is initialized before a following width-only reflow.
 
 The replacement Rust engine now owns retained Unicode analysis for its frame transaction. The existing Unicode 17 generator emits both TypeScript and compact Rust Script/Script_Extensions partitions from one source. A no-std `unicode-segmentation` 1.13.3 iterator supplies extended grapheme boundaries; the engine maps them back to the public UTF-16 coordinate space, resolves contextual scripts in reusable flat arrays, and commits or aborts that derived arena with text and styles. Session reservation prewarms active and pending analysis storage, while unchanged text skips analysis. Retained UAX #9 products now form equal-level runs, and one interval sweep intersects them with resolved style and script items while skipping hard-break controls. Root direction remains paragraph-level state; nested stated directions carry a distinct override bit and force run parity. Primary-font HarfRust shaping consumes those runs inside `text_update` through borrowed retained language/features and writes glyph SoA directly into an A/B session arena; the legacy batch export shares the same prewarmed buffer and reusable feature scratch. A real-Inter compiled-Wasm test observes the shape-plan cache created by the frame call. The optimized shaper is 973,367 raw, 364,517 gzip, and 287,942 Brotli bytes at this checkpoint. Ordered fallback, layout, and nonempty plan output remain open, so this size evidence carries no complete-path frame latency claim.
 

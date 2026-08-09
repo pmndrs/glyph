@@ -1,14 +1,14 @@
 use alloc::{collections::BTreeMap, vec::Vec};
 
 use crate::{
-    STATUS_RESULT_TOO_LARGE, ShapeRunRef, ShaperRegistry,
+    STATUS_RESULT_TOO_LARGE, ShapeRangeRef, ShapeRunRef, ShaperRegistry,
     bidi::{BidiAnalysis, BidiError, DIRECTION_AUTO, analyze_into as analyze_bidi_into},
     unicode::{UnicodeAnalysis, UnicodeError},
 };
 
 use super::{
     cluster_state::{ClusterArena, ClusterBuildInput},
-    flow_composition::FlowLayoutArena,
+    flow_composition::{EllipsisReplacement, FlowLayoutArena},
     flow_geometry::FlowGeometryArena,
     font_binding::FontRenderBinding,
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
@@ -20,7 +20,7 @@ use super::{
     positioning::PositionedGlyphArena,
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
-    shaping_state::{ShapeArena, ShapingRunArena},
+    shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
     style_state::{
         DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
         StyleInvalidation,
@@ -76,6 +76,18 @@ struct ClusterRecord {
     source_run: u32,
     cluster: u32,
     missing: bool,
+}
+
+#[derive(Clone, Copy)]
+struct BoundaryCandidate {
+    source_run: usize,
+    cluster_start: usize,
+    source_binding_handle: u32,
+    source_font_handle: u32,
+    ellipsis_binding_handle: u32,
+    ellipsis_font_handle: u32,
+    source_advance: f64,
+    ellipsis_advance: f64,
 }
 
 #[derive(Default)]
@@ -143,6 +155,11 @@ struct ParagraphState {
     pending_geometry: FlowGeometryArena,
     flow_layout: FlowLayoutArena,
     pending_flow_layout: FlowLayoutArena,
+    boundary_shape: BoundaryShapeArena,
+    pending_boundary_shape: BoundaryShapeArena,
+    boundary_shape_scratch: ShapeArena,
+    ellipsis_shape_scratch: ShapeArena,
+    ellipsis_text_scratch: Vec<u16>,
     positioned: PositionedGlyphArena,
     pending_positioned: PositionedGlyphArena,
     flow_slot_scratch: super::flow_geometry::InlineSlotArena,
@@ -1083,6 +1100,11 @@ impl ParagraphState {
         self.pending_geometry.clear();
         self.flow_layout.clear();
         self.pending_flow_layout.clear();
+        self.boundary_shape.clear();
+        self.pending_boundary_shape.clear();
+        self.boundary_shape_scratch.clear();
+        self.ellipsis_shape_scratch.clear();
+        self.ellipsis_text_scratch.clear();
         self.positioned.clear();
         self.pending_positioned.clear();
         self.fallback_spans.clear();
@@ -1145,6 +1167,7 @@ impl ParagraphState {
                     font_bindings,
                     limits.max_lines,
                     limits.max_slots_per_band,
+                    next_glyph_id,
                 )?;
             }
             if positioned_changed {
@@ -1211,6 +1234,15 @@ impl ParagraphState {
         self.pending_clusters.reserve(capacity)?;
         self.flow_layout.reserve(capacity, 1)?;
         self.pending_flow_layout.reserve(capacity, 1)?;
+        self.boundary_shape.reserve(capacity.min(64))?;
+        self.pending_boundary_shape.reserve(capacity.min(64))?;
+        self.boundary_shape_scratch.reserve(8)?;
+        self.ellipsis_shape_scratch.reserve(4)?;
+        if self.ellipsis_text_scratch.capacity() == 0 {
+            self.ellipsis_text_scratch
+                .try_reserve_exact(1)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+        }
         self.positioned.reserve(glyph_capacity)?;
         self.pending_positioned.reserve(glyph_capacity)?;
         self.glyph_identity_index
@@ -1776,13 +1808,15 @@ impl ParagraphState {
 
     fn prepare_flow_layout(
         &mut self,
-        shaper: &ShaperRegistry,
+        shaper: &mut ShaperRegistry,
         font_stacks: &[RegisteredFontStack],
         font_bindings: &[RegisteredFontBinding],
         max_lines: u32,
         max_slots_per_band: u32,
+        next_glyph_id: &mut u32,
     ) -> Result<(), EngineError> {
         self.abort_flow_layout();
+        self.pending_boundary_shape.clear();
         let clusters = if self.clusters_prepared {
             &self.pending_clusters
         } else {
@@ -1792,6 +1826,21 @@ impl ParagraphState {
             self.pending_resolved_styles.segments()
         } else {
             self.resolved_styles.segments()
+        };
+        let style_storage = if self.styles_prepared {
+            &self.pending_styles
+        } else {
+            &self.styles
+        };
+        let runs = if self.shaping_runs_prepared {
+            self.pending_shaping_runs.runs()
+        } else {
+            self.shaping_runs.runs()
+        };
+        let text = if self.text_prepared {
+            self.pending_text.as_slice()
+        } else {
+            self.text.as_slice()
         };
         let geometry = if self.geometry_prepared {
             &self.pending_geometry
@@ -1819,18 +1868,150 @@ impl ParagraphState {
                     })
             },
         )?;
+        let mut ellipsis_index = 0usize;
+        while ellipsis_index < self.pending_flow_layout.ellipsis_threads().len() {
+            let flow_thread_id = self.pending_flow_layout.ellipsis_threads()[ellipsis_index];
+            let line = self
+                .pending_flow_layout
+                .lines
+                .iter()
+                .rev()
+                .find(|line| line.flow_thread_id == flow_thread_id)
+                .copied()
+                .ok_or(EngineError::InvalidRequest)?;
+            let fragment_index = usize::try_from(line.fragment_start)
+                .map_err(|_| EngineError::InvalidRequest)?
+                .checked_add(usize::from(line.fragment_count))
+                .and_then(|end| end.checked_sub(1))
+                .ok_or(EngineError::InvalidRequest)?;
+            let fragment = *self
+                .pending_flow_layout
+                .fragments
+                .get(fragment_index)
+                .ok_or(EngineError::InvalidRequest)?;
+            let line_cluster_start = usize::try_from(fragment.line.cluster_start)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let line_text_start = fragment.line.text_start;
+            let source_shape = &mut self.boundary_shape_scratch;
+            let ellipsis_shape = &mut self.ellipsis_shape_scratch;
+            let ellipsis_text = &mut self.ellipsis_text_scratch;
+            let mut final_candidate = None;
+            let target = self
+                .pending_flow_layout
+                .truncate_for_ellipsis(flow_thread_id, clusters, |cluster_end, text_end| {
+                    let candidate = prepare_boundary_candidate(
+                        shaper,
+                        text,
+                        ellipsis_text,
+                        source_shape,
+                        ellipsis_shape,
+                        clusters,
+                        runs,
+                        style_storage,
+                        font_stacks,
+                        font_bindings,
+                        line_cluster_start,
+                        line_text_start,
+                        cluster_end,
+                        text_end,
+                    )?;
+                    let retained_advance = clusters.advances[candidate.cluster_start..cluster_end]
+                        .iter()
+                        .copied()
+                        .sum::<f64>();
+                    final_candidate = Some(candidate);
+                    Ok(EllipsisReplacement {
+                        cluster_start: candidate.cluster_start,
+                        advance_adjustment: candidate.source_advance + candidate.ellipsis_advance
+                            - retained_advance,
+                    })
+                })?
+                .ok_or(EngineError::InvalidRequest)?;
+            let candidate = final_candidate.ok_or(EngineError::InvalidRequest)?;
+            if usize::try_from(target.boundary_cluster_start).ok() != Some(candidate.cluster_start)
+            {
+                return Err(EngineError::InvalidRequest);
+            }
+            let source_span = if source_shape.runs.is_empty() {
+                (
+                    u32::try_from(self.pending_boundary_shape.shape.glyph_ids.len())
+                        .map_err(|_| EngineError::ResultTooLarge)?,
+                    0,
+                )
+            } else {
+                self.pending_boundary_shape
+                    .shape
+                    .append_from(source_shape, 0)?
+            };
+            let ellipsis_span = self
+                .pending_boundary_shape
+                .shape
+                .append_from(ellipsis_shape, 0)?;
+            append_boundary_source_ids(
+                &mut self.pending_boundary_shape.stable_ids,
+                source_shape,
+                clusters,
+                next_glyph_id,
+            )?;
+            let previous = self
+                .boundary_shape
+                .records
+                .iter()
+                .find(|record| record.flow_thread_id == flow_thread_id)
+                .copied();
+            let previous_ellipsis_ids = previous
+                .and_then(|record| {
+                    let start = usize::try_from(record.ellipsis_glyph_start).ok()?;
+                    let end =
+                        start.checked_add(usize::try_from(record.ellipsis_glyph_count).ok()?)?;
+                    self.boundary_shape.stable_ids.get(start..end)
+                })
+                .unwrap_or(&[]);
+            let ellipsis_count =
+                usize::try_from(ellipsis_span.1).map_err(|_| EngineError::InvalidRequest)?;
+            for ordinal in 0..ellipsis_count {
+                let stable_id = previous_ellipsis_ids
+                    .get(ordinal)
+                    .copied()
+                    .filter(|id| *id != 0)
+                    .map_or_else(|| allocate_glyph_id(next_glyph_id), Ok)?;
+                self.pending_boundary_shape.stable_ids.push(stable_id);
+            }
+            let boundary_index = u32::try_from(self.pending_boundary_shape.records.len())
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            self.pending_boundary_shape.records.push(BoundaryShape {
+                flow_thread_id,
+                source_run: u32::try_from(candidate.source_run)
+                    .map_err(|_| EngineError::ResultTooLarge)?,
+                cluster_start: target.boundary_cluster_start,
+                cluster_end: target.cluster_end,
+                text_end: target.text_end,
+                source_binding_handle: candidate.source_binding_handle,
+                source_font_handle: candidate.source_font_handle,
+                ellipsis_binding_handle: candidate.ellipsis_binding_handle,
+                ellipsis_font_handle: candidate.ellipsis_font_handle,
+                source_glyph_start: source_span.0,
+                source_glyph_count: source_span.1,
+                ellipsis_glyph_start: ellipsis_span.0,
+                ellipsis_glyph_count: ellipsis_span.1,
+            });
+            self.pending_flow_layout.fragments[fragment_index].boundary_index = boundary_index;
+            ellipsis_index += 1;
+        }
         self.flow_layout_prepared = true;
         Ok(())
     }
 
     fn abort_flow_layout(&mut self) {
         self.pending_flow_layout.clear();
+        self.pending_boundary_shape.clear();
         self.flow_layout_prepared = false;
     }
 
     fn commit_flow_layout(&mut self) {
         if self.flow_layout_prepared {
             core::mem::swap(&mut self.flow_layout, &mut self.pending_flow_layout);
+            core::mem::swap(&mut self.boundary_shape, &mut self.pending_boundary_shape);
         }
         self.abort_flow_layout();
     }
@@ -1876,6 +2057,11 @@ impl ParagraphState {
         } else {
             &self.flow_layout
         };
+        let boundary_shape = if self.flow_layout_prepared {
+            &self.pending_boundary_shape
+        } else {
+            &self.boundary_shape
+        };
         self.pending_positioned.build(
             &self.positioned,
             flow,
@@ -1883,6 +2069,7 @@ impl ParagraphState {
             clusters,
             runs,
             shape,
+            boundary_shape,
             styles,
             bidi,
             &mut self.glyph_identity_index,
@@ -2038,6 +2225,233 @@ fn find_font_binding(
         .iter()
         .find(|binding| binding.handle == handle)
         .ok_or(EngineError::FontStackMissing)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_boundary_candidate(
+    shaper: &mut ShaperRegistry,
+    text: &[u16],
+    ellipsis_text: &mut Vec<u16>,
+    source_shape: &mut ShapeArena,
+    ellipsis_shape: &mut ShapeArena,
+    clusters: &ClusterArena,
+    runs: &[ShapingRun],
+    styles: &StyleArena,
+    font_stacks: &[RegisteredFontStack],
+    font_bindings: &[RegisteredFontBinding],
+    line_cluster_start: usize,
+    line_text_start: u32,
+    cluster_end: usize,
+    text_end: u32,
+) -> Result<BoundaryCandidate, EngineError> {
+    let anchor = cluster_end
+        .checked_sub(1)
+        .filter(|index| *index >= line_cluster_start)
+        .or_else(|| (cluster_end < clusters.starts.len()).then_some(cluster_end))
+        .ok_or(EngineError::InvalidRequest)?;
+    let source_run = usize::try_from(
+        *clusters
+            .source_runs
+            .get(anchor)
+            .ok_or(EngineError::InvalidRequest)?,
+    )
+    .map_err(|_| EngineError::InvalidRequest)?;
+    let run = *runs.get(source_run).ok_or(EngineError::InvalidRequest)?;
+    let source_binding_handle = *clusters
+        .binding_handles
+        .get(anchor)
+        .ok_or(EngineError::InvalidRequest)?;
+    let source_font_handle = *clusters
+        .font_handles
+        .get(anchor)
+        .ok_or(EngineError::InvalidRequest)?;
+    if source_binding_handle == 0 || source_font_handle == 0 {
+        return Err(EngineError::InvalidRequest);
+    }
+    let mut cluster_start = cluster_end;
+    while cluster_start > line_cluster_start {
+        let previous = cluster_start - 1;
+        if clusters.source_runs.get(previous) != Some(&(source_run as u32))
+            || clusters.binding_handles.get(previous) != Some(&source_binding_handle)
+            || clusters.font_handles.get(previous) != Some(&source_font_handle)
+        {
+            break;
+        }
+        cluster_start = previous;
+    }
+
+    source_shape.clear();
+    let mut source_advance = 0.0;
+    if cluster_start < cluster_end {
+        let item_start = *clusters
+            .starts
+            .get(cluster_start)
+            .ok_or(EngineError::InvalidRequest)?;
+        shaper
+            .with_shaped_range(
+                source_font_handle,
+                text,
+                ShapeRunRef {
+                    text_start: run.text_start,
+                    text_end: run.text_end,
+                    script: run.script,
+                    language: styles.resolved_language(run.style),
+                    features: styles.resolved_features(run.style),
+                    direction: run.direction,
+                    cluster_level: 0,
+                    flags: 0x40,
+                },
+                ShapeRangeRef {
+                    item_start,
+                    item_end: text_end,
+                    context_start: line_text_start.max(run.text_start).min(item_start),
+                    context_end: text_end,
+                    flags: 0x40 | 0x02 | u32::from(item_start == line_text_start),
+                },
+                |shaped| {
+                    source_shape.append(
+                        source_run,
+                        source_font_handle,
+                        source_binding_handle,
+                        item_start,
+                        text_end,
+                        shaped,
+                    )
+                },
+            )
+            .map_err(shaper_error)?;
+        let metrics = shaper
+            .font_metrics(source_font_handle)
+            .ok_or(EngineError::InvalidRequest)?;
+        if metrics.units_per_em == 0 {
+            return Err(EngineError::InvalidRequest);
+        }
+        let scale = f64::from(run.style.font_size) / f64::from(metrics.units_per_em);
+        source_advance = source_shape
+            .x_advances
+            .iter()
+            .try_fold(0.0, |advance, value| {
+                let next = advance + f64::from(value.unsigned_abs()) * scale;
+                next.is_finite()
+                    .then_some(next)
+                    .ok_or(EngineError::InvalidRequest)
+            })?;
+        for cluster in cluster_start..cluster_end {
+            source_advance += f64::from(run.style.letter_spacing);
+            if clusters
+                .starts
+                .get(cluster)
+                .and_then(|start| usize::try_from(*start).ok())
+                .and_then(|start| text.get(start))
+                == Some(&0x20)
+            {
+                source_advance += f64::from(run.style.word_spacing);
+            }
+        }
+    }
+
+    ellipsis_text.clear();
+    ellipsis_text.push(0x2026);
+    let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
+    let mut selected = None;
+    for (font_index, binding_handle) in stack.fonts.iter().copied().enumerate() {
+        let font_handle = find_font_binding(font_bindings, binding_handle)?.shaping_handle;
+        ellipsis_shape.clear();
+        let missing = shaper
+            .with_shaped_run(
+                font_handle,
+                ellipsis_text,
+                ShapeRunRef {
+                    text_start: 0,
+                    text_end: 1,
+                    script: run.script,
+                    language: styles.resolved_language(run.style),
+                    features: &[],
+                    direction: run.direction,
+                    cluster_level: 0,
+                    flags: 0x40,
+                },
+                |shaped| {
+                    let missing = shaped.glyph_infos().iter().any(|info| info.glyph_id == 0);
+                    ellipsis_shape.append(source_run, font_handle, binding_handle, 0, 1, shaped)?;
+                    Ok(missing)
+                },
+            )
+            .map_err(shaper_error)?;
+        if !missing || font_index + 1 == stack.fonts.len() {
+            selected = Some((binding_handle, font_handle));
+            break;
+        }
+    }
+    let (ellipsis_binding_handle, ellipsis_font_handle) =
+        selected.ok_or(EngineError::FontStackMissing)?;
+    let metrics = shaper
+        .font_metrics(ellipsis_font_handle)
+        .ok_or(EngineError::InvalidRequest)?;
+    if metrics.units_per_em == 0 {
+        return Err(EngineError::InvalidRequest);
+    }
+    let scale = f64::from(run.style.font_size) / f64::from(metrics.units_per_em);
+    let ellipsis_advance = ellipsis_shape
+        .x_advances
+        .iter()
+        .try_fold(0.0, |advance, value| {
+            let next = advance + f64::from(value.unsigned_abs()) * scale;
+            next.is_finite()
+                .then_some(next)
+                .ok_or(EngineError::InvalidRequest)
+        })?;
+    Ok(BoundaryCandidate {
+        source_run,
+        cluster_start,
+        source_binding_handle,
+        source_font_handle,
+        ellipsis_binding_handle,
+        ellipsis_font_handle,
+        source_advance,
+        ellipsis_advance,
+    })
+}
+
+fn append_boundary_source_ids(
+    output: &mut Vec<u32>,
+    source: &ShapeArena,
+    clusters: &ClusterArena,
+    next_glyph_id: &mut u32,
+) -> Result<(), EngineError> {
+    let mut previous_cluster = None;
+    let mut ordinal = 0usize;
+    for &text_cluster in &source.clusters {
+        if previous_cluster == Some(text_cluster) {
+            ordinal += 1;
+        } else {
+            previous_cluster = Some(text_cluster);
+            ordinal = 0;
+        }
+        let stable_id = clusters
+            .starts
+            .binary_search(&text_cluster)
+            .ok()
+            .and_then(|cluster| {
+                let start = usize::try_from(*clusters.glyph_starts.get(cluster)?).ok()?;
+                let count = usize::try_from(*clusters.glyph_counts.get(cluster)?).ok()?;
+                (ordinal < count)
+                    .then(|| clusters.glyph_stable_ids.get(start + ordinal).copied())
+                    .flatten()
+            })
+            .filter(|id| *id != 0)
+            .map_or_else(|| allocate_glyph_id(next_glyph_id), Ok)?;
+        output.push(stable_id);
+    }
+    Ok(())
+}
+
+fn allocate_glyph_id(next_glyph_id: &mut u32) -> Result<u32, EngineError> {
+    let stable_id = (*next_glyph_id).max(1);
+    *next_glyph_id = stable_id
+        .checked_add(1)
+        .ok_or(EngineError::ResultTooLarge)?;
+    Ok(stable_id)
 }
 
 fn push_fallback_span(

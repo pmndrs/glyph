@@ -12,6 +12,11 @@ use super::{
     policy::{CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedPolicy},
 };
 
+// `fontSize` and `rasterPixelRatio` can select a different baked resource.
+// A replacement batch must therefore receive every input stream once even when
+// the policy dependency mask would omit unchanged fields from an in-place patch.
+const RESOURCE_SELECTION_CHANGES: u16 = (1 << 4) | (1 << 5);
+
 pub const DEFAULT_GATHER_RECORD_CAPACITY: usize = 32_768;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -169,6 +174,7 @@ impl PolicyGatherWorkspace {
         } else {
             super::positioning::ALL_SEMANTIC_CHANGES
         };
+        let selection_changed = semantic_changes & RESOURCE_SELECTION_CHANGES != 0;
         let mut cached_font_handle = None;
         let mut cached_binding = None;
         let mut cached_program = None;
@@ -206,7 +212,7 @@ impl PolicyGatherWorkspace {
                             technique,
                             variant,
                             semantic_changes,
-                            force_all_inputs,
+                            force_all_inputs || selection_changed,
                         )
                         .ok_or(GatherError::ProgramMissing)?;
                     cached_program = Some((technique, variant, program, f32_inputs, u32_inputs));
@@ -760,6 +766,39 @@ mod tests {
                 .all(|field| *field == [0.0, 0.0])
         );
         assert!(input.u32_fields.iter().all(|field| *field == [0, 0]));
+    }
+
+    #[test]
+    fn font_selection_changes_retain_inputs_needed_to_initialize_a_new_resource_batch() {
+        let binding = binding();
+        let policy = policy();
+        let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
+        let semantic_x = [10.0, 20.0];
+        let semantic_kind = [100, 200];
+        let mut workspace = PolicyGatherWorkspace::default();
+        workspace
+            .gather(
+                &policy,
+                CAPABILITY,
+                LayoutPlanInput {
+                    transform_id: 1,
+                    glyphs: &glyphs,
+                    semantic_change_masks: &[
+                        RESOURCE_SELECTION_CHANGES,
+                        RESOURCE_SELECTION_CHANGES,
+                    ],
+                    semantic_f32: &[&semantic_x],
+                    semantic_u32: &[&semantic_kind],
+                },
+                false,
+                |_| Some(&binding),
+            )
+            .unwrap();
+
+        let gathered = workspace.view();
+        let input = gathered.plan_input();
+        assert_eq!(input.f32_fields[0], semantic_x);
+        assert_eq!(input.u32_fields[0], semantic_kind);
     }
 
     #[test]

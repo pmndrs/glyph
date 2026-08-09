@@ -144,12 +144,12 @@ pub struct ReshapeRange {
 }
 
 #[derive(Clone, Copy)]
-struct SegmentRange {
-    item_start: u32,
-    item_end: u32,
-    context_start: u32,
-    context_end: u32,
-    flags: u32,
+pub(crate) struct ShapeRangeRef {
+    pub item_start: u32,
+    pub item_end: u32,
+    pub context_start: u32,
+    pub context_end: u32,
+    pub flags: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -323,7 +323,7 @@ impl ShaperRegistry {
                 let range = &ranges[segment];
                 (
                     usize::try_from(range.run).map_err(|_| STATUS_INVALID_REQUEST)?,
-                    SegmentRange {
+                    ShapeRangeRef {
                         item_start: range.item_start,
                         item_end: range.item_end,
                         context_start: range.context_start,
@@ -335,7 +335,7 @@ impl ShaperRegistry {
                 let run = &request.runs[segment];
                 (
                     segment,
-                    SegmentRange {
+                    ShapeRangeRef {
                         item_start: run.text_start,
                         item_end: run.text_end,
                         context_start: run.text_start,
@@ -405,17 +405,28 @@ impl ShaperRegistry {
         run: ShapeRunRef<'_>,
         consume: impl FnOnce(&harfrust::GlyphBuffer) -> Result<T, u32>,
     ) -> Result<T, u32> {
-        let font = self
-            .fonts
-            .get_mut(&font_handle)
-            .ok_or(STATUS_FONT_MISSING)?;
-        let range = SegmentRange {
+        let range = ShapeRangeRef {
             item_start: run.text_start,
             item_end: run.text_end,
             context_start: run.text_start,
             context_end: run.text_end,
             flags: run.flags,
         };
+        self.with_shaped_range(font_handle, text, run, range, consume)
+    }
+
+    pub(crate) fn with_shaped_range<T>(
+        &mut self,
+        font_handle: u32,
+        text: &[u16],
+        run: ShapeRunRef<'_>,
+        range: ShapeRangeRef,
+        consume: impl FnOnce(&harfrust::GlyphBuffer) -> Result<T, u32>,
+    ) -> Result<T, u32> {
+        let font = self
+            .fonts
+            .get_mut(&font_handle)
+            .ok_or(STATUS_FONT_MISSING)?;
         let shaped = shape_segment(
             font,
             text,
@@ -584,7 +595,7 @@ fn shape_segment(
     font: &mut RegisteredFont,
     text: &[u16],
     run: ShapeRunRef<'_>,
-    range: SegmentRange,
+    range: ShapeRangeRef,
     buffer_slot: &mut Option<UnicodeBuffer>,
     context_codepoints: &mut Vec<u32>,
     features: &mut Vec<Feature>,
@@ -635,7 +646,7 @@ fn shape_segment_inner(
     font: &mut RegisteredFont,
     text: &[u16],
     run: ShapeRunRef<'_>,
-    range: SegmentRange,
+    range: ShapeRangeRef,
     buffer: &mut UnicodeBuffer,
     context_codepoints: &mut Vec<u32>,
     features: &mut Vec<Feature>,
@@ -719,7 +730,7 @@ fn shape_segment_inner(
 
 fn shape_features(
     run: ShapeRunRef<'_>,
-    range: SegmentRange,
+    range: ShapeRangeRef,
     output: &mut Vec<Feature>,
 ) -> Result<(), u32> {
     output.clear();

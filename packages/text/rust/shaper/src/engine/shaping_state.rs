@@ -48,6 +48,30 @@ pub(crate) struct ShapeArena {
     pub glyph_flags: Vec<u16>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct BoundaryShape {
+    pub flow_thread_id: u32,
+    pub source_run: u32,
+    pub cluster_start: u32,
+    pub cluster_end: u32,
+    pub text_end: u32,
+    pub source_binding_handle: u32,
+    pub source_font_handle: u32,
+    pub ellipsis_binding_handle: u32,
+    pub ellipsis_font_handle: u32,
+    pub source_glyph_start: u32,
+    pub source_glyph_count: u32,
+    pub ellipsis_glyph_start: u32,
+    pub ellipsis_glyph_count: u32,
+}
+
+#[derive(Default)]
+pub(crate) struct BoundaryShapeArena {
+    pub records: Vec<BoundaryShape>,
+    pub shape: ShapeArena,
+    pub stable_ids: Vec<u32>,
+}
+
 impl ShapingRunArena {
     pub(crate) fn reserve(&mut self, capacity: usize) -> Result<(), EngineError> {
         if self.runs.capacity() < capacity {
@@ -274,6 +298,94 @@ impl ShapeArena {
             );
         }
         Ok(())
+    }
+
+    pub(crate) fn append_from(
+        &mut self,
+        source: &Self,
+        run_index: usize,
+    ) -> Result<(u32, u32), EngineError> {
+        let run = *source
+            .runs
+            .get(run_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let source_start =
+            usize::try_from(run.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+        let source_end = source_start
+            .checked_add(usize::try_from(run.glyph_count).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        let glyph_start =
+            u32::try_from(self.glyph_ids.len()).map_err(|_| EngineError::ResultTooLarge)?;
+        self.reserve(
+            self.glyph_ids
+                .len()
+                .saturating_add(source_end.saturating_sub(source_start)),
+        )?;
+        self.runs.push(ShapedRun { glyph_start, ..run });
+        self.glyph_ids.extend_from_slice(
+            source
+                .glyph_ids
+                .get(source_start..source_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        self.clusters.extend_from_slice(
+            source
+                .clusters
+                .get(source_start..source_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        self.x_advances.extend_from_slice(
+            source
+                .x_advances
+                .get(source_start..source_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        self.y_advances.extend_from_slice(
+            source
+                .y_advances
+                .get(source_start..source_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        self.x_offsets.extend_from_slice(
+            source
+                .x_offsets
+                .get(source_start..source_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        self.y_offsets.extend_from_slice(
+            source
+                .y_offsets
+                .get(source_start..source_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        self.glyph_flags.extend_from_slice(
+            source
+                .glyph_flags
+                .get(source_start..source_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        Ok((glyph_start, run.glyph_count))
+    }
+}
+
+impl BoundaryShapeArena {
+    pub(crate) fn clear(&mut self) {
+        self.records.clear();
+        self.shape.clear();
+        self.stable_ids.clear();
+    }
+
+    pub(crate) fn reserve(&mut self, glyph_capacity: usize) -> Result<(), EngineError> {
+        reserve_vec(&mut self.records, glyph_capacity.min(16))?;
+        self.shape.reserve(glyph_capacity)?;
+        reserve_vec(&mut self.stable_ids, glyph_capacity)
+    }
+
+    pub(crate) fn record(&self, index: u32) -> Option<BoundaryShape> {
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| self.records.get(index))
+            .copied()
     }
 }
 
