@@ -2,6 +2,12 @@
 
 ## 2026-08-09
 
+- **Added narrow paragraph editing without exposing engine complexity** — Three `Text` now provides `insertText`,
+  `deleteText`, and `replaceText` over DOM-compatible UTF-16 offsets; direct `text` assignment derives the smallest
+  scalar-aligned replacement. Multiple edits queue into the same next-frame Rust transaction, surrogate-pair splits fail
+  synchronously, and rich-text spans shift with explicit boundary semantics. A wire-level integration regression inspects
+  the serialized request rather than inferring narrowness from final pixels.
+
 - **Regenerated package-size truth after isolating baker build variants** — The renderer-neutral browser core plus the
   sole published SIMD shaper measures 1,224,539 raw / 447,121 gzip / 353,986 Brotli bytes; the Three adapter plus that
   core measures 1,466,450 / 485,864 / 385,930 bytes. Optional Three, React, and React Three Fiber peers remain excluded.

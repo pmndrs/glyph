@@ -105,6 +105,12 @@ interface DesiredTextState<Technique extends AnyRasterTechnique> {
   readonly material?: ThreeTextMaterial;
 }
 
+type PendingTextMutation = Readonly<{
+  start: number;
+  deleteCount: number;
+  insert: string;
+}>;
+
 export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   readonly #runtime: TextRuntime;
   #desired: DesiredTextState<Technique>;
@@ -115,6 +121,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   #desiredRevision = 0;
   #appliedRevision = -1;
   #semanticChanges = ALL_SEMANTIC_CHANGES;
+  readonly #textMutations: PendingTextMutation[] = [];
   #disposed = false;
   #error: unknown;
   onError: ((error: unknown) => void) | undefined;
@@ -200,13 +207,33 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     const changes = classifySemanticChanges(normalizedUpdate);
     if (changes === 0) return;
     const next = normalizeDesired({ ...this.#desired, ...normalizedUpdate } as TextProperties<Technique>);
+    const textMutation = minimalTextMutation(this.#desired.text, next.text);
     const fonts = selectedFonts(next);
     acquireFonts(fonts, this.#runtime);
     releaseFonts(this.#leasedFonts);
     this.#leasedFonts = fonts;
     this.#desired = next;
+    if (textMutation !== undefined) this.#textMutations.push(textMutation);
     this.#desiredRevision += 1;
     this.#semanticChanges |= changes;
+  }
+
+  insertText(offset: number, value: string): void {
+    this.replaceText(offset, offset, value);
+  }
+
+  deleteText(start: number, end: number): void {
+    this.replaceText(start, end, '');
+  }
+
+  replaceText(start: number, end: number, value: string): void {
+    this.#assertActive();
+    assertTextRange(this.#desired.text, start, end);
+    if (typeof value !== 'string') throw new TypeError('replacement text must be a string');
+    if (start === end && value.length === 0) return;
+    const text = this.#desired.text.slice(0, start) + value + this.#desired.text.slice(end);
+    const spans = editSpans(this.#desired.spans, start, end, value.length);
+    this.set({ text, spans } as TextUpdate<Technique>);
   }
 
   setSpan(index: number, span: TextSpan<Technique>): void {
@@ -308,9 +335,13 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   semanticChanges(): number {
     return this.#semanticChanges;
   }
+  textMutations(): readonly PendingTextMutation[] {
+    return this.#textMutations;
+  }
   markApplied(): void {
     this.#appliedRevision = this.#desiredRevision;
     this.#semanticChanges = 0;
+    this.#textMutations.length = 0;
   }
   bind(binding: ThreeTextBatchBinding, group: TextGroup | undefined): void {
     if (this.#binding !== binding) this.#unbind();
@@ -600,12 +631,8 @@ class ThreeTextBatchBinding {
         const properties = text.coreProperties();
         const content = properties.text as string;
         if (semanticChanges & TEXT_CHANGE) {
-          textMutations.push({
-            paragraphId: paragraph.id,
-            start: 0,
-            deleteCount: paragraph.textLength,
-            insert: content,
-          });
+          const pending = paragraph.created ? [{ start: 0, deleteCount: 0, insert: content }] : text.textMutations();
+          for (const mutation of pending) textMutations.push({ paragraphId: paragraph.id, ...mutation });
         }
         if (semanticChanges & STYLE_CHANGE) {
           const leases: ThreeTextEngineStackLease[] = [];
@@ -1070,6 +1097,75 @@ function ownPublication(publication: TextEnginePublication): TextEnginePublicati
 function replacedContent<Technique extends AnyRasterTechnique>(update: TextUpdate<Technique>): TextUpdate<Technique> {
   if (!('text' in update) || 'spans' in update) return update;
   return { ...update, spans: [] } as TextUpdate<Technique>;
+}
+
+function minimalTextMutation(previous: string, next: string): PendingTextMutation | undefined {
+  if (previous === next) return undefined;
+  const shared = Math.min(previous.length, next.length);
+  let start = 0;
+  while (start < shared) {
+    const previousCodePoint = previous.codePointAt(start)!;
+    if (previousCodePoint !== next.codePointAt(start)) break;
+    start += previousCodePoint > 0xffff ? 2 : 1;
+  }
+  let previousEnd = previous.length;
+  let nextEnd = next.length;
+  while (previousEnd > start && nextEnd > start) {
+    const previousStart = previousScalarStart(previous, previousEnd);
+    const nextStart = previousScalarStart(next, nextEnd);
+    if (previous.codePointAt(previousStart) !== next.codePointAt(nextStart)) break;
+    previousEnd = previousStart;
+    nextEnd = nextStart;
+  }
+  return {
+    start,
+    deleteCount: previousEnd - start,
+    insert: next.slice(start, nextEnd),
+  };
+}
+
+function previousScalarStart(value: string, end: number): number {
+  const last = end - 1;
+  const unit = value.charCodeAt(last);
+  const previous = value.charCodeAt(last - 1);
+  return unit >= 0xdc00 && unit <= 0xdfff && last > 0 && previous >= 0xd800 && previous <= 0xdbff ? last - 1 : last;
+}
+
+function assertTextRange(text: string, start: number, end: number): void {
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || end > text.length) {
+    throw new RangeError('text edit range is outside the text');
+  }
+  if (splitsSurrogatePair(text, start) || splitsSurrogatePair(text, end)) {
+    throw new RangeError('text edit range must not split a Unicode scalar');
+  }
+}
+
+function splitsSurrogatePair(text: string, offset: number): boolean {
+  if (offset <= 0 || offset >= text.length) return false;
+  const previous = text.charCodeAt(offset - 1);
+  const next = text.charCodeAt(offset);
+  return previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff;
+}
+
+function editSpans<Technique extends AnyRasterTechnique>(
+  spans: readonly TextSpan<Technique>[],
+  start: number,
+  end: number,
+  insertLength: number,
+): readonly TextSpan<Technique>[] {
+  const delta = insertLength - (end - start);
+  return spans.flatMap((span) => {
+    if (span.end <= start) return [span];
+    if (span.start >= end) return [{ ...span, start: span.start + delta, end: span.end + delta }];
+    const retainsLeft = span.start < start;
+    const retainsRight = span.end > end;
+    if (retainsLeft && retainsRight) return [{ ...span, end: span.end + delta }];
+    if (retainsLeft) return [{ ...span, end: start }];
+    if (retainsRight) {
+      return [{ ...span, start: start + insertLength, end: span.end + delta }];
+    }
+    return [];
+  });
 }
 
 function classifySemanticChanges<Technique extends AnyRasterTechnique>(update: TextUpdate<Technique>): number {

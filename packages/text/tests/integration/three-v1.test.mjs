@@ -27,6 +27,34 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
+  const editedSpans = new Text({
+    font,
+    text: 'ABCD',
+    spans: [
+      { start: 0, end: 2, paint: { color: '#ff0000' } },
+      { start: 2, end: 4, paint: { color: '#00ff00' } },
+    ],
+  });
+  editedSpans.insertText(1, 'X');
+  editedSpans.insertText(3, 'Y');
+  assert.deepEqual(
+    editedSpans.spans.map(({ start, end }) => ({ start, end })),
+    [
+      { start: 0, end: 3 },
+      { start: 4, end: 6 },
+    ],
+    'insertion inside a span extends it while insertion at a boundary stays outside',
+  );
+  editedSpans.deleteText(1, 4);
+  assert.equal(editedSpans.text, 'ACD');
+  assert.deepEqual(
+    editedSpans.spans.map(({ start, end }) => ({ start, end })),
+    [
+      { start: 0, end: 1 },
+      { start: 1, end: 3 },
+    ],
+  );
+  editedSpans.dispose();
 
   const scene = new THREE.Scene();
   const group = new TextGroup({ renderOrder: 12 });
@@ -166,6 +194,43 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 0, 'an empty update and cached measurement must not cross into Rust');
 
+  left.deleteText(1, 2);
+  scene.updateMatrixWorld();
+  assert.deepEqual(instrumented.latestTextMutations(), [{ start: 1, deleteCount: 1, insert: '' }]);
+  assert.equal(left.text, 'A');
+
+  left.insertText(1, 'B');
+  scene.updateMatrixWorld();
+  assert.deepEqual(instrumented.latestTextMutations(), [{ start: 1, deleteCount: 0, insert: 'B' }]);
+  assert.equal(left.text, 'AB');
+
+  left.text = 'AY';
+  scene.updateMatrixWorld();
+  assert.deepEqual(
+    instrumented.latestTextMutations(),
+    [{ start: 1, deleteCount: 1, insert: 'Y' }],
+    'declarative assignment must serialize its smallest scalar-aligned replacement',
+  );
+
+  left.replaceText(1, 2, 'Z');
+  left.deleteText(0, 1);
+  left.insertText(0, 'A');
+  scene.updateMatrixWorld();
+  assert.deepEqual(instrumented.latestTextMutations(), [
+    { start: 1, deleteCount: 1, insert: 'Z' },
+    { start: 0, deleteCount: 1, insert: '' },
+    { start: 0, deleteCount: 0, insert: 'A' },
+  ]);
+  assert.equal(left.text, 'AZ');
+
+  left.replaceText(0, 2, '🌍');
+  assert.throws(() => left.insertText(1, '!'), /must not split a Unicode scalar/u);
+  scene.updateMatrixWorld();
+  assert.equal(left.text, '🌍');
+  left.text = 'AB';
+  scene.updateMatrixWorld();
+
+  instrumented.reset();
   left.contentBox = { width: { mode: 'exact', size: 100 }, wrap: 'word' };
   const resizedMeasurement = left.measureLayout();
   assert.ok(resizedMeasurement, 'a pending mutation must produce its requested measurement');
@@ -232,6 +297,7 @@ async function createInstrumentedRuntime(registry) {
   const abi = JSON.parse(await readFile(new URL('../../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8'));
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
+  let latestRequest;
   WebAssembly.instantiate = async (source, imports) => {
     const instance = await originalInstantiate(source, imports);
     const exports = { ...instance.exports };
@@ -239,6 +305,8 @@ async function createInstrumentedRuntime(registry) {
     assert.equal(typeof update, 'function', 'instrumented shaper must export text_update');
     exports[abi.functions.textUpdate] = (...arguments_) => {
       crossings += 1;
+      const [, pointer, length] = arguments_;
+      latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
       return update(...arguments_);
     };
     return { exports };
@@ -252,6 +320,27 @@ async function createInstrumentedRuntime(registry) {
       },
       reset() {
         crossings = 0;
+      },
+      latestTextMutations() {
+        assert.ok(latestRequest, 'a text update request must have been captured');
+        const request = abi.layouts.engineUpdateRequest;
+        const mutation = abi.layouts.engineTextMutation;
+        const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+        const offset = view.getUint32(request.textMutationsOffset, true);
+        const count = view.getUint32(request.textMutationCount, true);
+        return Array.from({ length: count }, (_recordValue, index) => {
+          const record = offset + index * mutation.size;
+          const insertOffset = view.getUint32(record + mutation.insertOffset, true);
+          const insertCount = view.getUint32(record + mutation.insertCount, true);
+          const insert = String.fromCharCode(
+            ...Array.from({ length: insertCount }, (_unitValue, unit) => view.getUint16(insertOffset + unit * 2, true)),
+          );
+          return {
+            start: view.getUint32(record + mutation.textStart, true),
+            deleteCount: view.getUint32(record + mutation.deleteCount, true),
+            insert,
+          };
+        });
       },
     };
   } finally {
