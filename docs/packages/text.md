@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:04c42b4aa41023fc4f7945ffcd76ac40b28848db5e0f1686e8a88b6d4e754281'
+source_digest: 'sha256:31242b7ffc89ac76c6f4bf65ca6dc7a6b9339ea9e7ee2ed0fd371439878d4a02'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -190,7 +190,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T13:57:12Z'
+  at: '2026-08-09T14:10:06Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -1036,8 +1036,13 @@ fragmentation, and full-live promotion for one physical buffer and rejects zero-
 Focused tests prove that identical record ranges make different decisions for 16-byte and 64-byte streams. Ordered and
 stable physical publishers now retain fixed per-buffer range scratch, derive liveness through exact semantic dependency
 masks, align each stream independently, and pack only the selected physical buffer for its chosen spans. The stable
-logical-order buffer is not migrated at this checkpoint, and no upload or frame-time improvement is claimed before
-complete-path measurement.
+logical-order buffer uses the same cost model and copies committed gap bytes before publishing widened spans. Identical
+range shapes regroup into one active-buffer packing job: the first ungrouped implementation regressed cold
+Bitmap/MTSDF/Slug by roughly 1.2/2.2/2.4 ms through repeated program execution, while the corrected canonical run
+measures 15.208/15.940/16.114 ms cold and 3.946/4.370/5.284 ms resize against detached `bbd87d3e` baseline ranges of
+15.061–15.867 ms cold and 4.101–5.027 ms resize. These mixed results establish that the regression is closed, not a
+speedup. The standard resize lanes still publish one unchanged-size patch; sparse-distribution and browser upload
+evidence remain required.
 
 Live Paragraph Stress profiling also found two renderer-integration defects independent of shaping invalidation. The
 Three executor rebuilt a per-glyph origin lookup object graph after every plan application even though only presentation

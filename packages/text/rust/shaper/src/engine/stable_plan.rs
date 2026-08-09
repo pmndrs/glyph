@@ -14,9 +14,10 @@ use super::{
         validate_input,
     },
     plan_packing::{
-        MAX_PHYSICAL_BUFFERS, PackingError, PendingAllocation, PhysicalBufferState, RecordRange,
-        align_record_range, align_up, apply_writes, buffer_record_alignment,
-        coalesce_buffer_ranges, execute_run, grown_capacity, record_alignment, take_allocation,
+        MAX_PHYSICAL_BUFFERS, PackingError, PendingAllocation, PhysicalBufferState, RangeJob,
+        RecordRange, align_record_range, align_up, apply_writes, buffer_record_alignment,
+        coalesce_buffer_ranges, collect_range_jobs, execute_run, grown_capacity, record_alignment,
+        take_allocation,
     },
     policy::{
         ALLOCATION_STABLE_INDIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BUFFER_USAGE_COPY_DST,
@@ -244,6 +245,7 @@ pub struct StablePlanCompiler {
     slot_writes: Vec<SlotWrite>,
     changed_ranges: Vec<RecordRange>,
     buffer_ranges: [Vec<RecordRange>; MAX_PHYSICAL_BUFFERS],
+    range_jobs: Vec<RangeJob>,
     identity_keys: Vec<u32>,
     identity_epochs: Vec<u32>,
     identity_epoch: u32,
@@ -896,13 +898,22 @@ impl StablePlanCompiler {
                 required_slots,
             )?;
         }
-        for schema_index in 0..program.buffers.len() {
-            let schema = program.buffers[schema_index];
-            for range_index in 0..self.buffer_ranges[schema_index].len() {
-                let changed = self.buffer_ranges[schema_index][range_index];
-                let count = changed.end - changed.start;
-                let active_buffers = 1 << schema_index;
-                let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
+        collect_range_jobs(
+            &mut self.range_jobs,
+            &self.buffer_ranges,
+            program.buffers.len(),
+        )?;
+        for job_index in 0..self.range_jobs.len() {
+            let RangeJob {
+                range: changed,
+                active_buffers,
+            } = self.range_jobs[job_index];
+            let count = changed.end - changed.start;
+            let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
+            for (schema_index, schema) in program.buffers.iter().enumerate() {
+                if active_buffers & (1 << schema_index) == 0 {
+                    continue;
+                }
                 let byte_count = count as usize * schema.stride();
                 let payload_start = self.payload.len();
                 reserve(&mut self.payload, byte_count)?;
@@ -921,41 +932,46 @@ impl StablePlanCompiler {
                         .ok_or(StablePlanError::InvalidIdentity)?;
                     self.payload[payload_start..payload_start + byte_count].copy_from_slice(source);
                 }
-                let mut write_index = self
-                    .slot_writes
-                    .partition_point(|write| write.slot < changed.start);
-                while write_index < self.slot_writes.len()
-                    && self.slot_writes[write_index].slot < changed.end
+            }
+            let mut write_index = self
+                .slot_writes
+                .partition_point(|write| write.slot < changed.start);
+            while write_index < self.slot_writes.len()
+                && self.slot_writes[write_index].slot < changed.end
+            {
+                if !replace && !self.slot_writes[write_index].changed {
+                    write_index += 1;
+                    continue;
+                }
+                let first = self.slot_writes[write_index];
+                let mut end = write_index + 1;
+                while end < self.slot_writes.len()
+                    && self.slot_writes[end].slot == first.slot + (end - write_index) as u32
+                    && self.slot_writes[end].input_index
+                        == first.input_index + (end - write_index) as u32
+                    && (replace || self.slot_writes[end].changed)
+                    && self.slot_writes[end].slot < changed.end
                 {
-                    if !replace && !self.slot_writes[write_index].changed {
-                        write_index += 1;
-                        continue;
-                    }
-                    let first = self.slot_writes[write_index];
-                    let mut end = write_index + 1;
-                    while end < self.slot_writes.len()
-                        && self.slot_writes[end].slot == first.slot + (end - write_index) as u32
-                        && self.slot_writes[end].input_index
-                            == first.input_index + (end - write_index) as u32
-                        && (replace || self.slot_writes[end].changed)
-                        && self.slot_writes[end].slot < changed.end
-                    {
-                        end += 1;
-                    }
-                    execute_run(
-                        context.policy,
-                        context.capability_set,
-                        program,
-                        context.input,
-                        first.input_index as usize,
-                        (end - write_index) as u32,
-                        first.slot - changed.start,
-                        &mut self.payload,
-                        &payload_starts,
-                        count,
-                        active_buffers,
-                    )?;
-                    write_index = end;
+                    end += 1;
+                }
+                execute_run(
+                    context.policy,
+                    context.capability_set,
+                    program,
+                    context.input,
+                    first.input_index as usize,
+                    (end - write_index) as u32,
+                    first.slot - changed.start,
+                    &mut self.payload,
+                    &payload_starts,
+                    count,
+                    active_buffers,
+                )?;
+                write_index = end;
+            }
+            for (schema_index, schema) in program.buffers.iter().enumerate() {
+                if active_buffers & (1 << schema_index) == 0 {
+                    continue;
                 }
                 reserve(&mut self.patches, 1)?;
                 self.patches.push(PatchRecord {
@@ -1053,23 +1069,79 @@ impl StablePlanCompiler {
                 .copied()
                 .filter(|chunk| replace || chunk.changed()),
         );
-        for chunk_index in 0..self.order_chunk_scratch.len() {
-            let chunk = self.order_chunk_scratch[chunk_index];
-            let entries = self.batches[batch_index].order.entries(chunk)?;
+        self.changed_ranges.clear();
+        reserve(&mut self.changed_ranges, self.order_chunk_scratch.len())?;
+        let order_alignment =
+            buffer_record_alignment(&order_schema(), context.capability.update_alignment);
+        for chunk in self.order_chunk_scratch.iter().copied() {
+            self.changed_ranges.push(align_record_range(
+                RecordRange {
+                    start: chunk.record_start(),
+                    end: chunk
+                        .record_start()
+                        .checked_add(u32::from(chunk.len))
+                        .ok_or(StablePlanError::ArithmeticOverflow)?,
+                },
+                order_alignment,
+            )?);
+        }
+        self.changed_ranges
+            .sort_unstable_by_key(|range| range.start);
+        coalesce_buffer_ranges(
+            &mut self.changed_ranges,
+            4,
+            context.capability,
+            order_capacity,
+        )?;
+        for range_index in 0..self.changed_ranges.len() {
+            let range = self.changed_ranges[range_index];
             let payload_start = self.payload.len();
-            let byte_length = usize::from(chunk.len) * 4;
+            let byte_length = usize::try_from(range.end - range.start)
+                .ok()
+                .and_then(|count| count.checked_mul(4))
+                .ok_or(StablePlanError::ArithmeticOverflow)?;
             reserve(&mut self.payload, byte_length)?;
-            for entry in entries {
-                self.payload
-                    .extend_from_slice(&entry.record_slot.to_le_bytes());
+            self.payload.resize(payload_start + byte_length, 0);
+            if !replace {
+                let source_start = usize::try_from(range.start)
+                    .ok()
+                    .and_then(|start| start.checked_mul(4))
+                    .ok_or(StablePlanError::ArithmeticOverflow)?;
+                let source_end = source_start
+                    .checked_add(byte_length)
+                    .ok_or(StablePlanError::ArithmeticOverflow)?;
+                let source = self.batches[batch_index]
+                    .order_buffer
+                    .as_ref()
+                    .and_then(|buffer| buffer.bytes.get(source_start..source_end))
+                    .ok_or(StablePlanError::InvalidIdentity)?;
+                self.payload[payload_start..payload_start + byte_length].copy_from_slice(source);
+            }
+            for chunk_index in 0..self.order_chunk_scratch.len() {
+                let chunk = self.order_chunk_scratch[chunk_index];
+                let chunk_start = chunk.record_start();
+                if chunk_start < range.start || chunk_start >= range.end {
+                    continue;
+                }
+                let destination = payload_start
+                    + usize::try_from(chunk_start - range.start)
+                        .ok()
+                        .and_then(|start| start.checked_mul(4))
+                        .ok_or(StablePlanError::ArithmeticOverflow)?;
+                let entries = self.batches[batch_index].order.entries(chunk)?;
+                for (entry_index, entry) in entries.iter().enumerate() {
+                    let start = destination + entry_index * 4;
+                    self.payload[start..start + 4]
+                        .copy_from_slice(&entry.record_slot.to_le_bytes());
+                }
             }
             reserve(&mut self.patches, 1)?;
             self.patches.push(PatchRecord {
                 opcode: PATCH_WRITE,
                 buffer_id: id,
                 buffer_generation: generation,
-                destination_offset: chunk
-                    .record_start()
+                destination_offset: range
+                    .start
                     .checked_mul(4)
                     .ok_or(StablePlanError::ArithmeticOverflow)?,
                 byte_length: u32::try_from(byte_length)

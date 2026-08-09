@@ -13,9 +13,10 @@ use super::{
         validate_input,
     },
     plan_packing::{
-        MAX_PHYSICAL_BUFFERS, PackingError, PendingAllocation, PhysicalBufferState, RecordRange,
-        align_record_range, align_up, apply_writes, buffer_record_alignment,
-        coalesce_buffer_ranges, execute_run, grown_capacity, record_alignment, take_allocation,
+        MAX_PHYSICAL_BUFFERS, PackingError, PendingAllocation, PhysicalBufferState, RangeJob,
+        RecordRange, align_record_range, align_up, apply_writes, buffer_record_alignment,
+        coalesce_buffer_ranges, collect_range_jobs, execute_run, grown_capacity, record_alignment,
+        take_allocation,
     },
     policy::{
         ALLOCATION_ORDERED_DIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BufferSchema, CapabilitySetId,
@@ -141,6 +142,7 @@ pub struct OrderedPlanCompiler {
     batch_cursors: Vec<u32>,
     changed_ranges: Vec<RecordRange>,
     buffer_ranges: [Vec<RecordRange>; MAX_PHYSICAL_BUFFERS],
+    range_jobs: Vec<RangeJob>,
     resources: Vec<ResourceRecord>,
     plan_buffers: Vec<BufferRecord>,
     primitives: Vec<PrimitiveRecord>,
@@ -774,13 +776,22 @@ impl OrderedPlanCompiler {
                 pending.state.instance_count,
             )?;
         }
-        for schema_index in 0..program.buffers.len() {
-            let schema = program.buffers[schema_index];
-            for range_index in 0..self.buffer_ranges[schema_index].len() {
-                let aligned = self.buffer_ranges[schema_index][range_index];
-                let count = aligned.end - aligned.start;
-                let active_buffers = 1 << schema_index;
-                let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
+        collect_range_jobs(
+            &mut self.range_jobs,
+            &self.buffer_ranges,
+            program.buffers.len(),
+        )?;
+        for job_index in 0..self.range_jobs.len() {
+            let RangeJob {
+                range: aligned,
+                active_buffers,
+            } = self.range_jobs[job_index];
+            let count = aligned.end - aligned.start;
+            let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
+            for (schema_index, schema) in program.buffers.iter().enumerate() {
+                if active_buffers & (1 << schema_index) == 0 {
+                    continue;
+                }
                 let byte_count = usize::try_from(count)
                     .ok()
                     .and_then(|value| value.checked_mul(schema.stride()))
@@ -801,38 +812,42 @@ impl OrderedPlanCompiler {
                             .copy_from_slice(&old_buffer.bytes[source_start..source_end]);
                     }
                 }
+            }
 
-                let mut slot = aligned.start;
-                while slot < aligned.end.min(pending.state.instance_count) {
-                    if instance_unchanged(prior_instances, next_instances, slot, replace) {
-                        slot += 1;
-                        continue;
-                    }
-                    let input_start = next_instances[slot as usize].input_index;
-                    let run_start = slot;
+            let mut slot = aligned.start;
+            while slot < aligned.end.min(pending.state.instance_count) {
+                if instance_unchanged(prior_instances, next_instances, slot, replace) {
                     slot += 1;
-                    while slot < aligned.end.min(pending.state.instance_count)
-                        && !instance_unchanged(prior_instances, next_instances, slot, replace)
-                        && next_instances[slot as usize].input_index
-                            == input_start + (slot - run_start)
-                    {
-                        slot += 1;
-                    }
-                    execute_run(
-                        policy,
-                        capability_set,
-                        program,
-                        input,
-                        input_start as usize,
-                        slot - run_start,
-                        run_start - aligned.start,
-                        &mut self.payload,
-                        &payload_starts,
-                        count,
-                        active_buffers,
-                    )?;
+                    continue;
                 }
+                let input_start = next_instances[slot as usize].input_index;
+                let run_start = slot;
+                slot += 1;
+                while slot < aligned.end.min(pending.state.instance_count)
+                    && !instance_unchanged(prior_instances, next_instances, slot, replace)
+                    && next_instances[slot as usize].input_index == input_start + (slot - run_start)
+                {
+                    slot += 1;
+                }
+                execute_run(
+                    policy,
+                    capability_set,
+                    program,
+                    input,
+                    input_start as usize,
+                    slot - run_start,
+                    run_start - aligned.start,
+                    &mut self.payload,
+                    &payload_starts,
+                    count,
+                    active_buffers,
+                )?;
+            }
 
+            for (schema_index, schema) in program.buffers.iter().enumerate() {
+                if active_buffers & (1 << schema_index) == 0 {
+                    continue;
+                }
                 let buffer_id = pending.buffer_ids[schema_index];
                 let buffer_generation = pending.buffer_generations[schema_index];
                 let byte_length = count

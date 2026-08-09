@@ -2,6 +2,12 @@
 
 ## 2026-08-09
 
+- **Completed adaptive Rust planning for physical and stable-order buffers without accepting repeated packing** — The
+  first per-buffer execution prototype regressed cold Bitmap/MTSDF/Slug by roughly 1.2/2.2/2.4 ms. Grouping identical
+  selected ranges back into one active-buffer job closes that regression while preserving independent costing and
+  committed gap bytes. Canonical before/after results are mixed and standard resize remains one unchanged-size patch, so
+  sparse browser upload evidence is still required before claiming a win.
+
 - **Started per-physical-buffer dirty-range costing without changing publication** — Added a stride-specific Rust
   coalescer with exact tests for divergent narrow/wide gap decisions, fragmentation and 75% full-live promotion, zero
   stride, and overflow. Existing ordered/stable callers remain on the compatibility wrapper until the next atomic
