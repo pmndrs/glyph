@@ -37,7 +37,7 @@ sources:
     title: Three r185 legacy WebGL attribute uploads
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T13:51:48Z'
+  at: '2026-08-09T13:57:12Z'
 ---
 
 # Adaptive dirty-range uploads for retained text plans
@@ -256,8 +256,9 @@ three raster techniques. Backend-specific constants are acceptable; backend-spec
 - The current text capability values have not been swept against actual `writeBuffer`, `bufferSubData`, or PBO texture
   costs.
 - The stride-specific Rust coalescing primitive is implemented with focused gap, fragmentation, full-live, and overflow
-  tests. Ordered-direct, stable-indirect physical storage, and the order buffer still use the compatibility path, so
-  per-buffer publication has not yet been implemented or measured.
+  tests. Ordered-direct and stable-indirect physical storage now retain one reusable range vector per possible physical
+  buffer, select ranges through exact semantic dependency masks, align for that buffer's stride, and cost it separately.
+  The stable order buffer still bypasses this path, and end-to-end publication has not yet been measured.
 - Safari GC attributed to update-range objects has not been isolated from other known per-frame allocations.
 - Partial WebGL fallback PBO texture upload has not been proven through Three r185.
 

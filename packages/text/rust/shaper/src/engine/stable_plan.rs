@@ -15,8 +15,8 @@ use super::{
     },
     plan_packing::{
         MAX_PHYSICAL_BUFFERS, PackingError, PendingAllocation, PhysicalBufferState, RecordRange,
-        align_record_range, align_up, apply_writes, coalesce_ranges, execute_run, grown_capacity,
-        record_alignment, take_allocation,
+        align_record_range, align_up, apply_writes, buffer_record_alignment,
+        coalesce_buffer_ranges, execute_run, grown_capacity, record_alignment, take_allocation,
     },
     policy::{
         ALLOCATION_STABLE_INDIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BUFFER_USAGE_COPY_DST,
@@ -243,6 +243,7 @@ pub struct StablePlanCompiler {
     order_chunk_scratch: Vec<PendingChunk>,
     slot_writes: Vec<SlotWrite>,
     changed_ranges: Vec<RecordRange>,
+    buffer_ranges: [Vec<RecordRange>; MAX_PHYSICAL_BUFFERS],
     identity_keys: Vec<u32>,
     identity_epochs: Vec<u32>,
     identity_epoch: u32,
@@ -863,16 +864,10 @@ impl StablePlanCompiler {
             }
         }
         let required_slots = batch.slots.required_slots()?;
-        coalesce_ranges(
-            &mut self.changed_ranges,
-            program,
-            context.capability,
-            required_slots,
-        )?;
-        let record_alignment = record_alignment(program, context.capability.update_alignment)?;
-        for range_index in 0..self.changed_ranges.len() {
-            let changed = align_record_range(self.changed_ranges[range_index], record_alignment)?;
-            let count = changed.end - changed.start;
+        for ranges in &mut self.buffer_ranges {
+            ranges.clear();
+        }
+        for changed in self.changed_ranges.iter().copied() {
             let active_buffers = stable_active_buffers(
                 context.policy,
                 context.capability_set,
@@ -882,11 +877,32 @@ impl StablePlanCompiler {
                 changed,
                 replace,
             )?;
-            let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
             for (schema_index, schema) in program.buffers.iter().enumerate() {
                 if active_buffers & (1 << schema_index) == 0 {
                     continue;
                 }
+                reserve(&mut self.buffer_ranges[schema_index], 1)?;
+                self.buffer_ranges[schema_index].push(align_record_range(
+                    changed,
+                    buffer_record_alignment(schema, context.capability.update_alignment),
+                )?);
+            }
+        }
+        for (schema_index, schema) in program.buffers.iter().enumerate() {
+            coalesce_buffer_ranges(
+                &mut self.buffer_ranges[schema_index],
+                u32::from(schema.stride),
+                context.capability,
+                required_slots,
+            )?;
+        }
+        for schema_index in 0..program.buffers.len() {
+            let schema = program.buffers[schema_index];
+            for range_index in 0..self.buffer_ranges[schema_index].len() {
+                let changed = self.buffer_ranges[schema_index][range_index];
+                let count = changed.end - changed.start;
+                let active_buffers = 1 << schema_index;
+                let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
                 let byte_count = count as usize * schema.stride();
                 let payload_start = self.payload.len();
                 reserve(&mut self.payload, byte_count)?;
@@ -905,46 +921,41 @@ impl StablePlanCompiler {
                         .ok_or(StablePlanError::InvalidIdentity)?;
                     self.payload[payload_start..payload_start + byte_count].copy_from_slice(source);
                 }
-            }
-            let mut write_index = self
-                .slot_writes
-                .partition_point(|write| write.slot < changed.start);
-            while write_index < self.slot_writes.len()
-                && self.slot_writes[write_index].slot < changed.end
-            {
-                if !replace && !self.slot_writes[write_index].changed {
-                    write_index += 1;
-                    continue;
-                }
-                let first = self.slot_writes[write_index];
-                let mut end = write_index + 1;
-                while end < self.slot_writes.len()
-                    && self.slot_writes[end].slot == first.slot + (end - write_index) as u32
-                    && self.slot_writes[end].input_index
-                        == first.input_index + (end - write_index) as u32
-                    && (replace || self.slot_writes[end].changed)
-                    && self.slot_writes[end].slot < changed.end
+                let mut write_index = self
+                    .slot_writes
+                    .partition_point(|write| write.slot < changed.start);
+                while write_index < self.slot_writes.len()
+                    && self.slot_writes[write_index].slot < changed.end
                 {
-                    end += 1;
-                }
-                execute_run(
-                    context.policy,
-                    context.capability_set,
-                    program,
-                    context.input,
-                    first.input_index as usize,
-                    (end - write_index) as u32,
-                    first.slot - changed.start,
-                    &mut self.payload,
-                    &payload_starts,
-                    count,
-                    active_buffers,
-                )?;
-                write_index = end;
-            }
-            for (schema_index, schema) in program.buffers.iter().enumerate() {
-                if active_buffers & (1 << schema_index) == 0 {
-                    continue;
+                    if !replace && !self.slot_writes[write_index].changed {
+                        write_index += 1;
+                        continue;
+                    }
+                    let first = self.slot_writes[write_index];
+                    let mut end = write_index + 1;
+                    while end < self.slot_writes.len()
+                        && self.slot_writes[end].slot == first.slot + (end - write_index) as u32
+                        && self.slot_writes[end].input_index
+                            == first.input_index + (end - write_index) as u32
+                        && (replace || self.slot_writes[end].changed)
+                        && self.slot_writes[end].slot < changed.end
+                    {
+                        end += 1;
+                    }
+                    execute_run(
+                        context.policy,
+                        context.capability_set,
+                        program,
+                        context.input,
+                        first.input_index as usize,
+                        (end - write_index) as u32,
+                        first.slot - changed.start,
+                        &mut self.payload,
+                        &payload_starts,
+                        count,
+                        active_buffers,
+                    )?;
+                    write_index = end;
                 }
                 reserve(&mut self.patches, 1)?;
                 self.patches.push(PatchRecord {

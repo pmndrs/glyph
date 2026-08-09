@@ -200,10 +200,12 @@ pub fn record_alignment(
     byte_alignment: u32,
 ) -> Result<u32, PackingError> {
     program.buffers.iter().try_fold(1_u32, |records, schema| {
-        let stride = u32::from(schema.stride);
-        let divisor = gcd(byte_alignment, stride);
-        lcm(records, byte_alignment / divisor)
+        lcm(records, buffer_record_alignment(schema, byte_alignment))
     })
+}
+
+pub fn buffer_record_alignment(schema: &super::policy::BufferSchema, byte_alignment: u32) -> u32 {
+    byte_alignment / gcd(byte_alignment, u32::from(schema.stride))
 }
 
 pub fn align_up(value: u32, alignment: u32) -> Result<u32, PackingError> {
@@ -221,20 +223,6 @@ pub fn align_record_range(range: RecordRange, alignment: u32) -> Result<RecordRa
         .map(|value| value / alignment * alignment)
         .ok_or(PackingError::ArithmeticOverflow)?;
     Ok(RecordRange { start, end })
-}
-
-pub fn coalesce_ranges(
-    ranges: &mut alloc::vec::Vec<RecordRange>,
-    program: &super::policy::ProgramDescriptor,
-    capability: &super::policy::CapabilitySet,
-    live_records: u32,
-) -> Result<(), PackingError> {
-    let bytes_per_record = program.buffers.iter().try_fold(0_u32, |total, schema| {
-        total
-            .checked_add(u32::from(schema.stride))
-            .ok_or(PackingError::ArithmeticOverflow)
-    })?;
-    coalesce_buffer_ranges(ranges, bytes_per_record, capability, live_records)
 }
 
 pub fn coalesce_buffer_ranges(
