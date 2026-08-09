@@ -2,6 +2,14 @@
 
 ## 2026-08-08
 
+- **Promoted complete frame-request serialization into production** — A package-internal compiler now lowers text
+  mutations; full style records; constraints; sequential rectangle or polygon regions; polygon exclusions; inline
+  objects; policy parameters; and revision/fence state into one compiler-mapped allocation. It performs no shaping,
+  layout, batching, or packing. The current benchmark request is byte-identical to its established helper, including a
+  surrogate pair, while a broad structural fixture covers language, OpenType features, material, word/letter spacing,
+  baseline shift, decoration, vertical mode, holes, and inline objects. Public-state normalization and a real rich-frame
+  Rust acceptance test remain part of the Three cutover.
+
 - **Compiled the first production Three policy and raster bindings** — One deterministic policy now registers Bitmap,
   MTSDF, and Slug together against the retained Rust planner. Draw identity includes numeric `material_id`; storage
   identity excludes it, so a renderer may share physical buffers while splitting draws by material. Production binding

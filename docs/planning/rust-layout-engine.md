@@ -1205,6 +1205,15 @@ deterministically to nonzero `u32` values with UTF-8 FNV-1a, while a runtime-sco
 both domains. This is production policy/binding compilation, not the Three cutover: the public adapter still consumes
 legacy paragraph batches until frame-request compilation and render-plan lowering land.
 
+Production frame serialization now covers the complete current request ABI in one final allocation: text mutations;
+root and range styles; language and feature payloads; typography, paint, material, and decoration fields; constraints;
+sequential rectangle or polygon regions; exclusion holes; inline objects; policy bytes; and revision/fence state. It
+contains no shaping, layout, batching, or record-packing logic. For the existing rectangle stress case, the production
+bytes are exactly equal to the established benchmark helper, including UTF-16 surrogate handling. A broad structural
+fixture covers every variable table and the vertical/polygon/decorated lanes. The remaining proof is deliberately
+scoped: normalize actual public Three state into this descriptor, submit a rich request to Rust, then lower the returned
+plan; structural serialization alone is not that cutover.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement

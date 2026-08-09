@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:4987208b99eecd7f622a65d67ec9682da6dee9cb4d804b264fcbccf8197f37de'
+source_digest: 'sha256:60839e34e40a58bf01bdc41b1754318b027e132d66d61e6dad0702f8da70b820'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -128,6 +128,9 @@ sources:
   - id: text-engine-host
     resource: ../../packages/text/src/internal/text-engine-host.ts
     title: Retained frame host
+  - id: engine-frame-wire
+    resource: ../../packages/text/src/internal/engine-frame-wire.ts
+    title: Complete retained-frame request compiler
   - id: raster-validation
     resource: ../../packages/text/src/internal/raster-artifact-validation.ts
     title: Shared standalone raster artifact validation
@@ -738,6 +741,15 @@ tests compare every emitted lane with the established real-font renderer-parity 
 resource IDs lower through deterministic UTF-8 FNV-1a into the wire's nonzero `u32` namespace, and one runtime-scoped
 registry rejects any collision before Rust registration. The policy and binding bytes are still package-internal;
 public third-party policy authoring and Three render-plan consumption remain open.
+
+Frame-request serialization is also production code rather than a benchmark helper. One final `Uint8Array` carries
+text replacements; root and span style mutations; language and OpenType feature payloads; material, paint, decoration,
+letter/word spacing and baseline shift; multiple constraints and sequential rectangle or polygon regions; exclusion
+holes; inline objects; policy parameters; and publication-fence state. The compiler only validates fixed-width host
+values and writes the generated ABI—it does not shape, lay out, batch, or pack text. Its current rectangle request is
+byte-identical to the established benchmark helper, including surrogate-pair UTF-16. A broad structural fixture proves
+all variable tables and payload offsets; acceptance of normalized rich public state by a real Rust session remains an
+open Three-cutover gate.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 
