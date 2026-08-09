@@ -2,6 +2,13 @@
 
 ## 2026-08-08
 
+- **Executed MSDF from the Rust command buffer** — Extended the shared Three plan executor rather than adding another
+  target path. Rust policy buffers 1–7 bind directly as MSDF `vec4` storage, buffer 15 indexes the shared transform
+  sidecar, the renderer resolves and builds the validated layered atlas once, and the canonical `msdfShader` remains the
+  coverage authority. A compiled-Wasm fixture changes two retained paragraphs from Bitmap-first to MSDF-first fallback
+  without text or geometry resend and receives one six-instance program-2 draw. Wasm bytes are unchanged. Live pixels,
+  Slug, bounded retirement, material factories, and public cutover remain open.
+
 - **Made transform batching policy-selectable and executed indexed Bitmap draws** — Corrected the temporary global
   transform draw boundary. Programs may now split on transform and consume nonzero draw-level IDs, or omit that key and
   pack stable region transform slots into first-party policy buffer 15. The Bitmap Three executor applies Rust buffer

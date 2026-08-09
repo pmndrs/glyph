@@ -6,8 +6,10 @@ import type { TextEnginePublication } from '../internal/text-engine-host.js';
 import { FIRST_PARTY_TRANSFORM_BUFFER_ID } from '../internal/render-policy-wire.js';
 import { TextEngineRenderPlanView, type RenderPlanTable } from '../internal/render-plan-view.js';
 import { bitmap, type BitmapPageData } from '../raster/bitmap-technique.js';
+import { msdf, type MsdfData } from '../raster/msdf.js';
 import { bitmapShader } from './bitmap-shader.js';
 import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-runtime.js';
+import { msdfShader } from './msdf-shader.js';
 import { invalidatePboTexture } from './retained-target.js';
 
 type ScalarArray = Float32Array | Uint32Array | Uint16Array;
@@ -44,6 +46,7 @@ export class ThreeTextEnginePlanTarget {
   readonly #buffers = new Map<number, RetainedBuffer>();
   readonly #resources = new Map<number, RetainedResource>();
   readonly #bitmapTextures = new Map<number, THREE.DataTexture>();
+  readonly #msdfAtlases = new Map<number, THREE.DataArrayTexture>();
   readonly #materials = new Map<string, THREE.MeshBasicNodeMaterial>();
   readonly #activeTransformIndices = new Set<number>();
   readonly #rootInverse = new THREE.Matrix4();
@@ -68,6 +71,10 @@ export class ThreeTextEnginePlanTarget {
     bytes += this.#transformAttribute.array.byteLength;
     for (const texture of this.#bitmapTextures.values()) {
       const data = texture.image.data as ArrayBufferView | undefined;
+      bytes += data?.byteLength ?? 0;
+    }
+    for (const atlas of this.#msdfAtlases.values()) {
+      const data = atlas.image.data as ArrayBufferView | undefined;
       bytes += data?.byteLength ?? 0;
     }
     return bytes;
@@ -126,8 +133,10 @@ export class ThreeTextEnginePlanTarget {
     this.#disposeDraws();
     for (const material of this.#materials.values()) material.dispose();
     for (const texture of this.#bitmapTextures.values()) texture.dispose();
+    for (const atlas of this.#msdfAtlases.values()) atlas.dispose();
     this.#materials.clear();
     this.#bitmapTextures.clear();
+    this.#msdfAtlases.clear();
     this.#buffers.clear();
     this.#resources.clear();
     this.#activeTransformIndices.clear();
@@ -263,7 +272,7 @@ export class ThreeTextEnginePlanTarget {
         const resource = this.#resources.get(plan.u32(resourceRecord + resourceLayout.id));
         if (resource === undefined) throw new Error('draw references an unknown retained resource');
         const materialId = plan.u32(draw + drawLayout.materialId);
-        const material = this.#bitmapMaterial(resource, byPolicyId, materialId);
+        const material = this.#material(resource, byPolicyId, materialId);
         const geometry = unitQuad();
         geometry.instanceCount = plan.u16(primitive + primitiveLayout.recordCount);
         for (const buffer of byPolicyId.values()) {
@@ -402,6 +411,81 @@ export class ThreeTextEnginePlanTarget {
     return material;
   }
 
+  #material(
+    resource: RetainedResource,
+    buffers: ReadonlyMap<number, RetainedBuffer>,
+    materialId: number,
+  ): THREE.MeshBasicNodeMaterial {
+    const resolved = this.#coordinator.resolveResource(resource.referenceId);
+    if (resolved.technique === bitmap.id) return this.#bitmapMaterial(resource, buffers, materialId);
+    if (resolved.technique === msdf.id) return this.#msdfMaterial(resource, buffers, materialId);
+    throw new Error('this Three plan target checkpoint does not yet realize Slug draws');
+  }
+
+  #msdfMaterial(
+    resource: RetainedResource,
+    buffers: ReadonlyMap<number, RetainedBuffer>,
+    materialId: number,
+  ): THREE.MeshBasicNodeMaterial {
+    const data = msdfData(this.#coordinator.resolveResource(resource.referenceId));
+    const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
+      const buffer = buffers.get(id);
+      if (buffer === undefined) throw new Error(`MSDF draw is missing policy buffer ${id}`);
+      return buffer;
+    });
+    const transformIndices = buffers.get(FIRST_PARTY_TRANSFORM_BUFFER_ID);
+    if (transformIndices === undefined) throw new Error('MSDF draw is missing its transform-index buffer');
+    const key = `msdf:${resource.id}:${resource.generation}:${materialId}:${required
+      .map((buffer) => `${buffer.id}:${buffer.generation}`)
+      .join(',')}:${transformIndices.id}:${transformIndices.generation}:transform:${this.#transformGeneration}`;
+    let material = this.#materials.get(key);
+    if (material !== undefined) return material;
+    const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
+      ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
+    );
+    const instance = TSL.instanceIndex.add(runStart);
+    const fields = required.map((buffer) =>
+      TSL.storage(buffer.attribute, 'vec4', buffer.attribute.count).setPBO(true).element(instance),
+    );
+    const shader = msdfShader(
+      {
+        origin: fields[0]!.xy,
+        size: fields[0]!.zw,
+        uvOrigin: fields[1]!.xy,
+        uvSize: fields[1]!.zw,
+        uvBounds: fields[2]!,
+        fillColor: fields[3]!,
+        outlineColor: fields[4]!,
+        shadowColor: fields[5]!,
+        shadowOffset: fields[6]!.xy,
+        outlineWidth: fields[6]!.z,
+        pageIndex: fields[6]!.w,
+      },
+      {
+        atlas: this.#msdfAtlas(resource.referenceId, data),
+        atlasWidth: data.binding.width,
+        atlasHeight: data.binding.height,
+        pixelRange: data.pixelRange,
+      },
+    );
+    material = new THREE.MeshBasicNodeMaterial({
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      transparent: true,
+    });
+    material.positionNode = indexedTransformPosition(
+      shader.position,
+      transformIndices.attribute,
+      this.#transformAttribute,
+      instance,
+    );
+    material.colorNode = shader.color;
+    material.opacityNode = shader.opacity;
+    this.#materials.set(key, material);
+    return material;
+  }
+
   #bitmapTexture(referenceId: number, page: BitmapPageData): THREE.DataTexture {
     let texture = this.#bitmapTextures.get(referenceId);
     if (texture !== undefined) return texture;
@@ -414,6 +498,30 @@ export class ThreeTextEnginePlanTarget {
     texture.needsUpdate = true;
     this.#bitmapTextures.set(referenceId, texture);
     return texture;
+  }
+
+  #msdfAtlas(referenceId: number, data: MsdfData): THREE.DataArrayTexture {
+    let atlas = this.#msdfAtlases.get(referenceId);
+    if (atlas !== undefined) return atlas;
+    const bytes = new Uint8Array(data.binding.width * data.binding.height * data.binding.layers * 4);
+    for (let layer = 0; layer < data.pages.length; layer += 1) {
+      const page = data.pages[layer]!;
+      for (let row = 0; row < page.height; row += 1) {
+        const source = row * page.width * 4;
+        const target = (layer * data.binding.height + row) * data.binding.width * 4;
+        bytes.set(page.bytes.subarray(source, source + page.width * 4), target);
+      }
+    }
+    atlas = new THREE.DataArrayTexture(bytes, data.binding.width, data.binding.height, data.binding.layers);
+    atlas.format = THREE.RGBAFormat;
+    atlas.type = THREE.UnsignedByteType;
+    atlas.colorSpace = THREE.NoColorSpace;
+    atlas.magFilter = THREE.LinearFilter;
+    atlas.minFilter = THREE.LinearFilter;
+    atlas.generateMipmaps = false;
+    atlas.needsUpdate = true;
+    this.#msdfAtlases.set(referenceId, atlas);
+    return atlas;
   }
 
   #applyRetirements(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
@@ -449,6 +557,13 @@ function bitmapPage(resource: ThreeTextEngineResource): BitmapPageData {
     throw new Error('this Three plan target checkpoint realizes Bitmap draws only');
   }
   return resource.page as BitmapPageData;
+}
+
+function msdfData(resource: ThreeTextEngineResource): MsdfData {
+  if (resource.technique !== msdf.id || !('data' in resource)) {
+    throw new Error('Three MSDF draw references an incompatible resource');
+  }
+  return resource.data;
 }
 
 function scalarArray(scalarType: number, byteLength: number): ScalarArray {
