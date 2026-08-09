@@ -2,6 +2,12 @@
 
 ## 2026-08-09
 
+- **Closed the retained paragraph browser matrix under the f32 frame contract** — The sole UIKit mismatch was a stale
+  JavaScript-double style-input expectation, not a Rust or Yoga precision defect. Independent f32 line-box arithmetic
+  reproduces the retained engine's final baseline, content height, centered final row, and exact layout hash. The public
+  browser target now passes two bidi, nine policy, twelve CJK, and one UIKit-shaped contract without runtime widening or
+  comparison tolerances.
+
 - **Separated final customer timing from temporary phase instrumentation** — The public Three workload can now retain a
   single outside timer while disabling its internal phase collector. A 25,515-glyph, 31-sample release-artifact run
   measures complete frame preparation, Rust update/render-plan publication, and Three application without internal clock
