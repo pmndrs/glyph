@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:ae50b899148c1413445945b56f61b230046f081ac4a724a9001389db0f4c57f4'
+source_digest: 'sha256:4987208b99eecd7f622a65d67ec9682da6dee9cb4d804b264fcbccf8197f37de'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -119,6 +119,15 @@ sources:
   - id: raster-records
     resource: ../../packages/text/src/internal/raster-records.ts
     title: Shared dependency-light dense-record validation
+  - id: render-policy-wire
+    resource: ../../packages/text/src/internal/render-policy-wire.ts
+    title: First-party render-policy compiler
+  - id: font-binding-wire
+    resource: ../../packages/text/src/internal/font-binding-wire.ts
+    title: First-party font-binding compiler
+  - id: text-engine-host
+    resource: ../../packages/text/src/internal/text-engine-host.ts
+    title: Retained frame host
   - id: raster-validation
     resource: ../../packages/text/src/internal/raster-artifact-validation.ts
     title: Shared standalone raster artifact validation
@@ -719,6 +728,16 @@ as a borrowed direct-memory view. The host does not decode typography or copy pl
 test publishes alternating slots and proves the preceding slot remains byte-stable. This is the production ABI seam;
 the public runtime and Three adapter still use the legacy paragraph-batch path until request/policy compilation and GPU
 plan lowering are connected.
+
+The first production Three policy registers Bitmap, MTSDF, and Slug together rather than assigning a synthetic
+per-benchmark technique number. Its storage key includes technique, program, and raster resource; its draw key adds
+`material_id`, clip, depth, and order. A renderer can therefore retain one physical glyph buffer across material
+changes while emitting the draw partitions its backend requires. Production font-binding compilers lower validated
+bitmap strikes, MTSDF glyph records, and Slug bands directly into one field-major request allocation. Exact integration
+tests compare every emitted lane with the established real-font renderer-parity tables. Public string technique and
+resource IDs lower through deterministic UTF-8 FNV-1a into the wire's nonzero `u32` namespace, and one runtime-scoped
+registry rejects any collision before Rust registration. The policy and binding bytes are still package-internal;
+public third-party policy authoring and Three render-plan consumption remain open.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

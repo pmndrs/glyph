@@ -1195,6 +1195,16 @@ TypeScript and does not create a second module instance. A compiled-Wasm integra
 slots A/B while proving publication B leaves A byte-stable. The Three adapter is not switched by this slice; production
 request/policy compilation and plan lowering remain open and are not claimed by the host proof.
 
+The next production slice compiles one Three policy containing the complete first-party Bitmap, MTSDF, and Slug
+program set and compiles validated raster artifacts into the corresponding immutable field-major font bindings. The
+compiler allocates one final binding request rather than materializing per-field arrays. Exact fixture comparison covers
+every emitted lane, and the combined policy registers in the real Wasm module. Technique, program, and resource form
+storage identity; `material_id`, clip, depth, and order additionally form draw identity, preserving renderer authority
+to share storage or split physical buffers without placing a callback in Wasm. String technique and resource IDs map
+deterministically to nonzero `u32` values with UTF-8 FNV-1a, while a runtime-scoped registry rejects collisions across
+both domains. This is production policy/binding compilation, not the Three cutover: the public adapter still consumes
+legacy paragraph batches until frame-request compilation and render-plan lowering land.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement
