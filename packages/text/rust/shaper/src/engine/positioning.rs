@@ -49,6 +49,8 @@ pub(crate) struct SemanticGlyph {
 #[derive(Default)]
 pub(crate) struct PositionedGlyphArena {
     glyphs: Vec<LayoutGlyph>,
+    line_glyph_starts: Vec<u32>,
+    line_glyph_counts: Vec<u32>,
     semantic_glyphs: Vec<SemanticGlyph>,
     semantic_line_glyph_starts: Vec<u32>,
     semantic_line_glyph_counts: Vec<u32>,
@@ -96,14 +98,28 @@ impl PositionedGlyphArena {
     ) -> Result<(), EngineError> {
         self.clear();
         self.reserve(shape.glyph_ids.len())?;
+        reserve(&mut self.line_glyph_starts, flow.lines.len())?;
+        reserve(&mut self.line_glyph_counts, flow.lines.len())?;
         reserve(&mut self.semantic_line_glyph_starts, flow.lines.len())?;
         reserve(&mut self.semantic_line_glyph_counts, flow.lines.len())?;
         reserve(&mut self.semantic_line_inline_extents, flow.lines.len())?;
         let visually_ltr = is_trivially_ltr(bidi, runs);
         for (line_index, line) in flow.lines.iter().copied().enumerate() {
+            if flow
+                .recomposed_line_range()
+                .is_some_and(|(start, end)| line_index < start || line_index >= end)
+            {
+                self.append_retained_line(previous, line_index)?;
+                continue;
+            }
+            let line_glyph_start = self.glyphs.len();
             let semantic_line_start = self.semantic_glyphs.len();
             let fragments = line_fragments(flow, line)?;
             if fragments.is_empty() {
+                self.line_glyph_starts.push(
+                    u32::try_from(line_glyph_start).map_err(|_| EngineError::ResultTooLarge)?,
+                );
+                self.line_glyph_counts.push(0);
                 self.semantic_line_glyph_starts.push(
                     u32::try_from(semantic_line_start).map_err(|_| EngineError::ResultTooLarge)?,
                 );
@@ -160,12 +176,103 @@ impl PositionedGlyphArena {
             );
             self.semantic_line_inline_extents
                 .push((inline_end - inline_start).max(0.0));
+            self.line_glyph_starts
+                .push(u32::try_from(line_glyph_start).map_err(|_| EngineError::ResultTooLarge)?);
+            self.line_glyph_counts.push(
+                u32::try_from(self.glyphs.len().saturating_sub(line_glyph_start))
+                    .map_err(|_| EngineError::ResultTooLarge)?,
+            );
         }
         self.assign_content_revisions(previous, identity_index, next_content_revision)
     }
 
+    fn append_retained_line(
+        &mut self,
+        previous: &Self,
+        line_index: usize,
+    ) -> Result<(), EngineError> {
+        let glyph_start = usize::try_from(
+            *previous
+                .line_glyph_starts
+                .get(line_index)
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let glyph_count = usize::try_from(
+            *previous
+                .line_glyph_counts
+                .get(line_index)
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let glyph_end = glyph_start
+            .checked_add(glyph_count)
+            .ok_or(EngineError::InvalidRequest)?;
+        let semantic_start = usize::try_from(
+            *previous
+                .semantic_line_glyph_starts
+                .get(line_index)
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let semantic_count = usize::try_from(
+            *previous
+                .semantic_line_glyph_counts
+                .get(line_index)
+                .ok_or(EngineError::InvalidRequest)?,
+        )
+        .map_err(|_| EngineError::InvalidRequest)?;
+        let semantic_end = semantic_start
+            .checked_add(semantic_count)
+            .ok_or(EngineError::InvalidRequest)?;
+        self.line_glyph_starts
+            .push(u32::try_from(self.glyphs.len()).map_err(|_| EngineError::ResultTooLarge)?);
+        self.line_glyph_counts
+            .push(u32::try_from(glyph_count).map_err(|_| EngineError::ResultTooLarge)?);
+        self.glyphs.extend_from_slice(
+            previous
+                .glyphs
+                .get(glyph_start..glyph_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        for (target, source) in self.semantic_f32.iter_mut().zip(&previous.semantic_f32) {
+            target.extend_from_slice(
+                source
+                    .get(glyph_start..glyph_end)
+                    .ok_or(EngineError::InvalidRequest)?,
+            );
+        }
+        for (target, source) in self.semantic_u32.iter_mut().zip(&previous.semantic_u32) {
+            target.extend_from_slice(
+                source
+                    .get(glyph_start..glyph_end)
+                    .ok_or(EngineError::InvalidRequest)?,
+            );
+        }
+        self.semantic_line_glyph_starts.push(
+            u32::try_from(self.semantic_glyphs.len()).map_err(|_| EngineError::ResultTooLarge)?,
+        );
+        self.semantic_line_glyph_counts
+            .push(u32::try_from(semantic_count).map_err(|_| EngineError::ResultTooLarge)?);
+        self.semantic_line_inline_extents.push(
+            *previous
+                .semantic_line_inline_extents
+                .get(line_index)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        self.semantic_glyphs.extend_from_slice(
+            previous
+                .semantic_glyphs
+                .get(semantic_start..semantic_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        Ok(())
+    }
+
     pub(crate) fn clear(&mut self) {
         self.glyphs.clear();
+        self.line_glyph_starts.clear();
+        self.line_glyph_counts.clear();
         self.semantic_glyphs.clear();
         self.semantic_line_glyph_starts.clear();
         self.semantic_line_glyph_counts.clear();

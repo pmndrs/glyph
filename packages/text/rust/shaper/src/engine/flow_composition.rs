@@ -72,6 +72,7 @@ pub(crate) struct FlowLayoutArena {
     pub lines: Vec<FlowLine>,
     pub fragments: Vec<FlowFragment>,
     pub(crate) ellipsis_threads: Vec<u32>,
+    pub(crate) recomposed_lines: Option<(usize, usize)>,
 }
 
 impl FlowLayoutArena {
@@ -209,6 +210,155 @@ impl FlowLayoutArena {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub(crate) fn rebuild_one_line_if_state_converges(
+        &mut self,
+        previous: &Self,
+        geometry: &FlowGeometryArena,
+        previous_clusters: &ClusterArena,
+        clusters: &ClusterArena,
+        styles: &[StyleSegment],
+        slots: &mut InlineSlotArena,
+        edit_offset: u32,
+        max_lines: usize,
+        max_slots_per_band: usize,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+    ) -> Result<bool, EngineError> {
+        self.clear();
+        if !previous.ellipsis_threads.is_empty()
+            || previous.lines.is_empty()
+            || previous.lines.len() > max_lines
+            || previous.lines.iter().any(|line| {
+                usize::try_from(line.fragment_count)
+                    .map_or(true, |count| count > max_slots_per_band)
+            })
+            || previous_clusters.starts.len() != clusters.starts.len()
+        {
+            return Ok(false);
+        }
+        let Some(line_index) = previous.lines.iter().position(|line| {
+            line_fragments(previous, *line).is_ok_and(|fragments| {
+                fragments.iter().any(|fragment| {
+                    fragment.line.text_start <= edit_offset
+                        && edit_offset
+                            < fragment
+                                .line
+                                .text_end
+                                .max(fragment.line.text_start.saturating_add(1))
+                })
+            })
+        }) else {
+            return Ok(false);
+        };
+        let old_line = previous.lines[line_index];
+        let old_fragments = line_fragments(previous, old_line)?;
+        let Some(first_fragment) = old_fragments.first() else {
+            return Ok(false);
+        };
+        let Some(last_fragment) = old_fragments.last() else {
+            return Ok(false);
+        };
+        let cluster_start = usize::try_from(first_fragment.line.cluster_start)
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let old_cluster_end = usize::try_from(last_fragment.line.cluster_end)
+            .map_err(|_| EngineError::InvalidRequest)?;
+        if previous_clusters.stable_ids.get(cluster_start) != clusters.stable_ids.get(cluster_start)
+            || (old_cluster_end < clusters.stable_ids.len()
+                && previous_clusters.stable_ids.get(old_cluster_end)
+                    != clusters.stable_ids.get(old_cluster_end))
+        {
+            return Ok(false);
+        }
+        let Some(region_index) = geometry
+            .regions
+            .iter()
+            .position(|region| region.record.id == old_line.region_id)
+        else {
+            return Ok(false);
+        };
+        let region = geometry
+            .regions
+            .get(region_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        for prefix in 0..line_index {
+            self.append_retained_line(previous, prefix)?;
+        }
+        let mut cursor = LineCursor::at_cluster(cluster_start);
+        let composed_start = self.fragments.len();
+        let Some(height) = self.compose_band(
+            geometry,
+            region_index,
+            old_line.flow_thread_id,
+            old_line.region_id,
+            old_line.transform_index,
+            old_line.clip_id,
+            clusters,
+            styles,
+            slots,
+            &mut cursor,
+            old_line.block_start,
+            f64::from(region.record.block_end),
+            LineExtents {
+                above: old_line.baseline,
+                below: old_line.height - old_line.baseline,
+            },
+            wrapping_for_flow_thread(geometry, old_line.flow_thread_id)?,
+            old_line.align,
+            max_slots_per_band,
+            metrics_for,
+            first_font_for_stack,
+        )?
+        else {
+            self.clear();
+            return Ok(false);
+        };
+        let new_line = *self.lines.last().ok_or(EngineError::InvalidRequest)?;
+        let new_fragments = self
+            .fragments
+            .get(composed_start..)
+            .ok_or(EngineError::InvalidRequest)?;
+        let converged = cursor.cluster() == old_cluster_end
+            && height == old_line.height
+            && new_line.baseline == old_line.baseline
+            && new_fragments.len() == old_fragments.len()
+            && new_fragments.iter().zip(old_fragments).all(|(new, old)| {
+                new.slot_start == old.slot_start
+                    && new.slot_end == old.slot_end
+                    && new.line.cluster_start == old.line.cluster_start
+                    && new.line.cluster_end == old.line.cluster_end
+                    && new.line.text_start == old.line.text_start
+                    && new.line.text_end == old.line.text_end
+                    && new.line.hard_break == old.line.hard_break
+            });
+        if !converged {
+            self.clear();
+            return Ok(false);
+        }
+        for suffix in line_index + 1..previous.lines.len() {
+            self.append_retained_line(previous, suffix)?;
+        }
+        self.recomposed_lines = Some((line_index, line_index + 1));
+        Ok(true)
+    }
+
+    fn append_retained_line(
+        &mut self,
+        source: &Self,
+        line_index: usize,
+    ) -> Result<(), EngineError> {
+        let mut line = *source
+            .lines
+            .get(line_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let fragments = line_fragments(source, line)?;
+        line.fragment_start =
+            u32::try_from(self.fragments.len()).map_err(|_| EngineError::ResultTooLarge)?;
+        self.fragments.extend_from_slice(fragments);
+        self.lines.push(line);
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn compose_band(
         &mut self,
         geometry: &FlowGeometryArena,
@@ -314,6 +464,11 @@ impl FlowLayoutArena {
         self.lines.clear();
         self.fragments.clear();
         self.ellipsis_threads.clear();
+        self.recomposed_lines = None;
+    }
+
+    pub(crate) fn recomposed_line_range(&self) -> Option<(usize, usize)> {
+        self.recomposed_lines
     }
 
     pub(crate) fn ellipsis_threads(&self) -> &[u32] {
@@ -402,6 +557,28 @@ impl FlowLayoutArena {
             text_end,
         }))
     }
+}
+
+fn wrapping_for_flow_thread(
+    geometry: &FlowGeometryArena,
+    flow_thread_id: u32,
+) -> Result<u8, EngineError> {
+    geometry
+        .constraints
+        .iter()
+        .find(|constraint| constraint.flow_thread_id == flow_thread_id)
+        .map(|constraint| constraint.wrap)
+        .ok_or(EngineError::InvalidRequest)
+}
+
+fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragment], EngineError> {
+    let start = usize::try_from(line.fragment_start).map_err(|_| EngineError::InvalidRequest)?;
+    let end = start
+        .checked_add(usize::from(line.fragment_count))
+        .ok_or(EngineError::InvalidRequest)?;
+    flow.fragments
+        .get(start..end)
+        .ok_or(EngineError::InvalidRequest)
 }
 
 fn cluster_text_end(clusters: &ClusterArena, cluster_end: usize) -> u32 {
@@ -717,6 +894,163 @@ mod tests {
             [1, 2, 2, 2]
         );
         assert_eq!(layout.fragments.last().unwrap().line.cluster_end, 4);
+    }
+
+    #[test]
+    fn localized_edit_recomposes_one_line_and_reuses_converged_prefix_and_suffix() {
+        let make_clusters = |advances: Vec<f64>| ClusterArena {
+            starts: vec![0, 1, 2, 3, 4, 5],
+            ends: vec![1, 2, 3, 4, 5, 6],
+            advances,
+            flags: vec![CLUSTER_SAFE_BEFORE; 6],
+            style_indexes: vec![0; 6],
+            source_runs: vec![0; 6],
+            font_handles: vec![1; 6],
+            stable_ids: vec![1, 2, 3, 4, 5, 6],
+            index_at: vec![0, 1, 2, 3, 4, 5, 6],
+            ..ClusterArena::default()
+        };
+        let previous_clusters = make_clusters(vec![2.0; 6]);
+        let changed_clusters = make_clusters(vec![2.0, 2.0, 1.0, 2.0, 2.0, 2.0]);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 6,
+            style: ResolvedStyle::test_typography(10.0, 0.0, 0.0),
+        }];
+        let mut narrow_region = region();
+        narrow_region.inline_end = 4.0;
+        narrow_region.clip_inline_end = 4.0;
+        narrow_region.exclusion_count = 0;
+        let geometry = FlowGeometryArena {
+            constraints: vec![constraint()],
+            regions: vec![RetainedRegion {
+                record: narrow_region,
+                vertex_start: 0,
+            }],
+            ..FlowGeometryArena::default()
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+            })
+        };
+        let mut previous = FlowLayoutArena::default();
+        previous
+            .build(
+                &geometry,
+                &previous_clusters,
+                &styles,
+                &mut InlineSlotArena::default(),
+                8,
+                1,
+                metrics,
+                |_| Some(1),
+            )
+            .unwrap();
+        let retained_prefix = previous.fragments[0];
+        let retained_suffix = previous.fragments[2];
+        let mut changed = FlowLayoutArena::default();
+        assert!(
+            changed
+                .rebuild_one_line_if_state_converges(
+                    &previous,
+                    &geometry,
+                    &previous_clusters,
+                    &changed_clusters,
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    2,
+                    8,
+                    1,
+                    metrics,
+                    |_| Some(1),
+                )
+                .unwrap()
+        );
+        assert_eq!(changed.lines.len(), 3);
+        assert_eq!(changed.fragments[0], retained_prefix);
+        assert_eq!(changed.fragments[1].line.advance, 3.0);
+        assert_eq!(changed.fragments[2], retained_suffix);
+    }
+
+    #[test]
+    fn localized_edit_clears_partial_layout_when_line_state_does_not_converge() {
+        let make_clusters = |advances: Vec<f64>| ClusterArena {
+            starts: vec![0, 1, 2, 3, 4, 5],
+            ends: vec![1, 2, 3, 4, 5, 6],
+            advances,
+            flags: vec![CLUSTER_SAFE_BEFORE; 6],
+            style_indexes: vec![0; 6],
+            source_runs: vec![0; 6],
+            font_handles: vec![1; 6],
+            stable_ids: vec![1, 2, 3, 4, 5, 6],
+            index_at: vec![0, 1, 2, 3, 4, 5, 6],
+            ..ClusterArena::default()
+        };
+        let previous_clusters = make_clusters(vec![2.0; 6]);
+        let changed_clusters = make_clusters(vec![2.0, 2.0, 3.0, 2.0, 2.0, 2.0]);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 6,
+            style: ResolvedStyle::test_typography(10.0, 0.0, 0.0),
+        }];
+        let mut narrow_region = region();
+        narrow_region.inline_end = 4.0;
+        narrow_region.clip_inline_end = 4.0;
+        narrow_region.exclusion_count = 0;
+        let geometry = FlowGeometryArena {
+            constraints: vec![constraint()],
+            regions: vec![RetainedRegion {
+                record: narrow_region,
+                vertex_start: 0,
+            }],
+            ..FlowGeometryArena::default()
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+            })
+        };
+        let mut previous = FlowLayoutArena::default();
+        previous
+            .build(
+                &geometry,
+                &previous_clusters,
+                &styles,
+                &mut InlineSlotArena::default(),
+                8,
+                1,
+                metrics,
+                |_| Some(1),
+            )
+            .unwrap();
+        let mut changed = FlowLayoutArena::default();
+        assert!(
+            !changed
+                .rebuild_one_line_if_state_converges(
+                    &previous,
+                    &geometry,
+                    &previous_clusters,
+                    &changed_clusters,
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    2,
+                    8,
+                    1,
+                    metrics,
+                    |_| Some(1),
+                )
+                .unwrap()
+        );
+        assert!(changed.lines.is_empty());
+        assert!(changed.fragments.is_empty());
+        assert_eq!(changed.recomposed_line_range(), None);
     }
 
     #[test]
