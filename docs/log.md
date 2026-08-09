@@ -2,6 +2,12 @@
 
 ## 2026-08-08
 
+- **Resolved Rust resource references directly in Three** — The Three coordinator now registers each validated Bitmap
+  page, MTSDF atlas, and Slug analytic page under the same collision-checked numeric identity compiled into the Rust
+  font binding. A command-buffer `referenceId` resolves in one map lookup; Three does not scan fonts or repeat resource
+  partitioning. Incompatible technique reuse is rejected. Focused type-check, build, and compiled-Wasm coordinator tests
+  pass; physical buffer, patch, and draw realization remain open.
+
 - **Made transform ownership explicit and removed per-cluster draws** — The first real multi-paragraph publication
   exposed that paragraph-local positions had no renderer transform owner and cluster `semantic_id` prevented primitive
   coalescing. The policy now requires a paragraph-derived transform draw key, forbids transform from physical storage

@@ -87,6 +87,10 @@ test('Three coordinator shares shaping data across technique bindings and refere
   };
   const coordinator = new ThreeTextEngineCoordinator({ shaper });
   const first = coordinator.acquireFontStack([bitmapFont, msdfFont]);
+  const bitmapReference = coordinator.host.wireIdentities.resolve(bitmapFont.data.strikes[0].pages[0].resource);
+  const msdfReference = coordinator.host.wireIdentities.resolve(msdfFont.data.resource);
+  assert.equal(coordinator.resolveResource(bitmapReference).technique, bitmap.id);
+  assert.equal(coordinator.resolveResource(msdfReference).technique, msdf.id);
   const shared = coordinator.acquireFontStack([bitmapFont, msdfFont]);
   const reversed = coordinator.acquireFontStack([msdfFont, bitmapFont]);
   assert.equal(shared.handle, first.handle);
