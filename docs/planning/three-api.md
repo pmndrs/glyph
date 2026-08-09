@@ -143,6 +143,21 @@ One group traversal performs at most one mutating `text_update` transaction for 
 layout query with pending mutations may perform that synchronization earlier; the following traversal observes the
 committed revision and does not repeat the semantic work.
 
+For editor-style changes, use UTF-16 ranges instead of rebuilding or diffing the paragraph in application code:
+
+```ts
+label.insertText(cursor, 'a');
+label.deleteText(selectionStart, selectionEnd);
+label.replaceText(selectionStart, selectionEnd, pastedText);
+```
+
+These operations update the ordinary `text` value and queue narrow replacements for the same next-frame transaction.
+Multiple operations before traversal remain one Wasm call. Direct `label.text = next` remains the simple declarative API;
+the adapter derives its smallest common-prefix/common-suffix replacement without allocating a second scan buffer.
+Offsets match JavaScript and DOM selection APIs and cannot split a surrogate pair. Existing spans shift with edits;
+inserted text inherits a span only when inserted strictly inside it, so span-boundary affinity does not become hidden
+mutable state.
+
 Errors are retained on `text.error` or `group.error` and forwarded to `onError`. They do not escape Three.js scene
 traversal. `retry()` reapplies a retained publication after a renderer-side failure.
 
