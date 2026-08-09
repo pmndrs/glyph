@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:60839e34e40a58bf01bdc41b1754318b027e132d66d61e6dad0702f8da70b820'
+source_digest: 'sha256:d75f5786f818b1e6db813d28197024af3a3fb6bede937e94712c141547c287fe'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -750,6 +750,16 @@ values and writes the generated ABI—it does not shape, lay out, batch, or pack
 byte-identical to the established benchmark helper, including surrogate-pair UTF-16. A broad structural fixture proves
 all variable tables and payload offsets; acceptance of normalized rich public state by a real Rust session remains an
 open Three-cutover gate.
+
+Rust now distinguishes a loaded-font render binding from the shaping font whose retained SFNT, plans, metrics, and
+extents it reuses. Engine font stacks contain binding handles; each binding points to one shaping handle and carries its
+own technique/resources. Fallback records preserve both identities through shaping and cluster aggregation, positioning
+uses the shaping identity, and policy gather uses the binding identity. This permits one face to register several raster
+techniques without duplicating shaping data and permits a fallback glyph to emit a different technique in the same
+render plan. Compiled-Wasm tests prove both cases. The additional retained `u32` cluster lane changes optimized Wasm to
+1,070,580 raw / 402,114 gzip / 319,662 Brotli bytes. Current 8-warmup/31-sample resize medians are
+4.217/4.791/5.633 milliseconds for Bitmap/MTSDF/Slug; their 6–7% RSD does not distinguish the small movement from the
+preceding 4.120/4.646/5.622-millisecond checkpoint.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

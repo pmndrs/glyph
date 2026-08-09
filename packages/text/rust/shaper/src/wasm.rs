@@ -87,12 +87,12 @@ pub unsafe extern "C" fn pmndrs_text_shaper_register_font(
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_text_shaper_dispose_font(handle: u32) -> u32 {
     with_state(|state| {
-        if state.engine.references_font(handle) {
+        if state.engine.references_shaping_font(handle) {
             STATUS_FONT_IN_USE
         } else {
             let status = state.registry.dispose_font(handle);
             if status == STATUS_OK {
-                state.engine.dispose_font_binding(handle);
+                state.engine.dispose_bindings_for_shaping_font(handle);
             }
             status
         }
@@ -133,7 +133,10 @@ pub unsafe extern "C" fn pmndrs_text_engine_register_font_stack(
         }
         for bytes in bytes.chunks_exact(4) {
             let font = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-            if !state.registry.contains_font(font) {
+            let Some(shaping_handle) = state.engine.shaping_handle_for_binding(font) else {
+                return crate::STATUS_FONT_MISSING;
+            };
+            if !state.registry.contains_font(shaping_handle) {
                 return crate::STATUS_FONT_MISSING;
             }
             fonts.push(font);
@@ -161,11 +164,12 @@ pub extern "C" fn pmndrs_text_engine_font_stack_count() -> u32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_text_engine_register_font_binding(
     handle: u32,
+    shaping_handle: u32,
     pointer: u32,
     length: u32,
 ) -> u32 {
     with_state(|state| {
-        let Some(glyph_count) = state.registry.glyph_count(handle) else {
+        let Some(glyph_count) = state.registry.glyph_count(shaping_handle) else {
             return crate::STATUS_FONT_MISSING;
         };
         let Some(bytes) = owned_bytes(&state.allocations, pointer, length) else {
@@ -177,7 +181,7 @@ pub unsafe extern "C" fn pmndrs_text_engine_register_font_binding(
         };
         match state
             .engine
-            .register_font_binding(handle, glyph_count, binding)
+            .register_font_binding(handle, shaping_handle, glyph_count, binding)
         {
             Ok(()) => STATUS_OK,
             Err(error) => engine_status(error),

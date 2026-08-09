@@ -52,6 +52,7 @@ pub struct TextEngine {
 
 struct RegisteredFontBinding {
     handle: u32,
+    shaping_handle: u32,
     binding: FontRenderBinding,
 }
 
@@ -66,6 +67,7 @@ struct FallbackSpan {
     text_start: u32,
     text_end: u32,
     font_index: u16,
+    binding_handle: u32,
     font_handle: u32,
 }
 
@@ -153,10 +155,11 @@ impl TextEngine {
     pub fn register_font_binding(
         &mut self,
         handle: u32,
+        shaping_handle: u32,
         shaping_glyph_count: u32,
         binding: FontRenderBinding,
     ) -> Result<(), EngineError> {
-        if handle == 0 || binding.glyph_count() != shaping_glyph_count {
+        if handle == 0 || shaping_handle == 0 || binding.glyph_count() != shaping_glyph_count {
             return Err(EngineError::InvalidRequest);
         }
         if let Some(existing) = self
@@ -164,7 +167,7 @@ impl TextEngine {
             .iter()
             .find(|registered| registered.handle == handle)
         {
-            return if existing.binding == binding {
+            return if existing.shaping_handle == shaping_handle && existing.binding == binding {
                 Ok(())
             } else {
                 Err(EngineError::HandleConflict)
@@ -173,8 +176,11 @@ impl TextEngine {
         self.font_bindings
             .try_reserve(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
-        self.font_bindings
-            .push(RegisteredFontBinding { handle, binding });
+        self.font_bindings.push(RegisteredFontBinding {
+            handle,
+            shaping_handle,
+            binding,
+        });
         Ok(())
     }
 
@@ -193,6 +199,22 @@ impl TextEngine {
             .iter()
             .find(|binding| binding.handle == handle)
             .map(|binding| &binding.binding)
+    }
+
+    fn registered_font_binding(&self, handle: u32) -> Option<&RegisteredFontBinding> {
+        self.font_bindings
+            .iter()
+            .find(|binding| binding.handle == handle)
+    }
+
+    pub fn shaping_handle_for_binding(&self, handle: u32) -> Option<u32> {
+        self.registered_font_binding(handle)
+            .map(|binding| binding.shaping_handle)
+    }
+
+    pub fn dispose_bindings_for_shaping_font(&mut self, shaping_handle: u32) {
+        self.font_bindings
+            .retain(|binding| binding.shaping_handle != shaping_handle);
     }
 
     pub fn font_binding_count(&self) -> u32 {
@@ -263,10 +285,19 @@ impl TextEngine {
         self.font_stacks.len().try_into().unwrap_or(u32::MAX)
     }
 
-    pub fn references_font(&self, handle: u32) -> bool {
+    pub fn references_binding(&self, handle: u32) -> bool {
         self.font_stacks
             .iter()
             .any(|stack| stack.fonts.contains(&handle))
+    }
+
+    pub fn references_shaping_font(&self, shaping_handle: u32) -> bool {
+        self.font_stacks.iter().any(|stack| {
+            stack
+                .fonts
+                .iter()
+                .any(|handle| self.shaping_handle_for_binding(*handle) == Some(shaping_handle))
+        })
     }
 
     pub fn register_policy(
@@ -531,7 +562,7 @@ impl TextEngine {
             return Err(error);
         }
         if let Some(shaper) = shaper.as_deref_mut() {
-            if let Err(error) = session.prepare_shape(shaper, font_stacks) {
+            if let Err(error) = session.prepare_shape(shaper, font_stacks, font_bindings) {
                 session.abort_text();
                 session.abort_styles();
                 session.abort_unicode();
@@ -569,6 +600,7 @@ impl TextEngine {
                 && let Err(error) = session.prepare_flow_layout(
                     shaper,
                     font_stacks,
+                    font_bindings,
                     request.limits.max_lines,
                     request.limits.max_slots_per_band,
                 )
@@ -1006,6 +1038,7 @@ impl EngineSession {
         &mut self,
         shaper: &mut ShaperRegistry,
         font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
     ) -> Result<(), EngineError> {
         self.abort_shape();
         if !self.shaping_runs_prepared {
@@ -1025,7 +1058,8 @@ impl EngineSession {
         let mut max_stack_depth = 0usize;
         for (index, run) in runs.iter().copied().enumerate() {
             let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
-            let font_handle = *stack.fonts.first().ok_or(EngineError::FontStackMissing)?;
+            let binding_handle = *stack.fonts.first().ok_or(EngineError::FontStackMissing)?;
+            let font_handle = find_font_binding(font_bindings, binding_handle)?.shaping_handle;
             max_stack_depth = max_stack_depth.max(stack.fonts.len());
             push_fallback_span(
                 &mut self.pending_fallback_spans,
@@ -1034,6 +1068,7 @@ impl EngineSession {
                     text_start: run.text_start,
                     text_end: run.text_end,
                     font_index: 0,
+                    binding_handle,
                     font_handle,
                 },
             )?;
@@ -1063,6 +1098,7 @@ impl EngineSession {
                             output.append(
                                 source_index,
                                 span.font_handle,
+                                span.binding_handle,
                                 span.text_start,
                                 span.text_end,
                                 shaped,
@@ -1094,7 +1130,7 @@ impl EngineSession {
                     .font_stack_handle;
                 let stack = find_font_stack(font_stacks, stack_handle)?;
                 let next_font_index = span.font_index.checked_add(1);
-                let next_font =
+                let next_binding =
                     next_font_index.and_then(|index| stack.fonts.get(usize::from(index)).copied());
                 let mut cursor = span.text_start;
                 let mut record_index = cluster_index;
@@ -1103,8 +1139,11 @@ impl EngineSession {
                         break;
                     }
                     if record.missing
-                        && let (Some(font_index), Some(font_handle)) = (next_font_index, next_font)
+                        && let (Some(font_index), Some(binding_handle)) =
+                            (next_font_index, next_binding)
                     {
+                        let font_handle =
+                            find_font_binding(font_bindings, binding_handle)?.shaping_handle;
                         let cluster_start = record.cluster.max(cursor);
                         let cluster_end = self
                             .fallback_cluster_scratch
@@ -1135,6 +1174,7 @@ impl EngineSession {
                                     text_start: cluster_start,
                                     text_end: cluster_end,
                                     font_index,
+                                    binding_handle,
                                     font_handle,
                                     ..span
                                 },
@@ -1303,6 +1343,7 @@ impl EngineSession {
         &mut self,
         shaper: &ShaperRegistry,
         font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
         max_lines: u32,
         max_slots_per_band: u32,
     ) -> Result<(), EngineError> {
@@ -1335,6 +1376,12 @@ impl EngineSession {
                     .binary_search_by_key(&stack_handle, |stack| stack.handle)
                     .ok()
                     .and_then(|index| font_stacks[index].fonts.first().copied())
+                    .and_then(|handle| {
+                        font_bindings
+                            .iter()
+                            .find(|binding| binding.handle == handle)
+                            .map(|binding| binding.shaping_handle)
+                    })
             },
         )?;
         self.flow_layout_prepared = true;
@@ -1547,6 +1594,16 @@ fn find_font_stack(
         .ok_or(EngineError::FontStackMissing)
 }
 
+fn find_font_binding(
+    font_bindings: &[RegisteredFontBinding],
+    handle: u32,
+) -> Result<&RegisteredFontBinding, EngineError> {
+    font_bindings
+        .iter()
+        .find(|binding| binding.handle == handle)
+        .ok_or(EngineError::FontStackMissing)
+}
+
 fn push_fallback_span(
     spans: &mut Vec<FallbackSpan>,
     span: FallbackSpan,
@@ -1555,6 +1612,7 @@ fn push_fallback_span(
         && previous.source_run == span.source_run
         && previous.text_end == span.text_start
         && previous.font_index == span.font_index
+        && previous.binding_handle == span.binding_handle
         && previous.font_handle == span.font_handle
     {
         previous.text_end = span.text_end;
@@ -1715,14 +1773,14 @@ mod tests {
         assert_eq!(engine.register_font_stack(7, &[9, 4, 12]), Ok(()));
         assert_eq!(engine.register_font_stack(7, &[9, 4, 12]), Ok(()));
         assert_eq!(engine.font_stack(7), Ok(&[9, 4, 12][..]));
-        assert!(engine.references_font(4));
+        assert!(engine.references_binding(4));
         assert_eq!(engine.font_stack_count(), 1);
         assert_eq!(
             engine.register_font_stack(7, &[9, 12]),
             Err(EngineError::HandleConflict)
         );
         assert_eq!(engine.dispose_font_stack(7), Ok(()));
-        assert!(!engine.references_font(4));
+        assert!(!engine.references_binding(4));
         assert_eq!(
             engine.dispose_font_stack(7),
             Err(EngineError::FontStackMissing)
@@ -1734,6 +1792,7 @@ mod tests {
         let shape = ShapeArena {
             runs: vec![crate::engine::shaping_state::ShapedRun {
                 source_run: 7,
+                binding_handle: 11,
                 font_handle: 11,
                 text_start: 0,
                 text_end: 6,
@@ -1773,23 +1832,41 @@ mod tests {
     }
 
     #[test]
-    fn font_bindings_are_owned_once_per_font_and_match_shaping_coverage() {
+    fn binding_identity_is_distinct_from_shared_shaping_font_identity() {
         let mut engine = TextEngine::default();
         let binding = render_binding(3, 7);
         assert_eq!(
-            engine.register_font_binding(11, 4, binding.clone()),
+            engine.register_font_binding(11, 101, 4, binding.clone()),
             Err(EngineError::InvalidRequest)
         );
-        assert_eq!(engine.register_font_binding(11, 3, binding.clone()), Ok(()));
-        assert_eq!(engine.register_font_binding(11, 3, binding), Ok(()));
+        assert_eq!(
+            engine.register_font_binding(11, 101, 3, binding.clone()),
+            Ok(())
+        );
+        assert_eq!(engine.register_font_binding(11, 101, 3, binding), Ok(()));
         assert_eq!(engine.font_binding_count(), 1);
         assert_eq!(engine.font_binding(11).unwrap().technique(), TechniqueId(7));
         assert_eq!(
-            engine.register_font_binding(11, 3, render_binding(3, 8)),
+            engine.register_font_binding(12, 101, 3, render_binding(3, 8)),
+            Ok(())
+        );
+        assert_eq!(engine.font_binding_count(), 2);
+        assert_eq!(
+            engine
+                .registered_font_binding(12)
+                .map(|binding| binding.shaping_handle),
+            Some(101)
+        );
+        assert_eq!(
+            engine.register_font_binding(11, 101, 3, render_binding(3, 8)),
+            Err(EngineError::HandleConflict)
+        );
+        assert_eq!(
+            engine.register_font_binding(11, 102, 3, render_binding(3, 7)),
             Err(EngineError::HandleConflict)
         );
         engine.dispose_font_binding(11);
-        assert_eq!(engine.font_binding_count(), 0);
+        assert_eq!(engine.font_binding_count(), 1);
     }
 
     #[test]

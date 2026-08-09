@@ -28,6 +28,7 @@ pub(crate) struct ShapingRunArena {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ShapedRun {
     pub source_run: u32,
+    pub binding_handle: u32,
     pub font_handle: u32,
     pub text_start: u32,
     pub text_end: u32,
@@ -239,6 +240,7 @@ impl ShapeArena {
         &mut self,
         source_run: usize,
         font_handle: u32,
+        binding_handle: u32,
         text_start: u32,
         text_end: u32,
         shaped: &harfrust::GlyphBuffer,
@@ -251,6 +253,7 @@ impl ShapeArena {
             .map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?;
         self.runs.push(ShapedRun {
             source_run: u32::try_from(source_run).map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?,
+            binding_handle,
             font_handle,
             text_start,
             text_end,

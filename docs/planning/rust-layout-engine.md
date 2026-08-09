@@ -1214,6 +1214,17 @@ fixture covers every variable table and the vertical/polygon/decorated lanes. Th
 scoped: normalize actual public Three state into this descriptor, submit a rich request to Rust, then lower the returned
 plan; structural serialization alone is not that cutover.
 
+Render-binding identity is now independent from shaping-font identity. A registered binding handle names one loaded
+font/technique/resource combination and points to the retained shaping handle it shares; font stacks contain binding
+handles. Fallback carries both identities through the shape and cluster arenas, metrics/extents use the shaping handle,
+and policy gather uses the binding handle. This makes same-face multi-technique registration and mixed-technique
+fallback representable without retaining the SFNT twice. Compiled Wasm proves Inter missing Devanagari advances to a
+second binding and emits that binding's different technique in the Rust plan. The cost is one additional retained `u32`
+cluster lane. On the unchanged 25,515-positioned/21,805-renderable workload, 8-warmup/31-sample column-resize medians
+are 4.217/4.791/5.633 ms for Bitmap/MTSDF/Slug versus 4.120/4.646/5.622 ms at D-203; 6–7% RSD and lower run minima do
+not establish a regression. Optimized Wasm is 1,070,580 raw / 402,114 gzip / 319,662 Brotli bytes, +607 / -3,774 / +104
+bytes from D-203.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement
