@@ -47,6 +47,10 @@ interface MaterialRealization {
   readonly buffers: readonly Readonly<{ id: number; generation: number }>[];
 }
 
+type TransformRealization =
+  | Readonly<{ kind: 'direct'; transformId: number }>
+  | Readonly<{ kind: 'indexed'; indices: RetainedBuffer }>;
+
 export interface ThreeTextEnginePlanOwner {
   readonly drawRoot: THREE.Object3D;
   objectForTransform(transformId: number): THREE.Object3D;
@@ -126,11 +130,13 @@ export class ThreeTextEnginePlanTarget {
 
   /** Upload changed scene transforms without crossing into Wasm or invalidating text layout. */
   syncTransforms(): number {
-    if (this.#activeTransformIndices.size === 0) return 0;
+    const hasDirectTransforms = this.#draws.some((draw) => directTransformId(draw) !== 0);
+    if (this.#activeTransformIndices.size === 0 && !hasDirectTransforms) return 0;
     this.#owner.drawRoot.updateWorldMatrix(true, false);
     this.#rootInverse.copy(this.#owner.drawRoot.matrixWorld).invert();
     const target = this.#transformAttribute.array as Float32Array;
     let changed = 0;
+    let indexedChanged = 0;
     for (const index of this.#activeTransformIndices) {
       const object = this.#owner.objectForTransform(index);
       object.updateWorldMatrix(true, false);
@@ -139,10 +145,24 @@ export class ThreeTextEnginePlanTarget {
       target.set(this.#relativeTransform.elements, index * 16);
       this.#transformAttribute.addUpdateRange(index * 16, 16);
       changed += 1;
+      indexedChanged += 1;
+    }
+    for (const draw of this.#draws) {
+      const transformId = directTransformId(draw);
+      if (transformId === 0) continue;
+      const object = this.#owner.objectForTransform(transformId);
+      object.updateWorldMatrix(true, false);
+      this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
+      if (draw.matrix.equals(this.#relativeTransform)) continue;
+      draw.matrix.copy(this.#relativeTransform);
+      draw.matrixWorldNeedsUpdate = true;
+      changed += 1;
     }
     if (changed === 0) return 0;
-    this.#transformAttribute.needsUpdate = true;
-    invalidatePboTexture(this.#transformAttribute);
+    if (indexedChanged !== 0) {
+      this.#transformAttribute.needsUpdate = true;
+      invalidatePboTexture(this.#transformAttribute);
+    }
     return changed;
   }
 
@@ -302,7 +322,9 @@ export class ThreeTextEnginePlanTarget {
         const resource = this.#resources.get(plan.u32(resourceRecord + resourceLayout.id));
         if (resource === undefined) throw new Error('draw references an unknown retained resource');
         const materialId = plan.u32(draw + drawLayout.materialId);
-        const material = this.#material(resource, byPolicyId, materialId);
+        const transformId = plan.u32(draw + drawLayout.transformId);
+        const transform = this.#transformRealization(byPolicyId, transformId);
+        const material = this.#material(resource, byPolicyId, materialId, transform);
         const recordIndex = plan.u32(primitive + primitiveLayout.recordIndex);
         const recordCount = plan.u16(primitive + primitiveLayout.recordCount);
         const key = drawRealizationKey(
@@ -312,6 +334,7 @@ export class ThreeTextEnginePlanTarget {
           byPolicyId,
           plan.u32(draw + drawLayout.clipId),
           plan.u32(draw + drawLayout.depthKey),
+          transform,
           this.#transformGeneration,
         );
         const reusable = previous.get(key)?.shift();
@@ -321,6 +344,8 @@ export class ThreeTextEnginePlanTarget {
           }
           reusable.geometry.instanceCount = recordCount;
           reusable.userData.pmndrsTextRunStart = recordIndex;
+          reusable.userData.pmndrsTextTransformId = transformId;
+          reusable.matrixAutoUpdate = transform.kind !== 'direct';
           reusable.renderOrder = this.#owner.renderOrderBase + index;
           if (reusable.parent !== this.#owner.drawRoot) this.#owner.drawRoot.add(reusable);
           reused.add(reusable);
@@ -333,9 +358,11 @@ export class ThreeTextEnginePlanTarget {
         for (const buffer of byPolicyId.values()) {
           geometry.setAttribute(`_pmndrsText_${buffer.policyBufferId}`, buffer.attribute);
         }
-        geometry.setAttribute('_pmndrsTextTransforms', this.#transformAttribute);
+        if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsTextTransforms', this.#transformAttribute);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.pmndrsTextRunStart = recordIndex;
+        mesh.userData.pmndrsTextTransformId = transformId;
+        mesh.matrixAutoUpdate = transform.kind !== 'direct';
         mesh.frustumCulled = false;
         mesh.renderOrder = this.#owner.renderOrderBase + index;
         this.#owner.drawRoot.add(mesh);
@@ -357,6 +384,15 @@ export class ThreeTextEnginePlanTarget {
     for (const transformIndex of transformIndices) this.#activeTransformIndices.add(transformIndex);
   }
 
+  #transformRealization(buffers: ReadonlyMap<number, RetainedBuffer>, transformId: number): TransformRealization {
+    if (transformId !== 0) return { kind: 'direct', transformId };
+    const indices = buffers.get(FIRST_PARTY_TRANSFORM_BUFFER_ID);
+    if (indices === undefined || !(indices.array instanceof Uint32Array)) {
+      throw new Error('indexed Three draw is missing its u32 transform-index buffer');
+    }
+    return { kind: 'indexed', indices };
+  }
+
   #collectTransformIndices(
     plan: TextEngineRenderPlanView,
     draws: RenderPlanTable,
@@ -369,6 +405,7 @@ export class ThreeTextEnginePlanTarget {
     const result = new Set<number>();
     for (let drawIndex = 0; drawIndex < draws.count; drawIndex += 1) {
       const draw = plan.record(draws, drawIndex);
+      if (plan.u32(draw + drawLayout.transformId) !== 0) continue;
       const primitive = plan.record(primitives, plan.u32(draw + drawLayout.primitiveStart));
       const bufferStart = plan.u32(draw + drawLayout.bufferStart);
       const bufferEnd = bufferStart + plan.u32(draw + drawLayout.bufferCount);
@@ -411,6 +448,7 @@ export class ThreeTextEnginePlanTarget {
     resource: RetainedResource,
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
+    transform: TransformRealization,
   ): THREE.NodeMaterial {
     const resolved = this.#coordinator.resolveResource(resource.referenceId);
     if (resolved.technique !== bitmap.id) {
@@ -422,11 +460,9 @@ export class ThreeTextEnginePlanTarget {
       if (buffer === undefined) throw new Error(`Bitmap draw is missing policy buffer ${id}`);
       return buffer;
     });
-    const transformIndices = buffers.get(FIRST_PARTY_TRANSFORM_BUFFER_ID);
-    if (transformIndices === undefined) throw new Error('Bitmap draw is missing its transform-index buffer');
     const key = `${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformIndices.id}:${transformIndices.generation}:transform:${this.#transformGeneration}`;
+      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}`;
     const cached = this.#materials.get(key);
     if (cached !== undefined) return cached.material;
     const texture = this.#bitmapTexture(resource.referenceId, page);
@@ -450,19 +486,22 @@ export class ThreeTextEnginePlanTarget {
       },
       { page: texture },
     );
-    const position = indexedTransformPosition(
-      shader.position,
-      transformIndices.attribute,
-      this.#transformAttribute,
-      instance,
-    );
+    const position =
+      transform.kind === 'indexed'
+        ? indexedTransformPosition(shader.position, transform.indices.attribute, this.#transformAttribute, instance)
+        : shader.position;
     const material = this.#createMaterial(materialId, {
       technique: bitmap.id,
       shader,
       position,
       createDefaultMaterial: () => bitmapMaterial(shader, position),
     });
-    this.#retainMaterial(key, material, resource, [...required, transformIndices]);
+    this.#retainMaterial(
+      key,
+      material,
+      resource,
+      transform.kind === 'indexed' ? [...required, transform.indices] : required,
+    );
     return material;
   }
 
@@ -470,11 +509,12 @@ export class ThreeTextEnginePlanTarget {
     resource: RetainedResource,
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
+    transform: TransformRealization,
   ): THREE.NodeMaterial {
     const resolved = this.#coordinator.resolveResource(resource.referenceId);
-    if (resolved.technique === bitmap.id) return this.#bitmapMaterial(resource, buffers, materialId);
-    if (resolved.technique === msdf.id) return this.#msdfMaterial(resource, buffers, materialId);
-    if (resolved.technique === slug.id) return this.#slugMaterial(resource, buffers, materialId);
+    if (resolved.technique === bitmap.id) return this.#bitmapMaterial(resource, buffers, materialId, transform);
+    if (resolved.technique === msdf.id) return this.#msdfMaterial(resource, buffers, materialId, transform);
+    if (resolved.technique === slug.id) return this.#slugMaterial(resource, buffers, materialId, transform);
     throw new Error('this Three plan target does not recognize the draw technique');
   }
 
@@ -482,6 +522,7 @@ export class ThreeTextEnginePlanTarget {
     resource: RetainedResource,
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
+    transform: TransformRealization,
   ): THREE.NodeMaterial {
     const data = msdfData(this.#coordinator.resolveResource(resource.referenceId));
     const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
@@ -489,11 +530,9 @@ export class ThreeTextEnginePlanTarget {
       if (buffer === undefined) throw new Error(`MSDF draw is missing policy buffer ${id}`);
       return buffer;
     });
-    const transformIndices = buffers.get(FIRST_PARTY_TRANSFORM_BUFFER_ID);
-    if (transformIndices === undefined) throw new Error('MSDF draw is missing its transform-index buffer');
     const key = `msdf:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformIndices.id}:${transformIndices.generation}:transform:${this.#transformGeneration}`;
+      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}`;
     const cached = this.#materials.get(key);
     if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
@@ -524,19 +563,22 @@ export class ThreeTextEnginePlanTarget {
         pixelRange: data.pixelRange,
       },
     );
-    const position = indexedTransformPosition(
-      shader.position,
-      transformIndices.attribute,
-      this.#transformAttribute,
-      instance,
-    );
+    const position =
+      transform.kind === 'indexed'
+        ? indexedTransformPosition(shader.position, transform.indices.attribute, this.#transformAttribute, instance)
+        : shader.position;
     const material = this.#createMaterial(materialId, {
       technique: msdf.id,
       shader,
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#retainMaterial(key, material, resource, [...required, transformIndices]);
+    this.#retainMaterial(
+      key,
+      material,
+      resource,
+      transform.kind === 'indexed' ? [...required, transform.indices] : required,
+    );
     return material;
   }
 
@@ -582,6 +624,7 @@ export class ThreeTextEnginePlanTarget {
     resource: RetainedResource,
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
+    transformRealization: TransformRealization,
   ): THREE.NodeMaterial {
     const page = slugPage(this.#coordinator.resolveResource(resource.referenceId));
     const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
@@ -589,11 +632,9 @@ export class ThreeTextEnginePlanTarget {
       if (buffer === undefined) throw new Error(`Slug draw is missing policy buffer ${id}`);
       return buffer;
     });
-    const transformIndices = buffers.get(FIRST_PARTY_TRANSFORM_BUFFER_ID);
-    if (transformIndices === undefined) throw new Error('Slug draw is missing its transform-index buffer');
     const key = `slug:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformIndices.id}:${transformIndices.generation}:transform:${this.#transformGeneration}`;
+      .join(',')}:${transformProgramKey(transformRealization, this.#transformGeneration)}`;
     const cached = this.#materials.get(key);
     if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
@@ -609,8 +650,14 @@ export class ThreeTextEnginePlanTarget {
     const counts = TSL.storage(required[6]!.attribute, 'uvec4', required[6]!.attribute.count)
       .setPBO(true)
       .element(instance);
-    const transform = indexedTransformNodes(transformIndices.attribute, this.#transformAttribute, instance);
-    const modelViewProjection = TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix).mul(transform.matrix);
+    const indexedTransform =
+      transformRealization.kind === 'indexed'
+        ? indexedTransformNodes(transformRealization.indices.attribute, this.#transformAttribute, instance)
+        : undefined;
+    const modelViewProjection =
+      indexedTransform === undefined
+        ? TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix)
+        : TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix).mul(indexedTransform.matrix);
     const viewport = TSL.uniform(new THREE.Vector2(1, 1)).onRenderUpdate(({ renderer }, self) =>
       renderer?.getDrawingBufferSize(self.value),
     );
@@ -636,14 +683,19 @@ export class ThreeTextEnginePlanTarget {
         modelViewProjection,
       },
     );
-    const position = transform.position(shader.position);
+    const position = indexedTransform?.position(shader.position) ?? shader.position;
     const material = this.#createMaterial(materialId, {
       technique: slug.id,
       shader,
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#retainMaterial(key, material, resource, [...required, transformIndices]);
+    this.#retainMaterial(
+      key,
+      material,
+      resource,
+      transformRealization.kind === 'indexed' ? [...required, transformRealization.indices] : required,
+    );
     return material;
   }
 
@@ -788,13 +840,28 @@ function drawRealizationKey(
   buffers: ReadonlyMap<number, RetainedBuffer>,
   clipId: number,
   depthKey: number,
+  transform: TransformRealization,
   transformGeneration: number,
 ): string {
   const bufferKey = [...buffers]
     .sort(([left], [right]) => left - right)
     .map(([policyId, buffer]) => `${policyId}:${buffer.id}:${buffer.generation}`)
     .join(',');
-  return `${programId}:${resource.id}:${resource.generation}:${materialId}:${clipId}:${depthKey}:${transformGeneration}:${bufferKey}`;
+  const transformKey =
+    transform.kind === 'direct'
+      ? `direct:${transform.transformId}`
+      : transformProgramKey(transform, transformGeneration);
+  return `${programId}:${resource.id}:${resource.generation}:${materialId}:${clipId}:${depthKey}:${transformKey}:${bufferKey}`;
+}
+
+function transformProgramKey(transform: TransformRealization, generation: number): string {
+  return transform.kind === 'direct'
+    ? 'direct'
+    : `indexed:${transform.indices.id}:${transform.indices.generation}:table:${generation}`;
+}
+
+function directTransformId(draw: THREE.Mesh): number {
+  return (draw.userData.pmndrsTextTransformId as number | undefined) ?? 0;
 }
 
 function bitmapMaterial(

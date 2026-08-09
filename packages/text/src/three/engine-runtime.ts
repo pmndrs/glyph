@@ -5,7 +5,7 @@ import { slug, type SlugData, type SlugPageData } from '../raster/slug-technique
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import { firstPartyFontBindingBytes } from '../internal/font-binding-wire.js';
-import { firstPartyThreeRenderPolicyBytes } from '../internal/render-policy-wire.js';
+import { firstPartyThreeRenderPolicyBytes, type ThreeTransformMode } from '../internal/render-policy-wire.js';
 import { TextEngineHost, type TextEngineSession, type TextEngineSessionOptions } from '../internal/text-engine-host.js';
 import type { ThreeTextMaterial } from './material.js';
 
@@ -39,6 +39,11 @@ export type ThreeTextEngineResource =
   | Readonly<{ technique: typeof msdf.id; data: MsdfData }>
   | Readonly<{ technique: typeof slug.id; page: SlugPageData }>;
 
+export interface ThreeTextEngineCoordinatorOptions {
+  /** Renderer-policy choice; indexed is the first-party high-throughput default. */
+  readonly transformMode?: ThreeTransformMode;
+}
+
 /** Three-owned cold registrations shared by every text batch using one renderer-neutral runtime. */
 export class ThreeTextEngineCoordinator {
   readonly host: TextEngineHost;
@@ -53,9 +58,12 @@ export class ThreeTextEngineCoordinator {
   #nextMaterialHandle = 1;
   #disposed = false;
 
-  constructor(runtime: Pick<TextRuntime, 'shaper'>) {
+  constructor(runtime: Pick<TextRuntime, 'shaper'>, options: ThreeTextEngineCoordinatorOptions = {}) {
     this.host = new TextEngineHost(runtime.shaper);
-    this.host.registerPolicy(POLICY_HANDLE, firstPartyThreeRenderPolicyBytes(this.host.wireIdentities));
+    this.host.registerPolicy(
+      POLICY_HANDLE,
+      firstPartyThreeRenderPolicyBytes(this.host.wireIdentities, options.transformMode),
+    );
   }
 
   get policyHandle(): number {

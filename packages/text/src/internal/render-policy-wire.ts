@@ -99,6 +99,8 @@ export interface FirstPartyTechniqueWireIds {
   readonly slug: number;
 }
 
+export type ThreeTransformMode = 'direct' | 'indexed';
+
 export const firstPartyTechniqueWireIds: FirstPartyTechniqueWireIds = Object.freeze({
   bitmap: renderWireId('pmndrs.bitmap'),
   msdf: renderWireId('pmndrs.msdf'),
@@ -108,11 +110,16 @@ export const firstPartyTechniqueWireIds: FirstPartyTechniqueWireIds = Object.fre
 /** Compiler-mapped Three policy covering every first-party raster technique in one registration. */
 export function firstPartyThreeRenderPolicyBytes(
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
+  transformMode: ThreeTransformMode = 'indexed',
 ): Uint8Array {
   const bitmap = identities.resolve('pmndrs.bitmap');
   const msdf = identities.resolve('pmndrs.msdf');
   const slug = identities.resolve('pmndrs.slug');
-  const programs = [bitmapProgram(bitmap, 1), msdfProgram(msdf, 2), slugProgram(slug, 3)];
+  const programs = [
+    bitmapProgram(bitmap, 1, transformMode),
+    msdfProgram(msdf, 2, transformMode),
+    slugProgram(slug, 3, transformMode),
+  ];
   if (new Set(programs.map((program) => program.techniqueId)).size !== programs.length) {
     throw new TypeError('first-party raster technique wire identities collide');
   }
@@ -136,7 +143,7 @@ function threeCapabilitySet(): PolicyCapabilitySet {
   };
 }
 
-function bitmapProgram(techniqueId: number, programId: number): PolicyProgram {
+function bitmapProgram(techniqueId: number, programId: number, transformMode: ThreeTransformMode): PolicyProgram {
   const context = programContext('strike', 8, 0);
   const { loadF32, loadU32, binary, storeF32, storeU32 } = context;
   loadF32(15);
@@ -154,11 +161,19 @@ function bitmapProgram(techniqueId: number, programId: number): PolicyProgram {
     [4, [13, 14]],
     [5, [3, 4, 5, 6]],
   ]);
-  storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
-  return createProgram(techniqueId, programId, context, [...floatBuffers([2, 2, 2, 2, 4]), transformIndexBuffer()]);
+  if (transformMode === 'indexed') storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
+  return createProgram(
+    techniqueId,
+    programId,
+    context,
+    transformMode === 'indexed'
+      ? [...floatBuffers([2, 2, 2, 2, 4]), transformIndexBuffer()]
+      : floatBuffers([2, 2, 2, 2, 4]),
+    transformMode,
+  );
 }
 
-function msdfProgram(techniqueId: number, programId: number): PolicyProgram {
+function msdfProgram(techniqueId: number, programId: number, transformMode: ThreeTransformMode): PolicyProgram {
   const context = programContext('glyph', 10, 1);
   const { operations, loadF32, loadU32, binary, constantF32, storeF32, storeU32 } = context;
   loadF32(17);
@@ -181,14 +196,17 @@ function msdfProgram(techniqueId: number, programId: number): PolicyProgram {
     [6, [25, 25, 25, 25]],
     [7, [25, 25, 25, 24]],
   ]);
-  storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
-  return createProgram(techniqueId, programId, context, [
-    ...floatBuffers([4, 4, 4, 4, 4, 4, 4]),
-    transformIndexBuffer(),
-  ]);
+  if (transformMode === 'indexed') storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
+  return createProgram(
+    techniqueId,
+    programId,
+    context,
+    [...floatBuffers([4, 4, 4, 4, 4, 4, 4]), ...(transformMode === 'indexed' ? [transformIndexBuffer()] : [])],
+    transformMode,
+  );
 }
 
-function slugProgram(techniqueId: number, programId: number): PolicyProgram {
+function slugProgram(techniqueId: number, programId: number, transformMode: ThreeTransformMode): PolicyProgram {
   const context = programContext('glyph', 8, 6, true);
   const { loadF32, loadU32, binary, constantF32, constantU32, storeF32, storeU32 } = context;
   loadF32(16);
@@ -213,12 +231,18 @@ function slugProgram(techniqueId: number, programId: number): PolicyProgram {
     [6, [21, 22, 23, 24]],
     [7, [25, 26, 29, 29]],
   ]);
-  storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
-  return createProgram(techniqueId, programId, context, [
-    ...floatBuffers([4, 4, 4, 4, 4]),
-    ...u32Buffers([4, 4], 6),
-    transformIndexBuffer(),
-  ]);
+  if (transformMode === 'indexed') storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
+  return createProgram(
+    techniqueId,
+    programId,
+    context,
+    [
+      ...floatBuffers([4, 4, 4, 4, 4]),
+      ...u32Buffers([4, 4], 6),
+      ...(transformMode === 'indexed' ? [transformIndexBuffer()] : []),
+    ],
+    transformMode,
+  );
 }
 
 interface ProgramContext {
@@ -308,6 +332,7 @@ function createProgram(
   programId: number,
   context: ProgramContext,
   buffers: readonly PolicyBuffer[],
+  transformMode: ThreeTransformMode,
 ): PolicyProgram {
   const batch = textShaperAbi.policy.batchFields;
   return {
@@ -320,7 +345,14 @@ function createProgram(
     operations: context.operations,
     storageKeyMask: batch.technique | batch.program | batch.resource,
     drawKeyMask:
-      batch.technique | batch.program | batch.resource | batch.material | batch.clip | batch.depth | batch.order,
+      batch.technique |
+      batch.program |
+      batch.resource |
+      batch.material |
+      batch.clip |
+      batch.depth |
+      batch.order |
+      (transformMode === 'direct' ? batch.transform : 0),
   };
 }
 

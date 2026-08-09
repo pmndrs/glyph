@@ -2,6 +2,12 @@
 
 ## 2026-08-09
 
+- **Executed both policy-selected transform modes in Three** — Generalized the command-buffer target across indexed
+  and direct transform realizations for Bitmap, MSDF, and Slug. The same compiled-Wasm fixture now registers a direct
+  first-party policy: Rust emits draw transforms `[1,2]`, omits transform buffers, and Three updates retained draw
+  matrices from their scene objects. The existing indexed policy still emits draw transforms `[0,0]`, buffer 15, and
+  the shared matrix sidecar. The engine policy chooses the contract; Three does not rebatch the plan.
+
 - **Bounded Three residency and retained draw identity** — Applied exact Rust buffer/resource retirements to dependent
   material and texture realizations, retaining shared renderer resources until their final plan reference leaves. The
   compiled-Wasm fixture now checks exact live storage-plus-resource bytes after Bitmap → MSDF → Slug transitions.
