@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:d75f5786f818b1e6db813d28197024af3a3fb6bede937e94712c141547c287fe'
+source_digest: 'sha256:d7194a0ca57aa340e386cefe1b7fbf553b7e38cc75c6646b17130a8e83f38ead'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -131,6 +131,9 @@ sources:
   - id: engine-frame-wire
     resource: ../../packages/text/src/internal/engine-frame-wire.ts
     title: Complete retained-frame request compiler
+  - id: three-engine-runtime
+    resource: ../../packages/text/src/three/engine-runtime.ts
+    title: Lazy Three engine coordinator
   - id: raster-validation
     resource: ../../packages/text/src/internal/raster-artifact-validation.ts
     title: Shared standalone raster artifact validation
@@ -760,6 +763,14 @@ render plan. Compiled-Wasm tests prove both cases. The additional retained `u32`
 1,070,580 raw / 402,114 gzip / 319,662 Brotli bytes. Current 8-warmup/31-sample resize medians are
 4.217/4.791/5.633 milliseconds for Bitmap/MTSDF/Slug; their 6–7% RSD does not distinguish the small movement from the
 preceding 4.120/4.646/5.622-millisecond checkpoint.
+
+First-party engine ownership remains in the Three integration rather than `TextRuntime`, preserving the
+renderer-neutral core graph. A lazy runtime-scoped coordinator registers the complete Three policy once, assigns
+binding and session handles, and reference-counts ordered stack handles. Exact binding-handle sequences share a stack;
+reversed fallback order does not. Last release disposes the Rust stack, and monotonic allocation avoids immediately
+reusing a retired identity. A real-fixture integration binds Bitmap and MTSDF to one retained Inter shaping font and
+proves these lifecycle rules. This coordinator is not imported by the public Three entry until the batch/session
+render-plan cutover, so this checkpoint alone changes no shipping entry graph.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

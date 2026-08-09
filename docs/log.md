@@ -2,6 +2,13 @@
 
 ## 2026-08-08
 
+- **Added a lazy Three-owned engine coordinator** — The renderer-neutral runtime does not statically import first-party
+  raster programs. On first Three use, a runtime-scoped coordinator registers the all-technique policy, compiles loaded
+  font bindings, allocates session handles, and reference-counts exact ordered font-stack handles. A real Inter fixture
+  binds Bitmap and MTSDF to the same retained shaping font, proves identical stack acquisition shares one handle,
+  reversed fallback order does not, last release retires the stack, and retired handles are not immediately reused. The
+  coordinator remains outside the public Three graph until batch/session render-plan consumption lands.
+
 - **Separated shaping-font identity from render-binding identity** — Rust font stacks now contain loaded-font binding
   handles, and each binding names its shared shaping-font handle. Shaping, metrics, and extents continue through the
   retained font once; policy gather follows the selected binding, so the same face may carry multiple raster techniques
