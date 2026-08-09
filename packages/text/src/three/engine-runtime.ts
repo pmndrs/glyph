@@ -3,7 +3,7 @@ import { bitmap, type BitmapData, type BitmapPageData } from '../raster/bitmap-t
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugData, type SlugPageData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import type { TextRuntime } from '../text-runtime.js';
+import { textRuntimeShaper, type TextRuntime } from '../text-runtime.js';
 import { firstPartyFontBindingBytes } from '../internal/font-binding-wire.js';
 import { firstPartyThreeRenderPolicyBytes, type ThreeTransformMode } from '../internal/render-policy-wire.js';
 import { TextEngineHost, type TextEngineSession, type TextEngineSessionOptions } from '../internal/text-engine-host.js';
@@ -61,8 +61,11 @@ export class ThreeTextEngineCoordinator {
   #nextMaterialHandle = 1;
   #disposed = false;
 
-  constructor(runtime: Pick<TextRuntime, 'shaper'>, options: ThreeTextEngineCoordinatorOptions = {}) {
-    this.host = new TextEngineHost(runtime.shaper);
+  constructor(
+    shaper: ConstructorParameters<typeof TextEngineHost>[0],
+    options: ThreeTextEngineCoordinatorOptions = {},
+  ) {
+    this.host = new TextEngineHost(shaper);
     const planPrograms = compiledThreeRasterPlanPrograms(this.host.wireIdentities);
     this.#planPrograms = new Map(planPrograms.map((program) => [program.technique.id, program]));
     this.host.registerPolicy(
@@ -232,7 +235,7 @@ export class ThreeTextEngineCoordinator {
 export function threeTextEngineCoordinator(runtime: TextRuntime): ThreeTextEngineCoordinator {
   let coordinator = coordinators.get(runtime);
   if (coordinator === undefined) {
-    coordinator = new ThreeTextEngineCoordinator(runtime);
+    coordinator = new ThreeTextEngineCoordinator(textRuntimeShaper(runtime));
     coordinators.set(runtime, coordinator);
   }
   return coordinator;

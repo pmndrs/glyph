@@ -33,11 +33,7 @@ const conformanceCases: readonly BenchmarkCase[] = [
   { targetId: 'react-text-reconciliation', scenarioId: 'react-text-reconciliation' },
   { targetId: 'font-baker', scenarioId: 'cold-load-payload' },
   { targetId: 'font-loader-worker', scenarioId: 'worker-fallback' },
-  { targetId: 'harfrust-shaper', scenarioId: 'shaping-conformance' },
-  { targetId: 'paragraph-engine', scenarioId: 'paragraph-measurement' },
-  { targetId: 'paragraph-layout-engine', scenarioId: 'paragraph-layout' },
-  { targetId: 'paragraph-bidi-policy', scenarioId: 'paragraph-bidi-policy' },
-  { targetId: 'cjk-universality', scenarioId: 'cjk-universality' },
+  { targetId: 'paragraph-contracts', scenarioId: 'paragraph-contracts' },
   {
     targetId: 'advanced-shaping-conformance',
     scenarioId: 'advanced-shaping-conformance',

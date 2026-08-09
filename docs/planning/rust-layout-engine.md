@@ -18,12 +18,6 @@ sources:
   - id: layout-benchmark
     resource: ../../packages/text/scripts/benchmark-paragraph-layout.mts
     title: Paragraph layout benchmark, workflow text:layout-benchmark
-  - id: paragraph
-    resource: ../../packages/text/src/paragraph.ts
-    title: TypeScript paragraph preparation and layout
-  - id: paragraph-batch
-    resource: ../../packages/text/src/paragraph-batch.ts
-    title: Current canonical packing and dirty-range implementation
   - id: shaper-crate
     resource: ../../packages/text/rust/shaper/src/lib.rs
     title: HarfRust Wasm shaper crate
@@ -267,8 +261,9 @@ TypeScript owns:
 - lowering the renderer-neutral plan through the one Three/TSL policy used by both WebGPU and forced WebGL2; and
 - renderer-owned upload staging, command encoding, fences, and transfer-buffer retirement.
 
-TypeGPU product integration is outside this stack. The Three/TSL adapter and a minimal native plan consumer prove the
-display-list and policy boundaries without adding another renderer dependency or product surface.
+TypeGPU product integration is outside this stack. Its former paragraph-target adapter is deleted and will be rebuilt
+from scratch against the Rust-emitted render plan and policy contract. The Three/TSL adapter and a minimal native plan
+consumer prove those boundaries without adding another renderer dependency to the core engine.
 
 It does not decide bidi runs, break lines, position glyphs, synthesize decorations, or rebuild dirty ranges.
 

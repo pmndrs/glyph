@@ -1,6 +1,6 @@
 /* @workflow {
   "name": "text:layout-benchmark",
-  "summary": "Measures paragraph preparation, layout, and packing cost per glyph across realistic scales, with phase attribution and allocation.",
+  "summary": "Profiles public TextGroup updates from frame preparation through Rust text_update and Three render-plan application.",
   "requirements": "Built package: pnpm --filter @pmndrs/text build. Accepts --glyphs, --reps, --warmup, --case, --json.",
   "writes": "stdout only, or the JSON report path passed to --json"
 } */
@@ -8,8 +8,11 @@ import { writeFile } from 'node:fs/promises';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 
+import { setThreeTextProfiler, type ThreeTextProfilePhase } from '../dist/three.js';
+
 import {
   createBenchmarkParagraph,
+  disposeBenchmarkParagraph,
   loadParagraphBenchmarkFixture,
   paragraphTextForGlyphs,
 } from './support/paragraph-benchmark-fixture.mts';
@@ -40,8 +43,16 @@ const DEFAULT_SCALES = [5_500, 11_000, 22_000, 33_000] as const;
 
 type CaseName = 'cold' | 'font-size' | 'layout-width' | 'text';
 
-interface Sample {
-  readonly durationMs: number;
+interface UpdateProfile {
+  readonly wallMs: number;
+  readonly frameMs: number;
+  readonly prepareMs: number;
+  readonly engineMs: number;
+  readonly applyMs: number;
+  readonly transformsMs: number;
+}
+
+interface Sample extends UpdateProfile {
   readonly glyphs: number;
 }
 
@@ -56,6 +67,11 @@ interface CaseReport {
   readonly rsdPercent: number;
   readonly perGlyphUs: number;
   readonly bytesPerUpdate: number;
+  readonly frameMedianMs: number;
+  readonly prepareMedianMs: number;
+  readonly engineMedianMs: number;
+  readonly applyMedianMs: number;
+  readonly transformsMedianMs: number;
 }
 
 const options = parseArguments(process.argv.slice(2));
@@ -77,19 +93,26 @@ if (options.jsonPath !== undefined) {
   console.log(`\nwrote ${options.jsonPath}`);
 }
 
-font.runtime.dispose();
 font.loaded.dispose();
+font.runtime.dispose();
 
 async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
   const total = options.warmup + options.repetitions;
   const samples: Sample[] = [];
-  const { runtime } = font;
-
   // A cold case must build a fresh batch every repetition; the others measure an update to a warm one, which is what a
   // frame actually does. Both still run the same warmup discipline.
   const heapDeltas: number[] = [];
+  const counter = createBenchmarkParagraph(font, text, 600);
+  counter.group.updateMatrixWorld(true);
+  if (counter.group.error !== undefined) throw counter.group.error;
+  const calibratedGlyphs = counter.paragraph.measureLayout()?.glyphCount;
+  disposeBenchmarkParagraph(counter);
+  if (calibratedGlyphs === undefined) throw new Error('paragraph benchmark fixture did not publish a glyph count');
   const warm = name === 'cold' ? undefined : createBenchmarkParagraph(font, text, 600);
-  if (warm !== undefined) runtime.update();
+  if (warm !== undefined) {
+    warm.group.updateMatrixWorld(true);
+    if (warm.group.error !== undefined) throw warm.group.error;
+  }
 
   for (let repetition = 0; repetition < total; repetition += 1) {
     const recording = repetition >= options.warmup;
@@ -99,23 +122,22 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
 
     collectGarbage();
     const heapBefore = process.memoryUsage().heapUsed;
-    const started = performance.now();
-    runtime.update();
-    const durationMs = performance.now() - started;
+    const updated = created ?? warm!;
+    const profile = profileUpdate(() => updated.group.updateMatrixWorld(true));
     const heapAfter = process.memoryUsage().heapUsed;
 
-    const glyphs = glyphCount(created?.batch ?? warm!.batch);
-    created?.batch.dispose();
+    if (updated.group.error !== undefined) throw updated.group.error;
+    if (created !== undefined) disposeBenchmarkParagraph(created);
 
     if (recording) {
-      samples.push({ durationMs, glyphs });
+      samples.push({ ...profile, glyphs: calibratedGlyphs });
       heapDeltas.push(Math.max(0, heapAfter - heapBefore));
     }
   }
 
-  warm?.batch.dispose();
+  if (warm !== undefined) disposeBenchmarkParagraph(warm);
 
-  const durations = samples.map((sample) => sample.durationMs).sort((left, right) => left - right);
+  const durations = sorted(samples, 'wallMs');
   const glyphs = samples[0]?.glyphs ?? 0;
   const mean = durations.reduce((sum, value) => sum + value, 0) / durations.length;
   const variance = durations.reduce((sum, value) => sum + (value - mean) ** 2, 0) / durations.length;
@@ -132,7 +154,41 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
     rsdPercent: mean === 0 ? 0 : (Math.sqrt(variance) / mean) * 100,
     perGlyphUs: glyphs === 0 ? 0 : (median * 1000) / glyphs,
     bytesPerUpdate: bytes,
+    frameMedianMs: medianOf(sorted(samples, 'frameMs')),
+    prepareMedianMs: medianOf(sorted(samples, 'prepareMs')),
+    engineMedianMs: medianOf(sorted(samples, 'engineMs')),
+    applyMedianMs: medianOf(sorted(samples, 'applyMs')),
+    transformsMedianMs: medianOf(sorted(samples, 'transformsMs')),
   };
+}
+
+function profileUpdate(update: () => void): UpdateProfile {
+  const durations = new Map<ThreeTextProfilePhase, number>();
+  setThreeTextProfiler((phase, startedMs, endedMs) => {
+    durations.set(phase, (durations.get(phase) ?? 0) + endedMs - startedMs);
+  });
+  const started = performance.now();
+  try {
+    update();
+  } finally {
+    setThreeTextProfiler(undefined);
+  }
+  return {
+    wallMs: performance.now() - started,
+    frameMs: durations.get('frame.total') ?? 0,
+    prepareMs: durations.get('frame.prepare') ?? 0,
+    engineMs: durations.get('engine.update') ?? 0,
+    applyMs: durations.get('plan.apply') ?? 0,
+    transformsMs: durations.get('transforms.sync') ?? 0,
+  };
+}
+
+function sorted<Key extends keyof UpdateProfile>(samples: readonly Sample[], key: Key): number[] {
+  return samples.map((sample) => sample[key]).sort((left, right) => left - right);
+}
+
+function medianOf(values: readonly number[]): number {
+  return values[Math.floor(values.length / 2)] ?? 0;
 }
 
 function applyChange(name: CaseName, paragraph: ParagraphHandle, repetition: number, text: string): void {
@@ -145,29 +201,23 @@ function applyChange(name: CaseName, paragraph: ParagraphHandle, repetition: num
   } else paragraph.text = `${text.slice(0, text.length - repetition)}`;
 }
 
-type TextRuntimeHandle = (typeof font)['runtime'];
-type ParagraphBatchHandle = ReturnType<TextRuntimeHandle['createParagraphBatch']>;
-type ParagraphHandle = ReturnType<ParagraphBatchHandle['add']>;
-
-function glyphCount(batch: ParagraphBatchHandle): number {
-  let total = 0;
-  for (const paragraph of batch.current.paragraphs) total += paragraph.layout.glyphIds.length;
-  return total;
-}
+type ParagraphHandle = ReturnType<typeof createBenchmarkParagraph>['paragraph'];
 
 function printReport(rows: readonly CaseReport[]): void {
   console.log(
     `\nwarmup ${options.warmup} discarded · ${options.repetitions} recorded repetitions · budget ${budget60.toFixed(2)}ms @60Hz · ${budget120.toFixed(2)}ms @120Hz\n`,
   );
   console.log(
-    `${'case'.padEnd(13)}${'glyphs'.padStart(8)}${'median'.padStart(10)}${'p95'.padStart(10)}${'min'.padStart(9)}${'rsd'.padStart(7)}${'µs/glyph'.padStart(10)}${'B/glyph'.padStart(9)}  budget`,
+    `${'case'.padEnd(13)}${'glyphs'.padStart(8)}${'prepare'.padStart(10)}${'engine'.padStart(10)}${'apply'.padStart(10)}${'frame'.padStart(10)}${'wall'.padStart(10)}${'wall p95'.padStart(11)}${'rsd'.padStart(7)}  budget`,
   );
   for (const row of rows) {
     const over = row.medianMs / budget120;
     console.log(
-      `${row.name.padEnd(13)}${String(row.glyphs).padStart(8)}${`${row.medianMs.toFixed(2)}ms`.padStart(10)}${`${row.p95Ms.toFixed(2)}ms`.padStart(10)}${`${row.minMs.toFixed(2)}ms`.padStart(9)}${`${row.rsdPercent.toFixed(1)}%`.padStart(7)}${row.perGlyphUs.toFixed(3).padStart(10)}${(row.bytesPerUpdate / Math.max(1, row.glyphs)).toFixed(0).padStart(9)}  ${over <= 1 ? 'within 120Hz' : `${over.toFixed(1)}x over 120Hz`}`,
+      `${row.name.padEnd(13)}${String(row.glyphs).padStart(8)}${`${row.prepareMedianMs.toFixed(2)}ms`.padStart(10)}${`${row.engineMedianMs.toFixed(2)}ms`.padStart(10)}${`${row.applyMedianMs.toFixed(2)}ms`.padStart(10)}${`${row.frameMedianMs.toFixed(2)}ms`.padStart(10)}${`${row.medianMs.toFixed(2)}ms`.padStart(10)}${`${row.p95Ms.toFixed(2)}ms`.padStart(11)}${`${row.rsdPercent.toFixed(1)}%`.padStart(7)}  ${over <= 1 ? 'within 120Hz' : `${over.toFixed(1)}x over 120Hz`}`,
     );
   }
+  console.log('\nThis public Three diagnostic is not the canonical Rust-vs-TypeScript comparison.');
+  console.log('Use text:rust-layout-benchmark for the unchanged complete text_update + render-plan metric.');
 }
 
 function parseArguments(argv: readonly string[]) {

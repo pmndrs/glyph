@@ -16,8 +16,7 @@ import {
 
 import type { GlyphPaintInput } from './formatted-text.js';
 import type { FontSelection, LoadedFont } from './loaded-font.js';
-import type { ParagraphContentBox } from './paragraph-batch.js';
-import type { ParagraphStyle } from './paragraph.js';
+import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 import type { LoadedFontRequest } from './text-runtime.js';
 import {

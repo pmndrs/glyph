@@ -38,14 +38,12 @@ pub const STATUS_REVISION_CONFLICT: u32 = 12;
 pub const STATUS_FONT_STACK_MISSING: u32 = 13;
 pub const STATUS_FONT_IN_USE: u32 = 14;
 
-const BUFFER_FLAGS_MASK: u32 = 0xff;
 const MAX_CACHED_PLANS_PER_FONT: usize = 64;
 const DEFAULT_SHAPE_BUFFER_CAPACITY: usize = 32_768;
 const DEFAULT_SHAPE_FEATURE_CAPACITY: usize = 128;
 
 pub struct ShaperRegistry {
     fonts: BTreeMap<u32, RegisteredFont>,
-    result: ResultArena,
     shape_buffer: Option<UnicodeBuffer>,
     context_codepoints: Vec<u32>,
     shape_features: Vec<Feature>,
@@ -55,18 +53,11 @@ impl Default for ShaperRegistry {
     fn default() -> Self {
         Self {
             fonts: BTreeMap::new(),
-            result: ResultArena::default(),
             shape_buffer: Some(UnicodeBuffer::new()),
             context_codepoints: Vec::new(),
             shape_features: Vec::new(),
         }
     }
-}
-
-#[derive(Default)]
-struct ResultArena {
-    words: Vec<u32>,
-    byte_length: u32,
 }
 
 struct RegisteredFont {
@@ -122,27 +113,6 @@ pub struct FeatureRecord {
     pub end: u32,
 }
 
-pub struct RunRequest {
-    pub font_handle: u32,
-    pub text_start: u32,
-    pub text_end: u32,
-    pub script: u32,
-    pub language: Option<Vec<u8>>,
-    pub features: Vec<FeatureRecord>,
-    pub direction: u8,
-    pub cluster_level: u8,
-    pub flags: u32,
-}
-
-pub struct ReshapeRange {
-    pub run: u32,
-    pub item_start: u32,
-    pub item_end: u32,
-    pub context_start: u32,
-    pub context_end: u32,
-    pub flags: u32,
-}
-
 #[derive(Clone, Copy)]
 pub(crate) struct ShapeRangeRef {
     pub item_start: u32,
@@ -162,40 +132,6 @@ pub(crate) struct ShapeRunRef<'a> {
     pub direction: u8,
     pub cluster_level: u8,
     pub flags: u32,
-}
-
-impl<'a> From<&'a RunRequest> for ShapeRunRef<'a> {
-    fn from(run: &'a RunRequest) -> Self {
-        Self {
-            text_start: run.text_start,
-            text_end: run.text_end,
-            script: run.script,
-            language: run.language.as_deref(),
-            features: &run.features,
-            direction: run.direction,
-            cluster_level: run.cluster_level,
-            flags: run.flags,
-        }
-    }
-}
-
-pub struct ShapeBatchRequest {
-    pub text: Vec<u16>,
-    pub runs: Vec<RunRequest>,
-}
-
-pub struct ShapeBatchOutput {
-    pub font_handles: Vec<u32>,
-    pub run_font_slots: Vec<u16>,
-    pub run_glyph_starts: Vec<u32>,
-    pub run_glyph_counts: Vec<u32>,
-    pub glyph_ids: Vec<u16>,
-    pub clusters: Vec<u32>,
-    pub x_advances: Vec<i32>,
-    pub y_advances: Vec<i32>,
-    pub x_offsets: Vec<i32>,
-    pub y_offsets: Vec<i32>,
-    pub glyph_flags: Vec<u16>,
 }
 
 impl ShaperRegistry {
@@ -223,7 +159,6 @@ impl ShaperRegistry {
         extents: &[u8],
         availability: &[u8],
     ) -> u32 {
-        self.result.clear();
         if handle == 0 {
             return STATUS_INVALID_HANDLE;
         }
@@ -286,116 +221,11 @@ impl ShaperRegistry {
     }
 
     pub fn dispose_font(&mut self, handle: u32) -> u32 {
-        self.result.clear();
         if self.fonts.remove(&handle).is_some() {
             STATUS_OK
         } else {
             STATUS_FONT_MISSING
         }
-    }
-
-    pub fn shape_batch(&mut self, request: &ShapeBatchRequest) -> Result<ShapeBatchOutput, u32> {
-        self.result.clear();
-        self.shape_segments(request, None)
-    }
-
-    pub fn reshape_ranges(
-        &mut self,
-        request: &ShapeBatchRequest,
-        ranges: &[ReshapeRange],
-    ) -> Result<ShapeBatchOutput, u32> {
-        self.result.clear();
-        self.shape_segments(request, Some(ranges))
-    }
-
-    fn shape_segments(
-        &mut self,
-        request: &ShapeBatchRequest,
-        ranges: Option<&[ReshapeRange]>,
-    ) -> Result<ShapeBatchOutput, u32> {
-        validate_request(request, ranges)?;
-        let segment_count = ranges.map_or(request.runs.len(), <[ReshapeRange]>::len);
-        let mut output = ShapeBatchOutput::with_run_capacity(segment_count);
-        let mut font_slots = BTreeMap::<u32, u16>::new();
-
-        for segment in 0..segment_count {
-            let (run_index, range) = if let Some(ranges) = ranges {
-                let range = &ranges[segment];
-                (
-                    usize::try_from(range.run).map_err(|_| STATUS_INVALID_REQUEST)?,
-                    ShapeRangeRef {
-                        item_start: range.item_start,
-                        item_end: range.item_end,
-                        context_start: range.context_start,
-                        context_end: range.context_end,
-                        flags: range.flags,
-                    },
-                )
-            } else {
-                let run = &request.runs[segment];
-                (
-                    segment,
-                    ShapeRangeRef {
-                        item_start: run.text_start,
-                        item_end: run.text_end,
-                        context_start: run.text_start,
-                        context_end: run.text_end,
-                        flags: run.flags,
-                    },
-                )
-            };
-            let run = &request.runs[run_index];
-            let run_ref = ShapeRunRef::from(run);
-            let slot = if let Some(slot) = font_slots.get(&run.font_handle) {
-                *slot
-            } else {
-                let slot = u16::try_from(output.font_handles.len())
-                    .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-                output.font_handles.push(run.font_handle);
-                font_slots.insert(run.font_handle, slot);
-                slot
-            };
-            let glyph_start =
-                u32::try_from(output.glyph_ids.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-            let font = self
-                .fonts
-                .get_mut(&run.font_handle)
-                .ok_or(STATUS_FONT_MISSING)?;
-            let shaped = shape_segment(
-                font,
-                &request.text,
-                run_ref,
-                range,
-                &mut self.shape_buffer,
-                &mut self.context_codepoints,
-                &mut self.shape_features,
-            )?;
-            let append_result: Result<(), u32> = (|| {
-                let glyph_count =
-                    u32::try_from(shaped.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-                output.run_font_slots.push(slot);
-                output.run_glyph_starts.push(glyph_start);
-                output.run_glyph_counts.push(glyph_count);
-                for (info, position) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
-                    output
-                        .glyph_ids
-                        .push(u16::try_from(info.glyph_id).map_err(|_| STATUS_RESULT_TOO_LARGE)?);
-                    output.clusters.push(info.cluster);
-                    output.x_advances.push(position.x_advance);
-                    output.y_advances.push(position.y_advance);
-                    output.x_offsets.push(position.x_offset);
-                    output.y_offsets.push(position.y_offset);
-                    output.glyph_flags.push(
-                        u16::try_from(info.flags().to_bits())
-                            .map_err(|_| STATUS_RESULT_TOO_LARGE)?,
-                    );
-                }
-                Ok(())
-            })();
-            self.shape_buffer = Some(shaped.clear());
-            append_result?;
-        }
-        Ok(output)
     }
 
     pub(crate) fn with_shaped_run<T>(
@@ -441,22 +271,6 @@ impl ShaperRegistry {
         result
     }
 
-    pub fn clear_result(&mut self) {
-        self.result.clear();
-    }
-
-    pub fn set_result(&mut self, result: Vec<u8>) -> Result<(), u32> {
-        self.result.set(result)
-    }
-
-    pub fn result_pointer(&self) -> *const u32 {
-        self.result.words.as_ptr()
-    }
-
-    pub fn result_length(&self) -> u32 {
-        self.result.byte_length
-    }
-
     pub fn font_count(&self) -> u32 {
         self.fonts.len().try_into().unwrap_or(u32::MAX)
     }
@@ -487,108 +301,6 @@ impl ShaperRegistry {
             .map(|font| u32::try_from(font.plans.len()).unwrap_or(u32::MAX))
             .fold(0_u32, u32::saturating_add)
     }
-}
-
-impl ResultArena {
-    fn clear(&mut self) {
-        self.words.clear();
-        self.byte_length = 0;
-    }
-
-    fn set(&mut self, bytes: Vec<u8>) -> Result<(), u32> {
-        self.words.clear();
-        self.words
-            .try_reserve_exact(bytes.len().div_ceil(4))
-            .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-        for chunk in bytes.chunks(4) {
-            let mut word = [0; 4];
-            word[..chunk.len()].copy_from_slice(chunk);
-            self.words.push(u32::from_le_bytes(word));
-        }
-        self.byte_length = u32::try_from(bytes.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-        Ok(())
-    }
-}
-
-impl ShapeBatchOutput {
-    fn with_run_capacity(run_count: usize) -> Self {
-        Self {
-            font_handles: Vec::new(),
-            run_font_slots: Vec::with_capacity(run_count),
-            run_glyph_starts: Vec::with_capacity(run_count),
-            run_glyph_counts: Vec::with_capacity(run_count),
-            glyph_ids: Vec::new(),
-            clusters: Vec::new(),
-            x_advances: Vec::new(),
-            y_advances: Vec::new(),
-            x_offsets: Vec::new(),
-            y_offsets: Vec::new(),
-            glyph_flags: Vec::new(),
-        }
-    }
-}
-
-fn validate_request(
-    request: &ShapeBatchRequest,
-    ranges: Option<&[ReshapeRange]>,
-) -> Result<(), u32> {
-    let text_length = u32::try_from(request.text.len()).map_err(|_| STATUS_INVALID_REQUEST)?;
-    if request.runs.is_empty() {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    for run in &request.runs {
-        if run.font_handle == 0
-            || run.text_start > run.text_end
-            || run.text_end > text_length
-            || run.direction > 1
-            || run.cluster_level > 3
-            || run.flags & !BUFFER_FLAGS_MASK != 0
-            || !valid_script(run.script)
-            || !valid_utf16_boundary(&request.text, run.text_start)
-            || !valid_utf16_boundary(&request.text, run.text_end)
-            || run
-                .language
-                .as_ref()
-                .is_some_and(|value| parse_language(value).is_none())
-        {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        for feature in &run.features {
-            if !valid_tag(feature.tag)
-                || feature.start > feature.end
-                || feature.end > text_length
-                || !valid_utf16_boundary(&request.text, feature.start)
-                || !valid_utf16_boundary(&request.text, feature.end)
-            {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
-    }
-    if let Some(ranges) = ranges {
-        if ranges.is_empty() {
-            return Err(STATUS_INVALID_REQUEST);
-        }
-        for range in ranges {
-            let run = request
-                .runs
-                .get(usize::try_from(range.run).map_err(|_| STATUS_INVALID_REQUEST)?)
-                .ok_or(STATUS_INVALID_REQUEST)?;
-            if range.context_start > range.item_start
-                || range.item_start > range.item_end
-                || range.item_end > range.context_end
-                || range.context_start < run.text_start
-                || range.context_end > run.text_end
-                || range.flags & !BUFFER_FLAGS_MASK != 0
-                || !valid_utf16_boundary(&request.text, range.item_start)
-                || !valid_utf16_boundary(&request.text, range.item_end)
-                || !valid_utf16_boundary(&request.text, range.context_start)
-                || !valid_utf16_boundary(&request.text, range.context_end)
-            {
-                return Err(STATUS_INVALID_REQUEST);
-            }
-        }
-    }
-    Ok(())
 }
 
 fn shape_segment(
@@ -915,11 +627,6 @@ pub(crate) fn valid_tag(tag: u32) -> bool {
         .all(|byte| (0x20..=0x7e).contains(byte))
 }
 
-fn valid_script(tag: u32) -> bool {
-    let bytes = tag.to_be_bytes();
-    bytes[0].is_ascii_uppercase() && bytes[1..].iter().all(u8::is_ascii_lowercase)
-}
-
 pub(crate) fn valid_utf16_boundary(text: &[u16], offset: u32) -> bool {
     let Ok(offset) = usize::try_from(offset) else {
         return false;
@@ -1002,8 +709,6 @@ mod tests {
     fn tags_reject_non_opentype_bytes() {
         assert!(valid_tag(u32::from_be_bytes(*b"Latn")));
         assert!(!valid_tag(u32::from_be_bytes([b'L', 0, b't', b'n'])));
-        assert!(valid_script(u32::from_be_bytes(*b"Latn")));
-        assert!(!valid_script(u32::from_be_bytes(*b"LATN")));
     }
 
     #[test]

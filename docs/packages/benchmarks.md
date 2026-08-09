@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:805069ef81fb411215ec4ac945aebe4573faccb6fc0a77fdc7e0923fed407895'
+source_digest: 'sha256:cedbf0466d5682351c98761d2e874f9dcf8955b5eec88a548f9144efedf0d338'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -83,9 +83,9 @@ sources:
   - id: v1-compose-proof
     resource: ../../apps/benchmarks/src/v1-compose-proof.ts
     title: Target-v1 composed canonical-shader browser proof
-  - id: v1-async-proof
-    resource: ../../apps/benchmarks/src/v1-async-proof.ts
-    title: Target-v1 Worker synchronization browser proof
+  - id: paragraph-contracts
+    resource: ../../apps/benchmarks/src/benchmark/targets/conformance/paragraph-contracts.ts
+    title: Public Rust paragraph conformance target
   - id: bitmap-text-product-target
     resource: ../../apps/benchmarks/src/benchmark/targets/product/bitmap-text.ts
     title: Finite Bitmap public Text product target

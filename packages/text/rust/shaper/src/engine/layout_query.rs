@@ -7,16 +7,24 @@ use alloc::vec::Vec;
 
 use super::{
     EngineError,
+    cluster_state::ClusterArena,
     flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
     flow_geometry::FlowGeometryArena,
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
-    positioning::SemanticGlyph,
+    positioning::{SemanticGlyph, positioned_fragment_advance},
     semantic_view::{
         SEMANTIC_GLYPH, SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SemanticRecord,
     },
 };
 
 pub(crate) const MEASUREMENT_FLAG_OVERFLOWED: u16 = 1;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct LayoutExtents {
+    pub width: f64,
+    pub height: f64,
+    pub consumed_clusters: usize,
+}
 
 pub(crate) fn append_measurement(
     target: &mut Vec<SemanticRecord>,
@@ -28,6 +36,10 @@ pub(crate) fn append_measurement(
     positioned_glyphs: &[SemanticGlyph],
     semantic_line_glyph_starts: &[u32],
     semantic_line_glyph_counts: &[u32],
+    semantic_line_inline_extents: Option<&[f64]>,
+    text: &[u16],
+    clusters: &ClusterArena,
+    intrinsic_extents: Option<LayoutExtents>,
     include_glyphs: bool,
 ) -> Result<(), EngineError> {
     let constraint = geometry
@@ -37,8 +49,10 @@ pub(crate) fn append_measurement(
     if constraint.paragraph_id != paragraph_id {
         return Err(EngineError::InvalidRequest);
     }
-    if semantic_line_glyph_starts.len() != flow.lines.len()
-        || semantic_line_glyph_counts.len() != flow.lines.len()
+    if include_glyphs
+        && (semantic_line_glyph_starts.len() != flow.lines.len()
+            || semantic_line_glyph_counts.len() != flow.lines.len())
+        || semantic_line_inline_extents.is_some_and(|extents| extents.len() != flow.lines.len())
     {
         return Err(EngineError::InvalidRequest);
     }
@@ -87,15 +101,11 @@ pub(crate) fn append_measurement(
         let Some(last) = fragments.last() else {
             continue;
         };
-        let inline_start = fragments
-            .iter()
-            .map(|fragment| fragment.slot_start)
-            .fold(f64::INFINITY, f64::min);
-        let inline_end = fragments
-            .iter()
-            .map(|fragment| fragment.slot_start + fragment.line.advance)
-            .fold(f64::NEG_INFINITY, f64::max);
-        let advance = (inline_end - inline_start).max(0.0);
+        let advance = if let Some(extents) = semantic_line_inline_extents {
+            extents[index]
+        } else {
+            line_inline_extent(flow, line, index, text, clusters)?
+        };
         content_width = content_width.max(advance);
         content_height = content_height.max(line.block_start + line.height);
         consumed_clusters = consumed_clusters
@@ -147,11 +157,23 @@ pub(crate) fn append_measurement(
         }
     }
 
+    let intrinsic = intrinsic_extents.unwrap_or(LayoutExtents {
+        width: content_width,
+        height: content_height,
+        consumed_clusters,
+    });
+    let full_content_width = content_width.max(intrinsic.width);
+    let full_content_height = content_height.max(intrinsic.height);
     let width = resolve_axis(constraint.width_mode, constraint.width, content_width)?;
     let height = resolve_axis(constraint.height_mode, constraint.height, content_height)?;
     let overflowed = consumed_clusters < cluster_count
-        || content_width > f64::from(width)
-        || content_height > f64::from(height);
+        || intrinsic.consumed_clusters < cluster_count
+        || axis_overflowed(constraint.width_mode, constraint.width, full_content_width)?
+        || axis_overflowed(
+            constraint.height_mode,
+            constraint.height,
+            full_content_height,
+        )?;
     let missing_glyph_count = positioned_glyphs
         .iter()
         .filter(|glyph| glyph.glyph_id == 0)
@@ -172,11 +194,69 @@ pub(crate) fn append_measurement(
         item_count: u32::try_from(line_count).map_err(|_| EngineError::ResultTooLarge)?,
         inline_start: width,
         block_start: height,
-        inline_extent: finite_nonnegative_f32(content_width)?,
-        block_extent: finite_nonnegative_f32(content_height)?,
+        inline_extent: finite_nonnegative_f32(full_content_width)?,
+        block_extent: finite_nonnegative_f32(full_content_height)?,
         ..SemanticRecord::default()
     };
     Ok(())
+}
+
+pub(crate) fn flow_extents(
+    flow_thread_id: u32,
+    flow: &FlowLayoutArena,
+    text: &[u16],
+    clusters: &ClusterArena,
+) -> Result<LayoutExtents, EngineError> {
+    let mut extents = LayoutExtents::default();
+    for (index, line) in flow.lines.iter().copied().enumerate() {
+        if line.flow_thread_id != flow_thread_id {
+            continue;
+        }
+        let fragments = line_fragments(flow, line)?;
+        if fragments.is_empty() {
+            continue;
+        }
+        let Some(last) = fragments.last() else {
+            continue;
+        };
+        extents.width = extents
+            .width
+            .max(line_inline_extent(flow, line, index, text, clusters)?);
+        extents.height = extents.height.max(line.block_start + line.height);
+        extents.consumed_clusters = extents
+            .consumed_clusters
+            .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
+    }
+    Ok(extents)
+}
+
+fn line_inline_extent(
+    flow: &FlowLayoutArena,
+    line: FlowLine,
+    index: usize,
+    text: &[u16],
+    clusters: &ClusterArena,
+) -> Result<f64, EngineError> {
+    let fragments = line_fragments(flow, line)?;
+    if fragments.is_empty() {
+        return Ok(0.0);
+    }
+    let final_line = flow
+        .lines
+        .get(index + 1)
+        .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
+    let inline_start = fragments
+        .iter()
+        .map(|fragment| fragment.slot_start)
+        .fold(f64::INFINITY, f64::min);
+    let mut inline_end = f64::NEG_INFINITY;
+    for fragment in fragments.iter().copied() {
+        inline_end = inline_end.max(
+            fragment.slot_start
+                + positioned_fragment_advance(line, fragment, final_line, text, clusters)?,
+        );
+    }
+    Ok((inline_end - inline_start).max(0.0))
 }
 
 fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragment], EngineError> {
@@ -194,6 +274,14 @@ fn resolve_axis(mode: u8, requested: f32, content: f64) -> Result<f32, EngineErr
         AXIS_UNCONSTRAINED => finite_nonnegative_f32(content),
         AXIS_AT_MOST => finite_nonnegative_f32(content.min(f64::from(requested))),
         AXIS_EXACT => Ok(requested),
+        _ => Err(EngineError::InvalidRequest),
+    }
+}
+
+fn axis_overflowed(mode: u8, requested: f32, content: f64) -> Result<bool, EngineError> {
+    match mode {
+        AXIS_UNCONSTRAINED => Ok(false),
+        AXIS_AT_MOST | AXIS_EXACT => Ok(content > f64::from(requested)),
         _ => Err(EngineError::InvalidRequest),
     }
 }
@@ -269,6 +357,10 @@ mod tests {
             &positioned,
             &[0],
             &[2],
+            Some(&[7.0]),
+            &[],
+            &ClusterArena::default(),
+            None,
             false,
         )
         .unwrap();
@@ -301,6 +393,10 @@ mod tests {
             &positioned,
             &[0],
             &[2],
+            Some(&[7.0]),
+            &[],
+            &ClusterArena::default(),
+            None,
             true,
         )
         .unwrap();
@@ -314,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn constrained_measurement_reports_content_overflow_independently_of_box_size() {
+    fn constrained_measurement_preserves_demanded_intrinsic_content_extents() {
         let geometry = FlowGeometryArena {
             constraints: vec![constraint(AXIS_AT_MOST, 6.0, AXIS_AT_MOST, 4.0)],
             ..FlowGeometryArena::default()
@@ -358,6 +454,14 @@ mod tests {
             &[],
             &[0],
             &[0],
+            Some(&[7.0]),
+            &[],
+            &ClusterArena::default(),
+            Some(LayoutExtents {
+                width: 9.0,
+                height: 8.0,
+                consumed_clusters: 2,
+            }),
             false,
         )
         .unwrap();
@@ -365,8 +469,66 @@ mod tests {
         assert_eq!(records[0].flags, MEASUREMENT_FLAG_OVERFLOWED);
         assert_eq!(records[0].inline_start, 6.0);
         assert_eq!(records[0].block_start, 4.0);
-        assert_eq!(records[0].inline_extent, 7.0);
-        assert_eq!(records[0].block_extent, 5.0);
+        assert_eq!(records[0].inline_extent, 9.0);
+        assert_eq!(records[0].block_extent, 8.0);
+    }
+
+    #[test]
+    fn unconstrained_content_does_not_overflow_after_single_precision_publication() {
+        let geometry = FlowGeometryArena {
+            constraints: vec![constraint(AXIS_UNCONSTRAINED, 0.0, AXIS_UNCONSTRAINED, 0.0)],
+            ..FlowGeometryArena::default()
+        };
+        let flow = FlowLayoutArena {
+            lines: vec![FlowLine {
+                flow_thread_id: 11,
+                region_id: 3,
+                transform_index: 1,
+                clip_id: 0,
+                fragment_start: 0,
+                fragment_count: 1,
+                align: 1,
+                block_start: 0.0,
+                baseline: 100.0,
+                height: 140.64,
+            }],
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 0,
+                    cluster_end: 1,
+                    text_start: 0,
+                    text_end: 1,
+                    advance: 140.64,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 140.64,
+                boundary_index: NO_BOUNDARY,
+            }],
+            ..FlowLayoutArena::default()
+        };
+        let mut records = vec![];
+        append_measurement(
+            &mut records,
+            7,
+            1,
+            1,
+            &geometry,
+            &flow,
+            &[],
+            &[0],
+            &[0],
+            Some(&[140.64]),
+            &[],
+            &ClusterArena::default(),
+            None,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(records[0].flags, 0);
+        assert_eq!(records[0].inline_start, 140.64_f32);
+        assert_eq!(records[0].block_start, 140.64_f32);
     }
 
     fn constraint(width_mode: u8, width: f32, height_mode: u8, height: f32) -> FlowConstraint {

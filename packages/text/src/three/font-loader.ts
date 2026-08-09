@@ -3,17 +3,11 @@ import * as THREE from 'three/webgpu';
 import type { LoadedFont } from '../loaded-font.js';
 import { observeLoadedFontDispose } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import {
-  createTextRuntime,
-  type LoadedFontRequest,
-  type TextPreparationWorker,
-  type TextRuntime,
-} from '../text-runtime.js';
+import { createTextRuntime, type LoadedFontRequest, type TextRuntime } from '../text-runtime.js';
 import type { FontRegistry, RuntimeFontBake } from '../loader.js';
 
 export interface ThreeFontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;
-  readonly createWorker?: () => TextPreparationWorker;
   /**
    * Registers loaded fonts in a registry the application already owns. Without one the runtime creates its own, and a
    * caller holding registry-scoped state cannot reach the fonts this loader produces.
@@ -114,7 +108,6 @@ export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Loa
       domain = {
         manager: this.manager,
         runtime: createTextRuntime({
-          ...(this.#options.createWorker === undefined ? {} : { async: { createWorker: this.#options.createWorker } }),
           ...(this.#options.registry === undefined ? {} : { registry: this.#options.registry }),
         }),
         fonts: new Set(),

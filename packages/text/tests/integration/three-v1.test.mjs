@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { createRuntimeShaper, createTextRuntime, FontRegistry } from '@pmndrs/text';
+import { createTextRuntime, FontRegistry } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
 import { setThreeTextProfiler, Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
@@ -19,11 +19,10 @@ const amiriFontUrl = new URL(
 
 test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async () => {
   const registry = new FontRegistry();
-  const shaper = await createRuntimeShaper({
+  const runtime = await createTextRuntime({
     registry,
     wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
   });
-  const runtime = await createTextRuntime({ registry, shaper });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
@@ -137,11 +136,10 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
 
 test('TextGroup realizes two public Text objects as one indexed Rust draw', async () => {
   const registry = new FontRegistry();
-  const shaper = await createRuntimeShaper({
+  const runtime = await createTextRuntime({
     registry,
     wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
   });
-  const runtime = await createTextRuntime({ registry, shaper });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
@@ -254,11 +252,10 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
 
 test('Bitmap strike changes fully initialize a replacement indexed batch', async () => {
   const registry = new FontRegistry();
-  const shaper = await createRuntimeShaper({
+  const runtime = await createTextRuntime({
     registry,
     wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
   });
-  const runtime = await createTextRuntime({ registry, shaper });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(densityFontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16, 32] } },
@@ -298,56 +295,15 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
 
 test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () => {
   const registry = new FontRegistry();
-  const shaper = await createRuntimeShaper({
+  const runtime = await createTextRuntime({
     registry,
     wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
   });
-  const runtime = await createTextRuntime({ registry, shaper });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(amiriFontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   const text = 'مرحبا بالعالم';
-  const textUtf16 = Uint16Array.from({ length: text.length }, (_, index) => text.charCodeAt(index));
-  const shapingRequest = {
-    textUtf16,
-    features: [],
-    runs: [
-      {
-        font: font.font.handle,
-        textStart: 0,
-        textEnd: textUtf16.length,
-        direction: 'rtl',
-        script: 'Arab',
-        language: 'ar',
-        clusterLevel: 0,
-        flags: 0x40,
-        featureStart: 0,
-        featureCount: 0,
-      },
-    ],
-  };
-  const broad = ownedShape(shaper.shapeBatch(shapingRequest));
-  const narrowed = ownedShape(
-    shaper.reshapeRanges({
-      ...shapingRequest,
-      ranges: [
-        {
-          run: 0,
-          itemStart: 0,
-          itemEnd: 3,
-          contextStart: 0,
-          contextEnd: 3,
-          flags: 0x43,
-        },
-      ],
-    }),
-  );
-  assert.notDeepEqual(
-    shapeSignature(broad, 0, 3),
-    shapeSignature(narrowed, 0, 3),
-    'the fixture must fail if the retained whole-run shape is reused at the unsafe boundary',
-  );
 
   const scene = new THREE.Scene();
   const label = new Text({
@@ -368,11 +324,9 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
   assert.ok(inspection);
   assert.equal(inspection.lineTextEnds[0], 3, 'the fixed width must preserve the unsafe-boundary fixture');
   assert.equal(inspection.clusters.at(-1), 3, 'the ellipsis is anchored at the truncation boundary');
-  assert.deepEqual(
-    shapeSignature(inspection, 0, 3),
-    shapeSignature(narrowed, 0, 3),
-    'Rust positioning must consume the narrowed boundary shape, not the retained whole-run glyphs',
-  );
+  assert.deepEqual([...inspection.glyphIds], [61, 2613, 2598, 6597]);
+  assert.deepEqual([...inspection.clusters], [2, 1, 0, 3]);
+  assert.deepEqual([...inspection.x], [0.23199999332427979, 10.807999610900879, 18.375999450683594, 23.91200065612793]);
 
   label.dispose();
   font.dispose();
@@ -381,11 +335,10 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
 
 test('TextGroup atomically replaces child paragraphs without multiplying retained text capacity', async () => {
   const registry = new FontRegistry();
-  const shaper = await createRuntimeShaper({
+  const runtime = await createTextRuntime({
     registry,
     wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
   });
-  const runtime = await createTextRuntime({ registry, shaper });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
@@ -421,15 +374,4 @@ test('TextGroup atomically replaces child paragraphs without multiplying retaine
 
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
-}
-
-function ownedShape(shape) {
-  return { glyphIds: [...shape.glyphIds], clusters: [...shape.clusters] };
-}
-
-function shapeSignature(shape, start, end) {
-  return [...shape.glyphIds].flatMap((glyphId, index) => {
-    const cluster = shape.clusters[index];
-    return cluster >= start && cluster < end ? [[glyphId, cluster]] : [];
-  });
 }

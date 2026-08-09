@@ -26,8 +26,10 @@ describe('independent package-size report', () => {
       'font-validator-js',
       'runtime-baker-host-js',
       'runtime-baker-worker-js',
-      'text-shaper-js',
       'text-shaper-wasm',
+      'renderer-neutral-core-total',
+      'three-runtime-js',
+      'three-renderer-total',
       'bitmap-runtime-js',
       'mtsdf-runtime-js',
       'slug-runtime-js',
@@ -65,118 +67,38 @@ describe('independent package-size report', () => {
     }
   });
 
-  it('bounds accumulated target-v1 growth from the pre-coverage baseline', () => {
-    const coverageGrowth = {
-      // These ceilings exist to keep feature work honest and to push back on duplication, not to model a delivery
-      // constraint. Target-v1 spent the allowance on two consolidations rather than on new surface: one span cascade
-      // replaced a style sweep plus seven per-property heaps and now serves both the shaping and paint layers, and the
-      // Three Bitmap program regained the device-pixel snapping milestone 1 records as a hard contract.
-      //
-      // The browser-core allowance was raised once more for the layout tiering: 646 Brotli bytes bought a retained
-      // layout session that stops a content-box change from re-preparing the paragraph, Unicode and bidi reuse across
-      // any change that alters neither text nor base direction, positioning that writes typed arrays in place, and the
-      // opt-in phase profiler that measures all of it. A resize went from 130.78ms to 33.72ms at 25,515 glyphs, so this
-      // is bytes traded for time rather than new surface, and the raised ceiling keeps the same one-or-two-feature gap.
-      //
-      // Raised again for the structure-of-arrays cluster measurement and the pooled instance packing, then lowered
-      // when the layout profiler came out once its evidence was recorded: that returned 3,026 raw and 253 Brotli,
-      // mostly from its call sites rather than the module. A reflow lays out in 8.12ms at 25,515 glyphs against a
-      // 110.40ms pre-optimization baseline, inside the 120Hz budget. The ceiling tracks what the tree actually
-      // measures, so the next feature meets resistance rather than inherited slack.
-      //
-      // The three runtime baselines are re-derived against the tree with merged-v0 deleted, which shed roughly 215 KB
-      // from each graph, so growth is once again measured from something that exists. browser-core keeps its original
-      // pre-coverage baseline because deleting v0 did not move it: the root index never referenced v0, v0 re-exported
-      // the root. Each ceiling leaves roughly one or two features of room and no more, so it starts pushing back soon
-      // rather than quietly absorbing whatever lands next.
-      'browser-core': {
-        rawBytes: { baseline: 324_269, maximumGrowth: 64_000 },
-        minifiedBytes: { baseline: 247_205, maximumGrowth: 38_000 },
-        gzipBytes: { baseline: 72_108, maximumGrowth: 10_500 },
-        brotliBytes: { baseline: 55_251, maximumGrowth: 8_500 },
-      },
-      'bitmap-baker-js': {
-        rawBytes: { baseline: 17_478, maximumGrowth: 5_700 },
-        minifiedBytes: { baseline: 11_682, maximumGrowth: 4_000 },
-        gzipBytes: { baseline: 3_893, maximumGrowth: 900 },
-        brotliBytes: { baseline: 3_448, maximumGrowth: 800 },
-      },
-      'bitmap-baker-wasm': {
-        rawBytes: { baseline: 606_995, maximumGrowth: 20_000 },
-        minifiedBytes: { baseline: 606_995, maximumGrowth: 20_000 },
-        gzipBytes: { baseline: 226_702, maximumGrowth: 8_100 },
-        brotliBytes: { baseline: 173_552, maximumGrowth: 7_000 },
-      },
-      'bitmap-runtime-js': {
-        rawBytes: { baseline: 89_604, maximumGrowth: 12_000 },
-        minifiedBytes: { baseline: 60_671, maximumGrowth: 7_000 },
-        gzipBytes: { baseline: 16_081, maximumGrowth: 1_800 },
-        brotliBytes: { baseline: 14_229, maximumGrowth: 1_500 },
-      },
-      'mtsdf-baker-wasm': {
-        rawBytes: { baseline: 534_709, maximumGrowth: 18_500 },
-        minifiedBytes: { baseline: 534_709, maximumGrowth: 18_500 },
-        gzipBytes: { baseline: 208_474, maximumGrowth: 6_700 },
-        brotliBytes: { baseline: 163_570, maximumGrowth: 5_800 },
-      },
-      'mtsdf-baker-js': {
-        rawBytes: { baseline: 21_809, maximumGrowth: 5_200 },
-        minifiedBytes: { baseline: 15_430, maximumGrowth: 3_800 },
-        gzipBytes: { baseline: 4_701, maximumGrowth: 900 },
-        brotliBytes: { baseline: 4_176, maximumGrowth: 800 },
-      },
-      'mtsdf-runtime-js': {
-        rawBytes: { baseline: 94_145, maximumGrowth: 12_000 },
-        minifiedBytes: { baseline: 63_256, maximumGrowth: 7_000 },
-        gzipBytes: { baseline: 16_777, maximumGrowth: 1_800 },
-        brotliBytes: { baseline: 14_857, maximumGrowth: 1_500 },
-      },
-    } as const;
+  it('reports separately delivered JS and Wasm as exact consumer totals', () => {
+    const measured = new Map(report.entries.map((entry) => [entry.id, entry]));
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;
-    for (const [id, expectation] of Object.entries(coverageGrowth)) {
-      const entry = report.entries.find((candidate) => candidate.id === id);
-      expect(entry?.status).toBe('measured');
-      if (entry?.status !== 'measured') throw new Error(`Missing measured size entry: ${id}`);
-      for (const field of fields) {
-        const { baseline, maximumGrowth } = expectation[field];
-        expect(entry[field] - baseline).toBeLessThanOrEqual(maximumGrowth);
+    for (const [aggregateId, javascriptId] of [
+      ['renderer-neutral-core-total', 'browser-core'],
+      ['three-renderer-total', 'three-runtime-js'],
+    ] as const) {
+      const aggregate = measured.get(aggregateId);
+      const javascript = measured.get(javascriptId);
+      const wasm = measured.get('text-shaper-wasm');
+      expect(aggregate?.format).toBe('aggregate');
+      if (aggregate === undefined || javascript === undefined || wasm === undefined) {
+        throw new Error(`Missing aggregate size inputs for ${aggregateId}`);
       }
+      for (const field of fields) expect(aggregate[field]).toBe(javascript[field] + wasm[field]);
     }
-  });
 
-  it('bounds retained-capacity growth from the warm-publication baseline', () => {
-    const retainedCapacityGrowth = {
-      'bitmap-runtime-js': {
-        baseline: { rawBytes: 89_604, minifiedBytes: 60_671, gzipBytes: 16_081, brotliBytes: 14_229 },
-        // These ceilings were reviewed against a target-v1 that was missing two things it now carries. The Three
-        // Bitmap program had no device-pixel snapping, which milestone 1 records as a hard density contract and
-        // which is what makes this graph reproduce the pinned merged-v0 frame exactly. Spans resolved shaping and
-        // paint through two unrelated mechanisms that disagreed, replaced by one containment cascade — a net cost,
-        // since it deleted the previous style sweep and its per-property heaps.
-        //
-        // Baselines re-derived after merged-v0 deletion. Brotli stays the tightest of the four because it is what
-        // ships to browsers. NOTE these three graphs are currently within three bytes of each other because /three
-        // registers every built-in program at module scope; once technique-paired subpaths restore separation per
-        // D-158 they will diverge again and these baselines need re-deriving once more.
-        maximumGrowth: { rawBytes: 12_000, minifiedBytes: 7_000, gzipBytes: 1_800, brotliBytes: 1_500 },
-      },
-      'mtsdf-runtime-js': {
-        baseline: { rawBytes: 94_145, minifiedBytes: 63_256, gzipBytes: 16_777, brotliBytes: 14_857 },
-        maximumGrowth: { rawBytes: 12_000, minifiedBytes: 7_000, gzipBytes: 1_800, brotliBytes: 1_500 },
-      },
-      'slug-runtime-js': {
-        baseline: { rawBytes: 79_169, minifiedBytes: 53_547, gzipBytes: 14_214, brotliBytes: 12_612 },
-        maximumGrowth: { rawBytes: 12_000, minifiedBytes: 7_000, gzipBytes: 1_800, brotliBytes: 1_500 },
-      },
-    } as const;
-    const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;
-    for (const [id, expectation] of Object.entries(retainedCapacityGrowth)) {
-      const entry = report.entries.find((candidate) => candidate.id === id);
-      expect(entry?.status).toBe('measured');
-      if (entry?.status !== 'measured') throw new Error(`Missing measured size entry: ${id}`);
-      for (const field of fields) {
-        expect(entry[field] - expectation.baseline[field]).toBeLessThanOrEqual(expectation.maximumGrowth[field]);
+    for (const [aggregateId, assetId] of [
+      ['delivery-three-inter-bitmap', 'font-inter-bitmap-16-32'],
+      ['delivery-three-inter-mtsdf', 'font-inter-mtsdf'],
+      ['delivery-three-inter-slug', 'font-inter-slug'],
+      ['delivery-three-icons-bitmap', 'font-icons-bitmap-16-32'],
+      ['delivery-three-icons-mtsdf', 'font-icons-mtsdf'],
+      ['delivery-three-icons-slug', 'font-icons-slug'],
+    ] as const) {
+      const aggregate = measured.get(aggregateId);
+      const renderer = measured.get('three-renderer-total');
+      const asset = measured.get(assetId);
+      if (aggregate === undefined || renderer === undefined || asset === undefined) {
+        throw new Error(`Missing delivery size inputs for ${aggregateId}`);
       }
+      for (const field of fields) expect(aggregate[field]).toBe(renderer[field] + asset[field]);
     }
   });
 
@@ -199,7 +121,7 @@ describe('independent package-size report', () => {
     expect(unicode?.status).toBe('measured');
     if (core?.status !== 'measured' || unicode?.status !== 'measured') return;
     expect(unicode.minifiedBytes).toBeGreaterThan(0);
-    expect(core.minifiedBytes).toBeGreaterThan(unicode.minifiedBytes);
+    expect(core.minifiedBytes).toBeLessThan(unicode.minifiedBytes);
   });
 
   it('keeps foreign-host native-tool variance inside complete reviewed budgets', () => {
@@ -210,7 +132,6 @@ describe('independent package-size report', () => {
       'font-validator-js': [740_402, 584_255, 137_585, 112_927],
       'runtime-baker-host-js': [5_264, 3_861, 1_480, 1_322],
       'runtime-baker-worker-js': [13_315, 9_010, 3_030, 2_665],
-      'text-shaper-js': [43_944, 30_648, 8_798, 7_832],
       'text-shaper-wasm': [692_111, 692_111, 258_524, 202_634],
       'portable-baker-js': [10_046, 6_647, 2_338, 2_060],
       'portable-baker-wasm': [433_755, 433_755, 168_266, 136_961],

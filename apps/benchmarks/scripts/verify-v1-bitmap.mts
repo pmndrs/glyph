@@ -32,17 +32,6 @@ interface ComposeProofResult {
   readonly canonicalGreenPixels: number;
 }
 
-interface AsyncProofResult {
-  readonly status: string;
-  readonly workerCount: number;
-  readonly glyphCount: number;
-  readonly progressEvents: number;
-  readonly snapshotGlyphCount: number;
-  readonly desiredGlyphCount: number;
-  readonly superseded: boolean;
-  readonly aborted: boolean;
-}
-
 const root = fileURLToPath(new URL('..', import.meta.url));
 const vite = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url));
 const server = spawn(vite, ['--host', '127.0.0.1', '--port', '5177', '--strictPort'], {
@@ -170,45 +159,6 @@ try {
     process.stdout.write(`${expected} compose: ${JSON.stringify(result)}\n`);
     await page.close();
   }
-  const asyncPage = await browser.newPage();
-  const asyncErrors: string[] = [];
-  asyncPage.on('console', (message) => {
-    if (message.type() === 'error') asyncErrors.push(message.text());
-  });
-  asyncPage.on('pageerror', (error) => asyncErrors.push(error.message));
-  await asyncPage.goto('http://127.0.0.1:5177/v1-async.html', { waitUntil: 'domcontentloaded' });
-  const asyncEvaluation = await asyncPage.evaluate(() =>
-    (window as typeof window & { targetV1AsyncReady: Promise<AsyncProofResult> }).targetV1AsyncReady.then(
-      (value) => ({ ok: true as const, value }),
-      (cause: unknown) => {
-        const nested =
-          typeof cause === 'object' && cause !== null && 'cause' in cause && cause.cause instanceof Error
-            ? cause.cause
-            : undefined;
-        const error = cause instanceof Error ? cause : (nested ?? new Error(JSON.stringify(cause)));
-        return { ok: false as const, error: { name: error.name, message: error.message, stack: error.stack } };
-      },
-    ),
-  );
-  if (asyncErrors.length !== 0) throw new Error(`async Worker browser errors: ${asyncErrors.join(' | ')}`);
-  if (!asyncEvaluation.ok)
-    throw new Error(
-      `target-v1 async Worker rejected: ${asyncEvaluation.error.name}: ${asyncEvaluation.error.message}\n${asyncEvaluation.error.stack ?? ''}`,
-    );
-  const asyncResult = asyncEvaluation.value;
-  if (
-    asyncResult.status !== 'published' ||
-    asyncResult.workerCount !== 1 ||
-    asyncResult.glyphCount !== 11 ||
-    asyncResult.progressEvents < 2 ||
-    asyncResult.snapshotGlyphCount !== 8 ||
-    asyncResult.desiredGlyphCount !== 22 ||
-    !asyncResult.superseded ||
-    !asyncResult.aborted
-  )
-    throw new Error(`target-v1 async Worker did not prepare the expected paragraph: ${JSON.stringify(asyncResult)}`);
-  process.stdout.write(`worker: ${JSON.stringify(asyncResult)}\n`);
-  await asyncPage.close();
 } finally {
   await browser.close();
   server.kill('SIGTERM');

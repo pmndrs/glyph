@@ -1,15 +1,5 @@
 import type { BenchmarkScenario } from './contracts';
 import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
-import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layout-v0.json';
-import cjkContract from '../../fixtures/contracts/paragraph-cjk-layout-v0.json';
-import cjkManifest from '../../fixtures/fonts/noto-sans-cjk-2.004/manifest.json';
-import cjkOracle from '../../fixtures/shaping/noto-sans-cjk/harfrust.json';
-
-const paragraphPolicyHash = [
-  ...Object.values(paragraphBidiContract.bidi).map(({ layout }) => layout.hash),
-  ...Object.values(paragraphBidiContract.policies.cases).map(({ layout }) => layout.hash),
-  paragraphBidiContract.uikit.resolved.layout.hash,
-].join(':');
 const ADVANCED_SHAPING_HASH = '51ba1d14';
 const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
@@ -318,110 +308,20 @@ function reactTextValidation(values: readonly import('./contracts').BenchmarkMea
   return `${values.length}/${values.length} exact React Text reconciliations + R3F frames`;
 }
 
-function shapingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
-  deterministicValidation(values.map((value) => value.hash));
-  for (const value of values) {
-    if (value.metrics?.boundaryCrossings !== 1 || value.metrics.goldenCases !== 8 || value.metrics.planCount !== 3) {
-      throw new Error('Shaping sample did not preserve its call, corpus, and plan-cache contract');
-    }
-  }
-  return `${values.length}/${values.length} exact corpus outputs · 1 Wasm call/sample`;
-}
-
-function paragraphValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+function paragraphContractsValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
   deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
     if (
-      value.metrics?.shapeBoundaryCrossings !== 1 ||
-      value.metrics.reshapeBoundaryCrossings !== 0 ||
-      value.metrics.reflowBoundaryCrossings !== 0 ||
-      value.metrics.measurementCount !== 3 ||
-      value.metrics.positionedGlyphBytes !== 0
-    ) {
-      throw new Error('Paragraph sample did not preserve its prepare-once, cached-reflow contract');
-    }
-  }
-  return `${values.length}/${values.length} exact paragraph outputs · 0 Wasm reflow calls/sample`;
-}
-
-function paragraphLayoutValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
-  deterministicValidation(values.map((value) => value.hash));
-  for (const value of values) {
-    if (
-      value.hash !== 'bb15bbcc:4f111a3f:e8c0e9d5' ||
-      value.metrics?.shapeBoundaryCrossings !== 1 ||
-      // Zero, because boundary reshaping requested the whole run as context and so returned the glyphs the retained
-      // shape already held. The pinned hash above is unchanged by removing it, which is the proof.
-      value.metrics.reshapeBoundaryCrossings !== 0 ||
-      value.metrics.batchedBoundaryLayouts !== 2 ||
-      value.metrics.layoutCount !== 3 ||
-      value.metrics.glyphCount !== 165
-    ) {
-      throw new Error(
-        `Paragraph layout sample did not preserve its exact SoA and batch contract: hash=${value.hash} shape=${String(value.metrics?.shapeBoundaryCrossings)} reshape=${String(value.metrics?.reshapeBoundaryCrossings)} batched=${String(value.metrics?.batchedBoundaryLayouts)} layouts=${String(value.metrics?.layoutCount)} glyphs=${String(value.metrics?.glyphCount)}`,
-      );
-    }
-  }
-  return `${values.length}/${values.length} exact positioned outputs · no reshape crossings`;
-}
-
-function paragraphPolicyValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
-  deterministicValidation(values.map((value) => value.hash));
-  for (const value of values) {
-    if (
-      value.hash !== paragraphPolicyHash ||
       value.metrics?.bidiLayoutCount !== 2 ||
       value.metrics.policyLayoutCount !== 9 ||
+      value.metrics.cjkLayoutCount !== 12 ||
       value.metrics.uikitMeasurementCount !== 25 ||
-      value.metrics.uikitLayoutCount !== 1 ||
-      value.metrics.shapeBoundaryCrossings !== 4 ||
-      value.metrics.reshapeBoundaryCrossings !== 0
+      value.metrics.uikitLayoutCount !== 1
     ) {
-      throw new Error(
-        `Paragraph policy sample did not preserve its bidi, policy, and uikit contract: hash=${value.hash} shape=${String(value.metrics?.shapeBoundaryCrossings)} reshape=${String(value.metrics?.reshapeBoundaryCrossings)}`,
-      );
+      throw new Error('Rust paragraph contracts did not execute the complete retained matrix');
     }
   }
-  return `${values.length}/${values.length} exact bidi/policy outputs · current-uikit-shaped flow`;
-}
-
-function cjkUniversalityValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
-  deterministicValidation(values.map((value) => value.hash));
-  const corpusGlyphCount = cjkOracle.cases.reduce((sum, fixture) => sum + fixture.glyphs.length, 0);
-  const sourceUtf16Units =
-    cjkOracle.cases.reduce((sum, fixture) => sum + fixture.text.length, 0) +
-    Object.values(cjkContract.cases).reduce((sum, fixture) => sum + fixture.text.length, 0);
-  for (const value of values) {
-    const metrics = value.metrics;
-    if (
-      metrics?.sourceUtf16Units !== sourceUtf16Units ||
-      metrics.corpusCaseCount !== cjkOracle.cases.length ||
-      metrics.corpusGlyphCount !== corpusGlyphCount ||
-      metrics.paragraphCaseCount !== Object.keys(cjkContract.cases).length ||
-      metrics.layoutCount !== Object.keys(cjkContract.cases).length * 3 ||
-      metrics.directShapeBoundaryCrossings !== 1 ||
-      metrics.paragraphShapeBoundaryCrossings !== 4 ||
-      metrics.reshapeBoundaryCrossings !== 0 ||
-      metrics.retainedFontBytes !== cjkManifest.bake.expectedCore.transport.shapingPayload.rawBytes ||
-      metrics.sourceFontBytes !== cjkManifest.source.fontBytes ||
-      metrics.artifactBytes !== cjkManifest.bake.expectedCore.artifactBytes ||
-      metrics.shapingPayloadRawBytes !== cjkManifest.bake.expectedCore.transport.shapingPayload.rawBytes ||
-      metrics.shapingPayloadGzipBytes !== cjkManifest.bake.expectedCore.transport.shapingPayload.gzipBytes ||
-      metrics.shapingPayloadBrotliBytes !== cjkManifest.bake.expectedCore.transport.shapingPayload.brotliBytes ||
-      typeof metrics.planCount !== 'number' ||
-      !Number.isFinite(metrics.planCount) ||
-      metrics.planCount < 4 ||
-      typeof metrics.wasmMemoryBytes !== 'number' ||
-      !Number.isFinite(metrics.wasmMemoryBytes) ||
-      metrics.wasmMemoryBytes <= 0 ||
-      !finiteNonnegative(metrics.coldBakeMs) ||
-      !finiteNonnegative(metrics.coldRegistrationMs) ||
-      !finiteNonnegative(metrics.coldShaperInitializationMs)
-    ) {
-      throw new Error('CJK sample did not preserve its exact shaping, layout, and payload contract');
-    }
-  }
-  return `${values.length}/${values.length} exact CJK corpus + horizontal paragraph outputs`;
+  return `${values.length}/${values.length} exact bidi, policy, uikit, and CJK contract matrices`;
 }
 
 function advancedShapingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
@@ -655,39 +555,11 @@ export const scenarios: readonly BenchmarkScenario[] = [
     validate: (values) => deterministicValidation(values.map((value) => value.hash)),
   },
   {
-    id: 'shaping-conformance',
-    label: 'HarfRust shaping conformance',
-    description: 'Eight pinned runs in one Wasm call with exact SoA output and cache accounting.',
-    requiredCapabilities: new Set(['shaping', 'font-bytes', 'wasm']),
-    validate: shapingValidation,
-  },
-  {
-    id: 'paragraph-measurement',
-    label: 'Paragraph measurement',
-    description: 'Exact GLB-backed broad shape followed by cached wide and narrow reflow.',
+    id: 'paragraph-contracts',
+    label: 'Rust paragraph contracts',
+    description: 'Exact retained bidi, policy, uikit, and CJK layouts through public Text.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
-    validate: paragraphValidation,
-  },
-  {
-    id: 'paragraph-layout',
-    label: 'Positioned paragraph layout',
-    description: 'Exact natural, wide, and narrow SoA output with cached batched boundary reshape.',
-    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
-    validate: paragraphLayoutValidation,
-  },
-  {
-    id: 'paragraph-bidi-policy',
-    label: 'Bidi + paragraph policies',
-    description: 'Exact Amiri bidi, line policies, and current-uikit-shaped retained layout.',
-    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
-    validate: paragraphPolicyValidation,
-  },
-  {
-    id: 'cjk-universality',
-    label: 'CJK universality',
-    description: 'Exact pan-CJK source/reduced shaping and horizontal no-space reflow.',
-    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
-    validate: cjkUniversalityValidation,
+    validate: paragraphContractsValidation,
   },
 ];
 
