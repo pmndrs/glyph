@@ -6,8 +6,8 @@ use crate::{
         self as abi, ENGINE_TEXT_MUTATION_DELETE_COUNT, ENGINE_TEXT_MUTATION_ENCODING,
         ENGINE_TEXT_MUTATION_INSERT_COUNT, ENGINE_TEXT_MUTATION_INSERT_OFFSET,
         ENGINE_TEXT_MUTATION_OPCODE, ENGINE_TEXT_MUTATION_RECORD_ALIGNMENT,
-        ENGINE_TEXT_MUTATION_RECORD_SIZE, ENGINE_TEXT_MUTATION_RESERVED0,
-        ENGINE_TEXT_MUTATION_RESERVED1, ENGINE_TEXT_MUTATION_TEXT_START,
+        ENGINE_TEXT_MUTATION_PARAGRAPH_ID, ENGINE_TEXT_MUTATION_RECORD_SIZE,
+        ENGINE_TEXT_MUTATION_RESERVED0, ENGINE_TEXT_MUTATION_TEXT_START,
         ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
     bidi::{DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL},
@@ -41,6 +41,7 @@ pub(crate) struct TextMutationBatch<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct TextMutation<'a> {
+    pub paragraph_id: u32,
     pub text_start: u32,
     pub delete_count: u32,
     pub insert_utf16_le: &'a [u8],
@@ -54,12 +55,13 @@ pub(crate) struct StyleMutationBatch<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum StyleMutation<'a> {
-    Remove { style_id: u32 },
+    Remove { paragraph_id: u32, style_id: u32 },
     Upsert(StyleValue<'a>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct StyleValue<'a> {
+    pub paragraph_id: u32,
     pub style_id: u32,
     pub cascade_order: u32,
     pub field_mask: u32,
@@ -96,6 +98,7 @@ pub(crate) struct GeometryBatch<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct FlowConstraint {
+    pub paragraph_id: u32,
     pub flow_thread_id: u32,
     pub width: f32,
     pub height: f32,
@@ -202,9 +205,24 @@ impl GeometryBatch<'_> {
         self.inline_objects.len() / abi::ENGINE_INLINE_OBJECT_RECORD_SIZE as usize
     }
 
+    pub(crate) fn paragraph_id(self, index: usize) -> Option<u32> {
+        if index < self.constraint_count() {
+            let record = record_at(self.constraints, abi::ENGINE_CONSTRAINT_RECORD_SIZE, index)?;
+            return read_u32(record, abi::ENGINE_CONSTRAINT_PARAGRAPH_ID).ok();
+        }
+        let inline_index = index.checked_sub(self.constraint_count())?;
+        let record = record_at(
+            self.inline_objects,
+            abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
+            inline_index,
+        )?;
+        read_u32(record, abi::ENGINE_INLINE_OBJECT_PARAGRAPH_ID).ok()
+    }
+
     pub(crate) fn constraint(self, index: usize) -> Option<FlowConstraint> {
         let record = record_at(self.constraints, abi::ENGINE_CONSTRAINT_RECORD_SIZE, index)?;
         Some(FlowConstraint {
+            paragraph_id: read_u32(record, abi::ENGINE_CONSTRAINT_PARAGRAPH_ID).ok()?,
             flow_thread_id: read_u32(record, abi::ENGINE_CONSTRAINT_FLOW_THREAD_ID).ok()?,
             width: read_f32(record, abi::ENGINE_CONSTRAINT_WIDTH).ok()?,
             height: read_f32(record, abi::ENGINE_CONSTRAINT_HEIGHT).ok()?,
@@ -373,10 +391,15 @@ impl<'a> TextMutationBatch<'a> {
             .ok()?
         };
         Some(TextMutation {
+            paragraph_id: read_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID).ok()?,
             text_start: read_u32(record, ENGINE_TEXT_MUTATION_TEXT_START).ok()?,
             delete_count: read_u32(record, ENGINE_TEXT_MUTATION_DELETE_COUNT).ok()?,
             insert_utf16_le,
         })
+    }
+
+    pub(crate) fn paragraph_id(self, index: usize) -> Option<u32> {
+        self.get(index).map(|mutation| mutation.paragraph_id)
     }
 
     pub(crate) fn validate_disjoint_geometry(self, geometry: GeometryBatch<'_>) -> Result<(), u32> {
@@ -433,8 +456,12 @@ impl<'a> StyleMutationBatch<'a> {
         let start = index.checked_mul(stride)?;
         let record = self.records.get(start..start.checked_add(stride)?)?;
         let style_id = read_u32(record, abi::ENGINE_STYLE_MUTATION_STYLE_ID).ok()?;
+        let paragraph_id = read_u32(record, abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID).ok()?;
         if record[abi::ENGINE_STYLE_MUTATION_OPCODE] == STYLE_MUTATION_REMOVE {
-            return Some(StyleMutation::Remove { style_id });
+            return Some(StyleMutation::Remove {
+                paragraph_id,
+                style_id,
+            });
         }
         let language_length =
             u32::from(read_u16(record, abi::ENGINE_STYLE_MUTATION_LANGUAGE_LENGTH).ok()?);
@@ -465,6 +492,7 @@ impl<'a> StyleMutationBatch<'a> {
             .ok()?
         };
         Some(StyleMutation::Upsert(StyleValue {
+            paragraph_id,
             style_id,
             cascade_order: read_u32(record, abi::ENGINE_STYLE_MUTATION_CASCADE_ORDER).ok()?,
             field_mask: read_u32(record, abi::ENGINE_STYLE_MUTATION_FIELD_MASK).ok()?,
@@ -493,6 +521,13 @@ impl<'a> StyleMutationBatch<'a> {
                 .ok()?,
             root: record[abi::ENGINE_STYLE_MUTATION_FLAGS] == STYLE_FLAG_ROOT,
         }))
+    }
+
+    pub(crate) fn paragraph_id(self, index: usize) -> Option<u32> {
+        match self.get(index)? {
+            StyleMutation::Remove { paragraph_id, .. }
+            | StyleMutation::Upsert(StyleValue { paragraph_id, .. }) => Some(paragraph_id),
+        }
     }
 
     pub(crate) fn feature(value: StyleValue<'_>, index: usize) -> Option<FeatureRecord> {
@@ -608,13 +643,17 @@ fn style_payload_ranges(request: &[u8], record: &[u8]) -> Result<[Option<(usize,
 fn validate_style_record(request: &[u8], record: &[u8]) -> Result<(), u32> {
     let opcode = byte(record, abi::ENGINE_STYLE_MUTATION_OPCODE)?;
     let style_id = read_u32(record, abi::ENGINE_STYLE_MUTATION_STYLE_ID)?;
-    if style_id == 0 {
+    let paragraph_id = read_u32(record, abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID)?;
+    if style_id == 0 || paragraph_id == 0 {
         return Err(STATUS_INVALID_REQUEST);
     }
     if opcode == STYLE_MUTATION_REMOVE {
         for (index, value) in record.iter().copied().enumerate() {
             let identity = index == abi::ENGINE_STYLE_MUTATION_OPCODE
                 || (abi::ENGINE_STYLE_MUTATION_STYLE_ID..abi::ENGINE_STYLE_MUTATION_STYLE_ID + 4)
+                    .contains(&index)
+                || (abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID
+                    ..abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID + 4)
                     .contains(&index);
             if !identity && value != 0 {
                 return Err(STATUS_INVALID_REQUEST);
@@ -880,7 +919,7 @@ pub(crate) fn parse_text_mutations(
         if record[ENGINE_TEXT_MUTATION_OPCODE] != TEXT_MUTATION_REPLACE_UTF16
             || record[ENGINE_TEXT_MUTATION_ENCODING] != TEXT_ENCODING_UTF16_LE
             || read_u16(record, ENGINE_TEXT_MUTATION_RESERVED0)? != 0
-            || read_u32(record, ENGINE_TEXT_MUTATION_RESERVED1)? != 0
+            || read_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID)? == 0
         {
             return Err(STATUS_INVALID_REQUEST);
         }
@@ -1042,6 +1081,9 @@ fn validate_constraints(
         .chunks_exact(abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize)
         .enumerate()
     {
+        if read_u32(record, abi::ENGINE_CONSTRAINT_PARAGRAPH_ID)? == 0 {
+            return Err(STATUS_INVALID_REQUEST);
+        }
         let flow_thread_id = read_u32(record, abi::ENGINE_CONSTRAINT_FLOW_THREAD_ID)?;
         if flow_thread_id == 0
             || prior_u32_duplicate(
@@ -1253,7 +1295,8 @@ fn validate_inline_objects(records: &[u8]) -> Result<(), u32> {
         .enumerate()
     {
         let id = read_u32(record, abi::ENGINE_INLINE_OBJECT_ID)?;
-        if id == 0
+        if read_u32(record, abi::ENGINE_INLINE_OBJECT_PARAGRAPH_ID)? == 0
+            || id == 0
             || prior_u32_duplicate(
                 records,
                 abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
@@ -1562,6 +1605,11 @@ mod tests {
             STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_STYLE_ID,
             7,
         );
+        write_u32(
+            &mut removal,
+            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+            1,
+        );
         assert!(parse_style_mutations(&removal, STYLE_OFFSET as u32, 1).is_ok());
         removal[STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_DIRECTION] = DIRECTION_LTR;
         assert!(parse_style_mutations(&removal, STYLE_OFFSET as u32, 1).is_err());
@@ -1600,6 +1648,11 @@ mod tests {
         bytes[record + abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_UPSERT;
         bytes[record + abi::ENGINE_STYLE_MUTATION_FLAGS] = STYLE_FLAG_ROOT;
         write_u32(&mut bytes, record + abi::ENGINE_STYLE_MUTATION_STYLE_ID, 7);
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+            1,
+        );
         write_u32(
             &mut bytes,
             record + abi::ENGINE_STYLE_MUTATION_CASCADE_ORDER,
@@ -1675,6 +1728,7 @@ mod tests {
         let record = &mut bytes[record_offset as usize..payload_offset as usize];
         record[ENGINE_TEXT_MUTATION_OPCODE] = TEXT_MUTATION_REPLACE_UTF16;
         record[ENGINE_TEXT_MUTATION_ENCODING] = TEXT_ENCODING_UTF16_LE;
+        write_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID, 1);
         write_u32(record, ENGINE_TEXT_MUTATION_TEXT_START, 2);
         write_u32(record, ENGINE_TEXT_MUTATION_DELETE_COUNT, 1);
         write_u32(record, ENGINE_TEXT_MUTATION_INSERT_OFFSET, payload_offset);
@@ -1689,6 +1743,7 @@ mod tests {
         assert_eq!(
             batch.get(0),
             Some(TextMutation {
+                paragraph_id: 1,
                 text_start: 2,
                 delete_count: 1,
                 insert_utf16_le: &[0x61, 0x00, 0x3d, 0xd8],
@@ -1864,6 +1919,11 @@ mod tests {
             TEXT_ENCODING_UTF16_LE;
         write_u32(
             &mut cross_section_alias,
+            mutation_offset + ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
+            1,
+        );
+        write_u32(
+            &mut cross_section_alias,
             mutation_offset + ENGINE_TEXT_MUTATION_INSERT_OFFSET,
             CONSTRAINT_OFFSET as u32,
         );
@@ -1932,6 +1992,11 @@ mod tests {
 
     fn valid_geometry_bytes() -> Vec<u8> {
         let mut bytes = vec![0; GEOMETRY_LENGTH];
+        write_u32(
+            &mut bytes,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
+            1,
+        );
         write_u32(
             &mut bytes,
             CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_FLOW_THREAD_ID,
@@ -2026,6 +2091,11 @@ mod tests {
             40.0,
         );
 
+        write_u32(
+            &mut bytes,
+            INLINE_OFFSET + abi::ENGINE_INLINE_OBJECT_PARAGRAPH_ID,
+            1,
+        );
         write_u32(&mut bytes, INLINE_OFFSET + abi::ENGINE_INLINE_OBJECT_ID, 3);
         write_u32(
             &mut bytes,

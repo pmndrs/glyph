@@ -35,10 +35,11 @@ test('production frame compiler preserves the established benchmark request byte
       maxInlineObjects: 1,
       maxSlotsPerBand: 1,
     },
-    textMutations: [{ start: 0, deleteCount: 0, insert: text }],
+    textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: text }],
     styleMutations: [
       {
         opcode: 'upsert',
+        paragraphId: 1,
         styleId: 1,
         cascadeOrder: 0,
         start: 0,
@@ -49,6 +50,7 @@ test('production frame compiler preserves the established benchmark request byte
     ],
     constraints: [
       {
+        paragraphId: 1,
         flowThreadId: 1,
         geometryRevision: 0,
         width: 320,
@@ -114,6 +116,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
     styleMutations: [
       {
         opcode: 'upsert',
+        paragraphId: 3,
         styleId: 9,
         cascadeOrder: 2,
         start: 1,
@@ -190,6 +193,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
     ],
     inlineObjects: [
       {
+        paragraphId: 3,
         id: 3,
         contentRevision: 1,
         textOffset: 4,
@@ -220,9 +224,14 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   const styleOffset = header.getUint32(request.styleMutationsOffset, true);
   const style = abi.layouts.engineStyleMutation;
   const styleView = new DataView(bytes.buffer, bytes.byteOffset + styleOffset, style.size);
+  assert.equal(styleView.getUint32(style.paragraphId, true), 3);
   assert.equal(styleView.getUint8(style.direction), 2);
   assert.equal(styleView.getUint16(style.languageLength, true), 2);
   assert.equal(styleView.getUint16(style.featureCount, true), 1);
   assert.equal(styleView.getUint32(style.materialId, true), 8);
   assert.equal(styleView.getUint32(style.decorationFlags, true), 13);
+  const inlineObjectOffset = header.getUint32(request.inlineObjectsOffset, true);
+  const inlineObject = abi.layouts.engineInlineObject;
+  const inlineObjectView = new DataView(bytes.buffer, bytes.byteOffset + inlineObjectOffset, inlineObject.size);
+  assert.equal(inlineObjectView.getUint32(inlineObject.paragraphId, true), 3);
 });

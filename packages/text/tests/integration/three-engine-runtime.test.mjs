@@ -108,10 +108,11 @@ test('Three coordinator shares shaping data across technique bindings and refere
         maxSlotsPerBand: 2,
         maxOutputBytes: 1024 * 1024,
       },
-      textMutations: [{ start: 0, deleteCount: 0, insert: 'abc' }],
+      textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'abc' }],
       styleMutations: [
         {
           opcode: 'upsert',
+          paragraphId: 1,
           styleId: 1,
           cascadeOrder: 0,
           start: 0,
@@ -128,6 +129,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
       ],
       constraints: [
         {
+          paragraphId: 1,
           flowThreadId: 1,
           geometryRevision: 1,
           width: 256,

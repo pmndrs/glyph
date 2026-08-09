@@ -14,6 +14,7 @@ export interface TextEngineFrameLimits {
 }
 
 export interface TextEngineTextMutation {
+  readonly paragraphId: number;
   readonly start: number;
   readonly deleteCount: number;
   readonly insert: string;
@@ -54,9 +55,10 @@ export interface TextEngineStyleValue {
 }
 
 export type TextEngineStyleMutation =
-  | { readonly opcode: 'remove'; readonly styleId: number }
+  | { readonly opcode: 'remove'; readonly paragraphId: number; readonly styleId: number }
   | {
       readonly opcode: 'upsert';
+      readonly paragraphId: number;
       readonly styleId: number;
       readonly cascadeOrder: number;
       readonly start: number;
@@ -66,6 +68,7 @@ export type TextEngineStyleMutation =
     };
 
 export interface TextEngineConstraint {
+  readonly paragraphId: number;
   readonly flowThreadId: number;
   readonly geometryRevision: number;
   readonly width: number;
@@ -126,6 +129,7 @@ export interface TextEngineExclusion {
 }
 
 export interface TextEngineInlineObject {
+  readonly paragraphId: number;
   readonly id: number;
   readonly contentRevision: number;
   readonly textOffset: number;
@@ -289,6 +293,7 @@ function writeTextMutations(
     const payloadOffset = payloadOffsets[index]!;
     view.setUint8(offset + layout.opcode, textShaperAbi.engine.textMutationOpcodes.replaceUtf16);
     view.setUint8(offset + layout.encoding, textShaperAbi.engine.textEncodings.utf16Le);
+    view.setUint32(offset + layout.paragraphId, u32(mutation.paragraphId, 'paragraph ID'), true);
     view.setUint32(offset + layout.textStart, u32(mutation.start, 'text mutation start'), true);
     view.setUint32(offset + layout.deleteCount, u32(mutation.deleteCount, 'text mutation delete count'), true);
     view.setUint32(offset + layout.insertOffset, payloadOffset, true);
@@ -311,6 +316,7 @@ function writeStyleMutations(
   const layout = textShaperAbi.layouts.engineStyleMutation;
   for (const [index, mutation] of mutations.entries()) {
     const offset = tableOffset + index * layout.size;
+    view.setUint32(offset + layout.paragraphId, u32(mutation.paragraphId, 'paragraph ID'), true);
     view.setUint32(offset + layout.styleId, u32(mutation.styleId, 'style ID'), true);
     if (mutation.opcode === 'remove') {
       view.setUint8(offset + layout.opcode, textShaperAbi.engine.styleMutationOpcodes.remove);
@@ -396,6 +402,7 @@ function writeConstraints(view: DataView, tableOffset: number, constraints: read
   const engine = textShaperAbi.engine;
   for (const [index, value] of constraints.entries()) {
     const offset = tableOffset + index * layout.size;
+    view.setUint32(offset + layout.paragraphId, u32(value.paragraphId, 'paragraph ID'), true);
     for (const [field, number] of [
       ['flowThreadId', value.flowThreadId],
       ['geometryRevision', value.geometryRevision],
@@ -501,6 +508,7 @@ function writeInlineObjects(view: DataView, tableOffset: number, objects: readon
   const layout = textShaperAbi.layouts.engineInlineObject;
   for (const [index, value] of objects.entries()) {
     const offset = tableOffset + index * layout.size;
+    view.setUint32(offset + layout.paragraphId, u32(value.paragraphId, 'paragraph ID'), true);
     for (const [field, number] of [
       ['id', value.id],
       ['contentRevision', value.contentRevision],

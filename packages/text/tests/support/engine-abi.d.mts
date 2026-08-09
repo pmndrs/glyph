@@ -5,6 +5,7 @@ export interface EngineUpdateFields {
   readonly consumedPlanRevision: number;
   readonly acknowledgedPublicationGeneration?: number;
   readonly textMutations?: readonly {
+    readonly paragraphId?: number;
     readonly start: number;
     readonly deleteCount: number;
     readonly insert: readonly number[];
@@ -22,17 +23,20 @@ export interface EngineFrameUpdateFields {
   readonly consumedPlanRevision?: number;
   readonly acknowledgedPublicationGeneration?: number;
   readonly textMutation?: {
+    readonly paragraphId?: number;
     readonly start: number;
     readonly deleteCount: number;
     readonly insert: readonly number[];
   };
   readonly style?: {
+    readonly paragraphId?: number;
     readonly textEnd: number;
     readonly fontSize: number;
     readonly lineHeight: number;
     readonly rasterPixelRatio: number;
   };
   readonly geometry?: {
+    readonly paragraphId?: number;
     readonly width: number;
     readonly height: number;
     readonly maxLines: number;

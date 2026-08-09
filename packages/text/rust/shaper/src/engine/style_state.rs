@@ -262,7 +262,7 @@ impl StyleArena {
                 .get(request_index)
                 .ok_or(EngineError::InvalidRequest)?;
             let style_id = match mutation {
-                StyleMutation::Remove { style_id } => style_id,
+                StyleMutation::Remove { style_id, .. } => style_id,
                 StyleMutation::Upsert(value) => value.style_id,
             };
             scratch.push(MutationKey {

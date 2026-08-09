@@ -96,6 +96,7 @@ export function engineUpdateBytes(
     const record = mutationsOffset + index * mutationLayout.size;
     view.setUint8(record + mutationLayout.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
     view.setUint8(record + mutationLayout.encoding, abi.engine.textEncodings.utf16Le);
+    view.setUint32(record + mutationLayout.paragraphId, mutation.paragraphId ?? 1, true);
     view.setUint32(record + mutationLayout.textStart, mutation.start, true);
     view.setUint32(record + mutationLayout.deleteCount, mutation.deleteCount, true);
     if (mutation.insert.length > 0) {
@@ -170,6 +171,7 @@ export function engineFrameUpdateBytes(
   if (textMutation !== undefined) {
     view.setUint8(textRecordOffset + textRecord.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
     view.setUint8(textRecordOffset + textRecord.encoding, abi.engine.textEncodings.utf16Le);
+    view.setUint32(textRecordOffset + textRecord.paragraphId, textMutation.paragraphId ?? 1, true);
     view.setUint32(textRecordOffset + textRecord.textStart, textMutation.start, true);
     view.setUint32(textRecordOffset + textRecord.deleteCount, textMutation.deleteCount, true);
     view.setUint32(textRecordOffset + textRecord.insertOffset, textPayloadOffset, true);
@@ -182,6 +184,7 @@ export function engineFrameUpdateBytes(
   if (style !== undefined) {
     view.setUint8(styleRecordOffset + styleRecord.opcode, abi.engine.styleMutationOpcodes.upsert);
     view.setUint8(styleRecordOffset + styleRecord.flags, abi.engine.styleFlags.root);
+    view.setUint32(styleRecordOffset + styleRecord.paragraphId, style.paragraphId ?? 1, true);
     view.setUint32(styleRecordOffset + styleRecord.styleId, 1, true);
     view.setUint32(
       styleRecordOffset + styleRecord.fieldMask,
@@ -199,6 +202,7 @@ export function engineFrameUpdateBytes(
   }
 
   if (geometry !== undefined) {
+    view.setUint32(constraintOffset + constraint.paragraphId, geometry.paragraphId ?? 1, true);
     view.setUint32(constraintOffset + constraint.flowThreadId, 1, true);
     view.setFloat32(constraintOffset + constraint.width, geometry.width, true);
     view.setFloat32(constraintOffset + constraint.height, geometry.height, true);
