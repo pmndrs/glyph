@@ -573,6 +573,7 @@ mod tests {
 
     fn constraint() -> FlowConstraint {
         FlowConstraint {
+            paragraph_id: 1,
             flow_thread_id: 1,
             width: 10.0,
             height: 100.0,

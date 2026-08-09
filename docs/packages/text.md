@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6b2f912f6c6b1e60d9ca2f562b6ee335054f48bdd55222d2eba9656d9907bdf6'
+source_digest: 'sha256:4774636e57780e33b8013d420aa2b0af9f0be235428fd4d73fd1d13d9e403086'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -786,8 +786,14 @@ The public Three batch semantics require multiple independent paragraphs in one 
 Multiple flow constraints inside one paragraph remain sequential/alternate regions for that prose; they are not a
 substitute for separate `Text` state. The Rust gather workspace now supports a one-reservation `begin` followed by
 allocation-free appends of independent positioned SoA inputs. A focused test proves two layouts retain exact order and
-semantic fields in the combined plan input. Paragraph-keyed wire records, retained child state, session-wide stable ID
-allocation, and atomic shared-plan commit remain in progress; no per-text-session shortcut is shipped. Adjacent
+semantic fields in the combined plan input. Text, style, constraint, and inline-object records now carry an explicit
+nonzero paragraph ID through the generated Rust/TypeScript ABI. The transitional single-paragraph session rejects mixed
+IDs within a transaction and rejects rebinding across transactions, so keyed records cannot silently mutate one shared
+state before the retained-child cutover. Text replacements reuse their former reserved word; style, constraint, and
+inline-object records each grow by four bytes. The optimized Wasm measures 1,070,673 raw / 402,177 gzip / 319,722
+Brotli bytes, versus 1,070,685 / 402,154 / 319,914 at the preceding batching checkpoint; this does not establish a
+material size change. Retained child state, session-wide stable ID allocation, and atomic shared-plan commit remain in
+progress; no per-text-session shortcut is shipped. Adjacent
 8-warmup/31-sample Bitmap column-resize medians are 4.083 ms before and 4.078 ms after the rebuilt module, with 5.8% and
 6.1% RSD; this supports no speedup claim and exposes no material regression. Optimized Wasm is 1,070,685 / 402,154 /
 319,914 raw/gzip/Brotli bytes, +105 / +40 / +252 from D-205.

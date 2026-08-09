@@ -80,6 +80,7 @@ struct ClusterRecord {
 
 #[derive(Default)]
 struct EngineSession {
+    paragraph_id: Option<u32>,
     revision: SessionRevision,
     acknowledged_publication_generation: u32,
     policy_binding: Option<PolicyBinding>,
@@ -485,6 +486,7 @@ impl TextEngine {
         if !request.limits.all_nonzero() {
             return Err(EngineError::InvalidRequest);
         }
+        let paragraph_id = request_paragraph_id(request)?;
         let policy = self
             .policies
             .get(&request.policy_handle)
@@ -503,6 +505,12 @@ impl TextEngine {
             .sessions
             .get_mut(&request.session_id)
             .ok_or(EngineError::SessionMissing)?;
+        if session.paragraph_id.is_some()
+            && paragraph_id.is_some()
+            && session.paragraph_id != paragraph_id
+        {
+            return Err(EngineError::InvalidRequest);
+        }
         if session.policy_binding.is_some_and(|binding| {
             binding.handle != request.policy_handle || binding.fingerprint != policy_fingerprint
         }) {
@@ -707,6 +715,7 @@ impl TextEngine {
             policy_handle: request.policy_handle,
             capability_set: request.capability_set,
             policy_fingerprint,
+            paragraph_id,
         })
     }
 
@@ -779,6 +788,9 @@ impl TextEngine {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
         });
+        if session.paragraph_id.is_none() {
+            session.paragraph_id = prepared.paragraph_id;
+        }
         session.revision = prepared.next;
         Ok(CommittedUpdate {
             session_id: prepared.session_id,
@@ -1679,6 +1691,37 @@ fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineErro
     Ok(())
 }
 
+fn request_paragraph_id(request: UpdateRequest<'_>) -> Result<Option<u32>, EngineError> {
+    let mut paragraph_id = None;
+    for index in 0..request.text_mutations.len() {
+        merge_paragraph_id(&mut paragraph_id, request.text_mutations.paragraph_id(index))?;
+    }
+    for index in 0..request.style_mutations.len() {
+        merge_paragraph_id(&mut paragraph_id, request.style_mutations.paragraph_id(index))?;
+    }
+    let geometry_count = request
+        .geometry
+        .constraint_count()
+        .checked_add(request.geometry.inline_object_count())
+        .ok_or(EngineError::InvalidRequest)?;
+    for index in 0..geometry_count {
+        merge_paragraph_id(&mut paragraph_id, request.geometry.paragraph_id(index))?;
+    }
+    Ok(paragraph_id)
+}
+
+fn merge_paragraph_id(
+    current: &mut Option<u32>,
+    candidate: Option<u32>,
+) -> Result<(), EngineError> {
+    let candidate = candidate.ok_or(EngineError::InvalidRequest)?;
+    if current.is_some_and(|value| value != candidate) {
+        return Err(EngineError::InvalidRequest);
+    }
+    *current = Some(candidate);
+    Ok(())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TextMutationError {
     Invalid,
@@ -1712,7 +1755,8 @@ mod tests {
         abi_contract::{
             self as abi, ENGINE_TEXT_MUTATION_DELETE_COUNT, ENGINE_TEXT_MUTATION_ENCODING,
             ENGINE_TEXT_MUTATION_INSERT_COUNT, ENGINE_TEXT_MUTATION_INSERT_OFFSET,
-            ENGINE_TEXT_MUTATION_OPCODE, ENGINE_TEXT_MUTATION_RECORD_SIZE,
+            ENGINE_TEXT_MUTATION_OPCODE, ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
+            ENGINE_TEXT_MUTATION_RECORD_SIZE,
             ENGINE_TEXT_MUTATION_TEXT_START, ENGINE_UPDATE_REQUEST_HEADER_SIZE,
         },
         bidi::DIRECTION_RTL,
@@ -2183,6 +2227,66 @@ mod tests {
     }
 
     #[test]
+    fn single_paragraph_session_rejects_mixed_and_rebound_paragraph_ids() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+
+        let mut mixed_bytes = text_mutation_bytes(&[(0, 0, &[0x61]), (1, 0, &[0x62])]);
+        let second = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+            + ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
+        write_u32(
+            &mut mixed_bytes,
+            second + ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
+            2,
+        );
+        let mixed = parse_text_mutations(
+            &mixed_bytes,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            2,
+        )
+        .unwrap();
+        let mut request = update(0, 0, 0);
+        request.text_mutations = mixed;
+        assert_eq!(
+            engine.prepare_update(request, 1),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61])]);
+        let mut initial = update(0, 0, 0);
+        initial.text_mutations = parse_text_mutations(
+            &initial_bytes,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            1,
+        )
+        .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let mut rebound_bytes = text_mutation_bytes(&[(1, 0, &[0x62])]);
+        write_u32(
+            &mut rebound_bytes,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
+            2,
+        );
+        let mut rebound = update(1, 1, 1);
+        rebound.text_mutations = parse_text_mutations(
+            &rebound_bytes,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            1,
+        )
+        .unwrap();
+        assert_eq!(
+            engine.prepare_update(rebound, 2),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.session_text(4).unwrap(), &[0x61]);
+    }
+
+    #[test]
     fn a_committed_session_rejects_rebinding_its_policy_identity() {
         let mut engine = TextEngine::default();
         engine
@@ -2343,6 +2447,11 @@ mod tests {
         write_u32(&mut bytes, record + abi::ENGINE_STYLE_MUTATION_STYLE_ID, 1);
         write_u32(
             &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+            1,
+        );
+        write_u32(
+            &mut bytes,
             record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
             STYLE_FIELD_FONT_STACK
                 | STYLE_FIELD_FONT_SIZE
@@ -2390,6 +2499,11 @@ mod tests {
             record + abi::ENGINE_STYLE_MUTATION_STYLE_ID,
             style_id,
         );
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+            1,
+        );
         bytes
     }
 
@@ -2408,6 +2522,7 @@ mod tests {
             let record = &mut bytes[start..end];
             record[ENGINE_TEXT_MUTATION_OPCODE] = TEXT_MUTATION_REPLACE_UTF16;
             record[ENGINE_TEXT_MUTATION_ENCODING] = TEXT_ENCODING_UTF16_LE;
+            write_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID, 1);
             write_u32(record, ENGINE_TEXT_MUTATION_TEXT_START, text_start);
             write_u32(record, ENGINE_TEXT_MUTATION_DELETE_COUNT, delete_count);
             if !insert.is_empty() {

@@ -252,7 +252,7 @@ struct EngineTextMutationRecord {
     delete_count: u32,
     insert_offset: u32,
     insert_count: u32,
-    reserved1: u32,
+    paragraph_id: u32,
 }
 
 #[repr(C)]
@@ -283,6 +283,7 @@ struct EngineStyleMutationRecord {
     decoration_flags: u32,
     decoration_thickness: f32,
     decoration_offset: f32,
+    paragraph_id: u32,
 }
 
 #[repr(C)]
@@ -306,6 +307,7 @@ struct EngineConstraintRecord {
     overflow: u8,
     block_align: u8,
     flags: u16,
+    paragraph_id: u32,
 }
 
 #[repr(C)]
@@ -374,6 +376,7 @@ struct EngineInlineObjectRecord {
     baseline_alignment: u8,
     flags: u8,
     reserved0: u16,
+    paragraph_id: u32,
 }
 
 #[repr(C, align(16))]
@@ -1167,9 +1170,9 @@ field_offset!(
     insert_count
 );
 field_offset!(
-    ENGINE_TEXT_MUTATION_RESERVED1,
+    ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
     EngineTextMutationRecord,
-    reserved1
+    paragraph_id
 );
 field_offset!(
     ENGINE_STYLE_MUTATION_OPCODE,
@@ -1302,6 +1305,11 @@ field_offset!(
     decoration_offset
 );
 field_offset!(
+    ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+    EngineStyleMutationRecord,
+    paragraph_id
+);
+field_offset!(
     ENGINE_CONSTRAINT_FLOW_THREAD_ID,
     EngineConstraintRecord,
     flow_thread_id
@@ -1372,6 +1380,11 @@ field_offset!(
     block_align
 );
 field_offset!(ENGINE_CONSTRAINT_FLAGS, EngineConstraintRecord, flags);
+field_offset!(
+    ENGINE_CONSTRAINT_PARAGRAPH_ID,
+    EngineConstraintRecord,
+    paragraph_id
+);
 field_offset!(ENGINE_FLOW_VERTEX_INLINE, EngineFlowVertexRecord, inline);
 field_offset!(ENGINE_FLOW_VERTEX_BLOCK, EngineFlowVertexRecord, block);
 field_offset!(ENGINE_REGION_ID, EngineRegionRecord, id);
@@ -1547,6 +1560,11 @@ field_offset!(
     ENGINE_INLINE_OBJECT_RESERVED0,
     EngineInlineObjectRecord,
     reserved0
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_PARAGRAPH_ID,
+    EngineInlineObjectRecord,
+    paragraph_id
 );
 field_offset!(ENGINE_RESULT_ABI_VERSION, EngineResultHeader, abi_version);
 field_offset!(ENGINE_RESULT_BYTE_LENGTH, EngineResultHeader, byte_length);
@@ -2109,7 +2127,7 @@ pub fn json() -> String {
                 "deleteCount": ENGINE_TEXT_MUTATION_DELETE_COUNT,
                 "insertOffset": ENGINE_TEXT_MUTATION_INSERT_OFFSET,
                 "insertCount": ENGINE_TEXT_MUTATION_INSERT_COUNT,
-                "reserved1": ENGINE_TEXT_MUTATION_RESERVED1
+                "paragraphId": ENGINE_TEXT_MUTATION_PARAGRAPH_ID
             },
             "engineStyleMutation": {
                 "size": ENGINE_STYLE_MUTATION_RECORD_SIZE,
@@ -2139,7 +2157,8 @@ pub fn json() -> String {
                 "decorationRgba": ENGINE_STYLE_MUTATION_DECORATION_RGBA,
                 "decorationFlags": ENGINE_STYLE_MUTATION_DECORATION_FLAGS,
                 "decorationThickness": ENGINE_STYLE_MUTATION_DECORATION_THICKNESS,
-                "decorationOffset": ENGINE_STYLE_MUTATION_DECORATION_OFFSET
+                "decorationOffset": ENGINE_STYLE_MUTATION_DECORATION_OFFSET,
+                "paragraphId": ENGINE_STYLE_MUTATION_PARAGRAPH_ID
             },
             "engineConstraint": {
                 "size": ENGINE_CONSTRAINT_RECORD_SIZE,
@@ -2162,7 +2181,8 @@ pub fn json() -> String {
                 "align": ENGINE_CONSTRAINT_ALIGN,
                 "overflow": ENGINE_CONSTRAINT_OVERFLOW,
                 "blockAlign": ENGINE_CONSTRAINT_BLOCK_ALIGN,
-                "flags": ENGINE_CONSTRAINT_FLAGS
+                "flags": ENGINE_CONSTRAINT_FLAGS,
+                "paragraphId": ENGINE_CONSTRAINT_PARAGRAPH_ID
             },
             "engineFlowVertex": {
                 "size": ENGINE_FLOW_VERTEX_RECORD_SIZE,
@@ -2230,7 +2250,8 @@ pub fn json() -> String {
                 "marginBlockEnd": ENGINE_INLINE_OBJECT_MARGIN_BLOCK_END,
                 "baselineAlignment": ENGINE_INLINE_OBJECT_BASELINE_ALIGNMENT,
                 "flags": ENGINE_INLINE_OBJECT_FLAGS,
-                "reserved0": ENGINE_INLINE_OBJECT_RESERVED0
+                "reserved0": ENGINE_INLINE_OBJECT_RESERVED0,
+                "paragraphId": ENGINE_INLINE_OBJECT_PARAGRAPH_ID
             },
             "engineResult": {
                 "size": ENGINE_RESULT_HEADER_SIZE,
