@@ -314,14 +314,16 @@ export class TextGroup extends THREE.Object3D {
     return this.#material;
   }
   set material(value: ThreeTextMaterial | undefined) {
+    this.setMaterial(value);
+  }
+  setMaterial(value: ThreeTextMaterial | undefined): void {
     this.#material = value;
     this.#binding?.invalidateMaterial();
   }
 
   override add(...children: THREE.Object3D[]): this {
     this.#assertActive();
-    for (const child of children)
-      if (child instanceof Text) validateText(child as Text<AnyRasterTechnique>);
+    for (const child of children) if (child instanceof Text) validateText(child as Text<AnyRasterTechnique>);
     return super.add(...children);
   }
   setCapacity(capacity: GlyphBufferCapacity): void {
@@ -415,11 +417,7 @@ class ThreeTextBatchBinding {
   #materialInvalidated = false;
   #disposed = false;
 
-  constructor(
-    runtime: TextRuntime,
-    capacity: GlyphBufferCapacity,
-    group: TextGroup | undefined,
-  ) {
+  constructor(runtime: TextRuntime, capacity: GlyphBufferCapacity, group: TextGroup | undefined) {
     this.#runtime = runtime;
     this.#group = group;
     this.#coordinator = threeTextEngineCoordinator(runtime);
@@ -625,10 +623,7 @@ class ThreeTextBatchBinding {
     this.#textsByParagraph.clear();
     this.#removed.length = 0;
   }
-  #ensureText(
-    text: Text<AnyRasterTechnique>,
-    group: TextGroup | undefined,
-  ): void {
+  #ensureText(text: Text<AnyRasterTechnique>, group: TextGroup | undefined): void {
     validateBinding(this.#runtime, text);
     let paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined) {
@@ -693,11 +688,7 @@ function compileEngineStyles<Technique extends AnyRasterTechnique>(
   ];
   for (const [index, span] of (properties.spans ?? []).entries()) {
     const fontStackHandle = span.font === undefined ? undefined : acquireEngineStack(coordinator, span.font, leases);
-    const materialId = acquireEngineMaterial(
-      coordinator,
-      (span as TextSpan<Technique>).material,
-      materialLeases,
-    );
+    const materialId = acquireEngineMaterial(coordinator, (span as TextSpan<Technique>).material, materialLeases);
     styles.push({
       opcode: 'upsert',
       paragraphId,
@@ -891,9 +882,7 @@ function ownPublication(publication: TextEnginePublication): TextEnginePublicati
  * against unrelated text, so an update that replaces text without stating spans
  * clears the ones it replaced.
  */
-function replacedContent<Technique extends AnyRasterTechnique>(
-  update: TextUpdate<Technique>,
-): TextUpdate<Technique> {
+function replacedContent<Technique extends AnyRasterTechnique>(update: TextUpdate<Technique>): TextUpdate<Technique> {
   if (!('text' in update) || 'spans' in update) return update;
   return { ...update, spans: [] } as TextUpdate<Technique>;
 }
@@ -906,9 +895,7 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
   return Object.freeze({
     font: properties.font,
     text: formatted?.text ?? (properties.text as string),
-    spans: Object.freeze([
-      ...((formatted?.spans as readonly TextSpan<Technique>[]) ?? properties.spans ?? []),
-    ]),
+    spans: Object.freeze([...((formatted?.spans as readonly TextSpan<Technique>[]) ?? properties.spans ?? [])]),
     contentBox: Object.freeze({ ...(properties.contentBox ?? {}) }),
     style: Object.freeze({ ...(properties.style ?? {}) }),
     paint: Object.freeze({ ...(properties.paint ?? {}) }),
@@ -957,9 +944,7 @@ function nearestTextGroup(object: THREE.Object3D): TextGroup | undefined {
   }
   return undefined;
 }
-function eraseTextTechnique<Technique extends AnyRasterTechnique>(
-  text: Text<Technique>,
-): Text<AnyRasterTechnique> {
+function eraseTextTechnique<Technique extends AnyRasterTechnique>(text: Text<Technique>): Text<AnyRasterTechnique> {
   return text as unknown as Text<AnyRasterTechnique>;
 }
 function collectTextDescendants(group: TextGroup): Text<AnyRasterTechnique>[] {

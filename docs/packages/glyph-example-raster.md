@@ -5,7 +5,7 @@ description: Proves the published raster and baker extension boundary with a pri
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/text-glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:f668c47d4500e4fe1d98d84b73dbf95f8d842d04c1fed4b144ad293b2c3c5610'
+source_digest: 'sha256:0a0b7bd0a74ec262d5b4722cc43e5a1f8da837e9fa72b9c1d9112f119f1bb445'
 tags: [package, raster, extension-proof, threejs, tsl]
 sources:
   - id: manifest
@@ -28,7 +28,7 @@ sources:
     title: Dual-backend product rendering probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-04T18:59:39Z'
+  at: '2026-08-09T06:36:53Z'
 ---
 
 # Package reference: `@pmndrs/text-glyph-example-raster`
@@ -48,20 +48,23 @@ diagnostic rather than a text-quality recommendation. The baker accepts both emb
 The external lane authenticates the companion GLB and its separate record payload through the public raster and resource
 resolvers; the embedded lane proves recursive `BufferView` rebasing through the public Node composition host.
 
-The package now supplies both halves of the target-v1 boundary separately. `glyphExample` is a portable
-`defineRasterTechnique` that decodes, selects one shared resource, and packs canonical positive-down instance storage while
-importing no renderer; `@pmndrs/text-glyph-example-raster/three` registers the Three program for it through the public
-`registerThreeRasterProgram` registry, so nothing in `@pmndrs/text` names this package. Instance capacity and dirty ranges
-are now core's, not the plugin's: the program reads `PreparedGlyphBatch.capacity` and `.dirtyRanges` and retains its meshes,
-geometry, and buffers while both hold, which deleted this package's own slack planner and bucket coalescer. Focused tests
-cover deterministic bytes, public Node bake, standalone companion validation, external resource resolution,
-abort-before-decode, selection, range writes, binding identity, and paint admission.
+The package now supplies both halves of the Rust render-plan boundary separately. `glyphExample` is a portable
+`defineRasterTechnique` that decodes and selects one shared resource while importing no renderer.
+`@pmndrs/text-glyph-example-raster/three` registers a static policy program through public
+`registerThreeRasterPlanProgram`, so nothing in `@pmndrs/text` names this package. The policy describes the exact Rust
+inputs, buffers, scalar operations, and storage/draw keys. A cold compiler lowers validated glyph colors and inset data
+into one font binding; a renderer factory consumes the resulting buffers to construct the TSL material. The package no
+longer owns a `ParagraphBatchTarget`, target revision, slack planner, dirty-range upload loop, or mesh transaction.
+Focused tests cover deterministic bytes, public Node bake, standalone companion validation, external resource
+resolution, abort-before-decode, selection and binding identity, plus a compiled-Wasm public `Text` lifecycle that
+observes Rust-packed buffers and retained draw/geometry identity.
 
 The hardware-browser target uses the public source-font fallback, package runtime baker, the target-v1 `FontLoader`, public
 `Text` and `TextGroup`, warm matrix-lifecycle publication, TSL compilation, draw, asynchronous render-target readback, and
 complete disposal. WebGPU and forced WebGL2 each produced two deterministic samples with visible glyph frames, one draw,
-retained mesh and geometry identity, and the same RGBA SHA-256
-`0e0ec025a2121ec3b29317276c12978e7a7a062197b0a9ad448a6b37c270b368`.
+retained mesh and geometry identity, individual `Text.visible` behavior inside an indexed shared draw, caller-owned
+Group ordering, and the same RGBA SHA-256
+`817495c4afe3a8f88d2af85d972f43be88b9f834ed0268d0d0b2e3de86ba9d46`.
 When the benchmark route supplies an exclusive execution context, the target borrows that renderer, restores render target,
 clear, viewport, scissor, and scissor-test state, and never creates or disposes a parallel renderer. Run the focused lane with
 `pnpm scripts run benchmark:external-raster`.

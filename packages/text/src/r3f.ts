@@ -83,9 +83,7 @@ const fontPromises = new Map<string, Promise<LoadedFont<AnyRasterTechnique>>>();
 const techniqueIds = new WeakMap<object, number>();
 let nextTechniqueId = 1;
 
-export function Text<Technique extends AnyRasterTechnique>(
-  input: R3fTextProps<Technique>,
-): ReactElement | null {
+export function Text<Technique extends AnyRasterTechnique>(input: R3fTextProps<Technique>): ReactElement | null {
   const { ref: forwardedRef, ...properties } = input;
   const flattened = useMemo(() => flattenText<Technique>(properties.children), [properties.children]);
   const desired = textProperties(properties, flattened);
@@ -168,7 +166,7 @@ export function TextGroup(input: R3fTextGroupProps): ReactElement | null {
     if (object === undefined) return;
     if (properties.capacity !== undefined && !sameCapacity(properties.capacity, object))
       object.setCapacity(properties.capacity);
-    object.material = properties.material;
+    object.setMaterial(properties.material);
     invalidate();
   }, [invalidate, object, properties.capacity, properties.material]);
 

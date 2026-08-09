@@ -20,6 +20,13 @@ export type {
 export { FontLoader } from './three/font-loader.js';
 export { defineTextMaterial } from './three/material.js';
 export type { ThreeTextMaterial, ThreeTextMaterialContext } from './three/material.js';
+export { registerThreeRasterPlanProgram, threePolicyAbi } from './three/plan-program-registry.js';
+export type {
+  ThreePlanProgramBuffer,
+  ThreePlanProgramFontCompiler,
+  ThreePlanProgramMaterialContext,
+  ThreeRasterPlanProgram,
+} from './three/plan-program-registry.js';
 export { msdfShader } from './three/msdf-shader.js';
 export type { ThreeMsdfInstanceNodes, ThreeMsdfShaderOutput, ThreeMsdfShaderResources } from './three/msdf-shader.js';
 export { registerThreeRasterProgram } from './three/program-registry.js';
@@ -41,10 +48,4 @@ export type {
   ThreeSlugShaderResources,
 } from './three/slug-shader.js';
 export { Text, TextGroup } from './three/text.js';
-export type {
-  StandaloneTextProperties,
-  TextGroupOptions,
-  TextProperties,
-  TextSpan,
-  TextUpdate,
-} from './three/text.js';
+export type { StandaloneTextProperties, TextGroupOptions, TextProperties, TextSpan, TextUpdate } from './three/text.js';

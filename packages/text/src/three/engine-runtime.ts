@@ -8,6 +8,7 @@ import { firstPartyFontBindingBytes } from '../internal/font-binding-wire.js';
 import { firstPartyThreeRenderPolicyBytes, type ThreeTransformMode } from '../internal/render-policy-wire.js';
 import { TextEngineHost, type TextEngineSession, type TextEngineSessionOptions } from '../internal/text-engine-host.js';
 import type { ThreeTextMaterial } from './material.js';
+import { compiledThreeRasterPlanPrograms, type CompiledThreeRasterPlanProgram } from './plan-program-registry.js';
 
 const POLICY_HANDLE = 1;
 const MAX_U32 = 0xffff_ffff;
@@ -37,7 +38,8 @@ interface RetainedMaterial {
 export type ThreeTextEngineResource =
   | Readonly<{ technique: typeof bitmap.id; page: BitmapPageData }>
   | Readonly<{ technique: typeof msdf.id; data: MsdfData }>
-  | Readonly<{ technique: typeof slug.id; page: SlugPageData }>;
+  | Readonly<{ technique: typeof slug.id; page: SlugPageData }>
+  | Readonly<{ technique: string; resource: unknown; program: CompiledThreeRasterPlanProgram }>;
 
 export interface ThreeTextEngineCoordinatorOptions {
   /** Renderer-policy choice; indexed is the first-party high-throughput default. */
@@ -52,6 +54,7 @@ export class ThreeTextEngineCoordinator {
   readonly #stacks = new Map<string, RetainedStack>();
   readonly #materialHandles = new WeakMap<ThreeTextMaterial, RetainedMaterial>();
   readonly #materials = new Map<number, RetainedMaterial>();
+  readonly #planPrograms: ReadonlyMap<string, CompiledThreeRasterPlanProgram>;
   #nextBindingHandle = 1;
   #nextStackHandle = 1;
   #nextSessionHandle = 1;
@@ -60,9 +63,15 @@ export class ThreeTextEngineCoordinator {
 
   constructor(runtime: Pick<TextRuntime, 'shaper'>, options: ThreeTextEngineCoordinatorOptions = {}) {
     this.host = new TextEngineHost(runtime.shaper);
+    const planPrograms = compiledThreeRasterPlanPrograms(this.host.wireIdentities);
+    this.#planPrograms = new Map(planPrograms.map((program) => [program.technique.id, program]));
     this.host.registerPolicy(
       POLICY_HANDLE,
-      firstPartyThreeRenderPolicyBytes(this.host.wireIdentities, options.transformMode),
+      firstPartyThreeRenderPolicyBytes(
+        this.host.wireIdentities,
+        options.transformMode,
+        planPrograms.map((program) => program.policy),
+      ),
     );
   }
 
@@ -149,8 +158,21 @@ export class ThreeTextEngineCoordinator {
     const existing = this.#bindingHandles.get(font);
     if (existing !== undefined) return existing;
     const handle = this.#allocateBindingHandle();
-    this.#registerResources(font);
-    this.host.registerFontBinding(handle, font.font.handle, firstPartyFontBindingBytes(font, this.host.wireIdentities));
+    const program = this.#planPrograms.get(font.technique.id);
+    if (program === undefined) {
+      this.#registerResources(font);
+      this.host.registerFontBinding(
+        handle,
+        font.font.handle,
+        firstPartyFontBindingBytes(font, this.host.wireIdentities),
+      );
+    } else {
+      const compiled = program.compileFont(font, this.host.wireIdentities);
+      for (const [key, resource] of compiled.resources) {
+        this.#retainResource(key, { technique: font.technique.id, resource, program });
+      }
+      this.host.registerFontBinding(handle, font.font.handle, compiled.binding);
+    }
     this.#bindingHandles.set(font, handle);
     return handle;
   }

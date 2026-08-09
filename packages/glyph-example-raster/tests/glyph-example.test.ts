@@ -5,6 +5,8 @@ import { join } from 'node:path';
 
 import {
   FontRegistry,
+  createRuntimeShaper,
+  createTextRuntime,
   rasterBake,
   type GlyphPaint,
   type RasterGlyphInput,
@@ -15,10 +17,13 @@ import {
   type Sha256Hex,
 } from '@pmndrs/text';
 import { bakeFont } from '@pmndrs/text/bake';
+import { Text, TextGroup } from '@pmndrs/text/three';
+import * as THREE from 'three/webgpu';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import glyphExampleBaker from '../src/baker.js';
 import { GLYPH_EXAMPLE_KIND, glyphExample, glyphExampleDescriptor, type GlyphExampleData } from '../src/index.js';
+import '../src/three.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const temporaryDirectories: string[] = [];
@@ -151,6 +156,49 @@ describe('public external raster proof', () => {
     );
     font.dispose();
   });
+
+  test('publishes and retains external draws through the Rust command buffer', async () => {
+    const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
+    const core = baked.execution.outputs.find(({ role }) => role === 'font');
+    assert.ok(core);
+    const registry = new FontRegistry();
+    const shaper = await createRuntimeShaper({
+      registry,
+      wasm: await readFile(new URL('../../text/dist/text_shaper.wasm', import.meta.url)),
+    });
+    const runtime = await createTextRuntime({ registry, shaper });
+    const font = await runtime.loadFont({
+      input: { baked: dataUrl(await readFile(core.file)) },
+      raster: { technique: glyphExample, options: { paletteSeed: 7 } },
+    });
+    const text = new Text({ font, text: 'PUBLIC RASTER', style: { fontSize: 48 } });
+    const group = new TextGroup({ renderOrder: 200 });
+    group.add(text);
+    const scene = new THREE.Scene();
+    scene.add(group);
+    scene.updateMatrixWorld();
+
+    expect(group.error).toBeUndefined();
+    const draw = group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+    expect(draw).toBeDefined();
+    expect(draw?.renderOrder).toBe(200);
+    const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
+    expect(geometry.getAttribute('_pmndrsText_1')).toBeDefined();
+    expect(geometry.getAttribute('_pmndrsText_2')).toBeDefined();
+    expect(geometry.getAttribute('_pmndrsText_3')).toBeDefined();
+    expect(geometry.getAttribute('_pmndrsText_15')).toBeDefined();
+
+    text.text = 'PLUGIN UPDATE';
+    scene.updateMatrixWorld();
+    expect(group.error).toBeUndefined();
+    expect(group.children.find((child) => child instanceof THREE.Mesh)).toBe(draw);
+    expect(draw?.geometry).toBe(geometry);
+
+    group.dispose();
+    text.dispose();
+    font.dispose();
+    runtime.dispose();
+  });
 });
 
 async function loadEmbedded(): Promise<{ readonly font: RegisteredFont; readonly data: GlyphExampleData }> {
@@ -198,4 +246,8 @@ function glyphColor(data: GlyphExampleData, glyphId: number): readonly number[] 
 
 function paint(): GlyphPaint {
   return { palette: [{ color: [1, 1, 1, 1] }], paintIndices: Uint16Array.of(0) };
+}
+
+function dataUrl(bytes: Uint8Array): string {
+  return `data:model/gltf-binary;base64,${Buffer.from(bytes).toString('base64')}`;
 }

@@ -14,6 +14,7 @@ import { msdfShader } from './msdf-shader.js';
 import { invalidatePboTexture } from './retained-target.js';
 import { slugShader, type ThreeSlugPageResources } from './slug-shader.js';
 import type { ThreeTextMaterialContext } from './material.js';
+import type { ThreePlanProgramBuffer } from './plan-program-registry.js';
 
 type ScalarArray = Float32Array | Uint32Array | Uint16Array;
 
@@ -144,8 +145,14 @@ export class ThreeTextRenderPlanExecutor {
       const object = this.#owner.objectForTransform(index);
       object.updateWorldMatrix(true, false);
       this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
-      if (matrixEquals(target, index * 16, this.#relativeTransform.elements)) continue;
-      target.set(this.#relativeTransform.elements, index * 16);
+      const offset = index * 16;
+      if (object.visible) {
+        if (matrixEquals(target, offset, this.#relativeTransform.elements)) continue;
+        target.set(this.#relativeTransform.elements, offset);
+      } else {
+        if (zeroMatrixEquals(target, offset)) continue;
+        target.fill(0, offset, offset + 16);
+      }
       this.#transformAttribute.addUpdateRange(index * 16, 16);
       changed += 1;
       indexedChanged += 1;
@@ -154,12 +161,19 @@ export class ThreeTextRenderPlanExecutor {
       const transformId = directTransformId(draw);
       if (transformId === 0) continue;
       const object = this.#owner.objectForTransform(transformId);
+      let drawChanged = false;
+      if (draw.visible !== object.visible) {
+        draw.visible = object.visible;
+        drawChanged = true;
+      }
       object.updateWorldMatrix(true, false);
       this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
-      if (draw.matrix.equals(this.#relativeTransform)) continue;
-      draw.matrix.copy(this.#relativeTransform);
-      draw.matrixWorldNeedsUpdate = true;
-      changed += 1;
+      if (!draw.matrix.equals(this.#relativeTransform)) {
+        draw.matrix.copy(this.#relativeTransform);
+        draw.matrixWorldNeedsUpdate = true;
+        drawChanged = true;
+      }
+      if (drawChanged) changed += 1;
     }
     if (changed === 0) return 0;
     if (indexedChanged !== 0) {
@@ -518,7 +532,57 @@ export class ThreeTextRenderPlanExecutor {
     if (resolved.technique === bitmap.id) return this.#bitmapMaterial(resource, buffers, materialId, transform);
     if (resolved.technique === msdf.id) return this.#msdfMaterial(resource, buffers, materialId, transform);
     if (resolved.technique === slug.id) return this.#slugMaterial(resource, buffers, materialId, transform);
+    if ('program' in resolved) return this.#planProgramMaterial(resource, resolved, buffers, materialId, transform);
     throw new Error('this Three plan target does not recognize the draw technique');
+  }
+
+  #planProgramMaterial(
+    resource: RetainedResource,
+    resolved: Extract<ThreeTextEngineResource, { readonly program: unknown }>,
+    buffers: ReadonlyMap<number, RetainedBuffer>,
+    materialId: number,
+    transform: TransformRealization,
+  ): THREE.NodeMaterial {
+    const required = [...buffers.values()];
+    const key = `external:${resource.id}:${resource.generation}:${materialId}:${required
+      .map((buffer) => `${buffer.policyBufferId}:${buffer.id}:${buffer.generation}`)
+      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}`;
+    const cached = this.#materials.get(key);
+    if (cached !== undefined) return cached.material;
+    const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
+      ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
+    );
+    const instance = TSL.instanceIndex.add(runStart);
+    const publicBuffers = new Map<number, ThreePlanProgramBuffer>(
+      [...buffers].map(([id, buffer]) => [
+        id,
+        {
+          scalarType: buffer.scalarType,
+          vectorWidth: buffer.vectorWidth,
+          attribute: buffer.attribute,
+        },
+      ]),
+    );
+    const material = this.#ownMaterial(
+      resolved.program.createMaterial({
+        resource: resolved.resource,
+        buffers: publicBuffers,
+        instance,
+        materialId,
+        material: this.#coordinator.resolveMaterial(materialId),
+        transformPosition: (position) =>
+          transform.kind === 'indexed'
+            ? indexedTransformPosition(position, transform.indices.attribute, this.#transformAttribute, instance)
+            : position,
+      }),
+    );
+    this.#retainMaterial(
+      key,
+      material,
+      resource,
+      transform.kind === 'indexed' ? [...required, transform.indices] : required,
+    );
+    return material;
   }
 
   #msdfMaterial(
@@ -743,7 +807,10 @@ export class ThreeTextRenderPlanExecutor {
 
   #createMaterial(materialId: number, context: ThreeTextMaterialContext): THREE.NodeMaterial {
     const definition = this.#coordinator.resolveMaterial(materialId);
-    const material = definition?.create(context) ?? context.createDefaultMaterial();
+    return this.#ownMaterial(definition?.create(context) ?? context.createDefaultMaterial());
+  }
+
+  #ownMaterial(material: THREE.NodeMaterial): THREE.NodeMaterial {
     if (material?.isNodeMaterial !== true)
       throw new TypeError('text material factory must return a Three NodeMaterial');
     if (this.#ownedMaterials.has(material)) {
@@ -942,6 +1009,13 @@ function transformAttribute(transformCapacity: number): THREE.StorageInstancedBu
 function matrixEquals(target: Float32Array, offset: number, matrix: readonly number[]): boolean {
   for (let index = 0; index < 16; index += 1) {
     if (target[offset + index] !== Math.fround(matrix[index]!)) return false;
+  }
+  return true;
+}
+
+function zeroMatrixEquals(target: Float32Array, offset: number): boolean {
+  for (let index = 0; index < 16; index += 1) {
+    if (target[offset + index] !== 0) return false;
   }
   return true;
 }

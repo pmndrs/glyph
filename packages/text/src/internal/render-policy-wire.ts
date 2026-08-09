@@ -4,14 +4,14 @@ const MAX_U32 = 0xffff_ffff;
 const encoder = new TextEncoder();
 export const FIRST_PARTY_TRANSFORM_BUFFER_ID = 15;
 
-type PolicyInputScope = keyof typeof textShaperAbi.policy.inputScopes;
+export type PolicyInputScope = keyof typeof textShaperAbi.policy.inputScopes;
 
-interface PolicyInput {
+export interface PolicyInput {
   readonly scope: PolicyInputScope;
   readonly field: number;
 }
 
-interface PolicyBuffer {
+export interface PolicyBuffer {
   readonly id: number;
   readonly scalar: number;
   readonly vectorWidth: number;
@@ -21,7 +21,7 @@ interface PolicyBuffer {
   readonly capacityClass?: number;
 }
 
-interface PolicyOperation {
+export interface PolicyOperation {
   readonly opcode: number;
   readonly target?: number;
   readonly operand0?: number;
@@ -31,7 +31,7 @@ interface PolicyOperation {
   readonly immediate2?: number;
 }
 
-interface PolicyProgram {
+export interface PolicyProgram {
   readonly techniqueId: number;
   readonly programId: number;
   readonly capabilitySetId?: number;
@@ -50,7 +50,7 @@ interface PolicyProgram {
   readonly operations: readonly PolicyOperation[];
 }
 
-interface PolicyCapabilitySet {
+export interface PolicyCapabilitySet {
   readonly id: number;
   readonly flags: number;
   readonly maxBufferBytes: number;
@@ -64,7 +64,7 @@ interface PolicyCapabilitySet {
   readonly wholeBufferThresholdBasisPoints: number;
 }
 
-interface PolicyDescriptor {
+export interface PolicyDescriptor {
   readonly capabilitySets: readonly PolicyCapabilitySet[];
   readonly programs: readonly PolicyProgram[];
 }
@@ -117,6 +117,7 @@ export const firstPartyTechniqueWireIds: FirstPartyTechniqueWireIds = Object.fre
 export function firstPartyThreeRenderPolicyBytes(
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
   transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
+  additionalPrograms: readonly PolicyProgram[] = [],
 ): Uint8Array {
   const bitmap = identities.resolve('pmndrs.bitmap');
   const msdf = identities.resolve('pmndrs.msdf');
@@ -125,15 +126,16 @@ export function firstPartyThreeRenderPolicyBytes(
     typeof transformMode === 'string'
       ? { bitmap: transformMode, msdf: transformMode, slug: transformMode }
       : transformMode;
-  const programs = [
+  const programs: PolicyProgram[] = [
     bitmapProgram(bitmap, 1, modes.bitmap),
     msdfProgram(msdf, 2, modes.msdf),
     slugProgram(slug, 3, modes.slug),
+    ...additionalPrograms,
   ];
   if (new Set(programs.map((program) => program.techniqueId)).size !== programs.length) {
     throw new TypeError('first-party raster technique wire identities collide');
   }
-  return compilePolicy({ capabilitySets: [threeCapabilitySet()], programs });
+  return compileRenderPolicy({ capabilitySets: [threeCapabilitySet()], programs });
 }
 
 function threeCapabilitySet(): PolicyCapabilitySet {
@@ -399,7 +401,7 @@ function transformIndexBuffer(): PolicyBuffer {
   };
 }
 
-function compilePolicy(descriptor: PolicyDescriptor): Uint8Array {
+export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   const request = textShaperAbi.layouts.policyRequest;
   const capability = textShaperAbi.layouts.policyCapabilitySet;
   const programLayout = textShaperAbi.layouts.policyProgram;
