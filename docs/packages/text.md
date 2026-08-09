@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:51054483c8717b0cdc059992ce1c7d732f304071b5c85931660d0fe03e9a2559'
+source_digest: 'sha256:b6dce9879ae98132ac2c7f11b3f0fba957ffee93af5698a01ee4c65c994e299f'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -901,6 +901,9 @@ corresponding scene object without a Wasm call. Bitmap and MSDF use the ordinary
 ordinary model-view-projection matrix to its dilation graph. The compiled-Wasm fixture proves direct IDs `[1,2]`, no
 transform-index/table geometry attributes, exact initial matrices, and one changed retained matrix after a scene-only
 transform update. Indexed and direct are policy program contracts; the target does not reinterpret or merge them.
+One hybrid-policy publication further proves the modes compose: program-1 Bitmap carries draw transform zero and both
+indexed attributes while program-2 MSDF carries draw transform two and neither attribute. Updating both corresponding
+scene objects changes the shared table lane and direct retained mesh matrix in the same renderer synchronization.
 
 Three material definitions now have one public construction function and one runtime-scoped numeric identity registry.
 The executor resolves Rust's `materialId` to a factory only when a compatible technique/program/resource material is
