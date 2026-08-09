@@ -147,13 +147,14 @@ async function readyViewport(technique: Technique, workload: string): Promise<HT
       viewport.getAttribute('data-presentation-pending') !== 'false' ||
       !Number.isFinite(framesPerSecond) ||
       framesPerSecond <= 0 ||
-      (workload === 'advanced-shaping' && Number(viewport.getAttribute('data-glyph-count')) <= 0) ||
+      Number(viewport.getAttribute('data-glyph-count')) <= 0 ||
+      Number(viewport.getAttribute('data-draw-count')) <= 0 ||
       viewport.getAttribute('data-missing-glyph-count') !== '0'
     ) {
       return undefined;
     }
     return viewport;
-  });
+  }, 60_000);
 }
 
 function percentile(values: readonly number[], ratio: number): number {

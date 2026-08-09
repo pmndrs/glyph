@@ -593,6 +593,10 @@ async function createComparisonWorkloadRuntime(
         next.workload === 'icon-grid' && nextIconGridInstance !== undefined
           ? nextIconGridInstance.activate(next, { height, width })
           : undefined;
+      const previous = entries;
+      const previousRoot = batchRoot;
+      const reuseBatchRoot =
+        previousRoot instanceof TextGroup && comparisonWorkloadDefinition(next.workload).batching !== 'standalone';
       const nextEntries = createEntries(
         activeFont().loaded,
         technique,
@@ -606,23 +610,28 @@ async function createComparisonWorkloadRuntime(
         initialIconWindow?.scrollX ?? (workloadChanged ? 0 : -scene.position.x),
         initialIconWindow?.scrollY ?? (workloadChanged ? 0 : scene.position.y),
       );
-      const nextRoot = createBatchRoot(next.workload);
+      const nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(next.workload);
       const scheduledAt = performance.now();
       try {
-        // The staged root is published off-scene: a TextGroup shapes, lays out, and packs its whole workload inside
-        // one `updateMatrixWorld`, so the committed layouts are readable before anything reaches the live scene.
+        // Compatible grouped workloads replace their children through one retained Rust session. Creating a second
+        // TextGroup would duplicate every reserved engine arena while the outgoing command buffer is still live.
+        if (reuseBatchRoot) for (const { node } of previous) previousRoot.remove(node);
         for (const { node } of nextEntries) nextRoot.add(node);
         publishWorkloadTexts(nextRoot, nextEntries);
         const readyAt = performance.now();
         if (disposed || commitRevision !== revision) {
-          disposeEntries(nextEntries);
-          disposeBatchRoot(nextRoot);
+          entries = nextEntries;
+          batchRoot = nextRoot;
+          disposeEntries(previous);
+          if (!reuseBatchRoot) disposeBatchRoot(previousRoot);
+          if (iconGridInstanceChanged) {
+            iconGridInstance?.dispose();
+            iconGridInstance = next.workload === 'icon-grid' ? nextIconGridInstance : undefined;
+          }
           return;
         }
         const sceneStartedAt = performance.now();
         layoutEntries(nextEntries, next, width, height);
-        const previous = entries;
-        const previousRoot = batchRoot;
         entries = nextEntries;
         batchRoot = nextRoot;
         configuration = next;
@@ -640,7 +649,7 @@ async function createComparisonWorkloadRuntime(
         scene.clear();
         scene.add(nextRoot);
         disposeEntries(previous);
-        disposeBatchRoot(previousRoot);
+        if (!reuseBatchRoot) disposeBatchRoot(previousRoot);
         if (iconGridInstanceChanged) {
           iconGridInstance?.dispose();
           iconGridInstance = next.workload === 'icon-grid' ? nextIconGridInstance : undefined;
@@ -657,8 +666,25 @@ async function createComparisonWorkloadRuntime(
           iconGridInstance?.settle(next, { height, width }, scene);
         }
       } catch (error) {
+        if (reuseBatchRoot) {
+          for (const { node } of nextEntries) nextRoot.remove(node);
+          disposeBatchRoot(nextRoot);
+          const restoredRoot = createBatchRoot(configuration.workload);
+          try {
+            for (const { node } of previous) restoredRoot.add(node);
+            publishWorkloadTexts(restoredRoot, previous);
+            batchRoot = restoredRoot;
+            scene.clear();
+            scene.add(restoredRoot);
+          } catch (recoveryError) {
+            disposeBatchRoot(restoredRoot);
+            disposeEntries(nextEntries);
+            if (iconGridInstanceChanged) nextIconGridInstance?.dispose();
+            throw new Error(`comparison workload update also failed: ${String(error)}`, { cause: recoveryError });
+          }
+        }
         disposeEntries(nextEntries);
-        disposeBatchRoot(nextRoot);
+        if (!reuseBatchRoot) disposeBatchRoot(nextRoot);
         if (iconGridInstanceChanged) nextIconGridInstance?.dispose();
         throw error;
       }
@@ -860,7 +886,7 @@ async function createComparisonWorkloadRuntime(
         const activeZoomEntry =
           configuration.workload === 'zoom-text' ? entries[zoomAnimationState.phraseIndex] : undefined;
         const zoomScale = activeZoomEntry?.node.scale.x ?? 1;
-        measureVisibleEntries(entries, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
+        measureVisibleEntries(entries, batchRoot, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
         const effectiveCssFontSize =
           configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : configuration.fontSize;
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
@@ -1537,6 +1563,7 @@ function disposeEntries(entries: readonly WorkloadEntry[]): void {
 
 function measureVisibleEntries(
   entries: readonly WorkloadEntry[],
+  batchRoot: THREE.Object3D,
   zoomScale: number,
   metrics: MutableVisibleEntryMetrics,
   geometries: Set<THREE.InstancedBufferGeometry>,
@@ -1548,10 +1575,12 @@ function measureVisibleEntries(
   metrics.lineCount = 0;
   metrics.missingGlyphCount = 0;
   metrics.sourceTextLength = 0;
+  geometries.clear();
+  // Rust-planned TextGroup draws are siblings of the authored entry nodes. Traversing each entry therefore reports
+  // zero even though the shared command buffer submits one draw; traverse the realized batch root exactly once.
+  measureVisibleObject(batchRoot, metrics, geometries);
   for (const entry of entries) {
     if (!entry.node.visible) continue;
-    geometries.clear();
-    measureVisibleObject(entry.node, metrics, geometries);
     measureVisibleLayout(committedTextMetrics(entry.text), zoomScale, metrics);
     if (entry.labelText !== undefined) measureVisibleLayout(committedTextMetrics(entry.labelText), zoomScale, metrics);
     metrics.sourceTextLength += entry.sourceText.length;
