@@ -656,6 +656,101 @@ test('Three coordinator shares shaping data across technique bindings and refere
   directTarget.dispose();
   directSession.dispose();
 
+  const hybridPolicyHandle = 3;
+  coordinator.host.registerPolicy(
+    hybridPolicyHandle,
+    firstPartyThreeRenderPolicyBytes(coordinator.host.wireIdentities, {
+      bitmap: 'indexed',
+      msdf: 'direct',
+      slug: 'indexed',
+    }),
+  );
+  const hybridSession = coordinator.createSession({
+    requestCapacity: 4_096,
+    resultCapacity: 1024 * 1024,
+    textCapacity: 16,
+  });
+  const hybridRequest = initialRequest.slice();
+  const hybridRequestView = new DataView(hybridRequest.buffer, hybridRequest.byteOffset, hybridRequest.byteLength);
+  hybridRequestView.setUint32(requestLayout.sessionId, hybridSession.handle, true);
+  hybridRequestView.setUint32(requestLayout.policyHandle, hybridPolicyHandle, true);
+  const hybridInitialPublication = hybridSession.update(hybridRequest);
+  const hybridTarget = new ThreeTextEnginePlanTarget(coordinator, {
+    drawRoot,
+    renderOrderBase: 30,
+    objectForTransform(transformId) {
+      const object = paragraphObjects.get(transformId);
+      if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
+      return object;
+    },
+  });
+  hybridTarget.apply(hybridInitialPublication);
+  const hybridPublication = hybridSession.update(
+    compileTextEngineFrameUpdate({
+      sessionId: hybridSession.handle,
+      policyHandle: hybridPolicyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: hybridInitialPublication.engineRevision,
+      consumedPlanRevision: hybridInitialPublication.planRevision,
+      acknowledgedPublicationGeneration: 0,
+      limits: {
+        maxParagraphs: 2,
+        maxClusters: 16,
+        maxLines: 8,
+        maxRegions: 2,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      styleMutations: [
+        {
+          opcode: 'upsert',
+          paragraphId: 2,
+          styleId: 1,
+          cascadeOrder: 0,
+          start: 0,
+          end: 3,
+          root: true,
+          value: {
+            fontStackHandle: reversed.handle,
+            materialId: secondaryMaterial.id,
+            fontSize: 16,
+            rasterPixelRatio: 1,
+            foregroundRgba: 0xffff_ffff,
+          },
+        },
+      ],
+    }),
+  );
+  const hybridPlan = plan.bind(hybridPublication);
+  const hybridDraws = hybridPlan.table('draws');
+  assert.deepEqual(
+    Array.from({ length: hybridDraws.count }, (_, index) => {
+      const hybridDraw = hybridPlan.record(hybridDraws, index);
+      return [hybridPlan.u32(hybridDraw + drawLayout.programId), hybridPlan.u32(hybridDraw + drawLayout.transformId)];
+    }),
+    [
+      [1, 0],
+      [2, 2],
+    ],
+    'one Rust publication may mix indexed and direct program contracts',
+  );
+  hybridTarget.apply(hybridPublication);
+  const [hybridIndexedDraw, hybridDirectDraw] = hybridTarget.draws;
+  assert.ok(hybridIndexedDraw.geometry.getAttribute('_pmndrsText_15'));
+  assert.ok(hybridIndexedDraw.geometry.getAttribute('_pmndrsTextTransforms'));
+  assert.equal(hybridDirectDraw.geometry.getAttribute('_pmndrsText_15'), undefined);
+  assert.equal(hybridDirectDraw.geometry.getAttribute('_pmndrsTextTransforms'), undefined);
+  assert.equal(hybridDirectDraw.matrix.elements[12], 9);
+  paragraphObjects.get(1).position.x = 6;
+  paragraphObjects.get(2).position.x = 10;
+  assert.equal(hybridTarget.syncTransforms(), 2);
+  assert.equal(hybridIndexedDraw.geometry.getAttribute('_pmndrsTextTransforms').array[1 * 16 + 12], 6);
+  assert.equal(hybridDirectDraw.matrix.elements[12], 10);
+  hybridTarget.dispose();
+  hybridSession.dispose();
+
   target.dispose();
   session.dispose();
   first.release();

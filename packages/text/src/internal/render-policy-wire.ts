@@ -101,6 +101,12 @@ export interface FirstPartyTechniqueWireIds {
 
 export type ThreeTransformMode = 'direct' | 'indexed';
 
+export interface ThreeTechniqueTransformModes {
+  readonly bitmap: ThreeTransformMode;
+  readonly msdf: ThreeTransformMode;
+  readonly slug: ThreeTransformMode;
+}
+
 export const firstPartyTechniqueWireIds: FirstPartyTechniqueWireIds = Object.freeze({
   bitmap: renderWireId('pmndrs.bitmap'),
   msdf: renderWireId('pmndrs.msdf'),
@@ -110,15 +116,19 @@ export const firstPartyTechniqueWireIds: FirstPartyTechniqueWireIds = Object.fre
 /** Compiler-mapped Three policy covering every first-party raster technique in one registration. */
 export function firstPartyThreeRenderPolicyBytes(
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
-  transformMode: ThreeTransformMode = 'indexed',
+  transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
 ): Uint8Array {
   const bitmap = identities.resolve('pmndrs.bitmap');
   const msdf = identities.resolve('pmndrs.msdf');
   const slug = identities.resolve('pmndrs.slug');
+  const modes =
+    typeof transformMode === 'string'
+      ? { bitmap: transformMode, msdf: transformMode, slug: transformMode }
+      : transformMode;
   const programs = [
-    bitmapProgram(bitmap, 1, transformMode),
-    msdfProgram(msdf, 2, transformMode),
-    slugProgram(slug, 3, transformMode),
+    bitmapProgram(bitmap, 1, modes.bitmap),
+    msdfProgram(msdf, 2, modes.msdf),
+    slugProgram(slug, 3, modes.slug),
   ];
   if (new Set(programs.map((program) => program.techniqueId)).size !== programs.length) {
     throw new TypeError('first-party raster technique wire identities collide');

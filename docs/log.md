@@ -6,7 +6,9 @@
   and direct transform realizations for Bitmap, MSDF, and Slug. The same compiled-Wasm fixture now registers a direct
   first-party policy: Rust emits draw transforms `[1,2]`, omits transform buffers, and Three updates retained draw
   matrices from their scene objects. The existing indexed policy still emits draw transforms `[0,0]`, buffer 15, and
-  the shared matrix sidecar. The engine policy chooses the contract; Three does not rebatch the plan.
+  the shared matrix sidecar. A hybrid policy additionally publishes indexed Bitmap and direct MSDF draws together;
+  scene-only synchronization updates both realizations without Wasm. The engine policy chooses each program contract;
+  Three does not rebatch the plan.
 
 - **Bounded Three residency and retained draw identity** — Applied exact Rust buffer/resource retirements to dependent
   material and texture realizations, retaining shared renderer resources until their final plan reference leaves. The
