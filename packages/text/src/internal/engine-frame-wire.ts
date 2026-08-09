@@ -161,6 +161,7 @@ export interface TextEngineFrameUpdate {
   readonly consumedPlanRevision: number;
   readonly acknowledgedPublicationGeneration: number;
   readonly semanticViewMask?: number;
+  readonly compositingIndependent?: boolean;
   readonly limits: TextEngineFrameLimits;
   readonly paragraphMutations?: readonly TextEngineParagraphMutation[];
   readonly textMutations?: readonly TextEngineTextMutation[];
@@ -263,6 +264,11 @@ interface HeaderOffsets {
 function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: number, offsets: HeaderOffsets): void {
   const layout = textShaperAbi.layouts.engineUpdateRequest;
   const limits = frame.limits;
+  view.setUint32(
+    layout.flags,
+    frame.compositingIndependent === true ? textShaperAbi.engine.frameFlags.compositingIndependent : 0,
+    true,
+  );
   for (const [field, value] of [
     ['abiVersion', textShaperAbi.version],
     ['byteLength', byteLength],

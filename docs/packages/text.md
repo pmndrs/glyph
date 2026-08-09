@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:372d0c9c9a307344c22020acf9a7f8ce295070b17b77e5ae5f13c8cdaf49475a'
+source_digest: 'sha256:8af3dbc1edd2172625a7c0bca81eef92524e0f7c499d1c9a227a1cc0307fa4ab'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -190,7 +190,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-09T10:04:42Z'
+  at: '2026-08-09T12:24:43Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -998,6 +998,22 @@ only current policy storage, the transform sidecar, and the current Bitmap/MSDF/
 transition. Draw compatibility is range-independent: reorder retains exact meshes, geometries, and materials while
 updating `recordIndex`, count, and render order; coalescing retains the one compatible draw and removes only the other.
 Live WebGPU/WebGL2 submission still owns the final native-fence proof before public cutover.
+
+`TextGroup.compositing` now makes the batch's ordering contract explicit. The default `ordered` mode preserves authored
+draw order. `independent` declares that compatible descendants may be reordered, allowing both Rust plan strategies to
+coalesce interleaved technique/resource groups without moving that decision into Three. The value is carried as one
+frame flag, is fixed when a group is constructed, and is exposed through the R3F wrapper. Rust tests cover interleaved
+resources in ordered-direct and stable-indirect plans. The optimized shaper at this checkpoint is 1,101,079 raw,
+417,984 gzip, and 328,164 Brotli bytes.
+
+Three now sends only the semantic sections a property update can invalidate. Text replacement sends text, style, and
+geometry; font/span/style/paint/raster/material changes send style; content-box changes send geometry; an empty update
+does nothing. A demanded measurement or inspection mask rides on the same pending frame instead of issuing a second
+`text_update`, and one returned semantic publication populates every paragraph in the session. Cached committed queries
+remain crossing-free. The focused two-paragraph compiled-Wasm lifecycle proves empty-update no-op behavior, one-call
+geometry and text mutation plus measurement, all-paragraph measurement retention, and exact five-instance command-buffer
+output after a text replacement. Optional Three phase profiling is inactive by default and can emit User Timing spans
+for frame preparation, Rust update, plan application, semantic readback, transform synchronization, and total time.
 
 The replacement Rust engine now owns retained Unicode analysis for its frame transaction. The existing Unicode 17 generator emits both TypeScript and compact Rust Script/Script_Extensions partitions from one source. A no-std `unicode-segmentation` 1.13.3 iterator supplies extended grapheme boundaries; the engine maps them back to the public UTF-16 coordinate space, resolves contextual scripts in reusable flat arrays, and commits or aborts that derived arena with text and styles. Session reservation prewarms active and pending analysis storage, while unchanged text skips analysis. Retained UAX #9 products now form equal-level runs, and one interval sweep intersects them with resolved style and script items while skipping hard-break controls. Root direction remains paragraph-level state; nested stated directions carry a distinct override bit and force run parity. Primary-font HarfRust shaping consumes those runs inside `text_update` through borrowed retained language/features and writes glyph SoA directly into an A/B session arena; the legacy batch export shares the same prewarmed buffer and reusable feature scratch. A real-Inter compiled-Wasm test observes the shape-plan cache created by the frame call. The optimized shaper is 973,367 raw, 364,517 gzip, and 287,942 Brotli bytes at this checkpoint. Ordered fallback, layout, and nonempty plan output remain open, so this size evidence carries no complete-path frame latency claim.
 

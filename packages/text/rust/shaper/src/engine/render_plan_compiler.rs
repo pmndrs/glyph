@@ -861,6 +861,7 @@ mod tests {
                     semantic_change_masks: &[],
                     f32_fields: &[x],
                     u32_fields: &[],
+                    order_independent: false,
                 },
                 checkpoint,
                 publication_generation,

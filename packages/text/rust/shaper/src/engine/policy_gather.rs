@@ -404,6 +404,7 @@ impl GatheredPlanInput<'_> {
             semantic_change_masks: self.semantic_change_masks,
             f32_fields: &self.f32_fields[..self.f32_field_count],
             u32_fields: &self.u32_fields[..self.u32_field_count],
+            order_independent: false,
         }
     }
 }

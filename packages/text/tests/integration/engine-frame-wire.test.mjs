@@ -106,6 +106,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
     consumedPlanRevision: 4,
     acknowledgedPublicationGeneration: 5,
     semanticViewMask: 6,
+    compositingIndependent: true,
     limits: {
       maxParagraphs: 4,
       maxClusters: 32,
@@ -218,6 +219,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   });
   const request = abi.layouts.engineUpdateRequest;
   const header = new DataView(bytes.buffer, bytes.byteOffset, request.size);
+  assert.equal(header.getUint32(request.flags, true), abi.engine.frameFlags.compositingIndependent);
   assert.equal(header.getUint32(request.byteLength, true), bytes.byteLength);
   assert.equal(header.getUint32(request.styleMutationCount, true), 1);
   assert.equal(header.getUint32(request.regionCount, true), 1);

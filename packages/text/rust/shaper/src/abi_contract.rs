@@ -2632,6 +2632,9 @@ pub fn json() -> String {
         },
         "engine": {
             "defaultSessionTextCapacity": DEFAULT_SESSION_TEXT_CAPACITY,
+            "frameFlags": {
+                "compositingIndependent": crate::engine::frame::FRAME_FLAG_COMPOSITING_INDEPENDENT
+            },
             "semanticF32Fields": {
                 "inlineStart": SEMANTIC_F32_INLINE_START,
                 "blockStart": SEMANTIC_F32_BLOCK_START,

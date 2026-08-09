@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:6e7b1addabb158330122eadf0355d70bc5abb4889926be3a903dfc4c33f97ebd'
+source_digest: 'sha256:805069ef81fb411215ec4ac945aebe4573faccb6fc0a77fdc7e0923fed407895'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -205,7 +205,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-09T10:13:02Z'
+  at: '2026-08-09T12:24:43Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -424,6 +424,22 @@ zero-draw cell. The current 27-cell WebGPU sweep completes every Bitmap/MTSDF/Sl
 Icon Grid gap explicit: 2,926–3,021 glyphs currently produce 476 draws and 30.8–47.0 RAF FPS even though median submit is
 0.27–0.76 ms and median GPU work is 0.57–2.02 ms. That is batching-policy evidence, not a shaping-performance result or
 an accepted release cost.[^presentation-framerate-sweep]
+
+Paragraph Stress can opt into Chrome User Timing with `?textTimings=1`. Its retained update is split into authored
+property staging, Rust update plus demanded measurement, clean publication, renderer submission, and the package's
+internal Three phases. The production path performs no timing calls while the option is absent. The workload now asks
+for layout metrics before explicit scene publication, so the semantic mask shares the pending mutation and the later
+matrix traversal sees clean Rust state. Icon Grid constructs its batch with independent compositing; other workloads
+retain ordered semantics.
+
+An identical direct Chromium 149/WebGPU/DPR-2 Paragraph Stress comparison retained 11,510 glyphs, one draw, and 64
+authored reflows in every case. The committed baseline measured 14.295 ms median reflow; measurement piggyback alone on
+that baseline measured 13.615 ms; adding semantic dirty tiers while retaining the same old Rust measured 7.450 ms; the
+complete candidate measured 6.885 ms. These telemetry histories contain 13–16 settled samples and establish direction
+and isolation, not a portable frame-time gate. A normal phase capture attributes most changed-frame CPU time to the
+single Rust `text_update`; TypeScript preparation, semantic readback, plan application, and renderer submit are smaller.
+A symbol-preserving diagnostic did not provide honest finer Rust attribution because LTO inlines most warm work into the
+export, so internal phase timers are required before claiming a particular Rust loop is dominant.
 
 Paint & Effects is one live paragraph whose per-word hue advances continuously; opacity is shared, bounded white outline and hard shadow are MTSDF-only, and Bitmap plus Slug disable both controls. Paragraph Stress treats text volume as a topology change: moving its volume control immediately rebuilds the repeated corpus, while controls that only alter retained animation or paint state avoid replacement layouts. Dynamic Layout derives its initial three phase-offset widths from the same elapsed animation clock as subsequent frames, awaits every paragraph layout, and publishes the trio atomically; the first visible frame therefore continues directly into animation instead of flashing a uniform-width staging layout. One benchmark-owned interaction component gives navigable live canvases mouse drag and two-finger touch pan; Off-axis additionally enables pinch and wheel zoom. It translates gestures into renderer-neutral view commands and does not put DOM listeners in `@pmndrs/text`. Workloads are deliberately not React Activities. They are framework-neutral retained scenes behind the route-owned render host, so a swap releases the old scene's text and font/raster residency without replacing the host canvas, renderer, timestamp timer, or telemetry history. Only the Benchmark and Conformance modes retain React state as Activities. The shared multi-technique workload implementation remains a dynamic chunk; Benchmark schedules a cancellable no-timeout idle import, while pointer hover or keyboard focus warms it immediately. Unsupported idle-callback hosts simply retain interaction warming, so the chunk never enters the initial graph and ordinary Benchmark startup never waits for it. The host serializes scene activation and retains the current scene until its replacement is ready, preventing an asynchronously initialized workload from publishing partial text or inheriting the prior workload's configuration. Renderer-published configuration revisions make product probes causal rather than reflections of React props. Dynamic layout separately reports one completed three-paragraph reflow cost and count instead of hiding reshape work inside the CPU-submit graph. The MTSDF base-level scene and sampling paths require deterministic pixels within each renderer invocation, authenticated artifacts and resource counts, and bounded error against the independent scalar reconstruction. Hardware Apple Metal and headless SwiftShader framebuffer hashes remain labeled observations because filtered analytic coverage is not byte-portable across drivers. The current SwiftShader comparison reports `0.0957/255` mean absolute error, maximum error `10`, and 3,233 pixels above its threshold, all inside the reviewed `0.25/255`, `48`, and 2% envelopes. The current direct WebGPU observation reports framebuffer hash `4da56d…`, 14,400 changed pixels, 2,420 colors, and a 6,798,412-byte compressed artifact; its scalar comparison reports mean absolute error `0.0184937`, maximum error `1`, and zero threshold error pixels. The gate names base-level behavior rather than the removed generated-mip path.
 
