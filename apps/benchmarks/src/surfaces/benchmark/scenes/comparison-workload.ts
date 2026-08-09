@@ -1,5 +1,5 @@
 import { FontRegistry, type ParagraphLayoutSummary, type RegisteredFont } from '@pmndrs/text';
-import { setThreeTextProfiler, TextGroup, threeTextUserTimingProfiler } from '@pmndrs/text/three';
+import { TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/text/three/bitmap';
 
@@ -69,7 +69,6 @@ type WorkloadEntry = ComparisonWorkloadEntry;
 
 const textTimingsEnabled =
   typeof location !== 'undefined' && new URLSearchParams(location.search).get('textTimings') === '1';
-if (textTimingsEnabled) setThreeTextProfiler(threeTextUserTimingProfiler());
 
 function timingBegin(): number {
   return textTimingsEnabled ? performance.now() : 0;

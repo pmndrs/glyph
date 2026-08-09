@@ -2,6 +2,7 @@ import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
 import { fontBakerAbi, type FontBakerAbi } from './generated/font-baker-abi.js';
 
 export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
+export { fontBakerAbi } from './generated/font-baker-abi.js';
 
 export interface FontBakeDescriptorV0 {
   readonly formatVersion: 0;
@@ -113,8 +114,7 @@ export async function createFontBaker(source: FontBakerWasmSource): Promise<Font
 }
 
 export function createFontBakerFromInstance(instance: WebAssembly.Instance): FontBakeCore {
-  const abi = readFontBakerAbi(instance);
-  const exports = readExports(instance.exports, abi);
+  const exports = readExports(instance.exports, fontBakerAbi);
 
   return {
     bake({ source, descriptor }) {
@@ -134,7 +134,7 @@ export function createFontBakerFromInstance(instance: WebAssembly.Instance): Fon
         );
         responseLength = exports.pmndrs_font_baker_result_len();
         const response = new Uint8Array(exports.memory.buffer, responsePointer, responseLength);
-        return decodeResponse(response, abi);
+        return decodeResponse(response, fontBakerAbi);
       } finally {
         if (sourcePointer !== 0) {
           exports.pmndrs_font_baker_dealloc(sourcePointer, source.byteLength);
@@ -148,11 +148,6 @@ export function createFontBakerFromInstance(instance: WebAssembly.Instance): Fon
       }
     },
   };
-}
-
-export function readFontBakerAbi(instance: WebAssembly.Instance): FontBakerAbiV0 {
-  readExports(instance.exports, fontBakerAbi);
-  return fontBakerAbi;
 }
 
 interface FontBakerExports {

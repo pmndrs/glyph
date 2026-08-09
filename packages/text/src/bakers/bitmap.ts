@@ -17,6 +17,8 @@ import {
 } from '../internal/bitmap-contract.js';
 import type { RasterCoverage } from '../raster-coverage.js';
 
+export { bitmapBakerAbi } from '../generated/bitmap-baker-abi.js';
+
 export interface BitmapBakerOptions {
   readonly strikes: readonly [number, ...number[]];
   readonly coverage?: RasterCoverage;
@@ -83,8 +85,7 @@ export async function createBitmapBaker(source: BitmapBakerWasmSource): Promise<
 }
 
 export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): BitmapBakerCore {
-  const abi = readBitmapBakerAbi(instance);
-  return createDirectRasterBakerFromInstance<BitmapBakerRequestV0, 'bitmap'>(instance, abi, {
+  return createDirectRasterBakerFromInstance<BitmapBakerRequestV0, 'bitmap'>(instance, bitmapBakerAbi, {
     label: 'bitmap baker',
     kind: BITMAP_KIND,
     extension: BITMAP_EXTENSION,
@@ -92,11 +93,6 @@ export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): B
     pageFormat: 'r8unorm',
     createError: (error) => new BitmapBakeError(error),
   });
-}
-
-export function readBitmapBakerAbi(instance: WebAssembly.Instance): BitmapBakerAbiV0 {
-  void instance;
-  return bitmapBakerAbi;
 }
 
 export function bitmapBakerFromCore(

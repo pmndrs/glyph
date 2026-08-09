@@ -14,7 +14,6 @@ import { msdfShader } from './msdf-shader.js';
 import { slugShader, type ThreeSlugPageResources } from './slug-shader.js';
 import type { ThreeTextMaterialContext } from './material.js';
 import type { ThreePlanProgramBuffer } from './plan-program-registry.js';
-import { textProfileBegin, textProfileEnd } from './profiler.js';
 
 type ScalarArray = Float32Array | Uint32Array | Uint16Array;
 
@@ -515,7 +514,6 @@ export class ThreeTextRenderPlanExecutor {
 
   #ensureOriginRecords(): void {
     if (this.#originRecords.size !== 0) return;
-    const started = textProfileBegin();
     for (const segment of this.#originSegments) {
       if (!(segment.origins.array instanceof Float32Array) || !(segment.stableIds.array instanceof Uint32Array))
         continue;
@@ -533,7 +531,6 @@ export class ThreeTextRenderPlanExecutor {
         });
       }
     }
-    textProfileEnd('origins.index', started);
   }
 
   #transformRealization(buffers: ReadonlyMap<number, RetainedBuffer>, transformId: number): TransformRealization {

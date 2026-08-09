@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { FontBakeError, createFontBaker, createFontBakerFromInstance, readFontBakerAbi } from '../../dist/index.js';
+import { FontBakeError, createFontBaker, createFontBakerFromInstance, fontBakerAbi } from '../../dist/index.js';
 
 const [wasm, rustReleaseWasm] = await Promise.all([
   readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
@@ -23,10 +23,8 @@ test('the distributed module is the pinned size-optimized zero-import release mo
 test('the published and generated TypeScript ABI contracts are identical', async () => {
   const module = await WebAssembly.compile(wasm);
   assert.deepEqual(WebAssembly.Module.imports(module), []);
-  const instance = await WebAssembly.instantiate(module, {});
-  const generated = readFontBakerAbi(instance);
-  assert.equal(generated.versions.binaryen, '129.0.0');
-  assert.deepEqual(generated, publishedAbi);
+  assert.equal(fontBakerAbi.versions.binaryen, '129.0.0');
+  assert.deepEqual(fontBakerAbi, publishedAbi);
   assert.equal(
     WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
     false,

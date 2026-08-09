@@ -5,8 +5,8 @@ import test from 'node:test';
 import {
   createSlugBaker,
   createSlugBakerFromInstance,
-  readSlugBakerAbi,
   SlugBakeError,
+  slugBakerAbi,
   slugBakerFromCore,
 } from '../../dist/bakers/slug.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
@@ -31,15 +31,14 @@ async function setup() {
 }
 
 test('ships the generated generic direct/segmented Slug ABI', async () => {
-  const { module, instance } = await setup();
+  const { module } = await setup();
   assert.deepEqual(WebAssembly.Module.imports(module), [
     { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
   ]);
-  const generated = readSlugBakerAbi(instance);
-  assert.deepEqual(generated, JSON.parse(await readFile(abiUrl, 'utf8')));
-  assert.equal(generated.response.magic, 'PMSL');
-  assert.equal(generated.segmented.chunkByteLength, 8 * 1024 * 1024);
-  assert.deepEqual(generated.versions, {
+  assert.deepEqual(slugBakerAbi, JSON.parse(await readFile(abiUrl, 'utf8')));
+  assert.equal(slugBakerAbi.response.magic, 'PMSL');
+  assert.equal(slugBakerAbi.segmented.chunkByteLength, 8 * 1024 * 1024);
+  assert.deepEqual(slugBakerAbi.versions, {
     generator: '0.0.0',
     ktx2: '0.5.0',
     readFonts: '0.42.1',

@@ -2,6 +2,18 @@
 
 ## 2026-08-09
 
+- **Prevented test-only Wasm variants from entering published baker artifacts** — Distributable MTSDF and Slug
+  artifact-baker builds and the optional SIMD compatibility switch now use feature-specific Cargo target directories;
+  the MTSDF kernel test uses a separate target. The package build rejects any optimized baker missing an export declared
+  by its Rust-generated TypeScript ABI. The full MTSDF artifact remains 552,025 bytes with SHA-256 `ec6eb164…7de8` before
+  and after the 60,993-byte kernel-only test. Generated ABI constants replace instance-ignoring or duplicate reader
+  functions across the font, Bitmap, MTSDF, and Slug baker hosts.
+
+- **Removed timing instrumentation and stale-output risk from the published Three graph** — The package no longer exports
+  or calls its temporary phase profiler. One-crossing integration evidence now wraps the Wasm export solely in the test
+  harness, while benchmark workload markers and outside frame timing remain application-owned. Package builds recreate
+  `dist` before TypeScript emission so deleted profiler and legacy modules cannot survive in a published tarball.
+
 - **Closed the retained paragraph browser matrix under the f32 frame contract** — The sole UIKit mismatch was a stale
   JavaScript-double style-input expectation, not a Rust or Yoga precision defect. Independent f32 line-box arithmetic
   reproduces the retained engine's final baseline, content height, centered final row, and exact layout hash. The public

@@ -7,7 +7,7 @@ import {
   MtsdfGenerationError,
   createMtsdfGenerator,
   createMtsdfGeneratorFromInstance,
-  readMtsdfGeneratorAbi,
+  mtsdfGeneratorAbi,
 } from '../../dist/internal/mtsdf-generator.js';
 import { mtsdfOracleCases } from '../fixtures/mtsdf-oracle-cases.mjs';
 
@@ -24,11 +24,11 @@ async function setup() {
 }
 
 test('ships an optimized module with the exact progress import and TypeScript ABI', async () => {
-  const { module, instance } = await setup();
+  const { module } = await setup();
   assert.deepEqual(WebAssembly.Module.imports(module), [
     { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
   ]);
-  assert.deepEqual(readMtsdfGeneratorAbi(instance), publishedAbi);
+  assert.deepEqual(mtsdfGeneratorAbi, publishedAbi);
   assert.equal(
     WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
     false,

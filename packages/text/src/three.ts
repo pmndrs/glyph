@@ -26,8 +26,6 @@ export type {
   ThreePlanProgramMaterialContext,
   ThreeRasterPlanProgram,
 } from './three/plan-program-registry.js';
-export { setThreeTextProfiler, threeTextUserTimingProfiler } from './three/profiler.js';
-export type { ThreeTextProfiler, ThreeTextProfilePhase } from './three/profiler.js';
 export { msdfShader } from './three/msdf-shader.js';
 export type { ThreeMsdfInstanceNodes, ThreeMsdfShaderOutput, ThreeMsdfShaderResources } from './three/msdf-shader.js';
 export type {

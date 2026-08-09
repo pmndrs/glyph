@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const manifest = 'rust/mtsdf-baker/Cargo.toml';
+const targetDirectory = fileURLToPath(new URL('../rust/mtsdf-baker/target/kernel-only-wasm/', import.meta.url));
 execFileSync(
   'cargo',
   [
@@ -17,12 +19,10 @@ execFileSync(
     '--locked',
     '--no-default-features',
   ],
-  { cwd: packageRoot, stdio: 'inherit' },
+  { cwd: packageRoot, env: { ...process.env, CARGO_TARGET_DIR: targetDirectory }, stdio: 'inherit' },
 );
 
-const bytes = await readFile(
-  new URL('../rust/mtsdf-baker/target/wasm32-unknown-unknown/release/pmndrs_text_mtsdf_baker.wasm', import.meta.url),
-);
+const bytes = await readFile(join(targetDirectory, 'wasm32-unknown-unknown/release/pmndrs_text_mtsdf_baker.wasm'));
 const module = await WebAssembly.compile(bytes);
 assert.deepEqual(WebAssembly.Module.imports(module), []);
 const { exports } = await WebAssembly.instantiate(module, {});

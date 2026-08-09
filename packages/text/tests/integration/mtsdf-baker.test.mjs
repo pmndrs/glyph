@@ -7,8 +7,8 @@ import { RasterCoverageError } from '@pmndrs/text';
 import {
   createMsdfBaker,
   createMsdfBakerFromInstance,
+  msdfBakerAbi,
   msdfBakerFromCore,
-  readMsdfBakerAbi,
 } from '@pmndrs/text/bakers/msdf';
 import { MsdfArtifactValidationError, validateMsdfArtifact } from '@pmndrs/text/bakers/msdf/validate';
 import {
@@ -57,17 +57,16 @@ async function setup() {
 }
 
 test('ships one generated progress import and bundles its artifact contract in TypeScript', async () => {
-  const { module, instance } = await setup();
+  const { module } = await setup();
   assert.deepEqual(WebAssembly.Module.imports(module), [
     { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
   ]);
-  const generated = readMsdfBakerAbi(instance);
-  assert.deepEqual(generated, publishedAbi);
+  assert.deepEqual(msdfBakerAbi, publishedAbi);
   assert.equal(
     WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
     false,
   );
-  assert.deepEqual(generated.artifactBaker.versions, {
+  assert.deepEqual(msdfBakerAbi.artifactBaker.versions, {
     generator: '0.0.0',
     ktx2: '0.5.0',
     msdfFormat: 0,
