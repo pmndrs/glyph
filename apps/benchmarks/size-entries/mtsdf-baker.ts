@@ -1,6 +1,6 @@
 export {
   createMsdfBaker,
   createMsdfBakerFromInstance,
+  msdfBakerAbi,
   msdfBakerFromCore,
-  readMsdfBakerAbi,
 } from '@pmndrs/text/bakers/msdf';
