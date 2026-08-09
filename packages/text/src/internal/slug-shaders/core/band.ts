@@ -7,7 +7,6 @@
  */
 import { d, std } from 'typegpu';
 import { calcRootCode } from './root-code.js';
-import { unitClamp } from './unit-clamp.js';
 import { solveHorizontalPolynomial } from './solve-quadratic.js';
 
 const HEADER_REFERENCE_MASK = 0xffff;
@@ -83,10 +82,10 @@ function curveContribution(
 ): d.v3f {
   'use gpu';
 
-  const p0 = std.sub(curveP0, renderCoordinate);
-  const p1 = std.sub(curveP1, renderCoordinate);
-  const p2 = std.sub(curveP2, renderCoordinate);
-  const maximum = std.max(std.max(p0.x, p1.x), p2.x) * pixelsPerEm;
+  const p0 = curveP0.sub(renderCoordinate);
+  const p1 = curveP1.sub(renderCoordinate);
+  const p2 = curveP2.sub(renderCoordinate);
+  const maximum = std.max(p0.x, p1.x, p2.x) * pixelsPerEm;
   const rootCode = calcRootCode(p0.y, p1.y, p2.y);
   let coverage = d.f32(0);
   let weight = d.f32(0);
@@ -97,12 +96,12 @@ function curveContribution(
     const secondRoot = roots.y * pixelsPerEm;
     const hasFirstRoot = (rootCode & d.u32(1)) > 0;
     const hasSecondRoot = (rootCode & d.u32(0x100)) > 0;
-    const firstContribution = std.select(d.f32(0), unitClamp(firstRoot * thickenFactor + 0.5), hasFirstRoot);
-    const secondContribution = std.select(d.f32(0), unitClamp(secondRoot * thickenFactor + 0.5), hasSecondRoot);
+    const firstContribution = std.select(d.f32(0), std.saturate(firstRoot * thickenFactor + 0.5), hasFirstRoot);
+    const secondContribution = std.select(d.f32(0), std.saturate(secondRoot * thickenFactor + 0.5), hasSecondRoot);
     coverage = firstContribution - secondContribution;
     weight = std.max(
-      std.select(d.f32(0), unitClamp(1 - std.abs(firstRoot) * 2), hasFirstRoot),
-      std.select(d.f32(0), unitClamp(1 - std.abs(secondRoot) * 2), hasSecondRoot),
+      std.select(d.f32(0), std.saturate(1 - std.abs(firstRoot) * 2), hasFirstRoot),
+      std.select(d.f32(0), std.saturate(1 - std.abs(secondRoot) * 2), hasSecondRoot),
     );
   }
 

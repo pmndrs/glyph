@@ -80,7 +80,7 @@ function evaluateBandCurve(
   weight: Node<'float'>,
 ): void {
   const referenceIndex: Node<'uint'> = uintAdd(uintAdd(glyph.referenceBase, localReferenceOffset), uint(index));
-  const curveReference: Node<'uint'> = loadReference(page, referenceIndex, axis);
+  const curveReference: Node<'uint'> = loadReference(page, referenceIndex);
   const curve = loadCurve(page, uintAdd(glyph.curveBaseTexel, curveReference));
   const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
   const contribution: Node<'vec3'> = curveContribution(

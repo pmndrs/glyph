@@ -44,17 +44,12 @@ export function loadHeader(
   return uint(texel.x).toVar(`${namePrefix}Header`);
 }
 
-export function loadReference(
-  page: SlugShaderPage,
-  index: Node<'uint'>,
-  axis: 'horizontal' | 'vertical',
-  namePrefix: string = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical',
-): Node<'uint'> {
+export function loadReference(page: SlugShaderPage, index: Node<'uint'>): Node<'uint'> {
   const pair = loadUvec4(page.referenceTexture, gridCoordinate(uintShiftRight(index, uint(1)), page.referenceWidth)).x;
-  return coreValue('uint', `${namePrefix}Reference`, () => {
+  return t3.toTSL(() => {
     'use gpu';
     return slugReferenceFromPair(t3.fromTSL(pair, d.u32).$, t3.fromTSL(index, d.u32).$);
-  });
+  }) as Node<'uint'>;
 }
 
 export function loadCurve(page: SlugShaderPage, texelIndex: Node<'uint'>): SlugShaderCurve {

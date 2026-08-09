@@ -1,6 +1,5 @@
 /** Adapted from three-flatland Slug at 2935a89f (MIT). */
 import { d, std } from 'typegpu';
-import { unitClamp } from './unit-clamp.js';
 
 /**
  * Combine horizontal and vertical winding coverage using Lengyel's weighted blend.
@@ -25,7 +24,7 @@ export function calcCoverage(
   const fallback = std.min(std.abs(xCoverage), std.abs(yCoverage));
   const rawCoverage = std.max(weighted, fallback);
   const evenOddCoverage = 1 - std.abs(1 - std.fract(rawCoverage * 0.5) * 2);
-  const filledCoverage = std.select(unitClamp(rawCoverage), evenOddCoverage, evenOdd);
+  const filledCoverage = std.select(std.saturate(rawCoverage), evenOddCoverage, evenOdd);
   const boostedCoverage = std.select(filledCoverage, std.sqrt(filledCoverage), weightBoost);
   const darken = stemDarken * std.max(d.f32(0), 1 - pixelsPerEm / 24);
 
