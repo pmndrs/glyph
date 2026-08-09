@@ -7,6 +7,7 @@ import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
 
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
+import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { compileTextEngineFrameUpdate } from '../../dist/internal/engine-frame-wire.js';
 import { TextEngineRenderPlanView } from '../../dist/internal/render-plan-view.js';
 import { FontRegistry } from '../../dist/loader.js';
@@ -100,17 +101,23 @@ test('Three coordinator shares shaping data across technique bindings and refere
       consumedPlanRevision: 0,
       acknowledgedPublicationGeneration: 0,
       limits: {
-        maxParagraphs: 1,
+        maxParagraphs: 2,
         maxClusters: 16,
         maxLines: 8,
-        maxRegions: 1,
+        maxRegions: 2,
         maxExclusions: 1,
         maxInlineObjects: 1,
         maxSlotsPerBand: 2,
         maxOutputBytes: 1024 * 1024,
       },
-      paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
-      textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'abc' }],
+      paragraphMutations: [
+        { opcode: 'upsert', paragraphId: 1, order: 0 },
+        { opcode: 'upsert', paragraphId: 2, order: 1 },
+      ],
+      textMutations: [
+        { paragraphId: 1, start: 0, deleteCount: 0, insert: 'abc' },
+        { paragraphId: 2, start: 0, deleteCount: 0, insert: 'def' },
+      ],
       styleMutations: [
         {
           opcode: 'upsert',
@@ -123,6 +130,22 @@ test('Three coordinator shares shaping data across technique bindings and refere
           value: {
             fontStackHandle: first.handle,
             materialId: 7,
+            fontSize: 16,
+            rasterPixelRatio: 1,
+            foregroundRgba: 0xffff_ffff,
+          },
+        },
+        {
+          opcode: 'upsert',
+          paragraphId: 2,
+          styleId: 1,
+          cascadeOrder: 0,
+          start: 0,
+          end: 3,
+          root: true,
+          value: {
+            fontStackHandle: first.handle,
+            materialId: 8,
             fontSize: 16,
             rasterPixelRatio: 1,
             foregroundRgba: 0xffff_ffff,
@@ -141,6 +164,27 @@ test('Three coordinator shares shaping data across technique bindings and refere
           resumeBlockOffset: 0,
           maxLines: 8,
           regionStart: 0,
+          resumeCluster: 0,
+          regionCount: 1,
+          resumeRegion: 0,
+          widthMode: 'at-most',
+          heightMode: 'at-most',
+          wrap: 'word',
+          align: 'start',
+          overflow: 'visible',
+          blockAlign: 'start',
+        },
+        {
+          paragraphId: 2,
+          flowThreadId: 2,
+          geometryRevision: 1,
+          width: 256,
+          height: 128,
+          viewportBlockStart: 0,
+          viewportBlockEnd: 128,
+          resumeBlockOffset: 0,
+          maxLines: 8,
+          regionStart: 1,
           resumeCluster: 0,
           regionCount: 1,
           resumeRegion: 0,
@@ -170,6 +214,23 @@ test('Three coordinator shares shaping data across technique bindings and refere
           clipInlineEnd: 256,
           clipBlockEnd: 128,
         },
+        {
+          id: 2,
+          geometryRevision: 1,
+          shape: 'rectangle',
+          exclusionStart: 0,
+          exclusionCount: 0,
+          writingMode: 'horizontal-tb',
+          textOrientation: 'mixed',
+          inlineStart: 0,
+          blockStart: 0,
+          inlineEnd: 256,
+          blockEnd: 128,
+          clipInlineStart: 0,
+          clipBlockStart: 0,
+          clipInlineEnd: 256,
+          clipBlockEnd: 128,
+        },
       ],
     }),
   );
@@ -181,6 +242,45 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const firstPatch = plan.record(patches, 0);
   assert.ok(plan.u16(firstPatch) > 0);
   assert.throws(() => plan.record(patches, patches.count), /outside its table/);
+  const drawLayout = textShaperAbi.layouts.engineDraw;
+  const draws = plan.table('draws');
+  assert.deepEqual(
+    adjacentMaterialGroups(plan, draws, drawLayout.materialId),
+    [7, 8],
+    'Rust gathers child paragraphs into one ordered command buffer',
+  );
+
+  const reorderedPublication = session.update(
+    compileTextEngineFrameUpdate({
+      sessionId: session.handle,
+      policyHandle: coordinator.policyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: publication.engineRevision,
+      consumedPlanRevision: publication.planRevision,
+      acknowledgedPublicationGeneration: 0,
+      limits: {
+        maxParagraphs: 2,
+        maxClusters: 16,
+        maxLines: 8,
+        maxRegions: 2,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      paragraphMutations: [
+        { opcode: 'upsert', paragraphId: 1, order: 1 },
+        { opcode: 'upsert', paragraphId: 2, order: 0 },
+      ],
+    }),
+  );
+  const reorderedPlan = plan.bind(reorderedPublication);
+  const reorderedDraws = reorderedPlan.table('draws');
+  assert.deepEqual(
+    adjacentMaterialGroups(reorderedPlan, reorderedDraws, drawLayout.materialId),
+    [8, 7],
+    'lifecycle-only reorder retains both paragraphs and changes shared draw order',
+  );
   session.dispose();
   first.release();
   first.release();
@@ -197,3 +297,12 @@ test('Three coordinator shares shaping data across technique bindings and refere
   shaper.dispose();
   registered.dispose();
 });
+
+function adjacentMaterialGroups(plan, draws, materialOffset) {
+  const groups = [];
+  for (let index = 0; index < draws.count; index += 1) {
+    const material = plan.u32(plan.record(draws, index) + materialOffset);
+    if (groups.at(-1) !== material) groups.push(material);
+  }
+  return groups;
+}

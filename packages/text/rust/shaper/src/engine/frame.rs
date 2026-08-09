@@ -137,7 +137,6 @@ pub(crate) struct PreparedUpdate {
     pub(super) policy_handle: u32,
     pub(super) capability_set: u32,
     pub(super) policy_fingerprint: u64,
-    pub(super) paragraph_id: Option<u32>,
 }
 
 impl PreparedUpdate {

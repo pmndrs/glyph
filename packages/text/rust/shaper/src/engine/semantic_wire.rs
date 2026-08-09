@@ -5,8 +5,8 @@ use crate::{
     abi_contract::{
         self as abi, ENGINE_TEXT_MUTATION_DELETE_COUNT, ENGINE_TEXT_MUTATION_ENCODING,
         ENGINE_TEXT_MUTATION_INSERT_COUNT, ENGINE_TEXT_MUTATION_INSERT_OFFSET,
-        ENGINE_TEXT_MUTATION_OPCODE, ENGINE_TEXT_MUTATION_RECORD_ALIGNMENT,
-        ENGINE_TEXT_MUTATION_PARAGRAPH_ID, ENGINE_TEXT_MUTATION_RECORD_SIZE,
+        ENGINE_TEXT_MUTATION_OPCODE, ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
+        ENGINE_TEXT_MUTATION_RECORD_ALIGNMENT, ENGINE_TEXT_MUTATION_RECORD_SIZE,
         ENGINE_TEXT_MUTATION_RESERVED0, ENGINE_TEXT_MUTATION_TEXT_START,
         ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
@@ -19,16 +19,15 @@ use crate::{
         DECORATION_NONE, DECORATION_SOLID, DECORATION_WAVY, EXCLUSION_WRAP_BOTH,
         EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST,
         ORIENTATION_MIXED, ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP,
-        OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, SHAPE_POLYGON, SHAPE_RECTANGLE,
-        STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION,
-        STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
+        OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT,
+        SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION,
+        STYLE_FIELD_DIRECTION, STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
         STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING,
         STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK, STYLE_FIELD_MATERIAL,
         STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING, STYLE_FLAG_ROOT,
         STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
         TEXT_MUTATION_REPLACE_UTF16, UpdateLimits, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD,
         WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
-        PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT,
     },
     valid_language_bytes, valid_tag,
     wire::{array, read_f32, read_u16, read_u32},
@@ -214,8 +213,20 @@ impl GeometryBatch<'_> {
         self.constraints.len() / abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize
     }
 
+    pub(crate) fn region_count(self) -> usize {
+        self.regions.len() / abi::ENGINE_REGION_RECORD_SIZE as usize
+    }
+
+    pub(crate) fn exclusion_count(self) -> usize {
+        self.exclusions.len() / abi::ENGINE_EXCLUSION_RECORD_SIZE as usize
+    }
+
     pub(crate) fn inline_object_count(self) -> usize {
         self.inline_objects.len() / abi::ENGINE_INLINE_OBJECT_RECORD_SIZE as usize
+    }
+
+    pub(crate) fn is_empty(self) -> bool {
+        self.constraints.is_empty() && self.inline_objects.is_empty()
     }
 
     pub(crate) fn take_paragraph(
@@ -348,33 +359,68 @@ impl GeometryBatch<'_> {
         for section in [self.constraints, self.inline_objects] {
             mix_bytes(&mut hash, section);
         }
-        for record in self
-            .regions
-            .chunks_exact(abi::ENGINE_REGION_RECORD_SIZE as usize)
-        {
-            mix_record_without_u32(&mut hash, record, abi::ENGINE_REGION_VERTICES_OFFSET);
-            mix_vertex_payload(
-                &mut hash,
-                self.request,
-                record,
-                abi::ENGINE_REGION_SHAPE,
-                abi::ENGINE_REGION_VERTICES_OFFSET,
-                abi::ENGINE_REGION_VERTEX_COUNT,
-            );
-        }
-        for record in self
-            .exclusions
-            .chunks_exact(abi::ENGINE_EXCLUSION_RECORD_SIZE as usize)
-        {
-            mix_record_without_u32(&mut hash, record, abi::ENGINE_EXCLUSION_VERTICES_OFFSET);
-            mix_vertex_payload(
-                &mut hash,
-                self.request,
-                record,
-                abi::ENGINE_EXCLUSION_SHAPE,
-                abi::ENGINE_EXCLUSION_VERTICES_OFFSET,
-                abi::ENGINE_EXCLUSION_VERTEX_COUNT,
-            );
+        for constraint_index in 0..self.constraint_count() {
+            let Some(constraint) = self.constraint(constraint_index) else {
+                continue;
+            };
+            let Ok(region_start) = usize::try_from(constraint.region_start) else {
+                continue;
+            };
+            let Some(region_end) = region_start.checked_add(usize::from(constraint.region_count))
+            else {
+                continue;
+            };
+            for region_index in region_start..region_end {
+                let Some(record) =
+                    record_at(self.regions, abi::ENGINE_REGION_RECORD_SIZE, region_index)
+                else {
+                    continue;
+                };
+                mix_record_without_u32(&mut hash, record, abi::ENGINE_REGION_VERTICES_OFFSET);
+                mix_vertex_payload(
+                    &mut hash,
+                    self.request,
+                    record,
+                    abi::ENGINE_REGION_SHAPE,
+                    abi::ENGINE_REGION_VERTICES_OFFSET,
+                    abi::ENGINE_REGION_VERTEX_COUNT,
+                );
+                let Ok(exclusion_start) =
+                    read_u16(record, abi::ENGINE_REGION_EXCLUSION_START).map(usize::from)
+                else {
+                    continue;
+                };
+                let Ok(exclusion_count) = read_u16(record, abi::ENGINE_REGION_EXCLUSION_COUNT)
+                else {
+                    continue;
+                };
+                let Some(exclusion_end) = exclusion_start.checked_add(usize::from(exclusion_count))
+                else {
+                    continue;
+                };
+                for exclusion_index in exclusion_start..exclusion_end {
+                    let Some(exclusion) = record_at(
+                        self.exclusions,
+                        abi::ENGINE_EXCLUSION_RECORD_SIZE,
+                        exclusion_index,
+                    ) else {
+                        continue;
+                    };
+                    mix_record_without_u32(
+                        &mut hash,
+                        exclusion,
+                        abi::ENGINE_EXCLUSION_VERTICES_OFFSET,
+                    );
+                    mix_vertex_payload(
+                        &mut hash,
+                        self.request,
+                        exclusion,
+                        abi::ENGINE_EXCLUSION_SHAPE,
+                        abi::ENGINE_EXCLUSION_VERTICES_OFFSET,
+                        abi::ENGINE_EXCLUSION_VERTEX_COUNT,
+                    );
+                }
+            }
         }
         hash
     }
@@ -493,11 +539,7 @@ impl<'a> TextMutationBatch<'a> {
         self.get(index).map(|mutation| mutation.paragraph_id)
     }
 
-    pub(crate) fn take_paragraph(
-        self,
-        paragraph_id: u32,
-        cursor: &mut usize,
-    ) -> Result<Self, u32> {
+    pub(crate) fn take_paragraph(self, paragraph_id: u32, cursor: &mut usize) -> Result<Self, u32> {
         Ok(Self {
             request: self.request,
             records: take_records(
@@ -638,11 +680,7 @@ impl<'a> StyleMutationBatch<'a> {
         }
     }
 
-    pub(crate) fn take_paragraph(
-        self,
-        paragraph_id: u32,
-        cursor: &mut usize,
-    ) -> Result<Self, u32> {
+    pub(crate) fn take_paragraph(self, paragraph_id: u32, cursor: &mut usize) -> Result<Self, u32> {
         Ok(Self {
             request: self.request,
             records: take_records(
@@ -1062,7 +1100,10 @@ pub(crate) fn parse_paragraph_mutations(
         if paragraph_id == 0
             || byte(record, abi::ENGINE_PARAGRAPH_MUTATION_FLAGS)? != 0
             || read_u16(record, abi::ENGINE_PARAGRAPH_MUTATION_RESERVED0)? != 0
-            || !matches!(opcode, PARAGRAPH_MUTATION_UPSERT | PARAGRAPH_MUTATION_REMOVE)
+            || !matches!(
+                opcode,
+                PARAGRAPH_MUTATION_UPSERT | PARAGRAPH_MUTATION_REMOVE
+            )
             || (opcode == PARAGRAPH_MUTATION_REMOVE && order != 0)
             || prior_u32_duplicate(
                 records,
@@ -1832,11 +1873,7 @@ mod tests {
             offset + abi::ENGINE_PARAGRAPH_MUTATION_PARAGRAPH_ID,
             7,
         );
-        write_u32(
-            &mut bytes,
-            offset + abi::ENGINE_PARAGRAPH_MUTATION_ORDER,
-            3,
-        );
+        write_u32(&mut bytes, offset + abi::ENGINE_PARAGRAPH_MUTATION_ORDER, 3);
         let second = offset + stride;
         bytes[second + abi::ENGINE_PARAGRAPH_MUTATION_OPCODE] = PARAGRAPH_MUTATION_REMOVE;
         write_u32(
@@ -1857,23 +1894,11 @@ mod tests {
             Some(ParagraphMutation::Remove { paragraph_id: 8 })
         );
 
-        write_u32(
-            &mut bytes,
-            second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER,
-            1,
-        );
+        write_u32(&mut bytes, second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER, 1);
         assert!(parse_paragraph_mutations(&bytes, offset as u32, 2).is_err());
-        write_u32(
-            &mut bytes,
-            second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER,
-            0,
-        );
+        write_u32(&mut bytes, second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER, 0);
         bytes[second + abi::ENGINE_PARAGRAPH_MUTATION_OPCODE] = PARAGRAPH_MUTATION_UPSERT;
-        write_u32(
-            &mut bytes,
-            second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER,
-            3,
-        );
+        write_u32(&mut bytes, second + abi::ENGINE_PARAGRAPH_MUTATION_ORDER, 3);
         assert!(parse_paragraph_mutations(&bytes, offset as u32, 2).is_err());
     }
 
@@ -2074,8 +2099,14 @@ mod tests {
         let style_bytes = valid_style_bytes();
         let styles = parse_style_mutations(&style_bytes, STYLE_OFFSET as u32, 1).unwrap();
         let mut style_cursor = 0;
-        assert_eq!(styles.take_paragraph(2, &mut style_cursor).unwrap().len(), 0);
-        assert_eq!(styles.take_paragraph(1, &mut style_cursor).unwrap().len(), 1);
+        assert_eq!(
+            styles.take_paragraph(2, &mut style_cursor).unwrap().len(),
+            0
+        );
+        assert_eq!(
+            styles.take_paragraph(1, &mut style_cursor).unwrap().len(),
+            1
+        );
         assert_eq!(style_cursor, 1);
 
         let geometry_bytes = valid_geometry_bytes();

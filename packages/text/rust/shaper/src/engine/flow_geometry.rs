@@ -48,65 +48,58 @@ impl FlowGeometryArena {
     pub(crate) fn build(&mut self, geometry: GeometryBatch<'_>) -> Result<(), EngineError> {
         self.clear();
         reserve(&mut self.constraints, geometry.constraint_count())?;
+        reserve(&mut self.regions, geometry.region_count())?;
+        reserve(&mut self.exclusions, geometry.exclusion_count())?;
         for index in 0..geometry.constraint_count() {
-            self.constraints.push(
-                geometry
-                    .constraint(index)
-                    .ok_or(EngineError::InvalidRequest)?,
-            );
-        }
-        let region_count = self
-            .constraints
-            .iter()
-            .map(|constraint| {
-                usize::try_from(constraint.region_start)
-                    .ok()
-                    .and_then(|start| start.checked_add(usize::from(constraint.region_count)))
-            })
-            .try_fold(0usize, |maximum, end| {
-                end.map(|end| maximum.max(end))
-                    .ok_or(EngineError::InvalidRequest)
-            })?;
-        reserve(&mut self.regions, region_count)?;
-        for index in 0..region_count {
-            let record = geometry.region(index).ok_or(EngineError::InvalidRequest)?;
-            let vertex_start = append_vertices(
-                &mut self.vertices,
-                geometry,
-                record.vertices_offset,
-                record.vertex_count,
-            )?;
-            self.regions.push(RetainedRegion {
-                record,
-                vertex_start,
-            });
-        }
-        let exclusion_count = self
-            .regions
-            .iter()
-            .map(|region| {
-                usize::from(region.record.exclusion_start)
-                    .checked_add(usize::from(region.record.exclusion_count))
-            })
-            .try_fold(0usize, |maximum, end| {
-                end.map(|end| maximum.max(end))
-                    .ok_or(EngineError::InvalidRequest)
-            })?;
-        reserve(&mut self.exclusions, exclusion_count)?;
-        for index in 0..exclusion_count {
-            let record = geometry
-                .exclusion(index)
+            let mut constraint = geometry
+                .constraint(index)
                 .ok_or(EngineError::InvalidRequest)?;
-            let vertex_start = append_vertices(
-                &mut self.vertices,
-                geometry,
-                record.vertices_offset,
-                record.vertex_count,
-            )?;
-            self.exclusions.push(RetainedExclusion {
-                record,
-                vertex_start,
-            });
+            let source_region_start = usize::try_from(constraint.region_start)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            constraint.region_start =
+                u32::try_from(self.regions.len()).map_err(|_| EngineError::InvalidRequest)?;
+            for region_index in source_region_start
+                ..source_region_start
+                    .checked_add(usize::from(constraint.region_count))
+                    .ok_or(EngineError::InvalidRequest)?
+            {
+                let mut region = geometry
+                    .region(region_index)
+                    .ok_or(EngineError::InvalidRequest)?;
+                let source_exclusion_start = usize::from(region.exclusion_start);
+                region.exclusion_start = u16::try_from(self.exclusions.len())
+                    .map_err(|_| EngineError::InvalidRequest)?;
+                let vertex_start = append_vertices(
+                    &mut self.vertices,
+                    geometry,
+                    region.vertices_offset,
+                    region.vertex_count,
+                )?;
+                for exclusion_index in source_exclusion_start
+                    ..source_exclusion_start
+                        .checked_add(usize::from(region.exclusion_count))
+                        .ok_or(EngineError::InvalidRequest)?
+                {
+                    let exclusion = geometry
+                        .exclusion(exclusion_index)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    let vertex_start = append_vertices(
+                        &mut self.vertices,
+                        geometry,
+                        exclusion.vertices_offset,
+                        exclusion.vertex_count,
+                    )?;
+                    self.exclusions.push(RetainedExclusion {
+                        record: exclusion,
+                        vertex_start,
+                    });
+                }
+                self.regions.push(RetainedRegion {
+                    record: region,
+                    vertex_start,
+                });
+            }
+            self.constraints.push(constraint);
         }
         Ok(())
     }
