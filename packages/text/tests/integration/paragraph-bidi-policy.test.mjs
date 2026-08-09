@@ -70,6 +70,55 @@ test('lays out exact mixed-direction Amiri goldens through retained GLB shaping 
   font.dispose();
 });
 
+test('reuses broad Arabic shaping at safe line boundaries and narrows only unsafe context', async () => {
+  const { font, shaper } = await runtime('amiri-1.002/Amiri-Regular.ttf');
+  shaper.registerFont(font);
+  const text = 'مرحبا بالعالم';
+  const textUtf16 = utf16(text);
+  const request = {
+    textUtf16,
+    features: [],
+    runs: [
+      {
+        font: font.handle,
+        textStart: 0,
+        textEnd: textUtf16.length,
+        direction: 'rtl',
+        script: 'Arab',
+        language: 'ar',
+        clusterLevel: 0,
+        flags: 0x40,
+        featureStart: 0,
+        featureCount: 0,
+      },
+    ],
+  };
+  const broad = ownShape(shaper.shapeBatch(request));
+  const safeBoundary = 6;
+  const unsafeBoundary = 7;
+
+  assert.equal(glyphFlagsAtCluster(broad, safeBoundary) & 1, 0, 'word boundary is safe to break');
+  assert.equal(glyphFlagsAtCluster(broad, unsafeBoundary) & 1, 1, 'joining boundary is unsafe to break');
+  assert.deepEqual(
+    shapeRangeSignature(reshapeLine(shaper, request, 0, safeBoundary), 0, safeBoundary),
+    shapeRangeSignature(broad, 0, safeBoundary),
+    'safe first line is byte-identical to the retained broad shape',
+  );
+  assert.deepEqual(
+    shapeRangeSignature(reshapeLine(shaper, request, safeBoundary, textUtf16.length), safeBoundary, textUtf16.length),
+    shapeRangeSignature(broad, safeBoundary, textUtf16.length),
+    'safe next line is byte-identical to the retained broad shape',
+  );
+  assert.notDeepEqual(
+    shapeRangeSignature(reshapeLine(shaper, request, 0, unsafeBoundary), 0, unsafeBoundary),
+    shapeRangeSignature(broad, 0, unsafeBoundary),
+    'forcing an unsafe Arabic boundary changes the line shape',
+  );
+
+  shaper.dispose();
+  font.dispose();
+});
+
 test('applies exact alignment, clipping, max-lines, and ellipsis policies without hidden calls', async () => {
   const { font, shaper } = await runtime('inter-v4.1/Inter-Regular.ttf');
   const calls = { shape: 0, reshape: 0 };
@@ -178,6 +227,63 @@ function observeShaper(shaper, calls, requests) {
     memoryReport: () => shaper.memoryReport(),
     dispose: () => shaper.dispose(),
   };
+}
+
+function reshapeLine(shaper, request, start, end) {
+  return ownShape(
+    shaper.reshapeRanges({
+      ...request,
+      ranges: [
+        {
+          run: 0,
+          itemStart: start,
+          itemEnd: end,
+          contextStart: start,
+          contextEnd: end,
+          flags: 0x43,
+        },
+      ],
+    }),
+  );
+}
+
+function ownShape(shape) {
+  return {
+    glyphIds: [...shape.glyphIds],
+    clusters: [...shape.clusters],
+    xAdvances: [...shape.xAdvances],
+    yAdvances: [...shape.yAdvances],
+    xOffsets: [...shape.xOffsets],
+    yOffsets: [...shape.yOffsets],
+    glyphFlags: [...shape.glyphFlags],
+  };
+}
+
+function glyphFlagsAtCluster(shape, cluster) {
+  const index = shape.clusters.indexOf(cluster);
+  assert.notEqual(index, -1, `expected a glyph at cluster ${cluster}`);
+  return shape.glyphFlags[index];
+}
+
+function shapeRangeSignature(shape, start, end) {
+  return shape.glyphIds.flatMap((glyphId, index) =>
+    shape.clusters[index] >= start && shape.clusters[index] < end
+      ? [
+          [
+            glyphId,
+            shape.clusters[index],
+            shape.xAdvances[index],
+            shape.yAdvances[index],
+            shape.xOffsets[index],
+            shape.yOffsets[index],
+          ],
+        ]
+      : [],
+  );
+}
+
+function utf16(value) {
+  return Uint16Array.from({ length: value.length }, (_, index) => value.charCodeAt(index));
 }
 
 function assertGoldenLayout(layout, golden, full) {
