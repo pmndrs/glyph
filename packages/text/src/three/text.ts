@@ -40,6 +40,8 @@ import {
 } from './engine-runtime.js';
 import type { ThreeTextMaterial } from './material.js';
 
+const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
+
 export type TextSpan<Technique extends AnyRasterTechnique> = Omit<ParagraphSpan<Technique>, 'renderVariant'> &
   Readonly<{ material?: ThreeTextMaterial }>;
 
@@ -620,7 +622,7 @@ class ThreeTextBatchBinding {
         this.#paragraphs.size,
         totalTextLength,
         Math.max(regions.length, this.#paragraphs.size),
-        this.#resultCapacity,
+        MAX_TEXT_ENGINE_OUTPUT_BYTES,
       );
       const publication = this.#session.update(
         compileTextEngineFrameUpdate({
@@ -763,7 +765,12 @@ class ThreeTextBatchBinding {
         consumedPlanRevision: this.#planRevision,
         acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
         semanticViewMask,
-        limits: engineLimits(this.#paragraphs.size, totalTextLength, this.#paragraphs.size, this.#resultCapacity),
+        limits: engineLimits(
+          this.#paragraphs.size,
+          totalTextLength,
+          this.#paragraphs.size,
+          MAX_TEXT_ENGINE_OUTPUT_BYTES,
+        ),
       }),
     );
     this.#engineRevision = publication.engineRevision;

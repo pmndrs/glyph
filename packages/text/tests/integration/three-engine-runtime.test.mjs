@@ -160,7 +160,11 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const slugFirst = coordinator.acquireFontStack([slugFont, msdfFont, bitmapFont]);
   assert.equal(shared.handle, first.handle);
   assert.notEqual(reversed.handle, first.handle, 'fallback order is part of stack identity');
-  const session = coordinator.createSession({ requestCapacity: 4_096, resultCapacity: 1024 * 1024, textCapacity: 16 });
+  const session = coordinator.createSession({
+    requestCapacity: 4_096,
+    resultCapacity: textShaperAbi.layouts.engineResult.size,
+    textCapacity: 16,
+  });
   const initialRequest = compileTextEngineFrameUpdate({
     sessionId: session.handle,
     policyHandle: coordinator.policyHandle,
@@ -302,6 +306,10 @@ test('Three coordinator shares shaping data across technique bindings and refere
     ],
   });
   const publication = session.update(initialRequest);
+  assert.ok(
+    publication.bytes.byteLength > textShaperAbi.layouts.engineResult.size,
+    'the host must reserve the reported result watermark and retry the cold publication',
+  );
   const plan = new TextEngineRenderPlanView().bind(publication);
   for (const name of ['resources', 'buffers', 'patches', 'primitives', 'draws']) {
     assert.ok(plan.table(name).count > 0, `${name} must come from the Rust publication`);

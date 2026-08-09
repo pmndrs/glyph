@@ -2,6 +2,13 @@
 
 ## 2026-08-09
 
+- **Made cold command-buffer growth recover instead of failing the benchmark scene** — Decoupled the 64 MiB output
+  safety limit from the smaller retained A/B arenas. Rust's exact required-result watermark now drives one bounded cold
+  reserve/retry; the host re-resolves the request pointer and recopies after possible Wasm-memory detachment. A
+  compiled-Wasm test forces growth from a header-sized arena. The live MTSDF paragraph-stress scene consequently publishes
+  11,510 glyphs in one draw instead of status 7 at 1,382,592 bytes. Three settled WebGPU A/B runs rejected an eighth,
+  split origin/size storage binding: CPU submit was unchanged and median GPU time trended worse, so MTSDF stays packed.
+
 - **Made the 25,515-glyph Rust benchmark self-validating** — The result header's `primitiveCount` counts primitive-table
   rows, so the benchmark's former “1 renderable instance” label did not prove the workload even though its 1–2.4 MiB
   writes showed full packing. It now sums glyph primitive `recordCount` values and rejects an undersized plan. On the
