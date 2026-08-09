@@ -61,6 +61,15 @@ pub(crate) struct PositionedGlyphArena {
     visual_clusters: Vec<u32>,
     visual_levels: Vec<u8>,
     line_levels: Vec<u8>,
+    recomposed_glyphs: Option<RecomposedGlyphRange>,
+}
+
+#[derive(Clone, Copy)]
+struct RecomposedGlyphRange {
+    previous_start: usize,
+    previous_end: usize,
+    next_start: usize,
+    next_end: usize,
 }
 
 impl PositionedGlyphArena {
@@ -183,6 +192,21 @@ impl PositionedGlyphArena {
                     .map_err(|_| EngineError::ResultTooLarge)?,
             );
         }
+        self.recomposed_glyphs = flow
+            .recomposed_line_range()
+            .map(|(start, end)| {
+                Ok(RecomposedGlyphRange {
+                    previous_start: line_span_start(&previous.line_glyph_starts, start)?,
+                    previous_end: line_span_end(
+                        &previous.line_glyph_starts,
+                        &previous.line_glyph_counts,
+                        end,
+                    )?,
+                    next_start: line_span_start(&self.line_glyph_starts, start)?,
+                    next_end: line_span_end(&self.line_glyph_starts, &self.line_glyph_counts, end)?,
+                })
+            })
+            .transpose()?;
         self.assign_content_revisions(previous, identity_index, next_content_revision)
     }
 
@@ -287,6 +311,7 @@ impl PositionedGlyphArena {
         self.visual_clusters.clear();
         self.visual_levels.clear();
         self.line_levels.clear();
+        self.recomposed_glyphs = None;
     }
 
     pub(crate) fn glyphs(&self) -> &[LayoutGlyph] {
@@ -799,6 +824,53 @@ impl PositionedGlyphArena {
         index: &mut IdentityIndex,
         next_revision: &mut u32,
     ) -> Result<(), EngineError> {
+        self.semantic_change_masks.resize(self.glyphs.len(), 0);
+        if let Some(range) = self.recomposed_glyphs {
+            *next_revision = (*next_revision).max(1);
+            let previous_glyphs = previous
+                .glyphs
+                .get(range.previous_start..range.previous_end)
+                .ok_or(EngineError::InvalidRequest)?;
+            let next_glyphs = self
+                .glyphs
+                .get(range.next_start..range.next_end)
+                .ok_or(EngineError::InvalidRequest)?;
+            if previous_glyphs.len() == next_glyphs.len()
+                && previous_glyphs
+                    .iter()
+                    .zip(next_glyphs)
+                    .all(|(old, next)| old.stable_id == next.stable_id)
+            {
+                for offset in 0..next_glyphs.len() {
+                    self.assign_content_revision(
+                        range.next_start + offset,
+                        previous,
+                        Some(range.previous_start + offset),
+                        next_revision,
+                    )?;
+                }
+                return Ok(());
+            }
+            index
+                .prepare(previous_glyphs.len())
+                .map_err(identity_index_error)?;
+            for (offset, glyph) in previous_glyphs.iter().enumerate() {
+                index
+                    .insert(
+                        glyph.stable_id,
+                        u32::try_from(range.previous_start + offset)
+                            .map_err(|_| EngineError::ResultTooLarge)?,
+                    )
+                    .map_err(identity_index_error)?;
+            }
+            for slot in range.next_start..range.next_end {
+                let previous_slot = index
+                    .get(self.glyphs[slot].stable_id)
+                    .and_then(|value| usize::try_from(value).ok());
+                self.assign_content_revision(slot, previous, previous_slot, next_revision)?;
+            }
+            return Ok(());
+        }
         if self.glyphs.len() == previous.glyphs.len()
             && self
                 .glyphs
@@ -857,7 +929,10 @@ impl PositionedGlyphArena {
             return Err(EngineError::ResultTooLarge);
         }
         self.glyphs[slot].content_revision = revision;
-        self.semantic_change_masks.push(change_mask);
+        *self
+            .semantic_change_masks
+            .get_mut(slot)
+            .ok_or(EngineError::InvalidRequest)? = change_mask;
         Ok(())
     }
 
@@ -890,6 +965,25 @@ impl PositionedGlyphArena {
         }
         mask
     }
+}
+
+fn line_span_start(starts: &[u32], line: usize) -> Result<usize, EngineError> {
+    starts
+        .get(line)
+        .copied()
+        .and_then(|value| usize::try_from(value).ok())
+        .ok_or(EngineError::InvalidRequest)
+}
+
+fn line_span_end(starts: &[u32], counts: &[u32], line_end: usize) -> Result<usize, EngineError> {
+    let line = line_end.checked_sub(1).ok_or(EngineError::InvalidRequest)?;
+    let start = line_span_start(starts, line)?;
+    let count = counts
+        .get(line)
+        .copied()
+        .and_then(|value| usize::try_from(value).ok())
+        .ok_or(EngineError::InvalidRequest)?;
+    start.checked_add(count).ok_or(EngineError::InvalidRequest)
 }
 
 fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragment], EngineError> {
@@ -1370,5 +1464,60 @@ mod tests {
         assert_eq!(reordered.glyphs[1].content_revision, 1);
         assert_eq!(reordered.semantic_change_masks, [0, 0]);
         assert_eq!(next_revision, 5);
+    }
+
+    #[test]
+    fn converged_lines_assign_revisions_only_inside_the_recomposed_glyph_range() {
+        let glyph = |stable_id, revision| LayoutGlyph {
+            stable_id,
+            content_revision: revision,
+            binding_handle: 1,
+            font_handle: 1,
+            glyph_id: stable_id,
+            semantic_id: stable_id,
+            material_id: 0,
+            clip_id: 0,
+            depth_key: 0,
+            font_size: 16.0,
+            raster_pixel_ratio: 1.0,
+            inline_start: stable_id as f32,
+            block_start: 0.0,
+            inline_extent: 8.0,
+            block_extent: 16.0,
+        };
+        let make_arena = || {
+            let mut arena = PositionedGlyphArena {
+                glyphs: vec![glyph(1, 10), glyph(2, 20), glyph(3, 30)],
+                ..PositionedGlyphArena::default()
+            };
+            for field in &mut arena.semantic_f32 {
+                field.extend([1.0, 2.0, 3.0]);
+            }
+            for field in &mut arena.semantic_u32 {
+                field.extend([1, 2, 3]);
+            }
+            arena
+        };
+        let previous = make_arena();
+        let mut next = make_arena();
+        next.semantic_f32[0][1] = 4.0;
+        next.recomposed_glyphs = Some(RecomposedGlyphRange {
+            previous_start: 1,
+            previous_end: 2,
+            next_start: 1,
+            next_end: 2,
+        });
+        let mut next_revision = 40;
+        next.assign_content_revisions(&previous, &mut IdentityIndex::default(), &mut next_revision)
+            .unwrap();
+        assert_eq!(
+            next.glyphs
+                .iter()
+                .map(|glyph| glyph.content_revision)
+                .collect::<Vec<_>>(),
+            [10, 40, 30]
+        );
+        assert_eq!(next.semantic_change_masks, [0, 1, 0]);
+        assert_eq!(next_revision, 41);
     }
 }

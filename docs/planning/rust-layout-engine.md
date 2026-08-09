@@ -1043,6 +1043,12 @@ abort, copying only the proven changed identity range instead of cloning the par
 Wasm shrank 520 raw bytes to 1,137,874. This cleanup removes known redundant copying without attributing the remaining
 latency to memcpy. Length-changing edits still require the chunk-local gap storage below.
 
+Positioning now carries the exact previous/new glyph span for the line accepted by the convergence proof. Retained
+prefix and suffix glyphs keep their content revisions and zero change masks; only the recomposed span performs semantic
+field comparison and identity lookup. On the same 101-update optimized workload this narrows 7.633 ms median / 9.358 ms
+p95 to 6.894 / 9.314 ms. The 9.7% median reduction admits the range optimization, while the effectively unchanged p95
+does not support a tail-latency claim. Optimized Wasm grows 1,693 raw bytes to 1,139,567.
+
 The renderer's 25% instance slack is not the edit-storage design. Editing requires the selected ABI-private
 64-cluster semantic chunks to reserve a small bounded gap so insert, delete, and replacement operations move only the
 affected chunk before summaries and downstream line state resume. The current production text, shape, cluster, and
