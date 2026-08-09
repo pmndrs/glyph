@@ -28,6 +28,12 @@ pub struct RecordRange {
     pub end: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RangeJob {
+    pub range: RecordRange,
+    pub active_buffers: u32,
+}
+
 pub struct PhysicalBufferState {
     pub id: u32,
     pub generation: u32,
@@ -293,6 +299,34 @@ pub fn coalesce_buffer_ranges(
     Ok(())
 }
 
+pub fn collect_range_jobs(
+    jobs: &mut alloc::vec::Vec<RangeJob>,
+    buffer_ranges: &[alloc::vec::Vec<RecordRange>; MAX_PHYSICAL_BUFFERS],
+    buffer_count: usize,
+) -> Result<(), PackingError> {
+    jobs.clear();
+    let range_count = buffer_ranges[..buffer_count]
+        .iter()
+        .try_fold(0_usize, |total, ranges| total.checked_add(ranges.len()))
+        .ok_or(PackingError::ArithmeticOverflow)?;
+    jobs.try_reserve(range_count)
+        .map_err(|_| PackingError::AllocationFailed)?;
+    for (buffer_index, ranges) in buffer_ranges[..buffer_count].iter().enumerate() {
+        for range in ranges.iter().copied() {
+            if let Some(job) = jobs.iter_mut().find(|job| job.range == range) {
+                job.active_buffers |= 1 << buffer_index;
+            } else {
+                jobs.push(RangeJob {
+                    range,
+                    active_buffers: 1 << buffer_index,
+                });
+            }
+        }
+    }
+    jobs.sort_unstable_by_key(|job| (job.range.start, job.range.end));
+    Ok(())
+}
+
 fn gcd(mut left: u32, mut right: u32) -> u32 {
     while right != 0 {
         (left, right) = (right, left % right);
@@ -310,7 +344,10 @@ fn lcm(left: u32, right: u32) -> Result<u32, PackingError> {
 mod tests {
     use alloc::vec;
 
-    use super::{PackingError, RecordRange, coalesce_buffer_ranges};
+    use super::{
+        MAX_PHYSICAL_BUFFERS, PackingError, RangeJob, RecordRange, coalesce_buffer_ranges,
+        collect_range_jobs,
+    };
     use crate::engine::policy::{CapabilitySet, CapabilitySetId};
 
     fn capability() -> CapabilitySet {
@@ -382,6 +419,34 @@ mod tests {
         assert_eq!(
             coalesce_buffer_ranges(&mut overflow, 2, &capability(), u32::MAX),
             Err(PackingError::ArithmeticOverflow)
+        );
+    }
+
+    #[test]
+    fn identical_per_buffer_ranges_share_one_packing_job() {
+        let mut ranges: [alloc::vec::Vec<RecordRange>; MAX_PHYSICAL_BUFFERS] =
+            core::array::from_fn(|_| alloc::vec::Vec::new());
+        ranges[0].extend([
+            RecordRange { start: 0, end: 10 },
+            RecordRange { start: 20, end: 21 },
+        ]);
+        ranges[1].push(RecordRange { start: 0, end: 10 });
+        let mut jobs = alloc::vec::Vec::new();
+
+        collect_range_jobs(&mut jobs, &ranges, 2).unwrap();
+
+        assert_eq!(
+            jobs,
+            [
+                RangeJob {
+                    range: RecordRange { start: 0, end: 10 },
+                    active_buffers: 0b11,
+                },
+                RangeJob {
+                    range: RecordRange { start: 20, end: 21 },
+                    active_buffers: 0b01,
+                },
+            ]
         );
     }
 }
