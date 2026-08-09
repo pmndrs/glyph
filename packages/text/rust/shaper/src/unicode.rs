@@ -81,6 +81,29 @@ impl UnicodeAnalysis {
         self.line_breaks.breaks()
     }
 
+    pub(crate) fn reusable_for_ascii_letter_edit(
+        &self,
+        previous: &[u16],
+        next: &[u16],
+        start: usize,
+        previous_end: usize,
+        next_end: usize,
+    ) -> bool {
+        previous.len() == next.len()
+            && previous_end.saturating_sub(start) == next_end.saturating_sub(start)
+            && previous_end <= previous.len()
+            && next_end <= next.len()
+            && previous
+                .get(start..previous_end)
+                .zip(next.get(start..next_end))
+                .is_some_and(|(previous, next)| {
+                    !previous.is_empty()
+                        && previous.iter().zip(next).all(|(previous, next)| {
+                            is_ascii_letter(*previous) && is_ascii_letter(*next)
+                        })
+                })
+    }
+
     pub(crate) fn clear(&mut self) {
         self.utf8.clear();
         self.line_breaks.clear();
@@ -295,6 +318,10 @@ fn is_neutral_script(script: u32) -> bool {
     matches!(script, COMMON_SCRIPT | INHERITED_SCRIPT | UNKNOWN_SCRIPT)
 }
 
+fn is_ascii_letter(unit: u16) -> bool {
+    matches!(unit, 0x41..=0x5a | 0x61..=0x7a)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,5 +390,17 @@ mod tests {
             .unwrap();
         assert_eq!(analysis.grapheme_boundaries.capacity(), boundary_capacity);
         assert_eq!(analysis.analyze(&[0xd800]), Err(UnicodeError::InvalidUtf16));
+    }
+
+    #[test]
+    fn only_equal_length_ascii_letter_edits_reuse_unicode_structure() {
+        let analysis = UnicodeAnalysis::default();
+        let previous: Vec<u16> = "alpha".encode_utf16().collect();
+        let letters: Vec<u16> = "aloha".encode_utf16().collect();
+        let digit: Vec<u16> = "al0ha".encode_utf16().collect();
+        assert!(analysis.reusable_for_ascii_letter_edit(&previous, &letters, 2, 3, 3));
+        assert!(!analysis.reusable_for_ascii_letter_edit(&previous, &digit, 2, 3, 3));
+        assert!(!analysis.reusable_for_ascii_letter_edit(&previous, &letters, 2, 4, 3));
+        assert!(!analysis.reusable_for_ascii_letter_edit(&previous, &letters, 6, 7, 7));
     }
 }

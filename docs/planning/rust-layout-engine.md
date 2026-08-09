@@ -1027,11 +1027,11 @@ that shaping alone cannot meet the contract: cluster rebuilding, line compositio
 remain global, and the ordinary eight-warmup lane still catches a later 1,114,112-byte memory growth. Both are open
 failures, not reasons to weaken the gates.
 
-The next checkpoint adds an exact one-line convergence proof for same-length localized edits. With geometry, font
-metrics, limits, and ellipsis behavior unchanged, Rust recomposes the line containing the edit and compares its ending
-cluster cursor, metrics, slots, fragments, hard-break state, and stable boundary identities with the retained line. A
-match permits the prefix and suffix lines—and their positioned glyph records—to be retained; any mismatch discards the
-partial result and runs the complete composer. A 101-update production run after 40 warmups improves the same workload
+The next checkpoint added the first one-line convergence proof for same-length localized edits. With geometry, font
+metrics, limits, and ellipsis behavior unchanged, Rust recomposed the line containing the edit and initially required
+the complete line record to match the retained line. A match permitted the prefix and suffix lines—and their positioned
+glyph records—to be retained; any mismatch discarded the partial result and ran the complete composer. A 101-update
+production run after 40 warmups improved the same workload
 from the preceding 9.372 ms checkpoint to 7.668 ms median, an 18.2% end-to-end reduction, with 9.620 ms p95 and five
 roughly 1.2 KiB command-buffer patches. The optimized Wasm grows from 1,131,457 to 1,138,394 raw bytes (+6,937). This
 remains above budget. Cluster reconstruction, revision assignment, and plan gathering remain broad, and the retained
@@ -1056,6 +1056,19 @@ run's first safe boundary. Any topology mismatch uses the cold builder. A field-
 result equals an independent cold rebuild. The same 101-update optimized workload improves from 6.894 / 9.314 ms
 median/p95 to 5.881 / 8.406 ms, with five roughly 1.2 KiB patches. Optimized Wasm grows 7,633 raw bytes to 1,147,200.
 This admits the retained aggregation path but remains above the 4 ms p95 contract.
+
+The composer now continues across old line bands until the new cursor reaches an old line's ending cluster with the
+same height and baseline. Only that ending state controls whether the following line may be retained: requiring the
+recomposed line's start and fragments to equal the old line made later convergence impossible after a boundary moved.
+An exact three-line fixture transfers advance across the edited boundary, changes the second line from clusters
+`[3,6)` to `[3,5)`, and proves the next recomposed line reaches cluster 9 before the suffix is retained. Equal-length
+ASCII-letter replacement also reuses Unicode and bidi state because UTF-16 length, grapheme boundaries, Latin script,
+UAX #14 class, and bidi class cannot change under that exact guard; spaces, punctuation, non-ASCII text, and structural
+edits continue through complete analysis. On the unchanged production benchmark, 40 warmups and 101 measured updates
+improve the preceding 5.881 / 8.406 ms median/p95 to 2.607 / 6.184 ms. RSD falls from the previously observed 137.6%
+split to 42.4%, while five roughly 1.2 KiB patches remain. The 1,147,266-byte optimized Wasm is 66 bytes larger than
+the retained-cluster checkpoint. The median meets the 4 ms ceiling, but the break-sensitive p95 does not; retained
+policy gathering, plan compilation, and chunk-local insert/delete storage remain open.
 
 The renderer's 25% instance slack is not the edit-storage design. Editing requires the selected ABI-private
 64-cluster semantic chunks to reserve a small bounded gap so insert, delete, and replacement operations move only the
