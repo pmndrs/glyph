@@ -83,7 +83,7 @@ function measureCold() {
   for (let index = 0; index < options.warmup + options.repetitions; index += 1) {
     createSession(initial.byteLength);
     const result = execute(initial, true);
-    glyphs = result.primitiveCount;
+    glyphs = result.glyphCount;
     if (index >= options.warmup) {
       samples.push(result.durationMs);
       plans.push(result);
@@ -96,7 +96,7 @@ function measureCold() {
 function measureWarm(name) {
   createSession(initial.byteLength);
   let state = execute(initial, true);
-  const livePrimitiveCount = state.primitiveCount;
+  const liveGlyphCount = state.glyphCount;
   const localizedText = [...utf16];
   let suffixLength = utf16.length;
   const samples = [];
@@ -152,7 +152,7 @@ function measureWarm(name) {
     }
   }
   requireStatus(fn.disposeSession(sessionId), `dispose ${name} session`);
-  return summarize(name, livePrimitiveCount, samples, plans);
+  return summarize(name, liveGlyphCount, samples, plans);
 }
 
 function createSession(requestCapacity) {
@@ -202,12 +202,24 @@ function execute(bytes, allowGrowth = false, operation = 'text_update') {
       writeBytes += patch.getUint32(patchLayout.byteLength, true);
     }
   }
+  const primitiveCount = result.getUint32(layout.primitiveCount, true);
+  const primitivesOffset = result.getUint32(layout.primitivesOffset, true);
+  const primitiveLayout = abi.layouts.enginePrimitive;
+  let glyphCount = 0;
+  for (let index = 0; index < primitiveCount; index += 1) {
+    const at = resultPointer + primitivesOffset + index * primitiveLayout.size;
+    const primitive = new DataView(memory.buffer, at, primitiveLayout.size);
+    if (primitive.getUint8(primitiveLayout.kind) === abi.engine.primitiveKinds.glyph) {
+      glyphCount += primitive.getUint16(primitiveLayout.recordCount, true);
+    }
+  }
   return {
     durationMs,
     engineRevision: result.getUint32(layout.engineRevision, true),
     planRevision: result.getUint32(layout.planRevision, true),
     publicationGeneration: result.getUint32(layout.publicationGeneration, true),
-    primitiveCount: result.getUint32(layout.primitiveCount, true),
+    primitiveCount,
+    glyphCount,
     patchCount,
     writeBytes,
   };
@@ -267,6 +279,9 @@ function registerPolicy() {
 }
 
 function summarize(name, glyphs, samples, plans) {
+  if (glyphs < Math.floor(options.glyphs * 0.95)) {
+    throw new Error(`benchmark planned only ${glyphs} glyph records for a ${options.glyphs}-glyph fixture target`);
+  }
   const sorted = samples.toSorted((left, right) => left - right);
   const patchCounts = plans.map((plan) => plan.patchCount).toSorted((left, right) => left - right);
   const writeBytes = plans.map((plan) => plan.writeBytes).toSorted((left, right) => left - right);
