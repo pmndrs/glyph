@@ -1089,7 +1089,7 @@ function createBatchRoot(workload: ComparisonWorkloadId): THREE.Object3D {
   if (comparisonWorkloadDefinition(workload).batching === 'standalone') return new THREE.Group();
   // `grow` keeps one buffer per physical resource. A chunked batch would split a paragraph's glyph run at every chunk
   // boundary and turn one draw into several, which would make the batched lanes look worse than the standalone one.
-  return new TextGroup<AnyRasterTechnique>({
+  return new TextGroup({
     capacity: { size: 4_096, policy: 'grow' },
   });
 }

@@ -9,7 +9,7 @@ import type * as THREE from 'three/webgpu';
  */
 export type WorkloadFont = LoadedFont<AnyRasterTechnique>;
 export type WorkloadText = Text<AnyRasterTechnique>;
-export type WorkloadTextGroup = TextGroup<AnyRasterTechnique>;
+export type WorkloadTextGroup = TextGroup;
 
 export interface MutableSpanPaint {
   color: string;

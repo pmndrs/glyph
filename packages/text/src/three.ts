@@ -47,5 +47,4 @@ export type {
   TextProperties,
   TextSpan,
   TextUpdate,
-  ThreeRenderVariant,
 } from './three/text.js';

@@ -306,6 +306,8 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 
 | D-223 | Raster technique is owned by each loaded font binding and is no longer repeated by `FontStack`, imperative Three `Text`, or `TextGroup`. `createFontStack` accepts unique live fonts from one runtime and preserves the union of their techniques in its type. The Rust engine resolves the actual binding per glyph; the renderer policy decides whether and how each technique is lowered, and the render plan supplies the resulting storage/draw partition. Three leases heterogeneous selections by runtime rather than enforcing one technique, while the legacy `ParagraphBatch` retains its explicit single-technique boundary and rejects a heterogeneous union. A compiled-Wasm public fixture realizes one Bitmap-root paragraph with an MSDF span as two policy-selected draws and invokes the same `material` factory under both canonical technique contexts. | Accepted |
 
+| D-224 | The Three and R3F command-buffer surfaces complete D-167's naming cutover: `material` is the only authored renderer customization property from group/text/span input through numeric Rust `materialId` and renderer factory realization. Their `ThreeRenderVariant` generic, `renderVariant` properties, setters, comparison logic, and no-op binding hook are deleted. The legacy portable core and TypeGPU variant state remains only until those implementations move to the Rust plan; it is not re-exported through the cut-over renderer APIs. | Accepted |
+
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
 ## Verification and optimization

@@ -2,6 +2,11 @@
 
 ## 2026-08-09
 
+- **Completed material naming through Three and R3F** — Removed the obsolete `ThreeRenderVariant` generic and every
+  `renderVariant` property, setter, span field, comparison, and no-op binding hook from the command-buffer-backed public
+  adapters. `material` is now the sole authored name through numeric Rust `materialId` and renderer factory realization;
+  legacy core/TypeGPU variants remain scoped to the path awaiting deletion.
+
 - **Removed authored technique from Three grouping and font stacks** — `createFontStack` now accepts heterogeneous
   Bitmap/MSDF/Slug fonts from one runtime and preserves their technique union, while the legacy single-technique
   `ParagraphBatch` rejects that union at its own boundary. `TextGroup` and its R3F wrapper no longer accept or expose a
