@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { createRuntimeShaper, createTextRuntime, FontRegistry } from '@pmndrs/text';
+import { createTextRuntime, FontRegistry } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
 import { bitmapShader, defineTextMaterial, msdfShader, slugShader, Text } from '@pmndrs/text/three';
 import * as TSL from 'three/tsl';
@@ -18,11 +18,10 @@ test('the canonical technique shaders are exported as callable node builders', (
 
 test('a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path', async () => {
   const registry = new FontRegistry();
-  const shaper = await createRuntimeShaper({
+  const runtime = await createTextRuntime({
     registry,
     wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
   });
-  const runtime = await createTextRuntime({ registry, shaper });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },

@@ -52,6 +52,7 @@ pub(crate) struct PositionedGlyphArena {
     semantic_glyphs: Vec<SemanticGlyph>,
     semantic_line_glyph_starts: Vec<u32>,
     semantic_line_glyph_counts: Vec<u32>,
+    semantic_line_inline_extents: Vec<f64>,
     semantic_change_masks: Vec<u16>,
     semantic_f32: [Vec<f32>; SEMANTIC_F32_FIELD_COUNT],
     semantic_u32: [Vec<u32>; SEMANTIC_U32_FIELD_COUNT],
@@ -97,6 +98,7 @@ impl PositionedGlyphArena {
         self.reserve(shape.glyph_ids.len())?;
         reserve(&mut self.semantic_line_glyph_starts, flow.lines.len())?;
         reserve(&mut self.semantic_line_glyph_counts, flow.lines.len())?;
+        reserve(&mut self.semantic_line_inline_extents, flow.lines.len())?;
         let visually_ltr = is_trivially_ltr(bidi, runs);
         for (line_index, line) in flow.lines.iter().copied().enumerate() {
             let semantic_line_start = self.semantic_glyphs.len();
@@ -106,6 +108,7 @@ impl PositionedGlyphArena {
                     u32::try_from(semantic_line_start).map_err(|_| EngineError::ResultTooLarge)?,
                 );
                 self.semantic_line_glyph_counts.push(0);
+                self.semantic_line_inline_extents.push(0.0);
                 continue;
             }
             let first = fragments.first().ok_or(EngineError::InvalidRequest)?;
@@ -122,8 +125,13 @@ impl PositionedGlyphArena {
                 .lines
                 .get(line_index + 1)
                 .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
+            let inline_start = fragments
+                .iter()
+                .map(|fragment| fragment.slot_start)
+                .fold(f64::INFINITY, f64::min);
+            let mut inline_end = f64::NEG_INFINITY;
             for fragment in fragments.iter().copied() {
-                self.position_fragment(
+                let fragment_advance = self.position_fragment(
                     line,
                     fragment,
                     final_line,
@@ -138,6 +146,7 @@ impl PositionedGlyphArena {
                     metrics_for,
                     extents_for,
                 )?;
+                inline_end = inline_end.max(fragment.slot_start + fragment_advance);
             }
             self.semantic_line_glyph_starts
                 .push(u32::try_from(semantic_line_start).map_err(|_| EngineError::ResultTooLarge)?);
@@ -149,6 +158,8 @@ impl PositionedGlyphArena {
                 )
                 .map_err(|_| EngineError::ResultTooLarge)?,
             );
+            self.semantic_line_inline_extents
+                .push((inline_end - inline_start).max(0.0));
         }
         self.assign_content_revisions(previous, identity_index, next_content_revision)
     }
@@ -158,6 +169,7 @@ impl PositionedGlyphArena {
         self.semantic_glyphs.clear();
         self.semantic_line_glyph_starts.clear();
         self.semantic_line_glyph_counts.clear();
+        self.semantic_line_inline_extents.clear();
         self.semantic_change_masks.clear();
         for field in &mut self.semantic_f32 {
             field.clear();
@@ -183,6 +195,10 @@ impl PositionedGlyphArena {
             &self.semantic_line_glyph_starts,
             &self.semantic_line_glyph_counts,
         )
+    }
+
+    pub(crate) fn semantic_line_inline_extents(&self) -> &[f64] {
+        &self.semantic_line_inline_extents
     }
 
     pub(crate) fn semantic_change_masks(&self) -> &[u16] {
@@ -213,7 +229,7 @@ impl PositionedGlyphArena {
         visually_ltr: bool,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
-    ) -> Result<(), EngineError> {
+    ) -> Result<f64, EngineError> {
         let cluster_start = usize::try_from(fragment.line.cluster_start)
             .map_err(|_| EngineError::InvalidRequest)?;
         let cluster_end =
@@ -258,17 +274,15 @@ impl PositionedGlyphArena {
 
         let available = (fragment.slot_end - fragment.slot_start - fragment.line.advance).max(0.0);
         let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
-        let justify_spaces =
-            if line.align == ALIGN_JUSTIFY && !fragment.line.hard_break && !final_line {
-                count_justification_spaces(text, clusters, cluster_start, cluster_end)
-            } else {
-                0
-            };
-        let per_space = if justify_spaces == 0 {
-            0.0
-        } else {
-            available / f64::from(justify_spaces)
-        };
+        let (justify_spaces, per_space) = justification_adjustment(
+            line,
+            fragment,
+            final_line,
+            text,
+            clusters,
+            cluster_start,
+            cluster_end,
+        );
         let offset = if per_space == 0.0 {
             alignment_offset(line.align, paragraph_level, available)
         } else {
@@ -421,7 +435,7 @@ impl PositionedGlyphArena {
                 extents_for,
             )?;
         }
-        Ok(())
+        Ok(fragment.line.advance + per_space * f64::from(justify_spaces))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -922,6 +936,56 @@ fn count_justification_spaces(
         .unwrap_or(u32::MAX)
 }
 
+#[allow(clippy::too_many_arguments)]
+fn justification_adjustment(
+    line: FlowLine,
+    fragment: FlowFragment,
+    final_line: bool,
+    text: &[u16],
+    clusters: &ClusterArena,
+    cluster_start: usize,
+    cluster_end: usize,
+) -> (u32, f64) {
+    let spaces = if line.align == ALIGN_JUSTIFY && !fragment.line.hard_break && !final_line {
+        count_justification_spaces(text, clusters, cluster_start, cluster_end)
+    } else {
+        0
+    };
+    let available = (fragment.slot_end - fragment.slot_start - fragment.line.advance).max(0.0);
+    (spaces, justification_space_advance(available, spaces))
+}
+
+pub(crate) fn positioned_fragment_advance(
+    line: FlowLine,
+    fragment: FlowFragment,
+    final_line: bool,
+    text: &[u16],
+    clusters: &ClusterArena,
+) -> Result<f64, EngineError> {
+    let cluster_start =
+        usize::try_from(fragment.line.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
+    let cluster_end =
+        usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+    let (spaces, per_space) = justification_adjustment(
+        line,
+        fragment,
+        final_line,
+        text,
+        clusters,
+        cluster_start,
+        cluster_end,
+    );
+    Ok(fragment.line.advance + per_space * f64::from(spaces))
+}
+
+fn justification_space_advance(available: f64, space_count: u32) -> f64 {
+    if space_count == 0 {
+        0.0
+    } else {
+        available / f64::from(space_count)
+    }
+}
+
 fn cluster_is_space(text: &[u16], clusters: &ClusterArena, cluster: usize) -> bool {
     clusters
         .starts
@@ -1006,6 +1070,12 @@ mod tests {
         bidi.levels[1] = 0;
         run.style.bidi_override = true;
         assert!(!is_trivially_ltr(&bidi, &[run]));
+    }
+
+    #[test]
+    fn justification_expands_only_lines_with_expandable_spaces() {
+        assert_eq!(justification_space_advance(22.0, 2), 11.0);
+        assert_eq!(justification_space_advance(22.0, 0), 0.0);
     }
 
     #[test]

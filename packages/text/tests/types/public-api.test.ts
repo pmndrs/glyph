@@ -3,13 +3,10 @@ import {
   defineRasterBatchStage,
   defineRasterBaker,
   defineFont,
-  createParagraphEngine,
-  createRuntimeShaper,
   FontLoader,
   FontRegistry,
   rasterBake,
   type AnyRasterModule,
-  type BidiAnalysisViews,
   type FontInputOf,
   type FontRasterModuleOf,
   type GlyphPaint,
@@ -27,13 +24,7 @@ import {
   type RasterSource,
   type RegisteredFont,
   type RegisteredRaster,
-  type RuntimeShaper,
   type Sha256Hex,
-  type ShapeBatchRequest,
-  type ShapedBatchViews,
-  type LayoutParagraph,
-  type ParagraphConstraints,
-  type ParagraphMeasurement,
 } from '../../src/index.js';
 import type { Object3D } from 'three/webgpu';
 
@@ -63,38 +54,7 @@ const fontLoader = new FontLoader({
   development: false,
 });
 const registeredPromise: Promise<RegisteredFont> = fontLoader.load('/fonts/Inter.ttf');
-const shaperPromise: Promise<RuntimeShaper> = createRuntimeShaper({ registry: fontRegistry });
-declare const fontHandle: RegisteredFont['handle'];
-const shapeRequest: ShapeBatchRequest = {
-  textUtf16: Uint16Array.of(0x41),
-  features: [],
-  runs: [
-    {
-      font: fontHandle,
-      textStart: 0,
-      textEnd: 1,
-      direction: 'ltr',
-      script: 'Latn',
-      language: 'en',
-      clusterLevel: 0,
-      flags: 0x40,
-      featureStart: 0,
-      featureCount: 0,
-    },
-  ],
-};
-const shapedPromise: Promise<ShapedBatchViews> = shaperPromise.then((shaper) => shaper.shapeBatch(shapeRequest));
-const bidiPromise: Promise<BidiAnalysisViews> = shaperPromise.then((shaper) =>
-  shaper.analyzeBidi(Uint16Array.of(0x05d0), 'auto'),
-);
-const preparedParagraph: Promise<LayoutParagraph> = shaperPromise.then((shaper) =>
-  createParagraphEngine({ shaper }).create({ text: 'Hello', font: fontHandle }),
-);
 void registeredPromise;
-void shaperPromise;
-void shapedPromise;
-void bidiPromise;
-void preparedParagraph;
 
 interface MsdfResource {
   readonly texture: unknown;
@@ -220,43 +180,6 @@ runtime.load(font, { module: configurable });
 
 // @ts-expect-error An MSDF decoder cannot consume a Slug artifact.
 msdf.decode(font, slugArtifact);
-
-declare const paragraph: LayoutParagraph;
-
-const naturalMeasurement: ParagraphMeasurement = paragraph.measure();
-const constrainedMeasurement = paragraph.measure({
-  width: { mode: 'at-most', size: 320 },
-});
-const intrinsicParagraph = paragraph.layout();
-const constrainedParagraph = paragraph.layout({
-  width: { mode: 'at-most', size: 320 },
-  height: { mode: 'unconstrained' },
-  wrap: 'word',
-});
-const committedParagraph = paragraph.layout({
-  width: { mode: 'exactly', size: 280 },
-});
-const hostLayoutConstraints: ParagraphConstraints = {
-  width: { mode: 'at-most', size: 320 },
-};
-void intrinsicParagraph;
-void naturalMeasurement;
-void constrainedMeasurement;
-void constrainedParagraph;
-void committedParagraph;
-void hostLayoutConstraints;
-
-// @ts-expect-error Measurement deliberately omits positioned glyph arrays.
-void naturalMeasurement.glyphIds;
-
-// @ts-expect-error At-most constraints require an available size.
-paragraph.layout({ width: { mode: 'at-most' } });
-
-// @ts-expect-error Measurement and layout use the same constraint contract.
-paragraph.measure({ height: { mode: 'exactly' } });
-
-// @ts-expect-error Unconstrained axes do not carry a meaningless size.
-paragraph.layout({ width: { mode: 'unconstrained', size: 320 } });
 
 const titleFont = defineFont('/fonts/Inter-Regular.ttf', msdf);
 type _TitleInput = Expect<Equal<FontInputOf<typeof titleFont>, '/fonts/Inter-Regular.ttf'>>;

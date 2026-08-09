@@ -18,8 +18,8 @@ sources:
     resource: ../../packages/text/src/internal/runtime-bake-protocol.ts
     title: Runtime bake protocol
   - id: paragraph
-    resource: ../../packages/text/src/paragraph.ts
-    title: Paragraph engine
+    resource: ../../packages/text/src/three/text.ts
+    title: Retained paragraph and Three.js synchronization boundary
   - id: benchmark-runner
     resource: ../../apps/benchmarks/src/benchmark/runner.ts
     title: Shared benchmark lifecycle

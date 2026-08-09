@@ -1,6 +1,6 @@
 import { statedProperties } from './internal/span-cascade.js';
 import type { FontSelection } from './loaded-font.js';
-import type { ParagraphStyle } from './paragraph.js';
+import type { ParagraphStyle } from './text-properties.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 
 declare const textLiteralTechnique: unique symbol;
@@ -16,13 +16,12 @@ export interface GlyphPaintInput {
   readonly shadow?: { readonly color: ColorInput; readonly offset: readonly [number, number] };
 }
 
-export interface ParagraphSpan<Technique extends AnyRasterTechnique, Variant = undefined> {
+export interface ParagraphSpan<Technique extends AnyRasterTechnique> {
   readonly start: number;
   readonly end: number;
   readonly font?: FontSelection<Technique>;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
-  readonly renderVariant?: Variant;
 }
 
 export interface TextLiteral<Technique extends AnyRasterTechnique = never> {

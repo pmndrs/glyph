@@ -1,9 +1,8 @@
 import type {
-  LayoutParagraph as Paragraph,
-  LayoutParagraphAxisConstraint as ParagraphAxisConstraint,
-  ParagraphConstraints,
-  ParagraphInput,
+  ParagraphAxisConstraint,
+  ParagraphContentBox,
   ParagraphLayout,
+  ParagraphMeasurement,
 } from '@pmndrs/text';
 
 export const YogaMeasureMode = Object.freeze({ Undefined: 0, Exactly: 1, AtMost: 2 });
@@ -12,7 +11,16 @@ type YogaMeasureModeValue = (typeof YogaMeasureMode)[keyof typeof YogaMeasureMod
 type Inset = readonly [top: number, right: number, bottom: number, left: number];
 type Size = readonly [width: number, height: number];
 
-export function createUikitLayoutFixture(paragraph: Paragraph, policy: ParagraphConstraints = {}) {
+export interface UikitParagraphSubject<Input = unknown> {
+  measure(contentBox: ParagraphContentBox): ParagraphMeasurement;
+  layout(contentBox: ParagraphContentBox): ParagraphLayout;
+  update(input: Input): void;
+}
+
+export function createUikitLayoutFixture<Input>(
+  paragraph: UikitParagraphSubject<Input>,
+  policy: ParagraphContentBox = {},
+) {
   let currentPolicy = { ...policy };
   let dirtyCount = 1;
   let paintRevision = 0;
@@ -20,11 +28,11 @@ export function createUikitLayoutFixture(paragraph: Paragraph, policy: Paragraph
   const calls = { measure: 0, layout: 0 };
 
   const measuredParagraph = {
-    measure(constraints?: ParagraphConstraints) {
+    measure(constraints: ParagraphContentBox = {}) {
       calls.measure += 1;
       return paragraph.measure(constraints);
     },
-    layout(constraints?: ParagraphConstraints) {
+    layout(constraints: ParagraphContentBox = {}) {
       calls.layout += 1;
       return paragraph.layout(constraints);
     },
@@ -99,8 +107,8 @@ export function createUikitLayoutFixture(paragraph: Paragraph, policy: Paragraph
       );
       const layout = measuredParagraph.layout({
         ...currentPolicy,
-        width: { mode: 'exactly', size: contentWidth },
-        height: { mode: 'exactly', size: contentHeight },
+          width: { mode: 'exact', size: contentWidth },
+          height: { mode: 'exact', size: contentHeight },
       });
       const contentLeft = -outerWidth / 2 + borderLeft + paddingLeft;
       const contentTop = outerHeight / 2 - borderTop - paddingTop;
@@ -111,11 +119,11 @@ export function createUikitLayoutFixture(paragraph: Paragraph, policy: Paragraph
         centeredY: Float32Array.from(layout.y, (value) => contentTop - value),
       };
     },
-    updateParagraph(input: ParagraphInput) {
+    updateParagraph(input: Input) {
       paragraph.update(input);
       dirtyCount += 1;
     },
-    updateShapingPolicy(policyUpdate: ParagraphConstraints) {
+    updateShapingPolicy(policyUpdate: ParagraphContentBox) {
       currentPolicy = { ...currentPolicy, ...policyUpdate };
       dirtyCount += 1;
     },
@@ -132,7 +140,7 @@ function mapYogaAxis(value: number, mode: YogaMeasureModeValue, name: string): P
   if (mode === YogaMeasureMode.Undefined) return { mode: 'unconstrained' };
   const size = validYogaSize(value, name);
   if (mode === YogaMeasureMode.AtMost) return { mode: 'at-most', size };
-  if (mode === YogaMeasureMode.Exactly) return { mode: 'exactly', size };
+  if (mode === YogaMeasureMode.Exactly) return { mode: 'exact', size };
   throw new RangeError(`unsupported Yoga ${name} measure mode`);
 }
 

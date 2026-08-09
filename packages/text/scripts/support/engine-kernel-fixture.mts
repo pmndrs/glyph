@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import {
   createBenchmarkParagraph,
+  disposeBenchmarkParagraph,
   loadParagraphBenchmarkFixture,
   paragraphTextForGlyphs,
 } from './paragraph-benchmark-fixture.mts';
@@ -32,8 +33,8 @@ export async function captureKernelWorkloads(targets: readonly number[]): Promis
   try {
     return targets.map((target) => captureWorkload(fixture, target, policy));
   } finally {
-    fixture.runtime.dispose();
     fixture.loaded.dispose();
+    fixture.runtime.dispose();
   }
 }
 
@@ -44,8 +45,9 @@ function captureWorkload(
 ): CapturedKernelInput {
   const text = paragraphTextForGlyphs(targetGlyphs);
   const created = createBenchmarkParagraph(fixture, text, 600);
-  fixture.runtime.update();
-  const layout = created.paragraph.committed?.layout;
+  created.group.updateMatrixWorld(true);
+  if (created.group.error !== undefined) throw created.group.error;
+  const layout = created.paragraph.inspectLayout();
   if (layout === undefined) throw new Error('paragraph benchmark fixture did not publish a layout');
   const glyphs = layout.glyphIds.length;
   const planeLeft = new Float32Array(glyphs);
@@ -89,6 +91,6 @@ function captureWorkload(
     levels,
     policy,
   };
-  created.batch.dispose();
+  disposeBenchmarkParagraph(created);
   return captured;
 }

@@ -5,15 +5,10 @@ use crate::{
     STATUS_FONT_IN_USE, STATUS_FONT_STACK_MISSING, STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST,
     STATUS_OK, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING, STATUS_RESULT_TOO_LARGE,
     STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT, STATUS_SESSION_MISSING, ShaperRegistry,
-    bidi,
     engine::{
         EngineError, TextEngine, font_binding_wire::parse_font_binding, frame::SessionRevision,
         frame_wire::parse_update_request, render_plan_wire::publication_layout,
         transport::FrameTransport, wire::parse_policy,
-    },
-    wire::{
-        pack_bidi_result, pack_result, parse_bidi_request, parse_reshape_request,
-        parse_shape_request,
     },
 };
 
@@ -623,83 +618,6 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn pmndrs_text_shaper_shape_batch(pointer: u32, length: u32) -> u32 {
-    with_state(|state| {
-        state.registry.clear_result();
-        let Some(bytes) = owned_bytes(&state.allocations, pointer, length) else {
-            return STATUS_INVALID_REQUEST;
-        };
-        let request = match parse_shape_request(bytes) {
-            Ok(request) => request,
-            Err(status) => return status,
-        };
-        let output = match state.registry.shape_batch(&request) {
-            Ok(output) => output,
-            Err(status) => return status,
-        };
-        match pack_result(&output) {
-            Ok(result) => store_result(&mut state.registry, result),
-            Err(status) => status,
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn pmndrs_text_shaper_reshape_ranges(pointer: u32, length: u32) -> u32 {
-    with_state(|state| {
-        state.registry.clear_result();
-        let Some(bytes) = owned_bytes(&state.allocations, pointer, length) else {
-            return STATUS_INVALID_REQUEST;
-        };
-        let (request, ranges) = match parse_reshape_request(bytes) {
-            Ok(request) => request,
-            Err(status) => return status,
-        };
-        let output = match state.registry.reshape_ranges(&request, &ranges) {
-            Ok(output) => output,
-            Err(status) => return status,
-        };
-        match pack_result(&output) {
-            Ok(result) => store_result(&mut state.registry, result),
-            Err(status) => status,
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn pmndrs_text_shaper_analyze_bidi(pointer: u32, length: u32) -> u32 {
-    with_state(|state| {
-        state.registry.clear_result();
-        let Some(bytes) = owned_bytes(&state.allocations, pointer, length) else {
-            return STATUS_INVALID_REQUEST;
-        };
-        let (text, direction) = match parse_bidi_request(bytes) {
-            Ok(request) => request,
-            Err(status) => return status,
-        };
-        let output = match bidi::analyze(&text, direction) {
-            Ok(output) => output,
-            Err(bidi::BidiError::InvalidDirection) => return STATUS_INVALID_REQUEST,
-            Err(bidi::BidiError::ResultTooLarge) => return STATUS_RESULT_TOO_LARGE,
-        };
-        match pack_bidi_result(&output) {
-            Ok(result) => store_result(&mut state.registry, result),
-            Err(status) => status,
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_text_shaper_result_ptr() -> u32 {
-    with_state(|state| u32::try_from(state.registry.result_pointer() as usize).unwrap_or(0))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_text_shaper_result_len() -> u32 {
-    with_state(|state| state.registry.result_length())
-}
-
 #[derive(Default)]
 struct WasmState {
     registry: ShaperRegistry,
@@ -782,13 +700,6 @@ fn owns_region(allocations: &[Allocation], pointer: u32, length: u32) -> bool {
                 .checked_add(entry.requested_length)
                 .is_some_and(|allocation_end| pointer >= entry.pointer && end <= allocation_end)
         })
-}
-
-fn store_result(registry: &mut ShaperRegistry, result: Vec<u8>) -> u32 {
-    match registry.set_result(result) {
-        Ok(()) => 0,
-        Err(status) => status,
-    }
 }
 
 fn engine_status(error: EngineError) -> u32 {

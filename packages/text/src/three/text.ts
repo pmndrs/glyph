@@ -15,7 +15,7 @@ import type {
   ParagraphContentBox,
   ParagraphProperties,
   ParagraphStyle,
-} from '../index.js';
+} from '../text-properties.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import {
@@ -51,13 +51,10 @@ const STYLE_CHANGE = 1 << 1;
 const GEOMETRY_CHANGE = 1 << 2;
 const ALL_SEMANTIC_CHANGES = TEXT_CHANGE | STYLE_CHANGE | GEOMETRY_CHANGE;
 
-export type TextSpan<Technique extends AnyRasterTechnique> = Omit<ParagraphSpan<Technique>, 'renderVariant'> &
+export type TextSpan<Technique extends AnyRasterTechnique> = ParagraphSpan<Technique> &
   Readonly<{ material?: ThreeTextMaterial }>;
 
-type TextBaseProperties<Technique extends AnyRasterTechnique> = Omit<
-  ParagraphBaseProperties<Technique>,
-  'renderVariant'
->;
+type TextBaseProperties<Technique extends AnyRasterTechnique> = ParagraphBaseProperties<Technique>;
 
 type TextContentProperties<Technique extends AnyRasterTechnique> =
   | Readonly<{ text: string; spans?: readonly TextSpan<Technique>[] }>

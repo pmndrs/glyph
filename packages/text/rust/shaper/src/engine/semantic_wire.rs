@@ -1436,6 +1436,7 @@ fn validate_regions(
     {
         let id = read_u32(record, abi::ENGINE_REGION_ID)?;
         let transform_index = read_u32(record, abi::ENGINE_REGION_TRANSFORM_INDEX)?;
+        let shape = byte(record, abi::ENGINE_REGION_SHAPE)?;
         if id == 0
             || transform_index == 0
             || prior_u32_duplicate(
@@ -1458,14 +1459,14 @@ fn validate_regions(
         {
             return Err(STATUS_INVALID_REQUEST);
         }
-        let region_bounds = bounds(
+        let region_bounds = nonempty_block_bounds(
             record,
             abi::ENGINE_REGION_INLINE_START,
             abi::ENGINE_REGION_BLOCK_START,
             abi::ENGINE_REGION_INLINE_END,
             abi::ENGINE_REGION_BLOCK_END,
         )?;
-        let clip = bounds(
+        let clip = nonempty_block_bounds(
             record,
             abi::ENGINE_REGION_CLIP_INLINE_START,
             abi::ENGINE_REGION_CLIP_BLOCK_START,
@@ -1476,6 +1477,7 @@ fn validate_regions(
             || clip.1 < region_bounds.1
             || clip.2 > region_bounds.2
             || clip.3 > region_bounds.3
+            || (region_bounds.0 == region_bounds.2 && shape != SHAPE_RECTANGLE)
         {
             return Err(STATUS_INVALID_REQUEST);
         }
@@ -1662,6 +1664,26 @@ fn bounds(
         finite(record, block_end)?,
     );
     if values.0 >= values.2 || values.1 >= values.3 {
+        Err(STATUS_INVALID_REQUEST)
+    } else {
+        Ok(values)
+    }
+}
+
+fn nonempty_block_bounds(
+    record: &[u8],
+    inline_start: usize,
+    block_start: usize,
+    inline_end: usize,
+    block_end: usize,
+) -> Result<(f32, f32, f32, f32), u32> {
+    let values = (
+        finite(record, inline_start)?,
+        finite(record, block_start)?,
+        finite(record, inline_end)?,
+        finite(record, block_end)?,
+    );
+    if values.0 > values.2 || values.1 >= values.3 {
         Err(STATUS_INVALID_REQUEST)
     } else {
         Ok(values)
@@ -2240,6 +2262,41 @@ mod tests {
                 .fingerprint(),
             polygon_geometry.fingerprint(),
             "request placement is not semantic geometry",
+        );
+
+        let mut zero_width = valid_geometry_bytes();
+        write_f32(
+            &mut zero_width,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_WIDTH,
+            0.0,
+        );
+        write_u16(
+            &mut zero_width,
+            REGION_OFFSET + abi::ENGINE_REGION_EXCLUSION_COUNT,
+            0,
+        );
+        write_f32(
+            &mut zero_width,
+            REGION_OFFSET + abi::ENGINE_REGION_INLINE_END,
+            0.0,
+        );
+        write_f32(
+            &mut zero_width,
+            REGION_OFFSET + abi::ENGINE_REGION_CLIP_INLINE_END,
+            0.0,
+        );
+        let zero_width = parse_valid_geometry(&zero_width).unwrap();
+        let mut retained_zero_width = FlowGeometryArena::default();
+        retained_zero_width.build(zero_width).unwrap();
+        assert_eq!(
+            InlineSlotArena::default()
+                .resolve_band(&retained_zero_width, 0, 0.0, 10.0, 1)
+                .unwrap(),
+            [InlineSlot {
+                start: 0.0,
+                end: 0.0,
+            }],
+            "a zero-width host measurement still composes one-cluster lines",
         );
 
         let mut outside_text = bytes.clone();

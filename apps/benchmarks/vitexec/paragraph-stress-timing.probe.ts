@@ -24,10 +24,9 @@ await new Promise<void>((resolve, reject) => {
 
 const measures = performance.getEntriesByType('measure') as PerformanceMeasure[];
 const summaries = Object.fromEntries(
-  [...new Set(measures.map(({ name }) => name))].sort().map((name) => [
-    name,
-    summarize(measures.filter((entry) => entry.name === name).map(({ duration }) => duration)),
-  ]),
+  [...new Set(measures.map(({ name }) => name))]
+    .sort()
+    .map((name) => [name, summarize(measures.filter((entry) => entry.name === name).map(({ duration }) => duration))]),
 );
 const elapsed = frameDeltas.reduce((sum, duration) => sum + duration, 0);
 console.log(
@@ -50,7 +49,9 @@ function waitForViewport(): Promise<HTMLElement> {
     const candidate = document.querySelector<HTMLElement>(
       '[data-testid="comparison-live-viewport"][data-workload="paragraph-stress"]',
     );
-    return candidate !== null && Number(candidate.dataset.framesPerSecond) > 0 && Number(candidate.dataset.glyphCount) > 0
+    return candidate !== null &&
+      Number(candidate.dataset.framesPerSecond) > 0 &&
+      Number(candidate.dataset.glyphCount) > 0
       ? candidate
       : undefined;
   };

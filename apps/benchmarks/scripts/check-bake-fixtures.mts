@@ -14,13 +14,13 @@ const fixtureChecks = [
   'generate-showcase-raster-fixtures.mts',
   'generate-mtsdf-render-fixture.mts',
   'generate-slug-render-fixture.mts',
-  'generate-paragraph-bidi-contract.mts',
-  'generate-paragraph-cjk-contract.mts',
+  'generate-paragraph-conformance-font.mts',
 ] as const;
 
 export async function checkBakeFixtures(): Promise<void> {
   await buildRuntimePackages();
   for (const script of fixtureChecks) await runNodeScript(`scripts/${script}`, ['--check']);
+  await runNodeScript('scripts/check-paragraph-contract-fixtures.mts');
   await runNodeScript('scripts/provision-harfbuzz.mts', ['--check']);
   await runNodeScript('scripts/generate-japanese-showcase-subset.mts', ['--check']);
 }

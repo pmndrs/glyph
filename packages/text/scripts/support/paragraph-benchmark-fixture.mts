@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 
-import { createRuntimeShaper, createTextRuntime, FontRegistry } from '../../dist/index.js';
-import { bitmap } from '../../dist/raster/bitmap-technique.js';
+import { createTextRuntime, FontRegistry } from '../../dist/index.js';
+import { Text, TextGroup } from '../../dist/three.js';
+import { bitmap } from '../../dist/three/bitmap.js';
 
 export const paragraphBenchmarkSource = [
   'Typography is a moving system. AVATAR To Wa Yo repeat familiar kerning pairs while a responsive panel changes the space around them. The quick visual check is useful, but the benchmark records the cost of shaping, layout, upload, and every rendered frame.',
@@ -12,11 +13,10 @@ export const paragraphBenchmarkSource = [
 export async function loadParagraphBenchmarkFixture() {
   const workspaceRoot = new URL('../../../../', import.meta.url);
   const registry = new FontRegistry();
-  const shaper = await createRuntimeShaper({
+  const runtime = await createTextRuntime({
     registry,
     wasm: await readFile(new URL('packages/text/dist/text_shaper.wasm', workspaceRoot)),
   });
-  const runtime = await createTextRuntime({ registry, shaper });
   const bytes = await readFile(new URL('apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', workspaceRoot));
   const loaded = await runtime.loadFont({
     input: { baked: `data:application/octet-stream;base64,${bytes.toString('base64')}` },
@@ -30,14 +30,20 @@ export function createBenchmarkParagraph(
   text: string,
   width: number,
 ) {
-  const batch = fixture.runtime.createParagraphBatch({ technique: bitmap });
-  const paragraph = batch.add({
+  const group = new TextGroup({ capacity: { size: Math.max(256, text.length), policy: 'grow' } });
+  const paragraph = new Text({
     font: fixture.loaded,
     text,
     contentBox: { width: { mode: 'exact', size: width }, wrap: 'word' },
     style: { fontSize: 24 },
   });
-  return { batch, paragraph };
+  group.add(paragraph);
+  return { group, paragraph };
+}
+
+export function disposeBenchmarkParagraph(created: ReturnType<typeof createBenchmarkParagraph>): void {
+  created.group.dispose();
+  created.paragraph.dispose();
 }
 
 export function paragraphTextForGlyphs(target: number): string {

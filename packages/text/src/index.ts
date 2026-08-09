@@ -59,38 +59,14 @@ export type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
 export { createFontStack, FontLeaseError } from './loaded-font.js';
 
 export type {
-  GlyphBatchKey,
   GlyphBufferCapacity,
-  GlyphCapacityOverflow,
-  GlyphOriginUpdate,
-  GlyphSnapshot,
-  GlyphTopology,
-  Paragraph,
   ParagraphAxisConstraint,
   ParagraphBaseProperties,
-  ParagraphBatch,
-  ParagraphBatchObserver,
-  ParagraphBatchOptions,
   ParagraphContentBox,
   ParagraphContentProperties,
-  ParagraphId,
   ParagraphProperties,
-  ParagraphSnapshot,
-  ParagraphUpdate,
-  PreparedGlyphBatch,
-  PreparedGlyphRun,
-  PreparedParagraph,
-  PreparedParagraphBatchRevision,
-  TextPreparationError,
-} from './paragraph-batch.js';
-export type {
-  ParagraphBatchAttachment,
-  ParagraphBatchTarget,
-  ParagraphBatchTargetError,
-  ParagraphBatchTargetRevision,
-  ParagraphBatchTargetStage,
-  ParagraphBatchTargetUpdate,
-} from './paragraph-batch-attachment.js';
+  ParagraphStyle,
+} from './text-properties.js';
 
 export type {
   ColorInput,
@@ -111,17 +87,6 @@ export type { IdentifiedSpanRange, SpanRange } from './internal/span-cascade.js'
 export { SpanNestingError } from './internal/span-cascade.js';
 
 export type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
-
-export type {
-  ParagraphConstraints,
-  ParagraphEngine,
-  ParagraphEngineOptions,
-  ParagraphInput,
-  ParagraphStyle,
-} from './paragraph.js';
-export type { Paragraph as LayoutParagraph } from './paragraph.js';
-export type { ParagraphAxisConstraint as LayoutParagraphAxisConstraint } from './paragraph.js';
-export { createParagraphEngine } from './paragraph.js';
 
 export type {
   AnyRasterModule,
@@ -188,33 +153,7 @@ export {
   normalizeRasterCoverage,
 } from './raster-coverage.js';
 
-export type {
-  BidiAnalysisViews,
-  BidiDirection,
-  RuntimeShaper,
-  RuntimeShaperMemoryReport,
-  RuntimeShaperOptions,
-  ReshapeBatchRequest,
-  ReshapeRange,
-  ShapeBatchRequest,
-  ShapeRunRequest,
-  ShapedBatchViews,
-  TextShaperWasmSource,
-} from './shaper.js';
-export { createRuntimeShaper } from './shaper.js';
 export type { FontFeature, ResolvedFontFeature } from './font-feature.js';
 
-export type {
-  AsyncTextUpdateOptions,
-  LoadedFontInput,
-  LoadedFontRequest,
-  TextPreparationWorker,
-  TextRuntime,
-  TextRuntimeOptions,
-  TextRuntimeRevision,
-  TextUpdateCallback,
-  TextUpdateOutcome,
-  TextUpdateProgress,
-  TextUpdateResult,
-} from './text-runtime.js';
-export { createTextPreparationWorker, createTextRuntime } from './text-runtime.js';
+export type { LoadedFontInput, LoadedFontRequest, TextRuntime, TextRuntimeOptions } from './text-runtime.js';
+export { createTextRuntime } from './text-runtime.js';

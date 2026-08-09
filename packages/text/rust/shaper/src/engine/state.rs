@@ -11,7 +11,10 @@ use super::{
     flow_composition::{EllipsisReplacement, FlowLayoutArena},
     flow_geometry::FlowGeometryArena,
     font_binding::FontRenderBinding,
-    frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
+    frame::{
+        CommittedUpdate, OVERFLOW_CLIP, OVERFLOW_VISIBLE, PreparedUpdate, SessionRevision,
+        UpdateRequest,
+    },
     identity_index::IdentityIndex,
     policy::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedPolicy},
     policy_gather::{
@@ -155,6 +158,11 @@ struct ParagraphState {
     pending_geometry: FlowGeometryArena,
     flow_layout: FlowLayoutArena,
     pending_flow_layout: FlowLayoutArena,
+    intrinsic_geometry_scratch: FlowGeometryArena,
+    intrinsic_flow_layout_scratch: FlowLayoutArena,
+    intrinsic_flow_slot_scratch: super::flow_geometry::InlineSlotArena,
+    intrinsic_positioned_scratch: PositionedGlyphArena,
+    intrinsic_identity_scratch: IdentityIndex,
     boundary_shape: BoundaryShapeArena,
     pending_boundary_shape: BoundaryShapeArena,
     boundary_shape_scratch: ShapeArena,
@@ -690,9 +698,79 @@ impl TextEngine {
                     for order_index in 0..session.active_order().len() {
                         let paragraph_id = session.active_order()[order_index].id;
                         let paragraph = session
-                            .paragraph(paragraph_id)
+                            .paragraph_mut(paragraph_id)
                             .ok_or(EngineError::InvalidRequest)?;
-                        let state = &paragraph.state;
+                        let state = &mut paragraph.state;
+                        let visible_extents = {
+                            let text = if state.text_prepared {
+                                &state.pending_text
+                            } else {
+                                &state.text
+                            };
+                            let clusters = if state.clusters_prepared {
+                                &state.pending_clusters
+                            } else {
+                                &state.clusters
+                            };
+                            let geometry = if state.geometry_prepared {
+                                &state.pending_geometry
+                            } else {
+                                &state.geometry
+                            };
+                            let flow = if state.flow_layout_prepared {
+                                &state.pending_flow_layout
+                            } else {
+                                &state.flow_layout
+                            };
+                            let flow_thread_id = geometry
+                                .constraints
+                                .first()
+                                .ok_or(EngineError::InvalidRequest)?
+                                .flow_thread_id;
+                            super::layout_query::flow_extents(flow_thread_id, flow, text, clusters)?
+                        };
+                        let active_flow = if state.flow_layout_prepared {
+                            &state.pending_flow_layout
+                        } else {
+                            &state.flow_layout
+                        };
+                        let active_line_count = active_flow.lines.len();
+                        let has_ellipsis = !active_flow.ellipsis_threads().is_empty();
+                        let cluster_count = if state.clusters_prepared {
+                            state.pending_clusters.starts.len()
+                        } else {
+                            state.clusters.starts.len()
+                        };
+                        let constraint = if state.geometry_prepared {
+                            state.pending_geometry.constraints.first()
+                        } else {
+                            state.geometry.constraints.first()
+                        }
+                        .copied()
+                        .ok_or(EngineError::InvalidRequest)?;
+                        let needs_intrinsic =
+                            visible_extents.consumed_clusters < cluster_count || has_ellipsis;
+                        if needs_intrinsic {
+                            state.prepare_intrinsic_flow_layout(
+                                shaper.as_deref().ok_or(EngineError::InvalidRequest)?,
+                                font_stacks,
+                                font_bindings,
+                                request.limits.max_lines,
+                                request.limits.max_slots_per_band,
+                            )?;
+                        }
+                        let max_lines_truncated = constraint.max_lines != 0
+                            && active_line_count
+                                >= usize::try_from(constraint.max_lines)
+                                    .map_err(|_| EngineError::ResultTooLarge)?;
+                        let inspect_full_clipped_layout = needs_intrinsic
+                            && constraint.overflow == OVERFLOW_CLIP
+                            && !max_lines_truncated;
+                        if inspect_full_clipped_layout {
+                            state.prepare_intrinsic_positioned(
+                                shaper.as_deref().ok_or(EngineError::InvalidRequest)?,
+                            )?;
+                        }
                         let text = if state.text_prepared {
                             &state.pending_text
                         } else {
@@ -708,15 +786,40 @@ impl TextEngine {
                         } else {
                             &state.geometry
                         };
-                        let flow = if state.flow_layout_prepared {
+                        let active_flow = if state.flow_layout_prepared {
                             &state.pending_flow_layout
                         } else {
                             &state.flow_layout
                         };
-                        let positioned = if state.positioned_prepared {
+                        let active_positioned = if state.positioned_prepared {
                             &state.pending_positioned
                         } else {
                             &state.positioned
+                        };
+                        let flow = if inspect_full_clipped_layout {
+                            &state.intrinsic_flow_layout_scratch
+                        } else {
+                            active_flow
+                        };
+                        let positioned = if inspect_full_clipped_layout {
+                            &state.intrinsic_positioned_scratch
+                        } else {
+                            active_positioned
+                        };
+                        let intrinsic_extents = if needs_intrinsic {
+                            let flow_thread_id = geometry
+                                .constraints
+                                .first()
+                                .ok_or(EngineError::InvalidRequest)?
+                                .flow_thread_id;
+                            Some(super::layout_query::flow_extents(
+                                flow_thread_id,
+                                &state.intrinsic_flow_layout_scratch,
+                                text,
+                                clusters,
+                            )?)
+                        } else {
+                            None
                         };
                         let (line_glyph_starts, line_glyph_counts) =
                             positioned.semantic_line_glyph_spans();
@@ -730,6 +833,10 @@ impl TextEngine {
                             positioned.semantic_glyphs(),
                             line_glyph_starts,
                             line_glyph_counts,
+                            Some(positioned.semantic_line_inline_extents()),
+                            text,
+                            clusters,
+                            intrinsic_extents,
                             include_layout_inspection,
                         )?;
                     }
@@ -1100,6 +1207,9 @@ impl ParagraphState {
         self.pending_geometry.clear();
         self.flow_layout.clear();
         self.pending_flow_layout.clear();
+        self.intrinsic_geometry_scratch.clear();
+        self.intrinsic_flow_layout_scratch.clear();
+        self.intrinsic_positioned_scratch.clear();
         self.boundary_shape.clear();
         self.pending_boundary_shape.clear();
         self.boundary_shape_scratch.clear();
@@ -1234,6 +1344,7 @@ impl ParagraphState {
         self.pending_clusters.reserve(capacity)?;
         self.flow_layout.reserve(capacity, 1)?;
         self.pending_flow_layout.reserve(capacity, 1)?;
+        self.intrinsic_flow_layout_scratch.reserve(capacity, 1)?;
         self.boundary_shape.reserve(capacity.min(64))?;
         self.pending_boundary_shape.reserve(capacity.min(64))?;
         self.boundary_shape_scratch.reserve(8)?;
@@ -1245,6 +1356,7 @@ impl ParagraphState {
         }
         self.positioned.reserve(glyph_capacity)?;
         self.pending_positioned.reserve(glyph_capacity)?;
+        self.intrinsic_positioned_scratch.reserve(glyph_capacity)?;
         self.glyph_identity_index
             .prepare(glyph_capacity)
             .map_err(|_| EngineError::ResultTooLarge)?;
@@ -2000,6 +2112,129 @@ impl ParagraphState {
         }
         self.flow_layout_prepared = true;
         Ok(())
+    }
+
+    fn prepare_intrinsic_flow_layout(
+        &mut self,
+        shaper: &ShaperRegistry,
+        font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
+        max_lines: u32,
+        max_slots_per_band: u32,
+    ) -> Result<(), EngineError> {
+        let source_geometry = if self.geometry_prepared {
+            &self.pending_geometry
+        } else {
+            &self.geometry
+        };
+        self.intrinsic_geometry_scratch.clone_from(source_geometry);
+        let constraint = self
+            .intrinsic_geometry_scratch
+            .constraints
+            .first_mut()
+            .ok_or(EngineError::InvalidRequest)?;
+        let region_start =
+            usize::try_from(constraint.region_start).map_err(|_| EngineError::InvalidRequest)?;
+        let final_region = region_start
+            .checked_add(usize::from(constraint.region_count))
+            .and_then(|end| end.checked_sub(1))
+            .ok_or(EngineError::InvalidRequest)?;
+        let region = self
+            .intrinsic_geometry_scratch
+            .regions
+            .get_mut(final_region)
+            .ok_or(EngineError::InvalidRequest)?;
+        const INTRINSIC_BLOCK_END: f32 = 16_777_216.0;
+        constraint.max_lines = 0;
+        constraint.viewport_block_end = INTRINSIC_BLOCK_END;
+        constraint.overflow = OVERFLOW_VISIBLE;
+        region.record.block_end = INTRINSIC_BLOCK_END;
+
+        let clusters = if self.clusters_prepared {
+            &self.pending_clusters
+        } else {
+            &self.clusters
+        };
+        let styles = if self.styles_prepared {
+            self.pending_resolved_styles.segments()
+        } else {
+            self.resolved_styles.segments()
+        };
+        self.intrinsic_flow_layout_scratch.build(
+            &self.intrinsic_geometry_scratch,
+            clusters,
+            styles,
+            &mut self.intrinsic_flow_slot_scratch,
+            usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?,
+            usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?,
+            |handle| shaper.font_metrics(handle),
+            |stack_handle| {
+                font_stacks
+                    .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                    .ok()
+                    .and_then(|index| font_stacks[index].fonts.first().copied())
+                    .and_then(|handle| {
+                        font_bindings
+                            .iter()
+                            .find(|binding| binding.handle == handle)
+                            .map(|binding| binding.shaping_handle)
+                    })
+            },
+        )
+    }
+
+    fn prepare_intrinsic_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
+        let text = if self.text_prepared {
+            self.pending_text.as_slice()
+        } else {
+            self.text.as_slice()
+        };
+        let clusters = if self.clusters_prepared {
+            &self.pending_clusters
+        } else {
+            &self.clusters
+        };
+        let runs = if self.shaping_runs_prepared {
+            self.pending_shaping_runs.runs()
+        } else {
+            self.shaping_runs.runs()
+        };
+        let shape = if self.shape_prepared {
+            &self.pending_shape
+        } else {
+            &self.shape
+        };
+        let styles = if self.styles_prepared {
+            self.pending_resolved_styles.segments()
+        } else {
+            self.resolved_styles.segments()
+        };
+        let bidi = if self.bidi_prepared {
+            &self.pending_bidi
+        } else {
+            &self.bidi
+        };
+        let previous = if self.positioned_prepared {
+            &self.pending_positioned
+        } else {
+            &self.positioned
+        };
+        let mut next_content_revision = 1;
+        self.intrinsic_positioned_scratch.build(
+            previous,
+            &self.intrinsic_flow_layout_scratch,
+            text,
+            clusters,
+            runs,
+            shape,
+            &BoundaryShapeArena::default(),
+            styles,
+            bidi,
+            &mut self.intrinsic_identity_scratch,
+            &mut next_content_revision,
+            |handle| shaper.font_metrics(handle),
+            |handle, glyph| shaper.font_glyph_extents(handle, glyph),
+        )
     }
 
     fn abort_flow_layout(&mut self) {

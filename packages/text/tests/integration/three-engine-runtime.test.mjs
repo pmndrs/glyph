@@ -134,7 +134,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
     },
     disposed: false,
   };
-  const coordinator = new ThreeTextEngineCoordinator({ shaper });
+  const coordinator = new ThreeTextEngineCoordinator(shaper);
   const materialCalls = [];
   const primaryMaterial = coordinator.acquireMaterial(
     defineTextMaterial((context) => {

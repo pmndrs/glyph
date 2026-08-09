@@ -1,7 +1,7 @@
 import type { BenchmarkInput, BenchmarkTarget, Capability } from '../../contracts';
 import { selectableFontFixture } from '../../font-fixtures';
-import { createShapingConformanceTargets } from './direct-runtime';
 import { createFontLoaderWorkerConformanceTarget } from './font-loader-worker';
+import { createParagraphContractsConformanceTarget } from './paragraph-contracts';
 import { mtsdfRasterConformanceAdapter } from './raster/mtsdf';
 import { slugRasterConformanceAdapter } from './raster/slug';
 import { createRasterSamplingConformanceTarget, createRasterSourceOutlineConformanceTarget } from './raster/target';
@@ -166,7 +166,7 @@ function runtimeFallbackTarget(technique: Technique, backend: Backend): Benchmar
 export function createConformanceTargets(): readonly BenchmarkTarget[] {
   return [
     createFontLoaderWorkerConformanceTarget(),
-    ...createShapingConformanceTargets(),
+    createParagraphContractsConformanceTarget(),
     tslBaselineTarget('webgl2'),
     tslBaselineTarget('webgpu'),
     advancedShapingTarget(),
