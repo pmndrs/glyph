@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:fa4cf68dac7a7f288956a565bc048e9159d74b6e67ba0794578d691d2155ce0d'
+source_digest: 'sha256:b1cb33af564181b940c763b7f3d640b4f9264c0cef5da564afed61f486c906ae'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -886,9 +886,13 @@ material and observes one six-instance draw over transform slots `[2,2,2,1,1,1]`
 packs seven exact `vec4` streams plus transform indices, Three resolves the validated atlas directly and feeds those
 streams to the canonical `msdfShader`, and a retained Bitmap-first → MSDF-first stack change produces one six-instance
 program-2 draw without resending text or geometry. The executor is not connected to the public `Text` lifecycle, so
-Slug realization, browser pixels, retirement-bounded caches, material factories, public cutover, and end-to-end latency
-remain open. The optimized shaper remains 1,083,255 raw / 411,409 gzip / 324,539 Brotli bytes; all 129 Rust tests and the
-focused compiled-Wasm/Three integration test pass.
+Slug uses the same executor with five float and two integer `vec4` streams plus transform indices. Its validated curve,
+header, and packed-reference textures are retained once. The indexed matrix drives both final placement and the
+canonical analytic dilation graph through an exact per-instance MVP, while the existing row-based shader interface
+remains valid for transform-split targets. The compiled-Wasm fixture republishes the same six retained instances as one
+program-3 draw without resending text or geometry. Browser shader compilation/pixels, retirement-bounded caches,
+material factories, public cutover, and end-to-end latency remain open. The optimized shaper remains 1,083,255 raw /
+411,409 gzip / 324,539 Brotli bytes; all 129 Rust tests and the focused compiled-Wasm/Three integration test pass.
 
 The replacement Rust engine now owns retained Unicode analysis for its frame transaction. The existing Unicode 17 generator emits both TypeScript and compact Rust Script/Script_Extensions partitions from one source. A no-std `unicode-segmentation` 1.13.3 iterator supplies extended grapheme boundaries; the engine maps them back to the public UTF-16 coordinate space, resolves contextual scripts in reusable flat arrays, and commits or aborts that derived arena with text and styles. Session reservation prewarms active and pending analysis storage, while unchanged text skips analysis. Retained UAX #9 products now form equal-level runs, and one interval sweep intersects them with resolved style and script items while skipping hard-break controls. Root direction remains paragraph-level state; nested stated directions carry a distinct override bit and force run parity. Primary-font HarfRust shaping consumes those runs inside `text_update` through borrowed retained language/features and writes glyph SoA directly into an A/B session arena; the legacy batch export shares the same prewarmed buffer and reusable feature scratch. A real-Inter compiled-Wasm test observes the shape-plan cache created by the frame call. The optimized shaper is 973,367 raw, 364,517 gzip, and 287,942 Brotli bytes at this checkpoint. Ordered fallback, layout, and nonempty plan output remain open, so this size evidence carries no complete-path frame latency claim.
 

@@ -2,6 +2,14 @@
 
 ## 2026-08-08
 
+- **Executed Slug from the Rust command buffer** — Bound Rust's five float `vec4`, two integer `uvec4`, and indexed-
+  transform streams directly to the canonical Slug graph. The renderer retains validated curve/header/reference
+  textures and keeps the WebGL-compatible packed-reference representation. A new full-MVP dilation input applies the
+  exact per-instance transform to both placement and analytic half-pixel expansion while retaining the legacy row
+  interface. The compiled-Wasm fixture republishes the same six retained glyphs as one program-3 draw after Bitmap and
+  MSDF, without resending text or geometry. Wasm bytes are unchanged. Live shader compilation/pixels, bounded
+  retirement, material factories, and public cutover remain open.
+
 - **Executed MSDF from the Rust command buffer** — Extended the shared Three plan executor rather than adding another
   target path. Rust policy buffers 1–7 bind directly as MSDF `vec4` storage, buffer 15 indexes the shared transform
   sidecar, the renderer resolves and builds the validated layered atlas once, and the canonical `msdfShader` remains the
