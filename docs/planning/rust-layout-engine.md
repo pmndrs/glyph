@@ -1037,6 +1037,12 @@ roughly 1.2 KiB command-buffer patches. The optimized Wasm grows from 1,131,457 
 remains above budget. Cluster reconstruction, revision assignment, and plan gathering remain broad, and the retained
 high-water mark is still 80.38 MiB.
 
+The existing transaction's two flat UTF-16/identity buffers now remain synchronized after an equal-length commit or
+abort, copying only the proven changed identity range instead of cloning the paragraph before its next edit. A
+101-update rerun measured 7.633 ms median / 9.358 ms p95, effectively flat against 7.668 / 9.620 ms, while optimized
+Wasm shrank 520 raw bytes to 1,137,874. This cleanup removes known redundant copying without attributing the remaining
+latency to memcpy. Length-changing edits still require the chunk-local gap storage below.
+
 The renderer's 25% instance slack is not the edit-storage design. Editing requires the selected ABI-private
 64-cluster semantic chunks to reserve a small bounded gap so insert, delete, and replacement operations move only the
 affected chunk before summaries and downstream line state resume. The current production text, shape, cluster, and

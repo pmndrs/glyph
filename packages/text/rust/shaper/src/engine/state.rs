@@ -143,6 +143,7 @@ struct ParagraphState {
     pending_text: Vec<u16>,
     text_unit_ids: Vec<u32>,
     pending_text_unit_ids: Vec<u32>,
+    pending_text_mirrors_committed: bool,
     next_text_unit_id: u32,
     pending_next_text_unit_id: u32,
     text_prepared: bool,
@@ -1194,6 +1195,7 @@ impl ParagraphState {
         self.pending_text.clear();
         self.text_unit_ids.clear();
         self.pending_text_unit_ids.clear();
+        self.pending_text_mirrors_committed = true;
         self.next_text_unit_id = 0;
         self.pending_next_text_unit_id = 0;
         self.text_prepared = false;
@@ -1383,20 +1385,27 @@ impl ParagraphState {
         if mutations.len() == 0 {
             return Ok(());
         }
-        if self.pending_text.try_reserve(self.text.len()).is_err() {
-            return Err(EngineError::ResultTooLarge);
+        if !self.pending_text_mirrors_committed {
+            if self.pending_text.try_reserve(self.text.len()).is_err() {
+                return Err(EngineError::ResultTooLarge);
+            }
+            if self
+                .pending_text_unit_ids
+                .try_reserve(self.text_unit_ids.len())
+                .is_err()
+            {
+                return Err(EngineError::ResultTooLarge);
+            }
+            self.pending_text.clear();
+            self.pending_text.extend_from_slice(&self.text);
+            self.pending_text_unit_ids.clear();
+            self.pending_text_unit_ids
+                .extend_from_slice(&self.text_unit_ids);
+            self.pending_text_mirrors_committed = true;
         }
-        if self
-            .pending_text_unit_ids
-            .try_reserve(self.text_unit_ids.len())
-            .is_err()
-        {
-            return Err(EngineError::ResultTooLarge);
-        }
-        self.pending_text.extend_from_slice(&self.text);
-        self.pending_text_unit_ids
-            .extend_from_slice(&self.text_unit_ids);
         self.pending_next_text_unit_id = self.next_text_unit_id.max(1);
+        self.text_prepared = true;
+        self.pending_text_mirrors_committed = false;
         for index in 0..mutations.len() {
             let Some(mutation) = mutations.get(index) else {
                 self.abort_text();
@@ -1423,13 +1432,22 @@ impl ParagraphState {
             return Err(EngineError::InvalidRequest);
         }
         self.text_edit = changed_identity_range(&self.text_unit_ids, &self.pending_text_unit_ids);
-        self.text_prepared = true;
         Ok(())
     }
 
     fn abort_text(&mut self) {
-        self.pending_text.clear();
-        self.pending_text_unit_ids.clear();
+        if self.text_prepared {
+            self.pending_text.clear();
+            self.pending_text.extend_from_slice(&self.text);
+            self.pending_text_unit_ids.clear();
+            self.pending_text_unit_ids
+                .extend_from_slice(&self.text_unit_ids);
+            self.pending_text_mirrors_committed = true;
+        }
+        self.clear_text_preparation();
+    }
+
+    fn clear_text_preparation(&mut self) {
         self.pending_next_text_unit_id = 0;
         self.text_prepared = false;
         self.text_edit = None;
@@ -1513,11 +1531,26 @@ impl ParagraphState {
 
     fn commit_text(&mut self) {
         if self.text_prepared {
+            let retains_mirror = self.pending_text.len() == self.text.len();
+            let edit = self.text_edit;
             core::mem::swap(&mut self.text, &mut self.pending_text);
             core::mem::swap(&mut self.text_unit_ids, &mut self.pending_text_unit_ids);
             self.next_text_unit_id = self.pending_next_text_unit_id;
+            if retains_mirror {
+                if let Some(edit) = edit {
+                    self.pending_text[edit.old_start..edit.new_end]
+                        .copy_from_slice(&self.text[edit.old_start..edit.new_end]);
+                    self.pending_text_unit_ids[edit.old_start..edit.new_end]
+                        .copy_from_slice(&self.text_unit_ids[edit.old_start..edit.new_end]);
+                }
+                self.pending_text_mirrors_committed = true;
+            } else {
+                self.pending_text.clear();
+                self.pending_text_unit_ids.clear();
+                self.pending_text_mirrors_committed = false;
+            }
         }
-        self.abort_text();
+        self.clear_text_preparation();
     }
 
     fn prepare_unicode(&mut self) -> Result<(), EngineError> {
@@ -3551,6 +3584,9 @@ mod tests {
         let session = engine.sessions.get(&4).unwrap();
         let paragraph = session.first_paragraph_state().unwrap();
         assert_eq!(paragraph.text_unit_ids, [8, 5, 6, 3, 4, 7]);
+        assert!(paragraph.pending_text_mirrors_committed);
+        assert_eq!(paragraph.pending_text, paragraph.text);
+        assert_eq!(paragraph.pending_text_unit_ids, paragraph.text_unit_ids);
         assert_eq!(
             [paragraph.pending_text.capacity(), paragraph.text.capacity(),],
             settled_capacities
