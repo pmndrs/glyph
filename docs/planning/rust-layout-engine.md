@@ -1232,6 +1232,12 @@ distinct identity; retired handles are not immediately reused. A real Inter fixt
 one shaping handle and proves the lifecycle in compiled Wasm. The coordinator is not yet referenced by the public Three
 entry, so this slice establishes cold ownership without claiming the batch/session cutover or a shipping graph change.
 
+The first consumption slice retains a validated plan view instead of decoding Rust records into host objects. One
+`DataView` covers the Wasm memory buffer and survives normal A/B slot changes; only `memory.grow()` replaces it. Table
+offsets, counts, strides, alignment, and publication bounds are validated once per publication, after which the Three
+lowerer can apply patches and draws by fixed offsets. A real compiled-Wasm fixture produces nonempty resource, buffer,
+patch, primitive, and draw tables through this view. GPU realization and the public Three import remain open.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement
