@@ -114,11 +114,51 @@ impl PolicyGatherWorkspace {
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         force_all_inputs: bool,
+        binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+    ) -> Result<(), GatherError> {
+        self.begin(policy, input.glyphs.len())?;
+        self.append(
+            policy,
+            capability_set,
+            input,
+            force_all_inputs,
+            binding_for_font,
+        )
+    }
+
+    pub fn begin(
+        &mut self,
+        policy: &ValidatedPolicy,
+        record_capacity: usize,
+    ) -> Result<(), GatherError> {
+        self.reserve_policy(policy, record_capacity)?;
+        self.clear();
+        Ok(())
+    }
+
+    pub fn append<'binding>(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        input: LayoutPlanInput<'_>,
+        force_all_inputs: bool,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
         validate_semantic_shape(input)?;
-        self.reserve_policy(policy, input.glyphs.len())?;
-        self.clear();
+        let required = self.glyphs.len().saturating_add(input.glyphs.len());
+        if self.glyphs.capacity() < required
+            || self.semantic_change_masks.capacity() < required
+            || self
+                .f32_fields
+                .iter()
+                .any(|field| field.capacity() < required)
+            || self
+                .u32_fields
+                .iter()
+                .any(|field| field.capacity() < required)
+        {
+            return Err(GatherError::AllocationFailed);
+        }
         let semantic_changes = if input.semantic_change_masks.len() == input.glyphs.len() {
             input
                 .semantic_change_masks
@@ -350,7 +390,6 @@ impl<T: Copy + Default> AlignedField<T> {
         unsafe { core::slice::from_raw_parts(self.blocks.as_ptr().cast::<T>(), self.len) }
     }
 
-    #[cfg(test)]
     fn capacity(&self) -> usize {
         self.blocks.capacity() * 4
     }
@@ -622,6 +661,45 @@ mod tests {
             );
         }
         assert_eq!(workspace.capacities(), capacities);
+    }
+
+    #[test]
+    fn appends_independent_layouts_into_one_plan_input() {
+        let binding = binding();
+        let policy = policy();
+        let first = [layout_glyph(1, 0)];
+        let second = [layout_glyph(2, 1)];
+        let first_x = [10.0];
+        let second_x = [20.0];
+        let first_kind = [100];
+        let second_kind = [200];
+        let mut workspace = PolicyGatherWorkspace::default();
+        workspace.begin(&policy, 2).unwrap();
+        for input in [
+            LayoutPlanInput {
+                glyphs: &first,
+                semantic_change_masks: &[],
+                semantic_f32: &[&first_x],
+                semantic_u32: &[&first_kind],
+            },
+            LayoutPlanInput {
+                glyphs: &second,
+                semantic_change_masks: &[],
+                semantic_f32: &[&second_x],
+                semantic_u32: &[&second_kind],
+            },
+        ] {
+            workspace
+                .append(&policy, CAPABILITY, input, true, |_| Some(&binding))
+                .unwrap();
+        }
+        let gathered = workspace.view();
+        let input = gathered.plan_input();
+        assert_eq!(input.glyphs.len(), 2);
+        assert_eq!(input.glyphs[0].stable_id, 1);
+        assert_eq!(input.glyphs[1].stable_id, 2);
+        assert_eq!(input.f32_fields[0], &[10.0, 20.0]);
+        assert_eq!(input.u32_fields[0], &[100, 200]);
     }
 
     #[test]

@@ -2,6 +2,15 @@
 
 ## 2026-08-08
 
+- **Preserved multi-paragraph Three batching in the Rust session design** — Existing `TextGroup` batches independent
+  paragraphs, while the current Rust session's multiple constraints all flow the same prose. The cutover therefore uses
+  one group/session containing stable-ID paragraph states and one shared planner/publication, rather than one Wasm call
+  and buffer set per `Text`. The policy gather workspace now appends independent positioned SoA inputs after one total
+  reservation, with an exact two-layout proof and no allocation inside append. Paragraph-keyed frame mutation and
+  transactional session state remain the next Rust slice. Adjacent rebuilt-Wasm Bitmap runs measured 4.083 ms before
+  and 4.078 ms after for full-column resize; that does not establish a speed change and does rule out a visible
+  regression in this run. Wasm changes by +105/+40/+252 raw/gzip/Brotli bytes.
+
 - **Bound Three plan consumption directly to Wasm publication memory** — A reusable package-internal reader validates
   every Rust-emitted render-plan table and reads its fixed records in place. It retains one `DataView` across ordinary
   A/B publications and replaces it only after `memory.grow()`, so it does not materialize per-glyph JavaScript objects.
