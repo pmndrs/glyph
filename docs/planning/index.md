@@ -41,6 +41,8 @@
 - [Shaping compilation and execution research](shaping-compilation-research.md) — closed-corpus baking, semantic bytecode, per-font CPU/Wasm specialization, and WebGPU execution research.
 - [Language-aware font units and physical bitmap strikes](language-and-strike-bundles.md) — coverage-first language delivery, CJK units, DPR selection, and independent strike residency.
 - [Responsive editorial flow and mixed-raster composition](editorial-flow-layout.md) — post-v1 exclusion regions, responsive columns, and a bitmap/MTSDF/Slug benchmark.
+- [Paragraph-scoped preparation and synchronous layout queries](paragraph-query-preparation.md) — one-paragraph
+  prepare/query, retained candidate adoption, and why it needs no third full buffer.
 
 ## Rendering analysis
 

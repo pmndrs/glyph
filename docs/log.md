@@ -2,6 +2,16 @@
 
 ## 2026-08-09
 
+- **Specified paragraph-scoped synchronous preparation without triple buffering** — Current `measureLayout()` either
+  returns committed cache or drives a complete session update and plan. The reviewed follow-up design retains one
+  speculative session transaction with paragraph-keyed pending states, linear identity reservation, explicit
+  prepare/adopt/leave-committed modes, inactive-slot copied query results, host lease retention, and new-paragraph
+  candidate ownership. Sequential paragraph queries extend the same transaction and the next frame adopts that exact
+  work before global plan compilation. Roadmap items 11.17 and 11.18 queue the query layer and promised realtime
+  publishing set as independent `feat/*` follow-up stacks after the Rust/Three cutover merges; neither is a hidden
+  prerequisite for consuming the cutover. Factoring preparation from plan commit is cohesive but not a safe flag-only
+  change.
+
 - **Completed adaptive Rust planning for physical and stable-order buffers without accepting repeated packing** — The
   first per-buffer execution prototype regressed cold Bitmap/MTSDF/Slug by roughly 1.2/2.2/2.4 ms. Grouping identical
   selected ranges back into one active-buffer job closes that regression while preserving independent costing and
