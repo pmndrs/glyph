@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:c4e55483dfca0dd7e83cee94220295b9fede6b88854f915a97a2dd07d5800701'
+source_digest: 'sha256:4b2ff74a52d39457b541c3ab2e31c67ce6055de053dfa845bf16b8f48f2f1a54'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -821,6 +821,13 @@ arenas and reusable mutation/resolution scratch once, then reserves every active
 from one capacity policy. New map children can therefore reuse the proven setup without duplicating lifecycle code or
 silently omitting a scratch lane. Optimized Wasm is 1,074,774 raw / 404,030 gzip / 321,343 Brotli bytes (+310 / -28 /
 +187 over the borrowed-span checkpoint).
+Paragraph finalization now has one complete ordered path: every preparation failure and explicit abort calls
+`abort_all`, while successful shared-plan publication calls `commit_all`. This is the rollback boundary required before
+one frame can prepare several child paragraphs. A fresh optimized-Wasm rebuild exposed stale pre-control-record fixtures;
+the compiled integration lane now asserts the 136-byte request header and supplies explicit paragraph IDs on text,
+style, constraint, and inline-object records. Focused compiled-Wasm integration and all 125 Rust unit tests pass.
+Optimized Wasm is 1,073,248 raw / 404,463 gzip / 321,189 Brotli bytes (-1,526 / +433 / -154 from the centralized
+capacity checkpoint); the mixed compression movement supports no size or latency claim.
 Adjacent
 8-warmup/31-sample Bitmap column-resize medians are 4.083 ms before and 4.078 ms after the rebuilt module, with 5.8% and
 6.1% RSD; this supports no speedup claim and exposes no material regression. Optimized Wasm is 1,070,685 / 402,154 /

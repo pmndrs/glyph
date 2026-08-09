@@ -374,10 +374,15 @@ function engineStyleUpdateBytes(
   },
 ) {
   const request = abi.layouts.engineUpdateRequest;
+  const paragraphRecord = abi.layouts.engineParagraphMutation;
   const textRecord = abi.layouts.engineTextMutation;
   const styleRecord = abi.layouts.engineStyleMutation;
-  const textRecordOffset = text.length === 0 ? 0 : request.size;
-  const styleRecordOffset = align(request.size + (text.length === 0 ? 0 : textRecord.size), styleRecord.alignment);
+  const paragraphRecordOffset = align(request.size, paragraphRecord.alignment);
+  const textRecordOffset = text.length === 0 ? 0 : paragraphRecordOffset + paragraphRecord.size;
+  const styleRecordOffset = align(
+    paragraphRecordOffset + paragraphRecord.size + (text.length === 0 ? 0 : textRecord.size),
+    styleRecord.alignment,
+  );
   const textPayloadOffset = styleRecordOffset + styleRecord.size;
   const textPayloadEnd = textPayloadOffset + text.length * 2;
   const constraint = abi.layouts.engineConstraint;
@@ -395,6 +400,7 @@ function engineStyleUpdateBytes(
   view.setUint32(request.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
   view.setUint32(request.policyHandle, policyHandle, true);
   view.setUint32(request.capabilitySet, 1, true);
+  view.setUint32(request.maxParagraphs, 1, true);
   for (const field of [
     'maxClusters',
     'maxLines',
@@ -406,6 +412,8 @@ function engineStyleUpdateBytes(
     view.setUint32(request[field], field === 'maxClusters' ? 2 : 1, true);
   }
   view.setUint32(request.maxOutputBytes, 64 * 1024, true);
+  view.setUint32(request.paragraphMutationsOffset, paragraphRecordOffset, true);
+  view.setUint32(request.paragraphMutationCount, 1, true);
   view.setUint32(request.textMutationsOffset, textRecordOffset, true);
   view.setUint32(request.textMutationCount, text.length === 0 ? 0 : 1, true);
   view.setUint32(request.styleMutationsOffset, styleRecordOffset, true);
@@ -417,9 +425,13 @@ function engineStyleUpdateBytes(
     view.setUint32(request.regionCount, 1, true);
   }
 
+  view.setUint8(paragraphRecordOffset + paragraphRecord.opcode, abi.engine.paragraphMutationOpcodes.upsert);
+  view.setUint32(paragraphRecordOffset + paragraphRecord.paragraphId, 1, true);
+
   if (text.length > 0) {
     view.setUint8(textRecordOffset + textRecord.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
     view.setUint8(textRecordOffset + textRecord.encoding, abi.engine.textEncodings.utf16Le);
+    view.setUint32(textRecordOffset + textRecord.paragraphId, 1, true);
     view.setUint32(textRecordOffset + textRecord.insertOffset, textPayloadOffset, true);
     view.setUint32(textRecordOffset + textRecord.insertCount, text.length, true);
     for (const [index, unit] of text.entries()) view.setUint16(textPayloadOffset + index * 2, unit, true);
@@ -429,6 +441,7 @@ function engineStyleUpdateBytes(
     styleRecordOffset + styleRecord.opcode,
     removeRoot ? abi.engine.styleMutationOpcodes.remove : abi.engine.styleMutationOpcodes.upsert,
   );
+  view.setUint32(styleRecordOffset + styleRecord.paragraphId, 1, true);
   view.setUint32(styleRecordOffset + styleRecord.styleId, 1, true);
   if (!removeRoot) {
     view.setUint8(styleRecordOffset + styleRecord.flags, abi.engine.styleFlags.root);
@@ -447,6 +460,7 @@ function engineStyleUpdateBytes(
     view.setFloat32(styleRecordOffset + styleRecord.rasterPixelRatio, 1, true);
   }
   if (geometry) {
+    view.setUint32(constraintOffset + constraint.paragraphId, 1, true);
     view.setUint32(constraintOffset + constraint.flowThreadId, 1, true);
     view.setFloat32(constraintOffset + constraint.width, 100, true);
     view.setFloat32(constraintOffset + constraint.height, 100, true);

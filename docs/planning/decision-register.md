@@ -282,6 +282,8 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 
 | D-211 | Every retained paragraph is initialized and capacity-reserved through one functional `ParagraphState` path. It prewarms paired style/resolution arenas and reusable scratch, then applies one text-capacity policy to every active/pending Unicode-through-positioning arena. New batch children cannot accidentally omit a retained lane or duplicate setup logic. Optimized Wasm changes from 1,074,464 / 404,058 / 321,156 to 1,074,774 / 404,030 / 321,343 raw/gzip/Brotli bytes. | Accepted |
 
+| D-212 | Paragraph transaction finalization has one complete ordered definition. Every preparation failure and explicit session abort invokes `ParagraphState::abort_all`; successful shared-plan publication invokes `commit_all`. This prevents a later child failure from leaving an earlier child's pending Unicode-through-positioning arena live when the retained session becomes multi-paragraph. Rebuilding optimized Wasm also exposed pre-control-record integration fixtures: they now assert the 136-byte frame header and write explicit paragraph IDs through text, style, constraints, and inline objects. Focused compiled-Wasm integration and all 125 Rust unit tests pass. Optimized Wasm changes from 1,074,774 / 404,030 / 321,343 to 1,073,248 / 404,463 / 321,189 raw/gzip/Brotli bytes; no latency claim is attached to this control-flow consolidation. | Accepted |
+
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
 ## Verification and optimization
