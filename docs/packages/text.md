@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6616c7c15a04a52faf40f5e0d4d3c3df73bed49f879e93eb2657b5db79cffe9c'
+source_digest: 'sha256:c4e55483dfca0dd7e83cee94220295b9fede6b88854f915a97a2dd07d5800701'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -816,6 +816,11 @@ paragraph has no records, and lets the transaction reject any unclaimed tail. Th
 views in production, so the multi-child loop will not need per-record maps, record copies, or a second decode. An exact
 fixture consumes present and absent spans across every keyed semantic table. Optimized Wasm is 1,074,464 raw / 404,058
 gzip / 321,156 Brotli bytes (+1,390 / +521 / +110 over the session-identity checkpoint).
+Paragraph creation and capacity growth now share one `ParagraphState` initializer/reserver. It prewarms the paired style
+arenas and reusable mutation/resolution scratch once, then reserves every active/pending text-through-positioning arena
+from one capacity policy. New map children can therefore reuse the proven setup without duplicating lifecycle code or
+silently omitting a scratch lane. Optimized Wasm is 1,074,774 raw / 404,030 gzip / 321,343 Brotli bytes (+310 / -28 /
++187 over the borrowed-span checkpoint).
 Adjacent
 8-warmup/31-sample Bitmap column-resize medians are 4.083 ms before and 4.078 ms after the rebuilt module, with 5.8% and
 6.1% RSD; this supports no speedup claim and exposes no material regression. Optimized Wasm is 1,070,685 / 402,154 /

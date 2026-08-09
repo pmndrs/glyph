@@ -280,6 +280,8 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 
 | D-210 | Multi-paragraph frame consumption uses forward-only borrowed spans, not per-record maps or copied semantic arrays. Validated text, style, constraint, and inline-object tables expose a cursor that consumes only contiguous records for the current paragraph, returns an empty borrowed view when absent, and leaves an exact final cursor check to reject skipped or repeated ownership. The existing single-child production transaction now uses the same path. An exact fixture covers present/absent spans in every keyed table. Optimized Wasm changes from 1,073,074 / 403,537 / 321,046 to 1,074,464 / 404,058 / 321,156 raw/gzip/Brotli bytes. | Accepted |
 
+| D-211 | Every retained paragraph is initialized and capacity-reserved through one functional `ParagraphState` path. It prewarms paired style/resolution arenas and reusable scratch, then applies one text-capacity policy to every active/pending Unicode-through-positioning arena. New batch children cannot accidentally omit a retained lane or duplicate setup logic. Optimized Wasm changes from 1,074,464 / 404,058 / 321,156 to 1,074,774 / 404,030 / 321,343 raw/gzip/Brotli bytes. | Accepted |
+
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
 ## Verification and optimization
