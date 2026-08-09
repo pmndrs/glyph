@@ -154,6 +154,7 @@ struct ParagraphState {
     pending_resolved_styles: ResolvedStyleArena,
     unicode: UnicodeAnalysis,
     pending_unicode: UnicodeAnalysis,
+    unicode_reused_for_text_edit: bool,
     bidi: BidiAnalysis,
     pending_bidi: BidiAnalysis,
     shaping_runs: ShapingRunArena,
@@ -1207,6 +1208,7 @@ impl ParagraphState {
         self.pending_resolved_styles.clear();
         self.unicode.clear();
         self.pending_unicode.clear();
+        self.unicode_reused_for_text_edit = false;
         self.bidi.clear();
         self.pending_bidi.clear();
         self.shaping_runs.clear();
@@ -1560,6 +1562,18 @@ impl ParagraphState {
         if !self.text_prepared {
             return Ok(());
         }
+        if let Some(edit) = self.text_edit
+            && self.unicode.reusable_for_ascii_letter_edit(
+                &self.text,
+                &self.pending_text,
+                edit.old_start,
+                edit.old_end,
+                edit.new_end,
+            )
+        {
+            self.unicode_reused_for_text_edit = true;
+            return Ok(());
+        }
         self.pending_unicode
             .analyze(&self.pending_text)
             .map_err(unicode_error)?;
@@ -1569,6 +1583,7 @@ impl ParagraphState {
 
     fn abort_unicode(&mut self) {
         self.unicode_prepared = false;
+        self.unicode_reused_for_text_edit = false;
     }
 
     fn commit_unicode(&mut self) {
@@ -1580,6 +1595,9 @@ impl ParagraphState {
 
     fn prepare_bidi(&mut self) -> Result<(), EngineError> {
         self.abort_bidi();
+        if self.unicode_reused_for_text_edit && !self.style_invalidation.bidi {
+            return Ok(());
+        }
         if !self.text_prepared && !self.style_invalidation.bidi {
             return Ok(());
         }
@@ -2182,32 +2200,30 @@ impl ParagraphState {
             && let Some(edit) = self.text_edit
             && edit.old_end.saturating_sub(edit.old_start)
                 == edit.new_end.saturating_sub(edit.old_start)
-            && self
-                .pending_flow_layout
-                .rebuild_one_line_if_state_converges(
-                    &self.flow_layout,
-                    geometry,
-                    &self.clusters,
-                    clusters,
-                    styles,
-                    &mut self.flow_slot_scratch,
-                    u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?,
-                    max_lines,
-                    max_slots_per_band,
-                    |handle| shaper.font_metrics(handle),
-                    |stack_handle| {
-                        font_stacks
-                            .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                            .ok()
-                            .and_then(|index| font_stacks[index].fonts.first().copied())
-                            .and_then(|handle| {
-                                font_bindings
-                                    .iter()
-                                    .find(|binding| binding.handle == handle)
-                                    .map(|binding| binding.shaping_handle)
-                            })
-                    },
-                )?
+            && self.pending_flow_layout.rebuild_until_state_converges(
+                &self.flow_layout,
+                geometry,
+                &self.clusters,
+                clusters,
+                styles,
+                &mut self.flow_slot_scratch,
+                u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?,
+                max_lines,
+                max_slots_per_band,
+                |handle| shaper.font_metrics(handle),
+                |stack_handle| {
+                    font_stacks
+                        .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                        .ok()
+                        .and_then(|index| font_stacks[index].fonts.first().copied())
+                        .and_then(|handle| {
+                            font_bindings
+                                .iter()
+                                .find(|binding| binding.handle == handle)
+                                .map(|binding| binding.shaping_handle)
+                        })
+                },
+            )?
         {
             self.flow_layout_prepared = true;
             return Ok(());
@@ -3641,6 +3657,27 @@ mod tests {
         assert!(paragraph.text.is_empty());
         assert!(paragraph.unicode.grapheme_boundaries().is_empty());
         assert!(paragraph.bidi.levels.is_empty());
+    }
+
+    #[test]
+    fn ascii_text_reuse_does_not_suppress_an_independent_bidi_invalidation() {
+        let mut paragraph = ParagraphState::default();
+        paragraph.text = "abc".encode_utf16().collect();
+        paragraph.pending_text = "axc".encode_utf16().collect();
+        paragraph.text_prepared = true;
+        paragraph.text_edit = Some(TextEdit {
+            old_start: 1,
+            old_end: 2,
+            new_end: 2,
+        });
+        paragraph.style_invalidation.bidi = true;
+        paragraph.unicode.analyze(&paragraph.text).unwrap();
+
+        paragraph.prepare_unicode().unwrap();
+        assert!(paragraph.unicode_reused_for_text_edit);
+        paragraph.prepare_bidi().unwrap();
+        assert!(paragraph.bidi_prepared);
+        assert_eq!(paragraph.pending_bidi.paragraph_levels, [0]);
     }
 
     #[test]
