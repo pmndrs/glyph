@@ -2,6 +2,11 @@
 
 ## 2026-08-09
 
+- **Started per-physical-buffer dirty-range costing without changing publication** — Added a stride-specific Rust
+  coalescer with exact tests for divergent narrow/wide gap decisions, fragmentation and 75% full-live promotion, zero
+  stride, and overflow. Existing ordered/stable callers remain on the compatibility wrapper until the next atomic
+  checkpoint, so no upload or frame-time gain is claimed.
+
 - **Moved ellipsis and its real boundary reshape into the Rust frame transaction** — Only truncated flow threads build a
   retained boundary arena; ordinary reflow retains zero boundary reshapes. Font-stack ellipsis selection, complete
   no-wrap overflow, narrowed final-tail context, spacing, stable glyph identity, positioning, semantic inspection, and

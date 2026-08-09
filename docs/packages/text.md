@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:dcec3be38cc1cc058965b8e7593cedea1683c5594b4465a221100fe2cec724ce'
+source_digest: 'sha256:52739ee05c6056275b8899dc371771186cc210a99e265198567c0a3aaefec2e6'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -190,7 +190,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T13:43:37Z'
+  at: '2026-08-09T13:51:48Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -1030,6 +1030,12 @@ run noise, and sub-0.15 ms differences support only a performance-adjacent claim
 the adjacent lazy-origin-index and Bitmap resource-selection fixes, changes optimized Wasm from
 1,101,079 / 414,917 / 328,164 to 1,114,718 / 420,714 / 333,743 raw/gzip/Brotli bytes; that aggregate delta is not
 attributed to ellipsis alone.
+
+Dirty-range refinement begins with one stride-specific Rust coalescing primitive. It costs gaps, backend-call penalty,
+fragmentation, and full-live promotion for one physical buffer and rejects zero-stride or overflowing arithmetic.
+Focused tests prove that identical record ranges make different decisions for 16-byte and 64-byte streams. Existing
+ordered and stable publishers still call the program-wide compatibility wrapper at this checkpoint, so this is a
+tested implementation seam rather than a claimed upload or frame-time improvement.
 
 Live Paragraph Stress profiling also found two renderer-integration defects independent of shaping invalidation. The
 Three executor rebuilt a per-glyph origin lookup object graph after every plan application even though only presentation

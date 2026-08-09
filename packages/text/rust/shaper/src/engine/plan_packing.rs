@@ -229,14 +229,26 @@ pub fn coalesce_ranges(
     capability: &super::policy::CapabilitySet,
     live_records: u32,
 ) -> Result<(), PackingError> {
-    if ranges.is_empty() {
-        return Ok(());
-    }
     let bytes_per_record = program.buffers.iter().try_fold(0_u32, |total, schema| {
         total
             .checked_add(u32::from(schema.stride))
             .ok_or(PackingError::ArithmeticOverflow)
     })?;
+    coalesce_buffer_ranges(ranges, bytes_per_record, capability, live_records)
+}
+
+pub fn coalesce_buffer_ranges(
+    ranges: &mut alloc::vec::Vec<RecordRange>,
+    bytes_per_record: u32,
+    capability: &super::policy::CapabilitySet,
+    live_records: u32,
+) -> Result<(), PackingError> {
+    if ranges.is_empty() {
+        return Ok(());
+    }
+    if bytes_per_record == 0 {
+        return Err(PackingError::InvalidIdentity);
+    }
     let accepted_gap = capability
         .coalesce_gap_bytes
         .max(capability.range_call_penalty_bytes);
@@ -304,4 +316,84 @@ fn lcm(left: u32, right: u32) -> Result<u32, PackingError> {
     left.checked_div(gcd(left, right))
         .and_then(|value| value.checked_mul(right))
         .ok_or(PackingError::ArithmeticOverflow)
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::vec;
+
+    use super::{PackingError, RecordRange, coalesce_buffer_ranges};
+    use crate::engine::policy::{CapabilitySet, CapabilitySetId};
+
+    fn capability() -> CapabilitySet {
+        CapabilitySet {
+            id: CapabilitySetId(1),
+            flags: 0,
+            max_buffer_bytes: u32::MAX,
+            update_alignment: 4,
+            coalesce_gap_bytes: 128,
+            range_call_penalty_bytes: 256,
+            max_buffers_per_draw: 16,
+            max_resources_per_draw: 16,
+            max_indirect_draws: 1,
+            fragmentation_budget: 8,
+            whole_buffer_threshold_basis_points: 7_500,
+        }
+    }
+
+    #[test]
+    fn physical_buffer_stride_controls_gap_coalescing() {
+        let mut narrow = vec![
+            RecordRange { start: 0, end: 1 },
+            RecordRange { start: 10, end: 11 },
+        ];
+        let mut wide = narrow.clone();
+
+        coalesce_buffer_ranges(&mut narrow, 16, &capability(), 100).unwrap();
+        coalesce_buffer_ranges(&mut wide, 64, &capability(), 100).unwrap();
+
+        assert_eq!(narrow, [RecordRange { start: 0, end: 11 }]);
+        assert_eq!(
+            wide,
+            [
+                RecordRange { start: 0, end: 1 },
+                RecordRange { start: 10, end: 11 },
+            ]
+        );
+    }
+
+    #[test]
+    fn physical_buffer_cost_promotes_fragmented_and_expensive_updates() {
+        let mut fragmented = (0..9)
+            .map(|index| RecordRange {
+                start: index * 10,
+                end: index * 10 + 1,
+            })
+            .collect();
+        let mut expensive = vec![RecordRange { start: 0, end: 80 }];
+
+        coalesce_buffer_ranges(&mut fragmented, 16, &capability(), 100).unwrap();
+        coalesce_buffer_ranges(&mut expensive, 16, &capability(), 100).unwrap();
+
+        assert_eq!(fragmented, [RecordRange { start: 0, end: 100 }]);
+        assert_eq!(expensive, [RecordRange { start: 0, end: 100 }]);
+    }
+
+    #[test]
+    fn physical_buffer_cost_rejects_zero_stride_and_arithmetic_overflow() {
+        let mut range = vec![RecordRange { start: 0, end: 1 }];
+        assert_eq!(
+            coalesce_buffer_ranges(&mut range, 0, &capability(), 1),
+            Err(PackingError::InvalidIdentity)
+        );
+
+        let mut overflow = vec![RecordRange {
+            start: 0,
+            end: u32::MAX,
+        }];
+        assert_eq!(
+            coalesce_buffer_ranges(&mut overflow, 2, &capability(), u32::MAX),
+            Err(PackingError::ArithmeticOverflow)
+        );
+    }
 }
