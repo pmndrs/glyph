@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6d1fd8d4b1d3f4ace288388723ae75556602c8aefabe25527e2fec64b2b699aa'
+source_digest: 'sha256:7a8fc766c273b8e0eb5fa8c2b6367a0dedc25e3ea99684e10e696bd25b7ef103'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -805,6 +805,11 @@ remain on `EngineSession`, while the full text/style/Unicode/bidi/shaping/cluste
 one `ParagraphState`. This preserves the existing single child while making the next map conversion explicit and
 testable. All 124 Rust unit tests pass. The optimized Wasm is 1,073,179 raw / 403,475 gzip / 321,149 Brotli bytes,
 +56 / +44 / +232 over the paragraph-control checkpoint; no latency claim is attached to this ownership-only move.
+Stable glyph IDs and semantic content revisions now allocate from transaction-local counters rooted in the owning
+`EngineSession`, then commit only after shared-plan publication succeeds. `ParagraphState` retains its identity indexes
+but no longer owns counter namespaces, preventing equal child-local ordinals from aliasing in one planner. The
+single-child behavior remains byte-identical; the optimized Wasm is 1,073,074 raw / 403,537 gzip / 321,046 Brotli bytes
+(-105 / +62 / -103 versus the ownership split), which is compression/code-layout noise rather than a size claim.
 Adjacent
 8-warmup/31-sample Bitmap column-resize medians are 4.083 ms before and 4.078 ms after the rebuilt module, with 5.8% and
 6.1% RSD; this supports no speedup claim and exposes no material regression. Optimized Wasm is 1,070,685 / 402,154 /

@@ -85,6 +85,10 @@ struct EngineSession {
     acknowledged_publication_generation: u32,
     policy_binding: Option<PolicyBinding>,
     plan: RenderPlanCompiler,
+    next_glyph_id: u32,
+    pending_next_glyph_id: u32,
+    next_content_revision: u32,
+    pending_next_content_revision: u32,
     paragraph: ParagraphState,
 }
 
@@ -112,10 +116,6 @@ struct ParagraphState {
     clusters: ClusterArena,
     pending_clusters: ClusterArena,
     glyph_identity_index: IdentityIndex,
-    next_glyph_id: u32,
-    pending_next_glyph_id: u32,
-    next_content_revision: u32,
-    pending_next_content_revision: u32,
     geometry: FlowGeometryArena,
     pending_geometry: FlowGeometryArena,
     flow_layout: FlowLayoutArena,
@@ -552,6 +552,8 @@ impl TextEngine {
         // A completed renderer fence is external monotonic state. It remains accepted even if
         // plan preparation or publication later aborts.
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
+        let mut next_glyph_id = session.next_glyph_id.max(1);
+        let mut next_content_revision = session.next_content_revision.max(1);
         let paragraph = &mut session.paragraph;
         paragraph.prepare_text(request.text_mutations)?;
         if let Err(error) = paragraph.prepare_styles(request.style_mutations, |handle| {
@@ -589,7 +591,7 @@ impl TextEngine {
                 paragraph.abort_shaping_runs();
                 return Err(error);
             }
-            if let Err(error) = paragraph.prepare_clusters(shaper) {
+            if let Err(error) = paragraph.prepare_clusters(shaper, &mut next_glyph_id) {
                 paragraph.abort_text();
                 paragraph.abort_styles();
                 paragraph.abort_unicode();
@@ -635,7 +637,10 @@ impl TextEngine {
                 paragraph.abort_flow_layout();
                 return Err(error);
             }
-            if positioned_changed && let Err(error) = paragraph.prepare_positioned(shaper) {
+            if positioned_changed
+                && let Err(error) =
+                    paragraph.prepare_positioned(shaper, &mut next_content_revision)
+            {
                 paragraph.abort_text();
                 paragraph.abort_styles();
                 paragraph.abort_unicode();
@@ -717,6 +722,8 @@ impl TextEngine {
             paragraph.abort_positioned();
             return Err(plan_error(error));
         }
+        session.pending_next_glyph_id = next_glyph_id;
+        session.pending_next_content_revision = next_content_revision;
         Ok(PreparedUpdate {
             session_id: request.session_id,
             previous: session.revision,
@@ -770,6 +777,8 @@ impl TextEngine {
         session.paragraph.abort_geometry();
         session.paragraph.abort_flow_layout();
         session.paragraph.abort_positioned();
+        session.pending_next_glyph_id = 0;
+        session.pending_next_content_revision = 0;
         Ok(())
     }
 
@@ -795,6 +804,10 @@ impl TextEngine {
         session.paragraph.commit_geometry();
         session.paragraph.commit_flow_layout();
         session.paragraph.commit_positioned();
+        session.next_glyph_id = session.pending_next_glyph_id;
+        session.next_content_revision = session.pending_next_content_revision;
+        session.pending_next_glyph_id = 0;
+        session.pending_next_content_revision = 0;
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
@@ -1246,7 +1259,11 @@ impl ParagraphState {
         self.abort_shape();
     }
 
-    fn prepare_clusters(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
+    fn prepare_clusters(
+        &mut self,
+        shaper: &ShaperRegistry,
+        next_glyph_id: &mut u32,
+    ) -> Result<(), EngineError> {
         self.abort_clusters();
         if !self.shape_prepared && !self.style_invalidation.metrics {
             return Ok(());
@@ -1278,7 +1295,6 @@ impl ParagraphState {
         };
         if runs.is_empty() {
             self.pending_clusters.clear();
-            self.pending_next_glyph_id = self.next_glyph_id.max(1);
             self.clusters_prepared = true;
             return Ok(());
         }
@@ -1297,11 +1313,10 @@ impl ParagraphState {
             },
             |handle| shaper.font_metrics(handle),
         )?;
-        self.pending_next_glyph_id = self.next_glyph_id.max(1);
         if let Err(error) = self.pending_clusters.assign_stable_glyph_ids(
             &self.clusters,
             &mut self.glyph_identity_index,
-            &mut self.pending_next_glyph_id,
+            next_glyph_id,
         ) {
             self.abort_clusters();
             return Err(error);
@@ -1312,14 +1327,12 @@ impl ParagraphState {
 
     fn abort_clusters(&mut self) {
         self.pending_clusters.clear();
-        self.pending_next_glyph_id = 0;
         self.clusters_prepared = false;
     }
 
     fn commit_clusters(&mut self) {
         if self.clusters_prepared {
             core::mem::swap(&mut self.clusters, &mut self.pending_clusters);
-            self.next_glyph_id = self.pending_next_glyph_id;
         }
         self.abort_clusters();
     }
@@ -1423,7 +1436,11 @@ impl ParagraphState {
         self.abort_flow_layout();
     }
 
-    fn prepare_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
+    fn prepare_positioned(
+        &mut self,
+        shaper: &ShaperRegistry,
+        next_content_revision: &mut u32,
+    ) -> Result<(), EngineError> {
         self.abort_positioned();
         let text = if self.text_prepared {
             self.pending_text.as_slice()
@@ -1460,7 +1477,6 @@ impl ParagraphState {
         } else {
             &self.flow_layout
         };
-        self.pending_next_content_revision = self.next_content_revision.max(1);
         self.pending_positioned.build(
             &self.positioned,
             flow,
@@ -1471,7 +1487,7 @@ impl ParagraphState {
             styles,
             bidi,
             &mut self.glyph_identity_index,
-            &mut self.pending_next_content_revision,
+            next_content_revision,
             |handle| shaper.font_metrics(handle),
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
         )?;
@@ -1481,14 +1497,12 @@ impl ParagraphState {
 
     fn abort_positioned(&mut self) {
         self.pending_positioned.clear();
-        self.pending_next_content_revision = 0;
         self.positioned_prepared = false;
     }
 
     fn commit_positioned(&mut self) {
         if self.positioned_prepared {
             core::mem::swap(&mut self.positioned, &mut self.pending_positioned);
-            self.next_content_revision = self.pending_next_content_revision;
         }
         self.abort_positioned();
     }
