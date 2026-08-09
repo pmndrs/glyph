@@ -7,6 +7,7 @@ import type { TextRuntime } from '../text-runtime.js';
 import { firstPartyFontBindingBytes } from '../internal/font-binding-wire.js';
 import { firstPartyThreeRenderPolicyBytes } from '../internal/render-policy-wire.js';
 import { TextEngineHost, type TextEngineSession, type TextEngineSessionOptions } from '../internal/text-engine-host.js';
+import type { ThreeTextMaterial } from './material.js';
 
 const POLICY_HANDLE = 1;
 const MAX_U32 = 0xffff_ffff;
@@ -17,8 +18,19 @@ export interface ThreeTextEngineStackLease {
   release(): void;
 }
 
+export interface ThreeTextMaterialLease {
+  readonly id: number;
+  release(): void;
+}
+
 interface RetainedStack {
   readonly handle: number;
+  references: number;
+}
+
+interface RetainedMaterial {
+  readonly id: number;
+  readonly material: ThreeTextMaterial;
   references: number;
 }
 
@@ -33,9 +45,12 @@ export class ThreeTextEngineCoordinator {
   readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, number>();
   readonly #resources = new Map<number, ThreeTextEngineResource>();
   readonly #stacks = new Map<string, RetainedStack>();
+  readonly #materialHandles = new WeakMap<ThreeTextMaterial, RetainedMaterial>();
+  readonly #materials = new Map<number, RetainedMaterial>();
   #nextBindingHandle = 1;
   #nextStackHandle = 1;
   #nextSessionHandle = 1;
+  #nextMaterialHandle = 1;
   #disposed = false;
 
   constructor(runtime: Pick<TextRuntime, 'shaper'>) {
@@ -79,6 +94,34 @@ export class ThreeTextEngineCoordinator {
     return this.host.createSession({ ...options, handle: this.#allocateSessionHandle() });
   }
 
+  acquireMaterial(material: ThreeTextMaterial): ThreeTextMaterialLease {
+    this.#assertActive();
+    let retained = this.#materialHandles.get(material);
+    if (retained === undefined || retained.references === 0) {
+      retained = { id: this.#allocateMaterialHandle(), material, references: 0 };
+      this.#materialHandles.set(material, retained);
+      this.#materials.set(retained.id, retained);
+    }
+    retained.references += 1;
+    let released = false;
+    return {
+      id: retained.id,
+      release: () => {
+        if (released) return;
+        released = true;
+        retained.references -= 1;
+        if (retained.references === 0) this.#materials.delete(retained.id);
+      },
+    };
+  }
+
+  resolveMaterial(materialId: number): ThreeTextMaterial | undefined {
+    if (materialId === 0) return undefined;
+    const retained = this.#materials.get(materialId);
+    if (retained === undefined) throw new Error(`Three text command buffer references unknown material ${materialId}`);
+    return retained.material;
+  }
+
   resolveResource(referenceId: number): ThreeTextEngineResource {
     const resource = this.#resources.get(referenceId);
     if (resource === undefined) throw new Error(`Three text command buffer references unknown resource ${referenceId}`);
@@ -89,6 +132,7 @@ export class ThreeTextEngineCoordinator {
     if (this.#disposed) return;
     this.host.dispose();
     this.#stacks.clear();
+    this.#materials.clear();
     this.#disposed = true;
   }
 
@@ -143,6 +187,10 @@ export class ThreeTextEngineCoordinator {
 
   #allocateSessionHandle(): number {
     return allocateHandle(this.#nextSessionHandle, (next) => (this.#nextSessionHandle = next), 'text session');
+  }
+
+  #allocateMaterialHandle(): number {
+    return allocateHandle(this.#nextMaterialHandle, (next) => (this.#nextMaterialHandle = next), 'material');
   }
 
   #assertActive(): void {

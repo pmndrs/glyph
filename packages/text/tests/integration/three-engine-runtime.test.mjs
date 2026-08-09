@@ -21,6 +21,7 @@ import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 import { ThreeTextEnginePlanTarget } from '../../dist/three/engine-plan-target.js';
+import { defineTextMaterial } from '../../dist/three/material.js';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 const wasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
@@ -133,6 +134,21 @@ test('Three coordinator shares shaping data across technique bindings and refere
     disposed: false,
   };
   const coordinator = new ThreeTextEngineCoordinator({ shaper });
+  const materialCalls = [];
+  const primaryMaterial = coordinator.acquireMaterial(
+    defineTextMaterial((context) => {
+      materialCalls.push(`primary:${context.technique}`);
+      const material = context.createDefaultMaterial();
+      material.depthTest = true;
+      return material;
+    }),
+  );
+  const secondaryMaterial = coordinator.acquireMaterial(
+    defineTextMaterial((context) => {
+      materialCalls.push(`secondary:${context.technique}`);
+      return context.createDefaultMaterial();
+    }),
+  );
   const first = coordinator.acquireFontStack([bitmapFont, msdfFont]);
   const bitmapReference = coordinator.host.wireIdentities.resolve(bitmapFont.data.strikes[0].pages[0].resource);
   const msdfReference = coordinator.host.wireIdentities.resolve(msdfFont.data.resource);
@@ -181,7 +197,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
           root: true,
           value: {
             fontStackHandle: first.handle,
-            materialId: 7,
+            materialId: primaryMaterial.id,
             fontSize: 16,
             rasterPixelRatio: 1,
             foregroundRgba: 0xffff_ffff,
@@ -197,7 +213,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
           root: true,
           value: {
             fontStackHandle: first.handle,
-            materialId: 8,
+            materialId: secondaryMaterial.id,
             fontSize: 16,
             rasterPixelRatio: 1,
             foregroundRgba: 0xffff_ffff,
@@ -299,7 +315,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(draws.count, 2, 'cluster identity must not split compatible paragraph draws');
   assert.deepEqual(
     adjacentMaterialGroups(plan, draws, drawLayout.materialId),
-    [7, 8],
+    [primaryMaterial.id, secondaryMaterial.id],
     'Rust gathers child paragraphs into one ordered command buffer',
   );
   assert.deepEqual(
@@ -325,6 +341,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
   });
   target.apply(publication);
   assert.equal(target.draws.length, 2);
+  assert.equal(target.draws[0].material.depthTest, true);
+  assert.deepEqual(materialCalls, ['primary:pmndrs.bitmap', 'secondary:pmndrs.bitmap']);
   assert.deepEqual(
     target.draws.map((draw) => draw.parent),
     [drawRoot, drawRoot],
@@ -394,7 +412,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(reorderedDraws.count, 2);
   assert.deepEqual(
     adjacentMaterialGroups(reorderedPlan, reorderedDraws, drawLayout.materialId),
-    [8, 7],
+    [secondaryMaterial.id, primaryMaterial.id],
     'lifecycle-only reorder retains both paragraphs and changes shared draw order',
   );
   assert.deepEqual(
@@ -446,7 +464,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
           root: true,
           value: {
             fontStackHandle: first.handle,
-            materialId: 7,
+            materialId: primaryMaterial.id,
             fontSize: 16,
             rasterPixelRatio: 1,
             foregroundRgba: 0xffff_ffff,
@@ -497,7 +515,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
         root: true,
         value: {
           fontStackHandle: reversed.handle,
-          materialId: 7,
+          materialId: primaryMaterial.id,
           fontSize: 16,
           rasterPixelRatio: 1,
           foregroundRgba: 0xffff_ffff,
@@ -545,7 +563,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
         root: true,
         value: {
           fontStackHandle: slugFirst.handle,
-          materialId: 7,
+          materialId: primaryMaterial.id,
           fontSize: 16,
           rasterPixelRatio: 1,
           foregroundRgba: 0xffff_ffff,
@@ -564,6 +582,12 @@ test('Three coordinator shares shaping data across technique bindings and refere
     assert.ok(target.draws[0].geometry.getAttribute(`_pmndrsText_${policyBufferId}`));
   }
   assert.ok(target.gpuBytes > msdfGpuBytes, 'Slug page residency is included in command-buffer accounting');
+  assert.deepEqual(materialCalls, [
+    'primary:pmndrs.bitmap',
+    'secondary:pmndrs.bitmap',
+    'primary:pmndrs.msdf',
+    'primary:pmndrs.slug',
+  ]);
   assert.ok(target.gpuBytes > 0);
   target.dispose();
   session.dispose();
@@ -578,6 +602,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
   replacement.release();
   reversed.release();
   slugFirst.release();
+  primaryMaterial.release();
+  secondaryMaterial.release();
   coordinator.dispose();
   assert.throws(() => coordinator.acquireFontStack([bitmapFont]), /disposed/);
   shaper.dispose();
