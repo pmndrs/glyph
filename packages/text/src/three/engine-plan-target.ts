@@ -40,6 +40,13 @@ interface RetainedSlugPage extends ThreeSlugPageResources {
   dispose(): void;
 }
 
+interface MaterialRealization {
+  readonly material: THREE.NodeMaterial;
+  readonly resourceId: number;
+  readonly resourceGeneration: number;
+  readonly buffers: readonly Readonly<{ id: number; generation: number }>[];
+}
+
 export interface ThreeTextEnginePlanOwner {
   readonly drawRoot: THREE.Object3D;
   objectForTransform(transformId: number): THREE.Object3D;
@@ -56,7 +63,7 @@ export class ThreeTextEnginePlanTarget {
   readonly #bitmapTextures = new Map<number, THREE.DataTexture>();
   readonly #msdfAtlases = new Map<number, THREE.DataArrayTexture>();
   readonly #slugPages = new Map<number, RetainedSlugPage>();
-  readonly #materials = new Map<string, THREE.NodeMaterial>();
+  readonly #materials = new Map<string, MaterialRealization>();
   readonly #ownedMaterials = new WeakSet<THREE.NodeMaterial>();
   readonly #activeTransformIndices = new Set<number>();
   readonly #rootInverse = new THREE.Matrix4();
@@ -64,6 +71,7 @@ export class ThreeTextEnginePlanTarget {
   #transformAttribute = transformAttribute(1);
   #transformGeneration = 1;
   #draws: THREE.Mesh[] = [];
+  #drawKeys: string[] = [];
   #disposed = false;
 
   constructor(coordinator: ThreeTextEngineCoordinator, owner: ThreeTextEnginePlanOwner) {
@@ -142,7 +150,7 @@ export class ThreeTextEnginePlanTarget {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#disposeDraws();
-    for (const material of this.#materials.values()) material.dispose();
+    for (const realization of this.#materials.values()) realization.material.dispose();
     for (const texture of this.#bitmapTextures.values()) texture.dispose();
     for (const atlas of this.#msdfAtlases.values()) atlas.dispose();
     for (const page of this.#slugPages.values()) page.dispose();
@@ -260,6 +268,15 @@ export class ThreeTextEnginePlanTarget {
     const bufferLayout = textShaperAbi.layouts.engineBuffer;
     const resourceLayout = textShaperAbi.layouts.engineResource;
     const next: THREE.Mesh[] = [];
+    const nextKeys: string[] = [];
+    const previous = new Map<string, THREE.Mesh[]>();
+    for (let index = 0; index < this.#draws.length; index += 1) {
+      const key = this.#drawKeys[index]!;
+      const matches = previous.get(key) ?? [];
+      matches.push(this.#draws[index]!);
+      previous.set(key, matches);
+    }
+    const reused = new Set<THREE.Mesh>();
     const transformIndices = this.#collectTransformIndices(plan, draws, primitives, buffers);
     this.#ensureTransformCapacity(transformIndices);
     try {
@@ -286,28 +303,56 @@ export class ThreeTextEnginePlanTarget {
         if (resource === undefined) throw new Error('draw references an unknown retained resource');
         const materialId = plan.u32(draw + drawLayout.materialId);
         const material = this.#material(resource, byPolicyId, materialId);
+        const recordIndex = plan.u32(primitive + primitiveLayout.recordIndex);
+        const recordCount = plan.u16(primitive + primitiveLayout.recordCount);
+        const key = drawRealizationKey(
+          plan.u32(draw + drawLayout.programId),
+          resource,
+          materialId,
+          byPolicyId,
+          plan.u32(draw + drawLayout.clipId),
+          plan.u32(draw + drawLayout.depthKey),
+          this.#transformGeneration,
+        );
+        const reusable = previous.get(key)?.shift();
+        if (reusable !== undefined) {
+          if (!(reusable.geometry instanceof THREE.InstancedBufferGeometry)) {
+            throw new TypeError('retained text draw lost its instanced geometry');
+          }
+          reusable.geometry.instanceCount = recordCount;
+          reusable.userData.pmndrsTextRunStart = recordIndex;
+          reusable.renderOrder = this.#owner.renderOrderBase + index;
+          if (reusable.parent !== this.#owner.drawRoot) this.#owner.drawRoot.add(reusable);
+          reused.add(reusable);
+          next.push(reusable);
+          nextKeys.push(key);
+          continue;
+        }
         const geometry = unitQuad();
-        geometry.instanceCount = plan.u16(primitive + primitiveLayout.recordCount);
+        geometry.instanceCount = recordCount;
         for (const buffer of byPolicyId.values()) {
           geometry.setAttribute(`_pmndrsText_${buffer.policyBufferId}`, buffer.attribute);
         }
         geometry.setAttribute('_pmndrsTextTransforms', this.#transformAttribute);
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.userData.pmndrsTextRunStart = plan.u32(primitive + primitiveLayout.recordIndex);
+        mesh.userData.pmndrsTextRunStart = recordIndex;
         mesh.frustumCulled = false;
         mesh.renderOrder = this.#owner.renderOrderBase + index;
         this.#owner.drawRoot.add(mesh);
         next.push(mesh);
+        nextKeys.push(key);
       }
     } catch (error) {
       for (const mesh of next) {
+        if (reused.has(mesh)) continue;
         mesh.removeFromParent();
         mesh.geometry.dispose();
       }
       throw error;
     }
-    this.#disposeDraws();
+    this.#disposeDraws(reused);
     this.#draws = next;
+    this.#drawKeys = nextKeys;
     this.#activeTransformIndices.clear();
     for (const transformIndex of transformIndices) this.#activeTransformIndices.add(transformIndex);
   }
@@ -358,7 +403,7 @@ export class ThreeTextEnginePlanTarget {
     while (capacity < requiredRecords) capacity *= 2;
     this.#transformAttribute = transformAttribute(capacity / 4);
     this.#transformGeneration += 1;
-    for (const material of this.#materials.values()) material.dispose();
+    for (const realization of this.#materials.values()) realization.material.dispose();
     this.#materials.clear();
   }
 
@@ -382,8 +427,8 @@ export class ThreeTextEnginePlanTarget {
     const key = `${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
       .join(',')}:${transformIndices.id}:${transformIndices.generation}:transform:${this.#transformGeneration}`;
-    let material = this.#materials.get(key);
-    if (material !== undefined) return material;
+    const cached = this.#materials.get(key);
+    if (cached !== undefined) return cached.material;
     const texture = this.#bitmapTexture(resource.referenceId, page);
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
@@ -411,13 +456,13 @@ export class ThreeTextEnginePlanTarget {
       this.#transformAttribute,
       instance,
     );
-    material = this.#createMaterial(materialId, {
+    const material = this.#createMaterial(materialId, {
       technique: bitmap.id,
       shader,
       position,
       createDefaultMaterial: () => bitmapMaterial(shader, position),
     });
-    this.#materials.set(key, material);
+    this.#retainMaterial(key, material, resource, [...required, transformIndices]);
     return material;
   }
 
@@ -449,8 +494,8 @@ export class ThreeTextEnginePlanTarget {
     const key = `msdf:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
       .join(',')}:${transformIndices.id}:${transformIndices.generation}:transform:${this.#transformGeneration}`;
-    let material = this.#materials.get(key);
-    if (material !== undefined) return material;
+    const cached = this.#materials.get(key);
+    if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
     );
@@ -485,13 +530,13 @@ export class ThreeTextEnginePlanTarget {
       this.#transformAttribute,
       instance,
     );
-    material = this.#createMaterial(materialId, {
+    const material = this.#createMaterial(materialId, {
       technique: msdf.id,
       shader,
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#materials.set(key, material);
+    this.#retainMaterial(key, material, resource, [...required, transformIndices]);
     return material;
   }
 
@@ -549,8 +594,8 @@ export class ThreeTextEnginePlanTarget {
     const key = `slug:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
       .join(',')}:${transformIndices.id}:${transformIndices.generation}:transform:${this.#transformGeneration}`;
-    let material = this.#materials.get(key);
-    if (material !== undefined) return material;
+    const cached = this.#materials.get(key);
+    if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
     );
@@ -592,13 +637,13 @@ export class ThreeTextEnginePlanTarget {
       },
     );
     const position = transform.position(shader.position);
-    material = this.#createMaterial(materialId, {
+    const material = this.#createMaterial(materialId, {
       technique: slug.id,
       shader,
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#materials.set(key, material);
+    this.#retainMaterial(key, material, resource, [...required, transformIndices]);
     return material;
   }
 
@@ -653,14 +698,67 @@ export class ThreeTextEnginePlanTarget {
     return material;
   }
 
+  #retainMaterial(
+    key: string,
+    material: THREE.NodeMaterial,
+    resource: RetainedResource,
+    buffers: readonly RetainedBuffer[],
+  ): void {
+    this.#materials.set(key, {
+      material,
+      resourceId: resource.id,
+      resourceGeneration: resource.generation,
+      buffers: buffers.map(({ id, generation }) => ({ id, generation })),
+    });
+  }
+
+  #disposeMaterials(predicate: (realization: MaterialRealization) => boolean): void {
+    for (const [key, realization] of this.#materials) {
+      if (!predicate(realization)) continue;
+      realization.material.dispose();
+      this.#materials.delete(key);
+    }
+  }
+
+  #disposeResource(referenceId: number): void {
+    if ([...this.#resources.values()].some((resource) => resource.referenceId === referenceId)) return;
+    const bitmapTexture = this.#bitmapTextures.get(referenceId);
+    bitmapTexture?.dispose();
+    this.#bitmapTextures.delete(referenceId);
+    const msdfAtlas = this.#msdfAtlases.get(referenceId);
+    msdfAtlas?.dispose();
+    this.#msdfAtlases.delete(referenceId);
+    const retainedSlugPage = this.#slugPages.get(referenceId);
+    retainedSlugPage?.dispose();
+    this.#slugPages.delete(referenceId);
+  }
+
   #applyRetirements(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
     const layout = textShaperAbi.layouts.engineRetirement;
+    const kinds = textShaperAbi.engine.retirementKinds;
     for (let index = 0; index < table.count; index += 1) {
       const record = plan.record(table, index);
-      if (plan.u16(record + layout.kind) !== textShaperAbi.engine.retirementKinds.buffer) continue;
+      const kind = plan.u16(record + layout.kind);
       const id = plan.u32(record + layout.id);
       const generation = plan.u32(record + layout.generation);
-      if (this.#buffers.get(id)?.generation === generation) this.#buffers.delete(id);
+      if (kind === kinds.buffer) {
+        if (this.#buffers.get(id)?.generation !== generation) continue;
+        this.#disposeMaterials((realization) =>
+          realization.buffers.some((buffer) => buffer.id === id && buffer.generation === generation),
+        );
+        this.#buffers.delete(id);
+        continue;
+      }
+      if (kind === kinds.resource) {
+        const resource = this.#resources.get(id);
+        if (resource?.generation !== generation) continue;
+        this.#disposeMaterials(
+          (realization) =>
+            realization.resourceId === resource.id && realization.resourceGeneration === resource.generation,
+        );
+        this.#resources.delete(id);
+        this.#disposeResource(resource.referenceId);
+      }
     }
   }
 
@@ -672,13 +770,31 @@ export class ThreeTextEnginePlanTarget {
     return buffer;
   }
 
-  #disposeDraws(): void {
+  #disposeDraws(retained: ReadonlySet<THREE.Mesh> = new Set()): void {
     for (const draw of this.#draws) {
+      if (retained.has(draw)) continue;
       draw.removeFromParent();
       draw.geometry.dispose();
     }
     this.#draws = [];
+    this.#drawKeys = [];
   }
+}
+
+function drawRealizationKey(
+  programId: number,
+  resource: RetainedResource,
+  materialId: number,
+  buffers: ReadonlyMap<number, RetainedBuffer>,
+  clipId: number,
+  depthKey: number,
+  transformGeneration: number,
+): string {
+  const bufferKey = [...buffers]
+    .sort(([left], [right]) => left - right)
+    .map(([policyId, buffer]) => `${policyId}:${buffer.id}:${buffer.generation}`)
+    .join(',');
+  return `${programId}:${resource.id}:${resource.generation}:${materialId}:${clipId}:${depthKey}:${transformGeneration}:${bufferKey}`;
 }
 
 function bitmapMaterial(

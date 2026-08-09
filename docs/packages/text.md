@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:c78cc5ab00af32f4455e0fa37790706b1f080e75f43a0e2309ee84b7ba98e0f1'
+source_digest: 'sha256:ec1e94bdf0433862dd3c8bc9c9df6e2eef1d5c943f4cbdf46e65e36f7f092452'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -902,6 +902,14 @@ instances and Three owns their disposal. The compiled-Wasm fixture proves distin
 storage, reorder and coalescing reuse cached materials, and the same selected factory is instantiated once for each of
 Bitmap, MSDF, and Slug. The `TextGroup`/`Text`/span property route and fence-bounded retirement remain part of public
 cutover, so this checkpoint does not claim that authored materials are available from `Text` yet.
+
+The executor now bounds CPU/GPU realization residency from Rust retirement records. Retiring a physical buffer disposes
+only materials that depend on its exact generation; retiring a plan resource disposes its technique texture only after
+the final plan resource sharing that renderer reference leaves. Exact accounting in the compiled-Wasm fixture contains
+only current policy storage, the transform sidecar, and the current Bitmap/MSDF/Slug resource after each technique
+transition. Draw compatibility is range-independent: reorder retains exact meshes, geometries, and materials while
+updating `recordIndex`, count, and render order; coalescing retains the one compatible draw and removes only the other.
+Live WebGPU/WebGL2 submission still owns the final native-fence proof before public cutover.
 
 The replacement Rust engine now owns retained Unicode analysis for its frame transaction. The existing Unicode 17 generator emits both TypeScript and compact Rust Script/Script_Extensions partitions from one source. A no-std `unicode-segmentation` 1.13.3 iterator supplies extended grapheme boundaries; the engine maps them back to the public UTF-16 coordinate space, resolves contextual scripts in reusable flat arrays, and commits or aborts that derived arena with text and styles. Session reservation prewarms active and pending analysis storage, while unchanged text skips analysis. Retained UAX #9 products now form equal-level runs, and one interval sweep intersects them with resolved style and script items while skipping hard-break controls. Root direction remains paragraph-level state; nested stated directions carry a distinct override bit and force run parity. Primary-font HarfRust shaping consumes those runs inside `text_update` through borrowed retained language/features and writes glyph SoA directly into an A/B session arena; the legacy batch export shares the same prewarmed buffer and reusable feature scratch. A real-Inter compiled-Wasm test observes the shape-plan cache created by the frame call. The optimized shaper is 973,367 raw, 364,517 gzip, and 287,942 Brotli bytes at this checkpoint. Ordered fallback, layout, and nonempty plan output remain open, so this size evidence carries no complete-path frame latency claim.
 

@@ -423,10 +423,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
   );
   const previousDraws = [...target.draws];
   target.apply(reorderedPublication);
-  assert.ok(
-    previousDraws.every((draw) => draw.parent === null),
-    'superseded command-buffer draws detach',
-  );
+  assert.equal(target.draws[0], previousDraws[1], 'reorder retains the secondary draw object');
+  assert.equal(target.draws[1], previousDraws[0], 'reorder retains the primary draw object');
   assert.deepEqual(
     target.draws.map((draw) => draw.parent),
     [drawRoot, drawRoot],
@@ -435,6 +433,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
     target.draws.map((draw) => draw.renderOrder),
     [10, 11],
   );
+  const reorderedTargetDraws = [...target.draws];
   const coalescedPublication = session.update(
     compileTextEngineFrameUpdate({
       sessionId: session.handle,
@@ -478,6 +477,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(coalescedDraws.count, 1, 'same-material paragraphs coalesce across indexed transforms');
   assert.equal(coalescedPlan.u32(coalescedPlan.record(coalescedDraws, 0) + drawLayout.transformId), 0);
   target.apply(coalescedPublication);
+  assert.equal(target.draws[0], reorderedTargetDraws[1], 'coalescing retains the compatible primary draw');
+  assert.equal(reorderedTargetDraws[0].parent, null, 'coalescing retires only the incompatible secondary draw');
   assert.equal(target.draws.length, 1);
   assert.equal(target.draws[0].geometry.instanceCount, 6);
   const coalescedTransformIndices = target.draws[0].geometry.getAttribute('_pmndrsText_15').array;
@@ -533,7 +534,13 @@ test('Three coordinator shares shaping data across technique bindings and refere
   for (const policyBufferId of [1, 2, 3, 4, 5, 6, 7, 15]) {
     assert.ok(target.draws[0].geometry.getAttribute(`_pmndrsText_${policyBufferId}`));
   }
-  assert.ok(target.gpuBytes > bitmapGpuBytes, 'MSDF atlas residency is included in command-buffer accounting');
+  assert.equal(
+    target.gpuBytes,
+    textStorageBytes(target.draws) +
+      msdfFont.data.binding.width * msdfFont.data.binding.height * msdfFont.data.binding.layers * 4,
+    'retired Bitmap state is excluded and the live MSDF atlas is included',
+  );
+  assert.notEqual(target.gpuBytes, bitmapGpuBytes);
   const msdfGpuBytes = target.gpuBytes;
   const slugPublication = session.update(
     compileTextEngineFrameUpdate({
@@ -581,7 +588,17 @@ test('Three coordinator shares shaping data across technique bindings and refere
   for (const policyBufferId of [1, 2, 3, 4, 5, 6, 7, 15]) {
     assert.ok(target.draws[0].geometry.getAttribute(`_pmndrsText_${policyBufferId}`));
   }
-  assert.ok(target.gpuBytes > msdfGpuBytes, 'Slug page residency is included in command-buffer accounting');
+  const resourceLayout = textShaperAbi.layouts.engineResource;
+  const draw = slugPlan.record(slugDraws, 0);
+  const resource = slugPlan.record(slugPlan.table('resources'), slugPlan.u32(draw + drawLayout.resourceStart));
+  const slugResource = coordinator.resolveResource(slugPlan.u32(resource + resourceLayout.referenceId));
+  assert.equal(slugResource.technique, slug.id);
+  assert.equal(
+    target.gpuBytes,
+    textStorageBytes(target.draws) + slugPageGpuBytes(slugResource.page),
+    'retired MSDF state is excluded and the live Slug page is included',
+  );
+  assert.notEqual(target.gpuBytes, msdfGpuBytes);
   assert.deepEqual(materialCalls, [
     'primary:pmndrs.bitmap',
     'secondary:pmndrs.bitmap',
@@ -617,4 +634,26 @@ function adjacentMaterialGroups(plan, draws, materialOffset) {
     if (groups.at(-1) !== material) groups.push(material);
   }
   return groups;
+}
+
+function textStorageBytes(draws) {
+  const arrays = new Set();
+  for (const draw of draws) {
+    for (const [name, attribute] of Object.entries(draw.geometry.attributes)) {
+      if (name.startsWith('_pmndrsText')) arrays.add(attribute.array);
+    }
+  }
+  return [...arrays].reduce((bytes, array) => bytes + array.byteLength, 0);
+}
+
+function slugPageGpuBytes(page) {
+  const references = new Uint16Array(
+    page.referenceBytes.buffer,
+    page.referenceBytes.byteOffset,
+    page.referenceBytes.byteLength / 2,
+  );
+  const texels = Math.ceil(references.length / 2);
+  const width = Math.min(page.referenceWidth, texels);
+  const height = Math.ceil(texels / width);
+  return page.curveBytes.byteLength + page.headerBytes.byteLength + width * height * 4;
 }
