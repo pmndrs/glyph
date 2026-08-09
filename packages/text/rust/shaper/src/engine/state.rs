@@ -351,30 +351,7 @@ impl TextEngine {
             return Err(EngineError::SessionConflict);
         }
         let mut session = EngineSession::default();
-        session.paragraph.styles.reserve_default()?;
-        session.paragraph.pending_styles.reserve_default()?;
-        session.paragraph.resolved_styles.reserve_default()?;
-        session.paragraph.pending_resolved_styles.reserve_default()?;
-        session
-            .paragraph
-            .style_mutation_scratch
-            .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        session
-            .paragraph
-            .style_order_scratch
-            .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        session
-            .paragraph
-            .style_nesting_scratch
-            .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        session
-            .paragraph
-            .style_resolution_scratch
-            .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
-            .map_err(|_| EngineError::ResultTooLarge)?;
+        session.paragraph.initialize()?;
         self.sessions.insert(handle, session);
         Ok(())
     }
@@ -392,38 +369,7 @@ impl TextEngine {
             .sessions
             .get_mut(&handle)
             .ok_or(EngineError::SessionMissing)?;
-        let paragraph = &mut session.paragraph;
-        reserve_text_buffer(&mut paragraph.text, capacity)?;
-        reserve_text_buffer(&mut paragraph.pending_text, capacity)?;
-        reserve_vec(&mut paragraph.text_unit_ids, capacity)?;
-        reserve_vec(&mut paragraph.pending_text_unit_ids, capacity)?;
-        paragraph.unicode.reserve(capacity).map_err(unicode_error)?;
-        paragraph
-            .pending_unicode
-            .reserve(capacity)
-            .map_err(unicode_error)?;
-        paragraph.bidi.reserve(capacity).map_err(bidi_error)?;
-        paragraph.pending_bidi.reserve(capacity).map_err(bidi_error)?;
-        paragraph.shaping_runs.reserve(capacity)?;
-        paragraph.pending_shaping_runs.reserve(capacity)?;
-        let glyph_capacity = capacity.saturating_mul(2);
-        paragraph.shape.reserve(glyph_capacity)?;
-        paragraph.pending_shape.reserve(glyph_capacity)?;
-        paragraph.clusters.reserve(capacity)?;
-        paragraph.pending_clusters.reserve(capacity)?;
-        paragraph.flow_layout.reserve(capacity, 1)?;
-        paragraph.pending_flow_layout.reserve(capacity, 1)?;
-        paragraph.positioned.reserve(glyph_capacity)?;
-        paragraph.pending_positioned.reserve(glyph_capacity)?;
-        paragraph
-            .glyph_identity_index
-            .prepare(glyph_capacity)
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        reserve_vec(&mut paragraph.fallback_spans, capacity)?;
-        reserve_vec(&mut paragraph.pending_fallback_spans, capacity)?;
-        reserve_vec(&mut paragraph.fallback_span_scratch, capacity)?;
-        reserve_vec(&mut paragraph.fallback_cluster_scratch, glyph_capacity)?;
-        Ok(())
+        session.paragraph.reserve_text(capacity)
     }
 
     pub(crate) fn session_revision(&self, handle: u32) -> Result<SessionRevision, EngineError> {
@@ -856,6 +802,48 @@ impl TextEngine {
 }
 
 impl ParagraphState {
+    fn initialize(&mut self) -> Result<(), EngineError> {
+        self.styles.reserve_default()?;
+        self.pending_styles.reserve_default()?;
+        self.resolved_styles.reserve_default()?;
+        self.pending_resolved_styles.reserve_default()?;
+        reserve_vec(&mut self.style_mutation_scratch, DEFAULT_STYLE_CAPACITY)?;
+        reserve_vec(&mut self.style_order_scratch, DEFAULT_STYLE_CAPACITY)?;
+        reserve_vec(&mut self.style_nesting_scratch, DEFAULT_STYLE_CAPACITY)?;
+        reserve_vec(&mut self.style_resolution_scratch, DEFAULT_STYLE_CAPACITY)
+    }
+
+    fn reserve_text(&mut self, capacity: usize) -> Result<(), EngineError> {
+        reserve_text_buffer(&mut self.text, capacity)?;
+        reserve_text_buffer(&mut self.pending_text, capacity)?;
+        reserve_vec(&mut self.text_unit_ids, capacity)?;
+        reserve_vec(&mut self.pending_text_unit_ids, capacity)?;
+        self.unicode.reserve(capacity).map_err(unicode_error)?;
+        self.pending_unicode
+            .reserve(capacity)
+            .map_err(unicode_error)?;
+        self.bidi.reserve(capacity).map_err(bidi_error)?;
+        self.pending_bidi.reserve(capacity).map_err(bidi_error)?;
+        self.shaping_runs.reserve(capacity)?;
+        self.pending_shaping_runs.reserve(capacity)?;
+        let glyph_capacity = capacity.saturating_mul(2);
+        self.shape.reserve(glyph_capacity)?;
+        self.pending_shape.reserve(glyph_capacity)?;
+        self.clusters.reserve(capacity)?;
+        self.pending_clusters.reserve(capacity)?;
+        self.flow_layout.reserve(capacity, 1)?;
+        self.pending_flow_layout.reserve(capacity, 1)?;
+        self.positioned.reserve(glyph_capacity)?;
+        self.pending_positioned.reserve(glyph_capacity)?;
+        self.glyph_identity_index
+            .prepare(glyph_capacity)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        reserve_vec(&mut self.fallback_spans, capacity)?;
+        reserve_vec(&mut self.pending_fallback_spans, capacity)?;
+        reserve_vec(&mut self.fallback_span_scratch, capacity)?;
+        reserve_vec(&mut self.fallback_cluster_scratch, glyph_capacity)
+    }
+
     fn prepare_text(
         &mut self,
         mutations: super::semantic_wire::TextMutationBatch<'_>,
