@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
-  committedTextLayout,
+  committedTextMetrics,
   paintColor,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
@@ -197,7 +197,7 @@ export function animateZoomTextEntries(
 }
 
 function layoutZoomTextEntry(entry: ComparisonWorkloadEntry, viewportWidth: number, viewportHeight: number): void {
-  const layout = committedTextLayout(entry.text);
+  const layout = committedTextMetrics(entry.text);
   entry.text.position.set(-layout.width / 2, layout.height / 2, 0);
   entry.node.position.set(viewportWidth / 2, -viewportHeight / 2, 0);
   entry.node.scale.setScalar(1);

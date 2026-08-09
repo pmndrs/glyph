@@ -755,9 +755,17 @@ The render plan contains:
 - **retirement:** the earliest generation after which resources, slots, and output bytes may be reused.
 
 An explicitly requested semantic query may share the immutable A/B publication and its lifetime, but it is a sidecar,
-not a render-plan table and not an input to the renderer executor. The first admitted view contains one paragraph
-measurement record plus its line records; its mask is zero on ordinary rendering updates. Glyph inspection, caret,
-selection, hit testing, accessibility, and diagnostics must each prove a bounded record shape before admission.
+not a render-plan table and not an input to the renderer executor. The measurement view contains one paragraph summary
+plus its line records. The separately requested inspection view adds semantic glyph identity, font, cluster, size,
+flags, and shaped origins, including glyphs such as spaces that deliberately produce no render instance. Both masks are
+zero on ordinary rendering updates. Caret, selection, hit testing, accessibility, and diagnostics must each prove a
+bounded record shape before admission.
+
+A policy may request a renderer augmentation without moving semantic layout into the plan. The first-party Three policy
+writes each renderable glyph's session-global stable ID to one compact `u32` stream beside the technique's existing
+origin stream. Three uses that directed identifier only to implement optional presentation motion over retained GPU
+records. It restores authoritative target origins before every later plan application, so the Rust command buffer remains
+the sole render-state transition and no renderer-side candidate/current target state machine is required.
 
 The initial adapter lowers this IR to Three attributes, TSL storage nodes, and draws. The same graph runs through
 Three's WebGPU backend and forced WebGL2 backend. In Three 0.185.1, WebGL PBO setup replaces the supplied typed array with

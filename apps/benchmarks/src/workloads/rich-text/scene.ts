@@ -5,7 +5,7 @@ import type { RasterTechnique } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR_CSS, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
-  committedTextLayout,
+  committedTextMetrics,
   exactWidth,
   type ComparisonWorkloadEntry,
   type WorkloadFont,
@@ -311,7 +311,7 @@ export function layoutRichTextEntries(
   viewportWidth: number,
   viewportHeight: number,
 ): void {
-  const layouts = entries.map(({ text }) => committedTextLayout(text));
+  const layouts = entries.map(({ text }) => committedTextMetrics(text));
   if (layouts.length === 0) return;
   const stackHeight =
     layouts.reduce((total, layout) => total + layout.height, 0) + RICH_TEXT_PARAGRAPH_GAP * (layouts.length - 1);

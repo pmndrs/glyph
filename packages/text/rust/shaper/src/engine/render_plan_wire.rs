@@ -12,9 +12,9 @@ use crate::{
         RetirementRecord,
     },
     engine::semantic_view::{
-        SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT, SEMANTIC_INSERTED_GLYPH,
-        SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SEMANTIC_RUN, SEMANTIC_SELECTION,
-        SemanticRecord,
+        SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT, SEMANTIC_GLYPH,
+        SEMANTIC_INSERTED_GLYPH, SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SEMANTIC_RUN,
+        SEMANTIC_SELECTION, SemanticRecord,
     },
 };
 
@@ -213,8 +213,10 @@ fn validate_plan(plan: RenderPlanView<'_>, semantic_views: &[SemanticRecord]) ->
                     | SEMANTIC_SELECTION
                     | SEMANTIC_INSERTED_GLYPH
                     | SEMANTIC_PARAGRAPH_MEASUREMENT
+                    | SEMANTIC_GLYPH
             )
-            || record.text_start > record.text_end
+            || (!matches!(record.kind, SEMANTIC_PARAGRAPH_MEASUREMENT | SEMANTIC_GLYPH)
+                && record.text_start > record.text_end)
             || !finite4(
                 record.inline_start,
                 record.block_start,

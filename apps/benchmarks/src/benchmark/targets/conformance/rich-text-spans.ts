@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique, LoadedFont, LoadedFontRequest, ParagraphLayout } from '@pmndrs/text';
+import type { LoadedFont, LoadedFontRequest, ParagraphLayout } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
@@ -296,7 +296,7 @@ function measureCase(
     if (failure !== undefined) {
       throw new Error(`${caseId} failed to publish: ${String(failure)}`, { cause: failure });
     }
-    const layout = text.layout;
+    const layout = text.inspectLayout();
     if (layout === undefined) throw new Error(`${caseId} has no layout`);
     return readEvidence(text, layout);
   } finally {

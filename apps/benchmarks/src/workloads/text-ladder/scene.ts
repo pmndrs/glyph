@@ -5,7 +5,7 @@ import type { RasterConformanceSpecimen } from '../../benchmark/font-fixtures';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
-  committedTextLayout,
+  committedTextMetrics,
   paintColor,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
@@ -154,7 +154,7 @@ export function setTextLadderScenePosition(
 }
 
 export function layoutTextLadderEntries(entries: readonly ComparisonWorkloadEntry[], viewportWidth: number): void {
-  const layouts = entries.map(({ text }) => committedTextLayout(text));
+  const layouts = entries.map(({ text }) => committedTextMetrics(text));
   const widestLine = layouts.reduce((maximum, layout) => Math.max(maximum, layout.width), 0);
   const centeredColumnWidth = Math.min(widestLine, viewportWidth * 0.94);
   const x = Math.max(LADDER_INSET_CSS_PX, (viewportWidth - centeredColumnWidth) / 2);
@@ -177,7 +177,7 @@ export function animateTextLadderScene(
 ): void {
   const finalEntry = entries[entries.length - 1];
   if (finalEntry === undefined) return;
-  const layout = committedTextLayout(finalEntry.text);
+  const layout = committedTextMetrics(finalEntry.text);
   setTextLadderScenePosition(positionScratch, {
     animationSpeed: configuration.animationSpeed,
     elapsedMs,

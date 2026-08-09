@@ -21,6 +21,18 @@ export interface ParagraphMeasurement {
 }
 
 /**
+ * Bounded aggregate inspection of one retained layout. Unlike `ParagraphLayout`, this contains no per-glyph arrays and
+ * is suitable for positioning UI, telemetry, and missing-glyph admission checks.
+ */
+export interface ParagraphLayoutSummary extends ParagraphMeasurement {
+  /** Positioned glyphs retained by layout, including non-rendering glyphs such as spaces. */
+  readonly glyphCount: number;
+  readonly lineCount: number;
+  /** Positioned `.notdef` glyphs (`glyphId === 0`). */
+  readonly missingGlyphCount: number;
+}
+
+/**
  * Positioned glyph output in paragraph-local coordinates. The origin is the
  * paragraph box's top-left corner; positive X is right and positive Y is down.
  */
@@ -40,6 +52,11 @@ export interface ParagraphLayout extends ParagraphMeasurement {
   readonly lineGlyphCounts: Uint32Array;
   readonly lineBaselines: Float32Array;
   readonly lineAdvances: Float32Array;
+}
+
+/** Explicit demand-shaped inspection of retained Rust layout, including stable identities for directed augmentation. */
+export interface ParagraphLayoutInspection extends ParagraphLayout, ParagraphLayoutSummary {
+  readonly glyphStableIds: Uint32Array;
 }
 
 export interface FontSlotRecord {

@@ -6,7 +6,7 @@ import { createOklabColorCycle } from '../shared/oklab-color-cycle';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 
 import {
-  committedTextLayout,
+  committedTextMetrics,
   exactWidth,
   paintColor,
   type ComparisonWorkloadEntry,
@@ -102,7 +102,7 @@ export function layoutOffAxis3dEntries(
 ): void {
   const entry = entries[0];
   if (entry === undefined) return;
-  const layout = committedTextLayout(entry.text);
+  const layout = committedTextMetrics(entry.text);
   entry.text.position.set(-layout.width / 2, layout.height / 2, 0);
   entry.node.position.set(viewportWidth * (0.5 + OFF_AXIS_HORIZONTAL_BIAS_RATIO), -viewportHeight / 2, 0);
 }

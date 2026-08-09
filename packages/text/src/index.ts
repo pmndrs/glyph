@@ -36,7 +36,13 @@ export { defineFont } from './font.js';
 
 export type { FontHandle, FontKey, FontSlot, LocalGlyphId, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
 
-export type { FontSlotRecord, ParagraphLayout, ParagraphMeasurement } from './layout.js';
+export type {
+  FontSlotRecord,
+  ParagraphLayout,
+  ParagraphLayoutInspection,
+  ParagraphLayoutSummary,
+  ParagraphMeasurement,
+} from './layout.js';
 
 export type {
   FontLoadDiagnostic,

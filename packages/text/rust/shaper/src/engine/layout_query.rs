@@ -10,7 +10,10 @@ use super::{
     flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
     flow_geometry::FlowGeometryArena,
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
-    semantic_view::{SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SemanticRecord},
+    positioning::SemanticGlyph,
+    semantic_view::{
+        SEMANTIC_GLYPH, SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SemanticRecord,
+    },
 };
 
 pub(crate) const MEASUREMENT_FLAG_OVERFLOWED: u16 = 1;
@@ -22,6 +25,10 @@ pub(crate) fn append_measurement(
     cluster_count: usize,
     geometry: &FlowGeometryArena,
     flow: &FlowLayoutArena,
+    positioned_glyphs: &[SemanticGlyph],
+    semantic_line_glyph_starts: &[u32],
+    semantic_line_glyph_counts: &[u32],
+    include_glyphs: bool,
 ) -> Result<(), EngineError> {
     let constraint = geometry
         .constraints
@@ -30,13 +37,39 @@ pub(crate) fn append_measurement(
     if constraint.paragraph_id != paragraph_id {
         return Err(EngineError::InvalidRequest);
     }
+    if semantic_line_glyph_starts.len() != flow.lines.len()
+        || semantic_line_glyph_counts.len() != flow.lines.len()
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    let mut line_count = 0_usize;
+    for line in flow.lines.iter().copied() {
+        if line.flow_thread_id == constraint.flow_thread_id
+            && !line_fragments(flow, line)?.is_empty()
+        {
+            line_count = line_count
+                .checked_add(1)
+                .ok_or(EngineError::ResultTooLarge)?;
+        }
+    }
+    let reserve = line_count
+        .saturating_add(1)
+        .saturating_add(if include_glyphs {
+            positioned_glyphs.len()
+        } else {
+            0
+        });
     target
-        .try_reserve(flow.lines.len().saturating_add(1))
+        .try_reserve(reserve)
         .map_err(|_| EngineError::ResultTooLarge)?;
 
     let summary_index = target.len();
     let line_start =
         u32::try_from(summary_index.saturating_add(1)).map_err(|_| EngineError::ResultTooLarge)?;
+    let glyph_record_start = summary_index
+        .checked_add(1)
+        .and_then(|value| value.checked_add(line_count))
+        .ok_or(EngineError::ResultTooLarge)?;
     target.push(SemanticRecord::default());
     let mut content_width = 0.0_f64;
     let mut content_height = 0.0_f64;
@@ -73,6 +106,19 @@ pub(crate) fn append_measurement(
             parent_id: paragraph_id,
             text_start: first.line.text_start,
             text_end: last.line.text_end,
+            item_start: if include_glyphs {
+                u32::try_from(glyph_record_start)
+                    .map_err(|_| EngineError::ResultTooLarge)?
+                    .checked_add(semantic_line_glyph_starts[index])
+                    .ok_or(EngineError::ResultTooLarge)?
+            } else {
+                0
+            },
+            item_count: if include_glyphs {
+                semantic_line_glyph_counts[index]
+            } else {
+                0
+            },
             block_start: finite_f32(line.block_start + line.baseline)?,
             inline_extent: finite_nonnegative_f32(advance)?,
             block_extent: finite_nonnegative_f32(line.height)?,
@@ -80,12 +126,36 @@ pub(crate) fn append_measurement(
         });
     }
 
+    if include_glyphs {
+        if target.len() != glyph_record_start {
+            return Err(EngineError::InvalidRequest);
+        }
+        for glyph in positioned_glyphs {
+            target.push(SemanticRecord {
+                id: glyph.stable_id,
+                kind: SEMANTIC_GLYPH,
+                flags: glyph.flags,
+                parent_id: paragraph_id,
+                text_start: glyph.cluster,
+                text_end: glyph.font_handle,
+                item_start: u32::from(glyph.glyph_id),
+                inline_start: glyph.inline_origin,
+                block_start: glyph.block_origin,
+                inline_extent: glyph.font_size,
+                ..SemanticRecord::default()
+            });
+        }
+    }
+
     let width = resolve_axis(constraint.width_mode, constraint.width, content_width)?;
     let height = resolve_axis(constraint.height_mode, constraint.height, content_height)?;
     let overflowed = consumed_clusters < cluster_count
         || content_width > f64::from(width)
         || content_height > f64::from(height);
-    let line_count = target.len().saturating_sub(summary_index + 1);
+    let missing_glyph_count = positioned_glyphs
+        .iter()
+        .filter(|glyph| glyph.glyph_id == 0)
+        .count();
     target[summary_index] = SemanticRecord {
         id: paragraph_id,
         kind: SEMANTIC_PARAGRAPH_MEASUREMENT,
@@ -94,6 +164,9 @@ pub(crate) fn append_measurement(
         } else {
             0
         },
+        parent_id: u32::try_from(positioned_glyphs.len())
+            .map_err(|_| EngineError::ResultTooLarge)?,
+        text_start: u32::try_from(missing_glyph_count).map_err(|_| EngineError::ResultTooLarge)?,
         text_end: u32::try_from(text_length).map_err(|_| EngineError::ResultTooLarge)?,
         item_start: line_start,
         item_count: u32::try_from(line_count).map_err(|_| EngineError::ResultTooLarge)?,
@@ -183,12 +256,27 @@ mod tests {
             }],
         };
         let mut records = vec![];
-        append_measurement(&mut records, 7, 2, 2, &geometry, &flow).unwrap();
+        let positioned = [layout_glyph(3), layout_glyph(0)];
+        append_measurement(
+            &mut records,
+            7,
+            2,
+            2,
+            &geometry,
+            &flow,
+            &positioned,
+            &[0],
+            &[2],
+            false,
+        )
+        .unwrap();
 
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].kind, SEMANTIC_PARAGRAPH_MEASUREMENT);
         assert_eq!(records[0].id, 7);
         assert_eq!(records[0].flags, 0);
+        assert_eq!(records[0].parent_id, 2);
+        assert_eq!(records[0].text_start, 1);
         assert_eq!(records[0].item_start, 1);
         assert_eq!(records[0].item_count, 1);
         assert_eq!(records[0].inline_start, 20.0);
@@ -199,6 +287,28 @@ mod tests {
         assert_eq!(records[1].parent_id, 7);
         assert_eq!(records[1].block_start, 4.0);
         assert_eq!(records[1].inline_extent, 7.0);
+
+        let mut inspected = vec![];
+        append_measurement(
+            &mut inspected,
+            7,
+            2,
+            2,
+            &geometry,
+            &flow,
+            &positioned,
+            &[0],
+            &[2],
+            true,
+        )
+        .unwrap();
+        assert_eq!(inspected.len(), 4);
+        assert_eq!(inspected[1].item_start, 2);
+        assert_eq!(inspected[1].item_count, 2);
+        assert_eq!(inspected[2].kind, SEMANTIC_GLYPH);
+        assert_eq!(inspected[2].item_start, 3);
+        assert_eq!(inspected[3].kind, SEMANTIC_GLYPH);
+        assert_eq!(inspected[3].item_start, 0);
     }
 
     #[test]
@@ -234,7 +344,19 @@ mod tests {
             }],
         };
         let mut records = vec![];
-        append_measurement(&mut records, 7, 2, 2, &geometry, &flow).unwrap();
+        append_measurement(
+            &mut records,
+            7,
+            2,
+            2,
+            &geometry,
+            &flow,
+            &[],
+            &[0],
+            &[0],
+            false,
+        )
+        .unwrap();
 
         assert_eq!(records[0].flags, MEASUREMENT_FLAG_OVERFLOWED);
         assert_eq!(records[0].inline_start, 6.0);
@@ -263,6 +385,19 @@ mod tests {
             align: 1,
             overflow: 1,
             block_align: 1,
+        }
+    }
+
+    fn layout_glyph(glyph_id: u16) -> SemanticGlyph {
+        SemanticGlyph {
+            stable_id: u32::from(glyph_id) + 1,
+            font_handle: 1,
+            glyph_id,
+            cluster: 0,
+            flags: 0,
+            font_size: 16.0,
+            inline_origin: 0.0,
+            block_origin: 0.0,
         }
     }
 }

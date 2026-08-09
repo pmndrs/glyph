@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu';
 
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { TextEnginePublication } from '../internal/text-engine-host.js';
-import { FIRST_PARTY_TRANSFORM_BUFFER_ID } from '../internal/render-policy-wire.js';
+import { FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, FIRST_PARTY_TRANSFORM_BUFFER_ID } from '../internal/render-policy-wire.js';
 import { TextEngineRenderPlanView, type RenderPlanTable } from '../internal/render-plan-view.js';
 import { bitmap, type BitmapPageData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
@@ -48,6 +48,20 @@ interface MaterialRealization {
   readonly buffers: readonly Readonly<{ id: number; generation: number }>[];
 }
 
+interface OriginSegment {
+  readonly origins: RetainedBuffer;
+  readonly stableIds: RetainedBuffer;
+  readonly start: number;
+  readonly count: number;
+}
+
+interface OriginRecord {
+  readonly buffer: RetainedBuffer;
+  readonly index: number;
+  targetX: number;
+  targetY: number;
+}
+
 type TransformRealization =
   | Readonly<{ kind: 'direct'; transformId: number }>
   | Readonly<{ kind: 'indexed'; indices: RetainedBuffer }>;
@@ -71,12 +85,14 @@ export class ThreeTextRenderPlanExecutor {
   readonly #materials = new Map<string, MaterialRealization>();
   readonly #ownedMaterials = new WeakSet<THREE.NodeMaterial>();
   readonly #activeTransformIndices = new Set<number>();
+  readonly #originRecords = new Map<number, OriginRecord>();
   readonly #rootInverse = new THREE.Matrix4();
   readonly #relativeTransform = new THREE.Matrix4();
   #transformAttribute = transformAttribute(1);
   #transformGeneration = 1;
   #draws: THREE.Mesh[] = [];
   #drawKeys: string[] = [];
+  #originSegments: OriginSegment[] = [];
   #disposed = false;
 
   constructor(coordinator: ThreeTextEngineCoordinator, owner: ThreeTextEnginePlanOwner) {
@@ -106,6 +122,7 @@ export class ThreeTextRenderPlanExecutor {
 
   apply(publication: TextEnginePublication): void {
     if (this.#disposed) throw new Error('Three text-engine plan target has been disposed');
+    this.#restoreOriginTargets();
     const plan = this.#view.bind(publication);
     const resources = plan.table('resources');
     const buffers = plan.table('buffers');
@@ -127,6 +144,68 @@ export class ThreeTextRenderPlanExecutor {
     }
     this.syncTransforms();
     this.#applyRetirements(plan, retirements);
+    this.#captureOriginTargets();
+  }
+
+  snapshotGlyphOrigins(
+    stableIds: Uint32Array,
+    fallbackX: Float32Array,
+    fallbackY: Float32Array,
+  ): Readonly<{ shapedX: Float32Array; shapedY: Float32Array; displayedX: Float32Array; displayedY: Float32Array }> {
+    if (stableIds.length !== fallbackX.length || stableIds.length !== fallbackY.length) {
+      throw new RangeError('glyph origin snapshot arrays must be parallel');
+    }
+    const shapedX = fallbackX.slice();
+    const shapedY = fallbackY.slice();
+    const displayedX = fallbackX.slice();
+    const displayedY = fallbackY.slice();
+    for (let index = 0; index < stableIds.length; index += 1) {
+      const record = this.#originRecords.get(stableIds[index]!);
+      if (record === undefined || !(record.buffer.array instanceof Float32Array)) continue;
+      const offset = record.index * record.buffer.vectorWidth;
+      shapedX[index] = record.targetX;
+      shapedY[index] = record.targetY;
+      displayedX[index] = record.buffer.array[offset]!;
+      displayedY[index] = record.buffer.array[offset + 1]!;
+    }
+    return { shapedX, shapedY, displayedX, displayedY };
+  }
+
+  setGlyphOriginOverrides(stableIds: Uint32Array, x: Float32Array, y: Float32Array): void {
+    if (stableIds.length !== x.length || stableIds.length !== y.length) {
+      throw new RangeError('glyph origin override arrays must be parallel');
+    }
+    const touched = new Map<RetainedBuffer, readonly [number, number]>();
+    for (let index = 0; index < stableIds.length; index += 1) {
+      const record = this.#originRecords.get(stableIds[index]!);
+      if (record === undefined || !(record.buffer.array instanceof Float32Array)) continue;
+      const offset = record.index * record.buffer.vectorWidth;
+      record.buffer.array[offset] = x[index]!;
+      record.buffer.array[offset + 1] = y[index]!;
+      const range = touched.get(record.buffer);
+      touched.set(record.buffer, [
+        Math.min(range?.[0] ?? offset, offset),
+        Math.max(range?.[1] ?? offset + 2, offset + 2),
+      ]);
+    }
+    markOriginRanges(touched);
+  }
+
+  clearGlyphOriginOverrides(stableIds: Uint32Array): void {
+    const touched = new Map<RetainedBuffer, readonly [number, number]>();
+    for (const stableId of stableIds) {
+      const record = this.#originRecords.get(stableId);
+      if (record === undefined || !(record.buffer.array instanceof Float32Array)) continue;
+      const offset = record.index * record.buffer.vectorWidth;
+      record.buffer.array[offset] = record.targetX;
+      record.buffer.array[offset + 1] = record.targetY;
+      const range = touched.get(record.buffer);
+      touched.set(record.buffer, [
+        Math.min(range?.[0] ?? offset, offset),
+        Math.max(range?.[1] ?? offset + 2, offset + 2),
+      ]);
+    }
+    markOriginRanges(touched);
   }
 
   /** Upload changed scene transforms without crossing into Wasm or invalidating text layout. */
@@ -198,6 +277,8 @@ export class ThreeTextRenderPlanExecutor {
     this.#buffers.clear();
     this.#resources.clear();
     this.#activeTransformIndices.clear();
+    this.#originRecords.clear();
+    this.#originSegments = [];
   }
 
   #readResources(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
@@ -306,6 +387,7 @@ export class ThreeTextRenderPlanExecutor {
     const resourceLayout = textShaperAbi.layouts.engineResource;
     const next: THREE.Mesh[] = [];
     const nextKeys: string[] = [];
+    const nextOriginSegments: OriginSegment[] = [];
     const previous = new Map<string, THREE.Mesh[]>();
     for (let index = 0; index < this.#draws.length; index += 1) {
       const key = this.#drawKeys[index]!;
@@ -344,6 +426,14 @@ export class ThreeTextRenderPlanExecutor {
         const material = this.#material(resource, byPolicyId, materialId, transform);
         const recordIndex = plan.u32(primitive + primitiveLayout.recordIndex);
         const recordCount = plan.u16(primitive + primitiveLayout.recordCount);
+        const origins = byPolicyId.get(1);
+        const stableIds = byPolicyId.get(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID);
+        if (origins !== undefined && stableIds !== undefined) {
+          if (!(origins.array instanceof Float32Array) || !(stableIds.array instanceof Uint32Array)) {
+            throw new TypeError('glyph-origin augmentation buffers have invalid scalar types');
+          }
+          nextOriginSegments.push({ origins, stableIds, start: recordIndex, count: recordCount });
+        }
         const key = drawRealizationKey(
           plan.u32(draw + drawLayout.programId),
           resource,
@@ -397,8 +487,48 @@ export class ThreeTextRenderPlanExecutor {
     this.#disposeDraws(reused);
     this.#draws = next;
     this.#drawKeys = nextKeys;
+    this.#originSegments = nextOriginSegments;
     this.#activeTransformIndices.clear();
     for (const transformIndex of transformIndices) this.#activeTransformIndices.add(transformIndex);
+  }
+
+  #restoreOriginTargets(): void {
+    const touched = new Map<RetainedBuffer, readonly [number, number]>();
+    for (const record of this.#originRecords.values()) {
+      if (!(record.buffer.array instanceof Float32Array)) continue;
+      const offset = record.index * record.buffer.vectorWidth;
+      if (record.buffer.array[offset] === record.targetX && record.buffer.array[offset + 1] === record.targetY)
+        continue;
+      record.buffer.array[offset] = record.targetX;
+      record.buffer.array[offset + 1] = record.targetY;
+      const range = touched.get(record.buffer);
+      touched.set(record.buffer, [
+        Math.min(range?.[0] ?? offset, offset),
+        Math.max(range?.[1] ?? offset + 2, offset + 2),
+      ]);
+    }
+    markOriginRanges(touched);
+  }
+
+  #captureOriginTargets(): void {
+    this.#originRecords.clear();
+    for (const segment of this.#originSegments) {
+      if (!(segment.origins.array instanceof Float32Array) || !(segment.stableIds.array instanceof Uint32Array))
+        continue;
+      for (let index = segment.start; index < segment.start + segment.count; index += 1) {
+        const stableId = segment.stableIds.array[index];
+        if (stableId === undefined || stableId === 0)
+          throw new Error('origin augmentation references an invalid glyph');
+        const offset = index * segment.origins.vectorWidth;
+        if (this.#originRecords.has(stableId)) throw new Error('origin augmentation repeats a stable glyph identity');
+        this.#originRecords.set(stableId, {
+          buffer: segment.origins,
+          index,
+          targetX: segment.origins.array[offset]!,
+          targetY: segment.origins.array[offset + 1]!,
+        });
+      }
+    }
   }
 
   #transformRealization(buffers: ReadonlyMap<number, RetainedBuffer>, transformId: number): TransformRealization {
@@ -1103,6 +1233,12 @@ function markUpdated(buffer: RetainedBuffer, byteOffset: number, byteLength: num
   buffer.attribute.addUpdateRange(byteOffset / scalarBytes, byteLength / scalarBytes);
   buffer.attribute.needsUpdate = true;
   invalidatePboTexture(buffer.attribute);
+}
+
+function markOriginRanges(ranges: ReadonlyMap<RetainedBuffer, readonly [number, number]>): void {
+  for (const [buffer, [start, end]] of ranges) {
+    markUpdated(buffer, start * buffer.array.BYTES_PER_ELEMENT, (end - start) * buffer.array.BYTES_PER_ELEMENT, true);
+  }
 }
 
 function unitQuad(): THREE.InstancedBufferGeometry {

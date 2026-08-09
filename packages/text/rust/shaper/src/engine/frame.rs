@@ -1,6 +1,8 @@
 pub(crate) const RESULT_FLAG_CHECKPOINT: u32 = 1;
 pub(crate) const SEMANTIC_VIEW_MEASUREMENT: u32 = 1 << 0;
-pub(crate) const SEMANTIC_VIEW_MASK: u32 = SEMANTIC_VIEW_MEASUREMENT;
+pub(crate) const SEMANTIC_VIEW_LAYOUT_INSPECTION: u32 = 1 << 1;
+pub(crate) const SEMANTIC_VIEW_MASK: u32 =
+    SEMANTIC_VIEW_MEASUREMENT | SEMANTIC_VIEW_LAYOUT_INSPECTION;
 
 pub(crate) const TEXT_MUTATION_REPLACE_UTF16: u8 = 1;
 pub(crate) const TEXT_ENCODING_UTF16_LE: u8 = 1;
@@ -81,6 +83,7 @@ pub(crate) const SEMANTIC_U32_CLUSTER_ID: u8 = 1;
 pub(crate) const SEMANTIC_U32_REGION_ID: u8 = 2;
 pub(crate) const SEMANTIC_U32_FLOW_THREAD_ID: u8 = 3;
 pub(crate) const SEMANTIC_U32_TRANSFORM_INDEX: u8 = 4;
+pub(crate) const SEMANTIC_U32_STABLE_GLYPH_ID: u8 = 5;
 pub(crate) const PARAGRAPH_MUTATION_UPSERT: u8 = 1;
 pub(crate) const PARAGRAPH_MUTATION_REMOVE: u8 = 2;
 

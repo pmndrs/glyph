@@ -48,4 +48,12 @@ export type {
   ThreeSlugShaderResources,
 } from './three/slug-shader.js';
 export { Text, TextGroup } from './three/text.js';
-export type { StandaloneTextProperties, TextGroupOptions, TextProperties, TextSpan, TextUpdate } from './three/text.js';
+export type {
+  StandaloneTextProperties,
+  TextGlyphOriginSnapshot,
+  TextGlyphOriginUpdate,
+  TextGroupOptions,
+  TextProperties,
+  TextSpan,
+  TextUpdate,
+} from './three/text.js';

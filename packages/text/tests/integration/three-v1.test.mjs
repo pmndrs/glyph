@@ -47,9 +47,31 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.ok(measurement.firstBaseline > 0);
   assert.equal(measurement.firstBaseline, measurement.lastBaseline);
   assert.equal(measurement.overflowed, false);
+  assert.equal(measurement.glyphCount, 11, 'layout summary retains the non-rendering space glyph');
+  assert.equal(measurement.lineCount, 1);
+  assert.equal(measurement.missingGlyphCount, 0);
   assert.equal(label.measureLayout(), measurement, 'an unchanged committed layout must reuse its queried measurement');
+  const inspection = label.inspectLayout();
+  assert.ok(inspection, 'per-glyph layout must be available only through an explicit Rust inspection query');
+  assert.equal(inspection.glyphIds.length, measurement.glyphCount);
+  assert.equal(inspection.glyphStableIds.length, inspection.glyphIds.length);
+  assert.equal(inspection.lineGlyphCounts.length, measurement.lineCount);
+  assert.equal(label.inspectLayout(), inspection, 'an unchanged committed layout must reuse its copied inspection');
   assert.equal(label.layout, undefined, 'query data must not restore layout arrays to rendering');
   assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
+
+  const origins = label.snapshotGlyphOrigins();
+  assert.equal(origins.layout, inspection);
+  assert.deepEqual(origins.displayedX, origins.shapedX);
+  assert.deepEqual(origins.displayedY, origins.shapedY);
+  const presentedX = origins.shapedX.slice();
+  presentedX[0] += 3;
+  label.setGlyphOrigins({ layout: inspection, x: presentedX, y: origins.shapedY });
+  const presented = label.snapshotGlyphOrigins();
+  assert.equal(presented.shapedX[0], origins.shapedX[0], 'presentation must not mutate authoritative layout');
+  assert.equal(presented.displayedX[0], origins.shapedX[0] + 3);
+  label.clearGlyphOriginOverrides();
+  assert.deepEqual(label.snapshotGlyphOrigins().displayedX, origins.shapedX);
 
   group.renderOrder = 20;
   scene.updateMatrixWorld();
@@ -72,6 +94,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     'compatible revisions must retain draws and resize live counts',
   );
   assert.notEqual(label.measureLayout(), measurement, 'a semantic update must invalidate the measurement cache');
+  assert.notEqual(label.inspectLayout(), inspection, 'a semantic update must invalidate the inspection cache');
 
   scene.add(label);
   scene.updateMatrixWorld();
@@ -129,12 +152,37 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.equal(transforms.array[1 * 16 + 12], 2);
   assert.equal(transforms.array[2 * 16 + 12], 5);
 
+  const leftOrigins = left.snapshotGlyphOrigins();
+  const rightOrigins = right.snapshotGlyphOrigins();
+  assert.equal(leftOrigins.shapedX.length, 2);
+  assert.equal(rightOrigins.shapedX.length, 2);
+  const shiftedRightX = rightOrigins.shapedX.slice();
+  shiftedRightX[0] += 4;
+  right.setGlyphOrigins({ layout: rightOrigins.layout, x: shiftedRightX, y: rightOrigins.shapedY });
+  assert.equal(left.snapshotGlyphOrigins().displayedX[0], leftOrigins.shapedX[0]);
+  assert.equal(right.snapshotGlyphOrigins().displayedX[0], rightOrigins.shapedX[0] + 4);
+
   const version = transforms.version;
   right.position.x = 7;
   scene.updateMatrixWorld();
   assert.equal(group.children.filter((child) => child.isMesh)[0], draws[0]);
   assert.equal(transforms.version, version + 1);
   assert.equal(transforms.array[2 * 16 + 12], 7);
+  assert.equal(
+    right.snapshotGlyphOrigins().displayedX[0],
+    rightOrigins.shapedX[0] + 4,
+    'transform-only updates must not cross into Rust or discard presentation overrides',
+  );
+
+  right.style = { ...right.style, fontSize: 20 };
+  scene.updateMatrixWorld();
+  const resizedOrigins = right.snapshotGlyphOrigins();
+  assert.notEqual(resizedOrigins.layout, rightOrigins.layout);
+  assert.deepEqual(
+    resizedOrigins.displayedX,
+    resizedOrigins.shapedX,
+    'an authoritative command-buffer update must retire the previous presentation override',
+  );
 
   group.dispose();
   left.dispose();

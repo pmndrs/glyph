@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique, LoadedFont, ParagraphLayout } from '@pmndrs/text';
+import type { AnyRasterTechnique, LoadedFont, ParagraphLayoutSummary } from '@pmndrs/text';
 import { TextGroup, type Text } from '@pmndrs/text/three';
 import type * as THREE from 'three/webgpu';
 
@@ -71,8 +71,8 @@ export interface WorkloadTextFactoryContext {
  * Commits every pending Text edit beneath `root` and reports the first failure.
  *
  * Target-v1 has no per-Text readiness promise. A `TextGroup` — and a standalone `Text` that has a parent — reconciles,
- * shapes, lays out, and packs synchronously inside `updateMatrixWorld`, so this call is exactly the point at which
- * `layout` becomes readable and `error` becomes meaningful.
+ * shapes, lays out, and packs synchronously inside `updateMatrixWorld`, so this call is exactly the point at which an
+ * explicit retained-Rust measurement can observe the committed revision and `error` becomes meaningful.
  */
 export function publishWorkloadTexts(root: THREE.Object3D, entries: readonly ComparisonWorkloadEntry[]): void {
   root.updateMatrixWorld(true);
@@ -83,11 +83,11 @@ export function publishWorkloadTexts(root: THREE.Object3D, entries: readonly Com
   }
 }
 
-/** Returns the layout committed by the Text lifecycle before a workload positions its scene. */
-export function committedTextLayout(text: WorkloadText): ParagraphLayout {
-  const layout = text.layout;
-  if (layout === undefined) throw new Error('workload Text lost its committed layout');
-  return layout;
+/** Explicitly queries the aggregate metrics committed by the Rust Text lifecycle before scene positioning. */
+export function committedTextMetrics(text: WorkloadText): ParagraphLayoutSummary {
+  const metrics = text.measureLayout();
+  if (metrics === undefined) throw new Error('workload Text lost its committed layout metrics');
+  return metrics;
 }
 
 /** Target-v1 paint takes CSS colors, while the comparison palettes stay authored as 24-bit hex. */

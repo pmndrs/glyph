@@ -5,7 +5,7 @@ import fontAwesomeIcons from '../../../fixtures/fonts/font-awesome-free-6.7.2/ic
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
-  committedTextLayout,
+  committedTextMetrics,
   exactWidth,
   paintColor,
   publishWorkloadTexts,
@@ -160,7 +160,7 @@ export function positionIconGridEntry(
   row: number,
   iconSize: number,
 ): void {
-  const iconLayout = committedTextLayout(entry.text);
+  const iconLayout = committedTextMetrics(entry.text);
   entry.node.position.set(
     layout.inset + column * (layout.cellWidth + layout.gap),
     -(layout.inset + row * (layout.cellHeight + layout.gap)),
