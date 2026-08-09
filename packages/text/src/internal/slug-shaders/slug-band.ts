@@ -1,36 +1,24 @@
 /**
- * Adapted from three-flatland Slug at 2935a89f (MIT).
- * The texture addressing is adapted to PMNDRS_font_slug V0's exact R32UI
- * header grid and R16UI glyph-local reference grid.
+ * Three.js/TSL fill-band traversal over the host-agnostic band math in `core/band.js`.
+ *
+ * The loop, its early terminator, and every texture read live here because they are
+ * bound to Three.js control flow and to this page's texture layout. Each candidate
+ * curve's coverage, weight, and terminator come from one portable core call.
  */
 import type { Node } from 'three/webgpu';
+import { If, float, int, lessThan, max, uint } from 'three/tsl';
+import { d } from 'typegpu';
+import * as t3 from '@typegpu/three';
+import { coreValue } from './core-boundary.js';
 import {
-  If,
-  abs,
-  add,
-  clamp,
-  float,
-  int,
-  greaterThan,
-  lessThan,
-  max,
-  mul,
-  saturate,
-  select,
-  sub,
-  uint,
-} from 'three/tsl';
-import { calcRootCode } from './calc-root-code.js';
-import { solveHorizontalPolynomial, solveVerticalPolynomial } from './solve-quadratic.js';
-import {
-  bandCount,
-  bandReferenceOffset,
-  loadCurve,
-  loadHeader,
-  loadReference,
-  type SlugShaderPage,
-} from './slug-texture.js';
-import { intLessThan, uintAdd, uintBitAnd, vec2Sub, whileLoop } from './tsl-compat.js';
+  slugBandCurveCount,
+  slugBandIndex,
+  slugBandReferenceOffset,
+  slugHorizontalCurveContribution,
+  slugVerticalCurveContribution,
+} from './core/band.js';
+import { loadCurve, loadHeader, loadReference, type SlugShaderCurve, type SlugShaderPage } from './slug-texture.js';
+import { intLessThan, uintAdd, whileLoop } from './tsl-compat.js';
 
 export interface SlugShaderGlyph {
   readonly curveBaseTexel: Node<'uint'>;
@@ -47,68 +35,34 @@ interface SlugBandEvaluation {
   readonly weight: Node<'float'>;
 }
 
-function namedBool(node: Node<'bool'>, name: string): Node<'bool'> {
-  return node.toVar(name);
-}
+/** Signed coverage delta, antialiasing weight, and sorted-reference terminator of one curve. */
+type SlugCurveContribution = (
+  curveP0: d.v2f,
+  curveP1: d.v2f,
+  curveP2: d.v2f,
+  renderCoordinate: d.v2f,
+  pixelsPerEm: number,
+  thickenFactor: number,
+) => d.v3f;
 
-function namedFloat(node: Node<'float'>, name: string): Node<'float'> {
-  return node.toVar(name);
-}
-
-function namedUint(node: Node<'uint'>, name: string): Node<'uint'> {
-  return node.toVar(name);
-}
-
-function namedVec2(node: Node<'vec2'>, name: string): Node<'vec2'> {
-  return node.toVar(name);
-}
-
-function accumulateCurveRoots(
-  p0: Node<'vec2'>,
-  p1: Node<'vec2'>,
-  p2: Node<'vec2'>,
-  axis: 'horizontal' | 'vertical',
+function curveContribution(
+  contribute: SlugCurveContribution,
+  name: string,
+  curve: SlugShaderCurve,
+  renderCoordinate: Node<'vec2'>,
   pixelsPerEm: Node<'float'>,
   thickenFactor: Node<'float'>,
-  coverage: Node<'float'>,
-  weight: Node<'float'>,
-): void {
-  const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
-  const polynomial0: Node<'float'> = axis === 'horizontal' ? p0.y : p0.x;
-  const polynomial1: Node<'float'> = axis === 'horizontal' ? p1.y : p1.x;
-  const polynomial2: Node<'float'> = axis === 'horizontal' ? p2.y : p2.x;
-  const rootCode: Node<'uint'> = namedUint(
-    calcRootCode(polynomial0, polynomial1, polynomial2),
-    `${namePrefix}RootCode`,
-  );
-  If(greaterThan(float(rootCode), 0), () => {
-    const roots = axis === 'horizontal' ? solveHorizontalPolynomial(p0, p1, p2) : solveVerticalPolynomial(p0, p1, p2);
-    const firstRoot: Node<'float'> = namedFloat(mul(roots.x, pixelsPerEm), `${namePrefix}Root1`);
-    const secondRoot: Node<'float'> = namedFloat(mul(roots.y, pixelsPerEm), `${namePrefix}Root2`);
-    const hasFirstRoot: Node<'bool'> = namedBool(
-      greaterThan(float(uintBitAnd(rootCode, uint(1))), 0),
-      `${namePrefix}HasRoot1`,
+): Node<'vec3'> {
+  return coreValue('vec3', name, () => {
+    'use gpu';
+    return contribute(
+      t3.fromTSL(curve.p0, d.vec2f).$,
+      t3.fromTSL(curve.p1, d.vec2f).$,
+      t3.fromTSL(curve.p2, d.vec2f).$,
+      t3.fromTSL(renderCoordinate, d.vec2f).$,
+      t3.fromTSL(pixelsPerEm, d.f32).$,
+      t3.fromTSL(thickenFactor, d.f32).$,
     );
-    const hasSecondRoot: Node<'bool'> = namedBool(
-      greaterThan(float(uintBitAnd(rootCode, uint(0x100))), 0),
-      `${namePrefix}HasRoot2`,
-    );
-    const firstContribution: Node<'float'> = select(hasFirstRoot, saturate(add(mul(firstRoot, thickenFactor), 0.5)), 0);
-    const secondContribution: Node<'float'> = select(
-      hasSecondRoot,
-      saturate(add(mul(secondRoot, thickenFactor), 0.5)),
-      0,
-    );
-    const coverageDelta: Node<'float'> =
-      axis === 'horizontal' ? sub(firstContribution, secondContribution) : sub(secondContribution, firstContribution);
-    coverage.addAssign(coverageDelta);
-    const firstWeight: Node<'float'> = saturate(sub(1, mul(abs(firstRoot), 2)));
-    const secondWeight: Node<'float'> = saturate(sub(1, mul(abs(secondRoot), 2)));
-    const curveWeight: Node<'float'> = max(
-      select(hasFirstRoot, firstWeight, 0),
-      select(hasSecondRoot, secondWeight, 0),
-    );
-    weight.assign(max(weight, curveWeight));
   });
 }
 
@@ -127,20 +81,24 @@ function evaluateBandCurve(
 ): void {
   const referenceIndex: Node<'uint'> = uintAdd(uintAdd(glyph.referenceBase, localReferenceOffset), uint(index));
   const curveReference: Node<'uint'> = loadReference(page, referenceIndex, axis);
-  const curveTexel: Node<'uint'> = uintAdd(glyph.curveBaseTexel, curveReference);
-  const curve = loadCurve(page, curveTexel);
+  const curve = loadCurve(page, uintAdd(glyph.curveBaseTexel, curveReference));
   const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
-  const p0: Node<'vec2'> = namedVec2(vec2Sub(curve.p0, renderCoordinate), `${namePrefix}P0`);
-  const p1: Node<'vec2'> = namedVec2(vec2Sub(curve.p1, renderCoordinate), `${namePrefix}P1`);
-  const p2: Node<'vec2'> = namedVec2(vec2Sub(curve.p2, renderCoordinate), `${namePrefix}P2`);
-  const maximum0: Node<'float'> = axis === 'horizontal' ? p0.x : p0.y;
-  const maximum1: Node<'float'> = axis === 'horizontal' ? p1.x : p1.y;
-  const maximum2: Node<'float'> = axis === 'horizontal' ? p2.x : p2.y;
-  const maximum: Node<'float'> = mul(max(max(maximum0, maximum1), maximum2), pixelsPerEm);
-  If(lessThan(maximum, -0.5), () => {
+  const contribution: Node<'vec3'> = curveContribution(
+    axis === 'horizontal' ? slugHorizontalCurveContribution : slugVerticalCurveContribution,
+    `${namePrefix}Contribution`,
+    curve,
+    renderCoordinate,
+    pixelsPerEm,
+    thickenFactor,
+  );
+
+  // The references of a band are sorted by descending ray-axis maximum, so the
+  // first curve that cannot reach this fragment ends the band.
+  If(lessThan(contribution.z, -0.5), () => {
     index.assign(curveCount);
   }).Else(() => {
-    accumulateCurveRoots(p0, p1, p2, axis, pixelsPerEm, thickenFactor, coverage, weight);
+    coverage.addAssign(contribution.x);
+    weight.assign(max(weight, contribution.y));
     index.addAssign(1);
   });
 }
@@ -153,27 +111,35 @@ export function evaluateBand(
   pixelsPerEm: Node<'float'>,
   thickenFactor: Node<'float'>,
 ): SlugBandEvaluation {
+  const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
   const coordinate: Node<'float'> = axis === 'horizontal' ? renderCoordinate.y : renderCoordinate.x;
   const transformScale: Node<'float'> = axis === 'horizontal' ? glyph.bandTransform.y : glyph.bandTransform.x;
   const transformOffset: Node<'float'> = axis === 'horizontal' ? glyph.bandTransform.w : glyph.bandTransform.z;
   const declaredBandCount: Node<'uint'> = axis === 'horizontal' ? glyph.horizontalBandCount : glyph.verticalBandCount;
   const headerBase: Node<'uint'> = axis === 'horizontal' ? glyph.horizontalHeaderBase : glyph.verticalHeaderBase;
-  const scaledCoordinate: Node<'float'> = mul(coordinate, transformScale);
-  const transformedCoordinate: Node<'float'> = add(scaledCoordinate, transformOffset);
-  const maximumBandIndex: Node<'float'> = sub(float(declaredBandCount), 1);
-  const clampedBandIndex: Node<'float'> = clamp(transformedCoordinate, 0, maximumBandIndex);
-  const bandIndex: Node<'uint'> = uint(clampedBandIndex);
+  const bandIndex: Node<'uint'> = coreValue('uint', `${namePrefix}BandIndex`, () => {
+    'use gpu';
+    return slugBandIndex(
+      t3.fromTSL(coordinate, d.f32).$,
+      t3.fromTSL(transformScale, d.f32).$,
+      t3.fromTSL(transformOffset, d.f32).$,
+      t3.fromTSL(declaredBandCount, d.u32).$,
+    );
+  });
   const header: Node<'uint'> = loadHeader(page, uintAdd(headerBase, bandIndex), axis);
-  const localReferenceOffset: Node<'uint'> = namedUint(
-    bandReferenceOffset(header),
-    axis === 'horizontal' ? 'slugHorizontalReferenceOffset' : 'slugVerticalReferenceOffset',
+  const localReferenceOffset: Node<'uint'> = coreValue('uint', `${namePrefix}ReferenceOffset`, () => {
+    'use gpu';
+    return slugBandReferenceOffset(t3.fromTSL(header, d.u32).$);
+  });
+  const curveCount: Node<'int'> = int(
+    coreValue('uint', `${namePrefix}CurveCount`, () => {
+      'use gpu';
+      return slugBandCurveCount(t3.fromTSL(header, d.u32).$);
+    }),
   );
-  const coverage: Node<'float'> = namedFloat(float(0), axis === 'horizontal' ? 'slugXCoverage' : 'slugYCoverage');
-  const weight: Node<'float'> = namedFloat(float(0), axis === 'horizontal' ? 'slugXWeight' : 'slugYWeight');
-  const curveCount: Node<'int'> = int(bandCount(header));
-  const curveIndex: Node<'int'> = int(0).toVar(
-    axis === 'horizontal' ? 'slugHorizontalCurveIndex' : 'slugVerticalCurveIndex',
-  );
+  const coverage: Node<'float'> = float(0).toVar(axis === 'horizontal' ? 'slugXCoverage' : 'slugYCoverage');
+  const weight: Node<'float'> = float(0).toVar(axis === 'horizontal' ? 'slugXWeight' : 'slugYWeight');
+  const curveIndex: Node<'int'> = int(0).toVar(`${namePrefix}CurveIndex`);
   whileLoop(intLessThan(curveIndex, curveCount), () =>
     evaluateBandCurve(
       curveIndex,

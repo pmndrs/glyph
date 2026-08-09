@@ -1,12 +1,17 @@
+/**
+ * Three.js/TSL resource access for PMNDRS_font_slug V0's exact R32UI header grid,
+ * R16UI glyph-local reference grid, and RGBA16F curve grid.
+ *
+ * Only the addressing that exists because these resources are 2D textures lives
+ * here; the header and reference bit layout belongs to the host-agnostic core.
+ */
 import type { DataTexture, Node } from 'three/webgpu';
-import { float, int, ivec2, min, textureLoad, uint, vec2 } from 'three/tsl';
-import { intDiv, intMod, loadUvec4, uintAdd, uintBitAnd, uintMul, uintShiftRight } from './tsl-compat.js';
-
-const HEADER_REFERENCE_MASK = 0xffff;
-const HEADER_COUNT_SHIFT = 16;
-
-/** Maximum curves one fragment may evaluate from a hostile artifact. */
-export const MAX_SAFE_SLUG_BAND_CURVES = 512;
+import { int, ivec2, textureLoad, uint, vec2 } from 'three/tsl';
+import { d } from 'typegpu';
+import * as t3 from '@typegpu/three';
+import { coreValue } from './core-boundary.js';
+import { slugReferenceFromPair } from './core/band.js';
+import { intDiv, intMod, loadUvec4, uintAdd, uintShiftRight } from './tsl-compat.js';
 
 export interface SlugShaderPage {
   readonly curveTexture: DataTexture;
@@ -29,10 +34,6 @@ function gridCoordinate(index: Node<'uint'>, width: number): Node<'ivec2'> {
   return ivec2(intMod(integerIndex, integerWidth), intDiv(integerIndex, integerWidth));
 }
 
-function namedUint(node: Node<'uint'>, name: string): Node<'uint'> {
-  return node.toVar(name);
-}
-
 export function loadHeader(
   page: SlugShaderPage,
   index: Node<'uint'>,
@@ -40,7 +41,7 @@ export function loadHeader(
   namePrefix: string = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical',
 ): Node<'uint'> {
   const texel: Node<'vec4'> = textureLoad(page.headerTexture, gridCoordinate(index, page.headerWidth));
-  return namedUint(uint(texel.x), `${namePrefix}Header`);
+  return uint(texel.x).toVar(`${namePrefix}Header`);
 }
 
 export function loadReference(
@@ -49,12 +50,11 @@ export function loadReference(
   axis: 'horizontal' | 'vertical',
   namePrefix: string = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical',
 ): Node<'uint'> {
-  const texel = loadUvec4(page.referenceTexture, gridCoordinate(uintShiftRight(index, uint(1)), page.referenceWidth));
-  const bitOffset = uintMul(uintBitAnd(index, uint(1)), uint(16));
-  return namedUint(
-    uintBitAnd(uintShiftRight(texel.x, bitOffset), uint(HEADER_REFERENCE_MASK)),
-    `${namePrefix}Reference`,
-  );
+  const pair = loadUvec4(page.referenceTexture, gridCoordinate(uintShiftRight(index, uint(1)), page.referenceWidth)).x;
+  return coreValue('uint', `${namePrefix}Reference`, () => {
+    'use gpu';
+    return slugReferenceFromPair(t3.fromTSL(pair, d.u32).$, t3.fromTSL(index, d.u32).$);
+  });
 }
 
 export function loadCurve(page: SlugShaderPage, texelIndex: Node<'uint'>): SlugShaderCurve {
@@ -68,12 +68,4 @@ export function loadCurve(page: SlugShaderPage, texelIndex: Node<'uint'>): SlugS
     p1: vec2(first.z, first.w),
     p2: vec2(second.x, second.y),
   };
-}
-
-export function bandCount(header: Node<'uint'>): Node<'uint'> {
-  return uint(min(float(uintShiftRight(header, uint(HEADER_COUNT_SHIFT))), MAX_SAFE_SLUG_BAND_CURVES));
-}
-
-export function bandReferenceOffset(header: Node<'uint'>): Node<'uint'> {
-  return uintBitAnd(header, uint(HEADER_REFERENCE_MASK));
 }

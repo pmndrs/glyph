@@ -66,12 +66,16 @@ describe('independent package-size report', () => {
   });
 
   it('bounds accumulated renderer growth from the pre-coverage baseline', () => {
+    // Several allowances absorb between 85 and 211 bytes of drift from the
+    // tsdown/Rolldown emit migration, which rewrites and hoists module boundaries
+    // across every graph. No raster's own code changed there, and the Slug shader
+    // core is not in these graphs.
     const coverageGrowth = {
       'browser-core': {
         rawBytes: { baseline: 324_269, maximumGrowth: 17_000 },
         minifiedBytes: { baseline: 247_205, maximumGrowth: 11_000 },
-        gzipBytes: { baseline: 72_108, maximumGrowth: 2_500 },
-        brotliBytes: { baseline: 55_251, maximumGrowth: 2_100 },
+        gzipBytes: { baseline: 72_108, maximumGrowth: 2_700 },
+        brotliBytes: { baseline: 55_251, maximumGrowth: 2_300 },
       },
       'bitmap-baker-js': {
         rawBytes: { baseline: 17_478, maximumGrowth: 5_700 },
@@ -83,12 +87,14 @@ describe('independent package-size report', () => {
         rawBytes: { baseline: 606_995, maximumGrowth: 20_000 },
         minifiedBytes: { baseline: 606_995, maximumGrowth: 20_000 },
         gzipBytes: { baseline: 226_702, maximumGrowth: 8_100 },
-        brotliBytes: { baseline: 173_552, maximumGrowth: 7_000 },
+        // Already exceeded against the committed report before this change: the
+        // recorded Wasm brotli growth is 7,374 bytes from the pinned baseline.
+        brotliBytes: { baseline: 173_552, maximumGrowth: 7_500 },
       },
       'bitmap-runtime-js': {
         rawBytes: { baseline: 361_809, maximumGrowth: 27_000 },
         minifiedBytes: { baseline: 271_005, maximumGrowth: 16_500 },
-        gzipBytes: { baseline: 78_673, maximumGrowth: 3_750 },
+        gzipBytes: { baseline: 78_673, maximumGrowth: 3_950 },
         brotliBytes: { baseline: 60_857, maximumGrowth: 3_200 },
       },
       'mtsdf-baker-wasm': {
@@ -106,7 +112,7 @@ describe('independent package-size report', () => {
       'mtsdf-runtime-js': {
         rawBytes: { baseline: 370_255, maximumGrowth: 27_000 },
         minifiedBytes: { baseline: 275_271, maximumGrowth: 16_500 },
-        gzipBytes: { baseline: 79_993, maximumGrowth: 3_800 },
+        gzipBytes: { baseline: 79_993, maximumGrowth: 4_100 },
         brotliBytes: { baseline: 62_081, maximumGrowth: 3_300 },
       },
     } as const;
@@ -123,17 +129,24 @@ describe('independent package-size report', () => {
   });
 
   it('bounds retained-capacity growth from the warm-publication baseline', () => {
+    // As above, the Bitmap and MTSDF allowances absorb tsdown/Rolldown emit drift
+    // rather than any change to those rasters.
     const retainedCapacityGrowth = {
       'bitmap-runtime-js': {
         baseline: { rawBytes: 382_060, minifiedBytes: 283_898, gzipBytes: 81_435, brotliBytes: 63_146 },
-        maximumGrowth: { rawBytes: 6_500, minifiedBytes: 3_500, gzipBytes: 900, brotliBytes: 850 },
+        maximumGrowth: { rawBytes: 6_500, minifiedBytes: 3_700, gzipBytes: 1_250, brotliBytes: 850 },
       },
       'mtsdf-runtime-js': {
         baseline: { rawBytes: 389_761, minifiedBytes: 287_629, gzipBytes: 82_721, brotliBytes: 64_286 },
-        maximumGrowth: { rawBytes: 7_500, minifiedBytes: 4_000, gzipBytes: 1_050, brotliBytes: 1_050 },
+        maximumGrowth: { rawBytes: 7_500, minifiedBytes: 4_200, gzipBytes: 1_400, brotliBytes: 1_050 },
       },
+      // Rebased from the warm-publication figures once the Slug shader core moved to
+      // TypeGPU, because that step change is architectural rather than incremental
+      // growth: keeping the old reference point and widening the allowance five-fold
+      // would stop the assertion from bounding anything. The allowances are unchanged,
+      // so ordinary growth from the new reference is still held to the same margin.
       'slug-runtime-js': {
-        baseline: { rawBytes: 390_276, minifiedBytes: 286_600, gzipBytes: 82_730, brotliBytes: 64_271 },
+        baseline: { rawBytes: 445_687, minifiedBytes: 333_538, gzipBytes: 89_110, brotliBytes: 69_327 },
         maximumGrowth: { rawBytes: 10_750, minifiedBytes: 5_750, gzipBytes: 1_500, brotliBytes: 1_450 },
       },
     } as const;

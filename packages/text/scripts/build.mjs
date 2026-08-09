@@ -11,6 +11,12 @@ const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const tsc = fileURLToPath(
   new URL(process.platform === 'win32' ? '../node_modules/.bin/tsc.CMD' : '../node_modules/.bin/tsc', import.meta.url),
 );
+const tsdown = fileURLToPath(
+  new URL(
+    process.platform === 'win32' ? '../node_modules/.bin/tsdown.CMD' : '../node_modules/.bin/tsdown',
+    import.meta.url,
+  ),
+);
 const rustEnvironment = reproducibleRustEnvironment(workspaceRoot);
 const executable = process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt';
 const wasmOpt = fileURLToPath(new URL(`../node_modules/.bin/${executable}`, import.meta.url));
@@ -156,7 +162,9 @@ await run(
   ],
   rustEnvironment,
 );
-await run(tsc, ['-p', 'tsconfig.build.json']);
+// `tsdown` emits without typechecking, so the compiler keeps owning the build gate.
+await run(tsc, ['-p', 'tsconfig.build.json', '--noEmit']);
+await run(tsdown);
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
 await rm(new URL('../dist/font_baker.wasm', import.meta.url), { force: true });
 await rm(new URL('../dist/mtsdf-baker-abi-v0.json', import.meta.url), { force: true });
@@ -201,7 +209,7 @@ if (process.platform !== 'win32') {
   await chmod(new URL('../dist/node/cli.js', import.meta.url), 0o755);
 }
 
-function run(command, args, environment = process.env) {
+function run(command, args = [], environment = process.env) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd: packageRoot, env: environment, stdio: 'inherit' });
     child.once('error', reject);
