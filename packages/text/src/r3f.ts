@@ -144,6 +144,7 @@ export function TextGroup(input: R3fTextGroupProps): ReactElement | null {
   const createObject = useEffectEvent(() => {
     const created = new ThreeTextGroup({
       ...(properties.capacity === undefined ? {} : { capacity: properties.capacity }),
+      ...(properties.compositing === undefined ? {} : { compositing: properties.compositing }),
       ...(properties.renderOrder === undefined ? {} : { renderOrder: properties.renderOrder }),
       ...(properties.material === undefined ? {} : { material: properties.material }),
     });
@@ -342,7 +343,7 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
 
 function groupObjectProperties(properties: R3fTextGroupProps): Object3DProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['capacity', 'material', 'children', 'onError', 'ref']) delete object[key];
+  for (const key of ['capacity', 'compositing', 'material', 'children', 'onError', 'ref']) delete object[key];
   return object as Object3DProps;
 }
 

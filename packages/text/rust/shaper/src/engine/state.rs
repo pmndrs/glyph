@@ -95,6 +95,8 @@ struct EngineSession {
     pending_ordered_paragraphs: Vec<ParagraphOrder>,
     lifecycle_prepared: bool,
     lifecycle_changed: bool,
+    compositing_independent: bool,
+    pending_compositing_independent: bool,
 }
 
 struct RetainedParagraph {
@@ -585,6 +587,7 @@ impl TextEngine {
                     .any(|paragraph| paragraph.positioned_changed);
             let reuse_ordered_plan = !checkpoint
                 && !positioned_changed
+                && request.compositing_independent == session.compositing_independent
                 && policy
                     .programs()
                     .iter()
@@ -644,12 +647,14 @@ impl TextEngine {
                         .map_err(gather_error)?;
                 }
                 let gathered = gather.view();
+                let mut plan_input = gathered.plan_input();
+                plan_input.order_independent = request.compositing_independent;
                 session
                     .plan
                     .prepare(
                         policy,
                         CapabilitySetId(request.capability_set),
-                        gathered.plan_input(),
+                        plan_input,
                         checkpoint,
                         publication_generation,
                         request.acknowledged_publication_generation,
@@ -718,6 +723,7 @@ impl TextEngine {
             }
             session.pending_next_glyph_id = next_glyph_id;
             session.pending_next_content_revision = next_content_revision;
+            session.pending_compositing_independent = request.compositing_independent;
             Ok(())
         })();
         if let Err(error) = preparation {
@@ -800,6 +806,7 @@ impl TextEngine {
         session.next_content_revision = session.pending_next_content_revision;
         session.pending_next_glyph_id = 0;
         session.pending_next_content_revision = 0;
+        session.compositing_independent = session.pending_compositing_independent;
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
@@ -988,6 +995,7 @@ impl EngineSession {
         self.abort_lifecycle();
         self.pending_next_glyph_id = 0;
         self.pending_next_content_revision = 0;
+        self.pending_compositing_independent = self.compositing_independent;
     }
 
     fn abort_lifecycle(&mut self) {
@@ -3099,6 +3107,7 @@ mod tests {
             policy_handle: 9,
             capability_set: 1,
             semantic_view_mask: 0,
+            compositing_independent: false,
             limits: super::super::frame::UpdateLimits {
                 max_paragraphs: 1,
                 max_clusters: 1,

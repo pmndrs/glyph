@@ -43,8 +43,11 @@ pub(crate) fn parse_update_request(
         || read_u32(bytes, ENGINE_UPDATE_SESSION_ID)? != session_id
         || read_u32(bytes, ENGINE_UPDATE_BYTE_LENGTH)?
             != u32::try_from(bytes.len()).map_err(|_| STATUS_INVALID_REQUEST)?
-        || read_u32(bytes, ENGINE_UPDATE_FLAGS)? != 0
     {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let flags = read_u32(bytes, ENGINE_UPDATE_FLAGS)?;
+    if flags & !super::frame::FRAME_FLAGS != 0 {
         return Err(STATUS_INVALID_REQUEST);
     }
     let semantic_view_mask = read_u32(bytes, ENGINE_UPDATE_SEMANTIC_VIEW_MASK)?;
@@ -144,6 +147,7 @@ pub(crate) fn parse_update_request(
         policy_handle: read_u32(bytes, ENGINE_UPDATE_POLICY_HANDLE)?,
         capability_set: positive(bytes, ENGINE_UPDATE_CAPABILITY_SET)?,
         semantic_view_mask,
+        compositing_independent: flags & super::frame::FRAME_FLAG_COMPOSITING_INDEPENDENT != 0,
         limits,
         paragraph_mutations,
         text_mutations,
@@ -173,6 +177,25 @@ mod tests {
         let parsed = parse_update_request(&bytes, 4).unwrap();
         assert_eq!(parsed.session_id, 4);
         assert_eq!(parsed.policy_handle, 9);
+
+        let mut independent = bytes.clone();
+        write_u32(
+            &mut independent,
+            ENGINE_UPDATE_FLAGS,
+            super::super::frame::FRAME_FLAG_COMPOSITING_INDEPENDENT,
+        );
+        assert!(
+            parse_update_request(&independent, 4)
+                .unwrap()
+                .compositing_independent
+        );
+
+        let mut unknown_flag = bytes.clone();
+        write_u32(&mut unknown_flag, ENGINE_UPDATE_FLAGS, 1 << 31);
+        assert_eq!(
+            parse_update_request(&unknown_flag, 4),
+            Err(STATUS_INVALID_REQUEST)
+        );
 
         let mut measurement = bytes.clone();
         write_u32(

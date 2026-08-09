@@ -1,4 +1,6 @@
 pub(crate) const RESULT_FLAG_CHECKPOINT: u32 = 1;
+pub(crate) const FRAME_FLAG_COMPOSITING_INDEPENDENT: u32 = 1;
+pub(crate) const FRAME_FLAGS: u32 = FRAME_FLAG_COMPOSITING_INDEPENDENT;
 pub(crate) const SEMANTIC_VIEW_MEASUREMENT: u32 = 1 << 0;
 pub(crate) const SEMANTIC_VIEW_LAYOUT_INSPECTION: u32 = 1 << 1;
 pub(crate) const SEMANTIC_VIEW_MASK: u32 =
@@ -96,6 +98,7 @@ pub(crate) struct UpdateRequest<'a> {
     pub policy_handle: u32,
     pub capability_set: u32,
     pub semantic_view_mask: u32,
+    pub compositing_independent: bool,
     pub limits: UpdateLimits,
     pub paragraph_mutations: super::semantic_wire::ParagraphMutationBatch<'a>,
     pub text_mutations: super::semantic_wire::TextMutationBatch<'a>,

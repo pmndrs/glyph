@@ -74,6 +74,9 @@ export const textShaperAbi = {
       "polygon": 2,
       "rectangle": 1
     },
+    "frameFlags": {
+      "compositingIndependent": 1
+    },
     "inlineAlignments": {
       "center": 2,
       "end": 3,

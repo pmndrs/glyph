@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { createRuntimeShaper, createTextRuntime, FontRegistry } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
-import { Text, TextGroup } from '@pmndrs/text/three';
+import { setThreeTextProfiler, Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -152,6 +152,35 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.equal(transforms.array[1 * 16 + 12], 2);
   assert.equal(transforms.array[2 * 16 + 12], 5);
 
+  const initialLeftMeasurement = left.measureLayout();
+  const initialRightMeasurement = right.measureLayout();
+  assert.ok(initialLeftMeasurement);
+  assert.ok(initialRightMeasurement);
+  let updateCrossings = 0;
+  setThreeTextProfiler((phase) => {
+    if (phase === 'engine.update') updateCrossings += 1;
+  });
+  try {
+    left.set({});
+    assert.equal(left.measureLayout(), initialLeftMeasurement, 'an empty update must preserve the cached measurement');
+    scene.updateMatrixWorld();
+    assert.equal(updateCrossings, 0, 'an empty update and cached measurement must not cross into Rust');
+
+    left.contentBox = { width: { mode: 'exact', size: 100 }, wrap: 'word' };
+    const resizedMeasurement = left.measureLayout();
+    assert.ok(resizedMeasurement, 'a pending mutation must produce its requested measurement');
+    assert.notEqual(resizedMeasurement, initialLeftMeasurement);
+    assert.deepEqual(
+      right.measureLayout(),
+      initialRightMeasurement,
+      'one requested semantic publication must populate every retained paragraph',
+    );
+    scene.updateMatrixWorld();
+  } finally {
+    setThreeTextProfiler(undefined);
+  }
+  assert.equal(updateCrossings, 1, 'mutation, render plan, and demanded measurement must share one text_update');
+
   const leftOrigins = left.snapshotGlyphOrigins();
   const rightOrigins = right.snapshotGlyphOrigins();
   assert.equal(leftOrigins.shapedX.length, 2);
@@ -183,6 +212,23 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
     resizedOrigins.shapedX,
     'an authoritative command-buffer update must retire the previous presentation override',
   );
+
+  updateCrossings = 0;
+  setThreeTextProfiler((phase) => {
+    if (phase === 'engine.update') updateCrossings += 1;
+  });
+  try {
+    left.text = 'ABC';
+    const replacedMeasurement = left.measureLayout();
+    assert.equal(replacedMeasurement?.glyphCount, 3);
+    scene.updateMatrixWorld();
+  } finally {
+    setThreeTextProfiler(undefined);
+  }
+  assert.equal(updateCrossings, 1, 'text replacement and demanded measurement must share one text_update');
+  const replacedDraws = group.children.filter((child) => child.isMesh);
+  assert.equal(replacedDraws.length, 1);
+  assert.equal(replacedDraws[0].geometry.instanceCount, 5, 'the published command buffer must include the new glyph');
 
   group.dispose();
   left.dispose();

@@ -29,6 +29,8 @@ pub struct PlanInput<'a> {
     pub semantic_change_masks: &'a [u16],
     pub f32_fields: &'a [&'a [f32]],
     pub u32_fields: &'a [&'a [u32]],
+    /// The caller guarantees that reordering compatible draws cannot change compositing.
+    pub order_independent: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,4 +100,42 @@ pub fn span_bounds(glyphs: &[PlanGlyph]) -> Result<(f32, f32, f32, f32), PlanInp
         return Err(PlanInputError::InvalidShape);
     }
     Ok((inline_start, block_start, inline_extent, block_extent))
+}
+
+pub fn indexed_span_bounds(
+    glyphs: &[PlanGlyph],
+    mut indices: impl Iterator<Item = usize>,
+) -> Result<(f32, f32, f32, f32), PlanInputError> {
+    let first = glyphs
+        .get(indices.next().ok_or(PlanInputError::InvalidShape)?)
+        .ok_or(PlanInputError::InvalidShape)?;
+    let mut inline_start = first.inline_start;
+    let mut block_start = first.block_start;
+    let mut inline_end = first.inline_start + first.inline_extent;
+    let mut block_end = first.block_start + first.block_extent;
+    for index in indices {
+        let glyph = glyphs.get(index).ok_or(PlanInputError::InvalidShape)?;
+        inline_start = inline_start.min(glyph.inline_start);
+        block_start = block_start.min(glyph.block_start);
+        inline_end = inline_end.max(glyph.inline_start + glyph.inline_extent);
+        block_end = block_end.max(glyph.block_start + glyph.block_extent);
+    }
+    let inline_extent = inline_end - inline_start;
+    let block_extent = block_end - block_start;
+    if !inline_extent.is_finite() || !block_extent.is_finite() {
+        return Err(PlanInputError::InvalidShape);
+    }
+    Ok((inline_start, block_start, inline_extent, block_extent))
+}
+
+pub fn draw_fields_compatible(
+    first: PlanGlyph,
+    next: PlanGlyph,
+    split_material: bool,
+    split_transform: bool,
+) -> bool {
+    (!split_material || next.material_id == first.material_id)
+        && next.clip_id == first.clip_id
+        && next.depth_key == first.depth_key
+        && (!split_transform || next.transform_id == first.transform_id)
 }

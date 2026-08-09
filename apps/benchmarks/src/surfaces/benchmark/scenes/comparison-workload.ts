@@ -1,5 +1,5 @@
 import { FontRegistry, type ParagraphLayoutSummary, type RegisteredFont } from '@pmndrs/text';
-import { TextGroup } from '@pmndrs/text/three';
+import { setThreeTextProfiler, TextGroup, threeTextUserTimingProfiler } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/text/three/bitmap';
 
@@ -66,6 +66,18 @@ import {
 } from '../../../renderer/retained-font-fixture';
 
 type WorkloadEntry = ComparisonWorkloadEntry;
+
+const textTimingsEnabled =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).get('textTimings') === '1';
+if (textTimingsEnabled) setThreeTextProfiler(threeTextUserTimingProfiler());
+
+function timingBegin(): number {
+  return textTimingsEnabled ? performance.now() : 0;
+}
+
+function timingEnd(name: string, startedMs: number): void {
+  if (textTimingsEnabled) performance.measure(`@pmndrs/benchmark ${name}`, { start: startedMs });
+}
 
 export type {
   ComparisonWorkloadConfiguration,
@@ -596,7 +608,9 @@ async function createComparisonWorkloadRuntime(
       const previous = entries;
       const previousRoot = batchRoot;
       const reuseBatchRoot =
-        previousRoot instanceof TextGroup && comparisonWorkloadDefinition(next.workload).batching !== 'standalone';
+        previousRoot instanceof TextGroup &&
+        comparisonWorkloadDefinition(next.workload).batching !== 'standalone' &&
+        previousRoot.compositing === workloadCompositing(next.workload);
       const nextEntries = createEntries(
         activeFont().loaded,
         technique,
@@ -734,6 +748,7 @@ async function createComparisonWorkloadRuntime(
         return;
       }
       if (contentWidthChanged || fontSizeChanged) {
+        const retainedUpdateStarted = timingBegin();
         const readyStarted = performance.now();
         const retainedWidths = contentWidthChanged
           ? next.workload === 'dynamic-layout'
@@ -746,15 +761,23 @@ async function createComparisonWorkloadRuntime(
           for (const [index, entry] of entries.entries()) entry.lastWidth = retainedWidths[index]!;
         }
         const scheduledAt = performance.now();
+        const stagingStarted = timingBegin();
         applyRetainedTextLayout(
           entries.map(({ text }) => text),
           retainedWidths,
           fontSizeChanged ? next.fontSize : undefined,
         );
-        publishWorkloadTexts(batchRoot, entries);
-        const readyAt = performance.now();
+        timingEnd('text.stage', stagingStarted);
         const sceneStartedAt = performance.now();
+        // Layout metrics are demanded before explicit publication so the query mask rides on the pending semantic
+        // update. The following scene publication sees clean Rust state and only synchronizes renderer transforms.
+        const layoutStarted = timingBegin();
         layoutEntries(entries, next, width, height);
+        timingEnd('text.update-and-measure', layoutStarted);
+        const readyAt = performance.now();
+        const publishStarted = timingBegin();
+        publishWorkloadTexts(batchRoot, entries);
+        timingEnd('text.publish-clean', publishStarted);
         const finishedAt = performance.now();
         textReadyMs = finishedAt - readyStarted;
         textUpdateTelemetry.record({
@@ -764,6 +787,7 @@ async function createComparisonWorkloadRuntime(
           totalMs: finishedAt - readyStarted,
         });
         recordReflow(finishedAt - readyStarted);
+        timingEnd('text.retained-update', retainedUpdateStarted);
       } else if (viewportChanged) {
         layoutEntries(entries, next, width, height);
       }
@@ -874,6 +898,7 @@ async function createComparisonWorkloadRuntime(
           const started = performance.now();
           canvasSurface.render(scene, camera);
           const submitMs = performance.now() - started;
+          timingEnd('renderer.submit', started);
           if (firstDrawMs === 0) {
             firstDrawMs = submitMs;
             uploadFrameCompleteMs = submitMs;
@@ -1117,7 +1142,12 @@ function createBatchRoot(workload: ComparisonWorkloadId): THREE.Object3D {
   // boundary and turn one draw into several, which would make the batched lanes look worse than the standalone one.
   return new TextGroup({
     capacity: { size: 4_096, policy: 'grow' },
+    compositing: workloadCompositing(workload),
   });
+}
+
+function workloadCompositing(workload: ComparisonWorkloadId): 'ordered' | 'independent' {
+  return workload === 'icon-grid' ? 'independent' : 'ordered';
 }
 
 function disposeBatchRoot(root: THREE.Object3D): void {

@@ -43,8 +43,13 @@ import {
   type ThreeTextEngineStackLease,
 } from './engine-runtime.js';
 import type { ThreeTextMaterial } from './material.js';
+import { textProfileBegin, textProfileEnd } from './profiler.js';
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
+const TEXT_CHANGE = 1 << 0;
+const STYLE_CHANGE = 1 << 1;
+const GEOMETRY_CHANGE = 1 << 2;
+const ALL_SEMANTIC_CHANGES = TEXT_CHANGE | STYLE_CHANGE | GEOMETRY_CHANGE;
 
 export type TextSpan<Technique extends AnyRasterTechnique> = Omit<ParagraphSpan<Technique>, 'renderVariant'> &
   Readonly<{ material?: ThreeTextMaterial }>;
@@ -73,6 +78,8 @@ export type TextUpdate<Technique extends AnyRasterTechnique> =
 
 export interface TextGroupOptions {
   readonly capacity?: GlyphBufferCapacity;
+  /** Allows Rust to reorder compatible draws when descendants do not require compositing order. */
+  readonly compositing?: 'ordered' | 'independent';
   readonly renderOrder?: number;
   readonly material?: ThreeTextMaterial;
 }
@@ -111,6 +118,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   #textGroup: TextGroup | undefined;
   #desiredRevision = 0;
   #appliedRevision = -1;
+  #semanticChanges = ALL_SEMANTIC_CHANGES;
   #disposed = false;
   #error: unknown;
   onError: ((error: unknown) => void) | undefined;
@@ -192,13 +200,17 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
 
   set(update: TextUpdate<Technique>): void {
     this.#assertActive();
-    const next = normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<Technique>);
+    const normalizedUpdate = replacedContent(update);
+    const changes = classifySemanticChanges(normalizedUpdate);
+    if (changes === 0) return;
+    const next = normalizeDesired({ ...this.#desired, ...normalizedUpdate } as TextProperties<Technique>);
     const fonts = selectedFonts(next);
     acquireFonts(fonts, this.#runtime);
     releaseFonts(this.#leasedFonts);
     this.#leasedFonts = fonts;
     this.#desired = next;
     this.#desiredRevision += 1;
+    this.#semanticChanges |= changes;
   }
 
   setSpan(index: number, span: TextSpan<Technique>): void {
@@ -297,8 +309,12 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   needsApply(): boolean {
     return this.#desiredRevision !== this.#appliedRevision;
   }
+  semanticChanges(): number {
+    return this.#semanticChanges;
+  }
   markApplied(): void {
     this.#appliedRevision = this.#desiredRevision;
+    this.#semanticChanges = 0;
   }
   bind(binding: ThreeTextBatchBinding, group: TextGroup | undefined): void {
     if (this.#binding !== binding) this.#unbind();
@@ -329,6 +345,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
 
 export class TextGroup extends THREE.Object3D {
   #capacity: GlyphBufferCapacity;
+  readonly #compositing: 'ordered' | 'independent';
   #material: ThreeTextMaterial | undefined;
   #binding: ThreeTextBatchBinding | undefined;
   #disposed = false;
@@ -338,11 +355,15 @@ export class TextGroup extends THREE.Object3D {
   constructor(options: TextGroupOptions = {}) {
     super();
     this.#capacity = normalizeCapacity(options.capacity ?? { size: 4_096, policy: 'chunk' });
+    this.#compositing = normalizeCompositing(options.compositing);
     this.#material = options.material;
     if (options.renderOrder !== undefined) this.renderOrder = options.renderOrder;
   }
   get capacity(): GlyphBufferCapacity {
     return this.#capacity;
+  }
+  get compositing(): 'ordered' | 'independent' {
+    return this.#compositing;
   }
   get textCount(): number {
     return this.#binding?.textCount ?? 0;
@@ -506,33 +527,12 @@ class ThreeTextBatchBinding {
   }
   measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary | undefined {
     if (!this.#paragraphs.has(text)) return undefined;
-    this.synchronize();
-    const cached = this.#measurements.get(text);
-    if (cached !== undefined) return cached;
-    const publication = this.#querySemanticViews(textShaperAbi.engine.semanticViewMasks.measurement);
-    const measurements = readTextEngineMeasurements(publication);
-    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
-    for (const [paragraphId, measurement] of measurements) {
-      const measuredText = this.#textsByParagraph.get(paragraphId);
-      if (measuredText === undefined) throw new Error(`text engine measured unknown paragraph ${paragraphId}`);
-      this.#measurements.set(measuredText, measurement);
-    }
+    this.synchronize(textShaperAbi.engine.semanticViewMasks.measurement);
     return this.#measurements.get(text);
   }
   layoutInspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection | undefined {
     if (!this.#paragraphs.has(text)) return undefined;
-    this.synchronize();
-    const cached = this.#layoutInspections.get(text);
-    if (cached !== undefined) return cached;
-    const publication = this.#querySemanticViews(textShaperAbi.engine.semanticViewMasks.layoutInspection);
-    const layouts = readTextEngineLayouts(publication);
-    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
-    for (const [paragraphId, layout] of layouts) {
-      const inspectedText = this.#textsByParagraph.get(paragraphId);
-      if (inspectedText === undefined) throw new Error(`text engine inspected unknown paragraph ${paragraphId}`);
-      this.#measurements.set(inspectedText, layout);
-      this.#layoutInspections.set(inspectedText, layout);
-    }
+    this.synchronize(textShaperAbi.engine.semanticViewMasks.layoutInspection);
     return this.#layoutInspections.get(text);
   }
   glyphOriginSnapshot(text: Text<AnyRasterTechnique>): TextGlyphOriginSnapshot | undefined {
@@ -562,20 +562,31 @@ class ThreeTextBatchBinding {
   reconcileStandalone(text: Text<AnyRasterTechnique>): void {
     this.#ensureText(text, undefined);
   }
-  synchronize(): void {
+  synchronize(semanticViewMask = 0): void {
     if (this.#disposed) return;
+    const frameStarted = textProfileBegin();
     const ordered = [...this.#paragraphs.entries()].sort(
       ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
     );
-    const changed = ordered.flatMap(([text, paragraph], order) =>
-      paragraph.created || this.#materialInvalidated || text.needsApply() || paragraph.order !== order
-        ? [{ text, paragraph, order }]
-        : [],
-    );
+    const changed = ordered.flatMap(([text, paragraph], order) => {
+      const semanticChanges =
+        (paragraph.created ? ALL_SEMANTIC_CHANGES : text.semanticChanges()) |
+        (this.#materialInvalidated ? STYLE_CHANGE : 0);
+      return semanticChanges !== 0 || text.needsApply() || paragraph.order !== order
+        ? [{ text, paragraph, order, semanticChanges }]
+        : [];
+    });
     if (changed.length === 0 && this.#removed.length === 0) {
+      const transformsStarted = textProfileBegin();
       this.#target.syncTransforms();
+      textProfileEnd('transforms.sync', transformsStarted);
+      if (semanticViewMask !== 0 && !this.#hasSemanticViews(semanticViewMask)) {
+        this.#retainSemanticViews(this.#querySemanticViews(semanticViewMask), semanticViewMask);
+      }
+      textProfileEnd('frame.total', frameStarted);
       return;
     }
+    const preparingStarted = textProfileBegin();
     const paragraphMutations = [
       ...this.#removed.map((paragraph) => ({ opcode: 'remove' as const, paragraphId: paragraph.id })),
       ...changed.map(({ paragraph, order }) => ({
@@ -590,36 +601,44 @@ class ThreeTextBatchBinding {
     const regions: TextEngineRegion[] = [];
     const pendingLeases = new Map<RetainedEngineParagraph, ThreeTextEngineStackLease[]>();
     const pendingMaterials = new Map<RetainedEngineParagraph, ThreeTextMaterialLease[]>();
+    const pendingChanges = new Map<RetainedEngineParagraph, number>();
     let committed = false;
     try {
-      for (const { text, paragraph } of changed) {
+      for (const { text, paragraph, semanticChanges } of changed) {
+        pendingChanges.set(paragraph, semanticChanges);
         const properties = text.coreProperties();
         const content = properties.text as string;
-        textMutations.push({
-          paragraphId: paragraph.id,
-          start: 0,
-          deleteCount: paragraph.textLength,
-          insert: content,
-        });
-        const leases: ThreeTextEngineStackLease[] = [];
-        const materials: ThreeTextMaterialLease[] = [];
-        pendingLeases.set(paragraph, leases);
-        pendingMaterials.set(paragraph, materials);
-        const styles = compileEngineStyles(
-          this.#coordinator,
-          paragraph.id,
-          properties,
-          this.#group?.material,
-          leases,
-          materials,
-        );
-        styleMutations.push(...styles);
-        for (let styleId = styles.length + 1; styleId <= paragraph.styleCount; styleId += 1) {
-          styleMutations.push({ opcode: 'remove', paragraphId: paragraph.id, styleId });
+        if (semanticChanges & TEXT_CHANGE) {
+          textMutations.push({
+            paragraphId: paragraph.id,
+            start: 0,
+            deleteCount: paragraph.textLength,
+            insert: content,
+          });
         }
-        const geometry = compileEngineGeometry(paragraph, properties.contentBox, regions.length, content.length);
-        constraints.push(geometry.constraint);
-        regions.push(geometry.region);
+        if (semanticChanges & STYLE_CHANGE) {
+          const leases: ThreeTextEngineStackLease[] = [];
+          const materials: ThreeTextMaterialLease[] = [];
+          pendingLeases.set(paragraph, leases);
+          pendingMaterials.set(paragraph, materials);
+          const styles = compileEngineStyles(
+            this.#coordinator,
+            paragraph.id,
+            properties,
+            this.#group?.material,
+            leases,
+            materials,
+          );
+          styleMutations.push(...styles);
+          for (let styleId = styles.length + 1; styleId <= paragraph.styleCount; styleId += 1) {
+            styleMutations.push({ opcode: 'remove', paragraphId: paragraph.id, styleId });
+          }
+        }
+        if (semanticChanges & GEOMETRY_CHANGE) {
+          const geometry = compileEngineGeometry(paragraph, properties.contentBox, regions.length, content.length);
+          constraints.push(geometry.constraint);
+          regions.push(geometry.region);
+        }
       }
       const totalTextLength = [...this.#paragraphs.keys()].reduce((total, text) => total + text.text.length, 0);
       const limits = engineLimits(
@@ -636,6 +655,8 @@ class ThreeTextBatchBinding {
         expectedEngineRevision: this.#engineRevision,
         consumedPlanRevision: this.#planRevision,
         acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
+        compositingIndependent: this.#group?.compositing === 'independent',
+        semanticViewMask,
         limits,
         paragraphMutations,
         textMutations,
@@ -643,9 +664,12 @@ class ThreeTextBatchBinding {
         constraints,
         regions,
       });
+      textProfileEnd('frame.prepare', preparingStarted);
       let publication: TextEnginePublication;
       try {
+        const updateStarted = textProfileBegin();
         publication = this.#session.update(frame);
+        textProfileEnd('engine.update', updateStarted);
       } catch (error) {
         if (error instanceof TextEngineStatusError) {
           error.message +=
@@ -662,19 +686,20 @@ class ThreeTextBatchBinding {
       for (const removed of this.#removed) releaseMaterialLeases(removed.materialLeases);
       this.#removed.length = 0;
       for (const [order, [text, paragraph]] of ordered.entries()) {
-        if (!pendingLeases.has(paragraph) && paragraph.order === order) continue;
+        const semanticChanges = pendingChanges.get(paragraph) ?? 0;
+        if (semanticChanges === 0 && paragraph.order === order) continue;
         const nextLeases = pendingLeases.get(paragraph);
         if (nextLeases !== undefined) {
           releaseStackLeases(paragraph.stackLeases);
           releaseMaterialLeases(paragraph.materialLeases);
           paragraph.stackLeases = nextLeases;
           paragraph.materialLeases = pendingMaterials.get(paragraph) ?? [];
-          paragraph.textLength = text.text.length;
           paragraph.styleCount = 1 + text.spans.length;
-          paragraph.geometryRevision += 1;
-          paragraph.created = false;
-          text.markApplied();
         }
+        if (semanticChanges & TEXT_CHANGE) paragraph.textLength = text.text.length;
+        if (semanticChanges & GEOMETRY_CHANGE) paragraph.geometryRevision += 1;
+        paragraph.created = false;
+        text.markApplied();
         paragraph.order = order;
       }
       this.#materialInvalidated = false;
@@ -682,13 +707,17 @@ class ThreeTextBatchBinding {
       this.#layoutInspections.clear();
       committed = true;
       try {
+        const applyStarted = textProfileBegin();
         this.#target.apply(publication);
+        textProfileEnd('plan.apply', applyStarted);
         this.#lastPublication = undefined;
       } catch (error) {
         this.#lastPublication = ownPublication(publication);
         throw error;
       }
       this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
+      this.#retainSemanticViews(publication, semanticViewMask);
+      textProfileEnd('frame.total', frameStarted);
     } catch (error) {
       if (!committed) {
         for (const leases of pendingLeases.values()) releaseStackLeases(leases);
@@ -772,6 +801,7 @@ class ThreeTextBatchBinding {
 
   #querySemanticViews(semanticViewMask: number): TextEnginePublication {
     const totalTextLength = [...this.#paragraphs.keys()].reduce((total, entry) => total + entry.text.length, 0);
+    const updateStarted = textProfileBegin();
     const publication = this.#session.update(
       compileTextEngineFrameUpdate({
         sessionId: this.#session.handle,
@@ -780,6 +810,7 @@ class ThreeTextBatchBinding {
         expectedEngineRevision: this.#engineRevision,
         consumedPlanRevision: this.#planRevision,
         acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
+        compositingIndependent: this.#group?.compositing === 'independent',
         semanticViewMask,
         limits: engineLimits(
           this.#paragraphs.size,
@@ -789,9 +820,43 @@ class ThreeTextBatchBinding {
         ),
       }),
     );
+    textProfileEnd('engine.update', updateStarted);
     this.#engineRevision = publication.engineRevision;
     this.#planRevision = publication.planRevision;
     return publication;
+  }
+
+  #hasSemanticViews(semanticViewMask: number): boolean {
+    if (semanticViewMask === textShaperAbi.engine.semanticViewMasks.measurement) {
+      return this.#measurements.size === this.#paragraphs.size;
+    }
+    if (semanticViewMask === textShaperAbi.engine.semanticViewMasks.layoutInspection) {
+      return this.#layoutInspections.size === this.#paragraphs.size;
+    }
+    return false;
+  }
+
+  #retainSemanticViews(publication: TextEnginePublication, semanticViewMask: number): void {
+    if (semanticViewMask === 0) return;
+    const readingStarted = textProfileBegin();
+    if (semanticViewMask === textShaperAbi.engine.semanticViewMasks.measurement) {
+      for (const [paragraphId, measurement] of readTextEngineMeasurements(publication)) {
+        const measuredText = this.#textsByParagraph.get(paragraphId);
+        if (measuredText === undefined) throw new Error(`text engine measured unknown paragraph ${paragraphId}`);
+        this.#measurements.set(measuredText, measurement);
+      }
+    } else if (semanticViewMask === textShaperAbi.engine.semanticViewMasks.layoutInspection) {
+      for (const [paragraphId, layout] of readTextEngineLayouts(publication)) {
+        const inspectedText = this.#textsByParagraph.get(paragraphId);
+        if (inspectedText === undefined) throw new Error(`text engine inspected unknown paragraph ${paragraphId}`);
+        this.#measurements.set(inspectedText, layout);
+        this.#layoutInspections.set(inspectedText, layout);
+      }
+    } else {
+      throw new RangeError(`unsupported semantic view mask ${semanticViewMask}`);
+    }
+    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
+    textProfileEnd('semantic.read', readingStarted);
   }
 }
 
@@ -1026,6 +1091,23 @@ function replacedContent<Technique extends AnyRasterTechnique>(update: TextUpdat
   return { ...update, spans: [] } as TextUpdate<Technique>;
 }
 
+function classifySemanticChanges<Technique extends AnyRasterTechnique>(update: TextUpdate<Technique>): number {
+  let changes = 0;
+  if (Object.hasOwn(update, 'text')) changes |= TEXT_CHANGE | STYLE_CHANGE | GEOMETRY_CHANGE;
+  if (
+    Object.hasOwn(update, 'font') ||
+    Object.hasOwn(update, 'spans') ||
+    Object.hasOwn(update, 'style') ||
+    Object.hasOwn(update, 'paint') ||
+    Object.hasOwn(update, 'rasterPixelRatio') ||
+    Object.hasOwn(update, 'material')
+  ) {
+    changes |= STYLE_CHANGE;
+  }
+  if (Object.hasOwn(update, 'contentBox')) changes |= GEOMETRY_CHANGE;
+  return changes;
+}
+
 function normalizeDesired<Technique extends AnyRasterTechnique>(
   properties: TextProperties<Technique>,
 ): DesiredTextState<Technique> {
@@ -1074,6 +1156,11 @@ function normalizeCapacity(value: GlyphBufferCapacity): GlyphBufferCapacity {
   if (value.policy !== 'grow' && value.policy !== 'chunk' && value.policy !== 'fixed')
     throw new TypeError('glyph capacity policy is invalid');
   return Object.freeze({ size: value.size, policy: value.policy });
+}
+function normalizeCompositing(value: TextGroupOptions['compositing']): 'ordered' | 'independent' {
+  if (value === undefined || value === 'ordered') return 'ordered';
+  if (value === 'independent') return value;
+  throw new TypeError('text group compositing mode is invalid');
 }
 function nearestTextGroup(object: THREE.Object3D): TextGroup | undefined {
   let parent = object.parent;
