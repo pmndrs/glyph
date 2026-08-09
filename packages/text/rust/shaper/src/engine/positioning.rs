@@ -234,6 +234,7 @@ impl PositionedGlyphArena {
                 .ok_or(EngineError::InvalidRequest)?
                 .style;
             let font_handle = clusters.font_handles[cluster];
+            let binding_handle = clusters.binding_handles[cluster];
             let metrics = metrics_for(font_handle).ok_or(EngineError::InvalidRequest)?;
             if font_handle == 0 || metrics.units_per_em == 0 {
                 return Err(EngineError::InvalidRequest);
@@ -296,6 +297,7 @@ impl PositionedGlyphArena {
                                 .get(adjacency)
                                 .ok_or(EngineError::InvalidRequest)?,
                             content_revision: 0,
+                            binding_handle,
                             font_handle,
                             glyph_id,
                             semantic_id: clusters.stable_ids[cluster],
@@ -424,6 +426,7 @@ impl PositionedGlyphArena {
         let old = previous.glyphs[previous_slot];
         if next.stable_id != old.stable_id
             || next.font_handle != old.font_handle
+            || next.binding_handle != old.binding_handle
             || next.glyph_id != old.glyph_id
             || next.semantic_id != old.semantic_id
             || next.material_id != old.material_id
@@ -710,6 +713,7 @@ mod tests {
             flags: vec![CLUSTER_SAFE_BEFORE, CLUSTER_SAFE_BEFORE, CLUSTER_HARD_BREAK],
             style_indexes: vec![0, 0, 0],
             source_runs: vec![0, 0, u32::MAX],
+            binding_handles: vec![11, 11, 0],
             font_handles: vec![1, 1, 0],
             stable_ids: vec![10, 20, 30],
             glyph_starts: vec![0, 1, 2],

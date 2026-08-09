@@ -234,7 +234,12 @@ interface ShaperExports {
   readonly analyzeBidi: (pointer: number, length: number) => number;
   readonly resultPointer: () => number;
   readonly resultLength: () => number;
-  readonly registerFontBinding: (fontHandle: number, pointer: number, length: number) => number;
+  readonly registerFontBinding: (
+    bindingHandle: number,
+    shapingFontHandle: number,
+    pointer: number,
+    length: number,
+  ) => number;
   readonly registerFontStack: (handle: number, pointer: number, count: number) => number;
   readonly disposeFontStack: (handle: number) => number;
   readonly registerPolicy: (handle: number, pointer: number, length: number) => number;

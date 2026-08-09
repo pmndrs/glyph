@@ -25,6 +25,7 @@ pub(crate) struct ClusterArena {
     pub flags: Vec<u8>,
     pub style_indexes: Vec<u32>,
     pub source_runs: Vec<u32>,
+    pub binding_handles: Vec<u32>,
     pub font_handles: Vec<u32>,
     pub stable_ids: Vec<u32>,
     pub glyph_starts: Vec<u32>,
@@ -53,6 +54,7 @@ impl ClusterArena {
         reserve(&mut self.flags, capacity)?;
         reserve(&mut self.style_indexes, capacity)?;
         reserve(&mut self.source_runs, capacity)?;
+        reserve(&mut self.binding_handles, capacity)?;
         reserve(&mut self.font_handles, capacity)?;
         reserve(&mut self.stable_ids, capacity)?;
         reserve(&mut self.glyph_starts, capacity)?;
@@ -116,6 +118,7 @@ impl ClusterArena {
             self.style_indexes
                 .push(u32::try_from(style_index).map_err(|_| EngineError::ResultTooLarge)?);
             self.source_runs.push(NO_SOURCE_RUN);
+            self.binding_handles.push(0);
             self.font_handles.push(0);
             self.stable_ids.push(
                 *text_unit_ids
@@ -199,6 +202,7 @@ impl ClusterArena {
         self.flags.clear();
         self.style_indexes.clear();
         self.source_runs.clear();
+        self.binding_handles.clear();
         self.font_handles.clear();
         self.stable_ids.clear();
         self.glyph_starts.clear();
@@ -261,11 +265,14 @@ impl ClusterArena {
                     .ok_or(EngineError::InvalidRequest)?;
                 let cluster_index = self.cluster_at(cluster)?;
                 let source_slot = &mut self.source_runs[cluster_index];
+                let binding_slot = &mut self.binding_handles[cluster_index];
                 let font_slot = &mut self.font_handles[cluster_index];
                 if *source_slot == NO_SOURCE_RUN {
                     *source_slot = shaped_run.source_run;
+                    *binding_slot = shaped_run.binding_handle;
                     *font_slot = shaped_run.font_handle;
                 } else if *source_slot != shaped_run.source_run
+                    || *binding_slot != shaped_run.binding_handle
                     || *font_slot != shaped_run.font_handle
                 {
                     return Err(EngineError::InvalidRequest);
@@ -437,6 +444,7 @@ mod tests {
         let mut shape = ShapeArena {
             runs: vec![ShapedRun {
                 source_run: 0,
+                binding_handle: 19,
                 font_handle: 9,
                 text_start: 0,
                 text_end: 3,

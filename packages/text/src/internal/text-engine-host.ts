@@ -64,11 +64,15 @@ export class TextEngineHost {
     this.#exports = runtimeShaperEngineExports(shaper);
   }
 
-  registerFontBinding(fontHandle: number, bytes: Uint8Array): void {
+  registerFontBinding(bindingHandle: number, shapingFontHandle: number, bytes: Uint8Array): void {
     this.#assertActive();
-    uint32Handle(fontHandle, 'font handle');
+    uint32Handle(bindingHandle, 'font binding handle');
+    uint32Handle(shapingFontHandle, 'shaping font handle');
     this.#withBytes(bytes, (pointer, length) =>
-      requireStatus(this.#exports.registerFontBinding(fontHandle, pointer, length), 'register font binding'),
+      requireStatus(
+        this.#exports.registerFontBinding(bindingHandle, shapingFontHandle, pointer, length),
+        'register font binding',
+      ),
     );
   }
 

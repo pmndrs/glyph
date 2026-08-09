@@ -248,7 +248,7 @@ function registerFont() {
 function registerBinding() {
   const bytes = technique.bindingBytes;
   const pointer = copyIntoAllocation(memory, fn.allocate, bytes);
-  requireStatus(fn.registerFontBinding(fontHandle, pointer, bytes.byteLength), 'register font binding');
+  requireStatus(fn.registerFontBinding(fontHandle, fontHandle, pointer, bytes.byteLength), 'register font binding');
   fn.deallocate(pointer, bytes.byteLength);
 }
 

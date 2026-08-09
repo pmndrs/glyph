@@ -18,6 +18,7 @@ pub const DEFAULT_GATHER_RECORD_CAPACITY: usize = 32_768;
 pub struct LayoutGlyph {
     pub stable_id: u32,
     pub content_revision: u32,
+    pub binding_handle: u32,
     pub font_handle: u32,
     pub glyph_id: u32,
     pub semantic_id: u32,
@@ -132,12 +133,12 @@ impl PolicyGatherWorkspace {
         let mut cached_program = None;
         for glyph_index in 0..input.glyphs.len() {
             let glyph = input.glyphs[glyph_index];
-            let binding = if cached_font_handle == Some(glyph.font_handle) {
+            let binding = if cached_font_handle == Some(glyph.binding_handle) {
                 cached_binding.ok_or(GatherError::FontBindingMissing)?
             } else {
-                let binding =
-                    binding_for_font(glyph.font_handle).ok_or(GatherError::FontBindingMissing)?;
-                cached_font_handle = Some(glyph.font_handle);
+                let binding = binding_for_font(glyph.binding_handle)
+                    .ok_or(GatherError::FontBindingMissing)?;
+                cached_font_handle = Some(glyph.binding_handle);
                 cached_binding = Some(binding);
                 binding
             };
@@ -723,6 +724,7 @@ mod tests {
         LayoutGlyph {
             stable_id,
             content_revision: 1,
+            binding_handle: 9,
             font_handle: 9,
             glyph_id,
             semantic_id: 1,

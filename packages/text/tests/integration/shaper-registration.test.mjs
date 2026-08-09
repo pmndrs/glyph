@@ -5,7 +5,7 @@ import test from 'node:test';
 import { createRuntimeShaper, FontRegistry } from '@pmndrs/text';
 import { createFontBaker } from '@pmndrs/text-font-baker';
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
-import { fontBindingBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
+import { fontBindingBytes, renderPolicyBytes, renderPolicyBytesFromPrograms } from '../support/engine-abi.mjs';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
 const shaperWasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
@@ -130,13 +130,18 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   });
   const binding = copyToWasm(memory, fn.allocate, bindingBytes);
   assert.equal(fn.fontBindingCount(), 0);
-  assert.equal(fn.registerFontBinding(101, binding.pointer, binding.length), abi.status.ok);
-  assert.equal(fn.registerFontBinding(101, binding.pointer, binding.length), abi.status.ok);
+  assert.equal(fn.registerFontBinding(101, 101, binding.pointer, binding.length), abi.status.ok);
+  assert.equal(fn.registerFontBinding(101, 101, binding.pointer, binding.length), abi.status.ok);
   assert.equal(fn.fontBindingCount(), 1);
   new DataView(memory.buffer).setUint32(binding.pointer + abi.layouts.fontBindingRequest.techniqueId, 2, true);
-  assert.equal(fn.registerFontBinding(101, binding.pointer, binding.length), abi.status.policyConflict);
+  assert.equal(fn.registerFontBinding(101, 101, binding.pointer, binding.length), abi.status.policyConflict);
+  assert.equal(
+    fn.registerFontBinding(102, 101, binding.pointer, binding.length),
+    abi.status.ok,
+    'one shaping font may carry another independently selectable raster binding',
+  );
   fn.deallocate(binding.pointer, binding.length);
-  assert.equal(fn.fontBindingCount(), 1, 'binding state must not borrow the registration allocation');
+  assert.equal(fn.fontBindingCount(), 2, 'binding state must not borrow the registration allocation');
 
   const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(101, 0, 0, 0));
   assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
@@ -239,27 +244,39 @@ test('text_update advances missing clusters through an ordered font stack', asyn
   assert.equal(fn.initialize(), abi.status.ok);
   registerValidatedFont({ abi, fn, memory }, 101, inter);
   registerValidatedFont({ abi, fn, memory }, 202, devanagari);
+  registerSimpleBinding({ abi, fn, memory }, 1001, 101, inter, 71, 1);
+  registerSimpleBinding({ abi, fn, memory }, 1002, 202, devanagari, 72, 2);
 
-  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(101, 0, 0, 0, 202, 0, 0, 0));
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(0xe9, 3, 0, 0, 0xea, 3, 0, 0));
   assert.equal(fn.registerFontStack(17, stack.pointer, 2), abi.status.ok);
   fn.deallocate(stack.pointer, stack.length);
-  const policyBytes = renderPolicyBytes(abi);
+  const policyBytes = twoTechniquePolicyBytes(abi);
   const policy = copyToWasm(memory, fn.allocate, policyBytes);
   assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
   fn.deallocate(policy.pointer, policy.length);
-  assert.equal(fn.createSession(29, 512, abi.layouts.engineResult.size, 0), abi.status.ok);
+  assert.equal(fn.createSession(29, 2048, 64 * 1024, 0), abi.status.ok);
 
   const update = engineStyleUpdateBytes(abi, {
     sessionId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     text: [0x0915],
+    geometry: true,
   });
   const requestPointer = fn.requestPointer(29);
   new Uint8Array(memory.buffer, requestPointer, update.byteLength).set(update);
   const resultPointer = fn.textUpdate(29, requestPointer, update.byteLength);
   const result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
+  const primitivesOffset = result.getUint32(abi.layouts.engineResult.primitivesOffset, true);
+  assert.equal(
+    new DataView(memory.buffer).getUint32(
+      resultPointer + primitivesOffset + abi.layouts.enginePrimitive.techniqueId,
+      true,
+    ),
+    2,
+    'the fallback glyph must retain its own raster technique in the Rust render plan',
+  );
   assert.equal(
     fn.planCount(),
     2,
@@ -306,6 +323,39 @@ function registerValidatedFont({ abi, fn, memory }, handle, validated) {
     abi.status.ok,
   );
   for (const allocation of allocations) fn.deallocate(allocation.pointer, allocation.length);
+}
+
+function registerSimpleBinding({ abi, fn, memory }, bindingHandle, shapingHandle, validated, resourceId, techniqueId) {
+  const glyphCount = validated.glyphExtents.byteLength / 8;
+  const bytes = fontBindingBytes(abi, {
+    techniqueId,
+    glyphCount,
+    strikes: [0],
+    resources: [{ id: resourceId, generation: 1, kind: 1, reference: resourceId }],
+    resourceIndices: new Array(glyphCount).fill(0),
+    glyphF32: [new Array(glyphCount).fill(1)],
+  });
+  const allocation = copyToWasm(memory, fn.allocate, bytes);
+  assert.equal(
+    fn.registerFontBinding(bindingHandle, shapingHandle, allocation.pointer, allocation.length),
+    abi.status.ok,
+  );
+  fn.deallocate(allocation.pointer, allocation.length);
+}
+
+function twoTechniquePolicyBytes(abi) {
+  const program = (techniqueId, programId) => ({
+    techniqueId,
+    programId,
+    f32InputCount: 1,
+    u32InputCount: 0,
+    buffers: [{ id: 1, scalar: abi.policy.scalarTypes.f32, vectorWidth: 1 }],
+    operations: [
+      { opcode: abi.policy.opcodes.loadF32, target: 0, operand0: 0 },
+      { opcode: abi.policy.opcodes.storeF32, operand0: 0, immediate0: 1 },
+    ],
+  });
+  return renderPolicyBytesFromPrograms(abi, [program(1, 1), program(2, 2)]);
 }
 
 function engineStyleUpdateBytes(
