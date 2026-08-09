@@ -28,6 +28,9 @@ import {
   type TextEngineTextMutation,
 } from '../internal/engine-frame-wire.js';
 import type { TextEnginePublication, TextEngineSession } from '../internal/text-engine-host.js';
+import { readTextEngineMeasurements } from '../internal/layout-query-view.js';
+import type { ParagraphMeasurement } from '../layout.js';
+import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import {
   threeTextEngineCoordinator,
@@ -202,6 +205,11 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   retry(): void {
     this.#assertActive();
     this.#binding?.retry();
+  }
+  /** Performs one explicit Rust query when this committed layout has not already been measured. */
+  measureLayout(): ParagraphMeasurement | undefined {
+    this.#assertActive();
+    return this.#binding?.measurement(eraseTextTechnique(this));
   }
 
   override updateMatrixWorld(force?: boolean): void {
@@ -406,6 +414,7 @@ class ThreeTextBatchBinding {
   readonly #paragraphs = new Map<Text<AnyRasterTechnique>, RetainedEngineParagraph>();
   readonly #textsByParagraph = new Map<number, Text<AnyRasterTechnique>>();
   readonly #removed: RetainedEngineParagraph[] = [];
+  readonly #measurements = new Map<Text<AnyRasterTechnique>, ParagraphMeasurement>();
   #nextParagraphId = 1;
   #engineRevision = 0;
   #planRevision = 0;
@@ -455,6 +464,35 @@ class ThreeTextBatchBinding {
   }
   get renderOrderBase(): number {
     return this.#group?.renderOrder ?? 0;
+  }
+  measurement(text: Text<AnyRasterTechnique>): ParagraphMeasurement | undefined {
+    if (!this.#paragraphs.has(text)) return undefined;
+    this.synchronize();
+    const cached = this.#measurements.get(text);
+    if (cached !== undefined) return cached;
+    const totalTextLength = [...this.#paragraphs.keys()].reduce((total, entry) => total + entry.text.length, 0);
+    const publication = this.#session.update(
+      compileTextEngineFrameUpdate({
+        sessionId: this.#session.handle,
+        policyHandle: this.#coordinator.policyHandle,
+        capabilitySet: 1,
+        expectedEngineRevision: this.#engineRevision,
+        consumedPlanRevision: this.#planRevision,
+        acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
+        semanticViewMask: textShaperAbi.engine.semanticViewMasks.measurement,
+        limits: engineLimits(this.#paragraphs.size, totalTextLength, this.#paragraphs.size, this.#resultCapacity),
+      }),
+    );
+    this.#engineRevision = publication.engineRevision;
+    this.#planRevision = publication.planRevision;
+    const measurements = readTextEngineMeasurements(publication);
+    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
+    for (const [paragraphId, measurement] of measurements) {
+      const measuredText = this.#textsByParagraph.get(paragraphId);
+      if (measuredText === undefined) throw new Error(`text engine measured unknown paragraph ${paragraphId}`);
+      this.#measurements.set(measuredText, measurement);
+    }
+    return this.#measurements.get(text);
   }
   reconcile(texts: readonly Text<AnyRasterTechnique>[]): void {
     const desired = new Set(texts);
@@ -568,6 +606,7 @@ class ThreeTextBatchBinding {
         paragraph.order = order;
       }
       this.#materialInvalidated = false;
+      this.#measurements.clear();
       committed = true;
       try {
         this.#target.apply(publication);
@@ -621,6 +660,7 @@ class ThreeTextBatchBinding {
     for (const paragraph of this.#removed) releaseMaterialLeases(paragraph.materialLeases);
     this.#paragraphs.clear();
     this.#textsByParagraph.clear();
+    this.#measurements.clear();
     this.#removed.length = 0;
   }
   #ensureText(text: Text<AnyRasterTechnique>, group: TextGroup | undefined): void {

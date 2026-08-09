@@ -1035,7 +1035,11 @@ impl OrderedPlanCompiler {
                 material_id: if split_material { first.material_id } else { 0 },
                 clip_id: first.clip_id,
                 depth_key: first.depth_key,
-                transform_id: if split_transform { first.transform_id } else { 0 },
+                transform_id: if split_transform {
+                    first.transform_id
+                } else {
+                    0
+                },
                 primitive_start: u32::try_from(primitive_start)
                     .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
                 primitive_count: 1,
@@ -1482,7 +1486,13 @@ mod tests {
                     .collect::<Vec<_>>(),
                 expected
             );
-            assert_eq!(plan.primitives.iter().map(|item| item.record_count).sum::<u16>(), 2);
+            assert_eq!(
+                plan.primitives
+                    .iter()
+                    .map(|item| item.record_count)
+                    .sum::<u16>(),
+                2
+            );
         }
     }
 

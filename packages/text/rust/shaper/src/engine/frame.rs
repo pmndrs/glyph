@@ -1,4 +1,6 @@
 pub(crate) const RESULT_FLAG_CHECKPOINT: u32 = 1;
+pub(crate) const SEMANTIC_VIEW_MEASUREMENT: u32 = 1 << 0;
+pub(crate) const SEMANTIC_VIEW_MASK: u32 = SEMANTIC_VIEW_MEASUREMENT;
 
 pub(crate) const TEXT_MUTATION_REPLACE_UTF16: u8 = 1;
 pub(crate) const TEXT_ENCODING_UTF16_LE: u8 = 1;
@@ -90,6 +92,7 @@ pub(crate) struct UpdateRequest<'a> {
     pub acknowledged_publication_generation: u32,
     pub policy_handle: u32,
     pub capability_set: u32,
+    pub semantic_view_mask: u32,
     pub limits: UpdateLimits,
     pub paragraph_mutations: super::semantic_wire::ParagraphMutationBatch<'a>,
     pub text_mutations: super::semantic_wire::TextMutationBatch<'a>,

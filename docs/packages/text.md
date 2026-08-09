@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:36708c3ebe0e3ee71edc3df4355bd7e68986f64597152fabd7ce196c0b5ac1c7'
+source_digest: 'sha256:aa033b7909cfedec42bced6bd5e9b6b69d4c7fc7490a1f85e4277858498bee23'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -937,6 +937,13 @@ glyph-example package proves this contract without importing text internals or d
 compiled-Wasm lifecycle retains mesh and geometry identity over a text mutation. Its live WebGPU and forced-WebGL2
 frames are deterministic and byte-identical across backends. Individual visibility does not split an indexed draw or
 cross into Wasm: the renderer zeros only that text's matrix-sidecar slot; direct-policy draws mirror object visibility.
+
+Semantic measurement is now the first explicit query over that retained Rust state. `Text.measureLayout()` requests one
+paragraph summary and its line records through the existing frame ABI only when the committed result is absent from its
+cache. A normal rendering update requests no semantic records, and the command-buffer executor never reads the query
+sidecar. A semantic edit clears the cache; repeated measurement of the same committed layout returns the same frozen
+object without another crossing. Rust tests cover exact and at-most box resolution plus overflow, and the compiled-Wasm
+Three fixture proves measurement retains the existing mesh while the removed `Text.layout` arrays remain absent.
 
 Public font stacks no longer repeat a raster technique or require every fallback font to share one. Their generic type
 is the union of the concrete loaded-font techniques, while runtime construction still requires one text-runtime domain,

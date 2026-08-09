@@ -44,8 +44,11 @@ pub(crate) fn parse_update_request(
         || read_u32(bytes, ENGINE_UPDATE_BYTE_LENGTH)?
             != u32::try_from(bytes.len()).map_err(|_| STATUS_INVALID_REQUEST)?
         || read_u32(bytes, ENGINE_UPDATE_FLAGS)? != 0
-        || read_u32(bytes, ENGINE_UPDATE_SEMANTIC_VIEW_MASK)? != 0
     {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let semantic_view_mask = read_u32(bytes, ENGINE_UPDATE_SEMANTIC_VIEW_MASK)?;
+    if semantic_view_mask & !super::frame::SEMANTIC_VIEW_MASK != 0 {
         return Err(STATUS_INVALID_REQUEST);
     }
 
@@ -140,6 +143,7 @@ pub(crate) fn parse_update_request(
         )?,
         policy_handle: read_u32(bytes, ENGINE_UPDATE_POLICY_HANDLE)?,
         capability_set: positive(bytes, ENGINE_UPDATE_CAPABILITY_SET)?,
+        semantic_view_mask,
         limits,
         paragraph_mutations,
         text_mutations,
@@ -169,6 +173,26 @@ mod tests {
         let parsed = parse_update_request(&bytes, 4).unwrap();
         assert_eq!(parsed.session_id, 4);
         assert_eq!(parsed.policy_handle, 9);
+
+        let mut measurement = bytes.clone();
+        write_u32(
+            &mut measurement,
+            ENGINE_UPDATE_SEMANTIC_VIEW_MASK,
+            super::super::frame::SEMANTIC_VIEW_MEASUREMENT,
+        );
+        assert_eq!(
+            parse_update_request(&measurement, 4)
+                .unwrap()
+                .semantic_view_mask,
+            super::super::frame::SEMANTIC_VIEW_MEASUREMENT
+        );
+
+        let mut unknown_view = bytes.clone();
+        write_u32(&mut unknown_view, ENGINE_UPDATE_SEMANTIC_VIEW_MASK, 1 << 31);
+        assert_eq!(
+            parse_update_request(&unknown_view, 4),
+            Err(STATUS_INVALID_REQUEST)
+        );
 
         let mut trailing = bytes.clone();
         trailing.push(0);

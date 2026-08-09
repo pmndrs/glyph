@@ -89,6 +89,9 @@ export const textShaperAbi = {
     "internalBufferBindings": {
       "order": 65535
     },
+    "measurementFlags": {
+      "overflowed": 1
+    },
     "overflowModes": {
       "clip": 2,
       "ellipsis": 3,
@@ -145,6 +148,7 @@ export const textShaperAbi = {
       "fragment": 2,
       "insertedGlyph": 7,
       "line": 1,
+      "paragraphMeasurement": 8,
       "run": 3,
       "selection": 6
     },
@@ -154,6 +158,10 @@ export const textShaperAbi = {
       "foregroundRgba": 0,
       "regionId": 2,
       "transformIndex": 4
+    },
+    "semanticViewMasks": {
+      "all": 1,
+      "measurement": 1
     },
     "styleFields": {
       "all": 8191,
@@ -485,8 +493,8 @@ export const textShaperAbi = {
       "resultCapacity": 48,
       "retirementCount": 124,
       "retirementsOffset": 120,
-      "semanticsCount": 76,
-      "semanticsOffset": 72,
+      "semanticViewCount": 76,
+      "semanticViewsOffset": 72,
       "sessionId": 16,
       "size": 144,
       "status": 8
@@ -502,7 +510,7 @@ export const textShaperAbi = {
       "kind": 0,
       "size": 24
     },
-    "engineSemantic": {
+    "engineSemanticView": {
       "alignment": 4,
       "blockExtent": 40,
       "blockStart": 32,

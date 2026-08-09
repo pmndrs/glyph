@@ -12,6 +12,8 @@ const labels = new TextGroup();
 labels.add(label);
 label.text = 'Updated';
 label.setCapacity({ size: 64, policy: 'grow' });
+const measurement = label.measureLayout();
+void measurement?.contentWidth;
 labels.setCapacity({ size: 4_096, policy: 'chunk' });
 
 labels.add(new Text({ font: mtsdfFont, text: 'Mixed technique' }));

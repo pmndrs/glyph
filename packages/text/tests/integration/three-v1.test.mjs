@@ -40,6 +40,16 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.ok(firstDraws.length > 0);
   assert.equal(firstDraws[0].geometry.instanceCount, 10, 'the GPU plan omits the non-rendering space glyph');
   assert.equal(firstDraws[0].renderOrder, 12);
+  const measurement = label.measureLayout();
+  assert.ok(measurement, 'layout measurement must be available through an explicit Rust query');
+  assert.equal(measurement.width, measurement.contentWidth);
+  assert.equal(measurement.height, measurement.contentHeight);
+  assert.ok(measurement.firstBaseline > 0);
+  assert.equal(measurement.firstBaseline, measurement.lastBaseline);
+  assert.equal(measurement.overflowed, false);
+  assert.equal(label.measureLayout(), measurement, 'an unchanged committed layout must reuse its queried measurement');
+  assert.equal(label.layout, undefined, 'query data must not restore layout arrays to rendering');
+  assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
 
   group.renderOrder = 20;
   scene.updateMatrixWorld();
@@ -61,6 +71,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     7,
     'compatible revisions must retain draws and resize live counts',
   );
+  assert.notEqual(label.measureLayout(), measurement, 'a semantic update must invalidate the measurement cache');
 
   scene.add(label);
   scene.updateMatrixWorld();

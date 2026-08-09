@@ -27,6 +27,7 @@ export interface TextEnginePublication {
   readonly flags: number;
   readonly policyHandle: number;
   readonly capabilitySet: number;
+  readonly semanticViewCount: number;
   readonly primitiveCount: number;
   readonly patchCount: number;
   readonly drawCount: number;
@@ -246,6 +247,7 @@ export class TextEngineSession {
       flags: header.getUint32(layout.flags, true),
       policyHandle: header.getUint32(layout.policyHandle, true),
       capabilitySet: header.getUint32(layout.capabilitySet, true),
+      semanticViewCount: header.getUint32(layout.semanticViewCount, true),
       primitiveCount: header.getUint32(layout.primitiveCount, true),
       patchCount: header.getUint32(layout.patchCount, true),
       drawCount: header.getUint32(layout.drawCount, true),

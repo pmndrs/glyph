@@ -141,8 +141,9 @@ renderer.
   hidden typography crossings.
 - Per-line widths are computed inside Rust from declarative flow regions, columns, exclusions, and inline objects. An
   arbitrary host callback per line is incompatible with both a single crossing and native reuse.
-- The engine output contains semantic layout state and a portable render plan. Canonical GPU-ready records are requested
-  views within that plan, not the only representation of the result.
+- The engine retains semantic layout state and publishes a portable render plan. Rendering receives only policy-packed
+  physical records and commands. Measurement, caret, selection, hit testing, accessibility, and diagnostics are
+  separate demand-shaped views requested explicitly from the retained Rust state.
 - Render implementations register a versioned render-plan policy describing formats, batching compatibility,
   capabilities, patch preferences, and permitted augmentations. Stable policies are referenced by ID on updates rather
   than serialized every frame.
@@ -739,11 +740,10 @@ The render plan is a revisioned display-list and resource transaction, following
 renderers such as WebRender: rendering intent and resource changes are portable; backend command encoding is not.
 [^webrender]
 
-It contains:
+The render plan contains:
 
 - **identity:** ABI, engine revision, plan revision, required base revision, policy/capability hashes, and output
   generation;
-- **semantic tables:** optional line, fragment, run, cluster, logical/visual, caret, selection, and inserted-glyph tables;
 - **resources:** stable IDs, generations, bounds, creation/update/retirement intent, and technique-specific references;
 - **buffers:** stable buffer IDs, schemas, live lengths, capacities, and allocation generations;
 - **patches:** allocate/resize, write range, fill, copy/relocate, and retire operations referencing exact payload spans in
@@ -753,6 +753,11 @@ It contains:
 - **draw packets:** compatible primitive ranges, resource/buffer bindings, ordering tokens, and optional indirect
   argument records; and
 - **retirement:** the earliest generation after which resources, slots, and output bytes may be reused.
+
+An explicitly requested semantic query may share the immutable A/B publication and its lifetime, but it is a sidecar,
+not a render-plan table and not an input to the renderer executor. The first admitted view contains one paragraph
+measurement record plus its line records; its mask is zero on ordinary rendering updates. Glyph inspection, caret,
+selection, hit testing, accessibility, and diagnostics must each prove a bounded record shape before admission.
 
 The initial adapter lowers this IR to Three attributes, TSL storage nodes, and draws. The same graph runs through
 Three's WebGPU backend and forced WebGL2 backend. In Three 0.185.1, WebGL PBO setup replaces the supplied typed array with

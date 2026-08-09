@@ -3,14 +3,6 @@
 //! These types describe rendering intent and revision-relative resource changes. They deliberately
 //! contain no backend command, JavaScript callback, GPU object, or host pointer.
 
-pub const SEMANTIC_LINE: u16 = 1;
-pub const SEMANTIC_FRAGMENT: u16 = 2;
-pub const SEMANTIC_RUN: u16 = 3;
-pub const SEMANTIC_CLUSTER: u16 = 4;
-pub const SEMANTIC_CARET: u16 = 5;
-pub const SEMANTIC_SELECTION: u16 = 6;
-pub const SEMANTIC_INSERTED_GLYPH: u16 = 7;
-
 pub const RESOURCE_ACTION_CREATE: u16 = 1;
 pub const RESOURCE_ACTION_UPDATE: u16 = 2;
 pub const RESOURCE_ACTION_RETAIN: u16 = 3;
@@ -36,23 +28,6 @@ pub const RETIRE_RESOURCE: u16 = 1;
 pub const RETIRE_BUFFER: u16 = 2;
 pub const RETIRE_SLOT_RANGE: u16 = 3;
 pub const RETIRE_OUTPUT_BYTES: u16 = 4;
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct SemanticRecord {
-    pub id: u32,
-    pub kind: u16,
-    pub flags: u16,
-    pub parent_id: u32,
-    pub text_start: u32,
-    pub text_end: u32,
-    pub item_start: u32,
-    pub item_count: u32,
-    pub inline_start: f32,
-    pub block_start: f32,
-    pub inline_extent: f32,
-    pub block_extent: f32,
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -183,7 +158,6 @@ pub struct RenderPlanView<'a> {
     pub policy_handle: u32,
     pub capability_set: u32,
     pub policy_fingerprint: u64,
-    pub semantics: &'a [SemanticRecord],
     pub resources: &'a [ResourceRecord],
     pub buffers: &'a [BufferRecord],
     pub patches: &'a [PatchRecord],
@@ -194,7 +168,6 @@ pub struct RenderPlanView<'a> {
     pub payload: &'a [u8],
 }
 
-const _: () = assert!(core::mem::size_of::<SemanticRecord>() == 44);
 const _: () = assert!(core::mem::size_of::<ResourceRecord>() == 40);
 const _: () = assert!(core::mem::size_of::<BufferRecord>() == 36);
 const _: () = assert!(core::mem::size_of::<PatchRecord>() == 36);

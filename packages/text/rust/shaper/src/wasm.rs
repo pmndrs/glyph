@@ -8,8 +8,8 @@ use crate::{
     bidi,
     engine::{
         EngineError, TextEngine, font_binding_wire::parse_font_binding, frame::SessionRevision,
-        frame_wire::parse_update_request, render_plan_wire::plan_layout, transport::FrameTransport,
-        wire::parse_policy,
+        frame_wire::parse_update_request, render_plan_wire::publication_layout,
+        transport::FrameTransport, wire::parse_policy,
     },
     wire::{
         pack_bidi_result, pack_result, parse_bidi_request, parse_reshape_request,
@@ -546,7 +546,20 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
                 );
             }
         };
-        let required_output = match plan_layout(plan) {
+        let semantic_views = match state.engine.prepared_semantic_views(prepared) {
+            Ok(views) => views,
+            Err(error) => {
+                return publish_prepared_failure(
+                    state,
+                    prepared,
+                    revision,
+                    engine_status(error),
+                    0,
+                    0,
+                );
+            }
+        };
+        let required_output = match publication_layout(plan, semantic_views) {
             Ok(layout) => layout.byte_length,
             Err(status) => {
                 return publish_prepared_failure(state, prepared, revision, status, 0, 0);
@@ -572,7 +585,7 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
         let staged = match state
             .frames
             .get_mut(&session_id)
-            .and_then(|transport| transport.stage_plan(plan).ok())
+            .and_then(|transport| transport.stage_publication(plan, semantic_views).ok())
         {
             Some(staged) => staged,
             None => {

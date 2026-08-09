@@ -17,13 +17,12 @@ use crate::engine::frame::{
     SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INLINE_EXTENT, SEMANTIC_F32_INLINE_START,
     SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_RASTER_PIXEL_RATIO, SEMANTIC_U32_CLUSTER_ID,
     SEMANTIC_U32_FLOW_THREAD_ID, SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_REGION_ID,
-    SEMANTIC_U32_TRANSFORM_INDEX,
-    SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION,
-    STYLE_FIELD_DIRECTION, STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
-    STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING,
-    STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK, STYLE_FIELD_MATERIAL,
-    STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING, STYLE_FLAG_ROOT,
-    STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
+    SEMANTIC_U32_TRANSFORM_INDEX, SEMANTIC_VIEW_MASK, SEMANTIC_VIEW_MEASUREMENT, SHAPE_POLYGON,
+    SHAPE_RECTANGLE, STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION,
+    STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND,
+    STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK,
+    STYLE_FIELD_MATERIAL, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING,
+    STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
     TEXT_MUTATION_REPLACE_UTF16, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB,
     WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
 };
@@ -44,8 +43,10 @@ use crate::engine::render_plan::{
     PRIMITIVE_INLINE_OBJECT, PRIMITIVE_POLICY, PatchRecord, PrimitiveRecord,
     RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_BUFFER,
     RETIRE_OUTPUT_BYTES, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, ResourceRecord, RetirementRecord,
+};
+use crate::engine::semantic_view::{
     SEMANTIC_CARET, SEMANTIC_CLUSTER, SEMANTIC_FRAGMENT, SEMANTIC_INSERTED_GLYPH, SEMANTIC_LINE,
-    SEMANTIC_RUN, SEMANTIC_SELECTION, SemanticRecord,
+    SEMANTIC_PARAGRAPH_MEASUREMENT, SEMANTIC_RUN, SEMANTIC_SELECTION, SemanticRecord,
 };
 
 pub const ABI_VERSION: u32 = 0;
@@ -415,8 +416,8 @@ struct EngineResultHeader {
     capability_set: u32,
     policy_fingerprint_low: u32,
     policy_fingerprint_high: u32,
-    semantics_offset: u32,
-    semantics_count: u32,
+    semantic_views_offset: u32,
+    semantic_view_count: u32,
     resources_offset: u32,
     resource_count: u32,
     buffers_offset: u32,
@@ -1701,12 +1702,12 @@ field_offset!(
 field_offset!(
     ENGINE_RESULT_SEMANTICS_OFFSET,
     EngineResultHeader,
-    semantics_offset
+    semantic_views_offset
 );
 field_offset!(
     ENGINE_RESULT_SEMANTICS_COUNT,
     EngineResultHeader,
-    semantics_count
+    semantic_view_count
 );
 field_offset!(
     ENGINE_RESULT_RESOURCES_OFFSET,
@@ -2354,8 +2355,8 @@ pub fn json() -> String {
                 "capabilitySet": ENGINE_RESULT_CAPABILITY_SET,
                 "policyFingerprintLow": ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
                 "policyFingerprintHigh": ENGINE_RESULT_POLICY_FINGERPRINT_HIGH,
-                "semanticsOffset": ENGINE_RESULT_SEMANTICS_OFFSET,
-                "semanticsCount": ENGINE_RESULT_SEMANTICS_COUNT,
+                "semanticViewsOffset": ENGINE_RESULT_SEMANTICS_OFFSET,
+                "semanticViewCount": ENGINE_RESULT_SEMANTICS_COUNT,
                 "resourcesOffset": ENGINE_RESULT_RESOURCES_OFFSET,
                 "resourceCount": ENGINE_RESULT_RESOURCE_COUNT,
                 "buffersOffset": ENGINE_RESULT_BUFFERS_OFFSET,
@@ -2371,7 +2372,7 @@ pub fn json() -> String {
                 "diagnosticsOffset": ENGINE_RESULT_DIAGNOSTICS_OFFSET,
                 "diagnosticCount": ENGINE_RESULT_DIAGNOSTIC_COUNT
             },
-            "engineSemantic": {
+            "engineSemanticView": {
                 "size": SEMANTIC_RECORD_SIZE,
                 "alignment": SEMANTIC_RECORD_ALIGNMENT,
                 "id": SEMANTIC_ID,
@@ -2752,6 +2753,13 @@ pub fn json() -> String {
             "resultFlags": {
                 "checkpoint": RESULT_FLAG_CHECKPOINT
             },
+            "semanticViewMasks": {
+                "all": SEMANTIC_VIEW_MASK,
+                "measurement": SEMANTIC_VIEW_MEASUREMENT
+            },
+            "measurementFlags": {
+                "overflowed": crate::engine::layout_query::MEASUREMENT_FLAG_OVERFLOWED
+            },
             "semanticKinds": {
                 "line": SEMANTIC_LINE,
                 "fragment": SEMANTIC_FRAGMENT,
@@ -2759,7 +2767,8 @@ pub fn json() -> String {
                 "cluster": SEMANTIC_CLUSTER,
                 "caret": SEMANTIC_CARET,
                 "selection": SEMANTIC_SELECTION,
-                "insertedGlyph": SEMANTIC_INSERTED_GLYPH
+                "insertedGlyph": SEMANTIC_INSERTED_GLYPH,
+                "paragraphMeasurement": SEMANTIC_PARAGRAPH_MEASUREMENT
             },
             "resourceActions": {
                 "create": RESOURCE_ACTION_CREATE,

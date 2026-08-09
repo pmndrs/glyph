@@ -84,6 +84,7 @@ struct EngineSession {
     acknowledged_publication_generation: u32,
     policy_binding: Option<PolicyBinding>,
     plan: RenderPlanCompiler,
+    semantic_records: Vec<super::semantic_view::SemanticRecord>,
     next_glyph_id: u32,
     pending_next_glyph_id: u32,
     next_content_revision: u32,
@@ -534,6 +535,7 @@ impl TextEngine {
                 None
             };
         let preparation = (|| {
+            session.semantic_records.clear();
             session.prepare_lifecycle(
                 request.paragraph_mutations,
                 implicit_paragraph,
@@ -659,6 +661,49 @@ impl TextEngine {
                     )
                     .map_err(plan_error)?;
             }
+            if request.semantic_view_mask & super::frame::SEMANTIC_VIEW_MEASUREMENT != 0 {
+                let mut records = core::mem::take(&mut session.semantic_records);
+                let query = (|| {
+                    for order_index in 0..session.active_order().len() {
+                        let paragraph_id = session.active_order()[order_index].id;
+                        let paragraph = session
+                            .paragraph(paragraph_id)
+                            .ok_or(EngineError::InvalidRequest)?;
+                        let state = &paragraph.state;
+                        let text = if state.text_prepared {
+                            &state.pending_text
+                        } else {
+                            &state.text
+                        };
+                        let clusters = if state.clusters_prepared {
+                            &state.pending_clusters
+                        } else {
+                            &state.clusters
+                        };
+                        let geometry = if state.geometry_prepared {
+                            &state.pending_geometry
+                        } else {
+                            &state.geometry
+                        };
+                        let flow = if state.flow_layout_prepared {
+                            &state.pending_flow_layout
+                        } else {
+                            &state.flow_layout
+                        };
+                        super::layout_query::append_measurement(
+                            &mut records,
+                            paragraph_id,
+                            text.len(),
+                            clusters.starts.len(),
+                            geometry,
+                            flow,
+                        )?;
+                    }
+                    Ok(())
+                })();
+                session.semantic_records = records;
+                query?;
+            }
             session.pending_next_glyph_id = next_glyph_id;
             session.pending_next_content_revision = next_content_revision;
             Ok(())
@@ -698,6 +743,20 @@ impl TextEngine {
                 prepared.policy_fingerprint,
             )
             .map_err(plan_error)
+    }
+
+    pub(crate) fn prepared_semantic_views(
+        &self,
+        prepared: PreparedUpdate,
+    ) -> Result<&[super::semantic_view::SemanticRecord], EngineError> {
+        let session = self
+            .sessions
+            .get(&prepared.session_id)
+            .ok_or(EngineError::SessionMissing)?;
+        if session.revision != prepared.previous {
+            return Err(EngineError::RevisionConflict);
+        }
+        Ok(&session.semantic_records)
     }
 
     pub(crate) fn abort_update(&mut self, prepared: PreparedUpdate) -> Result<(), EngineError> {
@@ -913,6 +972,7 @@ impl EngineSession {
 
     fn abort_pending(&mut self) {
         self.plan.abort();
+        self.semantic_records.clear();
         for paragraph in &mut self.paragraphs {
             paragraph.state.abort_all();
             paragraph.positioned_changed = false;
@@ -2954,6 +3014,7 @@ mod tests {
             acknowledged_publication_generation,
             policy_handle: 9,
             capability_set: 1,
+            semantic_view_mask: 0,
             limits: super::super::frame::UpdateLimits {
                 max_paragraphs: 1,
                 max_clusters: 1,
