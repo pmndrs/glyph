@@ -102,7 +102,9 @@ glyph coverage algorithm unless the application registers a complete custom rast
 The Three integration interns each live `ThreeTextMaterial` by object identity and assigns a nonzero `u32 material_id`;
 zero means the built-in default material. The frame request carries the resolved ID on Rust-owned material segments.
 Rust resolves the ordinary batch → text → span cascade, maps clusters to one material ID, and preserves that ID through
-glyph primitives into draw packets.
+glyph primitives into draw packets. Each packet also carries the paragraph-derived `transformId`; transform is a
+required draw boundary but is excluded from first-party physical-storage identity, so distinct `Text` objects may share
+buffers without a draw spanning two scene-object transforms.
 
 The registered policy has independent storage and draw key masks. Every first-party policy includes material in its draw
 key. A capability-specific policy may omit it from the storage key, producing different material draws over ranges in

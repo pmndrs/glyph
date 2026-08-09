@@ -13,6 +13,7 @@ pub struct PlanGlyph {
     pub resource_kind: u16,
     pub resource_reference: u32,
     pub semantic_id: u32,
+    pub transform_id: u32,
     pub material_id: u32,
     pub clip_id: u32,
     pub depth_key: u32,
@@ -56,7 +57,7 @@ pub fn validate_input(input: PlanInput<'_>) -> Result<(), PlanInputError> {
 }
 
 pub fn validate_glyph(glyph: PlanGlyph) -> Result<(), PlanInputError> {
-    if glyph.stable_id == 0 || glyph.content_revision == 0 {
+    if glyph.stable_id == 0 || glyph.content_revision == 0 || glyph.transform_id == 0 {
         return Err(PlanInputError::InvalidIdentity);
     }
     if glyph.resource_id == 0

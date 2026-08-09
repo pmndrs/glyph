@@ -630,6 +630,7 @@ impl TextEngine {
                             policy,
                             CapabilitySetId(request.capability_set),
                             LayoutPlanInput {
+                                transform_id: paragraph_id,
                                 glyphs: positioned.glyphs(),
                                 semantic_change_masks: positioned.semantic_change_masks(),
                                 semantic_f32: &semantic_f32,
@@ -2877,7 +2878,11 @@ mod tests {
                 resource_kind_mask: 1,
                 semantic_view_mask: 0,
                 storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
-                draw_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+                draw_key_mask: BATCH_TECHNIQUE
+                    | BATCH_PROGRAM
+                    | BATCH_RESOURCE
+                    | BATCH_ORDER
+                    | crate::engine::policy::BATCH_TRANSFORM,
                 allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,

@@ -32,6 +32,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.equal(abi.layouts.engineBuffer.size, 36);
   assert.equal(abi.layouts.enginePatch.size, 36);
   assert.equal(abi.layouts.enginePrimitive.size, 64);
+  assert.equal(abi.layouts.engineDraw.size, 64);
   assert.deepEqual(
     [
       abi.layouts.engineTextMutation.size,

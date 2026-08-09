@@ -880,6 +880,7 @@ mod tests {
             resource_kind: 1,
             resource_reference: technique.0 + 90,
             semantic_id: 1,
+            transform_id: 1,
             material_id: 1,
             clip_id: 0,
             depth_key: 0,
@@ -942,7 +943,11 @@ mod tests {
             resource_kind_mask: 1,
             semantic_view_mask: 0,
             storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
-            draw_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+            draw_key_mask: BATCH_TECHNIQUE
+                | BATCH_PROGRAM
+                | BATCH_RESOURCE
+                | BATCH_ORDER
+                | crate::engine::policy::BATCH_TRANSFORM,
             allocation_strategy,
             f32_input_count: 1,
             u32_input_count: 0,

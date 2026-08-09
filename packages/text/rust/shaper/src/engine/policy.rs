@@ -35,16 +35,18 @@ pub const BATCH_MATERIAL: u32 = 1 << 3;
 pub const BATCH_CLIP: u32 = 1 << 4;
 pub const BATCH_DEPTH: u32 = 1 << 5;
 pub const BATCH_ORDER: u32 = 1 << 6;
+pub const BATCH_TRANSFORM: u32 = 1 << 7;
 const BATCH_FIELDS: u32 = BATCH_TECHNIQUE
     | BATCH_RESOURCE
     | BATCH_PROGRAM
     | BATCH_MATERIAL
     | BATCH_CLIP
     | BATCH_DEPTH
-    | BATCH_ORDER;
-const STORAGE_KEY_FIELDS: u32 = BATCH_FIELDS & !BATCH_ORDER;
+    | BATCH_ORDER
+    | BATCH_TRANSFORM;
+const STORAGE_KEY_FIELDS: u32 = BATCH_FIELDS & !(BATCH_ORDER | BATCH_TRANSFORM);
 const REQUIRED_STORAGE_KEYS: u32 = BATCH_TECHNIQUE | BATCH_RESOURCE | BATCH_PROGRAM;
-const REQUIRED_DRAW_KEYS: u32 = REQUIRED_STORAGE_KEYS | BATCH_ORDER;
+const REQUIRED_DRAW_KEYS: u32 = REQUIRED_STORAGE_KEYS | BATCH_ORDER | BATCH_TRANSFORM;
 
 pub const BUFFER_USAGE_VERTEX: u32 = 1 << 0;
 pub const BUFFER_USAGE_STORAGE: u32 = 1 << 1;
@@ -1863,7 +1865,11 @@ mod tests {
             resource_kind_mask: 1,
             semantic_view_mask: 0,
             storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
-            draw_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+            draw_key_mask: BATCH_TECHNIQUE
+                | BATCH_PROGRAM
+                | BATCH_RESOURCE
+                | BATCH_ORDER
+                | BATCH_TRANSFORM,
             allocation_strategy: ALLOCATION_ORDERED_DIRECT,
             f32_input_count: 2,
             u32_input_count: 0,
@@ -2206,7 +2212,11 @@ mod tests {
             resource_kind_mask: 1,
             semantic_view_mask: 0,
             storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
-            draw_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+            draw_key_mask: BATCH_TECHNIQUE
+                | BATCH_PROGRAM
+                | BATCH_RESOURCE
+                | BATCH_ORDER
+                | BATCH_TRANSFORM,
             allocation_strategy: ALLOCATION_ORDERED_DIRECT,
             f32_input_count: 1,
             u32_input_count: 1,

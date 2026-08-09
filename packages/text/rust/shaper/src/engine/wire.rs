@@ -600,7 +600,8 @@ mod tests {
             crate::engine::policy::BATCH_TECHNIQUE
                 | crate::engine::policy::BATCH_PROGRAM
                 | crate::engine::policy::BATCH_RESOURCE
-                | crate::engine::policy::BATCH_ORDER,
+                | crate::engine::policy::BATCH_ORDER
+                | crate::engine::policy::BATCH_TRANSFORM,
         );
         put_u16(
             program,

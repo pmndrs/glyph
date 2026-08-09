@@ -35,6 +35,7 @@ pub struct LayoutGlyph {
 
 #[derive(Clone, Copy)]
 pub struct LayoutPlanInput<'a> {
+    pub transform_id: u32,
     pub glyphs: &'a [LayoutGlyph],
     pub semantic_change_masks: &'a [u16],
     pub semantic_f32: &'a [&'a [f32]],
@@ -238,6 +239,7 @@ impl PolicyGatherWorkspace {
                 resource_kind: resource.kind,
                 resource_reference: resource.reference,
                 semantic_id: glyph.semantic_id,
+                transform_id: input.transform_id,
                 material_id: glyph.material_id,
                 clip_id: glyph.clip_id,
                 depth_key: glyph.depth_key,
@@ -568,6 +570,7 @@ mod tests {
         let glyphs = [layout_glyph(1, 0)];
         let foreground = [0x8040_20ff];
         let input = LayoutPlanInput {
+            transform_id: 1,
             glyphs: &glyphs,
             semantic_change_masks: &[],
             semantic_f32: &[],
@@ -610,6 +613,7 @@ mod tests {
                 &policy,
                 CAPABILITY,
                 LayoutPlanInput {
+                    transform_id: 1,
                     glyphs: &glyphs,
                     semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
@@ -622,7 +626,7 @@ mod tests {
         {
             let gathered = workspace.view();
             let input = gathered.plan_input();
-            assert_eq!(core::mem::size_of::<PlanGlyph>(), 60);
+            assert_eq!(core::mem::size_of::<PlanGlyph>(), 64);
             assert!(
                 input
                     .f32_fields
@@ -654,6 +658,9 @@ mod tests {
                 .plan_view(3, CAPABILITY, policy.fingerprint())
                 .unwrap();
             assert_eq!(plan.draws.len(), 1);
+            assert_eq!(plan.draws[0].transform_id, 1);
+            assert_eq!(plan.primitives[0].record_count, 2);
+            assert_eq!(plan.primitives[0].semantic_id, 0);
             assert_eq!(plan.patches.len(), 2);
             assert_eq!(
                 &plan.payload[..8],
@@ -677,12 +684,14 @@ mod tests {
         workspace.begin(&policy, 2).unwrap();
         for input in [
             LayoutPlanInput {
+                transform_id: 1,
                 glyphs: &first,
                 semantic_change_masks: &[],
                 semantic_f32: &[&first_x],
                 semantic_u32: &[&first_kind],
             },
             LayoutPlanInput {
+                transform_id: 2,
                 glyphs: &second,
                 semantic_change_masks: &[],
                 semantic_f32: &[&second_x],
@@ -698,8 +707,24 @@ mod tests {
         assert_eq!(input.glyphs.len(), 2);
         assert_eq!(input.glyphs[0].stable_id, 1);
         assert_eq!(input.glyphs[1].stable_id, 2);
+        assert_eq!(input.glyphs[0].transform_id, 1);
+        assert_eq!(input.glyphs[1].transform_id, 2);
         assert_eq!(input.f32_fields[0], &[10.0, 20.0]);
         assert_eq!(input.u32_fields[0], &[100, 200]);
+        let mut compiler = RenderPlanCompiler::default();
+        compiler
+            .prepare(&policy, CAPABILITY, input, true, 1, 0)
+            .unwrap();
+        let plan = compiler
+            .plan_view(3, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        assert_eq!(
+            plan.draws
+                .iter()
+                .map(|draw| draw.transform_id)
+                .collect::<Vec<_>>(),
+            [1, 2]
+        );
     }
 
     #[test]
@@ -715,6 +740,7 @@ mod tests {
                 &policy,
                 CAPABILITY,
                 LayoutPlanInput {
+                    transform_id: 1,
                     glyphs: &glyphs,
                     semantic_change_masks: &[1, 1],
                     semantic_f32: &[&semantic_x],
@@ -746,6 +772,7 @@ mod tests {
                 &policy,
                 CAPABILITY,
                 LayoutPlanInput {
+                    transform_id: 1,
                     glyphs: &glyphs,
                     semantic_change_masks: &[],
                     semantic_f32: &[],
@@ -761,6 +788,7 @@ mod tests {
                 &policy,
                 CapabilitySetId(2),
                 LayoutPlanInput {
+                    transform_id: 1,
                     glyphs: &glyphs,
                     semantic_change_masks: &[],
                     semantic_f32: &[],
@@ -776,6 +804,7 @@ mod tests {
                 &policy,
                 CAPABILITY,
                 LayoutPlanInput {
+                    transform_id: 1,
                     glyphs: &glyphs,
                     semantic_change_masks: &[],
                     semantic_f32: &[],
@@ -805,7 +834,7 @@ mod tests {
             binding_handle: 9,
             font_handle: 9,
             glyph_id,
-            semantic_id: 1,
+            semantic_id: stable_id,
             material_id: 6,
             clip_id: 0,
             depth_key: 0,
@@ -864,7 +893,11 @@ mod tests {
                 resource_kind_mask: 1 << 1,
                 semantic_view_mask: 0,
                 storage_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE,
-                draw_key_mask: BATCH_TECHNIQUE | BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+                draw_key_mask: BATCH_TECHNIQUE
+                    | BATCH_PROGRAM
+                    | BATCH_RESOURCE
+                    | BATCH_ORDER
+                    | crate::engine::policy::BATCH_TRANSFORM,
                 allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 4,
                 u32_input_count: 4,

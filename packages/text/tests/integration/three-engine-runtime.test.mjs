@@ -244,10 +244,15 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.throws(() => plan.record(patches, patches.count), /outside its table/);
   const drawLayout = textShaperAbi.layouts.engineDraw;
   const draws = plan.table('draws');
+  assert.equal(draws.count, 2, 'cluster identity must not split compatible paragraph draws');
   assert.deepEqual(
     adjacentMaterialGroups(plan, draws, drawLayout.materialId),
     [7, 8],
     'Rust gathers child paragraphs into one ordered command buffer',
+  );
+  assert.deepEqual(
+    Array.from({ length: draws.count }, (_, index) => plan.u32(plan.record(draws, index) + drawLayout.transformId)),
+    [1, 2],
   );
 
   const reorderedPublication = session.update(
@@ -276,10 +281,17 @@ test('Three coordinator shares shaping data across technique bindings and refere
   );
   const reorderedPlan = plan.bind(reorderedPublication);
   const reorderedDraws = reorderedPlan.table('draws');
+  assert.equal(reorderedDraws.count, 2);
   assert.deepEqual(
     adjacentMaterialGroups(reorderedPlan, reorderedDraws, drawLayout.materialId),
     [8, 7],
     'lifecycle-only reorder retains both paragraphs and changes shared draw order',
+  );
+  assert.deepEqual(
+    Array.from({ length: reorderedDraws.count }, (_, index) =>
+      reorderedPlan.u32(reorderedPlan.record(reorderedDraws, index) + drawLayout.transformId),
+    ),
+    [2, 1],
   );
   session.dispose();
   first.release();
