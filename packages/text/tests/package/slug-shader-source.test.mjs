@@ -21,7 +21,6 @@ const CORE_FUNCTIONS = {
     'calcRootCode',
     'stableRoots',
     'solveHorizontalPolynomial',
-    'unitClamp',
     'curveContribution',
     'slugHorizontalCurveContribution',
     'slugVerticalCurveContribution',

@@ -95,8 +95,8 @@
   "devDependencies": {
     "@react-three/fiber": "10.0.0-alpha.2",
     "@react-three/test-renderer": "9.1.0",
-    "@typegpu/gl": "https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c",
-    "@typegpu/three": "https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/three@e2d7e6d81c389a2584e91670c270f6e28178353c",
+    "@typegpu/gl": "https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@c98cc339b6730d5857caa51a6152618b283fe7a2",
+    "@typegpu/three": "https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/three@c98cc339b6730d5857caa51a6152618b283fe7a2",
     "@types/node": "24.13.3",
     "@types/react": "19.2.14",
     "@types/three": "0.185.1",
@@ -108,7 +108,7 @@
     "react": "19.2.8",
     "three": "0.185.1",
     "tsdown": "0.22.14",
-    "typegpu": "https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c",
+    "typegpu": "https://pkg.pr.new/software-mansion/TypeGPU/typegpu@c98cc339b6730d5857caa51a6152618b283fe7a2",
     "unicode-property-value-aliases": "3.9.0",
     "unplugin-typegpu": "0.11.6"
   },
