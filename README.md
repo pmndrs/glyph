@@ -8,7 +8,7 @@ engine integrations below are implemented and pass their portability gates.
 ## Render text with React Three Fiber
 
 ```tsx
-import { Text, TextGroup, useFont } from '@pmndrs/text/r3f';
+import { Text, TextGroup, useFont } from '@pmndrs/text/react';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 function Labels() {

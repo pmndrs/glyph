@@ -329,7 +329,7 @@ const coreJavaScript = await measureJavaScript(
     excludedInitial: [
       '/packages/text/dist/runtime-bake.js',
       '/packages/text/dist/runtime-bake-worker.js',
-      '/packages/text/dist/r3f.js',
+      '/packages/text/dist/react.js',
       '/packages/text/dist/three.js',
       '/packages/text/dist/raster/bitmap-technique.js',
       '/packages/text/dist/raster/msdf.js',

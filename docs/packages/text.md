@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:0b40e434baa2e5e043ffb88b7d46cc5dd7e7a1e0324d58044148445330e15abc'
+source_digest: 'sha256:5d4c053b1ebf9efe975e79a8ea6ba3f4521a628eab60281e537005c673f946f1'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -50,8 +50,8 @@ sources:
   - id: three-policy
     resource: ../../packages/text/src/three/plan-program-registry.ts
     title: Three.js policy-program registry
-  - id: r3f
-    resource: ../../packages/text/src/r3f.ts
+  - id: react
+    resource: ../../packages/text/src/react.ts
     title: React Three Fiber adapter
   - id: engine-design
     resource: ../planning/rust-layout-engine.md
@@ -64,7 +64,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T22:02:30Z'
+  at: '2026-08-10T22:52:27Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -81,7 +81,7 @@ The package owns five runtime layers:
 | Shaping and layout      | Rust/Wasm            | Unicode analysis, bidi, font fallback, shaping, line composition, positioning, ellipsis, and semantic query state.                     |
 | Policy and render plan  | Rust/Wasm            | Interpret a validated renderer policy, pack canonical technique records, coalesce dirty ranges, and emit a compact command buffer.     |
 | Three.js integration    | `@pmndrs/text/three` | Compile policy programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
-| React integration       | `@pmndrs/text/r3f`   | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                        |
+| React integration       | `@pmndrs/text/react` | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                        |
 
 Runtime Rust and all shared Rust code remain `no_std + alloc` compatible with the package allocator contract. The optional
 font-baker Wasm alone enables a feature-gated `std` adapter for Fontations subsetting; the same crate continues to
@@ -98,7 +98,7 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 | `@pmndrs/text/three/bitmap` | Bitmap technique, policy program, and canonical TSL shader.                                                                      |
 | `@pmndrs/text/three/msdf`   | MSDF technique, policy program, and canonical TSL shader.                                                                        |
 | `@pmndrs/text/three/slug`   | Slug technique, policy program, and canonical TSL shader.                                                                        |
-| `@pmndrs/text/r3f`          | React Three Fiber `<Text>`, `<TextGroup>`, and `useFont`.                                                                        |
+| `@pmndrs/text/react`        | React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                              |
 | `@pmndrs/text/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `text` CLI.                                      |
 | `@pmndrs/text/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                        |
 | `@pmndrs/text/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                 |

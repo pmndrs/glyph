@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 
 import type { FontStack, LoadedFont } from '../../src/index.js';
-import { Text, TextGroup, useFont } from '../../src/r3f.js';
+import { Text, TextGroup, useFont } from '../../src/react.js';
 import type { ThreeTextMaterial } from '../../src/three.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
