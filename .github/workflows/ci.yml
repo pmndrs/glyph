@@ -82,7 +82,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Provision authenticated HarfBuzz utilities
-        run: pnpm scripts run fixture:harfbuzz:provision
+        run: |
+          pnpm scripts run fixture:harfbuzz:provision
+          mise -C apps/benchmarks exec -- node ./scripts/provision-harfbuzz.mts --version=14.2.0
+          printf '%s\n' "$GITHUB_WORKSPACE/apps/benchmarks/.cache/harfbuzz/14.2.0/build/util" >> "$GITHUB_PATH"
 
       - name: Select rolling runner Chromium
         shell: bash
