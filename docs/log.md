@@ -2,6 +2,15 @@
 
 ## 2026-08-10
 
+- **Closed detached WebGL2 PBO updates** — The complete Presentation matrix exposed a deterministic transparent Zoom Text
+  frame on forced WebGL2 Bitmap. Three's PBO setup had replaced each storage attribute array with a padded retained copy,
+  while later Rust command-buffer patches still changed only canonical storage. Dirty patches now copy their exact byte
+  ranges into the detached upload view before texture invalidation; WebGPU retains direct aliasing. A focused integration
+  fixture proves canonical/upload equality and untouched padding. All 48 Bitmap/MTSDF/Slug × WebGPU/WebGL2 workload
+  cells remain visible with one renderer. The matrix also closed a benchmark-only transition seam where Off-axis's 120%
+  default could be observed for one render under the preceding workload's 100% contract. The PBO fix adds 587 raw / 112
+  gzip / 64 Brotli bytes to Three; core JavaScript and Wasm remain byte-identical.
+
 - **Final renderer lifecycle size evidence** — Regenerated the canonical package-size record after the final Three retry,
   dirty-range, disposal, and transform-identity fixes. Renderer-neutral JavaScript and the optimized shaper Wasm remain
   byte-identical. The complete Three adapter adds 764 raw / 355 minified / 118 gzip / 82 Brotli bytes, putting the

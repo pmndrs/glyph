@@ -1281,9 +1281,21 @@ function markUpdated(buffer: RetainedBuffer, byteOffset: number, byteLength: num
   if (byteOffset % scalarBytes !== 0 || byteLength % scalarBytes !== 0) {
     throw new RangeError('buffer patch is not scalar aligned');
   }
+  syncDetachedUploadRange(buffer, byteOffset, byteLength);
   mergeUpdateRange(buffer.attribute, byteOffset / scalarBytes, byteLength / scalarBytes);
   buffer.attribute.needsUpdate = true;
   invalidatePboTexture(buffer.attribute);
+}
+
+function syncDetachedUploadRange(buffer: RetainedBuffer, byteOffset: number, byteLength: number): void {
+  const upload = buffer.attribute.array;
+  if (upload === buffer.array) return;
+  if (upload.constructor !== buffer.array.constructor || upload.byteLength < buffer.array.byteLength) {
+    throw new TypeError('Three replaced a text-plan upload array with an incompatible view');
+  }
+  const source = new Uint8Array(buffer.array.buffer, buffer.array.byteOffset + byteOffset, byteLength);
+  const destination = new Uint8Array(upload.buffer, upload.byteOffset + byteOffset, byteLength);
+  destination.set(source);
 }
 
 function mergeUpdateRange(attribute: THREE.BufferAttribute, start: number, count: number): void {
