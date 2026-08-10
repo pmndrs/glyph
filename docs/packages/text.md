@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:53af21e8321a9bad7643741019c453d6a618f7a0de1304af90891a28e8fee944'
+source_digest: 'sha256:0b40e434baa2e5e043ffb88b7d46cc5dd7e7a1e0324d58044148445330e15abc'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -64,7 +64,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T23:30:00Z'
+  at: '2026-08-10T22:02:30Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -126,6 +126,13 @@ The `text glyphs` command uses the same package-owned baker Wasm and Skrifa to e
 IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name` filters can emit structured JSON or a
 compressed `--unicode-set` accepted by `text bake --unicodes`. Fonts without authored names still expose exact IDs rather
 than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
+
+The R3F `Text` component infers the technique union from a required outer font selection, including a font stack chosen
+from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. A nested `Text` may omit `font`
+because it is flattened into an inline span and inherits from its outer text; a rendered outer `Text` without a font is
+invalid. `TextGroup` owns batching and compositing policy, never font inheritance. Both components register their Three
+objects with the R3F host and are constructed during its commit rather than in a layout effect. React `Activity` can
+therefore pre-render a hidden text or whole text group, while R3F retains visibility and eventual disposal ownership.
 
 One baked GLB may expose several raster techniques without repeating its input identity. `TextRuntime.loadFont()` and
 R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The

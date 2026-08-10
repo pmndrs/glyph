@@ -5,7 +5,7 @@ description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Sl
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/text-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:97a2edefbff112367f3ac1675fa267a85d3f2438f2048dc4e2ffb72b808f3977'
+source_digest: 'sha256:42b2be36df44e9b5e058eae1a06824f1aca5a6f3a81e051ba5b63aa68dfd21fd'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -16,17 +16,20 @@ sources:
     title: Public R3F technique and fallback example
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T16:08:36Z'
+  at: '2026-08-10T22:18:30Z'
 ---
 
 # Package reference: `@pmndrs/text-r3f-hello-world`
 
 This private Vite application is the minimal product-shaped React Three Fiber example. One full-page canvas renders
 `Hello world` through the public `@pmndrs/text/r3f` `Text` component and resolves a Font Awesome globe through an ordered
-font stack. One `App` component owns the font loads, technique state, one world `Text`, and its in-canvas MSDF controls.
-Changing technique selects the corresponding loaded font stack for that same `Text`; the example does not retain a
-second renderer path or manually pack glyph data. Separate world and UI `TextGroup` roots batch their text descendants
-explicitly; ordinary nested groups only position individual buttons and their background meshes.
+font stack. One `App` component owns the font loads, technique state, three React `Activity` branches, and its in-canvas
+MSDF controls. Each hidden branch pre-renders a complete `TextGroup` and world `Text`; changing technique reveals the
+already committed Bitmap, MSDF, or Slug branch rather than initializing one after the click. The example does not retain
+a second renderer path or manually pack glyph data. The UI `TextGroup` batches its labels explicitly. The controls sit
+in one centered row at the top of the viewport, while the world copy remains centered in the available canvas. Each
+button needs only its own transform group for its background and label; neither text layer opts into independent
+compositing because authored order is the honest default for this small scene.
 
 The checked-in assets are deliberately bounded at source before baking:
 
@@ -46,10 +49,16 @@ graph.
 
 ```sh
 mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world dev
+mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world bake
+mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world bake:check
 mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world check
 ```
 
-The check runs TypeScript 7 isolated typechecking, React Compiler-aware Oxlint with warnings denied, Oxfmt, deterministic
-asset rebaking, a production Vite build, and a GPU Chromium acceptance probe. The probe clicks all three in-canvas
-controls through pointer events and requires 13 laid-out glyphs—11 visible records plus two spaces—in two Rust-planned
-meshes: one for Latin and one for the icon fallback resource.
+`bake:inter` and `bake:icons` own the two output GLBs, and the root `bake` command composes them. The corresponding
+`bake:check:inter`, `bake:check:icons`, and root `bake:check` commands preserve the same per-asset boundary in byte-exact
+check mode. The complete check runs TypeScript 7 isolated typechecking, React Compiler-aware Oxlint with warnings denied,
+Oxfmt, deterministic asset rebaking, a production Vite build, and a GPU Chromium acceptance probe. The probe clicks all three in-canvas
+controls through pointer events, reads the named R3F world layer directly through Vitexec, and first requires all three
+hidden `Activity` branches to own their two Rust-planned meshes. Every revealed branch contains 13 laid-out glyphs—11
+visible records plus two spaces—with one mesh for Latin and one for the icon fallback resource. The teaching component
+carries no probe-only effect, ref, frame callback, or canvas data attributes.
