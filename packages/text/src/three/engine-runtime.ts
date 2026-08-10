@@ -1,5 +1,5 @@
 import { observeLoadedFontDispose, type LoadedFont } from '../loaded-font.js';
-import { bitmap, type BitmapData, type BitmapPageData } from '../raster/bitmap-technique.js';
+import { bitmap, type BitmapData, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugData, type SlugPageData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
@@ -40,7 +40,7 @@ interface RetainedResourceOwners {
 }
 
 export type ThreeTextEngineResource =
-  | Readonly<{ technique: typeof bitmap.id; page: BitmapPageData }>
+  | Readonly<{ technique: typeof bitmap.id; strike: BitmapStrikeData }>
   | Readonly<{ technique: typeof msdf.id; data: MsdfData }>
   | Readonly<{ technique: typeof slug.id; page: SlugPageData }>
   | Readonly<{ technique: string; resource: unknown; program: CompiledThreeRasterPlanProgram }>;
@@ -210,7 +210,7 @@ export class ThreeTextEngineCoordinator {
     if (font.technique.id === bitmap.id) {
       const data = font.data as BitmapData;
       for (const strike of data.strikes) {
-        for (const page of strike.pages) this.#retainResource(font, page.resource, { technique: bitmap.id, page });
+        this.#retainResource(font, strike.pages[0]!.resource, { technique: bitmap.id, strike });
       }
       return;
     }

@@ -14,13 +14,18 @@ export function techniqueProof(abi, name, raster, allocation = 'ordered') {
 function bitmapProof(abi, raster, allocation) {
   const strike = raster.strikes[0];
   const view = recordView(strike.records);
-  const fields = denseAtlasFields(view, raster.glyphCount, strike.planeUnitsPerEm, strike.pages);
+  const binding = {
+    width: Math.max(...strike.pages.map((page) => page.width)),
+    height: Math.max(...strike.pages.map((page) => page.height)),
+  };
+  const fields = denseAtlasFields(view, raster.glyphCount, strike.planeUnitsPerEm, strike.pages, binding);
   return proof(abi, bitmapProgram(abi, 'strike'), allocation, {
     glyphCount: raster.glyphCount,
     strikes: [strike.ppem],
-    resources: strike.pages.map(resource),
-    resourceIndices: pageIndices(view, raster.glyphCount),
+    resources: [resource(undefined, 0)],
+    resourceIndices: pageIndices(view, raster.glyphCount, true),
     strikeF32: fields,
+    strikeU32: [field(raster.glyphCount, (record) => view.getUint16(record + 16, true))],
   });
 }
 
@@ -121,9 +126,10 @@ function proof(abi, descriptor, allocation, binding) {
 }
 
 function bitmapProgram(abi, glyphScope) {
-  const context = programContext(abi, glyphScope, 8, 0);
-  const { loadF32, binary, storeF32 } = context;
+  const context = programContext(abi, glyphScope, 8, 1);
+  const { loadF32, loadU32, binary, storeF32, storeU32 } = context;
   loadF32(15);
+  loadU32(29, 0);
   binary('multiplyF32', 15, 7, 2);
   binary('addF32', 16, 0, 15);
   binary('multiplyF32', 17, 8, 2);
@@ -137,7 +143,8 @@ function bitmapProgram(abi, glyphScope) {
     [4, [13, 14]],
     [5, [3, 4, 5, 6]],
   ]);
-  return program(context, floatBuffers(abi, [2, 2, 2, 2, 4]));
+  storeU32(6, 0, 29);
+  return program(context, [...floatBuffers(abi, [2, 2, 2, 2, 4]), ...uintBuffers(abi, [1], 6)]);
 }
 
 function mtsdfProgram(abi) {
