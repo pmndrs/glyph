@@ -108,17 +108,6 @@ function squareData(): SlugData {
     planeUnitsPerEm: 2048,
     records,
     pages: [page],
-    bindings: [
-      {
-        page: 0,
-        curveWidth: page.curveWidth,
-        curveHeight: page.curveHeight,
-        headerWidth: page.headerWidth,
-        headerHeight: page.headerHeight,
-        referenceWidth: page.referenceWidth,
-        referenceHeight: page.referenceHeight,
-      },
-    ],
   };
 }
 

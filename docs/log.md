@@ -2,6 +2,12 @@
 
 ## 2026-08-09
 
+- **Made application gates respect their shared build artifact dependency** — Root package checks already complete before
+  application checks, but the benchmark app rebuilds those runtime packages as part of its standalone contract. Running
+  application checks concurrently let that rebuild remove `packages/text/dist` while the R3F example authenticated its
+  freshly baked assets, intermittently hiding `bitmap_baker.wasm`. Root application checks now run serially; each app's
+  standalone check remains unchanged, and the ordering removes the filesystem race rather than adding a retry.
+
 - **Ported the external raster proof off the deleted host packer** — The private glyph-example consumer now uses the
   same public boundary required of third parties: its portable technique owns only identity, decode, retained resource,
   and disposal, while its Three registration supplies the declarative policy program and material realization. Removed

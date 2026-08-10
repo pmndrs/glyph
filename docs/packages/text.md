@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:fbbfd35177e290df7f279315bcc89af03064118259221906a3bc14120dae33a1'
+source_digest: 'sha256:94a04c1dd7cf680fb0e340dd0e664059de5c93d1ff453f5057eb8dd670b4f3fb'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -55,7 +55,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T02:15:49Z'
+  at: '2026-08-10T02:40:43Z'
 ---
 
 # Package reference: `@pmndrs/text`
