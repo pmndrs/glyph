@@ -7,7 +7,8 @@
 use alloc::vec::Vec;
 
 use super::{
-    ordered_plan::{OrderedPlanCompiler, OrderedPlanError},
+    ordered_plan::OrderedPlanCompiler,
+    plan_error::PlanError,
     plan_input::{PlanInput, PlanInputError, validate_input},
     policy::{
         ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, CapabilitySetId,
@@ -18,7 +19,7 @@ use super::{
         RESOURCE_ACTION_RETAIN, RESOURCE_ACTION_UPDATE, RETIRE_RESOURCE, RenderPlanView,
         ResourceRecord, RetirementRecord,
     },
-    stable_plan::{StablePlanCompiler, StablePlanError},
+    stable_plan::StablePlanCompiler,
 };
 
 const ORDERED_BUFFER_ID_LIMIT: u32 = 0x7fff_ffff;
@@ -37,8 +38,7 @@ pub enum RenderPlanCompilerError {
     InvalidResource,
     InvalidPlan,
     ArithmeticOverflow,
-    Ordered(OrderedPlanError),
-    Stable(StablePlanError),
+    Plan(PlanError),
 }
 
 impl From<PlanInputError> for RenderPlanCompilerError {
@@ -51,15 +51,9 @@ impl From<PlanInputError> for RenderPlanCompilerError {
     }
 }
 
-impl From<OrderedPlanError> for RenderPlanCompilerError {
-    fn from(error: OrderedPlanError) -> Self {
-        Self::Ordered(error)
-    }
-}
-
-impl From<StablePlanError> for RenderPlanCompilerError {
-    fn from(error: StablePlanError) -> Self {
-        Self::Stable(error)
+impl From<PlanError> for RenderPlanCompilerError {
+    fn from(error: PlanError) -> Self {
+        Self::Plan(error)
     }
 }
 
@@ -76,8 +70,7 @@ impl RenderPlanCompilerError {
             | Self::InvalidIdentity
             | Self::InvalidResource
             | Self::InvalidPlan => false,
-            Self::Ordered(error) => ordered_result_too_large(error),
-            Self::Stable(error) => stable_result_too_large(error),
+            Self::Plan(error) => plan_result_too_large(error),
         }
     }
 }
@@ -95,33 +88,23 @@ fn policy_result_too_large(error: PolicyExecutionError) -> bool {
     }
 }
 
-macro_rules! classify_plan_error {
-    ($error:expr, $error_type:ident) => {
-        match $error {
-            $error_type::AllocationFailed
-            | $error_type::CapacityExceeded
-            | $error_type::IdentifierExhausted
-            | $error_type::ArithmeticOverflow => true,
-            $error_type::AlreadyPrepared
-            | $error_type::NotPrepared
-            | $error_type::CapabilitySetMissing
-            | $error_type::ProgramMissing
-            | $error_type::UnsupportedStrategy
-            | $error_type::InvalidInputShape
-            | $error_type::InvalidIdentity
-            | $error_type::DuplicateIdentity
-            | $error_type::InvalidResource => false,
-            $error_type::PolicyExecution(error) => policy_result_too_large(error),
-        }
-    };
-}
-
-fn ordered_result_too_large(error: OrderedPlanError) -> bool {
-    classify_plan_error!(error, OrderedPlanError)
-}
-
-fn stable_result_too_large(error: StablePlanError) -> bool {
-    classify_plan_error!(error, StablePlanError)
+fn plan_result_too_large(error: PlanError) -> bool {
+    match error {
+        PlanError::AllocationFailed
+        | PlanError::CapacityExceeded
+        | PlanError::IdentifierExhausted
+        | PlanError::ArithmeticOverflow => true,
+        PlanError::AlreadyPrepared
+        | PlanError::NotPrepared
+        | PlanError::CapabilitySetMissing
+        | PlanError::ProgramMissing
+        | PlanError::UnsupportedStrategy
+        | PlanError::InvalidInputShape
+        | PlanError::InvalidIdentity
+        | PlanError::DuplicateIdentity
+        | PlanError::InvalidResource => false,
+        PlanError::PolicyExecution(error) => policy_result_too_large(error),
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

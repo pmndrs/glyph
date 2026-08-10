@@ -47,6 +47,25 @@ pub struct PendingAllocation {
     pub state: PhysicalBufferState,
 }
 
+/// Allocates one retained physical buffer through the shared cold growth path.
+#[inline(never)]
+pub fn push_pending_allocation(
+    allocations: &mut alloc::vec::Vec<PendingAllocation>,
+    id: u32,
+    generation: u32,
+    program_id: u32,
+    schema: super::policy::BufferSchema,
+    capacity: u32,
+) -> Result<(), PackingError> {
+    allocations
+        .try_reserve(1)
+        .map_err(|_| PackingError::AllocationFailed)?;
+    allocations.push(PendingAllocation {
+        state: PhysicalBufferState::new(id, generation, program_id, schema, capacity)?,
+    });
+    Ok(())
+}
+
 impl PhysicalBufferState {
     pub fn new(
         id: u32,

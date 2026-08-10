@@ -9,6 +9,64 @@ pub(crate) enum IdentityIndexError {
     DuplicateIdentity,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum IdentitySetError {
+    AllocationFailed,
+    ArithmeticOverflow,
+}
+
+/// Reusable exact-identity membership scratch.
+///
+/// Unlike [`IdentityIndex`], this stores no associated value. Plan compilers use it to reject
+/// duplicate semantic identities without allocating or clearing a table on warm updates.
+#[derive(Default)]
+pub(crate) struct IdentitySet {
+    keys: Vec<u32>,
+    epochs: Vec<u32>,
+    epoch: u32,
+}
+
+impl IdentitySet {
+    pub(crate) fn prepare(&mut self, entry_count: usize) -> Result<(), IdentitySetError> {
+        let required = entry_count
+            .checked_mul(2)
+            .and_then(usize::checked_next_power_of_two)
+            .ok_or(IdentitySetError::ArithmeticOverflow)?
+            .max(8);
+        if self.keys.len() < required {
+            let additional_keys = required - self.keys.len();
+            let additional_epochs = required - self.epochs.len();
+            reserve(&mut self.keys, additional_keys).map_err(identity_set_error)?;
+            reserve(&mut self.epochs, additional_epochs).map_err(identity_set_error)?;
+            self.keys.resize(required, 0);
+            self.epochs.resize(required, 0);
+        }
+        self.epoch = next_epoch(&mut self.epochs, self.epoch);
+        Ok(())
+    }
+
+    pub(crate) fn insert(&mut self, identity: u32) -> bool {
+        let mask = self.keys.len() - 1;
+        let mut index = hash(identity) & mask;
+        loop {
+            if self.epochs[index] != self.epoch {
+                self.epochs[index] = self.epoch;
+                self.keys[index] = identity;
+                return true;
+            }
+            if self.keys[index] == identity {
+                return false;
+            }
+            index = (index + 1) & mask;
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn capacities(&self) -> [usize; 2] {
+        [self.keys.capacity(), self.epochs.capacity()]
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct IdentityIndex {
     keys: Vec<u32>,
@@ -109,6 +167,15 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), IdentityInde
         .map_err(|_| IdentityIndexError::AllocationFailed)
 }
 
+fn identity_set_error(error: IdentityIndexError) -> IdentitySetError {
+    match error {
+        IdentityIndexError::AllocationFailed => IdentitySetError::AllocationFailed,
+        IdentityIndexError::ArithmeticOverflow | IdentityIndexError::DuplicateIdentity => {
+            IdentitySetError::ArithmeticOverflow
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +198,19 @@ mod tests {
         index.prepare(3).unwrap();
         assert_eq!(index.capacities(), capacities);
         assert_eq!(index.get(1), None);
+    }
+
+    #[test]
+    fn identity_set_rejects_duplicates_and_reuses_storage() {
+        let mut set = IdentitySet::default();
+        set.prepare(3).unwrap();
+        let capacities = set.capacities();
+        assert!(set.insert(1));
+        assert!(set.insert(9));
+        assert!(!set.insert(1));
+
+        set.prepare(3).unwrap();
+        assert_eq!(set.capacities(), capacities);
+        assert!(set.insert(1));
     }
 }

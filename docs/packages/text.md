@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6b57735a2d735419b5b5dbcb75becef566617d1241a5343342399bdf6dd5edc5'
+source_digest: 'sha256:fc3cc8108476ab425f8bb5c9286ebc8382e2ede2faf42b13a31df2b35272f659'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -216,15 +216,19 @@ font-binding, Three execution, artifact-validation, and Unicode conformance cove
 packers.
 
 A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) corroborated the
-deleted parallel path and identified smaller repeated validation helpers. It also highlighted similar draw emission in
-`ordered_plan.rs` and `stable_plan.rs`; those modules are not duplicate implementations of one behavior. Ordered-direct
-compacts physical records in draw order, while stable-indirect preserves slots, publishes an order buffer, and quarantines
-retirements until renderer acknowledgement. A symbol-bearing optimized build attributes 33.3 KiB of function bodies to
-ordered planning and 50.1 KiB to stable planning; that is strategy-specific code, not an assertion that all 83.4 KiB are
-duplicates. The identical final primitive/draw-record construction is now one deliberately out-of-line non-generic
-kernel. Together with a stable dependency-scan correction, the final Wasm is 220 raw / 485 gzip / 423 Brotli bytes smaller
-than the pre-extraction artifact. This establishes a real, modest compiled win; it does not infer savings from source-line
-count or assume that a generic refactor would avoid monomorphization.
+deleted parallel path and identified exact shared planner machinery. Ordered and stable planning now use one retained
+epoch-cleared identity set, one plan-error and result-capacity classifier, one cold physical-buffer allocator, one inline
+draw-span predicate, and one deliberately out-of-line final primitive/draw emitter. The optimized Wasm moved from
+1,160,505 raw / 442,612 gzip / 348,594 Brotli bytes to 1,159,317 / 442,284 / 347,850, saving 1,188 / 328 / 744 bytes.
+
+The remaining similar bodies are not two implementations of one behavior. Ordered-direct compacts physical records in
+draw order; stable-indirect preserves slots, publishes a separate order buffer, and quarantines retirements until renderer
+acknowledgement. A symbol-bearing optimized build attributes 33.3 KiB of function bodies to ordered planning and 50.1 KiB
+to stable planning; those complete strategy totals are upper bounds, not deduplicable byte estimates. Their draw compilers
+resolve different physical address spaces. Normalizing those addresses into another staging array or dispatching through a
+dynamic strategy interface would add hot-path memory traffic or indirect calls, so the audit retains the strategy-local
+loops and shares their exact invariants instead. The 22k-glyph complete Rust benchmark remains within adjacent-run noise;
+a 20-warmup/51-sample cold check measured 15.452 ms median / 15.670 ms p95 at 1.0% RSD.
 
 ## Current size and performance evidence
 
@@ -232,18 +236,19 @@ The latest checked package-size record after the baker ABI cleanup reports:
 
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
-| Core JavaScript plus shaper Wasm        | 1,248,903 B | 460,458 B | 364,063 B |
-| Three adapter plus core and shaper Wasm | 1,487,531 B | 498,479 B | 395,596 B |
+| Core JavaScript plus shaper Wasm        | 1,247,715 B | 460,130 B | 363,319 B |
+| Three adapter plus core and shaper Wasm | 1,487,318 B | 498,376 B | 395,130 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
-The optimized shaper is 1,160,505 raw / 442,612 gzip / 348,594 Brotli bytes. The renderer-neutral JavaScript graph is
-88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 327,026 raw / 55,867 gzip /
-47,002 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
+The optimized shaper is 1,159,317 raw / 442,284 gzip / 347,850 Brotli bytes. The renderer-neutral JavaScript graph is
+88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 328,001 raw / 56,092 gzip /
+47,280 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
 to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; the later shared-emitter and stable
 range-scan work reduces those totals to 460,416 and 498,437 gzip bytes. The homogeneous-policy dispatch and dirty-range
-alignment correction move the current totals to 460,458 and 498,479 gzip bytes.
+alignment correction moved those totals to 460,458 and 498,479 gzip bytes; the focused planner deduplication and current
+Three graph now measure 460,130 and 498,376 gzip bytes.
 The corrected complete MTSDF baker remains 552,025 raw / 215,030 gzip / 168,758 Brotli bytes; the earlier 52 KiB
 observation was a kernel-only test artifact that reused the distributable Cargo target directory.
 
