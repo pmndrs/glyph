@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 
 import { FontRegistry } from '@pmndrs/text';
 
-const arguments_ = process.argv.slice(2);
-if (arguments_.length !== 0) throw new Error('usage: check-paragraph-contract-fixtures.mts');
+const args = process.argv.slice(2);
+if (args.length !== 0) throw new Error('usage: check-paragraph-contract-fixtures.mts');
 
 const fixtures = new URL('../fixtures/', import.meta.url);
 const bidiUrl = new URL('contracts/paragraph-bidi-layout-v0.json', fixtures);

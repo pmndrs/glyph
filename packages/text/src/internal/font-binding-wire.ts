@@ -188,14 +188,14 @@ function compileMsdf(
   const pageAt = (row: number): number => view.getUint16(rowRecord(row) + 16, true);
   const atlas = (row: number, offset: number, dimension: 'width' | 'height'): number => {
     const page = pageAt(row);
-    return page === ABSENT_PAGE ? 0 : view.getUint16(rowRecord(row) + offset, true) / data.pages[page]![dimension];
+    return page === ABSENT_PAGE ? 0 : view.getUint16(rowRecord(row) + offset, true) / data.binding[dimension];
   };
   const span = (row: number, start: number, end: number, dimension: 'width' | 'height'): number => {
     const page = pageAt(row);
     const record = rowRecord(row);
     return page === ABSENT_PAGE
       ? 0
-      : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) / data.pages[page]![dimension];
+      : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) / data.binding[dimension];
   };
   return compileFontBinding({
     techniqueId,

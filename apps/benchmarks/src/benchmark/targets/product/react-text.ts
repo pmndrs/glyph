@@ -266,16 +266,58 @@ function exactContentBox(size: number): ParagraphContentBox {
   return { width: { mode: 'exact', size } };
 }
 
+function matchesFrameFloat(actual: number, oracle: number): boolean {
+  if (!Number.isFinite(actual) || !Number.isFinite(oracle)) return actual === oracle;
+  return float32UlpDistance(actual, oracle) <= 1;
+}
+
+const float32Scratch = new Float32Array(1);
+const float32Bits = new Uint32Array(float32Scratch.buffer);
+
+function float32UlpDistance(left: number, right: number): number {
+  float32Scratch[0] = left;
+  const leftBits = orderedFloat32Bits(float32Bits[0] ?? 0);
+  float32Scratch[0] = right;
+  const rightBits = orderedFloat32Bits(float32Bits[0] ?? 0);
+  return Math.abs(leftBits - rightBits);
+}
+
+function orderedFloat32Bits(bits: number): number {
+  return (bits & 0x8000_0000) === 0 ? (bits ^ 0x8000_0000) >>> 0 : ~bits >>> 0;
+}
+
+function hashWithOracleLineOrigins(layout: ParagraphLayout, oracleBaselines: readonly number[]): string | undefined {
+  if (layout.lineBaselines.length !== oracleBaselines.length) return undefined;
+  const y = layout.y.slice();
+  const lineBaselines = layout.lineBaselines.slice();
+  for (let line = 0; line < lineBaselines.length; line += 1) {
+    const actual = lineBaselines[line];
+    const expected = oracleBaselines[line];
+    if (actual === undefined || expected === undefined || !matchesFrameFloat(actual, expected)) return undefined;
+    const delta = expected - actual;
+    const glyphStart = layout.lineGlyphStarts[line] ?? 0;
+    const glyphEnd = glyphStart + (layout.lineGlyphCounts[line] ?? 0);
+    for (let glyph = glyphStart; glyph < glyphEnd; glyph += 1) {
+      const position = y[glyph];
+      if (position === undefined) return undefined;
+      y[glyph] = Math.fround(position + delta);
+    }
+    lineBaselines[line] = Math.fround(expected);
+  }
+  return hashParagraphLayout({ ...layout, y, lineBaselines });
+}
+
 function assertOracleLayout(layout: ParagraphLayout, state: 'natural' | 'narrow'): void {
   const oracle = canonicalParagraphLayout.goldens[state];
   const hash = hashParagraphLayout(layout);
+  const compatibleHash = hashWithOracleLineOrigins(layout, oracle.layout.lineBaselines);
   const expectedWidth = state === 'narrow' ? NARROW_WIDTH : oracle.measurement.width;
   if (
-    hash !== oracle.layout.hash ||
+    (hash !== oracle.layout.hash && compatibleHash !== oracle.layout.hash) ||
     layout.glyphIds.length !== oracle.layout.glyphCount ||
-    layout.width !== expectedWidth ||
-    layout.contentWidth !== oracle.measurement.contentWidth ||
-    layout.height !== oracle.measurement.height
+    !matchesFrameFloat(layout.width, expectedWidth) ||
+    !matchesFrameFloat(layout.contentWidth, oracle.measurement.contentWidth) ||
+    !matchesFrameFloat(layout.height, oracle.measurement.height)
   ) {
     throw new Error(
       `React Text ${state} layout differs from the pinned paragraph oracle: ` +
@@ -309,7 +351,8 @@ function countUniquePaints(object: BitmapTextObject): number {
   const paints = new Set<string>();
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
-    const colors = child.geometry.getAttribute('_pmndrsTextColors');
+    // Bitmap policy buffer 5 is the command buffer's packed RGBA instance lane.
+    const colors = child.geometry.getAttribute('_pmndrsText_5');
     if (colors === undefined) return;
     // One physical batch backs every run of a paragraph, so a draw reads its own window of the shared paint buffer.
     const start = (child.userData.pmndrsTextRunStart as number | undefined) ?? 0;

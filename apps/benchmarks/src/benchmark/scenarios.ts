@@ -359,7 +359,7 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
  * shaper's font selection; and the `.notdef` pin proves the fallback span is what resolved the Devanagari at all.
  */
 const RICH_TEXT_SPAN_EVIDENCE = {
-  hash: '87c41664',
+  hash: 'f73e324f',
   glyphCount: 175,
   renderedGlyphCount: 149,
   drawCount: 7,

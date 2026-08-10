@@ -16,9 +16,10 @@ use super::{
 };
 
 pub(crate) const SEMANTIC_F32_FIELD_COUNT: usize = 6;
+pub(crate) const SEMANTIC_F32_CHANGE_FIELD_COUNT: usize = 8;
 pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 6;
 pub(crate) const ALL_SEMANTIC_CHANGES: u16 =
-    (1 << (SEMANTIC_F32_FIELD_COUNT + SEMANTIC_U32_FIELD_COUNT)) - 1;
+    (1 << (SEMANTIC_F32_CHANGE_FIELD_COUNT + SEMANTIC_U32_FIELD_COUNT)) - 1;
 
 const BIDI_BN: u8 = 9;
 const BIDI_B: u8 = 10;
@@ -253,12 +254,23 @@ impl PositionedGlyphArena {
             .push(u32::try_from(self.glyphs.len()).map_err(|_| EngineError::ResultTooLarge)?);
         self.line_glyph_counts
             .push(u32::try_from(glyph_count).map_err(|_| EngineError::ResultTooLarge)?);
-        self.glyphs.extend_from_slice(
-            previous
-                .glyphs
-                .get(glyph_start..glyph_end)
-                .ok_or(EngineError::InvalidRequest)?,
-        );
+        let next_semantic_start = self.semantic_glyphs.len();
+        for previous_glyph in previous
+            .glyphs
+            .get(glyph_start..glyph_end)
+            .ok_or(EngineError::InvalidRequest)?
+        {
+            let previous_semantic_index = usize::try_from(previous_glyph.semantic_glyph_index)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let line_semantic_index = previous_semantic_index
+                .checked_sub(semantic_start)
+                .filter(|index| *index < semantic_count)
+                .ok_or(EngineError::InvalidRequest)?;
+            let mut glyph = *previous_glyph;
+            glyph.semantic_glyph_index = u32::try_from(next_semantic_start + line_semantic_index)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            self.glyphs.push(glyph);
+        }
         for (target, source) in self.semantic_f32.iter_mut().zip(&previous.semantic_f32) {
             target.extend_from_slice(
                 source
@@ -517,6 +529,8 @@ impl PositionedGlyphArena {
                     block_origin: finite_f32(origin_block)?,
                 });
                 if let Some(extents) = extents_for(font_handle, glyph_id) {
+                    let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
+                        .map_err(|_| EngineError::ResultTooLarge)?;
                     let inline_start = origin_inline + f64::from(extents.x_min) * scale;
                     let block_start = origin_block - f64::from(extents.y_max) * scale;
                     let inline_extent = f64::from(extents.x_max - extents.x_min) * scale;
@@ -525,10 +539,10 @@ impl PositionedGlyphArena {
                         LayoutGlyph {
                             stable_id,
                             content_revision: 0,
+                            semantic_glyph_index,
                             binding_handle,
                             font_handle,
                             glyph_id,
-                            semantic_id: clusters.stable_ids[cluster],
                             material_id: style.material_id,
                             clip_id: line.clip_id,
                             depth_key: 0,
@@ -562,6 +576,7 @@ impl PositionedGlyphArena {
                 text,
                 clusters,
                 runs,
+                styles,
                 boundary_shape,
                 metrics_for,
                 extents_for,
@@ -580,14 +595,13 @@ impl PositionedGlyphArena {
         text: &[u16],
         clusters: &ClusterArena,
         runs: &[ShapingRun],
+        styles: &[StyleSegment],
         arena: &BoundaryShapeArena,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<f64, EngineError> {
-        let run = *runs
-            .get(usize::try_from(boundary.source_run).map_err(|_| EngineError::InvalidRequest)?)
+        runs.get(usize::try_from(boundary.source_run).map_err(|_| EngineError::InvalidRequest)?)
             .ok_or(EngineError::InvalidRequest)?;
-        let style = run.style;
         let source_cluster =
             usize::try_from(boundary.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
         let ellipsis_cluster = usize::try_from(boundary.cluster_end)
@@ -605,10 +619,10 @@ impl PositionedGlyphArena {
             boundary.source_font_handle,
             None,
             source_cluster,
-            style,
             arena,
             text,
             clusters,
+            styles,
             metrics_for,
             extents_for,
         )?;
@@ -622,10 +636,10 @@ impl PositionedGlyphArena {
             boundary.ellipsis_font_handle,
             Some(boundary.text_end),
             ellipsis_cluster,
-            style,
             arena,
             text,
             clusters,
+            styles,
             metrics_for,
             extents_for,
         )
@@ -643,10 +657,10 @@ impl PositionedGlyphArena {
         font_handle: u32,
         cluster_override: Option<u32>,
         fallback_cluster: usize,
-        style: super::style_state::ResolvedStyle,
         arena: &BoundaryShapeArena,
         text: &[u16],
         clusters: &ClusterArena,
+        styles: &[StyleSegment],
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<f64, EngineError> {
@@ -654,7 +668,6 @@ impl PositionedGlyphArena {
         if font_handle == 0 || metrics.units_per_em == 0 {
             return Err(EngineError::InvalidRequest);
         }
-        let scale = f64::from(style.font_size) / f64::from(metrics.units_per_em);
         let start = usize::try_from(glyph_start).map_err(|_| EngineError::InvalidRequest)?;
         let end = start
             .checked_add(usize::try_from(glyph_count).map_err(|_| EngineError::InvalidRequest)?)
@@ -681,6 +694,18 @@ impl PositionedGlyphArena {
                     .binary_search(&shaped_cluster)
                     .unwrap_or(fallback_cluster)
             };
+            let style_index = usize::try_from(
+                *clusters
+                    .style_indexes
+                    .get(cluster_index)
+                    .ok_or(EngineError::InvalidRequest)?,
+            )
+            .map_err(|_| EngineError::InvalidRequest)?;
+            let style = styles
+                .get(style_index)
+                .ok_or(EngineError::InvalidRequest)?
+                .style;
+            let scale = f64::from(style.font_size) / f64::from(metrics.units_per_em);
             let semantic_id = *clusters
                 .stable_ids
                 .get(cluster_index)
@@ -733,6 +758,8 @@ impl PositionedGlyphArena {
                 block_origin: finite_f32(origin_block)?,
             });
             if let Some(extents) = extents_for(font_handle, glyph_id) {
+                let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
+                    .map_err(|_| EngineError::ResultTooLarge)?;
                 let inline_start = origin_inline + f64::from(extents.x_min) * scale;
                 let block_start = origin_block - f64::from(extents.y_max) * scale;
                 let inline_extent = f64::from(extents.x_max - extents.x_min) * scale;
@@ -741,10 +768,10 @@ impl PositionedGlyphArena {
                     LayoutGlyph {
                         stable_id,
                         content_revision: 0,
+                        semantic_glyph_index,
                         binding_handle,
                         font_handle,
                         glyph_id,
-                        semantic_id,
                         material_id: style.material_id,
                         clip_id: line.clip_id,
                         depth_key: 0,
@@ -943,7 +970,6 @@ impl PositionedGlyphArena {
             || next.font_handle != old.font_handle
             || next.binding_handle != old.binding_handle
             || next.glyph_id != old.glyph_id
-            || next.semantic_id != old.semantic_id
             || next.material_id != old.material_id
             || next.clip_id != old.clip_id
             || next.depth_key != old.depth_key
@@ -958,9 +984,18 @@ impl PositionedGlyphArena {
                 mask |= 1 << field;
             }
         }
+        let next_semantic = self.semantic_glyphs[self.glyphs[slot].semantic_glyph_index as usize];
+        let previous_semantic =
+            previous.semantic_glyphs[previous.glyphs[previous_slot].semantic_glyph_index as usize];
+        if next_semantic.inline_origin.to_bits() != previous_semantic.inline_origin.to_bits() {
+            mask |= 1 << 6;
+        }
+        if next_semantic.block_origin.to_bits() != previous_semantic.block_origin.to_bits() {
+            mask |= 1 << 7;
+        }
         for field in 0..SEMANTIC_U32_FIELD_COUNT {
             if self.semantic_u32[field][slot] != previous.semantic_u32[field][previous_slot] {
-                mask |= 1 << (SEMANTIC_F32_FIELD_COUNT + field);
+                mask |= 1 << (SEMANTIC_F32_CHANGE_FIELD_COUNT + field);
             }
         }
         mask
@@ -1401,6 +1436,13 @@ mod tests {
         assert_eq!(active.glyphs[0].inline_start, 4.0);
         assert_eq!(active.glyphs[1].inline_start, 10.0);
         assert_eq!(active.glyphs[0].block_start, 1.0);
+        assert_eq!(active.semantic_glyphs[0].inline_origin, 4.0);
+        assert_eq!(active.semantic_glyphs[1].inline_origin, 10.0);
+        assert_eq!(active.semantic_glyphs[0].block_origin, 8.0);
+        assert_ne!(
+            active.semantic_f32[1][0],
+            active.semantic_glyphs[0].block_origin
+        );
         assert_eq!(active.semantic_u32[0], [u32::MAX, u32::MAX]);
         assert_eq!(next_revision, 3);
 
@@ -1451,6 +1493,12 @@ mod tests {
 
         let mut reordered = PositionedGlyphArena::default();
         reordered.glyphs.extend(active.glyphs.iter().rev().copied());
+        reordered
+            .semantic_glyphs
+            .extend(active.semantic_glyphs.iter().rev().copied());
+        for (index, glyph) in reordered.glyphs.iter_mut().enumerate() {
+            glyph.semantic_glyph_index = index as u32;
+        }
         for field in 0..SEMANTIC_F32_FIELD_COUNT {
             reordered.semantic_f32[field].extend(active.semantic_f32[field].iter().rev().copied());
         }
@@ -1471,10 +1519,10 @@ mod tests {
         let glyph = |stable_id, revision| LayoutGlyph {
             stable_id,
             content_revision: revision,
+            semantic_glyph_index: stable_id - 1,
             binding_handle: 1,
             font_handle: 1,
             glyph_id: stable_id,
-            semantic_id: stable_id,
             material_id: 0,
             clip_id: 0,
             depth_key: 0,
@@ -1490,6 +1538,18 @@ mod tests {
                 glyphs: vec![glyph(1, 10), glyph(2, 20), glyph(3, 30)],
                 ..PositionedGlyphArena::default()
             };
+            arena
+                .semantic_glyphs
+                .extend([1, 2, 3].map(|stable_id| SemanticGlyph {
+                    stable_id,
+                    font_handle: 1,
+                    cluster: stable_id,
+                    glyph_id: stable_id as u16,
+                    flags: 0,
+                    font_size: 16.0,
+                    inline_origin: stable_id as f32,
+                    block_origin: 0.0,
+                }));
             for field in &mut arena.semantic_f32 {
                 field.extend([1.0, 2.0, 3.0]);
             }

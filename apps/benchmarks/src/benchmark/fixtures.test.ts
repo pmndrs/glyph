@@ -92,7 +92,6 @@ describe('canonical Inter fixtures', () => {
     expect(image.byteLength).toBe(metadata.image.bytes);
     expect(createHash('sha256').update(image).digest('hex')).toBe(metadata.image.sha256);
   });
-
 });
 
 describe('advanced-shaping result', () => {
@@ -288,5 +287,4 @@ describe('canonical Noto Sans CJK fixtures', () => {
     );
     expect(harfrust.cases).toEqual(harfbuzz.cases);
   });
-
 });

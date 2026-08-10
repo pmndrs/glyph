@@ -1059,6 +1059,7 @@ fn append_session_gather(
         let input = LayoutPlanInput {
             transform_id: ordered.id,
             glyphs: positioned.glyphs(),
+            semantic_glyphs: positioned.semantic_glyphs(),
             semantic_change_masks,
             semantic_f32: &semantic_f32,
             semantic_u32: &semantic_u32,
@@ -1798,6 +1799,11 @@ impl ParagraphState {
         } else {
             self.resolved_styles.segments()
         };
+        let style_storage = if self.styles_prepared {
+            &self.pending_styles
+        } else {
+            &self.styles
+        };
         let unicode = if self.unicode_prepared {
             &self.pending_unicode
         } else {
@@ -1809,7 +1815,7 @@ impl ParagraphState {
             &self.bidi
         };
         self.pending_shaping_runs
-            .build(text, styles, unicode, bidi)?;
+            .build(text, styles, style_storage, unicode, bidi)?;
         self.shaping_runs_prepared = true;
         Ok(())
     }
@@ -2876,7 +2882,7 @@ fn same_shaping_properties(left: ShapingRun, right: ShapingRun) -> bool {
     left.script == right.script
         && left.direction == right.direction
         && left.bidi_level == right.bidi_level
-        && left.style == right.style
+        && left.style.same_layout_sources(right.style)
 }
 
 fn containing_run(runs: &[ShapingRun], start: usize, end: usize) -> Option<usize> {

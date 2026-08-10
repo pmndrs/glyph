@@ -79,7 +79,11 @@ async function fixture(name) {
     const extension = raster.document.extensions.PMNDRS_font_distance_field;
     const data = {
       resource: defineRasterResourceId('test.mtsdf'),
-      binding: {},
+      binding: {
+        width: Math.max(...raster.pages.map((page) => page.width)),
+        height: Math.max(...raster.pages.map((page) => page.height)),
+        layers: raster.pages.length,
+      },
       emSize: extension.emSize,
       pixelRange: extension.pixelRange,
       planeUnitsPerEm: extension.planeUnitsPerEm,

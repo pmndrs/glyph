@@ -5,11 +5,13 @@ use alloc::vec::Vec;
 use super::{
     font_binding::{FontRenderBinding, SelectedGlyphBinding},
     frame::{
-        SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE, SEMANTIC_F32_FOREGROUND_GREEN,
-        SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_U32_FOREGROUND_RGBA,
+        SEMANTIC_F32_BLOCK_ORIGIN, SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE,
+        SEMANTIC_F32_FOREGROUND_GREEN, SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INLINE_ORIGIN,
+        SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_U32_CLUSTER_ID, SEMANTIC_U32_FOREGROUND_RGBA,
     },
     plan_input::{PlanGlyph, PlanInput},
     policy::{CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedPolicy},
+    positioning::SemanticGlyph,
 };
 
 // `fontSize` and `rasterPixelRatio` can select a different baked resource.
@@ -17,16 +19,54 @@ use super::{
 // the policy dependency mask would omit unchanged fields from an in-place patch.
 const RESOURCE_SELECTION_CHANGES: u16 = (1 << 4) | (1 << 5);
 
+// Exact Float32 results of the IEC 61966-2-1 sRGB transfer for every byte value.
+// Foreground colors stay one compact u32 per glyph while policy output reproduces
+// the renderer's prior linear Float32 instance records without a hot-path powf.
+const SRGB8_TO_LINEAR_BITS: [u32; 256] = [
+    0x00000000, 0x399f22b4, 0x3a1f22b4, 0x3a6eb40e, 0x3a9f22b4, 0x3ac6eb61, 0x3aeeb40e, 0x3b0b3e5d,
+    0x3b1f22b4, 0x3b33070a, 0x3b46eb61, 0x3b5b518e, 0x3b70f18f, 0x3b83e1c6, 0x3b8fe616, 0x3b9c87fd,
+    0x3ba9c9b6, 0x3bb7ad6f, 0x3bc6354a, 0x3bd56360, 0x3be539c1, 0x3bf5ba71, 0x3c0373b6, 0x3c0c6153,
+    0x3c15a705, 0x3c1f45be, 0x3c293e6b, 0x3c3391f7, 0x3c3e4149, 0x3c494d44, 0x3c54b6c9, 0x3c607eb4,
+    0x3c6ca5df, 0x3c792d22, 0x3c830aa9, 0x3c89af9f, 0x3c9085dc, 0x3c978dc6, 0x3c9ec7c2, 0x3ca63433,
+    0x3cadd37d, 0x3cb5a602, 0x3cbdac21, 0x3cc5e63a, 0x3cce54ac, 0x3cd6f7d5, 0x3cdfd010, 0x3ce8ddba,
+    0x3cf2212d, 0x3cfb9ac3, 0x3d02a56a, 0x3d0798dd, 0x3d0ca7e6, 0x3d11d2af, 0x3d171964, 0x3d1c7c30,
+    0x3d21fb3c, 0x3d2796b2, 0x3d2d4ebb, 0x3d332381, 0x3d39152b, 0x3d3f23e4, 0x3d454fd2, 0x3d4b991d,
+    0x3d51ffec, 0x3d588468, 0x3d5f26b6, 0x3d65e6fd, 0x3d6cc563, 0x3d73c20e, 0x3d7add24, 0x3d810b65,
+    0x3d84b793, 0x3d88732e, 0x3d8c3e48, 0x3d9018f4, 0x3d940344, 0x3d97fd49, 0x3d9c0715, 0x3da020ba,
+    0x3da44a4a, 0x3da883d6, 0x3daccd6f, 0x3db12727, 0x3db5910f, 0x3dba0b38, 0x3dbe95b3, 0x3dc33090,
+    0x3dc7dbe0, 0x3dcc97b4, 0x3dd1641d, 0x3dd6412b, 0x3ddb2eee, 0x3de02d76, 0x3de53cd4, 0x3dea5d18,
+    0x3def8e51, 0x3df4d090, 0x3dfa23e5, 0x3dff885e, 0x3e027f06, 0x3e05427f, 0x3e080ea2, 0x3e0ae377,
+    0x3e0dc104, 0x3e10a753, 0x3e13966a, 0x3e168e51, 0x3e198f0f, 0x3e1c98ac, 0x3e1fab30, 0x3e22c6a1,
+    0x3e25eb07, 0x3e29186a, 0x3e2c4ed0, 0x3e2f8e42, 0x3e32d6c5, 0x3e362862, 0x3e39831f, 0x3e3ce703,
+    0x3e405417, 0x3e43ca60, 0x3e4749e6, 0x3e4ad2af, 0x3e4e64c3, 0x3e520029, 0x3e55a4e7, 0x3e595305,
+    0x3e5d0a89, 0x3e60cb7a, 0x3e6495df, 0x3e6869be, 0x3e6c471f, 0x3e702e07, 0x3e741e7e, 0x3e78188b,
+    0x3e7c1c33, 0x3e8014bf, 0x3e822039, 0x3e84308b, 0x3e8645b8, 0x3e885fc3, 0x3e8a7eb0, 0x3e8ca281,
+    0x3e8ecb3b, 0x3e90f8df, 0x3e932b72, 0x3e9562f6, 0x3e979f6f, 0x3e99e0e0, 0x3e9c274c, 0x3e9e72b6,
+    0x3ea0c321, 0x3ea31890, 0x3ea57307, 0x3ea7d288, 0x3eaa3716, 0x3eaca0b6, 0x3eaf0f68, 0x3eb18332,
+    0x3eb3fc15, 0x3eb67a14, 0x3eb8fd34, 0x3ebb8576, 0x3ebe12de, 0x3ec0a56e, 0x3ec33d2a, 0x3ec5da14,
+    0x3ec87c30, 0x3ecb2380, 0x3ecdd008, 0x3ed081ca, 0x3ed338c9, 0x3ed5f508, 0x3ed8b68a, 0x3edb7d52,
+    0x3ede4963, 0x3ee11abf, 0x3ee3f169, 0x3ee6cd65, 0x3ee9aeb5, 0x3eec955b, 0x3eef815c, 0x3ef272b8,
+    0x3ef56974, 0x3ef86593, 0x3efb6716, 0x3efe6e00, 0x3f00bd2b, 0x3f02460c, 0x3f03d1a5, 0x3f055ff7,
+    0x3f06f104, 0x3f0884cd, 0x3f0a1b54, 0x3f0bb499, 0x3f0d509f, 0x3f0eef65, 0x3f1090ef, 0x3f12353d,
+    0x3f13dc50, 0x3f15862a, 0x3f1732cc, 0x3f18e237, 0x3f1a946e, 0x3f1c4970, 0x3f1e0140, 0x3f1fbbde,
+    0x3f21794d, 0x3f23398c, 0x3f24fc9f, 0x3f26c285, 0x3f288b41, 0x3f2a56d2, 0x3f2c253c, 0x3f2df67f,
+    0x3f2fca9c, 0x3f31a194, 0x3f337b6a, 0x3f35581d, 0x3f3737b0, 0x3f391a24, 0x3f3aff7a, 0x3f3ce7b2,
+    0x3f3ed2cf, 0x3f40c0d2, 0x3f42b1bc, 0x3f44a58e, 0x3f469c49, 0x3f4895ef, 0x3f4a9280, 0x3f4c91ff,
+    0x3f4e946c, 0x3f5099c9, 0x3f52a216, 0x3f54ad56, 0x3f56bb88, 0x3f58ccaf, 0x3f5ae0cc, 0x3f5cf7df,
+    0x3f5f11ea, 0x3f612eef, 0x3f634eee, 0x3f6571e9, 0x3f6797e0, 0x3f69c0d5, 0x3f6becca, 0x3f6e1bbf,
+    0x3f704db5, 0x3f7282ae, 0x3f74baab, 0x3f76f5ae, 0x3f7933b6, 0x3f7b74c6, 0x3f7db8de, 0x3f800000,
+];
+
 pub const DEFAULT_GATHER_RECORD_CAPACITY: usize = 32_768;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LayoutGlyph {
     pub stable_id: u32,
     pub content_revision: u32,
+    pub semantic_glyph_index: u32,
     pub binding_handle: u32,
     pub font_handle: u32,
     pub glyph_id: u32,
-    pub semantic_id: u32,
     pub material_id: u32,
     pub clip_id: u32,
     pub depth_key: u32,
@@ -42,6 +82,7 @@ pub struct LayoutGlyph {
 pub struct LayoutPlanInput<'a> {
     pub transform_id: u32,
     pub glyphs: &'a [LayoutGlyph],
+    pub(crate) semantic_glyphs: &'a [SemanticGlyph],
     pub semantic_change_masks: &'a [u16],
     pub semantic_f32: &'a [&'a [f32]],
     pub semantic_u32: &'a [&'a [u32]],
@@ -252,7 +293,7 @@ impl PolicyGatherWorkspace {
                     program
                 }
             };
-            let next = plan_glyph(input, glyph, binding, selected)?;
+            let next = plan_glyph(input, glyph_index, glyph, binding, selected)?;
             let Some(previous) = self.glyphs.get(cursor).copied() else {
                 self.retained_cursor = cursor;
                 self.retained_source_cursor = source_cursor - 1;
@@ -422,7 +463,7 @@ impl PolicyGatherWorkspace {
                 u32_inputs,
             )?;
             self.glyphs
-                .push(plan_glyph(input, glyph, binding, selected)?);
+                .push(plan_glyph(input, glyph_index, glyph, binding, selected)?);
             self.semantic_change_masks.push(
                 input
                     .semantic_change_masks
@@ -650,6 +691,13 @@ impl GatheredPlanInput<'_> {
 fn validate_semantic_shape(input: LayoutPlanInput<'_>) -> Result<(), GatherError> {
     if (!input.semantic_change_masks.is_empty()
         && input.semantic_change_masks.len() != input.glyphs.len())
+        || (!input.semantic_glyphs.is_empty()
+            && input.glyphs.iter().any(|glyph| {
+                usize::try_from(glyph.semantic_glyph_index)
+                    .ok()
+                    .and_then(|index| input.semantic_glyphs.get(index))
+                    .is_none_or(|semantic| semantic.stable_id != glyph.stable_id)
+            }))
         || input.semantic_f32.iter().any(|field| {
             field.len() != input.glyphs.len() || field.iter().any(|value| !value.is_finite())
         })
@@ -665,6 +713,7 @@ fn validate_semantic_shape(input: LayoutPlanInput<'_>) -> Result<(), GatherError
 
 fn plan_glyph(
     input: LayoutPlanInput<'_>,
+    glyph_index: usize,
     glyph: LayoutGlyph,
     binding: &FontRenderBinding,
     selected: SelectedGlyphBinding,
@@ -673,6 +722,16 @@ fn plan_glyph(
         .resources()
         .get(usize::try_from(selected.resource).map_err(|_| GatherError::ResourceBindingMissing)?)
         .ok_or(GatherError::ResourceBindingMissing)?;
+    let semantic_id = match input
+        .semantic_u32
+        .get(usize::from(SEMANTIC_U32_CLUSTER_ID))
+        .and_then(|values| values.get(glyph_index))
+        .copied()
+    {
+        Some(value) => value,
+        None if input.semantic_glyphs.is_empty() => glyph.stable_id,
+        None => return Err(GatherError::SourceFieldMissing),
+    };
     Ok(PlanGlyph {
         stable_id: glyph.stable_id,
         content_revision: glyph.content_revision,
@@ -682,7 +741,7 @@ fn plan_glyph(
         resource_generation: resource.generation,
         resource_kind: resource.kind,
         resource_reference: resource.reference,
-        semantic_id: glyph.semantic_id,
+        semantic_id,
         transform_id: input.transform_id,
         material_id: glyph.material_id,
         clip_id: glyph.clip_id,
@@ -746,6 +805,22 @@ fn derived_semantic_f32(
     input: LayoutPlanInput<'_>,
     glyph_index: usize,
 ) -> Result<Option<f32>, GatherError> {
+    if field == SEMANTIC_F32_INLINE_ORIGIN || field == SEMANTIC_F32_BLOCK_ORIGIN {
+        let semantic_index = input
+            .glyphs
+            .get(glyph_index)
+            .and_then(|glyph| usize::try_from(glyph.semantic_glyph_index).ok())
+            .ok_or(GatherError::SourceFieldMissing)?;
+        let glyph = input
+            .semantic_glyphs
+            .get(semantic_index)
+            .ok_or(GatherError::SourceFieldMissing)?;
+        return Ok(Some(if field == SEMANTIC_F32_INLINE_ORIGIN {
+            glyph.inline_origin
+        } else {
+            glyph.block_origin
+        }));
+    }
     if field == SEMANTIC_F32_INVERSE_FONT_SIZE {
         let font_size = input
             .glyphs
@@ -754,11 +829,11 @@ fn derived_semantic_f32(
             .ok_or(GatherError::SourceFieldMissing)?;
         return Ok(Some(1.0 / font_size));
     }
-    let shift = match field {
-        SEMANTIC_F32_FOREGROUND_RED => 24,
-        SEMANTIC_F32_FOREGROUND_GREEN => 16,
-        SEMANTIC_F32_FOREGROUND_BLUE => 8,
-        SEMANTIC_F32_FOREGROUND_ALPHA => 0,
+    let (shift, srgb) = match field {
+        SEMANTIC_F32_FOREGROUND_RED => (0, true),
+        SEMANTIC_F32_FOREGROUND_GREEN => (8, true),
+        SEMANTIC_F32_FOREGROUND_BLUE => (16, true),
+        SEMANTIC_F32_FOREGROUND_ALPHA => (24, false),
         _ => return Ok(None),
     };
     let packed = input
@@ -768,7 +843,11 @@ fn derived_semantic_f32(
         .copied()
         .ok_or(GatherError::SourceFieldMissing)?;
     let channel = (packed >> shift) & 0xff;
-    Ok(Some((f64::from(channel) / 255.0) as f32))
+    Ok(Some(if srgb {
+        f32::from_bits(SRGB8_TO_LINEAR_BITS[channel as usize])
+    } else {
+        (f64::from(channel) / 255.0) as f32
+    }))
 }
 
 fn source_u32(
@@ -850,26 +929,51 @@ mod tests {
 
     #[test]
     fn derives_policy_color_channels_and_inverse_font_size_without_retained_arrays() {
-        let glyphs = [layout_glyph(1, 0)];
-        let foreground = [0x8040_20ff];
+        let mut glyphs = [layout_glyph(1, 0)];
+        glyphs[0].semantic_glyph_index = 1;
+        let semantic_glyphs = [
+            SemanticGlyph {
+                stable_id: 99,
+                font_handle: 1,
+                cluster: 0,
+                glyph_id: 99,
+                flags: 0,
+                font_size: 16.0,
+                inline_origin: 500.0,
+                block_origin: 500.0,
+            },
+            SemanticGlyph {
+                stable_id: 1,
+                font_handle: 1,
+                cluster: 0,
+                glyph_id: 1,
+                flags: 0,
+                font_size: 16.0,
+                inline_origin: 12.5,
+                block_origin: -3.25,
+            },
+        ];
+        let foreground = [0xff20_4080];
         let input = LayoutPlanInput {
             transform_id: 1,
             glyphs: &glyphs,
+            semantic_glyphs: &semantic_glyphs,
             semantic_change_masks: &[],
             semantic_f32: &[],
             semantic_u32: &[&foreground],
         };
+        assert_eq!(validate_semantic_shape(input), Ok(()));
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_FOREGROUND_RED, input, 0),
-            Ok(Some((128.0_f64 / 255.0) as f32))
+            Ok(Some(f32::from_bits(SRGB8_TO_LINEAR_BITS[128])))
         );
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_FOREGROUND_GREEN, input, 0),
-            Ok(Some((64.0_f64 / 255.0) as f32))
+            Ok(Some(f32::from_bits(SRGB8_TO_LINEAR_BITS[64])))
         );
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_FOREGROUND_BLUE, input, 0),
-            Ok(Some((32.0_f64 / 255.0) as f32))
+            Ok(Some(f32::from_bits(SRGB8_TO_LINEAR_BITS[32])))
         );
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_FOREGROUND_ALPHA, input, 0),
@@ -878,6 +982,14 @@ mod tests {
         assert_eq!(
             derived_semantic_f32(SEMANTIC_F32_INVERSE_FONT_SIZE, input, 0),
             Ok(Some(1.0 / 16.0))
+        );
+        assert_eq!(
+            derived_semantic_f32(SEMANTIC_F32_INLINE_ORIGIN, input, 0),
+            Ok(Some(12.5))
+        );
+        assert_eq!(
+            derived_semantic_f32(SEMANTIC_F32_BLOCK_ORIGIN, input, 0),
+            Ok(Some(-3.25))
         );
     }
 
@@ -898,6 +1010,7 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
+                    semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
@@ -968,6 +1081,7 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
+                    semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[&initial_x],
                     semantic_u32: &[&semantic_kind],
@@ -990,6 +1104,7 @@ mod tests {
                     LayoutPlanInput {
                         transform_id: 1,
                         glyphs: &changed_glyphs,
+                        semantic_glyphs: &[],
                         semantic_change_masks: &[0, 1],
                         semantic_f32: &[&changed_x],
                         semantic_u32: &[&semantic_kind],
@@ -1017,6 +1132,7 @@ mod tests {
                     LayoutPlanInput {
                         transform_id: 1,
                         glyphs: &changed_topology,
+                        semantic_glyphs: &[],
                         semantic_change_masks: &[
                             0,
                             super::super::positioning::ALL_SEMANTIC_CHANGES
@@ -1037,6 +1153,7 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &changed_topology,
+                    semantic_glyphs: &[],
                     semantic_change_masks: &[0, crate::engine::positioning::ALL_SEMANTIC_CHANGES],
                     semantic_f32: &[&changed_x],
                     semantic_u32: &[&semantic_kind],
@@ -1069,6 +1186,7 @@ mod tests {
             LayoutPlanInput {
                 transform_id: 1,
                 glyphs: &first,
+                semantic_glyphs: &[],
                 semantic_change_masks: &[],
                 semantic_f32: &[&first_x],
                 semantic_u32: &[&first_kind],
@@ -1076,6 +1194,7 @@ mod tests {
             LayoutPlanInput {
                 transform_id: 2,
                 glyphs: &second,
+                semantic_glyphs: &[],
                 semantic_change_masks: &[],
                 semantic_f32: &[&second_x],
                 semantic_u32: &[&second_kind],
@@ -1125,6 +1244,7 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
+                    semantic_glyphs: &[],
                     semantic_change_masks: &[1, 1],
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
@@ -1159,6 +1279,7 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
+                    semantic_glyphs: &[],
                     semantic_change_masks: &[
                         RESOURCE_SELECTION_CHANGES,
                         RESOURCE_SELECTION_CHANGES,
@@ -1190,6 +1311,7 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
+                    semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[],
@@ -1206,6 +1328,7 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
+                    semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[],
@@ -1222,6 +1345,7 @@ mod tests {
                 LayoutPlanInput {
                     transform_id: 1,
                     glyphs: &glyphs,
+                    semantic_glyphs: &[],
                     semantic_change_masks: &[],
                     semantic_f32: &[],
                     semantic_u32: &[],
@@ -1247,10 +1371,10 @@ mod tests {
         LayoutGlyph {
             stable_id,
             content_revision: 1,
+            semantic_glyph_index: glyph_id,
             binding_handle: 9,
             font_handle: 9,
             glyph_id,
-            semantic_id: stable_id,
             material_id: 6,
             clip_id: 0,
             depth_key: 0,

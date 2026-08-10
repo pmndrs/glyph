@@ -947,16 +947,16 @@ fn f32_input_dependency(source: InputSource) -> u16 {
         return 0;
     }
     match source.field {
-        0..=5 => 1 << source.field,
-        6..=9 => 1 << 6,
-        10 => 1 << 4,
+        0..=7 => 1 << source.field,
+        8..=11 => 1 << 8,
+        12 => 1 << 4,
         _ => 0,
     }
 }
 
 fn u32_input_dependency(source: InputSource) -> u16 {
-    if source.scope == InputScope::Semantic && source.field < 5 {
-        1 << (6 + source.field)
+    if source.scope == InputScope::Semantic && source.field < 6 {
+        1 << (8 + source.field)
     } else {
         0
     }
