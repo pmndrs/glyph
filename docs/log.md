@@ -2,6 +2,12 @@
 
 ## 2026-08-10
 
+- **Collapsed the R3F hello-world scene to its public API** — Removed the `TechniqueScene`, `Copy`, and
+  `TechniqueButtons` component layers. One `App` now loads the two multi-technique assets, selects
+  `fonts[technique]` for one world `Text`, and renders the controls directly inside the world/UI `TextGroup` layers.
+  The dynamic union is explicit only at `Text<AnyRasterTechnique>`; each load and font stack retains its concrete type,
+  and the public API does not duplicate the font's technique binding as a second prop.
+
 - **Removed product HarfBuzz subprocesses** — `text glyphs`, `text bake --unicodes`, and programmatic
   `@pmndrs/text/bake` now use the packaged Fontations/Skera baker Wasm. One normalized prepared source feeds core
   shaping and every requested raster technique; HarfBuzz remains internal test-oracle tooling only.

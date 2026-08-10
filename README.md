@@ -259,7 +259,7 @@ For a known local font, the CLI exposes the same path without a project-discover
 pnpm exec text bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --msdf --slug
 ```
 
-Add `--unicodes U+0020-007E` to subset the shaping font through `hb-subset`, or `--check` to rebuild temporarily and
+Add `--unicodes U+0020-007E` to subset the shaping font through the package-owned baker Wasm, or `--check` to rebuild temporarily and
 require byte-identical output.
 
 Use the font's retained `post`/CFF glyph names to find icon code points or produce a bake-ready Unicode set:
@@ -269,7 +269,7 @@ pnpm exec text glyphs fa-solid-900.ttf --name globe --json
 pnpm exec text glyphs fa-solid-900.ttf --name globe --name earth-americas --unicode-set
 ```
 
-`text glyphs` requires `hb-info`; synthetic `gidN` labels are omitted rather than presented as font-authored names.
+`text glyphs` uses the package-owned baker Wasm; fonts without authored names still report exact glyph IDs.
 
 ### Load, shape, and render
 
