@@ -139,3 +139,25 @@ pub fn draw_fields_compatible(
         && next.depth_key == first.depth_key
         && (!split_transform || next.transform_id == first.transform_id)
 }
+
+/// Tests the shared logical and renderer-key invariants for extending a physical draw span.
+///
+/// Storage planners resolve batch membership and physical contiguity differently, so those two
+/// facts remain caller-owned. This stays inline because it runs once per candidate glyph.
+#[inline(always)]
+pub fn draw_span_compatible(
+    first: PlanGlyph,
+    next: PlanGlyph,
+    same_batch: bool,
+    contiguous: bool,
+    split_material: bool,
+    split_transform: bool,
+) -> bool {
+    same_batch
+        && contiguous
+        && next.technique == first.technique
+        && next.program_variant == first.program_variant
+        && next.resource_id == first.resource_id
+        && next.resource_generation == first.resource_generation
+        && draw_fields_compatible(first, next, split_material, split_transform)
+}

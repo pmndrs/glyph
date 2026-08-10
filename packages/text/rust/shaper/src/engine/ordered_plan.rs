@@ -8,20 +8,21 @@ use alloc::vec::Vec;
 use core::mem;
 
 use super::{
-    plan_draw::{GlyphDraw, PlanDrawError, push_glyph_draw},
+    identity_index::IdentitySet,
+    plan_draw::{GlyphDraw, push_glyph_draw},
     plan_input::{
-        PlanInputError, draw_fields_compatible, indexed_span_bounds, span_bounds, validate_glyph,
-        validate_input,
+        draw_fields_compatible, draw_span_compatible, indexed_span_bounds, span_bounds,
+        validate_glyph, validate_input,
     },
     plan_packing::{
-        MAX_PHYSICAL_BUFFERS, PackingError, PendingAllocation, PhysicalBufferState, RangeJob,
-        RecordRange, align_record_range, align_up, apply_writes, buffer_record_alignment,
-        coalesce_buffer_ranges, collect_range_jobs, execute_run, grown_capacity, record_alignment,
-        take_allocation,
+        MAX_PHYSICAL_BUFFERS, PendingAllocation, PhysicalBufferState, RangeJob, RecordRange,
+        align_record_range, align_up, apply_writes, buffer_record_alignment,
+        coalesce_buffer_ranges, collect_range_jobs, execute_run, grown_capacity,
+        push_pending_allocation, record_alignment, take_allocation,
     },
     policy::{
         ALLOCATION_ORDERED_DIRECT, BATCH_MATERIAL, BATCH_TRANSFORM, BufferSchema, CapabilitySetId,
-        PolicyExecutionError, TechniqueId, ValidatedPolicy,
+        TechniqueId, ValidatedPolicy,
     },
     render_plan::{
         BUFFER_ORDERED_DIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
@@ -31,61 +32,14 @@ use super::{
     },
 };
 
+pub use super::plan_error::PlanError as OrderedPlanError;
+
 #[cfg(test)]
 use super::render_plan::PRIMITIVE_GLYPH;
 
 pub use super::plan_input::{PlanGlyph as OrderedGlyph, PlanInput as OrderedPlanInput};
 
 const NONE: u32 = u32::MAX;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OrderedPlanError {
-    AllocationFailed,
-    AlreadyPrepared,
-    NotPrepared,
-    CapabilitySetMissing,
-    ProgramMissing,
-    UnsupportedStrategy,
-    InvalidInputShape,
-    InvalidIdentity,
-    DuplicateIdentity,
-    InvalidResource,
-    CapacityExceeded,
-    IdentifierExhausted,
-    ArithmeticOverflow,
-    PolicyExecution(PolicyExecutionError),
-}
-
-impl From<PlanInputError> for OrderedPlanError {
-    fn from(error: PlanInputError) -> Self {
-        match error {
-            PlanInputError::InvalidShape => Self::InvalidInputShape,
-            PlanInputError::InvalidIdentity => Self::InvalidIdentity,
-            PlanInputError::InvalidResource => Self::InvalidResource,
-        }
-    }
-}
-
-impl From<PackingError> for OrderedPlanError {
-    fn from(error: PackingError) -> Self {
-        match error {
-            PackingError::AllocationFailed => Self::AllocationFailed,
-            PackingError::ArithmeticOverflow => Self::ArithmeticOverflow,
-            PackingError::CapacityExceeded => Self::CapacityExceeded,
-            PackingError::InvalidIdentity => Self::InvalidIdentity,
-            PackingError::Policy(error) => Self::PolicyExecution(error),
-        }
-    }
-}
-
-impl From<PlanDrawError> for OrderedPlanError {
-    fn from(error: PlanDrawError) -> Self {
-        match error {
-            PlanDrawError::AllocationFailed => Self::AllocationFailed,
-            PlanDrawError::ArithmeticOverflow => Self::ArithmeticOverflow,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BatchKey {
@@ -150,9 +104,7 @@ pub struct OrderedPlanCompiler {
     pending_allocations: Vec<PendingAllocation>,
     input_batches: Vec<u32>,
     input_slots: Vec<u32>,
-    identity_keys: Vec<u32>,
-    identity_epochs: Vec<u32>,
-    identity_epoch: u32,
+    identity_set: IdentitySet,
     batch_cursors: Vec<u32>,
     changed_ranges: Vec<RecordRange>,
     buffer_ranges: [Vec<RecordRange>; MAX_PHYSICAL_BUFFERS],
@@ -429,49 +381,6 @@ impl OrderedPlanCompiler {
         self.publish_bindings = false;
     }
 
-    fn prepare_identity_set(&mut self, count: usize) -> Result<(), OrderedPlanError> {
-        let required = count
-            .checked_mul(2)
-            .and_then(|value| value.checked_next_power_of_two())
-            .unwrap_or(usize::MAX)
-            .max(8);
-        if required == usize::MAX {
-            return Err(OrderedPlanError::ArithmeticOverflow);
-        }
-        if self.identity_keys.len() < required {
-            let additional_keys = required - self.identity_keys.len();
-            let additional_epochs = required - self.identity_epochs.len();
-            reserve(&mut self.identity_keys, additional_keys)?;
-            reserve(&mut self.identity_epochs, additional_epochs)?;
-            self.identity_keys.resize(required, 0);
-            self.identity_epochs.resize(required, 0);
-        }
-        self.identity_epoch = match self.identity_epoch.checked_add(1) {
-            Some(epoch) => epoch,
-            None => {
-                self.identity_epochs.fill(0);
-                1
-            }
-        };
-        Ok(())
-    }
-
-    fn insert_identity(&mut self, identity: u32) -> bool {
-        let mask = self.identity_keys.len() - 1;
-        let mut slot = (identity.wrapping_mul(0x9e37_79b1) as usize) & mask;
-        loop {
-            if self.identity_epochs[slot] != self.identity_epoch {
-                self.identity_epochs[slot] = self.identity_epoch;
-                self.identity_keys[slot] = identity;
-                return true;
-            }
-            if self.identity_keys[slot] == identity {
-                return false;
-            }
-            slot = (slot + 1) & mask;
-        }
-    }
-
     fn prepare_complete_topology(
         &mut self,
         policy: &ValidatedPolicy,
@@ -485,11 +394,11 @@ impl OrderedPlanCompiler {
         self.input_batches.resize(input.glyphs.len(), NONE);
         self.input_batches.fill(NONE);
         self.input_slots.resize(input.glyphs.len(), 0);
-        self.prepare_identity_set(input.glyphs.len())?;
+        self.identity_set.prepare(input.glyphs.len())?;
 
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
             validate_glyph(glyph)?;
-            if !self.insert_identity(glyph.stable_id) {
+            if !self.identity_set.insert(glyph.stable_id) {
                 return Err(OrderedPlanError::DuplicateIdentity);
             }
             let program = policy
@@ -563,10 +472,10 @@ impl OrderedPlanCompiler {
         {
             return Ok(false);
         }
-        self.prepare_identity_set(input.glyphs.len())?;
+        self.identity_set.prepare(input.glyphs.len())?;
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
             validate_glyph(glyph)?;
-            if !self.insert_identity(glyph.stable_id) {
+            if !self.identity_set.insert(glyph.stable_id) {
                 return Err(OrderedPlanError::DuplicateIdentity);
             }
             let batch_index = self.input_batches[input_index];
@@ -783,7 +692,14 @@ impl OrderedPlanCompiler {
                         .ok_or(OrderedPlanError::ArithmeticOverflow)?,
                     ..PatchRecord::default()
                 });
-                self.prepare_allocation(id, generation, key.program_id, schema, capacity)?;
+                push_pending_allocation(
+                    &mut self.pending_allocations,
+                    id,
+                    generation,
+                    key.program_id,
+                    schema,
+                    capacity,
+                )?;
                 if new_or_resized
                     && let Some((previous_id, previous_generation, previous_length)) = previous
                 {
@@ -1001,21 +917,6 @@ impl OrderedPlanCompiler {
                 }
             }
         }
-        Ok(())
-    }
-
-    fn prepare_allocation(
-        &mut self,
-        id: u32,
-        generation: u32,
-        program_id: u32,
-        schema: BufferSchema,
-        capacity: u32,
-    ) -> Result<(), OrderedPlanError> {
-        reserve(&mut self.pending_allocations, 1)?;
-        self.pending_allocations.push(PendingAllocation {
-            state: PhysicalBufferState::new(id, generation, program_id, schema, capacity)?,
-        });
         Ok(())
     }
 
@@ -1303,13 +1204,14 @@ impl OrderedPlanCompiler {
     ) -> bool {
         let first = glyphs[start];
         let glyph = glyphs[next];
-        self.input_batches[next] as usize == batch_index
-            && self.input_slots[next] == first_slot + (next - start) as u32
-            && glyph.technique == first.technique
-            && glyph.program_variant == first.program_variant
-            && glyph.resource_id == first.resource_id
-            && glyph.resource_generation == first.resource_generation
-            && draw_fields_compatible(first, glyph, split_material, split_transform)
+        draw_span_compatible(
+            first,
+            glyph,
+            self.input_batches[next] as usize == batch_index,
+            self.input_slots[next] == first_slot + (next - start) as u32,
+            split_material,
+            split_transform,
+        )
     }
 
     fn prepare_removed_batches(
@@ -2078,8 +1980,8 @@ mod tests {
             compiler.pending_allocations.capacity(),
             compiler.input_batches.capacity(),
             compiler.input_slots.capacity(),
-            compiler.identity_keys.capacity(),
-            compiler.identity_epochs.capacity(),
+            compiler.identity_set.capacities()[0],
+            compiler.identity_set.capacities()[1],
             compiler.batch_cursors.capacity(),
             compiler.changed_ranges.capacity(),
             compiler.resources.capacity(),
