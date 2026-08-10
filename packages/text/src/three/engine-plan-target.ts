@@ -50,6 +50,7 @@ interface MaterialRealization {
 interface OriginSegment {
   readonly origins: RetainedBuffer;
   readonly stableIds: RetainedBuffer;
+  readonly order: RetainedBuffer | undefined;
   readonly start: number;
   readonly count: number;
 }
@@ -64,6 +65,10 @@ interface OriginRecord {
 type TransformRealization =
   | Readonly<{ kind: 'direct'; transformId: number }>
   | Readonly<{ kind: 'indexed'; indices: RetainedBuffer }>;
+
+interface RecordAddressing {
+  readonly order: RetainedBuffer | undefined;
+}
 
 export interface ThreeTextEnginePlanOwner {
   readonly drawRoot: THREE.Object3D;
@@ -424,17 +429,24 @@ export class ThreeTextRenderPlanExecutor {
         if (resource === undefined) throw new Error('draw references an unknown retained resource');
         const materialId = plan.u32(draw + drawLayout.materialId);
         const transformId = plan.u32(draw + drawLayout.transformId);
-        const transform = this.#transformRealization(byPolicyId, transformId);
-        const material = this.#material(resource, byPolicyId, materialId, transform);
         const recordIndex = plan.u32(primitive + primitiveLayout.recordIndex);
         const recordCount = plan.u16(primitive + primitiveLayout.recordCount);
+        const addressing = recordAddressing(plan, draw, primitive, byPolicyId);
+        const transform = this.#transformRealization(byPolicyId, transformId);
+        const material = this.#material(resource, byPolicyId, materialId, transform, addressing);
         const origins = byPolicyId.get(1);
         const stableIds = byPolicyId.get(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID);
         if (origins !== undefined && stableIds !== undefined) {
           if (!(origins.array instanceof Float32Array) || !(stableIds.array instanceof Uint32Array)) {
             throw new TypeError('glyph-origin augmentation buffers have invalid scalar types');
           }
-          nextOriginSegments.push({ origins, stableIds, start: recordIndex, count: recordCount });
+          nextOriginSegments.push({
+            origins,
+            stableIds,
+            order: addressing.order,
+            start: recordIndex,
+            count: recordCount,
+          });
         }
         const key = drawRealizationKey(
           plan.u32(draw + drawLayout.programId),
@@ -518,14 +530,15 @@ export class ThreeTextRenderPlanExecutor {
       if (!(segment.origins.array instanceof Float32Array) || !(segment.stableIds.array instanceof Uint32Array))
         continue;
       for (let index = segment.start; index < segment.start + segment.count; index += 1) {
-        const stableId = segment.stableIds.array[index];
+        const recordIndex = physicalRecordIndex(segment.order, index);
+        const stableId = segment.stableIds.array[recordIndex];
         if (stableId === undefined || stableId === 0)
           throw new Error('origin augmentation references an invalid glyph');
-        const offset = index * segment.origins.vectorWidth;
+        const offset = recordIndex * segment.origins.vectorWidth;
         if (this.#originRecords.has(stableId)) throw new Error('origin augmentation repeats a stable glyph identity');
         this.#originRecords.set(stableId, {
           buffer: segment.origins,
-          index,
+          index: recordIndex,
           targetX: segment.origins.array[offset]!,
           targetY: segment.origins.array[offset + 1]!,
         });
@@ -559,18 +572,21 @@ export class ThreeTextRenderPlanExecutor {
       const bufferStart = plan.u32(draw + drawLayout.bufferStart);
       const bufferEnd = bufferStart + plan.u32(draw + drawLayout.bufferCount);
       let transformBuffer: RetainedBuffer | undefined;
+      const byPolicyId = new Map<number, RetainedBuffer>();
       for (let bufferIndex = bufferStart; bufferIndex < bufferEnd; bufferIndex += 1) {
         const record = plan.record(buffers, bufferIndex);
         const candidate = this.#buffer(plan.u32(record + bufferLayout.id), plan.u32(record + bufferLayout.generation));
+        byPolicyId.set(candidate.policyBufferId, candidate);
         if (candidate.policyBufferId === FIRST_PARTY_TRANSFORM_BUFFER_ID) transformBuffer = candidate;
       }
       if (transformBuffer === undefined || !(transformBuffer.array instanceof Uint32Array)) {
         throw new Error('indexed Three draw is missing its u32 transform-index buffer');
       }
+      const addressing = recordAddressing(plan, draw, primitive, byPolicyId);
       const start = plan.u32(primitive + primitiveLayout.recordIndex);
       const end = start + plan.u16(primitive + primitiveLayout.recordCount);
       for (let recordIndex = start; recordIndex < end; recordIndex += 1) {
-        const transformIndex = transformBuffer.array[recordIndex];
+        const transformIndex = transformBuffer.array[physicalRecordIndex(addressing.order, recordIndex)];
         if (transformIndex === undefined || transformIndex === 0) {
           throw new Error('indexed Three draw references an invalid transform slot');
         }
@@ -598,6 +614,7 @@ export class ThreeTextRenderPlanExecutor {
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
     transform: TransformRealization,
+    addressing: RecordAddressing,
   ): THREE.NodeMaterial {
     const resolved = this.#coordinator.resolveResource(resource.referenceId);
     if (resolved.technique !== bitmap.id) {
@@ -611,14 +628,14 @@ export class ThreeTextRenderPlanExecutor {
     });
     const key = `${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}`;
+      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
     const cached = this.#materials.get(key);
     if (cached !== undefined) return cached.material;
     const texture = this.#bitmapTexture(resource.referenceId, page);
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
     );
-    const instance = TSL.instanceIndex.add(runStart);
+    const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
     const shader = bitmapShader(
       {
         origin: TSL.storage(required[0]!.attribute, 'vec2', required[0]!.attribute.count)
@@ -645,12 +662,7 @@ export class ThreeTextRenderPlanExecutor {
       position,
       createDefaultMaterial: () => bitmapMaterial(shader, position),
     });
-    this.#retainMaterial(
-      key,
-      material,
-      resource,
-      transform.kind === 'indexed' ? [...required, transform.indices] : required,
-    );
+    this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing));
     return material;
   }
 
@@ -659,12 +671,15 @@ export class ThreeTextRenderPlanExecutor {
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
     transform: TransformRealization,
+    addressing: RecordAddressing,
   ): THREE.NodeMaterial {
     const resolved = this.#coordinator.resolveResource(resource.referenceId);
-    if (resolved.technique === bitmap.id) return this.#bitmapMaterial(resource, buffers, materialId, transform);
-    if (resolved.technique === msdf.id) return this.#msdfMaterial(resource, buffers, materialId, transform);
-    if (resolved.technique === slug.id) return this.#slugMaterial(resource, buffers, materialId, transform);
-    if ('program' in resolved) return this.#planProgramMaterial(resource, resolved, buffers, materialId, transform);
+    if (resolved.technique === bitmap.id)
+      return this.#bitmapMaterial(resource, buffers, materialId, transform, addressing);
+    if (resolved.technique === msdf.id) return this.#msdfMaterial(resource, buffers, materialId, transform, addressing);
+    if (resolved.technique === slug.id) return this.#slugMaterial(resource, buffers, materialId, transform, addressing);
+    if ('program' in resolved)
+      return this.#planProgramMaterial(resource, resolved, buffers, materialId, transform, addressing);
     throw new Error('this Three plan target does not recognize the draw technique');
   }
 
@@ -674,17 +689,18 @@ export class ThreeTextRenderPlanExecutor {
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
     transform: TransformRealization,
+    addressing: RecordAddressing,
   ): THREE.NodeMaterial {
     const required = [...buffers.values()];
     const key = `external:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.policyBufferId}:${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}`;
+      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
     const cached = this.#materials.get(key);
     if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
     );
-    const instance = TSL.instanceIndex.add(runStart);
+    const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
     const publicBuffers = new Map<number, ThreePlanProgramBuffer>(
       [...buffers].map(([id, buffer]) => [
         id,
@@ -708,12 +724,7 @@ export class ThreeTextRenderPlanExecutor {
             : position,
       }),
     );
-    this.#retainMaterial(
-      key,
-      material,
-      resource,
-      transform.kind === 'indexed' ? [...required, transform.indices] : required,
-    );
+    this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing));
     return material;
   }
 
@@ -722,6 +733,7 @@ export class ThreeTextRenderPlanExecutor {
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
     transform: TransformRealization,
+    addressing: RecordAddressing,
   ): THREE.NodeMaterial {
     const data = msdfData(this.#coordinator.resolveResource(resource.referenceId));
     const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
@@ -731,13 +743,13 @@ export class ThreeTextRenderPlanExecutor {
     });
     const key = `msdf:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}`;
+      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
     const cached = this.#materials.get(key);
     if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
     );
-    const instance = TSL.instanceIndex.add(runStart);
+    const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
     const fields = required.map((buffer) =>
       TSL.storage(buffer.attribute, 'vec4', buffer.attribute.count).setPBO(true).element(instance),
     );
@@ -772,12 +784,7 @@ export class ThreeTextRenderPlanExecutor {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#retainMaterial(
-      key,
-      material,
-      resource,
-      transform.kind === 'indexed' ? [...required, transform.indices] : required,
-    );
+    this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing));
     return material;
   }
 
@@ -824,6 +831,7 @@ export class ThreeTextRenderPlanExecutor {
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
     transformRealization: TransformRealization,
+    addressing: RecordAddressing,
   ): THREE.NodeMaterial {
     const page = slugPage(this.#coordinator.resolveResource(resource.referenceId));
     const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
@@ -833,13 +841,15 @@ export class ThreeTextRenderPlanExecutor {
     });
     const key = `slug:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformProgramKey(transformRealization, this.#transformGeneration)}`;
+      .join(
+        ',',
+      )}:${transformProgramKey(transformRealization, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
     const cached = this.#materials.get(key);
     if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
     );
-    const instance = TSL.instanceIndex.add(runStart);
+    const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
     const floatFields = required
       .slice(0, 5)
       .map((buffer) => TSL.storage(buffer.attribute, 'vec4', buffer.attribute.count).setPBO(true).element(instance));
@@ -889,12 +899,7 @@ export class ThreeTextRenderPlanExecutor {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#retainMaterial(
-      key,
-      material,
-      resource,
-      transformRealization.kind === 'indexed' ? [...required, transformRealization.indices] : required,
-    );
+    this.#retainMaterial(key, material, resource, materialBuffers(required, transformRealization, addressing));
     return material;
   }
 
@@ -1054,6 +1059,73 @@ function drawRealizationKey(
       ? `direct:${transform.transformId}`
       : transformProgramKey(transform, transformGeneration);
   return `${programId}:${resource.id}:${resource.generation}:${materialId}:${clipId}:${depthKey}:${transformKey}:${bufferKey}`;
+}
+
+function recordAddressing(
+  plan: TextEngineRenderPlanView,
+  draw: number,
+  primitive: number,
+  buffers: ReadonlyMap<number, RetainedBuffer>,
+): RecordAddressing {
+  const drawLayout = textShaperAbi.layouts.engineDraw;
+  const primitiveLayout = textShaperAbi.layouts.enginePrimitive;
+  const indirectBufferId = plan.u32(draw + drawLayout.indirectBufferId);
+  const order = buffers.get(textShaperAbi.engine.internalBufferBindings.order);
+  if (indirectBufferId === 0) {
+    if (order !== undefined) throw new Error('ordered-direct draw unexpectedly contains an indirection buffer');
+    return { order: undefined };
+  }
+  if (
+    order === undefined ||
+    order.id !== indirectBufferId ||
+    !(order.array instanceof Uint32Array) ||
+    order.vectorWidth !== 1
+  ) {
+    throw new Error('stable-indirect draw is missing its scalar u32 order buffer');
+  }
+  const indirectOffset = plan.u32(draw + drawLayout.indirectOffset);
+  const recordIndex = plan.u32(primitive + primitiveLayout.recordIndex);
+  if (
+    indirectOffset % Uint32Array.BYTES_PER_ELEMENT !== 0 ||
+    indirectOffset / Uint32Array.BYTES_PER_ELEMENT !== recordIndex ||
+    plan.u32(primitive + primitiveLayout.bufferId) !== indirectBufferId
+  ) {
+    throw new Error('stable-indirect draw and primitive disagree about logical record addressing');
+  }
+  return { order };
+}
+
+function physicalInstance(logical: THREE.Node<'uint'>, addressing: RecordAddressing): THREE.Node<'uint'> {
+  const order = addressing.order;
+  return order === undefined
+    ? logical
+    : TSL.storage(order.attribute, 'uint', order.attribute.count).setPBO(true).element(logical);
+}
+
+function physicalRecordIndex(order: RetainedBuffer | undefined, logical: number): number {
+  if (order === undefined) return logical;
+  if (!(order.array instanceof Uint32Array) || order.vectorWidth !== 1) {
+    throw new TypeError('stable-indirect order buffer must contain scalar u32 records');
+  }
+  const physical = order.array[logical];
+  if (physical === undefined) throw new RangeError('stable-indirect logical record exceeds its order buffer');
+  return physical;
+}
+
+function addressingProgramKey(addressing: RecordAddressing): string {
+  const order = addressing.order;
+  return order === undefined ? 'ordered' : `stable:${order.id}:${order.generation}`;
+}
+
+function materialBuffers(
+  required: readonly RetainedBuffer[],
+  transform: TransformRealization,
+  addressing: RecordAddressing,
+): readonly RetainedBuffer[] {
+  const buffers = new Map(required.map((buffer) => [buffer.id, buffer]));
+  if (transform.kind === 'indexed') buffers.set(transform.indices.id, transform.indices);
+  if (addressing.order !== undefined) buffers.set(addressing.order.id, addressing.order);
+  return [...buffers.values()];
 }
 
 function transformProgramKey(transform: TransformRealization, generation: number): string {

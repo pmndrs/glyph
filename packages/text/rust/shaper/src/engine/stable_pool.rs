@@ -53,6 +53,8 @@ pub struct StableSlotPool {
     seen_slots: Vec<u32>,
     seen_epoch: u32,
     pending_slot_count: u32,
+    committed_live_count: u32,
+    pending_live_count: u32,
     pending_publication_generation: u32,
     prepared: bool,
 }
@@ -100,12 +102,7 @@ impl StableSlotPool {
         if publication_generation == 0 || u32::try_from(desired.len()).is_err() {
             return Err(StablePoolError::InvalidIdentity);
         }
-        self.assignments.clear();
-        self.retired_slots.clear();
-        self.allocated_free_slots.clear();
-        self.pending_slot_count =
-            u32::try_from(self.slots.len()).map_err(|_| StablePoolError::ArithmeticOverflow)?;
-        self.pending_publication_generation = publication_generation;
+        self.begin_prepare(desired.len(), publication_generation)?;
         let result = (|| {
             self.prepare_identity_map(desired.len())?;
             self.prepare_seen_slots()?;
@@ -169,6 +166,66 @@ impl StableSlotPool {
         result
     }
 
+    /// Reuses the committed identity index when the desired set contains exactly the same live
+    /// identities. Reordering and content-revision changes are allowed; insertion, replacement,
+    /// or deletion falls back to [`Self::prepare`].
+    ///
+    /// This keeps the common retained update to one desired-identity pass. The complete path must
+    /// rebuild the index because structural updates can leave acknowledgment-gated stale mappings
+    /// behind after commit.
+    pub fn prepare_retained(
+        &mut self,
+        desired: &[SlotIdentity],
+        publication_generation: u32,
+    ) -> Result<bool, StablePoolError> {
+        if self.prepared {
+            return Err(StablePoolError::AlreadyPrepared);
+        }
+        if publication_generation == 0 || u32::try_from(desired.len()).is_err() {
+            return Err(StablePoolError::InvalidIdentity);
+        }
+        if desired.len() != self.committed_live_count as usize {
+            return Ok(false);
+        }
+
+        self.begin_prepare(desired.len(), publication_generation)?;
+        self.prepare_seen_slots()?;
+        reserve(&mut self.assignments, desired.len())?;
+
+        for identity in desired.iter().copied() {
+            if identity.stable_id == 0 || identity.content_revision == 0 {
+                self.finish_transaction();
+                return Err(StablePoolError::InvalidIdentity);
+            }
+            let Some(slot) = self.find_identity(identity.stable_id) else {
+                self.finish_transaction();
+                return Ok(false);
+            };
+            let Some(state) = self.slots.get(slot as usize).copied() else {
+                self.finish_transaction();
+                return Ok(false);
+            };
+            if state.stable_id != identity.stable_id {
+                self.finish_transaction();
+                return Ok(false);
+            }
+            if self.slot_seen(slot)? {
+                self.finish_transaction();
+                return Err(StablePoolError::DuplicateIdentity);
+            }
+            self.mark_slot_seen(slot)?;
+            self.assignments.push(SlotAssignment {
+                stable_id: identity.stable_id,
+                content_revision: identity.content_revision,
+                slot,
+                changed: state.content_revision != identity.content_revision,
+            });
+        }
+
+        self.prepared = true;
+        Ok(true)
+    }
+
     pub fn assignments(&self) -> Result<&[SlotAssignment], StablePoolError> {
         if !self.prepared {
             return Err(StablePoolError::NotPrepared);
@@ -216,6 +273,7 @@ impl StableSlotPool {
                 content_revision: assignment.content_revision,
             };
         }
+        self.committed_live_count = self.pending_live_count;
         self.finish_transaction();
         Ok(())
     }
@@ -249,6 +307,22 @@ impl StableSlotPool {
         self.retired_slots.clear();
         self.allocated_free_slots.clear();
         self.prepared = false;
+    }
+
+    fn begin_prepare(
+        &mut self,
+        desired_count: usize,
+        publication_generation: u32,
+    ) -> Result<(), StablePoolError> {
+        self.assignments.clear();
+        self.retired_slots.clear();
+        self.allocated_free_slots.clear();
+        self.pending_slot_count =
+            u32::try_from(self.slots.len()).map_err(|_| StablePoolError::ArithmeticOverflow)?;
+        self.pending_live_count =
+            u32::try_from(desired_count).map_err(|_| StablePoolError::ArithmeticOverflow)?;
+        self.pending_publication_generation = publication_generation;
+        Ok(())
     }
 
     fn prepare_identity_map(&mut self, desired_count: usize) -> Result<(), StablePoolError> {
@@ -404,6 +478,36 @@ mod tests {
         pool.prepare(&identities(&[(2, 2), (1, 1)]), 2).unwrap();
         assert_eq!(slots(&pool), vec![1, 0]);
         assert_eq!(changed_slots(&pool), vec![1]);
+    }
+
+    #[test]
+    fn retained_prepare_reuses_slots_for_revision_changes_and_reordering() {
+        let mut pool = StableSlotPool::default();
+        pool.prepare(&identities(&[(1, 1), (2, 1), (3, 1)]), 1)
+            .unwrap();
+        pool.commit().unwrap();
+
+        assert!(
+            pool.prepare_retained(&identities(&[(3, 1), (1, 2), (2, 1)]), 2)
+                .unwrap()
+        );
+        assert_eq!(slots(&pool), vec![2, 0, 1]);
+        assert_eq!(changed_slots(&pool), vec![0]);
+    }
+
+    #[test]
+    fn retained_prepare_rejects_structural_changes_without_poisoning_complete_prepare() {
+        let mut pool = StableSlotPool::default();
+        pool.prepare(&identities(&[(1, 1), (2, 1)]), 1).unwrap();
+        pool.commit().unwrap();
+
+        assert!(
+            !pool
+                .prepare_retained(&identities(&[(1, 1), (3, 1)]), 2)
+                .unwrap()
+        );
+        pool.prepare(&identities(&[(1, 1), (3, 1)]), 2).unwrap();
+        assert_eq!(slots(&pool), vec![0, 2]);
     }
 
     #[test]

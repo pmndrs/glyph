@@ -1,6 +1,5 @@
 import * as THREE from 'three/webgpu';
-import type { Node } from 'three/webgpu';
-import { float, mul, vec3 } from 'three/tsl';
+import { instanceIndex, storage } from 'three/tsl';
 
 import { compactRgba8Readback } from '../../low-level/raster/rgba-readback';
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
@@ -31,7 +30,7 @@ export function createTslBaselineTarget(backend: RendererBackend): BenchmarkTarg
   return {
     id: `tsl-${backend}-baseline`,
     label: backend === 'webgpu' ? 'TSL WebGPU baseline' : 'TSL WebGL baseline',
-    detail: 'WebGPURenderer · TSL · deterministic readback',
+    detail: 'WebGPURenderer · nested logical-to-physical storage lookup · deterministic readback',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set(['deterministic', 'raster']),
     status: () => 'ready',
@@ -83,14 +82,16 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<B
     target.texture.generateMipmaps = false;
 
     geometry = new THREE.PlaneGeometry(2, 2);
+    const order = new THREE.StorageInstancedBufferAttribute(new Uint32Array([1]), 1);
+    const records = new THREE.StorageInstancedBufferAttribute(new Float32Array([0, 1, 0, 1, 1, 0, 0, 1]), 4);
+    geometry.setAttribute('_logicalOrder', order);
+    geometry.setAttribute('_physicalRecords', records);
     material = new THREE.MeshBasicNodeMaterial({ depthTest: false, depthWrite: false });
-    const half: Node<'float'> = float(0.5);
-    const redChannel: Node<'float'> = mul(half, 2);
-    const red: Node<'vec3'> = vec3(redChannel, 0, 0);
-    material.colorNode = red;
+    const physicalRecord = storage(order, 'uint', order.count).setPBO(true).element(instanceIndex);
+    material.colorNode = storage(records, 'vec4', records.count).setPBO(true).element(physicalRecord).rgb;
 
     const scene = new THREE.Scene();
-    scene.add(new THREE.Mesh(geometry, material));
+    scene.add(new THREE.InstancedMesh(geometry, material, 1));
     return {
       backend,
       dpr,

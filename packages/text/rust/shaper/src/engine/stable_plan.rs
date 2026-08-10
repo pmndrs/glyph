@@ -698,7 +698,12 @@ impl StablePlanCompiler {
                 .ok_or(StablePlanError::InvalidIdentity)?
         };
         let batch = &mut self.batches[batch_index];
-        batch.slots.prepare(identities, publication_generation)?;
+        if !batch
+            .slots
+            .prepare_retained(identities, publication_generation)?
+        {
+            batch.slots.prepare(identities, publication_generation)?;
+        }
         let assignments = batch.slots.assignments()?;
         self.order_entries.clear();
         reserve(&mut self.order_entries, assignments.len())?;
