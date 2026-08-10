@@ -6,7 +6,7 @@ use super::{
     EngineError,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
     flow_geometry::{FlowGeometryArena, InlineSlotArena},
-    frame::{OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, WRITING_HORIZONTAL_TB},
+    frame::{OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB},
     line_composition::{ComposedLine, LineCursor, layout_next_line},
     style_state::StyleSegment,
 };
@@ -164,10 +164,10 @@ impl FlowLayoutArena {
                         constraint.flow_thread_id,
                         region.record.id,
                         region.record.transform_index,
-                        if constraint.overflow == OVERFLOW_VISIBLE {
-                            0
-                        } else {
+                        if constraint.overflow == OVERFLOW_CLIP {
                             region.record.id
+                        } else {
+                            0
                         },
                         clusters,
                         styles,
@@ -731,7 +731,8 @@ mod tests {
         flow_geometry::{RetainedExclusion, RetainedRegion},
         frame::{
             ALIGN_START, AXIS_EXACT, BLOCK_ALIGN_START, EXCLUSION_WRAP_BOTH, ORIENTATION_MIXED,
-            OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, SHAPE_RECTANGLE, WRAP_CHARACTER, WRAP_NONE,
+            OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, SHAPE_RECTANGLE, WRAP_CHARACTER,
+            WRAP_NONE,
         },
         semantic_wire::{FlowConstraint, FlowExclusion, FlowRegion},
         style_state::ResolvedStyle,
@@ -883,6 +884,67 @@ mod tests {
             [1, 2, 2, 2]
         );
         assert_eq!(layout.fragments.last().unwrap().line.cluster_end, 4);
+    }
+
+    #[test]
+    fn only_clip_overflow_assigns_a_clip_id_to_lines() {
+        let clusters = ClusterArena {
+            starts: vec![0, 1, 2],
+            ends: vec![1, 2, 3],
+            advances: vec![2.0; 3],
+            flags: vec![CLUSTER_SAFE_BEFORE; 3],
+            style_indexes: vec![0; 3],
+            source_runs: vec![0; 3],
+            font_handles: vec![1; 3],
+            index_at: vec![0, 1, 2, 3],
+            ..ClusterArena::default()
+        };
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 3,
+            style: ResolvedStyle::test_typography(10.0, 0.0, 0.0),
+        }];
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+            })
+        };
+
+        for (overflow, expected_clip_id) in [
+            (OVERFLOW_VISIBLE, 0),
+            (OVERFLOW_ELLIPSIS, 0),
+            (OVERFLOW_CLIP, 7),
+        ] {
+            let mut flow = constraint();
+            flow.overflow = overflow;
+            let mut flow_region = region();
+            flow_region.exclusion_count = 0;
+            let geometry = FlowGeometryArena {
+                constraints: vec![flow],
+                regions: vec![RetainedRegion {
+                    record: flow_region,
+                    vertex_start: 0,
+                }],
+                ..FlowGeometryArena::default()
+            };
+            let mut layout = FlowLayoutArena::default();
+            layout
+                .build(
+                    &geometry,
+                    &clusters,
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    8,
+                    1,
+                    metrics,
+                    |_| Some(1),
+                )
+                .unwrap();
+            assert_eq!(layout.lines[0].clip_id, expected_clip_id);
+        }
     }
 
     #[test]
@@ -1246,6 +1308,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(layout.fragments[0].line.cluster_end, 3);
+        assert_eq!(layout.lines[0].clip_id, 0);
         assert_eq!(layout.ellipsis_threads(), [constraint.flow_thread_id]);
     }
 
