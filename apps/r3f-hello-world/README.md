@@ -15,7 +15,7 @@ The app uses React 19, the React Compiler, the WebGPU R3F entry point, and Three
 - `font-awesome-world.font.glb` contains only six globe/earth variants.
 
 Regeneration requires `hb-subset` from exactly HarfBuzz 14.2.0. Both checked assets are produced directly through the
-published CLI through `pnpm exec pmndrs-text-bake`, with `--input`, `--output`, `--unicodes`, `--bitmap`, `--msdf`, and
+published CLI through `pnpm exec text bake`, with `--input`, `--output`, `--unicodes`, `--bitmap`, `--msdf`, and
 `--slug`. The check
 uses the same commands with `--check`, which rebuilds into temporary storage and requires a byte-identical GLB without
 rewriting the checked asset.

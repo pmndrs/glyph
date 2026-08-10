@@ -5,7 +5,7 @@ description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Sl
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/text-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:98b85591af3d54252c12d996c7d284d550ca30b62506bae6d4aba6704ce6759d'
+source_digest: 'sha256:d661c8c488210e52695dbcb7d46d106346dc1739a8508434a39ff4d86600b044'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -33,7 +33,7 @@ The checked-in assets are deliberately bounded at source before baking:
 - Font Awesome contains six globe and earth PUA scalars, including the displayed `U+F0AC` glyph.
 
 Each GLB embeds Bitmap, MSDF, and Slug raster resources for its subset. The package manifest invokes only the published
-CLI through `pnpm exec pmndrs-text-bake`: direct input/output arguments select all three rasters, `--unicodes` delegates shaping-font
+CLI through `pnpm exec text bake`: direct input/output arguments select all three rasters, `--unicodes` delegates shaping-font
 subsetting to pinned HarfBuzz 14.2.0, and `--check` rebakes into temporary storage before requiring byte-identical output.
 The example loads each GLB once with one typed raster tuple and receives exact Bitmap, MSDF, and Slug `LoadedFont` values;
 it does not repeat the input URL per technique. Vite emits the public shaper Wasm URL and a combined Inter/Font Awesome

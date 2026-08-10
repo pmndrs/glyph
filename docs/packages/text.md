@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:0443fa322df23df85fcfd7214626d2013a075eef44fc7867991726e3feefc64b'
+source_digest: 'sha256:649d41b71383300aa4cea6f367338c8c8fc893948bfed95d920eb5acda35861f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -98,12 +98,18 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 text-preparation Worker are removed. TypeGPU is a later adapter stack built against the Rust render plan; it is not a
 compatibility wrapper over the removed batch model.
 
-The package-owned `pmndrs-text-bake` executable is available through `pnpm exec` and supports both project discovery and
-a direct known-font mode. Its stable packaged shim delegates to the built Node CLI, so workspace installs can link the
+The package-owned `text` executable is available through `pnpm exec`; its `bake` command supports both project discovery
+and a direct known-font mode. Its stable packaged shim delegates to the built Node CLI, so workspace installs can link the
 executable before `dist` exists. Direct mode accepts one input/output pair, a collection face, optional shaping-font
 Unicode subsetting through `hb-subset`, and independently selected embedded Bitmap, MSDF, and Slug rasters. `--check`
 publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output. It calls the
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
+
+The `text glyphs` command uses `hb-info` from the same HarfBuzz toolchain to enumerate Unicode mappings and surface names
+retained in a font's `post` or CFF data. Exact repeatable `--name` filters can emit structured JSON or a compressed
+`--unicode-set` accepted by `text bake --unicodes`. HarfBuzz's synthetic `gidN` labels are omitted, so absent font-authored
+names remain absent instead of being presented as semantic icon metadata. Rich vendor labels and aliases remain external
+catalog data.
 
 One baked GLB may expose several raster techniques without repeating its input identity. `TextRuntime.loadFont()` and
 R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The

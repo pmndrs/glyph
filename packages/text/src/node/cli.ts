@@ -21,15 +21,35 @@ export async function runCli(
   argv: readonly string[],
   io: CliIo = { stdout: process.stdout, stderr: process.stderr },
 ): Promise<number> {
-  let parsed: ParsedArguments;
+  const [command, ...commandArguments] = argv;
+  if (command === undefined || command === '--help' || command === '-h') {
+    io.stdout.write(topLevelUsage());
+    return 0;
+  }
+  if (command === '--version' || command === '-v') {
+    try {
+      io.stdout.write(`@pmndrs/text ${await packageVersion()}\n`);
+      return 0;
+    } catch (error) {
+      writeFailure(io, error);
+      return 1;
+    }
+  }
+  if (command === 'glyphs') return runGlyphsCommand(commandArguments, io);
+  if (command !== 'bake') {
+    io.stderr.write(`Unknown command: ${command}\n\n${topLevelUsage()}`);
+    return 2;
+  }
+
+  let parsed: ParsedBakeArguments;
   try {
-    parsed = parseArguments(argv);
+    parsed = parseBakeArguments(commandArguments);
   } catch (error) {
-    io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\n${usage()}`);
+    io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\n${bakeUsage()}`);
     return 2;
   }
   if (parsed.help) {
-    io.stdout.write(usage());
+    io.stdout.write(bakeUsage());
     return 0;
   }
   try {
@@ -59,16 +79,173 @@ export async function runCli(
     }
     return report.diagnostics.length === 0 ? 0 : 1;
   } catch (error) {
-    if (error instanceof NodeBakeError) {
-      io.stderr.write(`${error.code}: ${error.message}${error.path === undefined ? '' : ` (${error.path})`}\n`);
-    } else {
-      io.stderr.write(`${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
-    }
+    writeFailure(io, error);
     return 1;
   }
 }
 
-interface ParsedArguments {
+interface GlyphArguments {
+  readonly input: string;
+  readonly fontFaceIndex: number;
+  readonly names: readonly string[];
+  readonly json: boolean;
+  readonly unicodeSet: boolean;
+  readonly help: boolean;
+}
+
+interface GlyphRecord {
+  readonly unicode: string;
+  readonly codePoint: number;
+  readonly glyphId?: number;
+  readonly name?: string;
+}
+
+async function runGlyphsCommand(argv: readonly string[], io: CliIo): Promise<number> {
+  let parsed: GlyphArguments;
+  try {
+    parsed = parseGlyphArguments(argv);
+  } catch (error) {
+    io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\n${glyphUsage()}`);
+    return 2;
+  }
+  if (parsed.help) {
+    io.stdout.write(glyphUsage());
+    return 0;
+  }
+  try {
+    const glyphs = await inspectGlyphs(parsed);
+    if (parsed.json) {
+      io.stdout.write(
+        `${JSON.stringify({ input: parsed.input, fontFaceIndex: parsed.fontFaceIndex, glyphs }, null, 2)}\n`,
+      );
+    } else if (parsed.unicodeSet) {
+      io.stdout.write(`${formatUnicodeSet(glyphs.map(({ codePoint }) => codePoint))}\n`);
+    } else {
+      for (const glyph of glyphs) {
+        io.stdout.write(
+          `${glyph.unicode}\t${glyph.glyphId === undefined ? '-' : String(glyph.glyphId)}\t${glyph.name ?? '-'}\n`,
+        );
+      }
+    }
+    return 0;
+  } catch (error) {
+    writeFailure(io, error);
+    return 1;
+  }
+}
+
+function parseGlyphArguments(argv: readonly string[]): GlyphArguments {
+  let input: string | undefined;
+  let fontFaceIndex = 0;
+  let fontFaceIndexSet = false;
+  const names: string[] = [];
+  let json = false;
+  let unicodeSet = false;
+  let help = false;
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]!;
+    if (argument === '--help' || argument === '-h') {
+      help = true;
+    } else if (argument === '--font-face-index') {
+      if (fontFaceIndexSet) throw new TypeError('--font-face-index may be provided only once');
+      fontFaceIndexSet = true;
+      fontFaceIndex = nonnegativeInteger(valueAfter(argv, ++index, argument), argument);
+    } else if (argument === '--name') {
+      names.push(valueAfter(argv, ++index, argument));
+    } else if (argument === '--json') {
+      json = true;
+    } else if (argument === '--unicode-set') {
+      unicodeSet = true;
+    } else if (argument.startsWith('-')) {
+      throw new TypeError(`Unknown glyphs argument: ${argument}`);
+    } else {
+      input = uniqueValue(input, argument, 'font input');
+    }
+  }
+  if (json && unicodeSet) throw new TypeError('--json and --unicode-set cannot be combined');
+  if (!help && input === undefined) throw new TypeError('glyph inspection requires a font input');
+  return { input: input ?? '', fontFaceIndex, names, json, unicodeSet, help };
+}
+
+async function inspectGlyphs(options: GlyphArguments): Promise<readonly GlyphRecord[]> {
+  let stdout: string;
+  try {
+    const result = await run(
+      'hb-info',
+      ['-q', `--face-index=${options.fontFaceIndex}`, '--list-unicodes', '--list-glyphs', options.input],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    );
+    stdout = result.stdout;
+  } catch (error) {
+    throw new NodeBakeError(
+      'FONT_INSPECTION_FAILED',
+      `hb-info failed: ${error instanceof Error ? error.message : String(error)}`,
+      options.input,
+    );
+  }
+  const glyphIds = new Map<string, number | undefined>();
+  for (const line of stdout.split('\n')) {
+    const match = /^(\d+)\t(.+)$/u.exec(line);
+    if (match === null) continue;
+    const glyphId = Number(match[1]);
+    const name = match[2]!;
+    const previous = glyphIds.get(name);
+    glyphIds.set(name, previous === undefined && !glyphIds.has(name) ? glyphId : undefined);
+  }
+  const requestedNames = new Set(options.names);
+  const foundNames = new Set<string>();
+  const glyphs: GlyphRecord[] = [];
+  for (const line of stdout.split('\n')) {
+    const match = /^(U\+([0-9A-Fa-f]{4,6}))\t(.+)$/u.exec(line);
+    if (match === null) continue;
+    const codePoint = Number.parseInt(match[2]!, 16);
+    const rawName = match[3]!;
+    const name = /^gid\d+$/u.test(rawName) ? undefined : rawName;
+    if (requestedNames.size !== 0 && (name === undefined || !requestedNames.has(name))) continue;
+    if (name !== undefined) foundNames.add(name);
+    const glyphId = glyphIds.get(rawName);
+    glyphs.push({
+      unicode: formatCodePoint(codePoint),
+      codePoint,
+      ...(glyphId === undefined ? {} : { glyphId }),
+      ...(name === undefined ? {} : { name }),
+    });
+  }
+  const missing = options.names.filter((name) => !foundNames.has(name));
+  if (missing.length !== 0) {
+    throw new NodeBakeError(
+      'GLYPH_NAME_NOT_FOUND',
+      `font has no glyph name${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}`,
+      options.input,
+    );
+  }
+  return glyphs;
+}
+
+function formatUnicodeSet(codePoints: readonly number[]): string {
+  if (codePoints.length === 0) return '';
+  const sortedCodePoints = [...new Set(codePoints)].sort((left, right) => left - right);
+  const ranges: string[] = [];
+  let start = sortedCodePoints[0]!;
+  let end = start;
+  for (const codePoint of sortedCodePoints.slice(1)) {
+    if (codePoint === end + 1) {
+      end = codePoint;
+      continue;
+    }
+    ranges.push(start === end ? formatCodePoint(start) : `${formatCodePoint(start)}-${formatCodePoint(end)}`);
+    start = codePoint;
+    end = codePoint;
+  }
+  ranges.push(start === end ? formatCodePoint(start) : `${formatCodePoint(start)}-${formatCodePoint(end)}`);
+  return ranges.join(',');
+}
+
+function formatCodePoint(codePoint: number): string {
+  return `U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
+interface ParsedBakeArguments {
   readonly project: ProjectBakeOptions;
   readonly direct?: DirectBakeArguments;
   readonly json: boolean;
@@ -86,7 +263,7 @@ interface DirectBakeArguments {
   readonly check: boolean;
 }
 
-function parseArguments(argv: readonly string[]): ParsedArguments {
+function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let projectRoot: string | undefined;
   let outputRoot: string | undefined;
   const entries: string[] = [];
@@ -201,7 +378,7 @@ function bitmapStrikeList(value: string): readonly [number, ...number[]] {
 }
 
 async function bakeDirect(options: DirectBakeArguments): Promise<NodeFontBakeReport> {
-  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-text-bake-'));
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'text-bake-'));
   try {
     const input = await subsetInput(options, temporaryDirectory);
     const output = options.check ? join(temporaryDirectory, 'checked.font.glb') : options.output;
@@ -273,24 +450,102 @@ function valueAfter(argv: readonly string[], index: number, option: string): str
   return value;
 }
 
-function usage(): string {
-  return `Usage: pmndrs-text-bake [options]
+async function packageVersion(): Promise<string> {
+  const value: unknown = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || !('version' in value)) {
+    throw new TypeError('@pmndrs/text package metadata has no version');
+  }
+  const version = value.version;
+  if (typeof version !== 'string' || version.length === 0) {
+    throw new TypeError('@pmndrs/text package metadata has an invalid version');
+  }
+  return version;
+}
+
+function writeFailure(io: CliIo, error: unknown): void {
+  if (error instanceof NodeBakeError) {
+    io.stderr.write(`${error.code}: ${error.message}${error.path === undefined ? '' : ` (${error.path})`}\n`);
+  } else {
+    io.stderr.write(`${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
+  }
+}
+
+function topLevelUsage(): string {
+  return `Usage: text <command> [options]
+
+Portable font baking for @pmndrs/text.
+
+Commands:
+  bake                  Bake font shaping data and optional raster techniques
+  glyphs <font>         List Unicode mappings and font-provided glyph names
+
+Global options:
+  -h, --help            Show this help
+  -v, --version         Show the installed @pmndrs/text version
+
+Run "text <command> --help" for command-specific options and examples.
+`;
+}
+
+function glyphUsage(): string {
+  return `Usage: text glyphs <font> [options]
+
+List the font's Unicode mappings and surface glyph names retained in its post or
+CFF data. Synthetic HarfBuzz gid names are omitted. Requires the hb-info utility.
 
 Options:
-  --input <path>         Bake one known local font instead of project discovery
-  --output <path>        Output GLB for direct font baking
-  --font-face-index <n>  Collection face for direct baking (default: 0)
-  --unicodes <set>       Subset the shaping font through hb-subset before baking
-  --bitmap <ppem,...>    Embed Bitmap at the listed ppem strikes
+  --font-face-index <n>  Collection face to inspect (default: 0)
+  --name <glyph-name>    Select an exact font-provided glyph name; repeatable
+  --json                 Emit structured Unicode, glyph ID, and name records
+  --unicode-set          Emit a compressed set for text bake --unicodes
+  -h, --help             Show this help
+
+Examples:
+  text glyphs fa-solid-900.ttf --name globe --json
+  text glyphs fa-solid-900.ttf --name globe --name earth-americas --unicode-set
+`;
+}
+
+function bakeUsage(): string {
+  return `Usage:
+  text bake [discovery options]
+  text bake --input <font> --output <font.glb> [options]
+
+Bake one known font directly, or discover defineFont() declarations in a project.
+Direct options and discovery options cannot be mixed. With no bake options, discovery
+scans the current project and writes beside each source asset.
+
+Direct font options:
+  --input <path>         Source TTF, OTF, TTC, or OTC font
+  --output <path>        Output GLB containing shaping data and selected rasters
+  --font-face-index <n>  Collection face to bake (default: 0)
+  --unicodes <set>       HarfBuzz Unicode set used to subset the source font
+                        Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
+                        Selects code points, not raw glyph IDs; requires hb-subset
+
+Raster options:
+  --bitmap <ppem,...>    Embed Bitmap at positive integer ppem strikes (example: 16,32)
   --msdf                 Embed the default MSDF raster
   --slug                 Embed the default Slug raster
-  --check                Rebuild a direct font and require byte-identical output
+                        With none selected, emit a shaping-only GLB
+
+Discovery options:
   --project-root <path>  Project root (default: current directory)
   --entry <path>         Restrict discovery to an entry; repeatable
   --asset-root <path>    Local asset root; repeatable (default: public)
   --output-root <path>   Mirror asset-relative outputs under this directory
-  --json                 Print the complete machine-readable report
+
+Output options:
+  --check                Rebuild in temporary storage and require byte-identical output
+  --json                 Print the complete machine-readable bake report
   -h, --help             Show this help
+
+Examples:
+  text bake --input Inter-Regular.ttf --output inter.font.glb --bitmap 16,32 --msdf --slug
+  text bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --msdf
+  text bake --project-root . --output-root public/generated
+  text bake --input Inter-Regular.ttf --output inter.font.glb --msdf --check
+
 `;
 }
 

@@ -17,8 +17,13 @@ const archiveSha256 = archiveSha256ByVersion[version];
 const cacheDirectory = resolve('.cache/harfbuzz', version);
 const executable = resolve(cacheDirectory, 'build/util/hb-shape');
 const subsetExecutable = resolve(cacheDirectory, 'build/util/hb-subset');
+const infoExecutable = resolve(cacheDirectory, 'build/util/hb-info');
 
-if ((await isPinnedExecutable(executable, 'hb-shape')) && (await isPinnedExecutable(subsetExecutable, 'hb-subset'))) {
+if (
+  (await isPinnedExecutable(executable, 'hb-shape')) &&
+  (await isPinnedExecutable(subsetExecutable, 'hb-subset')) &&
+  (await isPinnedExecutable(infoExecutable, 'hb-info'))
+) {
   process.stdout.write(`${executable}\n`);
   process.exit(0);
 }
@@ -67,8 +72,8 @@ try {
     '-Dvector=disabled',
     '-Dintrospection=disabled',
   ]);
-  await run('meson', ['compile', '-C', buildDirectory, 'hb-shape', 'hb-subset']);
-  for (const utility of ['hb-shape', 'hb-subset'] as const) {
+  await run('meson', ['compile', '-C', buildDirectory, 'hb-shape', 'hb-subset', 'hb-info']);
+  for (const utility of ['hb-shape', 'hb-subset', 'hb-info'] as const) {
     if (!(await isPinnedExecutable(resolve(buildDirectory, `util/${utility}`), utility))) {
       throw new Error(`built ${utility} did not identify itself as HarfBuzz ${version}`);
     }
@@ -79,7 +84,7 @@ try {
 }
 process.stdout.write(`${executable}\n`);
 
-async function isPinnedExecutable(path: string, utility: 'hb-shape' | 'hb-subset'): Promise<boolean> {
+async function isPinnedExecutable(path: string, utility: 'hb-shape' | 'hb-subset' | 'hb-info'): Promise<boolean> {
   try {
     return (await capture(path, ['--version'])).trim() === `${utility} (HarfBuzz) ${version}`;
   } catch {
