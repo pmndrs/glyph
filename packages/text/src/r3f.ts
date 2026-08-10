@@ -18,7 +18,7 @@ import type { GlyphPaintInput } from './formatted-text.js';
 import type { FontSelection, LoadedFont } from './loaded-font.js';
 import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
-import type { LoadedFontRequest } from './text-runtime.js';
+import type { LoadedFontRequest, LoadedFontTechniques, LoadedFonts, LoadedFontsRequest } from './text-runtime.js';
 import {
   FontLoader,
   Text as ThreeText,
@@ -73,12 +73,18 @@ interface InlineProperties<Technique extends AnyRasterTechnique> {
 
 interface UseFont {
   <Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): LoadedFont<Technique>;
+  <const Techniques extends LoadedFontTechniques>(request: LoadedFontsRequest<Techniques>): LoadedFonts<Techniques>;
   preload<Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): Promise<LoadedFont<Technique>>;
+  preload<const Techniques extends LoadedFontTechniques>(
+    request: LoadedFontsRequest<Techniques>,
+  ): Promise<LoadedFonts<Techniques>>;
   clear<Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): void;
+  clear<const Techniques extends LoadedFontTechniques>(request: LoadedFontsRequest<Techniques>): void;
 }
 
 const fontLoader = new FontLoader();
-const fontPromises = new Map<string, Promise<LoadedFont<AnyRasterTechnique>>>();
+type AnyLoadedFontResult = LoadedFont<AnyRasterTechnique> | readonly LoadedFont<AnyRasterTechnique>[];
+const fontPromises = new Map<string, Promise<AnyLoadedFontResult>>();
 const techniqueIds = new WeakMap<object, number>();
 let nextTechniqueId = 1;
 
@@ -185,12 +191,14 @@ export function TextGroup(input: R3fTextGroupProps): ReactElement | null {
   );
 }
 
-const useFontImplementation = (<Technique extends AnyRasterTechnique>(
-  request: LoadedFontRequest<Technique>,
-): LoadedFont<Technique> => use(preloadFont(request))) as UseFont;
+const useFontImplementation = ((
+  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
+): AnyLoadedFontResult => use(preloadFontInternal(request))) as UseFont;
 
 useFontImplementation.preload = preloadFont;
-useFontImplementation.clear = (request): void => {
+useFontImplementation.clear = (
+  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
+): void => {
   fontPromises.delete(fontRequestKey(request));
 };
 
@@ -231,27 +239,48 @@ function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | undefined)
 
 function preloadFont<Technique extends AnyRasterTechnique>(
   request: LoadedFontRequest<Technique>,
-): Promise<LoadedFont<Technique>> {
+): Promise<LoadedFont<Technique>>;
+function preloadFont<const Techniques extends LoadedFontTechniques>(
+  request: LoadedFontsRequest<Techniques>,
+): Promise<LoadedFonts<Techniques>>;
+function preloadFont(
+  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
+): Promise<AnyLoadedFontResult> {
+  return preloadFontInternal(request);
+}
+
+function preloadFontInternal(
+  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
+): Promise<AnyLoadedFontResult> {
   const key = fontRequestKey(request);
-  let promise = fontPromises.get(key) as Promise<LoadedFont<Technique>> | undefined;
+  let promise = fontPromises.get(key);
   if (promise !== undefined) return promise;
-  promise = fontLoader.loadAsync(request).catch((error: unknown) => {
+  const loaded = 'rasters' in request ? fontLoader.loadFontsAsync(request) : fontLoader.loadAsync(request);
+  promise = loaded.catch((error: unknown) => {
     if (fontPromises.get(key) === promise) fontPromises.delete(key);
     throw error;
   });
-  fontPromises.set(key, promise as Promise<LoadedFont<AnyRasterTechnique>>);
+  fontPromises.set(key, promise);
   return promise;
 }
 
-function fontRequestKey<Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): string {
-  let techniqueId = techniqueIds.get(request.raster.technique);
-  if (techniqueId === undefined) {
-    techniqueId = nextTechniqueId++;
-    techniqueIds.set(request.raster.technique, techniqueId);
-  }
+function fontRequestKey(
+  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
+): string {
+  const rasters = 'rasters' in request ? request.rasters : [request.raster];
+  const rasterKeys = rasters.map((raster) => [techniqueKey(raster.technique), raster.options ?? null]);
   const input =
     'baked' in request.input ? ['baked', String(request.input.baked)] : ['source', String(request.input.source)];
-  return JSON.stringify([input, techniqueId, request.raster.options ?? null]);
+  return JSON.stringify([input, rasterKeys]);
+}
+
+function techniqueKey(technique: AnyRasterTechnique): number {
+  let techniqueId = techniqueIds.get(technique);
+  if (techniqueId === undefined) {
+    techniqueId = nextTechniqueId++;
+    techniqueIds.set(technique, techniqueId);
+  }
+  return techniqueId;
 }
 
 function flattenText<Technique extends AnyRasterTechnique>(

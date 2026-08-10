@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:61242870023c632bd2ce25324a2d961b249c6de523013d9935cc1ec1f543319c'
+source_digest: 'sha256:0443fa322df23df85fcfd7214626d2013a075eef44fc7867991726e3feefc64b'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -17,6 +17,9 @@ sources:
   - id: runtime
     resource: ../../packages/text/src/text-runtime.ts
     title: Font and Rust-runtime ownership
+  - id: node-cli
+    resource: ../../packages/text/src/node/cli.ts
+    title: Project-discovery and direct font-bake CLI
   - id: text-properties
     resource: ../../packages/text/src/text-properties.ts
     title: Paragraph input contract
@@ -94,6 +97,19 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 `@pmndrs/text/typegpu`, the TypeScript paragraph engine, paragraph batches/attachments, direct shaping exports, and the
 text-preparation Worker are removed. TypeGPU is a later adapter stack built against the Rust render plan; it is not a
 compatibility wrapper over the removed batch model.
+
+The package-owned `pmndrs-text-bake` executable is available through `pnpm exec` and supports both project discovery and
+a direct known-font mode. Its stable packaged shim delegates to the built Node CLI, so workspace installs can link the
+executable before `dist` exists. Direct mode accepts one input/output pair, a collection face, optional shaping-font
+Unicode subsetting through `hb-subset`, and independently selected embedded Bitmap, MSDF, and Slug rasters. `--check`
+publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output. It calls the
+same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
+
+One baked GLB may expose several raster techniques without repeating its input identity. `TextRuntime.loadFont()` and
+R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The
+artifact is fetched, validated, registered with the shaper, and retained once; each requested technique still derives
+its exact descriptor, resolves and decodes its own raster resource, and retains its associated data type. A mapped tuple
+keeps required Bitmap options and custom third-party technique types enforceable at every position.
 
 ## Retained frame transaction
 

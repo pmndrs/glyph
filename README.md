@@ -253,11 +253,22 @@ await bakeFont({
 
 Baking creates font metrics, glyph records, and technique resources before the application runs. Development fallback can perform the same work in a Worker. Loading remains explicit either way.
 
+For a known local font, the CLI exposes the same path without a project-discovery module:
+
+```sh
+pnpm exec pmndrs-text-bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --msdf --slug
+```
+
+Add `--unicodes U+0020-007E` to subset the shaping font through `hb-subset`, or `--check` to rebuild temporarily and
+require byte-identical output.
+
 ### Load, shape, and render
 
 ```ts
 import { createFontStack, createTextRuntime } from '@pmndrs/text';
+import { bitmap } from '@pmndrs/text/raster/bitmap';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import { slug } from '@pmndrs/text/raster/slug';
 
 const runtime = await createTextRuntime({
   async: {
@@ -272,6 +283,11 @@ const Inter = await runtime.loadFont({
 const Noto = await runtime.loadFont({
   input: { baked: '/fonts/NotoSans.font.glb' },
   raster: { technique: mtsdf },
+});
+
+const [InterBitmap, InterMsdf, InterSlug] = await runtime.loadFont({
+  input: { baked: '/fonts/Inter.font.glb' },
+  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: mtsdf }, { technique: slug }],
 });
 
 const UiFont = createFontStack(Inter, Noto);

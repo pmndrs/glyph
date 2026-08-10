@@ -5,6 +5,7 @@ import { gunzipSync } from 'node:zlib';
 
 import { createFontStack, createTextRuntime, FontRegistry } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
+import { msdf } from '@pmndrs/text/three/msdf';
 import { slug } from '@pmndrs/text/three/slug';
 import { defineTextMaterial, Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
@@ -22,6 +23,23 @@ const iconSlugFontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/font-awesome-free-6.7.2-slug.font.glb.gz',
   import.meta.url,
 );
+const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
+
+test('one runtime request registers one font and returns typed resources for every declared technique', async () => {
+  const runtime = await createTextRuntime({
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const [bitmapFont, msdfFont, slugFont] = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(multiTechniqueFontUrl)) },
+    rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
+  });
+  assert.equal(bitmapFont.font, msdfFont.font);
+  assert.equal(msdfFont.font, slugFont.font);
+  assert.equal(bitmapFont.technique, bitmap);
+  assert.equal(msdfFont.technique, msdf);
+  assert.equal(slugFont.technique, slug);
+  runtime.dispose();
+});
 
 test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async () => {
   const registry = new FontRegistry();

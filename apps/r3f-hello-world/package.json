@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "assets:generate": "node ./scripts/generate-fonts.mts",
-    "assets:check": "node ./scripts/generate-fonts.mts --check",
+    "assets:generate": "pnpm exec pmndrs-text-bake --input ../benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf --output ./assets/inter-latin.font.glb --unicodes U+0020-007E --bitmap 32 --msdf --slug && pnpm exec pmndrs-text-bake --input ../benchmarks/fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf --output ./assets/font-awesome-world.font.glb --unicodes U+E47B,U+F0AC,U+F57C,U+F57D,U+F57E,U+F7A2 --bitmap 32 --msdf --slug",
+    "assets:check": "pnpm exec pmndrs-text-bake --input ../benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf --output ./assets/inter-latin.font.glb --unicodes U+0020-007E --bitmap 32 --msdf --slug --check && pnpm exec pmndrs-text-bake --input ../benchmarks/fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf --output ./assets/font-awesome-world.font.glb --unicodes U+E47B,U+F0AC,U+F57C,U+F57D,U+F57E,U+F7A2 --bitmap 32 --msdf --slug --check",
     "build": "vite build",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm assets:check && pnpm build && pnpm live:check",
     "dev": "vite",

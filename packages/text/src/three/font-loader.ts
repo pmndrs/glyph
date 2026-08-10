@@ -3,7 +3,14 @@ import * as THREE from 'three/webgpu';
 import type { LoadedFont } from '../loaded-font.js';
 import { observeLoadedFontDispose } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import { createTextRuntime, type LoadedFontRequest, type TextRuntime } from '../text-runtime.js';
+import {
+  createTextRuntime,
+  type LoadedFontRequest,
+  type LoadedFontTechniques,
+  type LoadedFonts,
+  type LoadedFontsRequest,
+  type TextRuntime,
+} from '../text-runtime.js';
 import type { FontRegistry, RuntimeFontBake } from '../loader.js';
 
 export interface ThreeFontLoaderOptions {
@@ -69,6 +76,31 @@ export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Loa
     return new Promise((resolve, reject) => this.load(request, resolve, onProgress, reject));
   }
 
+  async loadFontsAsync<const Techniques extends LoadedFontTechniques>(
+    request: LoadedFontsRequest<Techniques> & { readonly signal?: AbortSignal },
+  ): Promise<LoadedFonts<Techniques>> {
+    this.#assertActive();
+    const item = requestInputUrl(request);
+    this.manager.itemStart(item);
+    try {
+      const { signal, ...requested } = request;
+      const domain = this.#runtimeDomain();
+      const runtime = await domain.runtime;
+      this.#assertActive();
+      signal?.throwIfAborted();
+      const normalized = normalizeRequests(requested, this.#options.runtimeBake);
+      const fonts = await runtime.loadFont(normalized, signal === undefined ? {} : { signal });
+      this.#assertActive();
+      for (const font of fonts) trackFont(domain, font);
+      return fonts;
+    } catch (error) {
+      this.manager.itemError(item);
+      throw error;
+    } finally {
+      this.manager.itemEnd(item);
+    }
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -91,13 +123,7 @@ export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Loa
     const normalized = normalizeRequest(requested as LoadedFontRequest<Technique>, this.#options.runtimeBake);
     const font = await runtime.loadFont(normalized, signal === undefined ? {} : { signal });
     this.#assertActive();
-    if (!domain.fonts.has(font)) {
-      domain.fonts.add(font);
-      observeLoadedFontDispose(font, () => {
-        domain.fonts.delete(font);
-        maybeDisposeDomain(domain);
-      });
-    }
+    trackFont(domain, font);
     return font;
   }
 
@@ -140,8 +166,32 @@ function normalizeRequest<Technique extends AnyRasterTechnique>(
   return request;
 }
 
+function normalizeRequests<const Techniques extends LoadedFontTechniques>(
+  request: LoadedFontsRequest<Techniques>,
+  runtimeBake: RuntimeFontBake | undefined,
+): LoadedFontsRequest<Techniques> {
+  if ('source' in request.input && request.input.runtimeBake === undefined) {
+    if (runtimeBake === undefined) throw new TypeError('source font loading requires a runtime font baker');
+    return { ...request, input: { ...request.input, runtimeBake } };
+  }
+  return request;
+}
+
 function requestUrl<Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): string {
+  return requestInputUrl(request);
+}
+
+function requestInputUrl(request: { readonly input: LoadedFontRequest<AnyRasterTechnique>['input'] }): string {
   return String('baked' in request.input ? request.input.baked : request.input.source);
+}
+
+function trackFont(domain: RuntimeDomain, font: LoadedFont<AnyRasterTechnique>): void {
+  if (domain.fonts.has(font)) return;
+  domain.fonts.add(font);
+  observeLoadedFontDispose(font, () => {
+    domain.fonts.delete(font);
+    maybeDisposeDomain(domain);
+  });
 }
 
 function maybeDisposeDomain(domain: RuntimeDomain): void {

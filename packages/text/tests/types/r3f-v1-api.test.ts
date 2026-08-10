@@ -5,6 +5,7 @@ import { Text, TextGroup, useFont } from '../../src/r3f.js';
 import type { ThreeTextMaterial } from '../../src/three.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
+import { slug } from '../../src/raster/slug-technique.js';
 
 declare const bitmapFont: LoadedFont<typeof bitmap>;
 declare const mtsdfFont: LoadedFont<typeof msdf>;
@@ -20,6 +21,13 @@ function FontConsumer(): null {
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
   void loaded;
+  const [loadedBitmap, loadedMsdf, loadedSlug] = useFont({
+    input: { baked: '/fonts/Inter.font.glb' },
+    rasters: [{ technique: bitmap, options: { strikes: [16] } }, { technique: msdf }, { technique: slug }],
+  });
+  loadedBitmap satisfies LoadedFont<typeof bitmap>;
+  loadedMsdf satisfies LoadedFont<typeof msdf>;
+  loadedSlug satisfies LoadedFont<typeof slug>;
   return null;
 }
 

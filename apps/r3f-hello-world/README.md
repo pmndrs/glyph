@@ -11,7 +11,11 @@ The app uses React 19, the React Compiler, the WebGPU R3F entry point, and Three
 - `inter-latin.font.glb` is a true Basic Latin source subset (`U+0020–U+007E`).
 - `font-awesome-world.font.glb` contains only six globe/earth variants.
 
-Regeneration requires exactly HarfBuzz 14.2.0. The check performs fresh source subsets and complete Bitmap/MSDF/Slug bakes, then requires byte-identical GLBs and manifest hashes.
+Regeneration requires `hb-subset` from exactly HarfBuzz 14.2.0. Both checked assets are produced directly through the
+published CLI through `pnpm exec pmndrs-text-bake`, with `--input`, `--output`, `--unicodes`, `--bitmap`, `--msdf`, and
+`--slug`. The check
+uses the same commands with `--check`, which rebuilds into temporary storage and requires a byte-identical GLB without
+rewriting the checked asset.
 
 ```sh
 mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world assets:check
