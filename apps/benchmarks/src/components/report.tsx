@@ -1,9 +1,12 @@
 import { Fragment } from 'react';
 import type { BenchmarkSummary } from '../benchmark/contracts';
 import { BENCHMARK_FONT_LABELS } from '../benchmark/font-fixtures';
+import { summarizePackageSizes } from '../benchmark/package-size-summary';
 import type { LiveBenchmarkCapture } from '../benchmark/product-result';
 import packageSizes from '../generated/package-sizes.json';
 import { Metric } from './ui';
+
+const packageSizeSummary = summarizePackageSizes(packageSizes);
 
 function ms(value: number | undefined): string {
   return value === undefined ? '—' : `${value.toFixed(2)} ms`;
@@ -61,17 +64,13 @@ export function Report({
         </div>
       )}
       <div className="rounded-md border border-border bg-surface p-3">
-        <p className="eyebrow">Independent package-size lane</p>
+        <p className="eyebrow">Package sizes · gzip</p>
         <div className="mt-2 grid gap-2">
-          {packageSizes.entries.map((entry) => (
+          {packageSizeSummary.map((entry) => (
             <div className="flex items-center gap-3 text-xs" key={entry.id}>
-              <span className={`size-2 rounded-full ${entry.status === 'measured' ? 'bg-success' : 'bg-warning'}`} />
+              <span className="size-2 rounded-full bg-success" />
               <span className="text-foreground">{entry.label}</span>
-              <span className="ml-auto font-mono text-[10px] text-muted">
-                {entry.status === 'measured'
-                  ? `${bytes(entry.rawBytes)} raw · ${bytes(entry.brotliBytes)} br`
-                  : 'not landed'}
-              </span>
+              <span className="ml-auto font-mono text-[10px] text-muted">{bytes(entry.gzipBytes)}</span>
             </div>
           ))}
         </div>

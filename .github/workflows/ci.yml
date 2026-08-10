@@ -38,6 +38,11 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Stage package-size presentation
+        run: |
+          cp apps/benchmarks/src/benchmark/package-size-summary.ts "$RUNNER_TEMP/package-size-summary.ts"
+          cp apps/benchmarks/src/benchmark/size-limit-report.mts "$RUNNER_TEMP/size-limit-report.mts"
+
       - name: Compare package delivery sizes with the PR base
         uses: andresz1/size-limit-action@94bc357df29c36c8f8d50ea497c3e225c3c95d1d # v1.8.0
         with:
@@ -45,12 +50,11 @@ jobs:
           build_script: build
           skip_step: install
           package_manager: pnpm
-          # The action runs this command in both revisions. The inline adapter
-          # accepts the base branch's older report, derives the same core total,
-          # and emits Size Limit's stable [{ name, size }] protocol.
+          # The action checks out both revisions, so stage the head revision's
+          # presentation adapter outside the worktree before it switches bases.
           script: >-
             sh -c "node apps/benchmarks/scripts/measure-package-sizes.mts |
-            node -e \"let input='';process.stdin.on('data',chunk=>input+=chunk).on('end',()=>{const report=JSON.parse(input);const entries=report.entries.filter(entry=>entry.status==='measured');const byId=new Map(entries.map(entry=>[entry.id,entry]));if(!byId.has('renderer-neutral-core-total')){const js=byId.get('browser-core');const wasm=byId.get('text-shaper-wasm');if(js&&wasm)byId.set('renderer-neutral-core-total',{id:'renderer-neutral-core-total',format:'aggregate',gzipBytes:js.gzipBytes+wasm.gzipBytes,brotliBytes:js.brotliBytes+wasm.brotliBytes})}const tracked=/^(browser-core|text-shaper-wasm|renderer-neutral-core-total|three-runtime-js|three-renderer-total|font-(inter|icons)-|delivery-three-)/;const rows=[...byId.values()].filter(entry=>tracked.test(entry.id)).flatMap(entry=>entry.format==='javascript'?[{name:entry.id+' (brotli)',size:entry.brotliBytes}]:entry.format==='aggregate'?[{name:entry.id+' (gzip)',size:entry.gzipBytes},{name:entry.id+' (brotli)',size:entry.brotliBytes}]:[{name:entry.id+' (raw)',size:entry.rawBytes},{name:entry.id+' (gzip)',size:entry.gzipBytes},{name:entry.id+' (brotli)',size:entry.brotliBytes}]);process.stdout.write(JSON.stringify(rows))})\""
+            node \"$RUNNER_TEMP/size-limit-report.mts\""
 
   check:
     name: Check
