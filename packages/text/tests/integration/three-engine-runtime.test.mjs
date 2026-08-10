@@ -775,6 +775,100 @@ test('Three coordinator shares shaping data across technique bindings and refere
   hybridTarget.dispose();
   hybridSession.dispose();
 
+  const stablePolicyHandle = 4;
+  coordinator.host.registerPolicy(
+    stablePolicyHandle,
+    firstPartyThreeRenderPolicyBytes(coordinator.host.wireIdentities, 'indexed', [], 'stable'),
+  );
+  const stableSession = coordinator.createSession({
+    requestCapacity: 4_096,
+    resultCapacity: 1024 * 1024,
+    textCapacity: 16,
+  });
+  const stableRequest = initialRequest.slice();
+  const stableRequestView = new DataView(stableRequest.buffer, stableRequest.byteOffset, stableRequest.byteLength);
+  stableRequestView.setUint32(requestLayout.sessionId, stableSession.handle, true);
+  stableRequestView.setUint32(requestLayout.policyHandle, stablePolicyHandle, true);
+  const stableInitialPublication = stableSession.update(stableRequest);
+  const stablePlan = plan.bind(stableInitialPublication);
+  const stableBuffers = stablePlan.table('buffers');
+  const bufferLayout = textShaperAbi.layouts.engineBuffer;
+  const orderBinding = textShaperAbi.engine.internalBufferBindings.order;
+  const orderRecord = Array.from({ length: stableBuffers.count }, (_, index) =>
+    stablePlan.record(stableBuffers, index),
+  ).find((record) => stablePlan.u16(record + bufferLayout.policyBufferId) === orderBinding);
+  assert.ok(orderRecord !== undefined, 'stable policy must publish its logical-order buffer');
+  const orderBufferId = stablePlan.u32(orderRecord + bufferLayout.id);
+  const stableDraws = stablePlan.table('draws');
+  assert.ok(
+    Array.from({ length: stableDraws.count }, (_, index) =>
+      stablePlan.u32(stablePlan.record(stableDraws, index) + drawLayout.indirectBufferId),
+    ).every((id) => id === orderBufferId),
+    'every stable draw must address physical records through the published order buffer',
+  );
+  const stableTarget = new ThreeTextRenderPlanExecutor(coordinator, {
+    drawRoot,
+    renderOrderBase: 40,
+    objectForTransform(transformId) {
+      const object = paragraphObjects.get(transformId);
+      if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
+      return object;
+    },
+  });
+  stableTarget.apply(stableInitialPublication);
+  const stableOrder = stableTarget.draws[0].geometry.getAttribute(`_pmndrsText_${orderBinding}`);
+  const stableIds = stableTarget.draws[0].geometry.getAttribute('_pmndrsText_14');
+  assert.ok(stableOrder.array instanceof Uint32Array);
+  assert.ok(stableIds.array instanceof Uint32Array);
+  const physicalIds = stableIds.array.slice();
+  const initialFirstPhysicalSlot = stableOrder.array[stableTarget.draws[0].userData.pmndrsTextRunStart];
+  const stablePreviousDraws = [...stableTarget.draws];
+  const stableReorderedPublication = stableSession.update(
+    compileTextEngineFrameUpdate({
+      sessionId: stableSession.handle,
+      policyHandle: stablePolicyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: stableInitialPublication.engineRevision,
+      consumedPlanRevision: stableInitialPublication.planRevision,
+      acknowledgedPublicationGeneration: 0,
+      limits: {
+        maxParagraphs: 2,
+        maxClusters: 16,
+        maxLines: 8,
+        maxRegions: 2,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      paragraphMutations: [
+        { opcode: 'upsert', paragraphId: 1, order: 1 },
+        { opcode: 'upsert', paragraphId: 2, order: 0 },
+      ],
+    }),
+  );
+  const stableReorderedPlan = plan.bind(stableReorderedPublication);
+  const stablePatches = stableReorderedPlan.table('patches');
+  const patchLayout = textShaperAbi.layouts.enginePatch;
+  assert.ok(stablePatches.count > 0);
+  assert.ok(
+    Array.from({ length: stablePatches.count }, (_, index) =>
+      stableReorderedPlan.u32(stableReorderedPlan.record(stablePatches, index) + patchLayout.bufferId),
+    ).every((id) => id === orderBufferId),
+    'lifecycle-only reorder must leave stable physical glyph records untouched',
+  );
+  stableTarget.apply(stableReorderedPublication);
+  assert.deepEqual(stableIds.array, physicalIds, 'Three retains the stable physical glyph table across reorder');
+  assert.equal(stableTarget.draws[0], stablePreviousDraws[1]);
+  assert.equal(stableTarget.draws[1], stablePreviousDraws[0]);
+  assert.notEqual(
+    stableOrder.array[stableTarget.draws[0].userData.pmndrsTextRunStart],
+    initialFirstPhysicalSlot,
+    'the reordered logical draw begins at a different retained physical slot',
+  );
+  stableTarget.dispose();
+  stableSession.dispose();
+
   target.dispose();
   session.dispose();
   first.release();
