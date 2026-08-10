@@ -2,6 +2,8 @@
 
 ## 2026-08-10
 
+- **Package-owned font preparation** — Added generated `prepare` and `inspect` Wasm exports backed by Skera and Skrifa. The optional baker alone enables `std`; the same Rust source still passes its `wasm32 --no-default-features` compatibility build, and an ASCII subset is inspected and rebaked through the packaged direct-memory bridge. Measured `opt-level = "z"` plus Binaryen `-Oz` wins for this graph at 1,097,710 raw / 391,557 gzip bytes.
+
 - **Single-package bake ownership** — Folded the portable font-baker Rust/Wasm source, TypeScript bridge, validator, schemas, tests, and build tooling into `@pmndrs/text`. `@pmndrs/text/bake` is now the sole programmatic product surface, while package-boundary tests prove the ordinary root import retains no eager edge to baker Wasm, `std`-enabled subsetting dependencies, Ajv, or glTF Validator.
 
 - **Made multi-technique fonts one authored load and one CLI bake** — Direct `text bake` arguments now accept a

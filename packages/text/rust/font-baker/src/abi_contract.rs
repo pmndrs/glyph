@@ -6,6 +6,8 @@ pub const MEMORY_EXPORT: &str = "memory";
 pub const ALLOC_EXPORT: &str = "pmndrs_font_baker_alloc";
 pub const DEALLOC_EXPORT: &str = "pmndrs_font_baker_dealloc";
 pub const BAKE_EXPORT: &str = "pmndrs_font_baker_bake";
+pub const PREPARE_EXPORT: &str = "pmndrs_font_baker_prepare";
+pub const INSPECT_EXPORT: &str = "pmndrs_font_baker_inspect";
 pub const RESULT_LEN_EXPORT: &str = "pmndrs_font_baker_result_len";
 
 pub const RESPONSE_HEADER_BYTES: u32 = size_of::<ResponseHeader>() as u32;

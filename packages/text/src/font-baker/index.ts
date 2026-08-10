@@ -14,6 +14,55 @@ export interface FontBakeRequestV0 {
   readonly descriptor: FontBakeDescriptorV0;
 }
 
+export interface UnicodeRangeV0 {
+  readonly start: number;
+  readonly end: number;
+}
+
+export interface FontSelectionV0 {
+  readonly formatVersion: 0;
+  readonly fontFaceIndex: number;
+  readonly unicodeRanges: readonly UnicodeRangeV0[];
+}
+
+export interface FontPrepareRequestV0 {
+  readonly source: Uint8Array;
+  readonly selection: FontSelectionV0;
+}
+
+export interface PreparedFontReportV0 {
+  readonly formatVersion: 0;
+  readonly sourceBytes: number;
+  readonly preparedBytes: number;
+  readonly fontFaceIndex: 0;
+  readonly glyphCount: number;
+  readonly sha256: string;
+}
+
+export interface PreparedFontV0 {
+  readonly bytes: Uint8Array;
+  readonly report: PreparedFontReportV0;
+}
+
+export interface FontInspectRequestV0 {
+  readonly source: Uint8Array;
+  readonly descriptor: FontBakeDescriptorV0;
+}
+
+export interface GlyphInspectionV0 {
+  readonly codePoint: number;
+  readonly glyphId: number;
+  readonly name?: string;
+}
+
+export interface FontInspectionV0 {
+  readonly formatVersion: 0;
+  readonly fontFaceIndex: number;
+  readonly glyphCount: number;
+  readonly glyphNameSource: 'post' | 'cff' | 'none';
+  readonly glyphs: readonly GlyphInspectionV0[];
+}
+
 export interface BakeArtifactV0 {
   readonly role: 'font';
   readonly id: string;
@@ -86,6 +135,8 @@ export class FontBakeError extends Error {
 
 export interface FontBakeCore {
   bake(request: FontBakeRequestV0): FontBakeResultV0;
+  prepare(request: FontPrepareRequestV0): PreparedFontV0;
+  inspect(request: FontInspectRequestV0): FontInspectionV0;
 }
 
 export type FontBakerWasmSource = BufferSource | WebAssembly.Module;
@@ -118,37 +169,23 @@ export function createFontBakerFromInstance(instance: WebAssembly.Instance): Fon
 
   return {
     bake({ source, descriptor }) {
-      const descriptorBytes = textEncoder.encode(JSON.stringify(descriptor));
-      let sourcePointer = 0;
-      let descriptorPointer = 0;
-      let responsePointer = 0;
-      let responseLength = 0;
-      try {
-        sourcePointer = copyIntoWasm(exports, source);
-        descriptorPointer = copyIntoWasm(exports, descriptorBytes);
-        responsePointer = exports.pmndrs_font_baker_bake(
-          sourcePointer,
-          source.byteLength,
-          descriptorPointer,
-          descriptorBytes.byteLength,
-        );
-        responseLength = exports.pmndrs_font_baker_result_len();
-        const response = new Uint8Array(exports.memory.buffer, responsePointer, responseLength);
-        return decodeResponse(response, fontBakerAbi);
-      } finally {
-        if (sourcePointer !== 0) {
-          exports.pmndrs_font_baker_dealloc(sourcePointer, source.byteLength);
-        }
-        if (descriptorPointer !== 0) {
-          exports.pmndrs_font_baker_dealloc(descriptorPointer, descriptorBytes.byteLength);
-        }
-        if (responsePointer !== 0 && responseLength !== 0) {
-          exports.pmndrs_font_baker_dealloc(responsePointer, responseLength);
-        }
-      }
+      return invoke(exports, exports.pmndrs_font_baker_bake, source, descriptor, decodeBakeResponse);
+    },
+    prepare({ source, selection }) {
+      return invoke(exports, exports.pmndrs_font_baker_prepare, source, selection, decodePreparedFont);
+    },
+    inspect({ source, descriptor }) {
+      return invoke(exports, exports.pmndrs_font_baker_inspect, source, descriptor, decodeFontInspection);
     },
   };
 }
+
+type FontBakerOperation = (
+  sourcePointer: number,
+  sourceLength: number,
+  descriptorPointer: number,
+  descriptorLength: number,
+) => number;
 
 interface FontBakerExports {
   readonly memory: WebAssembly.Memory;
@@ -160,6 +197,8 @@ interface FontBakerExports {
     descriptorPointer: number,
     descriptorLength: number,
   ) => number;
+  readonly pmndrs_font_baker_prepare: FontBakerOperation;
+  readonly pmndrs_font_baker_inspect: FontBakerOperation;
   readonly pmndrs_font_baker_result_len: () => number;
 }
 
@@ -168,12 +207,16 @@ function readExports(exports: WebAssembly.Exports, abi: FontBakerAbiV0): FontBak
   const alloc = exports[abi.functions.allocate.export];
   const dealloc = exports[abi.functions.deallocate.export];
   const bake = exports[abi.functions.bake.export];
+  const prepare = exports[abi.functions.prepare.export];
+  const inspect = exports[abi.functions.inspect.export];
   const resultLen = exports[abi.functions.responseByteLength.export];
   if (
     !(memory instanceof WebAssembly.Memory) ||
     typeof alloc !== 'function' ||
     typeof dealloc !== 'function' ||
     typeof bake !== 'function' ||
+    typeof prepare !== 'function' ||
+    typeof inspect !== 'function' ||
     typeof resultLen !== 'function'
   ) {
     throw new TypeError('invalid @pmndrs/text bake Wasm exports');
@@ -183,8 +226,42 @@ function readExports(exports: WebAssembly.Exports, abi: FontBakerAbiV0): FontBak
     pmndrs_font_baker_alloc: alloc as FontBakerExports['pmndrs_font_baker_alloc'],
     pmndrs_font_baker_dealloc: dealloc as FontBakerExports['pmndrs_font_baker_dealloc'],
     pmndrs_font_baker_bake: bake as FontBakerExports['pmndrs_font_baker_bake'],
+    pmndrs_font_baker_prepare: prepare as FontBakerExports['pmndrs_font_baker_prepare'],
+    pmndrs_font_baker_inspect: inspect as FontBakerExports['pmndrs_font_baker_inspect'],
     pmndrs_font_baker_result_len: resultLen as FontBakerExports['pmndrs_font_baker_result_len'],
   };
+}
+
+function invoke<Result>(
+  exports: FontBakerExports,
+  operation: FontBakerOperation,
+  source: Uint8Array,
+  descriptor: unknown,
+  decode: (bytes: Uint8Array, abi: FontBakerAbiV0) => Result,
+): Result {
+  const descriptorBytes = textEncoder.encode(JSON.stringify(descriptor));
+  let sourcePointer = 0;
+  let descriptorPointer = 0;
+  let responsePointer = 0;
+  let responseLength = 0;
+  try {
+    sourcePointer = copyIntoWasm(exports, source);
+    descriptorPointer = copyIntoWasm(exports, descriptorBytes);
+    responsePointer = operation(sourcePointer, source.byteLength, descriptorPointer, descriptorBytes.byteLength);
+    responseLength = exports.pmndrs_font_baker_result_len();
+    const response = new Uint8Array(exports.memory.buffer, responsePointer, responseLength);
+    return decode(response, fontBakerAbi);
+  } finally {
+    if (sourcePointer !== 0) {
+      exports.pmndrs_font_baker_dealloc(sourcePointer, source.byteLength);
+    }
+    if (descriptorPointer !== 0) {
+      exports.pmndrs_font_baker_dealloc(descriptorPointer, descriptorBytes.byteLength);
+    }
+    if (responsePointer !== 0 && responseLength !== 0) {
+      exports.pmndrs_font_baker_dealloc(responsePointer, responseLength);
+    }
+  }
 }
 
 function copyIntoWasm(exports: FontBakerExports, bytes: Uint8Array): number {
@@ -201,7 +278,7 @@ function copyIntoWasm(exports: FontBakerExports, bytes: Uint8Array): number {
   }
 }
 
-function decodeResponse(bytes: Uint8Array, abi: FontBakerAbiV0): FontBakeResultV0 {
+function decodeEnvelope(bytes: Uint8Array, abi: FontBakerAbiV0): { metadata: unknown; artifact: Uint8Array } {
   const response = abi.response;
   if (
     bytes.byteLength < response.headerByteLength ||
@@ -223,18 +300,41 @@ function decodeResponse(bytes: Uint8Array, abi: FontBakerAbiV0): FontBakeResultV
   if (status !== response.successStatus) {
     throw new FontBakeError(parseSerializedBakeError(metadata));
   }
+  return {
+    metadata,
+    artifact: bytes.slice(response.payloadOffset + metadataLength),
+  };
+}
+
+function decodeBakeResponse(bytes: Uint8Array, abi: FontBakerAbiV0): FontBakeResultV0 {
+  const { metadata, artifact: artifactBytes } = decodeEnvelope(bytes, abi);
   assertFontResultMetadata(metadata);
   const result = metadata;
   const artifact = result.artifacts[0];
   if (result.artifacts.length !== 1 || artifact === undefined) {
     throw new TypeError('V0 font baker must return exactly one core artifact');
   }
-  const artifactBytes = bytes.slice(response.payloadOffset + metadataLength);
   return {
     artifacts: [{ ...artifact, bytes: artifactBytes }],
     report: result.report,
     warnings: result.warnings,
   };
+}
+
+function decodePreparedFont(bytes: Uint8Array, abi: FontBakerAbiV0): PreparedFontV0 {
+  const { metadata, artifact } = decodeEnvelope(bytes, abi);
+  if (!isPreparedFontReport(metadata) || artifact.byteLength !== metadata.preparedBytes) {
+    throw new TypeError('font baker returned invalid prepared font metadata');
+  }
+  return { bytes: artifact, report: metadata };
+}
+
+function decodeFontInspection(bytes: Uint8Array, abi: FontBakerAbiV0): FontInspectionV0 {
+  const { metadata, artifact } = decodeEnvelope(bytes, abi);
+  if (!isFontInspection(metadata) || artifact.byteLength !== 0) {
+    throw new TypeError('font baker returned invalid font inspection metadata');
+  }
+  return metadata;
 }
 
 function assertFontResultMetadata(value: unknown): asserts value is FontResultMetadata {
@@ -327,6 +427,43 @@ function isBakeWarning(value: unknown): value is BakeWarning {
     typeof value.code === 'string' &&
     typeof value.message === 'string' &&
     (value.path === undefined || typeof value.path === 'string')
+  );
+}
+
+function isPreparedFontReport(value: unknown): value is PreparedFontReportV0 {
+  return (
+    isNonArrayObject(value) &&
+    value.formatVersion === 0 &&
+    isNonnegativeSafeInteger(value.sourceBytes) &&
+    isNonnegativeSafeInteger(value.preparedBytes) &&
+    value.preparedBytes > 0 &&
+    value.fontFaceIndex === 0 &&
+    isNonnegativeSafeInteger(value.glyphCount) &&
+    typeof value.sha256 === 'string' &&
+    /^[0-9a-f]{64}$/.test(value.sha256)
+  );
+}
+
+function isFontInspection(value: unknown): value is FontInspectionV0 {
+  return (
+    isNonArrayObject(value) &&
+    value.formatVersion === 0 &&
+    isNonnegativeSafeInteger(value.fontFaceIndex) &&
+    isNonnegativeSafeInteger(value.glyphCount) &&
+    (value.glyphNameSource === 'post' || value.glyphNameSource === 'cff' || value.glyphNameSource === 'none') &&
+    Array.isArray(value.glyphs) &&
+    value.glyphs.every(isGlyphInspection)
+  );
+}
+
+function isGlyphInspection(value: unknown): value is GlyphInspectionV0 {
+  return (
+    isNonArrayObject(value) &&
+    isNonnegativeSafeInteger(value.codePoint) &&
+    value.codePoint <= 0x10_ffff &&
+    isNonnegativeSafeInteger(value.glyphId) &&
+    value.glyphId <= 0xffff_ffff &&
+    (value.name === undefined || typeof value.name === 'string')
   );
 }
 

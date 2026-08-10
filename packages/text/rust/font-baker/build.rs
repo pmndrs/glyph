@@ -47,6 +47,26 @@ fn main() {
                 ],
                 "result": "responsePointer",
             },
+            "prepare": {
+                "export": abi_contract::PREPARE_EXPORT,
+                "parameters": [
+                    "sourcePointer",
+                    "sourceByteLength",
+                    "selectionPointer",
+                    "selectionByteLength",
+                ],
+                "result": "responsePointer",
+            },
+            "inspect": {
+                "export": abi_contract::INSPECT_EXPORT,
+                "parameters": [
+                    "sourcePointer",
+                    "sourceByteLength",
+                    "descriptorPointer",
+                    "descriptorByteLength",
+                ],
+                "result": "responsePointer",
+            },
             "responseByteLength": {
                 "export": abi_contract::RESULT_LEN_EXPORT,
                 "parameters": [],

@@ -6,6 +6,7 @@ use thiserror::Error;
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum BakeErrorCode {
     InvalidDescriptor,
+    InvalidSelection,
     InvalidFont,
     UnsupportedContainer,
     UnsupportedVariableFont,
@@ -15,6 +16,7 @@ pub enum BakeErrorCode {
     InvalidGlyphExtents,
     IntegerOverflow,
     SerializationFailed,
+    SubsettingFailed,
 }
 
 #[derive(Debug, Error, Serialize)]

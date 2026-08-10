@@ -4,6 +4,8 @@ use std::{boxed::Box, string::ToString, vec::Vec};
 use serde::Serialize;
 
 use crate::{BakeDescriptorV0, BakeResultV0, bake_font};
+#[cfg(feature = "subsetting")]
+use crate::{FontSelectionV0, inspect_font, prepare_font};
 
 const MAX_REQUEST_ALLOCATION_BYTES: u32 = 64 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = MAX_REQUEST_ALLOCATION_BYTES as usize;
@@ -13,6 +15,7 @@ static STATE: AtomicUsize = AtomicUsize::new(0);
 #[global_allocator]
 static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 
+#[cfg(not(feature = "std"))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
     core::arch::wasm32::unreachable()
@@ -72,6 +75,71 @@ pub unsafe extern "C" fn pmndrs_font_baker_bake(
     leak_response(encode_response(result))
 }
 
+#[cfg(feature = "subsetting")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_font_baker_prepare(
+    source_pointer: u32,
+    source_len: u32,
+    selection_pointer: u32,
+    selection_len: u32,
+) -> u32 {
+    let result = with_state(|state| {
+        let Some(source) = state.owned_bytes(source_pointer, source_len) else {
+            return Err(crate::BakeError::new(
+                crate::BakeErrorCode::InvalidSelection,
+                "font preparation source range is not an active module allocation",
+            ));
+        };
+        let Some(selection_bytes) = state.owned_bytes(selection_pointer, selection_len) else {
+            return Err(crate::BakeError::new(
+                crate::BakeErrorCode::InvalidSelection,
+                "font selection range is not an active module allocation",
+            ));
+        };
+        serde_json::from_slice::<FontSelectionV0>(selection_bytes)
+            .map_err(|error| {
+                crate::BakeError::new(crate::BakeErrorCode::InvalidSelection, error.to_string())
+            })
+            .and_then(|selection| prepare_font(source, selection))
+    });
+    leak_response(encode_value_response(
+        result.map(|prepared| (prepared.report, prepared.bytes)),
+    ))
+}
+
+#[cfg(feature = "subsetting")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_font_baker_inspect(
+    source_pointer: u32,
+    source_len: u32,
+    descriptor_pointer: u32,
+    descriptor_len: u32,
+) -> u32 {
+    let result = with_state(|state| {
+        let Some(source) = state.owned_bytes(source_pointer, source_len) else {
+            return Err(crate::BakeError::new(
+                crate::BakeErrorCode::InvalidDescriptor,
+                "font inspection source range is not an active module allocation",
+            ));
+        };
+        let Some(descriptor_bytes) = state.owned_bytes(descriptor_pointer, descriptor_len) else {
+            return Err(crate::BakeError::new(
+                crate::BakeErrorCode::InvalidDescriptor,
+                "font inspection descriptor range is not an active module allocation",
+            ));
+        };
+        serde_json::from_slice::<BakeDescriptorV0>(descriptor_bytes)
+            .map_err(|error| {
+                crate::BakeError::new(crate::BakeErrorCode::InvalidDescriptor, error.to_string())
+            })
+            .and_then(|descriptor| descriptor.validate())
+            .and_then(|descriptor| inspect_font(source, descriptor.font_face_index))
+    });
+    leak_response(encode_value_response(
+        result.map(|inspection| (inspection, Vec::new())),
+    ))
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_font_baker_result_len() -> u32 {
     with_state(|state| state.result_len)
@@ -116,6 +184,34 @@ fn encode_response(result: Result<BakeResultV0, crate::BakeError>) -> Vec<u8> {
             Vec::new(),
         ),
     };
+    encode_envelope(status, metadata, artifact)
+}
+
+#[cfg(feature = "subsetting")]
+fn encode_value_response<Metadata: Serialize>(
+    result: Result<(Metadata, Vec<u8>), crate::BakeError>,
+) -> Vec<u8> {
+    match result {
+        Ok((metadata, artifact)) => encode_envelope(
+            crate::abi_contract::RESPONSE_SUCCESS_STATUS,
+            serde_json::to_vec(&metadata).unwrap_or_else(|_| {
+                b"{\"code\":\"SERIALIZATION_FAILED\",\"message\":\"failed to serialize result\"}"
+                    .to_vec()
+            }),
+            artifact,
+        ),
+        Err(error) => encode_envelope(
+            1,
+            serde_json::to_vec(&error).unwrap_or_else(|_| {
+                b"{\"code\":\"SERIALIZATION_FAILED\",\"message\":\"failed to serialize error\"}"
+                    .to_vec()
+            }),
+            Vec::new(),
+        ),
+    }
+}
+
+fn encode_envelope(status: u32, metadata: Vec<u8>, artifact: Vec<u8>) -> Vec<u8> {
     let header_len = crate::abi_contract::RESPONSE_HEADER_BYTES as usize;
     let Ok(metadata_len) = u32::try_from(metadata.len()) else {
         return encode_response(Err(crate::BakeError::new(

@@ -170,6 +170,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -206,6 +212,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "log"
+version = "0.4.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -239,6 +251,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "skera",
  "skrifa",
  "talc",
  "thiserror",
@@ -353,6 +366,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
 
 [[package]]
+name = "skera"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a07f3ab79d1b30fdfc72a4637ec055f1013040f8791e4a521d6f3e364ee6eb4"
+dependencies = [
+ "hashbrown",
+ "skrifa",
+ "thiserror",
+ "write-fonts",
+]
+
+[[package]]
 name = "skrifa"
 version = "0.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -432,6 +457,17 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "write-fonts"
+version = "0.51.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b082e0c3b0c5565b4f7bb1e0bbb4efbc8afc5a9441ade74fadc6502f9d406091"
+dependencies = [
+ "font-types",
+ "log",
+ "read-fonts 0.42.1",
+]
 
 [[package]]
 name = "zmij"
