@@ -19,14 +19,10 @@ import {
   slugDescriptor,
   type SlugDescriptorV0,
 } from '../internal/slug-contract.js';
-import type { GlyphPaint, ResolvedPaint } from '../paint.js';
 import type { JsonValue, RasterResourceSource, RegisteredRaster } from '../raster.js';
 import {
   defineRasterResourceId,
   defineRasterTechnique,
-  type GlyphRange,
-  type RasterGlyphInput,
-  type RasterGlyphWriteInput,
   type RasterResourceId,
   type RasterTechnique,
   type RasterTechniqueId,
@@ -64,48 +60,19 @@ export interface SlugPageData {
   readonly referenceBytes: Uint8Array;
 }
 
-export interface SlugBinding {
-  readonly page: number;
-  readonly curveWidth: number;
-  readonly curveHeight: number;
-  readonly headerWidth: number;
-  readonly headerHeight: number;
-  readonly referenceWidth: number;
-  readonly referenceHeight: number;
-}
-
 export interface SlugData {
   readonly planeUnitsPerEm: number;
   readonly records: Uint8Array;
   readonly pages: readonly SlugPageData[];
-  readonly bindings: readonly SlugBinding[];
 }
 
-export interface SlugGlyphBatchStorage {
-  readonly origins: Float32Array;
-  readonly sizes: Float32Array;
-  readonly emOrigins: Float32Array;
-  readonly emSizes: Float32Array;
-  readonly inverseScales: Float32Array;
-  readonly bandTransforms: Float32Array;
-  readonly colors: Float32Array;
-  readonly curveBases: Uint32Array;
-  readonly horizontalHeaderBases: Uint32Array;
-  readonly verticalHeaderBases: Uint32Array;
-  readonly referenceBases: Uint32Array;
-  readonly horizontalBandCounts: Uint32Array;
-  readonly verticalBandCounts: Uint32Array;
-}
-
-/** Renderer-neutral Slug decoding, page selection, and canonical analytic instance packing. */
+/** Renderer-neutral Slug identity, decoding, and ownership. */
 export const slug: RasterTechnique<
   RasterTechniqueId & 'pmndrs.slug',
   typeof SLUG_KIND,
   undefined,
   SlugDescriptorV0,
-  SlugData,
-  SlugBinding,
-  SlugGlyphBatchStorage
+  SlugData
 > = defineRasterTechnique({
   id: 'pmndrs.slug',
   kind: SLUG_KIND,
@@ -121,41 +88,6 @@ export const slug: RasterTechnique<
     signal?.throwIfAborted();
     return data;
   },
-  select(input: RasterGlyphInput<SlugData>) {
-    assertGlyphId(input.data, input.glyphId);
-    const pageIndex = recordView(input.data).getUint16(input.glyphId * SLUG_GLYPH_RECORD_STRIDE + 8, true);
-    if (pageIndex === ABSENT_PAGE) return undefined;
-    const page = input.data.pages[pageIndex];
-    const binding = input.data.bindings[pageIndex];
-    if (page === undefined || binding === undefined) throw new TypeError('Slug glyph references a missing page');
-    return { resource: page.resource, pipelineVariant: 0, binding };
-  },
-  createStorage(capacity: number): SlugGlyphBatchStorage {
-    assertCapacity(capacity);
-    return {
-      origins: new Float32Array(capacity * 2),
-      sizes: new Float32Array(capacity * 2),
-      emOrigins: new Float32Array(capacity * 2),
-      emSizes: new Float32Array(capacity * 2),
-      inverseScales: new Float32Array(capacity),
-      bandTransforms: new Float32Array(capacity * 4),
-      colors: new Float32Array(capacity * 4),
-      curveBases: new Uint32Array(capacity),
-      horizontalHeaderBases: new Uint32Array(capacity),
-      verticalHeaderBases: new Uint32Array(capacity),
-      referenceBases: new Uint32Array(capacity),
-      horizontalBandCounts: new Uint32Array(capacity),
-      verticalBandCounts: new Uint32Array(capacity),
-    };
-  },
-  writeStorage(
-    storage: SlugGlyphBatchStorage,
-    range: GlyphRange,
-    input: RasterGlyphWriteInput<SlugData, SlugBinding>,
-  ): void {
-    writeSlugStorage(storage, range, input);
-  },
-  validatePaint: assertSlugPaint,
   dispose() {},
 });
 
@@ -199,18 +131,7 @@ async function decodeSlugData(font: RegisteredFont, raster: RegisteredRaster, si
     );
   }
   validateSlugRecordTable(records, pages, font.glyphCount);
-  const bindings = pages.map((page, index) =>
-    Object.freeze({
-      page: index,
-      curveWidth: page.curveWidth,
-      curveHeight: page.curveHeight,
-      headerWidth: page.headerWidth,
-      headerHeight: page.headerHeight,
-      referenceWidth: page.referenceWidth,
-      referenceHeight: page.referenceHeight,
-    }),
-  );
-  return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, records, pages, bindings };
+  return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, records, pages };
 }
 
 async function decodeSlugPage(
@@ -293,64 +214,6 @@ async function decodeSlugPage(
   };
 }
 
-function writeSlugStorage(
-  storage: SlugGlyphBatchStorage,
-  range: GlyphRange,
-  input: RasterGlyphWriteInput<SlugData, SlugBinding>,
-): void {
-  assertWriteRange(storage, range, input.glyphs.length);
-  if (input.data.bindings[input.binding.page] !== input.binding) {
-    throw new TypeError('Slug write binding does not belong to its data');
-  }
-  const records = recordView(input.data);
-  for (let index = 0; index < input.glyphs.length; index += 1) {
-    const glyph = input.glyphs[index]!;
-    assertGlyphId(input.data, glyph.glyphId);
-    if (!Number.isFinite(glyph.fontSize) || glyph.fontSize <= 0) {
-      throw new TypeError('Slug glyph font sizes must be positive finite values');
-    }
-    if (!Number.isFinite(glyph.originX) || !Number.isFinite(glyph.originY)) {
-      throw new TypeError('Slug glyph origins must be finite values');
-    }
-    assertResolvedPaint(glyph.paint);
-    const record = glyph.glyphId * SLUG_GLYPH_RECORD_STRIDE;
-    const pageIndex = records.getUint16(record + 8, true);
-    if (pageIndex !== input.binding.page) throw new TypeError('Slug glyph does not belong to the selected page');
-    const left = records.getInt16(record, true);
-    const bottom = records.getInt16(record + 2, true);
-    const right = records.getInt16(record + 4, true);
-    const top = records.getInt16(record + 6, true);
-    const horizontalBands = records.getUint16(record + 10, true);
-    const verticalBands = records.getUint16(record + 12, true);
-    const normalizedLeft = left / input.data.planeUnitsPerEm;
-    const normalizedBottom = bottom / input.data.planeUnitsPerEm;
-    const normalizedTop = top / input.data.planeUnitsPerEm;
-    const normalizedWidth = (right - left) / input.data.planeUnitsPerEm;
-    const normalizedHeight = (top - bottom) / input.data.planeUnitsPerEm;
-    const scale = glyph.fontSize / input.data.planeUnitsPerEm;
-    const instance = range.start + index;
-    setVector2(storage.origins, instance, glyph.originX + left * scale, glyph.originY - top * scale);
-    setVector2(storage.sizes, instance, (right - left) * scale, (top - bottom) * scale);
-    setVector2(storage.emOrigins, instance, normalizedLeft, normalizedTop);
-    setVector2(storage.emSizes, instance, normalizedWidth, normalizedHeight);
-    storage.inverseScales[instance] = 1 / glyph.fontSize;
-    const transformOffset = instance * 4;
-    const bandScaleX = verticalBands / normalizedWidth;
-    const bandScaleY = horizontalBands / normalizedHeight;
-    storage.bandTransforms.set(
-      [bandScaleX, bandScaleY, -normalizedLeft * bandScaleX, -normalizedBottom * bandScaleY],
-      transformOffset,
-    );
-    storage.colors.set(glyph.paint.color, transformOffset);
-    storage.curveBases[instance] = records.getUint32(record + 16, true);
-    storage.horizontalHeaderBases[instance] = records.getUint32(record + 24, true);
-    storage.verticalHeaderBases[instance] = records.getUint32(record + 28, true);
-    storage.referenceBases[instance] = records.getUint32(record + 32, true);
-    storage.horizontalBandCounts[instance] = horizontalBands;
-    storage.verticalBandCounts[instance] = verticalBands;
-  }
-}
-
 async function rasterResourceBytes(
   raster: RegisteredRaster,
   value: JsonValue | undefined,
@@ -429,34 +292,6 @@ function validateSlugRecordTable(records: Uint8Array, pages: readonly SlugPageDa
   }
 }
 
-function recordView(data: SlugData): DataView {
-  return new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
-}
-
-function assertGlyphId(data: SlugData, glyphId: number): void {
-  if (!Number.isSafeInteger(glyphId) || glyphId < 0 || glyphId >= data.records.byteLength / SLUG_GLYPH_RECORD_STRIDE) {
-    throw new TypeError('Slug glyph is outside the registered font');
-  }
-}
-
-function assertSlugPaint(paint: GlyphPaint): void {
-  for (const entry of paint.palette) assertResolvedPaint(entry);
-}
-
-function assertResolvedPaint(paint: ResolvedPaint): void {
-  if (paint.outline !== undefined || paint.shadow !== undefined) {
-    throw new TypeError('Slug V0 supports fill paint only');
-  }
-  if (paint.color.length !== 4 || paint.color.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
-    throw new TypeError('Slug fill color must contain four finite linear values in [0, 1]');
-  }
-}
-
-function setVector2(target: Float32Array, index: number, x: number, y: number): void {
-  target[index * 2] = x;
-  target[index * 2 + 1] = y;
-}
-
 function absentRecordIsCanonical(records: Uint8Array, offset: number): boolean {
   for (let byte = 0; byte < SLUG_GLYPH_RECORD_STRIDE; byte += 1) {
     if (byte === 8 || byte === 9) continue;
@@ -511,24 +346,4 @@ function checkedBytes(left: number, right: number): number {
     throw new RangeError('Slug pages exceed the runtime resource-memory limit');
   }
   return total;
-}
-
-function assertWriteRange(storage: SlugGlyphBatchStorage, range: GlyphRange, glyphCount: number): void {
-  const capacity = storage.inverseScales.length;
-  if (
-    !Number.isSafeInteger(range.start) ||
-    !Number.isSafeInteger(range.count) ||
-    range.start < 0 ||
-    range.count < 0 ||
-    range.count !== glyphCount ||
-    range.start > capacity - range.count
-  ) {
-    throw new RangeError('Slug storage write range is outside its capacity');
-  }
-}
-
-function assertCapacity(capacity: number): void {
-  if (!Number.isSafeInteger(capacity) || capacity < 0) {
-    throw new RangeError('Slug storage capacity must be a non-negative safe integer');
-  }
 }

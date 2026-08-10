@@ -1,14 +1,5 @@
-import type {
-  AnyRasterModule,
-  AnyRasterInput,
-  LoadedRaster,
-  RasterLoadOptions,
-  RasterReference,
-  RasterRequest,
-  RasterModuleOptionsOf,
-  RasterSelection,
-  RegisteredRaster,
-} from './raster.js';
+import type { RasterLoadOptions, RasterReference, RasterSelection, RegisteredRaster } from './raster.js';
+import type { AnyRasterTechnique, RasterTechniqueInput, RasterTechniqueRequest } from './raster-technique.js';
 import type { FontHandle, FontKey, RasterKey, Sha256Hex } from './identity.js';
 
 export interface FontMetrics {
@@ -52,48 +43,34 @@ export interface BakedFontSource {
 
 export type FontInput = string | URL | FontSourceOverride | BakedFontSource;
 
-export interface FontToken<Module extends AnyRasterModule, Input extends FontInput = FontInput> {
+export interface FontToken<Technique extends AnyRasterTechnique, Input extends FontInput = FontInput> {
   readonly input: Input;
-  readonly raster: RasterRequest<Module>;
+  readonly raster: RasterTechniqueRequest<Technique>;
 }
 
 export interface AnyFontToken {
   readonly input: FontInput;
   readonly raster: {
-    readonly module: AnyRasterModule;
+    readonly technique: AnyRasterTechnique;
     readonly options?: unknown;
   };
 }
 
-/** @deprecated Merged-v0 loaded font/raster pair retained only by the v0 React harness. */
-export interface LoadedFontV0<Module extends AnyRasterModule, Input extends FontInput = FontInput> {
-  readonly input: Input;
-  readonly font: RegisteredFont;
-  readonly raster: LoadedRaster<Module>;
-}
-
 export type FontInputOf<Token extends AnyFontToken> = Token['input'];
 
-export type FontRasterModuleOf<Token extends AnyFontToken> = Token['raster']['module'];
+export type FontRasterTechniqueOf<Token extends AnyFontToken> = Token['raster']['technique'];
 
-export function defineFont<const Input extends FontInput, const Module extends AnyRasterModule>(
+export function defineFont<const Input extends FontInput, const Technique extends AnyRasterTechnique>(
   input: Input,
-  raster: Module &
-    ([RasterModuleOptionsOf<Module>] extends [never]
-      ? unknown
-      : undefined extends RasterModuleOptionsOf<Module>
-        ? unknown
-        : never),
-): FontToken<Module, Input>;
+  raster: RasterTechniqueInput<Technique>,
+): FontToken<Technique, Input>;
 
-export function defineFont<const Input extends FontInput, const Module extends AnyRasterModule>(
-  input: Input,
-  raster: RasterRequest<Module>,
-): FontToken<Module, Input>;
-
-export function defineFont(input: FontInput, raster: AnyRasterInput): AnyFontToken {
+export function defineFont(
+  input: FontInput,
+  raster: AnyRasterTechnique | RasterTechniqueRequest<AnyRasterTechnique>,
+): AnyFontToken {
   return {
     input,
-    raster: 'module' in raster ? raster : { module: raster },
+    raster: 'technique' in raster ? raster : { technique: raster },
   };
 }

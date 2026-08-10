@@ -19,7 +19,6 @@ import {
   type MsdfOptions,
 } from '../internal/msdf-contract.js';
 import {
-  ABSENT_GLYPH_PAGE,
   DENSE_GLYPH_RECORD_STRIDE,
   decodeEmbeddedLosslessAtlasPage,
   jsonArray,
@@ -29,15 +28,10 @@ import {
   type RasterAtlasPage,
 } from '../internal/raster-atlas.js';
 import { decodeRasterCoverage } from '../internal/raster-coverage-artifact.js';
-import type { GlyphPaint, LinearRgba, ResolvedPaint } from '../paint.js';
-import { RasterCoverageError } from '../raster-coverage.js';
 import type { JsonValue, RegisteredRaster } from '../raster.js';
 import {
   defineRasterResourceId,
   defineRasterTechnique,
-  type GlyphRange,
-  type RasterGlyphInput,
-  type RasterGlyphWriteInput,
   type RasterResourceId,
   type RasterTechnique,
   type RasterTechniqueId,
@@ -64,7 +58,6 @@ export {
 export { DENSE_GLYPH_RECORD_STRIDE as MSDF_GLYPH_RECORD_STRIDE } from '../internal/raster-atlas.js';
 
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;
-const ABSENT_PAGE = ABSENT_GLYPH_PAGE;
 const MAX_RUNTIME_TEXTURE_BYTES = 256 * 1024 * 1024;
 
 export interface MsdfPageData extends RasterAtlasPage {
@@ -88,29 +81,13 @@ export interface MsdfData {
   readonly pages: readonly MsdfPageData[];
 }
 
-export interface MsdfGlyphBatchStorage {
-  readonly origins: Float32Array;
-  readonly sizes: Float32Array;
-  readonly uvOrigins: Float32Array;
-  readonly uvSizes: Float32Array;
-  readonly uvBounds: Float32Array;
-  readonly shadowOffsets: Float32Array;
-  readonly fillColors: Float32Array;
-  readonly outlineColors: Float32Array;
-  readonly outlineWidths: Float32Array;
-  readonly shadowColors: Float32Array;
-  readonly pageIndices: Uint16Array;
-}
-
-/** Renderer-neutral MSDF decoding, physical selection, and canonical instance packing. */
+/** Renderer-neutral MSDF identity, decoding, and ownership. */
 export const msdf: RasterTechnique<
   RasterTechniqueId & 'pmndrs.msdf',
   typeof MSDF_KIND,
   MsdfOptions | undefined,
   MsdfDescriptorV0,
-  MsdfData,
-  MsdfBinding,
-  MsdfGlyphBatchStorage
+  MsdfData
 > = defineRasterTechnique({
   id: 'pmndrs.msdf',
   kind: MSDF_KIND,
@@ -126,39 +103,6 @@ export const msdf: RasterTechnique<
     signal?.throwIfAborted();
     return data;
   },
-  select(input: RasterGlyphInput<MsdfData>) {
-    const { data, glyphId } = input;
-    assertGlyphId(data, glyphId);
-    assertCoverage(data, glyphId);
-    const pageIndex = recordView(data).getUint16(glyphId * RECORD_STRIDE + 16, true);
-    if (pageIndex === ABSENT_PAGE) return undefined;
-    if (data.pages[pageIndex] === undefined) throw new TypeError('MSDF glyph references a missing page');
-    return { resource: data.resource, pipelineVariant: 0, binding: data.binding };
-  },
-  createStorage(capacity: number): MsdfGlyphBatchStorage {
-    assertCapacity(capacity);
-    return {
-      origins: new Float32Array(capacity * 2),
-      sizes: new Float32Array(capacity * 2),
-      uvOrigins: new Float32Array(capacity * 2),
-      uvSizes: new Float32Array(capacity * 2),
-      uvBounds: new Float32Array(capacity * 4),
-      shadowOffsets: new Float32Array(capacity * 2),
-      fillColors: new Float32Array(capacity * 4),
-      outlineColors: new Float32Array(capacity * 4),
-      outlineWidths: new Float32Array(capacity),
-      shadowColors: new Float32Array(capacity * 4),
-      pageIndices: new Uint16Array(capacity),
-    };
-  },
-  writeStorage(
-    storage: MsdfGlyphBatchStorage,
-    range: GlyphRange,
-    input: RasterGlyphWriteInput<MsdfData, MsdfBinding>,
-  ): void {
-    writeMsdfStorage(storage, range, input);
-  },
-  validatePaint: assertMsdfPaint,
   dispose() {},
 });
 
@@ -243,133 +187,6 @@ async function decodeMsdfData(font: RegisteredFont, raster: RegisteredRaster): P
   };
 }
 
-function writeMsdfStorage(
-  storage: MsdfGlyphBatchStorage,
-  range: GlyphRange,
-  input: RasterGlyphWriteInput<MsdfData, MsdfBinding>,
-): void {
-  assertWriteRange(storage, range, input.glyphs.length);
-  if (input.binding !== input.data.binding) throw new TypeError('MSDF write binding does not belong to its data');
-  const records = recordView(input.data);
-  for (let index = 0; index < input.glyphs.length; index += 1) {
-    writeMsdfGlyph(storage, range.start + index, input.data, records, input.glyphs[index]!);
-  }
-}
-
-function writeMsdfGlyph(
-  storage: MsdfGlyphBatchStorage,
-  instance: number,
-  data: MsdfData,
-  records: DataView,
-  glyph: RasterGlyphInput<MsdfData>,
-): void {
-  assertGlyphId(data, glyph.glyphId);
-  assertCoverage(data, glyph.glyphId);
-  if (!Number.isFinite(glyph.fontSize) || glyph.fontSize <= 0) {
-    throw new TypeError('MSDF glyph font sizes must be positive finite values');
-  }
-  if (!Number.isFinite(glyph.originX) || !Number.isFinite(glyph.originY)) {
-    throw new TypeError('MSDF glyph origins must be finite values');
-  }
-  assertResolvedPaint(glyph.paint);
-  const record = glyph.glyphId * RECORD_STRIDE;
-  const planeLeft = records.getInt16(record, true);
-  const planeBottom = records.getInt16(record + 2, true);
-  const planeRight = records.getInt16(record + 4, true);
-  const planeTop = records.getInt16(record + 6, true);
-  const atlasLeft = records.getUint16(record + 8, true);
-  const atlasTop = records.getUint16(record + 10, true);
-  const atlasRight = records.getUint16(record + 12, true);
-  const atlasBottom = records.getUint16(record + 14, true);
-  const pageIndex = records.getUint16(record + 16, true);
-  if (pageIndex === ABSENT_PAGE || data.pages[pageIndex] === undefined) {
-    throw new TypeError('MSDF storage write requires a selected renderable glyph');
-  }
-  const scale = glyph.fontSize / data.planeUnitsPerEm;
-  const baseOriginX = glyph.originX + planeLeft * scale;
-  const baseOriginY = glyph.originY - planeTop * scale;
-  const baseWidth = (planeRight - planeLeft) * scale;
-  const baseHeight = (planeTop - planeBottom) * scale;
-  const shadowX = glyph.paint.shadow?.offset[0] ?? 0;
-  const shadowY = glyph.paint.shadow?.offset[1] ?? 0;
-  const originX = baseOriginX + Math.min(0, shadowX);
-  const originY = baseOriginY + Math.min(0, shadowY);
-  const width = baseWidth + Math.abs(shadowX);
-  const height = baseHeight + Math.abs(shadowY);
-  const baseUvX = atlasLeft / data.binding.width;
-  const baseUvY = atlasTop / data.binding.height;
-  const baseUvWidth = (atlasRight - atlasLeft) / data.binding.width;
-  const baseUvHeight = (atlasBottom - atlasTop) / data.binding.height;
-  const uvPerUnitX = baseUvWidth / baseWidth;
-  const uvPerUnitY = baseUvHeight / baseHeight;
-  const vectorOffset = instance * 2;
-  storage.origins[vectorOffset] = originX;
-  storage.origins[vectorOffset + 1] = originY;
-  storage.sizes[vectorOffset] = width;
-  storage.sizes[vectorOffset + 1] = height;
-  storage.uvOrigins[vectorOffset] = baseUvX + (originX - baseOriginX) * uvPerUnitX;
-  storage.uvOrigins[vectorOffset + 1] = baseUvY + (originY - baseOriginY) * uvPerUnitY;
-  storage.uvSizes[vectorOffset] = width * uvPerUnitX;
-  storage.uvSizes[vectorOffset + 1] = height * uvPerUnitY;
-  storage.shadowOffsets[vectorOffset] = shadowX * uvPerUnitX;
-  storage.shadowOffsets[vectorOffset + 1] = shadowY * uvPerUnitY;
-  const boundsOffset = instance * 4;
-  storage.uvBounds[boundsOffset] = baseUvX;
-  storage.uvBounds[boundsOffset + 1] = baseUvY;
-  storage.uvBounds[boundsOffset + 2] = baseUvX + baseUvWidth;
-  storage.uvBounds[boundsOffset + 3] = baseUvY + baseUvHeight;
-  storage.fillColors.set(glyph.paint.color, boundsOffset);
-  storage.outlineColors.set(glyph.paint.outline?.color ?? TRANSPARENT, boundsOffset);
-  storage.shadowColors.set(glyph.paint.shadow?.color ?? TRANSPARENT, boundsOffset);
-  storage.outlineWidths[instance] = resolveOutlineDistance(data, glyph.fontSize, glyph.paint.outline?.width ?? 0);
-  storage.pageIndices[instance] = pageIndex;
-}
-
-function recordView(data: MsdfData): DataView {
-  return new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
-}
-
-function assertGlyphId(data: MsdfData, glyphId: number): void {
-  if (!Number.isSafeInteger(glyphId) || glyphId < 0 || glyphId >= data.records.byteLength / RECORD_STRIDE) {
-    throw new TypeError('MSDF glyph is outside the registered font');
-  }
-}
-
-function assertCoverage(data: MsdfData, glyphId: number): void {
-  if (data.coverage !== undefined && (data.coverage[glyphId >> 3]! & (1 << (glyphId & 7))) === 0) {
-    throw new RasterCoverageError(MSDF_KIND, [glyphId]);
-  }
-}
-
-function resolveOutlineDistance(data: MsdfData, fontSize: number, outlineWidth: number): number {
-  const atlasPixels = outlineWidth / (fontSize / data.planeUnitsPerEm);
-  const maximum = data.pixelRange / 2;
-  if (atlasPixels > maximum) {
-    throw new RangeError(`MSDF outline width exceeds the ${maximum}-atlas-pixel field limit`);
-  }
-  return atlasPixels / data.pixelRange;
-}
-
-function assertWriteRange(storage: MsdfGlyphBatchStorage, range: GlyphRange, glyphCount: number): void {
-  const capacity = storage.pageIndices.length;
-  if (
-    !Number.isSafeInteger(range.start) ||
-    !Number.isSafeInteger(range.count) ||
-    range.start < 0 ||
-    range.count < 0 ||
-    range.count !== glyphCount ||
-    range.start > capacity - range.count
-  ) {
-    throw new RangeError('MSDF storage write range is outside its capacity');
-  }
-}
-
-function assertCapacity(capacity: number): void {
-  if (!Number.isSafeInteger(capacity) || capacity < 0) {
-    throw new RangeError('MSDF storage capacity must be a non-negative safe integer');
-  }
-}
-
 function configuredInteger(value: unknown, label: string, maximum: number): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > maximum) {
     throw new TypeError(`${label} must be an integer in 1..=${maximum}`);
@@ -386,31 +203,3 @@ function validateMsdfPageDirectory(value: JsonValue, pageIndex: number): void {
     throw new TypeError('MSDF V0 pages accept only the lossless rgba8unorm baseline');
   }
 }
-
-function assertMsdfPaint(paint: GlyphPaint): void {
-  for (const entry of paint.palette) assertResolvedPaint(entry);
-}
-
-function assertResolvedPaint(paint: ResolvedPaint): void {
-  assertLinearColor(paint.color, 'MSDF fill');
-  if (paint.outline !== undefined) {
-    assertLinearColor(paint.outline.color, 'MSDF outline');
-    if (!Number.isFinite(paint.outline.width) || paint.outline.width < 0) {
-      throw new TypeError('MSDF outline width must be a non-negative finite value');
-    }
-  }
-  if (paint.shadow !== undefined) {
-    assertLinearColor(paint.shadow.color, 'MSDF shadow');
-    if (paint.shadow.offset.some((value) => !Number.isFinite(value))) {
-      throw new TypeError('MSDF shadow offsets must be finite values');
-    }
-  }
-}
-
-function assertLinearColor(color: readonly number[], label: string): void {
-  if (color.length !== 4 || color.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
-    throw new TypeError(`${label} color must contain four finite linear values in [0, 1]`);
-  }
-}
-
-const TRANSPARENT: LinearRgba = [0, 0, 0, 0];

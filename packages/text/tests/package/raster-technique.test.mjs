@@ -4,7 +4,6 @@ import test from 'node:test';
 import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/text';
 
 function technique(id) {
-  const resource = defineRasterResourceId('test/page/0');
   return defineRasterTechnique({
     id,
     kind: 'test',
@@ -16,13 +15,6 @@ function technique(id) {
     async decode() {
       return {};
     },
-    select() {
-      return { resource, pipelineVariant: 0, binding: {} };
-    },
-    createStorage(capacity) {
-      return { glyphs: new Uint16Array(capacity) };
-    },
-    writeStorage() {},
     dispose() {},
   });
 }

@@ -1,13 +1,5 @@
 import type { RegisteredFont } from './font.js';
-import type { GlyphPaint, ResolvedPaint } from './paint.js';
-import type {
-  AnyRasterModule,
-  JsonValue,
-  RasterModuleOptionsOf,
-  RasterOptionsArgument,
-  RegisteredRaster,
-  RuntimeRasterBakerLoader,
-} from './raster.js';
+import type { JsonValue, RasterOptionsArgument, RegisteredRaster, RuntimeRasterBakerLoader } from './raster.js';
 
 declare const rasterTechniqueIdBrand: unique symbol;
 declare const rasterResourceIdBrand: unique symbol;
@@ -19,26 +11,10 @@ export type RasterTechniqueId = string & { readonly [rasterTechniqueIdBrand]: tr
 /** Stable technique-authored identity for one physical raster resource. */
 export type RasterResourceId = string & { readonly [rasterResourceIdBrand]: true };
 
-/** One logical glyph-instance range. */
-export interface GlyphRange {
-  readonly start: number;
-  readonly count: number;
-}
-
-/** Every public canonical storage field is an independently addressable typed-array view. */
-export type GlyphBatchStorageShape<Storage> = {
-  readonly [Field in keyof Storage]: ArrayBufferView;
-};
-
-/** Type-erased canonical storage at heterogeneous runtime boundaries. */
-export type GlyphBatchStorage = Readonly<Partial<Record<PropertyKey, ArrayBufferView>>>;
-
-interface RasterTechniqueTypeMap<Options, Descriptor, Data, Binding, Storage> {
+interface RasterTechniqueTypeMap<Options, Descriptor, Data> {
   readonly options: Options;
   readonly descriptor: Descriptor;
   readonly data: Data;
-  readonly binding: Binding;
-  readonly storage: Storage;
 }
 
 /** Common identity retained when concrete technique-associated types are intentionally erased. */
@@ -47,50 +23,18 @@ export interface AnyRasterTechnique {
   readonly kind: string;
   readonly extension: string;
   readonly version: number;
-  readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<unknown, JsonValue, unknown, unknown, unknown>;
+  readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<unknown, JsonValue, unknown>;
 }
 
-/**
- * Valid only for the duration of the `select` or `writeStorage` call that
- * receives it. Core pools these objects across updates, so a technique that
- * needs a field beyond the call must copy the value rather than retain the
- * input.
- */
-export interface RasterGlyphInput<Data> {
-  readonly data: Data;
-  readonly glyphId: number;
-  readonly fontSize: number;
-  /** Paragraph-local displayed origin after any caller-authored glyph override. */
-  readonly originX: number;
-  /** Paragraph-local displayed origin after any caller-authored glyph override. */
-  readonly originY: number;
-  readonly rasterPixelRatio: number;
-  readonly paint: ResolvedPaint;
-}
-
-export interface RasterGlyphWriteInput<Data, Binding> {
-  readonly data: Data;
-  /** The selection already used by core to form this physical glyph batch. */
-  readonly binding: Binding;
-  readonly glyphs: readonly RasterGlyphInput<Data>[];
-}
-
-export interface RasterGlyphSelection<Binding> {
-  readonly resource: RasterResourceId;
-  readonly pipelineVariant: number;
-  readonly binding: Binding;
-}
-
+/** Renderer-neutral raster identity, decoding, and ownership contract. */
 export interface RasterTechnique<
   Id extends RasterTechniqueId,
   Kind extends string,
   Options,
   Descriptor extends JsonValue,
   Data,
-  Binding,
-  Storage extends GlyphBatchStorageShape<Storage>,
 > extends AnyRasterTechnique {
-  readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<Options, Descriptor, Data, Binding, Storage>;
+  readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<Options, Descriptor, Data>;
 
   readonly id: Id;
   readonly kind: Kind;
@@ -100,45 +44,36 @@ export interface RasterTechnique<
 
   descriptor(options: RasterOptionsArgument<Options>): Descriptor;
   decode(font: RegisteredFont, raster: RegisteredRaster<Kind>, signal?: AbortSignal): Promise<Data>;
-  /** Return undefined when a shaped glyph intentionally has no renderable raster instance. */
-  select(input: RasterGlyphInput<Data>): RasterGlyphSelection<Binding> | undefined;
-  createStorage(capacity: number): Storage;
-  writeStorage(storage: Storage, range: GlyphRange, input: RasterGlyphWriteInput<Data, Binding>): void;
-  validatePaint?(paint: GlyphPaint): void;
   dispose(data: Data): void;
 }
 
 export type RasterTechniqueTypesOf<Technique extends AnyRasterTechnique> =
-  Technique extends RasterTechnique<
-    infer _Id,
-    infer _Kind,
-    infer Options,
-    infer Descriptor,
-    infer Data,
-    infer Binding,
-    infer Storage
-  >
-    ? RasterTechniqueTypeMap<Options, Descriptor, Data, Binding, Storage>
-    : RasterTechniqueTypeMap<unknown, JsonValue, unknown, unknown, GlyphBatchStorage>;
+  Technique extends RasterTechnique<infer _Id, infer _Kind, infer Options, infer Descriptor, infer Data>
+    ? RasterTechniqueTypeMap<Options, Descriptor, Data>
+    : RasterTechniqueTypeMap<unknown, JsonValue, unknown>;
 
-export type RasterTechniqueOptionsOf<Technique extends AnyRasterTechnique> =
-  RasterTechniqueTypesOf<Technique>['options'];
+export type RasterOptionsOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['options'];
 
-/** Options inferred from either the target-v1 technique or the merged-v0 raster module. */
-export type RasterOptionsOf<Raster extends AnyRasterTechnique | AnyRasterModule> = Raster extends AnyRasterTechnique
-  ? RasterTechniqueOptionsOf<Raster>
-  : Raster extends AnyRasterModule
-    ? RasterModuleOptionsOf<Raster>
-    : never;
+export type RasterTechniqueOptionsOf<Technique extends AnyRasterTechnique> = RasterOptionsOf<Technique>;
+
+export type RasterTechniqueRequest<Technique extends AnyRasterTechnique> = {
+  readonly technique: Technique;
+} & ([RasterOptionsOf<Technique>] extends [never]
+  ? { readonly options?: never }
+  : undefined extends RasterOptionsOf<Technique>
+    ? { readonly options?: RasterOptionsOf<Technique> }
+    : { readonly options: RasterOptionsOf<Technique> });
+
+export type RasterTechniqueInput<Technique extends AnyRasterTechnique> = [RasterOptionsOf<Technique>] extends [never]
+  ? Technique | RasterTechniqueRequest<Technique>
+  : undefined extends RasterOptionsOf<Technique>
+    ? Technique | RasterTechniqueRequest<Technique>
+    : RasterTechniqueRequest<Technique>;
 
 export type RasterTechniqueDescriptorOf<Technique extends AnyRasterTechnique> =
   RasterTechniqueTypesOf<Technique>['descriptor'];
 
 export type RasterDataOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['data'];
-
-export type RasterBindingOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['binding'];
-
-export type GlyphBatchStorageOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['storage'];
 
 type RasterTechniqueDefinition<
   Id extends string,
@@ -146,9 +81,7 @@ type RasterTechniqueDefinition<
   Options,
   Descriptor extends JsonValue,
   Data,
-  Binding,
-  Storage extends GlyphBatchStorageShape<Storage>,
-> = Omit<RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data, Binding, Storage>, 'id'> & {
+> = Omit<RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data>, 'id'> & {
   readonly id: Id;
 };
 
@@ -159,13 +92,11 @@ export function defineRasterTechnique<
   Options,
   Descriptor extends JsonValue,
   Data,
-  Binding,
-  Storage extends GlyphBatchStorageShape<Storage>,
 >(
-  technique: RasterTechniqueDefinition<Id, Kind, Options, Descriptor, Data, Binding, Storage>,
-): RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data, Binding, Storage> {
+  technique: RasterTechniqueDefinition<Id, Kind, Options, Descriptor, Data>,
+): RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data> {
   assertIdentifier(technique.id, 'raster technique ID');
-  return technique as RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data, Binding, Storage>;
+  return technique as RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data>;
 }
 
 /** Brand a stable resource identity produced by a portable technique. */

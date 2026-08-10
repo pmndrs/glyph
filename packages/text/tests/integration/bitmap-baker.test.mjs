@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { RasterCoverageError } from '@pmndrs/text';
 import {
   bitmapBakerAbi,
   bitmapBakerFromCore,
@@ -157,10 +156,8 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
     dispose() {},
   };
   const data = await bitmap.decode(font, runtimeRaster);
-  const paint = { color: [1, 1, 1, 1] };
-  const selection = (glyphId) => ({ data, glyphId, fontSize: 16, originX: 0, originY: 0, rasterPixelRatio: 1, paint });
-  assert.ok(bitmap.select(selection(43)));
-  assert.throws(() => bitmap.select(selection(45)), RasterCoverageError);
+  assert.equal(data.coverage[43 >> 3] & (1 << (43 & 7)), 1 << (43 & 7));
+  assert.equal(data.coverage[45 >> 3] & (1 << (45 & 7)), 0);
   bitmap.dispose(data);
 
   const mismatchedPolicy = {

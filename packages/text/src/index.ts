@@ -25,9 +25,8 @@ export type {
   BakedFontSource,
   FontInput,
   FontInputOf,
-  LoadedFontV0,
   FontMetrics,
-  FontRasterModuleOf,
+  FontRasterTechniqueOf,
   FontSourceOverride,
   FontToken,
   RegisteredFont,
@@ -89,26 +88,16 @@ export { SpanNestingError } from './internal/span-cascade.js';
 export type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
 
 export type {
-  AnyRasterModule,
-  AnyRasterInput,
   JsonValue,
-  LoadedRaster,
-  RasterBatchOf,
-  RasterBatchStage,
   RasterKind,
   RasterKindOf,
   RasterLoadOptions,
-  RasterModule,
-  RasterInput,
   RasterReference,
-  RasterRequest,
   RasterResolver,
   RasterResolverContext,
   RasterResourceResolver,
   RasterResourceResolverContext,
   RasterResourceSource,
-  RasterResourceOf,
-  RasterModuleOptionsOf,
   RasterOptionsArgument,
   RasterSelection,
   RasterSource,
@@ -118,27 +107,18 @@ export type {
   RuntimeRasterBakerLoader,
   RuntimeRasterBakerModule,
 } from './raster.js';
-export { defineRaster, defineRasterBatchStage } from './raster.js';
-export { RasterRuntime } from './raster-runtime.js';
-export type { RasterDrawBatch, RasterObjectDrawBatch } from './raster.js';
 
 export type {
   AnyRasterTechnique,
-  GlyphBatchStorage,
-  GlyphBatchStorageOf,
-  GlyphBatchStorageShape,
-  GlyphRange,
-  RasterBindingOf,
   RasterDataOf,
-  RasterGlyphInput,
-  RasterGlyphSelection,
-  RasterGlyphWriteInput,
   RasterResourceId,
   RasterTechnique,
   RasterTechniqueDescriptorOf,
   RasterTechniqueId,
   RasterOptionsOf,
   RasterTechniqueOptionsOf,
+  RasterTechniqueInput,
+  RasterTechniqueRequest,
   RasterTechniqueTypesOf,
 } from './raster-technique.js';
 export { defineRasterResourceId, defineRasterTechnique } from './raster-technique.js';
