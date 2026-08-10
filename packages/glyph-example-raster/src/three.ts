@@ -51,7 +51,7 @@ registerThreeRasterPlanProgram({
       glyphF32: {
         rows: data.glyphCount,
         fields: [
-          () => data.binding.inset,
+          () => data.inset,
           (row) => data.colors[row * 4]! / 255,
           (row) => data.colors[row * 4 + 1]! / 255,
           (row) => data.colors[row * 4 + 2]! / 255,

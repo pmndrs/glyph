@@ -5,11 +5,8 @@ import { join } from 'node:path';
 
 import {
   FontRegistry,
-  createRuntimeShaper,
   createTextRuntime,
   rasterBake,
-  type GlyphPaint,
-  type RasterGlyphInput,
   type RasterKey,
   type RasterResolverContext,
   type RasterResourceResolverContext,
@@ -22,7 +19,7 @@ import * as THREE from 'three/webgpu';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import glyphExampleBaker from '../src/baker.js';
-import { GLYPH_EXAMPLE_KIND, glyphExample, glyphExampleDescriptor, type GlyphExampleData } from '../src/index.js';
+import { GLYPH_EXAMPLE_KIND, glyphExample, glyphExampleDescriptor } from '../src/index.js';
 import '../src/three.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
@@ -69,72 +66,11 @@ describe('public external raster proof', () => {
       const data = await glyphExample.decode(font, raster);
       expect(raster.kind).toBe(GLYPH_EXAMPLE_KIND);
       expect(data.colors.byteLength).toBe(font.glyphCount * 4);
-      expect(data.binding.inset).toBe(glyphExampleDescriptor({ paletteSeed: 7 }).inset);
+      expect(data.inset).toBe(glyphExampleDescriptor({ paletteSeed: 7 }).inset);
       expect(resolve).toHaveBeenCalledOnce();
       expect(resolveResource).toHaveBeenCalledOnce();
       expect(resolve.mock.calls[0]?.[0].reference.kind).toBe(GLYPH_EXAMPLE_KIND);
       expect(resolveResource.mock.calls[0]?.[0].source.artifactHash).toMatch(/^[0-9a-f]{64}$/);
-      glyphExample.dispose(data);
-    } finally {
-      font.dispose();
-    }
-  });
-
-  test('selects one shared resource and packs canonical instances without a renderer', async () => {
-    const { font, data } = await loadEmbedded();
-    try {
-      const selection = glyphExample.select(glyph(data, 1));
-      expect(selection).toEqual({ resource: data.resource, pipelineVariant: 0, binding: data.binding });
-      expect(glyphExample.select(glyph(data, 2))?.binding).toBe(data.binding);
-
-      const storage = glyphExample.createStorage(4);
-      glyphExample.writeStorage(
-        storage,
-        { start: 1, count: 2 },
-        { data, binding: data.binding, glyphs: [glyph(data, 1), glyph(data, 2)] },
-      );
-      // Canonical storage is Float32Array, so every expectation compares at single precision.
-      const inset = data.binding.inset * 16;
-      expect(Array.from(storage.origins.subarray(0, 2))).toEqual([0, 0]);
-      expectClose(Array.from(storage.origins.subarray(2, 4)), [inset, 12 - 16 * 0.8 + inset]);
-      expectClose(Array.from(storage.sizes.subarray(2, 4)), [16 * 0.65 - inset * 2, 16 - inset * 2]);
-      expectClose(Array.from(storage.colors.subarray(4, 8)), glyphColor(data, 1));
-      expectClose(Array.from(storage.colors.subarray(8, 12)), glyphColor(data, 2));
-
-      expect(() =>
-        glyphExample.writeStorage(
-          storage,
-          { start: 0, count: 1 },
-          { data, binding: { ...data.binding }, glyphs: [glyph(data, 1)] },
-        ),
-      ).toThrow(/binding does not belong/);
-      expect(() =>
-        glyphExample.writeStorage(
-          storage,
-          { start: 4, count: 1 },
-          { data, binding: data.binding, glyphs: [glyph(data, 1)] },
-        ),
-      ).toThrow(/outside its capacity/);
-      expect(() => glyphExample.select(glyph(data, font.glyphCount))).toThrow(/unavailable glyph/);
-
-      glyphExample.dispose(data);
-    } finally {
-      font.dispose();
-    }
-  });
-
-  test('rejects paint the package cannot render', async () => {
-    const { font, data } = await loadEmbedded();
-    try {
-      expect(() =>
-        glyphExample.validatePaint?.({
-          paintIndices: Uint16Array.of(0),
-          palette: [{ color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 1 } }],
-        }),
-      ).toThrow(/fill color and opacity only/);
-      expect(() =>
-        glyphExample.validatePaint?.({ paintIndices: Uint16Array.of(0), palette: [{ color: [1, 1, 2, 1] }] }),
-      ).toThrow(/four finite linear values/);
       glyphExample.dispose(data);
     } finally {
       font.dispose();
@@ -162,11 +98,10 @@ describe('public external raster proof', () => {
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
     const registry = new FontRegistry();
-    const shaper = await createRuntimeShaper({
+    const runtime = await createTextRuntime({
       registry,
       wasm: await readFile(new URL('../../text/dist/text_shaper.wasm', import.meta.url)),
     });
-    const runtime = await createTextRuntime({ registry, shaper });
     const font = await runtime.loadFont({
       input: { baked: dataUrl(await readFile(core.file)) },
       raster: { technique: glyphExample, options: { paletteSeed: 7 } },
@@ -187,6 +122,20 @@ describe('public external raster proof', () => {
     expect(geometry.getAttribute('_pmndrsText_2')).toBeDefined();
     expect(geometry.getAttribute('_pmndrsText_3')).toBeDefined();
     expect(geometry.getAttribute('_pmndrsText_15')).toBeDefined();
+    expect(geometry.instanceCount).toBeGreaterThan(0);
+    const sizes = geometry.getAttribute('_pmndrsText_2');
+    const expectedWidth = Math.max(48 * 0.05, 48 * 0.65 - font.data.inset * 48 * 2);
+    const expectedHeight = Math.max(48 * 0.05, 48 - font.data.inset * 48 * 2);
+    for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
+      expect(sizes.getX(instance)).toBeCloseTo(expectedWidth, 5);
+      expect(sizes.getY(instance)).toBeCloseTo(expectedHeight, 5);
+    }
+    const colors = geometry.getAttribute('_pmndrsText_3');
+    for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
+      expect(font.data.colors.some((_, offset) => glyphColorMatches(font.data.colors, offset, colors, instance))).toBe(
+        true,
+      );
+    }
 
     text.text = 'PLUGIN UPDATE';
     scene.updateMatrixWorld();
@@ -200,15 +149,6 @@ describe('public external raster proof', () => {
     runtime.dispose();
   });
 });
-
-async function loadEmbedded(): Promise<{ readonly font: RegisteredFont; readonly data: GlyphExampleData }> {
-  const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
-  const core = baked.execution.outputs.find(({ role }) => role === 'font');
-  assert.ok(core);
-  const font = await new FontRegistry().registerAsset(await readFile(core.file));
-  const raster = await font.loadRaster(rasterSelection(font));
-  return { font, data: await glyphExample.decode(font, raster) };
-}
 
 /** The baked artifact advertises its own raster key, so the test never reimplements key derivation. */
 function rasterSelection(font: RegisteredFont): { readonly rasterKey: RasterKey; readonly kind: 'glyphExample' } {
@@ -231,23 +171,21 @@ async function bakeFixture(packaging: {
   });
 }
 
-function glyph(data: GlyphExampleData, glyphId: number): RasterGlyphInput<GlyphExampleData> {
-  return { data, glyphId, fontSize: 16, originX: 0, originY: 12, rasterPixelRatio: 1, paint: paint().palette[0]! };
-}
-
-function expectClose(actual: readonly number[], expected: readonly number[]): void {
-  expect(actual).toHaveLength(expected.length);
-  for (const [index, value] of expected.entries()) expect(actual[index]).toBeCloseTo(value, 6);
-}
-
-function glyphColor(data: GlyphExampleData, glyphId: number): readonly number[] {
-  return Array.from(data.colors.subarray(glyphId * 4, glyphId * 4 + 4), (value) => value / 255);
-}
-
-function paint(): GlyphPaint {
-  return { palette: [{ color: [1, 1, 1, 1] }], paintIndices: Uint16Array.of(0) };
-}
-
 function dataUrl(bytes: Uint8Array): string {
   return `data:model/gltf-binary;base64,${Buffer.from(bytes).toString('base64')}`;
+}
+
+function glyphColorMatches(
+  records: Uint8Array,
+  offset: number,
+  attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  instance: number,
+): boolean {
+  if (offset % 4 !== 0 || offset > records.length - 4) return false;
+  return (
+    Math.abs(attribute.getX(instance) - records[offset]! / 255) < 1e-6 &&
+    Math.abs(attribute.getY(instance) - records[offset + 1]! / 255) < 1e-6 &&
+    Math.abs(attribute.getZ(instance) - records[offset + 2]! / 255) < 1e-6 &&
+    Math.abs(attribute.getW(instance) - records[offset + 3]! / 255) < 1e-6
+  );
 }

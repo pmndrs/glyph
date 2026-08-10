@@ -5,7 +5,7 @@ description: Proves the published raster and baker extension boundary with a pri
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/text-glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:0a0b7bd0a74ec262d5b4722cc43e5a1f8da837e9fa72b9c1d9112f119f1bb445'
+source_digest: 'sha256:d3fc6c1fc5a3ff728ebf9ac8bb9112c4b0e1e9fc4f9304376ded7ecef41a1764'
 tags: [package, raster, extension-proof, threejs, tsl]
 sources:
   - id: manifest
@@ -28,7 +28,7 @@ sources:
     title: Dual-backend product rendering probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T06:36:53Z'
+  at: '2026-08-10T02:32:26Z'
 ---
 
 # Package reference: `@pmndrs/text-glyph-example-raster`
@@ -38,9 +38,9 @@ Status: ✅ Milestone 10.4 external extension proof
 This private workspace package is a consumer proof, not a fourth recommended production raster. It imports only published
 `@pmndrs/text` entry points and its own pinned Three.js dependency. It owns the literal `glyphExample` kind, companion
 extension and descriptor, deterministic baker, standalone-valid GLB framing, embedded or authenticated external RGBA glyph
-records, decoder validation, runtime baker, TSL material, retained instance storage, dirty upload policy, overflow replacement,
-paragraph/local-run render-order inheritance, abort behavior, and disposal. A source boundary test rejects imports from
-core internals or the three first-party raster and baker subpaths.
+records, decoder validation, runtime baker, declarative Rust packing policy, TSL material, paragraph/local-run render-order
+inheritance, abort behavior, and disposal. Rust owns retained instance storage, dirty-range publication, and overflow handling.
+A source boundary test rejects imports from core internals or the Three first-party raster and baker subpaths.
 
 The technique makes the proof observable by assigning each source-local glyph ID a deterministic color and drawing a framed
 em-relative diagnostic cell at the position produced by core shaping and paragraph layout. Its visual output is deliberately
@@ -49,15 +49,16 @@ The external lane authenticates the companion GLB and its separate record payloa
 resolvers; the embedded lane proves recursive `BufferView` rebasing through the public Node composition host.
 
 The package now supplies both halves of the Rust render-plan boundary separately. `glyphExample` is a portable
-`defineRasterTechnique` that decodes and selects one shared resource while importing no renderer.
+`defineRasterTechnique` that owns identity, decoding, one shared resource, and disposal while importing no renderer or
+instance-packing contract.
 `@pmndrs/text-glyph-example-raster/three` registers a static policy program through public
 `registerThreeRasterPlanProgram`, so nothing in `@pmndrs/text` names this package. The policy describes the exact Rust
 inputs, buffers, scalar operations, and storage/draw keys. A cold compiler lowers validated glyph colors and inset data
 into one font binding; a renderer factory consumes the resulting buffers to construct the TSL material. The package no
 longer owns a `ParagraphBatchTarget`, target revision, slack planner, dirty-range upload loop, or mesh transaction.
 Focused tests cover deterministic bytes, public Node bake, standalone companion validation, external resource
-resolution, abort-before-decode, selection and binding identity, plus a compiled-Wasm public `Text` lifecycle that
-observes Rust-packed buffers and retained draw/geometry identity.
+resolution, abort-before-decode, plus a compiled-Wasm public `Text` lifecycle that verifies Rust-packed sizes and colors
+and observes retained draw/geometry identity. No test reconstructs the removed TypeScript selector, storage, or writer.
 
 The hardware-browser target uses the public source-font fallback, package runtime baker, the target-v1 `FontLoader`, public
 `Text` and `TextGroup`, warm matrix-lifecycle publication, TSL compilation, draw, asynchronous render-target readback, and
