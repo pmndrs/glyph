@@ -16,6 +16,8 @@ export interface ThreeBitmapInstanceNodes {
   readonly uvSize: Node<'vec2'>;
   /** Resolved paint colour with alpha, unpremultiplied. */
   readonly color: Node<'vec4'>;
+  /** Texture-array layer containing this glyph's coverage. */
+  readonly pageIndex: Node<'uint'>;
 }
 
 /** The GPU resources one Bitmap glyph batch binds: the single-channel coverage page its strike binding selected. */
@@ -57,7 +59,7 @@ export function bitmapShader(
     instance.uvOrigin.x.add(TSL.uv().x.mul(instance.uvSize.x)),
     instance.uvOrigin.y.add(TSL.uv().y.mul(instance.uvSize.y)),
   );
-  const coverage = TSL.texture(resources.page, atlasUv).r;
+  const coverage = TSL.texture(resources.page, atlasUv).depth(instance.pageIndex).r;
   return {
     position: TSL.vec3(
       instance.origin.x.add(TSL.positionLocal.x.mul(instance.size.x)),

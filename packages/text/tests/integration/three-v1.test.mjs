@@ -630,6 +630,38 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   runtime.dispose();
 });
 
+test('multi-page Bitmap strikes remain one ordered texture-array draw', async () => {
+  const runtime = await createTextRuntime({
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(densityFontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16, 32] } },
+  });
+  assert.ok(font.data.strikes[1].pages.length > 1, 'the regression fixture must contain a multi-page 32 ppem strike');
+  const scene = new THREE.Scene();
+  const group = new TextGroup();
+  const label = new Text({
+    font,
+    rasterPixelRatio: 2,
+    text: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 !?.,;:'.repeat(24),
+    style: { fontSize: 16 },
+    contentBox: { width: { mode: 'exact', size: 480 }, wrap: 'word' },
+  });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined);
+  const draws = group.children.filter((child) => child.isMesh);
+  assert.equal(draws.length, 1, 'atlas page changes must select texture-array layers without fragmenting draws');
+  assert.ok(draws[0].geometry.getAttribute('_pmndrsText_6'), 'the Bitmap plan must publish a page-layer stream');
+
+  group.dispose();
+  label.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
 test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () => {
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({

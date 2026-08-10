@@ -105,9 +105,13 @@ function compileBitmap(
   techniqueId: number,
   identities: RenderWireIdentityRegistry,
 ): Uint8Array {
-  const entries = data.strikes.flatMap((strike) => strike.pages.map((page) => page.resource));
+  const entries = data.strikes.map((strike) => strike.pages[0]!.resource);
   const { resources, indexFor } = fontBindingResources(entries, identities);
   const views = data.strikes.map((strike) => recordView(strike.records));
+  const bindings = data.strikes.map((strike) => ({
+    width: Math.max(...strike.pages.map((page) => page.width)),
+    height: Math.max(...strike.pages.map((page) => page.height)),
+  }));
   const rows = checkedProduct(glyphCount, data.strikes.length, 'bitmap strike rows');
   const strikeRecord = (row: number): { readonly view: DataView; readonly record: number; readonly strike: number } => {
     const strike = Math.floor(row / glyphCount);
@@ -116,17 +120,14 @@ function compileBitmap(
   const atlas = (row: number, offset: number, dimension: 'width' | 'height'): number => {
     const { view, record, strike } = strikeRecord(row);
     const page = view.getUint16(record + 16, true);
-    return page === ABSENT_PAGE
-      ? 0
-      : view.getUint16(record + offset, true) / data.strikes[strike]!.pages[page]![dimension];
+    return page === ABSENT_PAGE ? 0 : view.getUint16(record + offset, true) / bindings[strike]![dimension];
   };
   const span = (row: number, start: number, end: number, dimension: 'width' | 'height'): number => {
     const { view, record, strike } = strikeRecord(row);
     const page = view.getUint16(record + 16, true);
     return page === ABSENT_PAGE
       ? 0
-      : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) /
-          data.strikes[strike]!.pages[page]![dimension];
+      : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) / bindings[strike]![dimension];
   };
   return compileFontBinding({
     techniqueId,
@@ -137,7 +138,7 @@ function compileBitmap(
     resourceIndex(row) {
       const { view, record, strike } = strikeRecord(row);
       const page = view.getUint16(record + 16, true);
-      return page === ABSENT_PAGE ? MISSING_RESOURCE : indexFor(data.strikes[strike]!.pages[page]!.resource);
+      return page === ABSENT_PAGE ? MISSING_RESOURCE : indexFor(data.strikes[strike]!.pages[0]!.resource);
     },
     glyphF32: emptyFontBindingTable(glyphCount),
     glyphU32: emptyFontBindingTable(glyphCount),
@@ -170,7 +171,15 @@ function compileBitmap(
         (row) => span(row, 10, 14, 'height'),
       ],
     },
-    strikeU32: emptyFontBindingTable(rows),
+    strikeU32: {
+      rows,
+      fields: [
+        (row) => {
+          const { view, record } = strikeRecord(row);
+          return view.getUint16(record + 16, true);
+        },
+      ],
+    },
     resourceF32: emptyFontBindingTable(resources.length),
     resourceU32: emptyFontBindingTable(resources.length),
   });

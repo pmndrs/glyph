@@ -5,7 +5,7 @@ import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { TextEnginePublication } from '../internal/text-engine-host.js';
 import { FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, FIRST_PARTY_TRANSFORM_BUFFER_ID } from '../internal/render-policy-wire.js';
 import { TextEngineRenderPlanView, type RenderPlanTable } from '../internal/render-plan-view.js';
-import { bitmap, type BitmapPageData } from '../raster/bitmap-technique.js';
+import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugPageData } from '../raster/slug-technique.js';
 import { bitmapShader } from './bitmap-shader.js';
@@ -85,7 +85,7 @@ export class ThreeTextRenderPlanExecutor {
   readonly #view = new TextEngineRenderPlanView();
   readonly #buffers = new Map<number, RetainedBuffer>();
   readonly #resources = new Map<number, RetainedResource>();
-  readonly #bitmapTextures = new Map<number, THREE.DataTexture>();
+  readonly #bitmapTextures = new Map<number, THREE.DataArrayTexture>();
   readonly #msdfAtlases = new Map<number, THREE.DataArrayTexture>();
   readonly #slugPages = new Map<number, RetainedSlugPage>();
   readonly #materials = new Map<string, MaterialRealization>();
@@ -589,8 +589,8 @@ export class ThreeTextRenderPlanExecutor {
     if (resolved.technique !== bitmap.id) {
       throw new Error('this Three plan target checkpoint realizes Bitmap draws only');
     }
-    const page = bitmapPage(resolved);
-    const required = [1, 2, 3, 4, 5].map((id) => {
+    const strike = bitmapStrike(resolved);
+    const required = [1, 2, 3, 4, 5, 6].map((id) => {
       const buffer = buffers.get(id);
       if (buffer === undefined) throw new Error(`Bitmap draw is missing policy buffer ${id}`);
       return buffer;
@@ -600,7 +600,7 @@ export class ThreeTextRenderPlanExecutor {
       .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
     const cached = this.#materials.get(key);
     if (cached !== undefined) return cached.material;
-    const texture = this.#bitmapTexture(resource.referenceId, page);
+    const texture = this.#bitmapTexture(resource.referenceId, strike);
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
     );
@@ -618,6 +618,9 @@ export class ThreeTextRenderPlanExecutor {
           .setPBO(true)
           .element(instance),
         color: TSL.storage(required[4]!.attribute, 'vec4', required[4]!.attribute.count).setPBO(true).element(instance),
+        pageIndex: TSL.storage(required[5]!.attribute, 'uint', required[5]!.attribute.count)
+          .setPBO(true)
+          .element(instance),
       },
       { page: texture },
     );
@@ -759,10 +762,23 @@ export class ThreeTextRenderPlanExecutor {
     return material;
   }
 
-  #bitmapTexture(referenceId: number, page: BitmapPageData): THREE.DataTexture {
+  #bitmapTexture(referenceId: number, strike: BitmapStrikeData): THREE.DataArrayTexture {
     let texture = this.#bitmapTextures.get(referenceId);
     if (texture !== undefined) return texture;
-    texture = new THREE.DataTexture(page.bytes, page.width, page.height, THREE.RedFormat, THREE.UnsignedByteType);
+    const width = Math.max(...strike.pages.map((page) => page.width));
+    const height = Math.max(...strike.pages.map((page) => page.height));
+    const bytes = new Uint8Array(width * height * strike.pages.length);
+    for (let layer = 0; layer < strike.pages.length; layer += 1) {
+      const page = strike.pages[layer]!;
+      for (let row = 0; row < page.height; row += 1) {
+        const source = row * page.width;
+        const target = (layer * height + row) * width;
+        bytes.set(page.bytes.subarray(source, source + page.width), target);
+      }
+    }
+    texture = new THREE.DataArrayTexture(bytes, width, height, strike.pages.length);
+    texture.format = THREE.RedFormat;
+    texture.type = THREE.UnsignedByteType;
     texture.colorSpace = THREE.NoColorSpace;
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearFilter;
@@ -1153,11 +1169,11 @@ function baseTextMaterial(): THREE.MeshBasicNodeMaterial {
   });
 }
 
-function bitmapPage(resource: ThreeTextEngineResource): BitmapPageData {
-  if (resource.technique !== bitmap.id || !('page' in resource)) {
+function bitmapStrike(resource: ThreeTextEngineResource): BitmapStrikeData {
+  if (resource.technique !== bitmap.id || !('strike' in resource)) {
     throw new Error('this Three plan target checkpoint realizes Bitmap draws only');
   }
-  return resource.page as BitmapPageData;
+  return resource.strike as BitmapStrikeData;
 }
 
 function msdfData(resource: ThreeTextEngineResource): MsdfData {

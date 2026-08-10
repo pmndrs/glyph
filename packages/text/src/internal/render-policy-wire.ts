@@ -164,11 +164,12 @@ function bitmapProgram(
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
-  const context = programContext('strike', 8, 0);
+  const context = programContext('strike', 8, 1);
   const { loadF32, loadU32, binary, storeF32, storeU32 } = context;
   loadF32(15);
   loadU32(31, 0);
   loadU32(30, 1);
+  loadU32(29, 2);
   binary('multiplyF32', 15, 7, 2);
   binary('addF32', 16, 0, 15);
   binary('multiplyF32', 17, 8, 2);
@@ -184,13 +185,14 @@ function bitmapProgram(
   ]);
   if (transformMode === 'indexed') storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
   storeU32(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, 0, 30);
+  storeU32(6, 0, 29);
   return createProgram(
     techniqueId,
     programId,
     context,
     transformMode === 'indexed'
-      ? [...floatBuffers([2, 2, 2, 2, 4]), stableGlyphIdBuffer(), transformIndexBuffer()]
-      : [...floatBuffers([2, 2, 2, 2, 4]), stableGlyphIdBuffer()],
+      ? [...floatBuffers([2, 2, 2, 2, 4]), ...u32Buffers([1], 6), stableGlyphIdBuffer(), transformIndexBuffer()]
+      : [...floatBuffers([2, 2, 2, 2, 4]), ...u32Buffers([1], 6), stableGlyphIdBuffer()],
     transformMode,
     allocationMode,
   );
