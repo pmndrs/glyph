@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 0,
+  "generatedBy": "text:rust-layout-benchmark",
+  "wasmSha256": "f74f96a6214532271296c8165738d14f71c0642aca4af9050a0363aed2a4d576",
+  "technique": "slug",
+  "allocation": "ordered",
+  "glyphTarget": 22000,
+  "warmup": 8,
+  "repetitions": 31,
+  "reports": [
+    {
+      "name": "cold",
+      "glyphs": 21805,
+      "medianMs": 16.725875000000087,
+      "p95Ms": 16.894916999999964,
+      "minMs": 16.458374999999933,
+      "rsdPercent": 0.6137453775542219,
+      "patchCount": 14,
+      "writeBytes": 2442160
+    },
+    {
+      "name": "no-op",
+      "glyphs": 21805,
+      "medianMs": 0.0008749999999508873,
+      "p95Ms": 0.001167000000009466,
+      "minMs": 0.0007080000000314612,
+      "rsdPercent": 20.607335343292988,
+      "patchCount": 0,
+      "writeBytes": 0
+    },
+    {
+      "name": "font-size",
+      "glyphs": 21805,
+      "medianMs": 6.641542000000072,
+      "p95Ms": 6.702041000000008,
+      "minMs": 6.610500000000002,
+      "rsdPercent": 0.3898369007329732,
+      "patchCount": 2,
+      "writeBytes": 697760
+    },
+    {
+      "name": "column-resize",
+      "glyphs": 21805,
+      "medianMs": 2.9641670000000886,
+      "p95Ms": 4.753292000000101,
+      "minMs": 2.357041999999865,
+      "rsdPercent": 29.06972897531289,
+      "patchCount": 1,
+      "writeBytes": 348880
+    },
+    {
+      "name": "suffix-edit",
+      "glyphs": 21805,
+      "medianMs": 14.372041999999965,
+      "p95Ms": 16.734709000000066,
+      "minMs": 13.90362499999992,
+      "rsdPercent": 43.12330239527032,
+      "patchCount": 0,
+      "writeBytes": 0
+    },
+    {
+      "name": "localized-edit",
+      "glyphs": 21805,
+      "medianMs": 1.3077499999999418,
+      "p95Ms": 6.753249999999753,
+      "minMs": 1.1738749999999527,
+      "rsdPercent": 80.70050052277502,
+      "patchCount": 7,
+      "writeBytes": 2128
+    },
+    {
+      "name": "localized-splice",
+      "glyphs": 21805,
+      "medianMs": 8.939582999999857,
+      "p95Ms": 9.373249999999643,
+      "minMs": 8.747791999999663,
+      "rsdPercent": 2.1178415753373674,
+      "patchCount": 7,
+      "writeBytes": 1221696
+    }
+  ]
+}

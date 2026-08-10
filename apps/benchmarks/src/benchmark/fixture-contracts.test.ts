@@ -4,9 +4,14 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 const contractRoot = new URL('../../fixtures/contracts/', import.meta.url);
+const resultRoot = new URL('../../fixtures/results/', import.meta.url);
 
 async function contract(name: string): Promise<Record<string, any>> {
   return JSON.parse(await readFile(new URL(name, contractRoot), 'utf8'));
+}
+
+async function result(name: string): Promise<Record<string, any>> {
+  return JSON.parse(await readFile(new URL(name, resultRoot), 'utf8'));
 }
 
 describe('milestone-one fixture contracts', () => {
@@ -90,5 +95,51 @@ describe('milestone-one fixture contracts', () => {
       ),
     ).toBe(true);
     expect(record.capabilityClaim.gpuWorkload).toBe(false);
+  });
+
+  it('pins the exact TypeScript-to-Rust layout migration comparison', async () => {
+    const [baseline, bitmap, mtsdf, slug] = await Promise.all([
+      result('typescript-layout-baseline-90964be0-darwin-arm64.json'),
+      result('rust-layout-bitmap-0bdb9e93-darwin-arm64.json'),
+      result('rust-layout-mtsdf-0bdb9e93-darwin-arm64.json'),
+      result('rust-layout-slug-0bdb9e93-darwin-arm64.json'),
+    ]);
+    const rustRecords = [bitmap, mtsdf, slug];
+
+    expect(baseline).toMatchObject({
+      generatedBy: 'text:layout-benchmark',
+      reports: [
+        { name: 'cold', glyphs: 25_515, medianMs: 58.32441699999981 },
+        { name: 'font-size', glyphs: 25_515, medianMs: 12.087332999999944 },
+        { name: 'layout-width', glyphs: 25_515, medianMs: 9.152791999999863 },
+        { name: 'text', glyphs: 25_507, medianMs: 39.607874999999694 },
+      ],
+    });
+    expect(rustRecords.map(({ technique }) => technique)).toEqual(['bitmap', 'mtsdf', 'slug']);
+    expect(new Set(rustRecords.map(({ wasmSha256 }) => wasmSha256))).toEqual(
+      new Set(['f74f96a6214532271296c8165738d14f71c0642aca4af9050a0363aed2a4d576']),
+    );
+
+    const comparableCases = [
+      ['cold', 'cold'],
+      ['font-size', 'font-size'],
+      ['layout-width', 'column-resize'],
+      ['text', 'suffix-edit'],
+    ] as const;
+    for (const record of rustRecords) {
+      expect(record).toMatchObject({
+        schemaVersion: 0,
+        generatedBy: 'text:rust-layout-benchmark',
+        allocation: 'ordered',
+        glyphTarget: 22_000,
+        warmup: 8,
+        repetitions: 31,
+      });
+      for (const [baselineName, rustName] of comparableCases) {
+        const baselineReport = baseline.reports.find(({ name }: { name: string }) => name === baselineName);
+        const rustReport = record.reports.find(({ name }: { name: string }) => name === rustName);
+        expect(rustReport.medianMs).toBeLessThan(baselineReport.medianMs);
+      }
+    }
   });
 });

@@ -1,0 +1,49 @@
+{
+  "generatedBy": "text:layout-benchmark",
+  "reports": [
+    {
+      "name": "cold",
+      "glyphs": 25515,
+      "medianMs": 58.32441699999981,
+      "meanMs": 60.39700277419357,
+      "minMs": 47.82662500000015,
+      "p95Ms": 72.5782079999999,
+      "rsdPercent": 15.540478236019345,
+      "perGlyphUs": 2.2858873995688738,
+      "bytesPerUpdate": 17132658.580645163
+    },
+    {
+      "name": "font-size",
+      "glyphs": 25515,
+      "medianMs": 12.087332999999944,
+      "meanMs": 12.722243225806471,
+      "minMs": 11.242707999999766,
+      "p95Ms": 15.895666999999776,
+      "rsdPercent": 11.271450340612626,
+      "perGlyphUs": 0.47373439153438934,
+      "bytesPerUpdate": 18199267.096774194
+    },
+    {
+      "name": "layout-width",
+      "glyphs": 25515,
+      "medianMs": 9.152791999999863,
+      "meanMs": 9.588596838709735,
+      "minMs": 7.461458000000221,
+      "p95Ms": 14.408792000000176,
+      "rsdPercent": 17.10678110942888,
+      "perGlyphUs": 0.358722006662742,
+      "bytesPerUpdate": 10448746.322580645
+    },
+    {
+      "name": "text",
+      "glyphs": 25507,
+      "medianMs": 39.607874999999694,
+      "meanMs": 39.64417212903229,
+      "minMs": 36.19237499999963,
+      "p95Ms": 42.58904100000018,
+      "rsdPercent": 4.593215968243925,
+      "perGlyphUs": 1.5528237346610614,
+      "bytesPerUpdate": 35170110.70967742
+    }
+  ]
+}

@@ -1,10 +1,11 @@
 /* @workflow {
   "name": "text:rust-layout-benchmark",
   "summary": "Measures the complete retained Rust text_update path with real font data and render-plan publication.",
-  "requirements": "Built @pmndrs/text and @pmndrs/text-font-baker packages. Accepts --glyphs, --reps, and --warmup.",
-  "writes": "stdout only"
+  "requirements": "Built @pmndrs/text and @pmndrs/text-font-baker packages. Accepts --glyphs, --reps, --warmup, and --json.",
+  "writes": "stdout and the optional JSON report path"
 } */
-import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
@@ -75,6 +76,27 @@ for (const name of options.case === undefined ? cases : [options.case]) {
   reports.push(name === 'cold' ? measureCold() : measureWarm(name));
 }
 printReport(reports);
+if (options.jsonPath !== undefined) {
+  await writeFile(
+    options.jsonPath,
+    `${JSON.stringify(
+      {
+        schemaVersion: 0,
+        generatedBy: 'text:rust-layout-benchmark',
+        wasmSha256: createHash('sha256').update(wasm).digest('hex'),
+        technique: options.technique,
+        allocation: options.allocation,
+        glyphTarget: options.glyphs,
+        warmup: options.warmup,
+        repetitions: options.repetitions,
+        reports,
+      },
+      undefined,
+      2,
+    )}\n`,
+  );
+  console.log(`wrote ${options.jsonPath}`);
+}
 
 function measureCold() {
   const samples = [];
@@ -357,6 +379,7 @@ function parseArguments(arguments_) {
     height: read('--height', 100_000),
     repetitions: read('--reps', 31),
     warmup: read('--warmup', 8),
+    jsonPath: readString('--json'),
   };
 
   function readString(name, fallback) {
