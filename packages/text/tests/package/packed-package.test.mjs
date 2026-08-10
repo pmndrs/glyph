@@ -36,6 +36,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.equal(packedFiles.includes('dist/slug-baker-abi-v0.json'), true);
   assert.deepEqual([...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(), [
     'LICENSE',
+    'bin',
     'dist',
     'package.json',
   ]);
@@ -75,7 +76,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
   assert.match(serialWorkerHost, /type:\s*["']module["']/);
 
-  const cli = join(installedDirectory, 'dist/node/cli.js');
+  const cli = join(installedDirectory, 'bin/pmndrs-text-bake.js');
   assert.notEqual((await stat(cli)).mode & 0o111, 0, 'the packed CLI must be executable');
   const cliHelp = spawnSync(process.execPath, [cli, '--help'], {
     cwd: join(temporaryDirectory, 'consumer'),

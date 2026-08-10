@@ -5,7 +5,7 @@ description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Sl
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/text-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:e13744eb1f7b218f5bf3bbc2efc3dd0bdb87eea3f3cc859a01bd97523234f897'
+source_digest: 'sha256:1b020863ebda8b47c742ba60e9579324b6d743a96451678230e33040611fde99'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -14,12 +14,6 @@ sources:
   - id: scene
     resource: ../../apps/r3f-hello-world/src/technique-scene.tsx
     title: Public R3F technique and fallback example
-  - id: asset-generator
-    resource: ../../apps/r3f-hello-world/scripts/generate-fonts.mts
-    title: Reproducible subset and multi-technique bake
-  - id: asset-manifest
-    resource: ../../apps/r3f-hello-world/assets/manifest.json
-    title: Authenticated checked-in example assets
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-08-10T03:47:15Z'
@@ -37,10 +31,13 @@ The checked-in assets are deliberately bounded at source before baking:
 - Inter contains Basic Latin `U+0020–U+007E`.
 - Font Awesome contains six globe and earth PUA scalars, including the displayed `U+F0AC` glyph.
 
-Each GLB embeds Bitmap, MSDF, and Slug raster resources for its subset. The manifest authenticates the exact artifacts,
-and `assets:check` uses pinned HarfBuzz 14.2.0 to subset and rebake both fonts in temporary storage before requiring
-byte-identical output. Vite emits the public shaper Wasm URL and a combined Inter/Font Awesome notice file. Three, React,
-and React Three Fiber remain ordinary workspace peers rather than part of the core package-size graph.
+Each GLB embeds Bitmap, MSDF, and Slug raster resources for its subset. The package manifest invokes only the published
+CLI through `pnpm exec pmndrs-text-bake`: direct input/output arguments select all three rasters, `--unicodes` delegates shaping-font
+subsetting to pinned HarfBuzz 14.2.0, and `--check` rebakes into temporary storage before requiring byte-identical output.
+The example loads each GLB once with one typed raster tuple and receives exact Bitmap, MSDF, and Slug `LoadedFont` values;
+it does not repeat the input URL per technique. Vite emits the public shaper Wasm URL and a combined Inter/Font Awesome
+notice file. Three, React, and React Three Fiber remain ordinary workspace peers rather than part of the core package-size
+graph.
 
 ## Commands
 

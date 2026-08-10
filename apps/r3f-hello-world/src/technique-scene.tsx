@@ -22,34 +22,22 @@ const BitmapText = Text<typeof bitmap>;
 const MsdfText = Text<typeof msdf>;
 const SlugText = Text<typeof slug>;
 
-const bitmapLatinRequest = {
+const latinRequest = {
   input: { baked: latinFontUrl },
-  raster: { technique: bitmap, options: { strikes: [32] } },
+  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
 } as const;
-const bitmapIconRequest = {
+const iconRequest = {
   input: { baked: iconFontUrl },
-  raster: { technique: bitmap, options: { strikes: [32] } },
-} as const;
-const msdfLatinRequest = {
-  input: { baked: latinFontUrl },
-  raster: { technique: msdf },
-} as const;
-const msdfIconRequest = {
-  input: { baked: iconFontUrl },
-  raster: { technique: msdf },
-} as const;
-const slugLatinRequest = {
-  input: { baked: latinFontUrl },
-  raster: { technique: slug },
-} as const;
-const slugIconRequest = {
-  input: { baked: iconFontUrl },
-  raster: { technique: slug },
+  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
 } as const;
 
 export function TechniqueScene({ onTechniqueChange, technique }: TechniqueSceneProps) {
   const viewport = useThree((state) => state.viewport);
-  const buttonFont = useFont(msdfLatinRequest);
+  const [bitmapLatin, msdfLatin, slugLatin] = useFont(latinRequest);
+  const [bitmapIcons, msdfIcons, slugIcons] = useFont(iconRequest);
+  const bitmapFont = useMemo(() => createFontStack(bitmapLatin, bitmapIcons), [bitmapIcons, bitmapLatin]);
+  const msdfFont = useMemo(() => createFontStack(msdfLatin, msdfIcons), [msdfIcons, msdfLatin]);
+  const slugFont = useMemo(() => createFontStack(slugLatin, slugIcons), [slugIcons, slugLatin]);
   const root = useRef<Group>(null);
 
   useEffect(() => {
@@ -76,42 +64,31 @@ export function TechniqueScene({ onTechniqueChange, technique }: TechniqueSceneP
 
   return (
     <group ref={root} position={[-viewport.width / 2, viewport.height / 2, 0]}>
-      <TechniqueCopy technique={technique} />
-      <TechniqueButtons font={buttonFont} onTechniqueChange={onTechniqueChange} selected={technique} />
+      <TechniqueCopy bitmapFont={bitmapFont} msdfFont={msdfFont} slugFont={slugFont} technique={technique} />
+      <TechniqueButtons font={msdfLatin} onTechniqueChange={onTechniqueChange} selected={technique} />
     </group>
   );
 }
 
-function TechniqueCopy({ technique }: { readonly technique: Technique }) {
+function TechniqueCopy({
+  bitmapFont,
+  msdfFont,
+  slugFont,
+  technique,
+}: {
+  readonly bitmapFont: FontSelection<typeof bitmap>;
+  readonly msdfFont: FontSelection<typeof msdf>;
+  readonly slugFont: FontSelection<typeof slug>;
+  readonly technique: Technique;
+}) {
   switch (technique) {
     case 'bitmap':
-      return <BitmapCopy />;
+      return <Copy TextComponent={BitmapText} font={bitmapFont} />;
     case 'msdf':
-      return <MsdfCopy />;
+      return <Copy TextComponent={MsdfText} font={msdfFont} />;
     case 'slug':
-      return <SlugCopy />;
+      return <Copy TextComponent={SlugText} font={slugFont} />;
   }
-}
-
-function BitmapCopy() {
-  const latin = useFont(bitmapLatinRequest);
-  const icons = useFont(bitmapIconRequest);
-  const font = useMemo(() => createFontStack(latin, icons), [icons, latin]);
-  return <Copy TextComponent={BitmapText} font={font} />;
-}
-
-function MsdfCopy() {
-  const latin = useFont(msdfLatinRequest);
-  const icons = useFont(msdfIconRequest);
-  const font = useMemo(() => createFontStack(latin, icons), [icons, latin]);
-  return <Copy TextComponent={MsdfText} font={font} />;
-}
-
-function SlugCopy() {
-  const latin = useFont(slugLatinRequest);
-  const icons = useFont(slugIconRequest);
-  const font = useMemo(() => createFontStack(latin, icons), [icons, latin]);
-  return <Copy TextComponent={SlugText} font={font} />;
 }
 
 function Copy<TechniqueType extends typeof bitmap | typeof msdf | typeof slug>({

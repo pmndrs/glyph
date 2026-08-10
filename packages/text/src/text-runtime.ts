@@ -41,6 +41,21 @@ export interface LoadedFontRequest<Technique extends AnyRasterTechnique> {
   readonly raster: RasterTechniqueRequest<Technique>;
 }
 
+export type LoadedFontTechniques = readonly [AnyRasterTechnique, ...AnyRasterTechnique[]];
+
+export type LoadedFontRasterRequests<Techniques extends LoadedFontTechniques> = {
+  readonly [Index in keyof Techniques]: RasterTechniqueRequest<Techniques[Index]>;
+};
+
+export interface LoadedFontsRequest<Techniques extends LoadedFontTechniques> {
+  readonly input: LoadedFontInput;
+  readonly rasters: LoadedFontRasterRequests<Techniques>;
+}
+
+export type LoadedFonts<Techniques extends LoadedFontTechniques> = {
+  readonly [Index in keyof Techniques]: LoadedFont<Techniques[Index]>;
+};
+
 export interface TextRuntime {
   readonly registry: FontRegistry;
   readonly disposed: boolean;
@@ -49,6 +64,11 @@ export interface TextRuntime {
     request: LoadedFontRequest<Technique>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<LoadedFont<Technique>>;
+
+  loadFont<const Techniques extends LoadedFontTechniques>(
+    request: LoadedFontsRequest<Techniques>,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<LoadedFonts<Techniques>>;
 
   dispose(): void;
 }
@@ -94,45 +114,66 @@ class TextRuntimeImpl implements TextRuntime {
     return this.#disposed;
   }
 
-  async loadFont<Technique extends AnyRasterTechnique>(
+  loadFont<Technique extends AnyRasterTechnique>(
     request: LoadedFontRequest<Technique>,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<LoadedFont<Technique>>;
+  loadFont<const Techniques extends LoadedFontTechniques>(
+    request: LoadedFontsRequest<Techniques>,
+    options?: { readonly signal?: AbortSignal },
+  ): Promise<LoadedFonts<Techniques>>;
+  async loadFont(
+    request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
     options: { readonly signal?: AbortSignal } = {},
-  ): Promise<LoadedFont<Technique>> {
+  ): Promise<unknown> {
     this.#assertActive();
     options.signal?.throwIfAborted();
     const font = await this.#loadRegisteredFont(request.input, options.signal);
     this.#assertActive();
     options.signal?.throwIfAborted();
     this.#shaper.registerFont(font);
-    const descriptor = techniqueOperations(request.raster.technique).descriptor(
-      request.raster.options as RasterOptionsArgument<RasterOptionsOf<Technique>>,
+    if ('rasters' in request) {
+      return Promise.all(
+        request.rasters.map((raster) => this.#loadFontRaster(font, raster, options.signal)),
+      ) as unknown as Promise<LoadedFonts<LoadedFontTechniques>>;
+    }
+    return this.#loadFontRaster(font, request.raster, options.signal);
+  }
+
+  async #loadFontRaster<Technique extends AnyRasterTechnique>(
+    font: RegisteredFont,
+    raster: RasterTechniqueRequest<Technique>,
+    signal: AbortSignal | undefined,
+  ): Promise<LoadedFont<Technique>> {
+    const descriptor = techniqueOperations(raster.technique).descriptor(
+      raster.options as RasterOptionsArgument<RasterOptionsOf<Technique>>,
     );
     const key = canonicalJson(descriptor);
-    const loaded = this.#loaded.get(font)?.get(request.raster.technique)?.get(key);
+    const loaded = this.#loaded.get(font)?.get(raster.technique)?.get(key);
     if (loaded !== undefined && !loaded.disposed) return loaded as LoadedFont<Technique>;
-    const pending = this.#pending.get(font)?.get(request.raster.technique)?.get(key);
-    if (pending !== undefined) return consumePending(pending.promise as Promise<LoadedFont<Technique>>, options.signal);
+    const pending = this.#pending.get(font)?.get(raster.technique)?.get(key);
+    if (pending !== undefined) return consumePending(pending.promise as Promise<LoadedFont<Technique>>, signal);
 
     const controller = new AbortController();
     const entry = {} as PendingTechniqueLoad;
-    const promise = this.#loadTechnique(font, request, descriptor, controller.signal).then(
+    const promise = this.#loadTechnique(font, raster, descriptor, controller.signal).then(
       (value) => {
-        this.#deletePending(font, request.raster.technique, key, entry);
+        this.#deletePending(font, raster.technique, key, entry);
         if (this.#disposed || controller.signal.aborted) {
           value.dispose();
           throw new FontLoadError('TEXT_RUNTIME_DISPOSED', 'text runtime was disposed during font loading');
         }
-        this.#loadedMap(font, request.raster.technique).set(key, value as LoadedFont<AnyRasterTechnique>);
+        this.#loadedMap(font, raster.technique).set(key, value as LoadedFont<AnyRasterTechnique>);
         return value;
       },
       (error: unknown) => {
-        this.#deletePending(font, request.raster.technique, key, entry);
+        this.#deletePending(font, raster.technique, key, entry);
         throw error;
       },
     );
     Object.assign(entry, { controller, promise });
-    this.#pendingMap(font, request.raster.technique).set(key, entry);
-    return consumePending(promise, options.signal);
+    this.#pendingMap(font, raster.technique).set(key, entry);
+    return consumePending(promise, signal);
   }
 
   dispose(): void {
@@ -166,11 +207,11 @@ class TextRuntimeImpl implements TextRuntime {
 
   async #loadTechnique<Technique extends AnyRasterTechnique>(
     font: RegisteredFont,
-    request: LoadedFontRequest<Technique>,
+    request: RasterTechniqueRequest<Technique>,
     descriptor: RasterTechniqueTypesOf<Technique>['descriptor'],
     signal: AbortSignal,
   ): Promise<LoadedFont<Technique>> {
-    const technique = request.raster.technique;
+    const technique = request.technique;
     const rasterKey = await deriveRasterKey({
       descriptor,
       extension: technique.extension,
@@ -209,11 +250,11 @@ class TextRuntimeImpl implements TextRuntime {
 
   async #runtimeBake<Technique extends AnyRasterTechnique>(
     font: RegisteredFont,
-    request: LoadedFontRequest<Technique>,
+    request: RasterTechniqueRequest<Technique>,
     rasterKey: Awaited<ReturnType<typeof deriveRasterKey>>,
     signal: AbortSignal,
   ): Promise<RegisteredRaster<RasterKindOf<Technique>>> {
-    const technique = request.raster.technique;
+    const technique = request.technique;
     const loadBaker = techniqueOperations(technique).runtimeBaker;
     if (loadBaker === undefined) {
       throw new FontLoadError('RASTER_NOT_FOUND', `${technique.kind} has no baked artifact or runtime baker`);
@@ -234,7 +275,7 @@ class TextRuntimeImpl implements TextRuntime {
       font,
       fontFaceIndex: registered.fontFaceIndex,
       rasterKey,
-      options: request.raster.options as RasterOptionsArgument<RasterOptionsOf<Technique>>,
+      options: request.options as RasterOptionsArgument<RasterOptionsOf<Technique>>,
       signal,
     } as unknown as TechniqueRasterBakeRequest<RasterOptionsOf<Technique>>;
     const baked = await baker.bake(bakeRequest);

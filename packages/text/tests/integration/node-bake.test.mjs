@@ -245,6 +245,31 @@ test('the installed CLI is a thin JSON-reporting layer over bakeProject', async 
   assert.deepEqual(report.diagnostics, []);
 });
 
+test('the CLI directly bakes and checks one known font from arguments', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-text-direct-cli-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = join(root, 'Inter-Regular.ttf');
+  const output = join(root, 'Inter.font.glb');
+  await writeFile(input, await readFile(fontUrl));
+
+  const bake = captureIo();
+  assert.equal(
+    await runCli(['--input', input, '--output', output, '--bitmap', '16', '--json'], bake.io),
+    0,
+    bake.stderr(),
+  );
+  const report = JSON.parse(bake.stdout());
+  assert.equal(report.rasters.length, 1);
+  assert.equal((await validateFontArtifact(await readFile(output))).document.extensions.PMNDRS_font.rasters.length, 1);
+
+  const check = captureIo();
+  assert.equal(
+    await runCli(['--input', input, '--output', output, '--bitmap', '16', '--check'], check.io),
+    0,
+    check.stderr(),
+  );
+});
+
 test('pre-cancellation and source/output overlap fail before filesystem mutation', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'pmndrs-text-node-errors-'));
   t.after(() => rm(root, { recursive: true, force: true }));

@@ -135,5 +135,14 @@ export {
 
 export type { FontFeature, ResolvedFontFeature } from './font-feature.js';
 
-export type { LoadedFontInput, LoadedFontRequest, TextRuntime, TextRuntimeOptions } from './text-runtime.js';
+export type {
+  LoadedFontInput,
+  LoadedFontRasterRequests,
+  LoadedFontRequest,
+  LoadedFontTechniques,
+  LoadedFonts,
+  LoadedFontsRequest,
+  TextRuntime,
+  TextRuntimeOptions,
+} from './text-runtime.js';
 export { createTextRuntime } from './text-runtime.js';
