@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { gunzipSync } from 'node:zlib';
 
-import { createTextRuntime, FontRegistry } from '@pmndrs/text';
+import { createFontStack, createTextRuntime, FontRegistry } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
+import { slug } from '@pmndrs/text/three/slug';
 import { defineTextMaterial, Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
@@ -14,6 +16,10 @@ const densityFontUrl = new URL(
 );
 const amiriFontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/amiri-bitmap-16.font.glb',
+  import.meta.url,
+);
+const iconSlugFontUrl = new URL(
+  '../../../../apps/benchmarks/fixtures/rendering/font-awesome-free-6.7.2-slug.font.glb.gz',
   import.meta.url,
 );
 
@@ -232,6 +238,56 @@ test('Three retires materials bound to a replaced buffer generation', async () =
   group.dispose();
   label.dispose();
   font.dispose();
+  runtime.dispose();
+});
+
+test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () => {
+  const registry = new FontRegistry();
+  const runtime = await createTextRuntime({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const [latin, icon] = await Promise.all([
+    runtime.loadFont({
+      input: { baked: dataUrl(await readFile(fontUrl)) },
+      raster: { technique: bitmap, options: { strikes: [16] } },
+    }),
+    runtime.loadFont({
+      input: { baked: dataUrl(gunzipSync(await readFile(iconSlugFontUrl))) },
+      raster: { technique: slug, options: {} },
+    }),
+  ]);
+  const realizedTechniques = [];
+  const material = defineTextMaterial((context) => {
+    realizedTechniques.push(context.technique);
+    return context.createDefaultMaterial();
+  });
+  const scene = new THREE.Scene();
+  const label = new Text({
+    font: createFontStack(latin, icon),
+    material,
+    text: 'Hello \uf0ac',
+  });
+  scene.add(label);
+  scene.updateMatrixWorld();
+
+  const draws = label.children.filter((child) => child.isMesh);
+  assert.equal(label.error, undefined);
+  assert.equal(draws.length, 2, 'Rust must partition fallback glyphs by renderer program and resource');
+  assert.equal(
+    draws.reduce((count, draw) => count + draw.geometry.instanceCount, 0),
+    6,
+  );
+  assert.deepEqual(realizedTechniques.sort(), [bitmap.id, slug.id].sort());
+  assert.deepEqual(
+    draws.map((draw) => draw.geometry.getAttribute('_pmndrsText_2').itemSize).sort(),
+    [2, 4],
+    'Bitmap vec2 and Slug vec4 records must coexist without a user technique selector',
+  );
+
+  label.dispose();
+  latin.dispose();
+  icon.dispose();
   runtime.dispose();
 });
 

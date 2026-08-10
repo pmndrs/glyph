@@ -7,10 +7,11 @@
     "assets:generate": "node ./scripts/generate-fonts.mts",
     "assets:check": "node ./scripts/generate-fonts.mts --check",
     "build": "vite build",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm assets:check && pnpm build",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm assets:check && pnpm build && pnpm live:check",
     "dev": "vite",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
+    "live:check": "vitexec --gpu ./scripts/live-check.probe.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
     "typescript": "7.0.2",
-    "vite": "8.1.5"
+    "vite": "8.1.5",
+    "vitexec": "0.1.17"
   }
 }

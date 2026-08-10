@@ -2,6 +2,13 @@
 
 ## 2026-08-09
 
+- **Proved mixed fallback techniques and the R3F example in a live browser** — A public compiled-Wasm integration loads
+  Bitmap Inter with Slug Font Awesome fallback and proves Rust partitions one paragraph into exact Bitmap `vec2` and
+  Slug `vec4` program draws without a user-facing technique selector. The bounded R3F Vite example now has a durable GPU
+  Chromium probe in its ordinary package check: it waits for authenticated fonts, verifies 13 laid-out glyphs as 11
+  visible records across two Rust-planned resource meshes, then clicks the real in-canvas Bitmap, MSDF, and Slug controls
+  through pointer events. TypeScript, React Compiler-aware lint, and the live interaction pass.
+
 - **Closed the Three command-buffer retry and ownership gaps** — Three now advances `consumedPlanRevision` only after
   successful plan application and automatically retries retained owned bytes before another engine update. Upload ranges
   clear once per plan then accumulate across origin restoration, presentation edits, and Rust patches. Exact retired
