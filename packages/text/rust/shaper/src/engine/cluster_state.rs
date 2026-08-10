@@ -238,9 +238,6 @@ impl ClusterArena {
             self.unsafe_before[cluster] = 0;
         }
         for shaped_run in shape.runs.iter().filter(|run| run.source_run == source_run) {
-            self.assign_shaped_run_ownership(runs, *shaped_run, cluster_start, cluster_end)?;
-        }
-        for shaped_run in shape.runs.iter().filter(|run| run.source_run == source_run) {
             let metrics = metrics_for(shaped_run.font_handle).ok_or(EngineError::InvalidRequest)?;
             if metrics.units_per_em == 0 {
                 return Err(EngineError::InvalidRequest);
@@ -259,12 +256,7 @@ impl ClusterArena {
                 if cluster < cluster_start || cluster >= cluster_end {
                     return Err(EngineError::InvalidRequest);
                 }
-                if self.source_runs[cluster] != source_run
-                    || self.binding_handles[cluster] != shaped_run.binding_handle
-                    || self.font_handles[cluster] != shaped_run.font_handle
-                {
-                    return Err(EngineError::InvalidRequest);
-                }
+                self.assign_cluster_ownership(cluster, *shaped_run)?;
                 self.shaped[cluster] = 1;
                 self.glyph_counts[cluster] = self.glyph_counts[cluster]
                     .checked_add(1)
@@ -273,6 +265,9 @@ impl ClusterArena {
                     u8::from(shape.glyph_flags[glyph] & GLYPH_UNSAFE_TO_BREAK != 0);
                 self.advances[cluster] += f64::from(shape.x_advances[glyph].unsigned_abs()) * scale;
             }
+        }
+        for shaped_run in shape.runs.iter().filter(|run| run.source_run == source_run) {
+            self.fill_glyphless_run_ownership(runs, *shaped_run, cluster_start, cluster_end)?;
         }
         let adjacency_start = usize::try_from(previous.glyph_starts[cluster_start])
             .map_err(|_| EngineError::InvalidRequest)?;
@@ -519,9 +514,9 @@ impl ClusterArena {
         let mut cluster = 0usize;
         for offset in 0..=text_length {
             while self
-                .starts
+                .ends
                 .get(cluster)
-                .is_some_and(|start| *start < offset as u32)
+                .is_some_and(|end| *end <= offset as u32)
             {
                 cluster += 1;
             }
@@ -542,9 +537,6 @@ impl ClusterArena {
         }
         reserve(&mut self.glyph_indices, shape.glyph_ids.len())?;
         self.glyph_indices.resize(shape.glyph_ids.len(), 0);
-        for shaped_run in &shape.runs {
-            self.assign_shaped_run_ownership(runs, *shaped_run, 0, self.starts.len())?;
-        }
         for shaped_run in &shape.runs {
             let source_index =
                 usize::try_from(shaped_run.source_run).map_err(|_| EngineError::InvalidRequest)?;
@@ -568,12 +560,7 @@ impl ClusterArena {
                     .get(glyph)
                     .ok_or(EngineError::InvalidRequest)?;
                 let cluster_index = self.cluster_at(cluster)?;
-                if self.source_runs[cluster_index] != shaped_run.source_run
-                    || self.binding_handles[cluster_index] != shaped_run.binding_handle
-                    || self.font_handles[cluster_index] != shaped_run.font_handle
-                {
-                    return Err(EngineError::InvalidRequest);
-                }
+                self.assign_cluster_ownership(cluster_index, *shaped_run)?;
                 self.shaped[cluster_index] = 1;
                 self.glyph_counts[cluster_index] = self.glyph_counts[cluster_index]
                     .checked_add(1)
@@ -593,6 +580,9 @@ impl ClusterArena {
                         .unsigned_abs(),
                 ) * scale;
             }
+        }
+        for shaped_run in &shape.runs {
+            self.fill_glyphless_run_ownership(runs, *shaped_run, 0, self.starts.len())?;
         }
         let mut glyph_start = 0_u32;
         for index in 0..self.glyph_starts.len() {
@@ -642,7 +632,28 @@ impl ClusterArena {
         Ok(())
     }
 
-    fn assign_shaped_run_ownership(
+    fn assign_cluster_ownership(
+        &mut self,
+        cluster: usize,
+        shaped_run: super::shaping_state::ShapedRun,
+    ) -> Result<(), EngineError> {
+        let source_slot = &mut self.source_runs[cluster];
+        let binding_slot = &mut self.binding_handles[cluster];
+        let font_slot = &mut self.font_handles[cluster];
+        if *source_slot == NO_SOURCE_RUN {
+            *source_slot = shaped_run.source_run;
+            *binding_slot = shaped_run.binding_handle;
+            *font_slot = shaped_run.font_handle;
+        } else if *source_slot != shaped_run.source_run
+            || *binding_slot != shaped_run.binding_handle
+            || *font_slot != shaped_run.font_handle
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    fn fill_glyphless_run_ownership(
         &mut self,
         runs: &[ShapingRun],
         shaped_run: super::shaping_state::ShapedRun,
@@ -659,14 +670,11 @@ impl ClusterArena {
             return Err(EngineError::InvalidRequest);
         }
         let cluster_start = self
-            .starts
-            .binary_search(&shaped_run.text_start)
-            .map_err(|_| EngineError::InvalidRequest)?;
-        let cluster_end = self
             .ends
-            .binary_search(&shaped_run.text_end)
-            .map(|index| index + 1)
-            .map_err(|_| EngineError::InvalidRequest)?;
+            .partition_point(|end| *end <= shaped_run.text_start);
+        let cluster_end = self
+            .starts
+            .partition_point(|start| *start < shaped_run.text_end);
         if cluster_start < allowed_start
             || cluster_end > allowed_end
             || cluster_start >= cluster_end
@@ -681,11 +689,6 @@ impl ClusterArena {
                 *source_slot = shaped_run.source_run;
                 *binding_slot = shaped_run.binding_handle;
                 *font_slot = shaped_run.font_handle;
-            } else if *source_slot != shaped_run.source_run
-                || *binding_slot != shaped_run.binding_handle
-                || *font_slot != shaped_run.font_handle
-            {
-                return Err(EngineError::InvalidRequest);
             }
         }
         Ok(())
@@ -724,7 +727,12 @@ impl ClusterArena {
             .get(usize::try_from(offset).map_err(|_| EngineError::InvalidRequest)?)
             .ok_or(EngineError::InvalidRequest)?;
         let index = usize::try_from(index).map_err(|_| EngineError::InvalidRequest)?;
-        if self.starts.get(index) != Some(&offset) {
+        if !self
+            .starts
+            .get(index)
+            .zip(self.ends.get(index))
+            .is_some_and(|(start, end)| *start <= offset && offset < *end)
+        {
             return Err(EngineError::InvalidRequest);
         }
         Ok(index)
@@ -989,6 +997,72 @@ mod tests {
         assert_eq!(clusters.glyph_counts, [1, 0]);
         assert_eq!(clusters.advances, [16.0, 0.0]);
         assert_eq!(clusters.flags[1] & CLUSTER_SAFE_BEFORE, 0);
+    }
+
+    #[test]
+    fn reordered_glyph_offset_maps_to_its_containing_grapheme() {
+        let text: Vec<u16> = "त्ये".encode_utf16().collect();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        assert_eq!(unicode.grapheme_boundaries(), &[0, 4]);
+        let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 4,
+            style,
+        }];
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end: 4,
+            script: u32::from_be_bytes(*b"Deva"),
+            direction: 4,
+            bidi_level: 0,
+            style,
+        }];
+        let shape = ShapeArena {
+            runs: vec![ShapedRun {
+                source_run: 0,
+                binding_handle: 19,
+                font_handle: 9,
+                text_start: 0,
+                text_end: 4,
+                glyph_start: 0,
+                glyph_count: 1,
+            }],
+            glyph_ids: vec![42],
+            clusters: vec![2],
+            x_advances: vec![1_000],
+            y_advances: vec![0],
+            x_offsets: vec![0],
+            y_offsets: vec![0],
+            glyph_flags: vec![GLYPH_UNSAFE_TO_BREAK],
+        };
+        let mut clusters = ClusterArena::default();
+        clusters
+            .build(
+                ClusterBuildInput {
+                    text: &text,
+                    text_unit_ids: &[1, 2, 3, 4],
+                    unicode: &unicode,
+                    styles: &styles,
+                    runs: &runs,
+                    shape: &shape,
+                },
+                |_| {
+                    Some(FontMetrics {
+                        units_per_em: 1_000,
+                        ascender: 800,
+                        descender: -200,
+                        line_gap: 0,
+                    })
+                },
+            )
+            .unwrap();
+
+        assert_eq!(clusters.index_at, [0, 0, 0, 0, 1]);
+        assert_eq!(clusters.glyph_counts, [1]);
+        assert_eq!(clusters.glyph_indices, [0]);
+        assert_eq!(clusters.source_runs, [0]);
     }
 
     #[test]

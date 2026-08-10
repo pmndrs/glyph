@@ -283,6 +283,74 @@ test('text_update advances missing clusters through an ordered font stack', asyn
   );
 });
 
+test('text_update appends a reordered Devanagari grapheme after a conjunct', async () => {
+  const [artifact, shaperWasm, abi] = await Promise.all([
+    readFile(
+      new URL(
+        '../../../../apps/benchmarks/fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb',
+        import.meta.url,
+      ),
+    ),
+    readFile(shaperWasmUrl),
+    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+  ]);
+  const validated = await validateFontArtifact(artifact);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  registerValidatedFont({ abi, fn, memory }, 202, validated);
+  registerSimpleBinding({ abi, fn, memory }, 1002, 202, validated, 72, 1);
+
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(0xea, 3, 0, 0));
+  assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
+  fn.deallocate(stack.pointer, stack.length);
+  const policyBytes = renderPolicyBytes(abi);
+  const policy = copyToWasm(memory, fn.allocate, policyBytes);
+  assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
+  fn.deallocate(policy.pointer, policy.length);
+  assert.equal(fn.createSession(29, 16 * 1024, 256 * 1024, 64), abi.status.ok);
+
+  const prefix = 'कर्म क्षेत्र में प्रगति निरंतर चलती है। प्र';
+  const appended = 'त्ये';
+  assert.equal(prefix.length, 43);
+  assert.equal(appended.length, 4);
+  const initial = engineStyleUpdateBytes(abi, {
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    text: utf16Units(prefix),
+    textEnd: prefix.length,
+    maxClusters: 86,
+    geometry: true,
+  });
+  let requestPointer = fn.requestPointer(29);
+  new Uint8Array(memory.buffer, requestPointer, initial.byteLength).set(initial);
+  let resultPointer = fn.textUpdate(29, requestPointer, initial.byteLength);
+  let result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
+  assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
+
+  const update = engineStyleUpdateBytes(abi, {
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    expectedEngineRevision: 1,
+    consumedPlanRevision: 1,
+    acknowledgedPublicationGeneration: 1,
+    text: utf16Units(appended),
+    textStart: prefix.length,
+    textEnd: prefix.length + appended.length,
+    maxClusters: 94,
+  });
+  requestPointer = fn.requestPointer(29);
+  new Uint8Array(memory.buffer, requestPointer, update.byteLength).set(update);
+  resultPointer = fn.textUpdate(29, requestPointer, update.byteLength);
+  result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
+  assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
+});
+
 test('shaper ownership stays scoped to its FontRegistry', async () => {
   const { artifact, shaperWasm } = await fixture();
   const firstRegistry = new FontRegistry();
@@ -367,7 +435,10 @@ function engineStyleUpdateBytes(
     consumedPlanRevision = 0,
     acknowledgedPublicationGeneration = 0,
     text = [],
+    textStart = 0,
     textEnd = text.length,
+    deleteCount = 0,
+    maxClusters = 2,
     removeRoot = false,
     geometry = false,
   },
@@ -408,7 +479,7 @@ function engineStyleUpdateBytes(
     'maxInlineObjects',
     'maxSlotsPerBand',
   ]) {
-    view.setUint32(request[field], field === 'maxClusters' ? 2 : 1, true);
+    view.setUint32(request[field], field === 'maxClusters' ? maxClusters : 1, true);
   }
   view.setUint32(request.maxOutputBytes, 64 * 1024, true);
   view.setUint32(request.paragraphMutationsOffset, paragraphRecordOffset, true);
@@ -431,6 +502,8 @@ function engineStyleUpdateBytes(
     view.setUint8(textRecordOffset + textRecord.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
     view.setUint8(textRecordOffset + textRecord.encoding, abi.engine.textEncodings.utf16Le);
     view.setUint32(textRecordOffset + textRecord.paragraphId, 1, true);
+    view.setUint32(textRecordOffset + textRecord.textStart, textStart, true);
+    view.setUint32(textRecordOffset + textRecord.deleteCount, deleteCount, true);
     view.setUint32(textRecordOffset + textRecord.insertOffset, textPayloadOffset, true);
     view.setUint32(textRecordOffset + textRecord.insertCount, text.length, true);
     for (const [index, unit] of text.entries()) view.setUint16(textPayloadOffset + index * 2, unit, true);
@@ -484,6 +557,12 @@ function engineStyleUpdateBytes(
     }
   }
   return bytes;
+}
+
+function utf16Units(value) {
+  const units = new Uint16Array(value.length);
+  for (let index = 0; index < value.length; index += 1) units[index] = value.charCodeAt(index);
+  return units;
 }
 
 function align(value, alignment) {
