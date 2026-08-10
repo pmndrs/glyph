@@ -48,6 +48,7 @@ export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps &
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
   readonly capacity?: StandaloneTextProperties<Technique>['capacity'];
+  readonly pixelSnapping?: boolean;
   readonly onError?: ((error: unknown) => void) | undefined;
   readonly ref?: Ref<ThreeText<Technique>>;
 };
@@ -113,13 +114,13 @@ export function Text<Technique extends AnyRasterTechnique>(input: R3fTextProps<T
       store.publish(undefined);
       created.dispose();
     };
-  }, [store]);
+  }, [properties.pixelSnapping, store]);
 
   useLayoutEffect(() => assignRef(forwardedRef, object), [forwardedRef, object]);
 
   useLayoutEffect(() => {
     if (object === undefined || desired.font === undefined) return;
-    const { capacity, ...update } = desired;
+    const { capacity, pixelSnapping: _pixelSnapping, ...update } = desired;
     if (!sameDesiredText(appliedRef.current, desired)) {
       object.set(update as StandaloneTextProperties<Technique>);
       appliedRef.current = desired;
@@ -152,6 +153,7 @@ export function TextGroup(input: R3fTextGroupProps): ReactElement | null {
       ...(properties.compositing === undefined ? {} : { compositing: properties.compositing }),
       ...(properties.renderOrder === undefined ? {} : { renderOrder: properties.renderOrder }),
       ...(properties.material === undefined ? {} : { material: properties.material }),
+      ...(properties.pixelSnapping === undefined ? {} : { pixelSnapping: properties.pixelSnapping }),
     });
     created.onError = (error: unknown) => onErrorRef.current?.(error);
     return created;
@@ -164,7 +166,7 @@ export function TextGroup(input: R3fTextGroupProps): ReactElement | null {
       store.publish(undefined);
       created.dispose();
     };
-  }, [store]);
+  }, [properties.pixelSnapping, store]);
 
   useLayoutEffect(() => assignRef(forwardedRef, object), [forwardedRef, object]);
 
@@ -348,6 +350,7 @@ function textProperties<Technique extends AnyRasterTechnique>(
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
     ...(properties.capacity === undefined ? {} : { capacity: properties.capacity }),
+    ...(properties.pixelSnapping === undefined ? {} : { pixelSnapping: properties.pixelSnapping }),
   });
 }
 
@@ -362,6 +365,7 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
     'rasterPixelRatio',
     'material',
     'capacity',
+    'pixelSnapping',
     'onError',
     'ref',
   ])
@@ -371,7 +375,8 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
 
 function groupObjectProperties(properties: R3fTextGroupProps): Object3DProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['capacity', 'compositing', 'material', 'children', 'onError', 'ref']) delete object[key];
+  for (const key of ['capacity', 'compositing', 'material', 'pixelSnapping', 'children', 'onError', 'ref'])
+    delete object[key];
   return object as Object3DProps;
 }
 

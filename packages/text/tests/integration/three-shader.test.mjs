@@ -67,6 +67,36 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   runtime.dispose();
 });
 
+test('Bitmap pixel snapping is an explicit opt-in graph specialization', async () => {
+  const registry = new FontRegistry();
+  const runtime = await createTextRuntime({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const clipPositions = [];
+  const material = defineTextMaterial((context) => {
+    clipPositions.push(context.shader.clipPosition);
+    return context.createDefaultMaterial();
+  });
+  const scene = new THREE.Scene();
+  const unsnapped = new Text({ font, material, text: 'A' });
+  const snapped = new Text({ font, material, pixelSnapping: true, text: 'B' });
+  scene.add(unsnapped, snapped);
+  scene.updateMatrixWorld();
+
+  assert.equal(clipPositions[0], TSL.modelViewProjection);
+  assert.notEqual(clipPositions[1], TSL.modelViewProjection);
+
+  unsnapped.dispose();
+  snapped.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 }

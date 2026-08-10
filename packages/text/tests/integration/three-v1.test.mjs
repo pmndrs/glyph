@@ -752,6 +752,42 @@ test('TextGroup atomically replaces child paragraphs without multiplying retaine
   runtime.dispose();
 });
 
+test('TextGroup grows aggregate glyph storage without reserving one aggregate-sized paragraph', async () => {
+  const registry = new FontRegistry();
+  const runtime = await createTextRuntime({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup({ capacity: { size: 4_096, policy: 'chunk' } });
+  const labels = Array.from({ length: 684 }, (_, index) => new Text({ font, text: `icon-${String(index)}` }));
+  group.add(...labels);
+  scene.add(group);
+  scene.updateMatrixWorld();
+
+  assert.equal(group.error, undefined);
+  assert.equal(group.textCount, labels.length);
+  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
+
+  for (let cycle = 0; cycle < 200; cycle += 1) {
+    for (let offset = 0; offset < 48; offset += 1) {
+      const index = (cycle * 23 + offset) % labels.length;
+      labels[index].text = `recycled-${String(cycle)}-${String(index)}`;
+    }
+    scene.updateMatrixWorld();
+    assert.equal(group.error, undefined, `recycling cycle ${String(cycle)} must remain publishable`);
+  }
+
+  group.dispose();
+  for (const label of labels) label.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 }
