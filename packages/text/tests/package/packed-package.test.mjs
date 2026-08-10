@@ -76,14 +76,14 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
   assert.match(serialWorkerHost, /type:\s*["']module["']/);
 
-  const cli = join(installedDirectory, 'bin/pmndrs-text-bake.js');
+  const cli = join(installedDirectory, 'bin/text.js');
   assert.notEqual((await stat(cli)).mode & 0o111, 0, 'the packed CLI must be executable');
   const cliHelp = spawnSync(process.execPath, [cli, '--help'], {
     cwd: join(temporaryDirectory, 'consumer'),
     encoding: 'utf8',
   });
   assert.equal(cliHelp.status, 0, cliHelp.stderr);
-  assert.match(cliHelp.stdout, /pmndrs-text-bake/);
+  assert.match(cliHelp.stdout, /^Usage: text <command>/);
 
   const commonJs = spawnSync(process.execPath, ['-e', "require('@pmndrs/text')"], {
     cwd: dirname(installedDirectory),

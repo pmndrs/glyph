@@ -2,11 +2,13 @@
 
 ## 2026-08-10
 
-- **Made multi-technique fonts one authored load and one CLI bake** — Direct `pmndrs-text-bake` arguments now accept a
+- **Made multi-technique fonts one authored load and one CLI bake** — Direct `text bake` arguments now accept a
   known input/output, shaping-font Unicode subsetting, Bitmap strikes, MSDF, Slug, and byte-exact check mode. The R3F
   hello-world example deletes its custom baker script and invokes only that published CLI for both checked assets. Its
   runtime surface now declares the three raster requests once per GLB and receives a position-preserving typed tuple;
-  the artifact is fetched and registered once while each technique retains its exact option and decoded-data type.
+  the artifact is fetched and registered once while each technique retains its exact option and decoded-data type. The
+  package now exposes one `text` executable with command-specific help and version output; `text glyphs` surfaces real
+  font glyph names as JSON or a bake-ready Unicode set while omitting synthetic `gidN` labels.
 
 - **Simplified publishing-size evidence** — The benchmark UI and Size Limit pull-request comment now share one strict
   nine-row projection: gzip for Core JS, Shaper Wasm, Three.js adapter JS, and Inter plus Font Awesome across Bitmap,

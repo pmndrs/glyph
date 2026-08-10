@@ -5,7 +5,7 @@
   "author": "Justin Walsh (https://github.com/thejustinwalsh)",
   "type": "module",
   "scripts": {
-    "bake": "pnpm --filter @pmndrs/text... build && node packages/text/dist/node/cli.js",
+    "bake": "pnpm --filter @pmndrs/text... build && node packages/text/bin/text.js bake",
     "dev": "pnpm --filter @pmndrs/text-benchmarks dev",
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
     "test": "pnpm --filter './packages/*' --if-present test && pnpm --filter './apps/*' --if-present test",

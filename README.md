@@ -256,11 +256,20 @@ Baking creates font metrics, glyph records, and technique resources before the a
 For a known local font, the CLI exposes the same path without a project-discovery module:
 
 ```sh
-pnpm exec pmndrs-text-bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --msdf --slug
+pnpm exec text bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --msdf --slug
 ```
 
 Add `--unicodes U+0020-007E` to subset the shaping font through `hb-subset`, or `--check` to rebuild temporarily and
 require byte-identical output.
+
+Use the font's retained `post`/CFF glyph names to find icon code points or produce a bake-ready Unicode set:
+
+```sh
+pnpm exec text glyphs fa-solid-900.ttf --name globe --json
+pnpm exec text glyphs fa-solid-900.ttf --name globe --name earth-americas --unicode-set
+```
+
+`text glyphs` requires `hb-info`; synthetic `gidN` labels are omitted rather than presented as font-authored names.
 
 ### Load, shape, and render
 

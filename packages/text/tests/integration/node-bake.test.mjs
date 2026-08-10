@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { link, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 
 import { bakeFont, bakeProject, NodeBakeError } from '@pmndrs/text/bake';
@@ -16,6 +16,10 @@ import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
 import { runCli } from '../../dist/node/cli.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
+const iconFontUrl = new URL(
+  '../../../../apps/benchmarks/fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf',
+  import.meta.url,
+);
 const goldenUrl = new URL('../fixtures/inter-bitmap-v0.json', import.meta.url);
 
 test('bakeFont writes exact combined embedded and external artifacts with complete reports', async (t) => {
@@ -232,6 +236,7 @@ test('the installed CLI is a thin JSON-reporting layer over bakeProject', async 
   const cli = new URL('../../dist/node/cli.js', import.meta.url);
   const result = await run(process.execPath, [
     cli.pathname,
+    'bake',
     '--project-root',
     root,
     '--output-root',
@@ -254,7 +259,7 @@ test('the CLI directly bakes and checks one known font from arguments', async (t
 
   const bake = captureIo();
   assert.equal(
-    await runCli(['--input', input, '--output', output, '--bitmap', '16', '--json'], bake.io),
+    await runCli(['bake', '--input', input, '--output', output, '--bitmap', '16', '--json'], bake.io),
     0,
     bake.stderr(),
   );
@@ -264,7 +269,7 @@ test('the CLI directly bakes and checks one known font from arguments', async (t
 
   const check = captureIo();
   assert.equal(
-    await runCli(['--input', input, '--output', output, '--bitmap', '16', '--check'], check.io),
+    await runCli(['bake', '--input', input, '--output', output, '--bitmap', '16', '--check'], check.io),
     0,
     check.stderr(),
   );
@@ -370,14 +375,55 @@ test('rejects a lying plugin descriptor before calling its baker or publishing o
 test('CLI help and malformed arguments are deterministic and side-effect free', async () => {
   const help = captureIo();
   assert.equal(await runCli(['--help'], help.io), 0);
-  assert.match(help.stdout(), /^Usage: pmndrs-text-bake/);
+  assert.match(help.stdout(), /^Usage: text <command>/);
+  assert.match(help.stdout(), /text <command> --help/);
   assert.equal(help.stderr(), '');
 
+  const bakeHelp = captureIo();
+  assert.equal(await runCli(['bake', '--help'], bakeHelp.io), 0);
+  assert.match(bakeHelp.stdout(), /^Usage:\n  text bake/);
+  assert.match(bakeHelp.stdout(), /U\+0020-007E,U\+00A0-00FF,U\+4E00-9FFF/);
+  assert.match(bakeHelp.stdout(), /Selects code points, not raw glyph IDs; requires hb-subset/);
+
+  const glyphHelp = captureIo();
+  assert.equal(await runCli(['glyphs', '--help'], glyphHelp.io), 0);
+  assert.match(glyphHelp.stdout(), /^Usage: text glyphs <font>/);
+  assert.match(glyphHelp.stdout(), /glyph names retained in its post or/);
+
+  const version = captureIo();
+  assert.equal(await runCli(['--version'], version.io), 0);
+  assert.match(version.stdout(), /^@pmndrs\/text \d+\.\d+\.\d+\n$/);
+
   const malformed = captureIo();
-  assert.equal(await runCli(['--output-root'], malformed.io), 2);
+  assert.equal(await runCli(['bake', '--output-root'], malformed.io), 2);
   assert.equal(malformed.stdout(), '');
   assert.match(malformed.stderr(), /^--output-root requires a value/);
-  assert.match(malformed.stderr(), /Usage: pmndrs-text-bake/);
+  assert.match(malformed.stderr(), /Usage:\n  text bake/);
+
+  const unknown = captureIo();
+  assert.equal(await runCli(['inspect'], unknown.io), 2);
+  assert.equal(unknown.stdout(), '');
+  assert.match(unknown.stderr(), /^Unknown command: inspect/);
+  assert.match(unknown.stderr(), /Usage: text <command>/);
+});
+
+test('the CLI surfaces font-provided icon names as JSON and reusable Unicode sets', async () => {
+  const json = captureIo();
+  assert.equal(await runCli(['glyphs', fileURLToPath(iconFontUrl), '--name', 'globe', '--json'], json.io), 0);
+  assert.deepEqual(JSON.parse(json.stdout()).glyphs, [
+    { unicode: 'U+F0AC', codePoint: 0xf0ac, glyphId: 537, name: 'globe' },
+    { unicode: 'U+1F310', codePoint: 0x1f310, glyphId: 537, name: 'globe' },
+  ]);
+
+  const unicodeSet = captureIo();
+  assert.equal(
+    await runCli(
+      ['glyphs', fileURLToPath(iconFontUrl), '--name', 'globe', '--name', 'earth-americas', '--unicode-set'],
+      unicodeSet.io,
+    ),
+    0,
+  );
+  assert.equal(unicodeSet.stdout(), 'U+F0AC,U+F57D,U+1F30E,U+1F310\n');
 });
 
 async function projectFixture(secondStrike = 16, options = {}) {
