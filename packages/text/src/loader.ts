@@ -24,6 +24,7 @@ import type {
   RegisteredRaster,
 } from './raster.js';
 import type { BakeProgressListener } from './bake.js';
+import type { RuntimeBakeRasterV0, RuntimeBakeUnicodeRangeV0 } from './internal/runtime-bake-protocol.js';
 
 const DEFAULT_MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
 const DEFAULT_MAX_BUFFER_VIEWS = 4_096;
@@ -50,6 +51,8 @@ export interface RuntimeFontBakeRequest {
   readonly source: Uint8Array;
   readonly sourceUrl: string;
   readonly bakedUrl?: string;
+  readonly unicodeRanges?: readonly RuntimeBakeUnicodeRangeV0[];
+  readonly rasters?: readonly RuntimeBakeRasterV0[];
   readonly signal?: AbortSignal;
   readonly onProgress?: BakeProgressListener;
 }
@@ -62,6 +65,8 @@ export interface FontLoaderOptions {
   readonly fetch?: typeof fetch;
   readonly development?: boolean;
   readonly runtimeBake?: RuntimeFontBake;
+  /** @internal A transformed runtime source cannot be authenticated or retained as the baked shaping source. */
+  readonly runtimeSourceIdentity?: 'original' | 'transformed';
   readonly onDiagnostic?: (diagnostic: FontLoadDiagnostic) => void;
   readonly onWarning?: (diagnostic: FontLoadDiagnostic) => void;
 }
@@ -374,6 +379,7 @@ export class FontLoader {
   readonly #baseUrl: URL | undefined;
   readonly #development: boolean;
   readonly #runtimeBake: RuntimeFontBake | undefined;
+  readonly #runtimeSourceIdentity: 'original' | 'transformed';
   readonly #onDiagnostic: ((diagnostic: FontLoadDiagnostic) => void) | undefined;
   readonly #onWarning: ((diagnostic: FontLoadDiagnostic) => void) | undefined;
   readonly #loads = new Map<string, SharedFontLoad>();
@@ -389,6 +395,7 @@ export class FontLoader {
     this.#baseUrl = resolveBaseUrl(options.baseUrl);
     this.#development = options.development ?? defaultDevelopmentMode();
     this.#runtimeBake = options.runtimeBake;
+    this.#runtimeSourceIdentity = options.runtimeSourceIdentity ?? 'original';
     this.#onDiagnostic = options.onDiagnostic;
     this.#onWarning = options.onWarning;
   }
@@ -487,7 +494,7 @@ export class FontLoader {
     return this.registry._registerAsset(baked, {
       ...(request.bakedUrl === undefined ? {} : { artifactUrl: request.bakedUrl }),
       sourceUrl: request.sourceUrl,
-      sourceBytes: source,
+      ...(this.#runtimeSourceIdentity === 'original' ? { sourceBytes: source } : {}),
       fetch: this.#fetch,
     });
   }

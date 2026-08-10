@@ -4,11 +4,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { FontLoader } from '@pmndrs/text';
+import { createTextRuntime, FontLoader } from '@pmndrs/text';
 import { bakeFont } from '@pmndrs/text/bake';
 import { bakeFontInWorker } from '@pmndrs/text/runtime-bake';
 import { createFontBaker } from '@pmndrs/text/bake';
 import { fontBakerWasmUrl } from '@pmndrs/text/bake';
+import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { msdf } from '@pmndrs/text/raster/msdf';
+import { slug } from '@pmndrs/text/raster/slug';
+import bitmapBaker from '../../dist/bakers/bitmap.js';
+import msdfBaker from '../../dist/bakers/msdf.js';
+import slugBaker from '../../dist/bakers/slug.js';
+import { resolveRasterBakePlan } from '../../dist/internal/raster-bake-plan.js';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
 const fixturePromise = Promise.all([
@@ -239,6 +246,108 @@ test('the Worker entry runs the portable baker and transfers the exact canonical
   assert.deepEqual(transfer, [value.artifacts[0].bytes]);
 });
 
+test('the Worker prepares once and matches the Node canonical GLB for every built-in raster', async (t) => {
+  const { source } = await fixturePromise;
+  const outputRoot = await mkdtemp(join(tmpdir(), 'pmndrs-text-runtime-subset-parity-'));
+  const output = join(outputRoot, 'Inter-ascii.font.glb');
+  t.after(() => rm(outputRoot, { recursive: true, force: true }));
+  const unicodeRanges = [{ start: 0x20, end: 0x7e }];
+  const plans = await Promise.all(
+    [
+      { baker: bitmapBaker, packaging: embeddedPackaging(), options: { strikes: [16] } },
+      { baker: msdfBaker, packaging: embeddedPackaging(), options: undefined },
+      { baker: slugBaker, packaging: embeddedPackaging(), options: undefined },
+    ].map(resolveRasterBakePlan),
+  );
+  await bakeFont({
+    input: new URL('Inter-Regular.ttf', fixtureDirectory),
+    output,
+    font: { fontFaceIndex: 0 },
+    unicodeRanges,
+    rasters: plans,
+  });
+  const expected = await readFile(output);
+
+  const originals = {
+    addEventListener: globalThis.addEventListener,
+    fetch: globalThis.fetch,
+    postMessage: globalThis.postMessage,
+  };
+  let receive;
+  const result = Promise.withResolvers();
+  globalThis.addEventListener = (type, listener) => {
+    if (type === 'message') receive = listener;
+  };
+  globalThis.fetch = async (input) => new Response(await readFile(new URL(String(input))));
+  globalThis.postMessage = (value, transfer) => {
+    if (value.type === 'bake-font-result-v0') result.resolve({ value, transfer });
+  };
+  t.after(() => {
+    restoreGlobal('addEventListener', originals.addEventListener);
+    restoreGlobal('fetch', originals.fetch);
+    restoreGlobal('postMessage', originals.postMessage);
+  });
+
+  await import(`../../dist/runtime-bake-worker.js?test=subset-raster-parity-${Date.now()}`);
+  receive({
+    data: {
+      type: 'bake-font-v0',
+      id: 23,
+      source: source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength),
+      font: { formatVersion: 0, fontFaceIndex: 0 },
+      unicodeRanges,
+      rasters: plans.map(({ baker, descriptor, rasterKey }) => ({
+        kind: baker.kind,
+        extension: baker.extension,
+        version: baker.version,
+        descriptor,
+        rasterKey,
+      })),
+    },
+  });
+  const { value, transfer } = await result.promise;
+  assert.equal(value.ok, true);
+  assert.equal(value.artifacts.length, 1);
+  assert.deepEqual(Buffer.from(value.artifacts[0].bytes), expected);
+  assert.deepEqual(transfer, [value.artifacts[0].bytes]);
+});
+
+test('one TextRuntime source load sends its normalized ranges and complete raster tuple once', async (t) => {
+  const { source } = await fixturePromise;
+  const baked = await readFile(
+    new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
+  );
+  const requests = [];
+  const runtime = await createTextRuntime({
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  t.after(() => runtime.dispose());
+  const runtimeBake = async (request) => {
+    requests.push(request);
+    return baked;
+  };
+  const [bitmapFont, msdfFont, slugFont] = await runtime.loadFont({
+    input: {
+      source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
+      runtimeBake,
+      unicodeRanges: [
+        { start: 0x41, end: 0x5a },
+        { start: 0x20, end: 0x7e },
+      ],
+    },
+    rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
+  });
+
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].unicodeRanges, [{ start: 0x20, end: 0x7e }]);
+  assert.deepEqual(
+    requests[0].rasters.map(({ kind }) => kind),
+    ['bitmap', 'msdf', 'slug'],
+  );
+  assert.equal(bitmapFont.font, msdfFont.font);
+  assert.equal(msdfFont.font, slugFont.font);
+});
+
 test('the Worker retries a failed Wasm fetch and retains the recovered core', async (t) => {
   const { source } = await fixturePromise;
   const originals = {
@@ -298,4 +407,8 @@ test('the Worker retries a failed Wasm fetch and retains the recovered core', as
 function restoreGlobal(key, value) {
   if (value === undefined) delete globalThis[key];
   else globalThis[key] = value;
+}
+
+function embeddedPackaging() {
+  return { artifact: 'embedded', pages: 'embedded' };
 }

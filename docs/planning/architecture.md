@@ -380,7 +380,10 @@ V0 requires:
 - broad-run, line-shape, paragraph-analysis, and width-layout caches;
 - GPU resources by font, raster, logical page, selected variant, and device.
 
-Persistent runtime-bake caching is deferred, but the key shape is reserved for source hash, descriptor hash, format/baker/generator versions, and selected raster.
+Runtime baking persists only the final validated canonical GLB in Worker-owned `CacheStorage`. The exact key includes the
+source hash, face, normalized Unicode ranges, ordered raster descriptors and keys, and format/baker/generator versions.
+The cache has an application-enforced 30-day TTL, 24-entry and 128 MiB total bounds, and a 64 MiB entry ceiling; storage
+failures are transparent misses. Preparation intermediates and partial raster results are never cached.
 
 ## Failure and warning model
 

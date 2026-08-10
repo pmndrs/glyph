@@ -32,7 +32,7 @@ pub(crate) fn build_font_glb(
         .copy_from_slice(&shaping.extents_availability);
 
     let document = json!({
-        "asset": { "version": "2.0", "generator": "@pmndrs/text/bake" },
+        "asset": { "version": "2.0", "generator": "@pmndrs/text" },
         "extensionsUsed": ["PMNDRS_font"],
         "extensionsRequired": ["PMNDRS_font"],
         "extensions": { "PMNDRS_font": {

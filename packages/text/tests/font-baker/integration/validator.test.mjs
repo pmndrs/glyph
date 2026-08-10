@@ -152,11 +152,10 @@ test('rejects malformed GLB framing before schema or payload work', async () => 
   ];
   for (const [code, bytes] of cases) await rejectsWithCode(bytes, code);
 
-  const padded = artifact.slice();
-  const jsonLength = readU32(padded, 12);
-  assert.equal(padded[20 + jsonLength - 1], 0x20);
-  padded[20 + jsonLength - 1] = 0;
-  await rejectsWithCode(padded, 'GLB_JSON');
+  const invalidJson = artifact.slice();
+  assert.equal(invalidJson[20], 0x7b);
+  invalidJson[20] = 0;
+  await rejectsWithCode(invalidJson, 'GLB_JSON');
 });
 
 test('covers every PMNDRS_font required field and raster-source union one field at a time', async () => {

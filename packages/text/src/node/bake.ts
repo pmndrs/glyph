@@ -13,7 +13,6 @@ import {
   type UnicodeRangeV0,
 } from '../font-baker/index.js';
 import { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
-import { validateFontArtifact } from '../font-baker/validator.js';
 
 export {
   FontBakeError,
@@ -39,12 +38,10 @@ import {
   type DiscoveryOptions,
   type ResolvedRasterBaker,
 } from '../discovery.js';
-import { composeFontBake } from '../internal/compose-bake.js';
-import { fontBakeDescriptorV0, soleCoreFontArtifact } from '../internal/core-bake-policy.js';
-import { normalizeUnicodeRanges } from '../internal/font-selection.js';
+import { fontBakeDescriptorV0 } from '../internal/core-bake-policy.js';
+import { bakeFontPipeline } from '../internal/font-bake-pipeline.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
-import type { Sha256Hex } from '../identity.js';
 
 export interface NodeBakeOptions<
   Rasters extends readonly RasterBakePlan<AnyRasterBakerModule>[] = readonly RasterBakePlan<AnyRasterBakerModule>[],
@@ -177,60 +174,21 @@ async function bakeFontWithResolvedPlans(
   timings.read = performance.now() - phase;
   options.signal?.throwIfAborted();
 
-  phase = performance.now();
   const fontBaker = await defaultFontBaker();
-  const preparation =
-    options.unicodeRanges === undefined
-      ? undefined
-      : fontBaker.prepare({
-          source: originalSource,
-          selection: {
-            formatVersion: 0,
-            fontFaceIndex: options.font.fontFaceIndex,
-            unicodeRanges: normalizeUnicodeRanges(options.unicodeRanges),
-          },
-        });
-  const source = preparation?.bytes ?? originalSource;
-  const fontFaceIndex = preparation?.report.fontFaceIndex ?? options.font.fontFaceIndex;
-  const core = fontBaker.bake({
-    source,
-    descriptor: fontBakeDescriptorV0(fontFaceIndex),
-  });
-  timings.coreBake = performance.now() - phase;
-  options.signal?.throwIfAborted();
-
-  phase = performance.now();
-  const coreValidation = await validateFontArtifact(soleCoreFontArtifact(core).bytes);
-  timings.validate += performance.now() - phase;
-  phase = performance.now();
-  const rasterInputs = [];
   const rasters = preparedRasters ?? (await Promise.all((options.rasters ?? []).map(resolveRasterBakePlan)));
-  for (const plan of rasters) {
-    options.signal?.throwIfAborted();
-    const raster = await plan.baker.bake({
-      font: {
-        source,
-        fontFaceIndex,
-        glyphCount: coreValidation.glyphCount,
-        shapingHash: coreValidation.shapingHash as Sha256Hex,
-      },
-      rasterKey: plan.rasterKey,
-      packaging: plan.packaging,
-      descriptor: plan.descriptor,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
-    rasterInputs.push({ raster, packaging: plan.packaging });
-  }
-  timings.rasterBake = performance.now() - phase;
-
-  phase = performance.now();
-  const composed = await composeFontBake(core, rasterInputs);
-  timings.compose = performance.now() - phase;
-  options.signal?.throwIfAborted();
-
-  phase = performance.now();
-  await validateFontArtifact(composed.artifacts[0]!.bytes);
-  timings.validate += performance.now() - phase;
+  const pipeline = await bakeFontPipeline({
+    fontBaker,
+    source: originalSource,
+    fontFaceIndex: options.font.fontFaceIndex,
+    ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+    rasters,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  });
+  timings.coreBake = pipeline.timings.coreBake;
+  timings.rasterBake = pipeline.timings.rasterBake;
+  timings.compose = pipeline.timings.compose;
+  timings.validate = pipeline.timings.validate;
+  const { composed, preparation } = pipeline;
   phase = performance.now();
   const report = finalizeTransport(composed.report, composed.artifacts);
   timings.transport = performance.now() - phase;
@@ -242,7 +200,7 @@ async function bakeFontWithResolvedPlans(
   const rssAfterBytes = process.memoryUsage.rss();
   return {
     ...report,
-    ...(preparation === undefined ? {} : { preparation: preparation.report }),
+    ...(preparation === undefined ? {} : { preparation }),
     execution: {
       timingsMs: { ...timings, total: performance.now() - started },
       memory: {
