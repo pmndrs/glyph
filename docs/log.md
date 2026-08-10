@@ -2,6 +2,12 @@
 
 ## 2026-08-10
 
+- **Fixed stacked-PR size reporting at the action boundary** — The pinned Size Limit action executes its configured
+  command directly rather than through a shell, so the compatibility pipe had been passed to the measurement script as
+  inert arguments and the action received the full report object. The workflow now supplies the same base-compatible
+  adapter through an explicit `sh -c` boundary. Executing the exact parsed workflow command locally emits 39 validated
+  `{name, size}` rows.
+
 - **Closed detached WebGL2 PBO updates** — The complete Presentation matrix exposed a deterministic transparent Zoom Text
   frame on forced WebGL2 Bitmap. Three's PBO setup had replaced each storage attribute array with a padded retained copy,
   while later Rust command-buffer patches still changed only canonical storage. Dirty patches now copy their exact byte
