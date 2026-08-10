@@ -85,7 +85,7 @@ test:
 ```txt
 @pmndrs/text           core, loading, shaping, layout, paragraph batches, target protocol
 @pmndrs/text/three     package-owned Three.js integration
-@pmndrs/text/r3f       package-owned React Three Fiber integration over /three
+@pmndrs/text/react     package-owned React integration over /three through React Three Fiber
 @pmndrs/text/typegpu   package-owned TypeGPU programs and direct engine
 @pmndrs/text-gpucat    external gpucat objects, resources, programs, and target
 ```

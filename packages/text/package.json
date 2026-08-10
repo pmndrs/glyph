@@ -38,9 +38,9 @@
       "types": "./dist/three/slug.d.ts",
       "import": "./dist/three/slug.js"
     },
-    "./r3f": {
-      "types": "./dist/r3f.d.ts",
-      "import": "./dist/r3f.js"
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
     },
     "./raster/bitmap": {
       "types": "./dist/raster/bitmap-technique.d.ts",

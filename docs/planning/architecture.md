@@ -248,7 +248,7 @@ The React integration owns no shaping, line-breaking, baking, raster decoding, s
 
 ```mermaid
 flowchart LR
-  React["@pmndrs/text/r3f"] --> Three["@pmndrs/text/three"] --> Core["@pmndrs/text"]
+  React["@pmndrs/text/react"] --> Three["@pmndrs/text/three"] --> Core["@pmndrs/text"]
   TypeGPU["@pmndrs/text/typegpu"] --> Core
   Gpucat["@pmndrs/text-gpucat"] --> Core
   Core --> Registry["asset validator / registry"]

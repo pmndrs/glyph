@@ -39,7 +39,7 @@ query result types. Rust owns shaping, bidi, line composition, positioning, inst
 command buffer. A renderer integration owns synchronization and GPU realization.
 
 Applications using Three.js normally import scene objects from `@pmndrs/text/three` or React components from
-`@pmndrs/text/r3f`; they do not drive the Rust engine directly.
+`@pmndrs/text/react`; they do not drive the Rust engine directly.
 
 ## Runtime and font loading
 
@@ -232,4 +232,4 @@ The following experimental V0 surfaces are not part of the current API:
 - `@pmndrs/text/typegpu` and its duplicate batch executor.
 
 TypeGPU will be rebuilt against the Rust render plan rather than retaining the removed TypeScript batch model. Use the
-[Three.js API](three-api.md) for the maintained renderer and `@pmndrs/text/r3f` for React.
+[Three.js API](three-api.md) for the maintained renderer and `@pmndrs/text/react` for React.

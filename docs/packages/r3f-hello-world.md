@@ -5,7 +5,7 @@ description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Sl
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/text-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:42b2be36df44e9b5e058eae1a06824f1aca5a6f3a81e051ba5b63aa68dfd21fd'
+source_digest: 'sha256:78ac230377232f8690c61f0daa8c129acfc80de1dd163186dbd2bd971cec70ae'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -16,20 +16,22 @@ sources:
     title: Public R3F technique and fallback example
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T22:18:30Z'
+  at: '2026-08-10T22:52:27Z'
 ---
 
 # Package reference: `@pmndrs/text-r3f-hello-world`
 
 This private Vite application is the minimal product-shaped React Three Fiber example. One full-page canvas renders
-`Hello world` through the public `@pmndrs/text/r3f` `Text` component and resolves a Font Awesome globe through an ordered
+`Hello world` through the public `@pmndrs/text/react` `Text` component and resolves a Font Awesome globe through an ordered
 font stack. One `App` component owns the font loads, technique state, three React `Activity` branches, and its in-canvas
 MSDF controls. Each hidden branch pre-renders a complete `TextGroup` and world `Text`; changing technique reveals the
 already committed Bitmap, MSDF, or Slug branch rather than initializing one after the click. The example does not retain
 a second renderer path or manually pack glyph data. The UI `TextGroup` batches its labels explicitly. The controls sit
 in one centered row at the top of the viewport, while the world copy remains centered in the available canvas. Each
-button needs only its own transform group for its background and label; neither text layer opts into independent
-compositing because authored order is the honest default for this small scene.
+button needs only its own transform group for its background and label; a shared TSL capsule mask rounds the three plane
+backgrounds without tessellated shape geometry. Inter labels use a 44-unit shaped line box, centered font metrics, and
+tracked uppercase text. Neither text layer opts into independent compositing because authored order is the honest default
+for this small scene.
 
 The checked-in assets are deliberately bounded at source before baking:
 

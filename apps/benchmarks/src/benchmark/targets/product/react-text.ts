@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 
 import type { LoadedFont, ParagraphLayout } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
-import { Text, useFont } from '@pmndrs/text/r3f';
+import { Text, useFont } from '@pmndrs/text/react';
 import type { LoadedFontRequest, ParagraphContentBox, Text as CoreText } from '@pmndrs/text/three';
 
 import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json';

@@ -54,7 +54,12 @@ material implementation.
 const loader = new FontLoader();
 const font = await loader.loadAsync({
   input: { baked: '/fonts/inter-msdf.font.glb' },
-  raster: { technique: msdf, options: { /* technique options */ } },
+  raster: {
+    technique: msdf,
+    options: {
+      /* technique options */
+    },
+  },
 });
 ```
 
@@ -115,11 +120,11 @@ application asserts that blending order is irrelevant.
 
 Capacity policy controls the instance arena:
 
-| Policy | Behavior |
-| --- | --- |
-| `grow` | Grow retained storage to fit the group. |
+| Policy  | Behavior                                                    |
+| ------- | ----------------------------------------------------------- |
+| `grow`  | Grow retained storage to fit the group.                     |
 | `chunk` | Use bounded chunks when the group exceeds the initial size. |
-| `fixed` | Reject an update that exceeds the declared capacity. |
+| `fixed` | Reject an update that exceeds the declared capacity.        |
 
 The default group capacity is 4,096 glyphs with `chunk` policy. A standalone `Text` defaults to 256 glyphs with `grow`
 policy. `setCapacity()` changes the retained capacity policy without changing text semantics.
@@ -250,7 +255,7 @@ are moved into another group.
 
 ## React Three Fiber
 
-`@pmndrs/text/r3f` exports `<Text>`, `<TextGroup>`, and `useFont`. Components preserve the Three ownership and batching
+`@pmndrs/text/react` exports `<Text>`, `<TextGroup>`, and `useFont`. Components preserve the Three ownership and batching
 semantics above. Nested R3F `<Text>` values flatten into formatted spans; an outer text requires a font, while nested spans
 may override it. The maintained renderer target is `@react-three/fiber/webgpu`, which inherits Three's WebGL fallback.
 
