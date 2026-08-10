@@ -4,6 +4,8 @@ export async function runBenchmarkTest(options: { readonly runtimePackagesReady?
   if (!options.runtimePackagesReady) await buildRuntimePackages();
   await runNodeScript('scripts/measure-package-sizes.mts', ['--check']);
   await runNodeScript('scripts/check-paragraph-contract-fixtures.mts');
+  await runNodeScript('scripts/generate-paragraph-bidi-contract.mts', ['--check']);
+  await runNodeScript('scripts/generate-paragraph-cjk-contract.mts', ['--check']);
   await runNodeScript('node_modules/vitest/vitest.mjs', ['run']);
   await run(process.execPath, ['--test', 'scripts/workflows.test.mts']);
   await runNodeScript('scripts/run-headless.mts', [

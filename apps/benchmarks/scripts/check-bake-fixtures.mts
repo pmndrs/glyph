@@ -15,6 +15,8 @@ const fixtureChecks = [
   'generate-mtsdf-render-fixture.mts',
   'generate-slug-render-fixture.mts',
   'generate-paragraph-conformance-font.mts',
+  'generate-paragraph-bidi-contract.mts',
+  'generate-paragraph-cjk-contract.mts',
 ] as const;
 
 export async function checkBakeFixtures(): Promise<void> {
