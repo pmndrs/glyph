@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 import type { AnyRasterBakerModule, RasterBakePlan } from '../bake.js';
 import type { UnicodeRangeV0 } from '../font-baker/index.js';
+import { normalizeUnicodeRanges } from '../internal/font-selection.js';
 import {
   bakeFont,
   bakeProject,
@@ -373,18 +374,7 @@ function parseUnicodeSet(value: string): readonly UnicodeRangeV0[] {
     }
     return { start, end };
   });
-  if (ranges.length === 0) throw new TypeError('--unicodes requires at least one range');
-  ranges.sort((left, right) => left.start - right.start || left.end - right.end);
-  const normalized: UnicodeRangeV0[] = [];
-  for (const range of ranges) {
-    const previous = normalized.at(-1);
-    if (previous !== undefined && range.start <= previous.end + 1) {
-      normalized[normalized.length - 1] = { start: previous.start, end: Math.max(previous.end, range.end) };
-    } else {
-      normalized.push(range);
-    }
-  }
-  return normalized;
+  return normalizeUnicodeRanges(ranges);
 }
 
 async function bakeDirect(options: DirectBakeArguments): Promise<NodeFontBakeReport> {
