@@ -620,8 +620,8 @@ async function createComparisonWorkloadRuntime(
         workloadChanged ? 0 : performance.now() - animationEpoch,
         options.textLadderSpecimen,
         nextCompanionFonts.map(({ loaded }) => loaded),
-        initialIconWindow?.scrollX ?? (workloadChanged ? 0 : -scene.position.x),
-        initialIconWindow?.scrollY ?? (workloadChanged ? 0 : scene.position.y),
+        initialIconWindow?.scrollX ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollX ?? 0)),
+        initialIconWindow?.scrollY ?? (workloadChanged ? 0 : (iconGridInstance?.view().scrollY ?? 0)),
       );
       const nextRoot = reuseBatchRoot ? previousRoot : createBatchRoot(next.workload);
       const scheduledAt = performance.now();
@@ -650,10 +650,13 @@ async function createComparisonWorkloadRuntime(
         configuration = next;
         committedContentWidth = comparisonWorkloadContentWidth(next, width);
         if (workloadChanged) {
-          // Scene transforms belong to the outgoing workload. Text Ladder exits by translating the shared scene,
-          // while Icon Grid pans it; every newly mounted workload must start from its own explicit view defaults.
-          scene.position.set(-(initialIconWindow?.scrollX ?? 0), initialIconWindow?.scrollY ?? 0, 0);
+          // Scene transforms belong to the outgoing workload. Every newly mounted workload starts with an identity
+          // content transform; Icon Grid scrolls its camera so retained Text transforms remain stable.
+          scene.position.set(0, 0, 0);
           camera = nextCamera;
+          if (next.workload === 'icon-grid' && nextIconGridInstance !== undefined) {
+            applyIconGridCamera(camera, nextIconGridInstance.view());
+          }
           animationEpoch = performance.now();
           zoomAnimationState.phraseIndex = 0;
           zoomAnimationState.phraseRevision = 0;
@@ -677,6 +680,7 @@ async function createComparisonWorkloadRuntime(
         });
         if (next.workload === 'icon-grid') {
           iconGridInstance?.settle(next, { height, width }, scene);
+          if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance.view());
         }
       } catch (error) {
         if (reuseBatchRoot) {
@@ -733,6 +737,7 @@ async function createComparisonWorkloadRuntime(
       ) {
         if (iconGridInstance === undefined) throw new Error('icon grid retained update lost its workload instance');
         await iconGridInstance.reconfigure(configuration, next, { height, width }, scene);
+        applyIconGridCamera(camera, iconGridInstance.view());
         configuration = next;
         committedContentWidth = undefined;
         revision += 1;
@@ -858,6 +863,7 @@ async function createComparisonWorkloadRuntime(
             animationRate(configuration),
             onError,
           );
+          if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance.view());
         }
         if (
           renderScene &&
@@ -910,7 +916,11 @@ async function createComparisonWorkloadRuntime(
         const activeZoomEntry =
           configuration.workload === 'zoom-text' ? entries[zoomAnimationState.phraseIndex] : undefined;
         const zoomScale = activeZoomEntry?.node.scale.x ?? 1;
-        measureVisibleEntries(entries, batchRoot, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
+        if (configuration.workload === 'icon-grid') {
+          measureIconGridRenderMetrics(entries, batchRoot, visibleEntryMetrics, visibleGeometryScratch);
+        } else {
+          measureVisibleEntries(entries, batchRoot, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
+        }
         const effectiveCssFontSize =
           configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : configuration.fontSize;
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
@@ -1057,7 +1067,10 @@ async function createComparisonWorkloadRuntime(
       panBy(deltaX, deltaY) {
         if (closing || disposed) return;
         if (configuration.workload === 'icon-grid') {
-          return iconGridInstance?.panBy(configuration, { height, width }, scene, deltaX, deltaY, onError);
+          if (iconGridInstance === undefined) return;
+          const applied = iconGridInstance.panBy(configuration, { height, width }, scene, deltaX, deltaY, onError);
+          applyIconGridCamera(camera, iconGridInstance.view());
+          return applied;
         }
         const horizontal = finite(deltaX, 'workload horizontal pan');
         const vertical = finite(deltaY, 'workload vertical pan');
@@ -1067,6 +1080,7 @@ async function createComparisonWorkloadRuntime(
       resetView() {
         if (configuration.workload === 'icon-grid') {
           iconGridInstance?.resetView(configuration, { height, width }, scene, onError);
+          if (iconGridInstance !== undefined) applyIconGridCamera(camera, iconGridInstance.view());
         } else {
           scene.position.set(0, 0, 0);
         }
@@ -1616,6 +1630,27 @@ function measureVisibleEntries(
   }
 }
 
+function measureIconGridRenderMetrics(
+  entries: readonly WorkloadEntry[],
+  batchRoot: THREE.Object3D,
+  metrics: MutableVisibleEntryMetrics,
+  geometries: Set<THREE.InstancedBufferGeometry>,
+): void {
+  metrics.drawCount = 0;
+  metrics.glyphCount = 0;
+  metrics.layoutHeight = 0;
+  metrics.layoutWidth = 0;
+  metrics.lineCount = 0;
+  metrics.missingGlyphCount = 0;
+  metrics.sourceTextLength = 0;
+  geometries.clear();
+  measureVisibleObject(batchRoot, metrics, geometries);
+  for (const entry of entries) {
+    if (!entry.node.visible) continue;
+    metrics.sourceTextLength += entry.sourceText.length;
+  }
+}
+
 function measureVisibleObject(
   object: THREE.Object3D,
   metrics: MutableVisibleEntryMetrics,
@@ -1667,6 +1702,17 @@ function createWorkloadCamera(
   camera.position.z = 500;
   camera.updateProjectionMatrix();
   return camera;
+}
+
+function applyIconGridCamera(
+  camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
+  view: { readonly scrollX: number; readonly scrollY: number },
+): void {
+  if (!(camera instanceof THREE.OrthographicCamera)) {
+    throw new TypeError('icon grid requires an orthographic camera');
+  }
+  camera.position.x = view.scrollX;
+  camera.position.y = -view.scrollY;
 }
 
 function resizeWorkloadCamera(
