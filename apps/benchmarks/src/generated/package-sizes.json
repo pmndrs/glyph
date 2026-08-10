@@ -21,22 +21,22 @@
       "label": "Text engine Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "1f8e820b08aeb8e83cd113a2613b8f1aef45f3b2a65303af06e8405f7ece5e7c",
-      "rawBytes": 1160543,
-      "minifiedBytes": 1160543,
-      "gzipBytes": 443055,
-      "brotliBytes": 348784
+      "sha256": "540db0e6eb37c3135f40b0a4ec40c0a5b544080d329bef722d3069a88ff9808e",
+      "rawBytes": 1160323,
+      "minifiedBytes": 1160323,
+      "gzipBytes": 442570,
+      "brotliBytes": 348361
     },
     {
       "id": "renderer-neutral-core-total",
       "label": "Renderer-neutral core total (JS + Wasm)",
       "status": "measured",
       "format": "aggregate",
-      "sha256": "3498f8e1044af251b1b4856126b26343f2253b202ac855569975e363a2df66fe",
-      "rawBytes": 1248941,
-      "minifiedBytes": 1224700,
-      "gzipBytes": 460901,
-      "brotliBytes": 364253
+      "sha256": "58d2185070062f36a2c230abc2960945a6d685c1de5e8190827e8c876ab20163",
+      "rawBytes": 1248721,
+      "minifiedBytes": 1224480,
+      "gzipBytes": 460416,
+      "brotliBytes": 363830
     },
     {
       "id": "three-runtime-js",
@@ -54,11 +54,11 @@
       "label": "Complete Three text renderer total (adapter JS + Wasm; peers external)",
       "status": "measured",
       "format": "aggregate",
-      "sha256": "d3bc862e2085388da122bd41eb21c93575fb820d2ac13eb9d9ba725d21eea86e",
-      "rawBytes": 1487569,
-      "minifiedBytes": 1376213,
-      "gzipBytes": 498922,
-      "brotliBytes": 395786
+      "sha256": "a2241aa7e70b625264c7c5a98dfe4ddefa4a11790558bd3c941e3be1a3eaec40",
+      "rawBytes": 1487349,
+      "minifiedBytes": 1375993,
+      "gzipBytes": 498437,
+      "brotliBytes": 395363
     },
     {
       "id": "font-inter-bitmap-16-32",
@@ -131,66 +131,66 @@
       "label": "Three + engine + Inter Bitmap delivery total",
       "status": "measured",
       "format": "aggregate",
-      "sha256": "d4c76716d543aa8aaf9a7407955ee874542bae490d847b6d617d87c8b1b564f7",
-      "rawBytes": 4637217,
-      "minifiedBytes": 4525861,
-      "gzipBytes": 1057230,
-      "brotliBytes": 816376
+      "sha256": "59d04c9b022855ab6ec0cdbebc3606f734216afde578ee216871ad02355238f4",
+      "rawBytes": 4636997,
+      "minifiedBytes": 4525641,
+      "gzipBytes": 1056745,
+      "brotliBytes": 815953
     },
     {
       "id": "delivery-three-inter-mtsdf",
       "label": "Three + engine + Inter MTSDF delivery total",
       "status": "measured",
       "format": "aggregate",
-      "sha256": "1fd846dedac5fbe45066dae32611aac869f52358202e89a9159f93714a9d58fa",
-      "rawBytes": 40835281,
-      "minifiedBytes": 40723925,
-      "gzipBytes": 7297334,
-      "brotliBytes": 3636158
+      "sha256": "63fc9b945f732839a48a7bb011d2e6d246e749445097e0f5a1fcc45c01e082b3",
+      "rawBytes": 40835061,
+      "minifiedBytes": 40723705,
+      "gzipBytes": 7296849,
+      "brotliBytes": 3635735
     },
     {
       "id": "delivery-three-inter-slug",
       "label": "Three + engine + Inter Slug delivery total",
       "status": "measured",
       "format": "aggregate",
-      "sha256": "e38722542434828c543275913899e8e9f169b1c4778de583229326c47463198c",
-      "rawBytes": 4932485,
-      "minifiedBytes": 4821129,
-      "gzipBytes": 1117409,
-      "brotliBytes": 805821
+      "sha256": "6256468889c21d6e3ad94e4c5c3ce8f6c42a5b36af4b8c4fbbf0c048362100a9",
+      "rawBytes": 4932265,
+      "minifiedBytes": 4820909,
+      "gzipBytes": 1116924,
+      "brotliBytes": 805398
     },
     {
       "id": "delivery-three-icons-bitmap",
       "label": "Three + engine + Font Awesome Bitmap delivery total",
       "status": "measured",
       "format": "aggregate",
-      "sha256": "19b75efa511f46f97002bd3b5e16b13489862808ad51dcebc407faa321935eb1",
-      "rawBytes": 3869301,
-      "minifiedBytes": 3757945,
-      "gzipBytes": 948969,
-      "brotliBytes": 751335
+      "sha256": "7f5bccf5142cac9a26003bdcbb8c57b39695fb087eb5f825f3de39e2e8e10007",
+      "rawBytes": 3869081,
+      "minifiedBytes": 3757725,
+      "gzipBytes": 948484,
+      "brotliBytes": 750912
     },
     {
       "id": "delivery-three-icons-mtsdf",
       "label": "Three + engine + Font Awesome MTSDF delivery total",
       "status": "measured",
       "format": "aggregate",
-      "sha256": "654bdbbde7c4885cb63fe20a0df0dfc264d7b1fe58123e8bd21c076639d5ae50",
-      "rawBytes": 34068469,
-      "minifiedBytes": 33957113,
-      "gzipBytes": 7726746,
-      "brotliBytes": 3720689
+      "sha256": "1368c4b698500316e45208bb004138a2bebb33d6d94c6c2d40aaddcd733248e0",
+      "rawBytes": 34068249,
+      "minifiedBytes": 33956893,
+      "gzipBytes": 7726261,
+      "brotliBytes": 3720266
     },
     {
       "id": "delivery-three-icons-slug",
       "label": "Three + engine + Font Awesome Slug delivery total",
       "status": "measured",
       "format": "aggregate",
-      "sha256": "17a90f2032fd34f69c48cb60ee8ed7e813bcde3d2c831b7c517782961085a909",
-      "rawBytes": 4432981,
-      "minifiedBytes": 4321625,
-      "gzipBytes": 1156934,
-      "brotliBytes": 880784
+      "sha256": "675dfb1a1c294921af36f3672bd4f0d3a09014649fc12fb23ac82b548e1579a3",
+      "rawBytes": 4432761,
+      "minifiedBytes": 4321405,
+      "gzipBytes": 1156449,
+      "brotliBytes": 880361
     },
     {
       "id": "font-validator-js",

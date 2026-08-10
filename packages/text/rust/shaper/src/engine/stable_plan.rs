@@ -9,6 +9,7 @@ use alloc::vec::Vec;
 use core::mem;
 
 use super::{
+    plan_draw::{GlyphDraw, PlanDrawError, push_glyph_draw},
     plan_input::{
         PlanInputError, draw_fields_compatible, indexed_span_bounds, span_bounds, validate_glyph,
         validate_input,
@@ -26,7 +27,7 @@ use super::{
     },
     render_plan::{
         BUFFER_STABLE_INDIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
-        POLICY_BUFFER_ORDER, PRIMITIVE_GLYPH, PatchRecord, PrimitiveRecord, RESOURCE_ACTION_CREATE,
+        POLICY_BUFFER_ORDER, PatchRecord, PrimitiveRecord, RESOURCE_ACTION_CREATE,
         RESOURCE_ACTION_RETAIN, RETIRE_BUFFER, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView,
         ResourceRecord, RetirementRecord,
     },
@@ -76,6 +77,15 @@ impl From<PackingError> for StablePlanError {
             PackingError::CapacityExceeded => Self::CapacityExceeded,
             PackingError::InvalidIdentity => Self::InvalidIdentity,
             PackingError::Policy(error) => Self::PolicyExecution(error),
+        }
+    }
+}
+
+impl From<PlanDrawError> for StablePlanError {
+    fn from(error: PlanDrawError) -> Self {
+        match error {
+            PlanDrawError::AllocationFailed => Self::AllocationFailed,
+            PlanDrawError::ArithmeticOverflow => Self::ArithmeticOverflow,
         }
     }
 }
@@ -1426,65 +1436,40 @@ impl StablePlanCompiler {
                         && resource.generation == first.resource_generation
                 })
                 .ok_or(StablePlanError::InvalidResource)?;
-            let primitive_start = self.primitives.len();
-            reserve(&mut self.primitives, 1)?;
-            self.primitives.push(PrimitiveRecord {
-                id: first.stable_id,
-                kind: PRIMITIVE_GLYPH,
-                technique_id: first.technique.0,
-                resource_id: first.resource_id,
-                resource_generation: first.resource_generation,
-                program_id: batch.key.program_id,
-                program_variant: first.program_variant,
-                record_count: count,
-                buffer_id: pending.order_buffer_id,
-                record_index: first_record,
-                logical_order: u32::try_from(input_index)
-                    .map_err(|_| StablePlanError::ArithmeticOverflow)?,
-                clip_id: first.clip_id,
-                semantic_id: if context.input.glyphs[input_index..end]
-                    .iter()
-                    .all(|glyph| glyph.semantic_id == first.semantic_id)
-                {
-                    first.semantic_id
-                } else {
-                    0
+            push_glyph_draw(
+                &mut self.primitives,
+                &mut self.draws,
+                GlyphDraw {
+                    glyph: first,
+                    program_id: batch.key.program_id,
+                    record_count: count,
+                    buffer_id: pending.order_buffer_id,
+                    record_index: first_record,
+                    logical_order: input_index,
+                    semantic_id: if context.input.glyphs[input_index..end]
+                        .iter()
+                        .all(|glyph| glyph.semantic_id == first.semantic_id)
+                    {
+                        first.semantic_id
+                    } else {
+                        0
+                    },
+                    inline_start,
+                    block_start,
+                    inline_extent,
+                    block_extent,
+                    material_id: if split_material { first.material_id } else { 0 },
+                    transform_id: if split_transform {
+                        first.transform_id
+                    } else {
+                        0
+                    },
+                    buffer_start: pending.buffer_start,
+                    buffer_count: u32::from(pending.buffer_count),
+                    resource_start,
+                    indirect: true,
                 },
-                inline_start,
-                block_start,
-                inline_extent,
-                block_extent,
-                ..PrimitiveRecord::default()
-            });
-            reserve(&mut self.draws, 1)?;
-            self.draws.push(DrawRecord {
-                id: first.stable_id,
-                program_id: batch.key.program_id,
-                program_variant: first.program_variant,
-                material_id: if split_material { first.material_id } else { 0 },
-                clip_id: first.clip_id,
-                depth_key: first.depth_key,
-                transform_id: if split_transform {
-                    first.transform_id
-                } else {
-                    0
-                },
-                primitive_start: u32::try_from(primitive_start)
-                    .map_err(|_| StablePlanError::ArithmeticOverflow)?,
-                primitive_count: 1,
-                buffer_start: pending.buffer_start,
-                buffer_count: u32::from(pending.buffer_count),
-                resource_start: u32::try_from(resource_start)
-                    .map_err(|_| StablePlanError::ArithmeticOverflow)?,
-                resource_count: 1,
-                order_token: u32::try_from(input_index)
-                    .map_err(|_| StablePlanError::ArithmeticOverflow)?,
-                indirect_buffer_id: pending.order_buffer_id,
-                indirect_offset: first_record
-                    .checked_mul(4)
-                    .ok_or(StablePlanError::ArithmeticOverflow)?,
-                ..DrawRecord::default()
-            });
+            )?;
             input_index = end;
         }
         Ok(())
@@ -1545,56 +1530,33 @@ impl StablePlanCompiler {
                 } else {
                     0
                 };
-                let primitive_start = self.primitives.len();
-                reserve(&mut self.primitives, 1)?;
-                self.primitives.push(PrimitiveRecord {
-                    id: first.stable_id,
-                    kind: PRIMITIVE_GLYPH,
-                    technique_id: first.technique.0,
-                    resource_id: first.resource_id,
-                    resource_generation: first.resource_generation,
-                    program_id: key.program_id,
-                    program_variant: first.program_variant,
-                    record_count: count,
-                    buffer_id: pending.order_buffer_id,
-                    record_index: first_record,
-                    logical_order: input_indices[start],
-                    clip_id: first.clip_id,
-                    semantic_id,
-                    inline_start,
-                    block_start,
-                    inline_extent,
-                    block_extent,
-                    ..PrimitiveRecord::default()
-                });
-                reserve(&mut self.draws, 1)?;
-                self.draws.push(DrawRecord {
-                    id: first.stable_id,
-                    program_id: key.program_id,
-                    program_variant: first.program_variant,
-                    material_id: if split_material { first.material_id } else { 0 },
-                    clip_id: first.clip_id,
-                    depth_key: first.depth_key,
-                    transform_id: if split_transform {
-                        first.transform_id
-                    } else {
-                        0
+                push_glyph_draw(
+                    &mut self.primitives,
+                    &mut self.draws,
+                    GlyphDraw {
+                        glyph: first,
+                        program_id: key.program_id,
+                        record_count: count,
+                        buffer_id: pending.order_buffer_id,
+                        record_index: first_record,
+                        logical_order: first_input,
+                        semantic_id,
+                        inline_start,
+                        block_start,
+                        inline_extent,
+                        block_extent,
+                        material_id: if split_material { first.material_id } else { 0 },
+                        transform_id: if split_transform {
+                            first.transform_id
+                        } else {
+                            0
+                        },
+                        buffer_start: pending.buffer_start,
+                        buffer_count: u32::from(pending.buffer_count),
+                        resource_start,
+                        indirect: true,
                     },
-                    primitive_start: u32::try_from(primitive_start)
-                        .map_err(|_| StablePlanError::ArithmeticOverflow)?,
-                    primitive_count: 1,
-                    buffer_start: pending.buffer_start,
-                    buffer_count: u32::from(pending.buffer_count),
-                    resource_start: u32::try_from(resource_start)
-                        .map_err(|_| StablePlanError::ArithmeticOverflow)?,
-                    resource_count: 1,
-                    order_token: input_indices[start],
-                    indirect_buffer_id: pending.order_buffer_id,
-                    indirect_offset: first_record
-                        .checked_mul(4)
-                        .ok_or(StablePlanError::ArithmeticOverflow)?,
-                    ..DrawRecord::default()
-                });
+                )?;
                 start = end;
             }
         }
@@ -1797,9 +1759,9 @@ fn stable_active_buffers(
         .buffer_dependency_masks(capability_set, program.technique, program.variant)
         .ok_or(StablePlanError::ProgramMissing)?;
     let mut active = 0_u32;
-    for write in writes
+    for write in writes_in_range(writes, changed)
         .iter()
-        .filter(|write| write.changed && (changed.start..changed.end).contains(&write.slot))
+        .filter(|write| write.changed)
     {
         let mask = input
             .semantic_change_masks
@@ -1816,6 +1778,12 @@ fn stable_active_buffers(
         }
     }
     Ok(active)
+}
+
+fn writes_in_range(writes: &[SlotWrite], range: RecordRange) -> &[SlotWrite] {
+    let start = writes.partition_point(|write| write.slot < range.start);
+    let end = writes.partition_point(|write| write.slot < range.end);
+    &writes[start..end]
 }
 
 fn order_schema() -> BufferSchema {
@@ -1854,6 +1822,31 @@ mod tests {
 
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
     const TECHNIQUE: TechniqueId = TechniqueId(1);
+
+    #[test]
+    fn dependency_queries_slice_only_the_requested_sorted_slots() {
+        let writes = [
+            SlotWrite {
+                slot: 2,
+                input_index: 20,
+                changed: true,
+            },
+            SlotWrite {
+                slot: 4,
+                input_index: 40,
+                changed: false,
+            },
+            SlotWrite {
+                slot: 7,
+                input_index: 70,
+                changed: true,
+            },
+        ];
+
+        let selected = writes_in_range(&writes, RecordRange { start: 3, end: 7 });
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].slot, 4);
+    }
 
     #[test]
     fn insertion_writes_one_new_physical_record_and_one_order_chunk() {

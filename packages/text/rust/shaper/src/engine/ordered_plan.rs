@@ -8,6 +8,7 @@ use alloc::vec::Vec;
 use core::mem;
 
 use super::{
+    plan_draw::{GlyphDraw, PlanDrawError, push_glyph_draw},
     plan_input::{
         PlanInputError, draw_fields_compatible, indexed_span_bounds, span_bounds, validate_glyph,
         validate_input,
@@ -24,11 +25,14 @@ use super::{
     },
     render_plan::{
         BUFFER_ORDERED_DIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
-        PRIMITIVE_GLYPH, PatchRecord, PrimitiveRecord, RESOURCE_ACTION_CREATE,
-        RESOURCE_ACTION_RETAIN, RETIRE_BUFFER, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView,
-        ResourceRecord, RetirementRecord,
+        PatchRecord, PrimitiveRecord, RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN,
+        RETIRE_BUFFER, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView, ResourceRecord,
+        RetirementRecord,
     },
 };
+
+#[cfg(test)]
+use super::render_plan::PRIMITIVE_GLYPH;
 
 pub use super::plan_input::{PlanGlyph as OrderedGlyph, PlanInput as OrderedPlanInput};
 
@@ -70,6 +74,15 @@ impl From<PackingError> for OrderedPlanError {
             PackingError::CapacityExceeded => Self::CapacityExceeded,
             PackingError::InvalidIdentity => Self::InvalidIdentity,
             PackingError::Policy(error) => Self::PolicyExecution(error),
+        }
+    }
+}
+
+impl From<PlanDrawError> for OrderedPlanError {
+    fn from(error: PlanDrawError) -> Self {
+        match error {
+            PlanDrawError::AllocationFailed => Self::AllocationFailed,
+            PlanDrawError::ArithmeticOverflow => Self::ArithmeticOverflow,
         }
     }
 }
@@ -1149,61 +1162,40 @@ impl OrderedPlanCompiler {
                         && resource.generation == first.resource_generation
                 })
                 .ok_or(OrderedPlanError::InvalidResource)?;
-            let primitive_start = self.primitives.len();
-            reserve(&mut self.primitives, 1)?;
-            self.primitives.push(PrimitiveRecord {
-                id: first.stable_id,
-                kind: PRIMITIVE_GLYPH,
-                technique_id: first.technique.0,
-                resource_id: first.resource_id,
-                resource_generation: first.resource_generation,
-                program_id: batch.state.key.program_id,
-                program_variant: first.program_variant,
-                record_count: count,
-                buffer_id: batch.buffer_ids[0],
-                record_index: first_slot,
-                logical_order: u32::try_from(input_index)
-                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
-                clip_id: first.clip_id,
-                semantic_id: if context.input.glyphs[input_index..end]
-                    .iter()
-                    .all(|glyph| glyph.semantic_id == first.semantic_id)
-                {
-                    first.semantic_id
-                } else {
-                    0
+            push_glyph_draw(
+                &mut self.primitives,
+                &mut self.draws,
+                GlyphDraw {
+                    glyph: first,
+                    record_count: count,
+                    buffer_id: batch.buffer_ids[0],
+                    record_index: first_slot,
+                    logical_order: input_index,
+                    semantic_id: if context.input.glyphs[input_index..end]
+                        .iter()
+                        .all(|glyph| glyph.semantic_id == first.semantic_id)
+                    {
+                        first.semantic_id
+                    } else {
+                        0
+                    },
+                    inline_start,
+                    block_start,
+                    inline_extent,
+                    block_extent,
+                    material_id: if split_material { first.material_id } else { 0 },
+                    transform_id: if split_transform {
+                        first.transform_id
+                    } else {
+                        0
+                    },
+                    buffer_start: batch.state.buffer_start,
+                    buffer_count: u32::from(batch.state.buffer_count),
+                    resource_start,
+                    indirect: false,
+                    program_id: batch.state.key.program_id,
                 },
-                inline_start,
-                block_start,
-                inline_extent,
-                block_extent,
-                ..PrimitiveRecord::default()
-            });
-            reserve(&mut self.draws, 1)?;
-            self.draws.push(DrawRecord {
-                id: first.stable_id,
-                program_id: batch.state.key.program_id,
-                program_variant: first.program_variant,
-                material_id: if split_material { first.material_id } else { 0 },
-                clip_id: first.clip_id,
-                depth_key: first.depth_key,
-                transform_id: if split_transform {
-                    first.transform_id
-                } else {
-                    0
-                },
-                primitive_start: u32::try_from(primitive_start)
-                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
-                primitive_count: 1,
-                buffer_start: batch.state.buffer_start,
-                buffer_count: u32::from(batch.state.buffer_count),
-                resource_start: u32::try_from(resource_start)
-                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
-                resource_count: 1,
-                order_token: u32::try_from(input_index)
-                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
-                ..DrawRecord::default()
-            });
+            )?;
             input_index = end;
         }
         Ok(())
@@ -1264,53 +1256,34 @@ impl OrderedPlanCompiler {
                 } else {
                     0
                 };
-                let primitive_start = self.primitives.len();
-                reserve(&mut self.primitives, 1)?;
-                self.primitives.push(PrimitiveRecord {
-                    id: first.stable_id,
-                    kind: PRIMITIVE_GLYPH,
-                    technique_id: first.technique.0,
-                    resource_id: first.resource_id,
-                    resource_generation: first.resource_generation,
-                    program_id: batch.state.key.program_id,
-                    program_variant: first.program_variant,
-                    record_count: count,
-                    buffer_id: batch.buffer_ids[0],
-                    record_index: u32::try_from(start)
-                        .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
-                    logical_order: instances[start].input_index,
-                    clip_id: first.clip_id,
-                    semantic_id,
-                    inline_start,
-                    block_start,
-                    inline_extent,
-                    block_extent,
-                    ..PrimitiveRecord::default()
-                });
-                reserve(&mut self.draws, 1)?;
-                self.draws.push(DrawRecord {
-                    id: first.stable_id,
-                    program_id: batch.state.key.program_id,
-                    program_variant: first.program_variant,
-                    material_id: if split_material { first.material_id } else { 0 },
-                    clip_id: first.clip_id,
-                    depth_key: first.depth_key,
-                    transform_id: if split_transform {
-                        first.transform_id
-                    } else {
-                        0
+                push_glyph_draw(
+                    &mut self.primitives,
+                    &mut self.draws,
+                    GlyphDraw {
+                        glyph: first,
+                        record_count: count,
+                        buffer_id: batch.buffer_ids[0],
+                        record_index: u32::try_from(start)
+                            .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
+                        logical_order: first_input,
+                        semantic_id,
+                        inline_start,
+                        block_start,
+                        inline_extent,
+                        block_extent,
+                        material_id: if split_material { first.material_id } else { 0 },
+                        transform_id: if split_transform {
+                            first.transform_id
+                        } else {
+                            0
+                        },
+                        buffer_start: batch.state.buffer_start,
+                        buffer_count: u32::from(batch.state.buffer_count),
+                        resource_start,
+                        indirect: false,
+                        program_id: batch.state.key.program_id,
                     },
-                    primitive_start: u32::try_from(primitive_start)
-                        .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
-                    primitive_count: 1,
-                    buffer_start: batch.state.buffer_start,
-                    buffer_count: u32::from(batch.state.buffer_count),
-                    resource_start: u32::try_from(resource_start)
-                        .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
-                    resource_count: 1,
-                    order_token: instances[start].input_index,
-                    ..DrawRecord::default()
-                });
+                )?;
                 start = end;
             }
         }

@@ -55,7 +55,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T17:49:53Z'
+  at: '2026-08-10T02:15:49Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -216,8 +216,12 @@ A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.
 deleted parallel path and identified smaller repeated validation helpers. It also highlighted similar draw emission in
 `ordered_plan.rs` and `stable_plan.rs`; those modules are not duplicate implementations of one behavior. Ordered-direct
 compacts physical records in draw order, while stable-indirect preserves slots, publishes an order buffer, and quarantines
-retirements until renderer acknowledgement. Shared emission logic may be extracted only if compiled-size and benchmark
-evidence show a benefit; a generic source refactor that monomorphizes twice is not assumed to shrink or accelerate Wasm.
+retirements until renderer acknowledgement. A symbol-bearing optimized build attributes 33.3 KiB of function bodies to
+ordered planning and 50.1 KiB to stable planning; that is strategy-specific code, not an assertion that all 83.4 KiB are
+duplicates. The identical final primitive/draw-record construction is now one deliberately out-of-line non-generic
+kernel. Together with a stable dependency-scan correction, the final Wasm is 220 raw / 485 gzip / 423 Brotli bytes smaller
+than the pre-extraction artifact. This establishes a real, modest compiled win; it does not infer savings from source-line
+count or assume that a generic refactor would avoid monomorphization.
 
 ## Current size and performance evidence
 
@@ -225,22 +229,23 @@ The latest checked package-size record after the baker ABI cleanup reports:
 
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
-| Core JavaScript plus shaper Wasm        | 1,248,941 B | 460,901 B | 364,253 B |
-| Three adapter plus core and shaper Wasm | 1,487,569 B | 498,922 B | 395,786 B |
+| Core JavaScript plus shaper Wasm        | 1,248,721 B | 460,416 B | 363,830 B |
+| Three adapter plus core and shaper Wasm | 1,487,349 B | 498,437 B | 395,363 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
-The optimized shaper is 1,160,543 raw / 443,055 gzip / 348,784 Brotli bytes. The renderer-neutral JavaScript graph is
+The optimized shaper is 1,160,323 raw / 442,570 gzip / 348,361 Brotli bytes. The renderer-neutral JavaScript graph is
 88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 327,026 raw / 55,867 gzip /
 47,002 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
-to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; Wasm did not change in that cleanup.
+to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; the later shared-emitter and stable
+range-scan work reduces those final totals to 460,416 and 498,437 gzip bytes.
 The corrected complete MTSDF baker remains 552,025 raw / 215,030 gzip / 168,758 Brotli bytes; the earlier 52 KiB
 observation was a kernel-only test artifact that reused the distributable Cargo target directory.
 
 The public Three benchmark now supports an outside-only mode that leaves the internal phase collector disabled and wraps
 one `updateMatrixWorld()` call with a host timer. An eight-warmup/31-sample run over 25,515 positioned glyphs measured
-17.68/6.13/5.66/16.37 ms median and 18.11/6.32/6.53/16.57 ms p95 for cold/font-size/width/text updates. Those values cover
+19.42/6.59/3.10/14.24 ms median and 21.00/6.86/4.75/15.26 ms p95 for cold/font-size/width/text updates. Those values cover
 frame preparation, the complete Rust transaction and render-plan publication, and Three plan application; they exclude
 GPU submission. An adjacent phase-instrumented run was indistinguishable within process noise. Those temporary profiler
 exports, calls, branches, and clock reads are now absent from the package source and clean publishing output; benchmark
@@ -273,8 +278,8 @@ shaper is 1,157,311 raw bytes, a 4,189-byte increase, and retained high-water me
 is established; the roughly 5.74 ms p95 and 81.4–81.6% RSD still fail the tail-latency gate.
 
 The direct benchmark also keeps an independent middle-splice lane. On the current optimized artifact, a sequential
-eight-warmup/31-sample run measures ordered-direct insertion/deletion at 8.369/8.473 ms median/p95 and 511.3 KiB written
-because following physical records move. Stable-indirect reduces that publication to 452 B but measures 10.683/11.149 ms.
+eight-warmup/31-sample run measures ordered-direct insertion/deletion at 8.452/9.033 ms median/p95 and 511.3 KiB written
+because following physical records move. Stable-indirect reduces that publication to 452 B and measures 9.372/9.583 ms.
 The earlier 51.067 ms figure was the maximum selected as p95 from only 11 samples and did not reproduce. This establishes
 the storage-policy tradeoff without changing the default: stable planning remains optimization/correctness work, and
 chunk-local text storage cannot be claimed as the dominant splice fix while the physical plan has this cost.
@@ -283,13 +288,13 @@ Three now consumes stable-indirect plans through one shared record-addressing ab
 branches. A Rust/Three integration regression proves lifecycle reorder mutates only the order table and preserves physical
 glyph bytes and draw objects. A two-record GPU oracle makes slot zero green and slot one red, then renders logical slot zero
 through `order[0] = 1`: forced WebGL2 and hardware WebGPU both return 16/16 exact red pixels and the same readback hash.
-The complete ordered Bitmap/MSDF/Slug/custom-material matrix remains green on both backends. Reusing the stable pool's
-committed identity index improved two short 22k equal-length runs to 2.446/6.862 and 2.376/6.704 ms median/p95, but a
-stricter 31-sample run detected late Wasm growth before producing a report. Stable-indirect is therefore renderer-proven
-but not the first-party default or a closed performance lane. The optimized shaper is 1,159,121 raw / 441,811 gzip /
-347,554 Brotli bytes. The explicit raster-origin correction adds 818 raw bytes without increasing the measured retained
-high-water mark: one render-to-semantic `u32` index replaces a duplicate hot-record identity, while origins remain in the
-existing semantic glyph record rather than two additional retained float lanes.
+The complete ordered Bitmap/MSDF/Slug/custom-material matrix remains green on both backends. A strict 31-sample stable
+run exposed a quadratic dependency scan: each changed physical range rescanned every slot write. Binary-partitioning the
+sorted writes to the requested range reduces stable font-size from 350.136 to 7.982 ms median and column resize from
+49.636 to 3.767 ms; localized edit is 2.172/6.628 ms and splice is 9.372/9.583 ms median/p95. Stable no-op remains
+1.083 ms versus ordered-direct's 0.001 ms, so stable remains an explicit policy rather than the first-party default. The
+sequential benchmark high-water marks are 107.56 MiB ordered and 114.25 MiB stable; retained-memory right-sizing remains
+open and neither figure is presented as ordinary application demand.
 
 ## Merge gates still open
 
