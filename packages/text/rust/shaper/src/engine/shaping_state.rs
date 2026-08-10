@@ -7,7 +7,7 @@ use crate::{
 
 use super::{
     EngineError,
-    style_state::{ResolvedStyle, StyleSegment},
+    style_state::{ResolvedStyle, StyleArena, StyleSegment},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -86,6 +86,7 @@ impl ShapingRunArena {
         &mut self,
         text: &[u16],
         styles: &[StyleSegment],
+        style_storage: &StyleArena,
         unicode: &UnicodeAnalysis,
         bidi: &BidiAnalysis,
     ) -> Result<(), EngineError> {
@@ -101,14 +102,17 @@ impl ShapingRunArena {
                     .or_else(|| bidi.paragraph_levels.first())
                     .copied()
                     .unwrap_or(0);
-                self.push(ShapingRun {
-                    text_start: segment.text_start,
-                    text_end: segment.text_start,
-                    script: COMMON_SCRIPT,
-                    direction: direction(segment.style, level),
-                    bidi_level: forced_level(segment.style, level),
-                    style: segment.style,
-                })?;
+                self.push(
+                    ShapingRun {
+                        text_start: segment.text_start,
+                        text_end: segment.text_start,
+                        script: COMMON_SCRIPT,
+                        direction: direction(segment.style, level),
+                        bidi_level: forced_level(segment.style, level),
+                        style: segment.style,
+                    },
+                    style_storage,
+                )?;
             }
             return Ok(());
         }
@@ -141,6 +145,7 @@ impl ShapingRunArena {
                         bidi_level: forced_level(style.style, bidi_run.level),
                         style: style.style,
                     },
+                    style_storage,
                 )?;
             }
             let boundary = style.text_end.min(script.text_end).min(bidi_run.text_end);
@@ -181,6 +186,7 @@ impl ShapingRunArena {
         start: u32,
         end: u32,
         template: ShapingRun,
+        style_storage: &StyleArena,
     ) -> Result<(), EngineError> {
         let mut fragment_start = usize::try_from(start).map_err(|_| EngineError::InvalidRequest)?;
         let mut offset = fragment_start;
@@ -190,12 +196,16 @@ impl ShapingRunArena {
             let hard_break = matches!(unit, 0x0a | 0x0b | 0x0c | 0x0d | 0x85 | 0x2028 | 0x2029);
             if hard_break {
                 if fragment_start < offset {
-                    self.push(ShapingRun {
-                        text_start: u32::try_from(fragment_start)
-                            .map_err(|_| EngineError::ResultTooLarge)?,
-                        text_end: u32::try_from(offset).map_err(|_| EngineError::ResultTooLarge)?,
-                        ..template
-                    })?;
+                    self.push(
+                        ShapingRun {
+                            text_start: u32::try_from(fragment_start)
+                                .map_err(|_| EngineError::ResultTooLarge)?,
+                            text_end: u32::try_from(offset)
+                                .map_err(|_| EngineError::ResultTooLarge)?,
+                            ..template
+                        },
+                        style_storage,
+                    )?;
                 }
                 offset += 1;
                 fragment_start = offset;
@@ -208,23 +218,26 @@ impl ShapingRunArena {
             }
         }
         if fragment_start < end {
-            self.push(ShapingRun {
-                text_start: u32::try_from(fragment_start)
-                    .map_err(|_| EngineError::ResultTooLarge)?,
-                text_end: u32::try_from(end).map_err(|_| EngineError::ResultTooLarge)?,
-                ..template
-            })?;
+            self.push(
+                ShapingRun {
+                    text_start: u32::try_from(fragment_start)
+                        .map_err(|_| EngineError::ResultTooLarge)?,
+                    text_end: u32::try_from(end).map_err(|_| EngineError::ResultTooLarge)?,
+                    ..template
+                },
+                style_storage,
+            )?;
         }
         Ok(())
     }
 
-    fn push(&mut self, run: ShapingRun) -> Result<(), EngineError> {
+    fn push(&mut self, run: ShapingRun, style_storage: &StyleArena) -> Result<(), EngineError> {
         if let Some(previous) = self.runs.last_mut()
             && previous.text_end == run.text_start
             && previous.script == run.script
             && previous.direction == run.direction
             && previous.bidi_level == run.bidi_level
-            && previous.style == run.style
+            && style_storage.same_layout_style(previous.style, run.style)
         {
             previous.text_end = run.text_end;
             return Ok(());
@@ -532,8 +545,10 @@ mod tests {
             },
         ];
         let mut runs = ShapingRunArena::default();
+        let style_storage = StyleArena::default();
         runs.reserve(16).unwrap();
-        runs.build(&text, &styles, &unicode, &bidi).unwrap();
+        runs.build(&text, &styles, &style_storage, &unicode, &bidi)
+            .unwrap();
         assert_eq!(
             runs.runs()
                 .iter()
@@ -541,6 +556,66 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![(0, 3, 0, 0), (4, 7, 0, 2)]
         );
+    }
+
+    #[test]
+    fn paint_only_style_boundaries_do_not_split_shaping_runs() {
+        let text: Vec<u16> = "a b".encode_utf16().collect();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        let bidi = analyze(&text, DIRECTION_LTR).unwrap();
+        let base = ResolvedStyle::default();
+        let mut painted = base;
+        painted.material_id = 7;
+        painted.raster_pixel_ratio = 2.0;
+        painted.foreground_rgba = 0xff00ffff;
+        painted.decoration_flags = 1;
+        let styles = [
+            StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style: painted,
+            },
+            StyleSegment {
+                text_start: 1,
+                text_end: text.len() as u32,
+                style: base,
+            },
+        ];
+        let mut runs = ShapingRunArena::default();
+        runs.build(&text, &styles, &StyleArena::default(), &unicode, &bidi)
+            .unwrap();
+
+        assert_eq!(runs.runs().len(), 1);
+        assert_eq!((runs.runs()[0].text_start, runs.runs()[0].text_end), (0, 3));
+    }
+
+    #[test]
+    fn metric_style_boundaries_still_split_shaping_runs() {
+        let text: Vec<u16> = "ab".encode_utf16().collect();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        let bidi = analyze(&text, DIRECTION_LTR).unwrap();
+        let base = ResolvedStyle::default();
+        let mut larger = base;
+        larger.font_size = 24.0;
+        let styles = [
+            StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style: base,
+            },
+            StyleSegment {
+                text_start: 1,
+                text_end: 2,
+                style: larger,
+            },
+        ];
+        let mut runs = ShapingRunArena::default();
+        runs.build(&text, &styles, &StyleArena::default(), &unicode, &bidi)
+            .unwrap();
+
+        assert_eq!(runs.runs().len(), 2);
     }
 
     #[test]

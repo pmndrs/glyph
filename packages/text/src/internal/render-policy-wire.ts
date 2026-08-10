@@ -101,6 +101,7 @@ export interface FirstPartyTechniqueWireIds {
 }
 
 export type ThreeTransformMode = 'direct' | 'indexed';
+export type ThreeAllocationMode = 'ordered' | 'stable';
 
 export interface ThreeTechniqueTransformModes {
   readonly bitmap: ThreeTransformMode;
@@ -119,6 +120,7 @@ export function firstPartyThreeRenderPolicyBytes(
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
   transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
   additionalPrograms: readonly PolicyProgram[] = [],
+  allocationMode: ThreeAllocationMode = 'ordered',
 ): Uint8Array {
   const bitmap = identities.resolve('pmndrs.bitmap');
   const msdf = identities.resolve('pmndrs.msdf');
@@ -128,9 +130,9 @@ export function firstPartyThreeRenderPolicyBytes(
       ? { bitmap: transformMode, msdf: transformMode, slug: transformMode }
       : transformMode;
   const programs: PolicyProgram[] = [
-    bitmapProgram(bitmap, 1, modes.bitmap),
-    msdfProgram(msdf, 2, modes.msdf),
-    slugProgram(slug, 3, modes.slug),
+    bitmapProgram(bitmap, 1, modes.bitmap, allocationMode),
+    msdfProgram(msdf, 2, modes.msdf, allocationMode),
+    slugProgram(slug, 3, modes.slug, allocationMode),
     ...additionalPrograms,
   ];
   if (new Set(programs.map((program) => program.techniqueId)).size !== programs.length) {
@@ -156,7 +158,12 @@ function threeCapabilitySet(): PolicyCapabilitySet {
   };
 }
 
-function bitmapProgram(techniqueId: number, programId: number, transformMode: ThreeTransformMode): PolicyProgram {
+function bitmapProgram(
+  techniqueId: number,
+  programId: number,
+  transformMode: ThreeTransformMode,
+  allocationMode: ThreeAllocationMode,
+): PolicyProgram {
   const context = programContext('strike', 8, 0);
   const { loadF32, loadU32, binary, storeF32, storeU32 } = context;
   loadF32(15);
@@ -185,10 +192,16 @@ function bitmapProgram(techniqueId: number, programId: number, transformMode: Th
       ? [...floatBuffers([2, 2, 2, 2, 4]), stableGlyphIdBuffer(), transformIndexBuffer()]
       : [...floatBuffers([2, 2, 2, 2, 4]), stableGlyphIdBuffer()],
     transformMode,
+    allocationMode,
   );
 }
 
-function msdfProgram(techniqueId: number, programId: number, transformMode: ThreeTransformMode): PolicyProgram {
+function msdfProgram(
+  techniqueId: number,
+  programId: number,
+  transformMode: ThreeTransformMode,
+  allocationMode: ThreeAllocationMode,
+): PolicyProgram {
   const context = programContext('glyph', 10, 1);
   const { operations, loadF32, loadU32, binary, constantF32, storeF32, storeU32 } = context;
   loadF32(17);
@@ -224,10 +237,16 @@ function msdfProgram(techniqueId: number, programId: number, transformMode: Thre
       ...(transformMode === 'indexed' ? [transformIndexBuffer()] : []),
     ],
     transformMode,
+    allocationMode,
   );
 }
 
-function slugProgram(techniqueId: number, programId: number, transformMode: ThreeTransformMode): PolicyProgram {
+function slugProgram(
+  techniqueId: number,
+  programId: number,
+  transformMode: ThreeTransformMode,
+  allocationMode: ThreeAllocationMode,
+): PolicyProgram {
   const context = programContext('glyph', 8, 6, true);
   const { loadF32, loadU32, binary, constantF32, constantU32, storeF32, storeU32 } = context;
   loadF32(16);
@@ -266,6 +285,7 @@ function slugProgram(techniqueId: number, programId: number, transformMode: Thre
       ...(transformMode === 'indexed' ? [transformIndexBuffer()] : []),
     ],
     transformMode,
+    allocationMode,
   );
 }
 
@@ -298,8 +318,8 @@ function programContext(
   const semantic = textShaperAbi.engine.semanticF32Fields;
   const semanticU32 = textShaperAbi.engine.semanticU32Fields;
   const inputs: PolicyInput[] = [
-    { scope: 'semantic', field: semantic.inlineStart },
-    { scope: 'semantic', field: semantic.blockStart },
+    { scope: 'semantic', field: semantic.inlineOrigin },
+    { scope: 'semantic', field: semantic.blockOrigin },
     { scope: 'semantic', field: semantic.fontSize },
     { scope: 'semantic', field: semantic.foregroundRed },
     { scope: 'semantic', field: semantic.foregroundGreen },
@@ -358,6 +378,7 @@ function createProgram(
   context: ProgramContext,
   buffers: readonly PolicyBuffer[],
   transformMode: ThreeTransformMode,
+  allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
   const batch = textShaperAbi.policy.batchFields;
   return {
@@ -368,6 +389,10 @@ function createProgram(
     inputs: context.inputs,
     buffers,
     operations: context.operations,
+    allocationStrategy:
+      allocationMode === 'stable'
+        ? textShaperAbi.policy.allocationStrategies.stableIndirect
+        : textShaperAbi.policy.allocationStrategies.orderedDirect,
     storageKeyMask: batch.technique | batch.program | batch.resource,
     drawKeyMask:
       batch.technique |

@@ -8,9 +8,9 @@ import { bitmapBaker } from '@pmndrs/text/bakers/bitmap';
 import { paragraphCjkCoverageText } from '../src/benchmark/paragraph-contract-corpus.ts';
 
 const output = resolve('fixtures/rendering/noto-sans-cjk-contract-bitmap-16.font.glb');
-const arguments_ = process.argv.slice(2);
-const check = arguments_.includes('--check');
-if (arguments_.some((argument) => argument !== '--check') || arguments_.length > 1) {
+const args = process.argv.slice(2);
+const check = args.includes('--check');
+if (args.some((argument) => argument !== '--check') || args.length > 1) {
   throw new Error('usage: generate-paragraph-conformance-font.mts [--check]');
 }
 const temporaryDirectory = check ? await mkdtemp(join(tmpdir(), 'pmndrs-text-cjk-contract-')) : undefined;

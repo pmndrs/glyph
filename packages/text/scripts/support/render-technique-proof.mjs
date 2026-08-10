@@ -27,19 +27,21 @@ function bitmapProof(abi, raster, allocation) {
 function mtsdfProof(abi, raster, allocation) {
   const extension = raster.document.extensions.PMNDRS_font_distance_field;
   const view = recordView(raster.records);
-  const fields = denseAtlasFields(view, raster.glyphCount, extension.planeUnitsPerEm, raster.pages);
+  const binding = {
+    width: Math.max(...raster.pages.map((page) => page.width)),
+    height: Math.max(...raster.pages.map((page) => page.height)),
+  };
+  const fields = denseAtlasFields(view, raster.glyphCount, extension.planeUnitsPerEm, raster.pages, binding);
   fields.push(
     field(raster.glyphCount, (record) => {
       const page = view.getUint16(record + 16, true);
       if (page === ABSENT_PAGE) return 0;
-      const width = raster.pages[page].width;
-      return view.getUint16(record + 12, true) / width;
+      return view.getUint16(record + 12, true) / binding.width;
     }),
     field(raster.glyphCount, (record) => {
       const page = view.getUint16(record + 16, true);
       if (page === ABSENT_PAGE) return 0;
-      const height = raster.pages[page].height;
-      return view.getUint16(record + 14, true) / height;
+      return view.getUint16(record + 14, true) / binding.height;
     }),
   );
   return proof(abi, mtsdfProgram(abi), allocation, {
@@ -194,8 +196,8 @@ function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inv
   const operations = [];
   const semantic = abi.engine.semanticF32Fields;
   const inputs = [
-    { scope: 'semantic', field: semantic.inlineStart },
-    { scope: 'semantic', field: semantic.blockStart },
+    { scope: 'semantic', field: semantic.inlineOrigin },
+    { scope: 'semantic', field: semantic.blockOrigin },
     { scope: 'semantic', field: semantic.fontSize },
     { scope: 'semantic', field: semantic.foregroundRed },
     { scope: 'semantic', field: semantic.foregroundGreen },
@@ -273,29 +275,32 @@ function uintBuffers(abi, widths, firstId) {
   return widths.map((vectorWidth, index) => ({ id: firstId + index, scalar: abi.policy.scalarTypes.u32, vectorWidth }));
 }
 
-function denseAtlasFields(view, glyphCount, units, pages) {
+function denseAtlasFields(view, glyphCount, units, pages, binding) {
   return [
     field(glyphCount, (record) => view.getInt16(record, true) / units),
     field(glyphCount, (record) => view.getInt16(record + 6, true) / units),
     field(glyphCount, (record) => (view.getInt16(record + 4, true) - view.getInt16(record, true)) / units),
     field(glyphCount, (record) => (view.getInt16(record + 6, true) - view.getInt16(record + 2, true)) / units),
-    field(glyphCount, (record) => atlasValue(view, record, pages, 8, 'width')),
-    field(glyphCount, (record) => atlasValue(view, record, pages, 10, 'height')),
-    field(glyphCount, (record) => atlasSpan(view, record, pages, 8, 12, 'width')),
-    field(glyphCount, (record) => atlasSpan(view, record, pages, 10, 14, 'height')),
+    field(glyphCount, (record) => atlasValue(view, record, pages, binding, 8, 'width')),
+    field(glyphCount, (record) => atlasValue(view, record, pages, binding, 10, 'height')),
+    field(glyphCount, (record) => atlasSpan(view, record, pages, binding, 8, 12, 'width')),
+    field(glyphCount, (record) => atlasSpan(view, record, pages, binding, 10, 14, 'height')),
   ];
 }
 
-function atlasValue(view, record, pages, offset, dimension) {
-  const page = view.getUint16(record + 16, true);
-  return page === ABSENT_PAGE ? 0 : view.getUint16(record + offset, true) / pages[page][dimension];
-}
-
-function atlasSpan(view, record, pages, start, end, dimension) {
+function atlasValue(view, record, pages, binding, offset, dimension) {
   const page = view.getUint16(record + 16, true);
   return page === ABSENT_PAGE
     ? 0
-    : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) / pages[page][dimension];
+    : view.getUint16(record + offset, true) / (binding?.[dimension] ?? pages[page][dimension]);
+}
+
+function atlasSpan(view, record, pages, binding, start, end, dimension) {
+  const page = view.getUint16(record + 16, true);
+  return page === ABSENT_PAGE
+    ? 0
+    : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) /
+        (binding?.[dimension] ?? pages[page][dimension]);
 }
 
 function pageIndices(view, glyphCount, arrayResource = false, stride = 20) {

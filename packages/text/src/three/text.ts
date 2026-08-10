@@ -1057,22 +1057,32 @@ function packedForeground(paint: GlyphPaintInput): number {
     throw new RangeError('opacity must be in [0, 1]');
   }
   const input = paint.color ?? '#ffffff';
-  const rgba = typeof input === 'string' ? parseHexColor(input) : input;
-  const channel = (value: number): number => Math.round(Math.min(1, Math.max(0, value)) * 255);
-  return (
-    (channel(rgba[0]) | (channel(rgba[1]) << 8) | (channel(rgba[2]) << 16) | (channel(rgba[3] * opacity) << 24)) >>> 0
-  );
+  const rgba = typeof input === 'string' ? parseHexColorBytes(input) : linearColorBytes(input);
+  const alpha = Math.round(rgba[3] * opacity);
+  return (rgba[0] | (rgba[1] << 8) | (rgba[2] << 16) | (alpha << 24)) >>> 0;
 }
 
-function parseHexColor(value: string): readonly [number, number, number, number] {
+function parseHexColorBytes(value: string): readonly [number, number, number, number] {
   const match = /^#([0-9a-f]{6}|[0-9a-f]{8})$/iu.exec(value);
   if (match === null) throw new TypeError('colors must be #rrggbb, #rrggbbaa, or linear RGBA');
   const hex = match[1]!;
-  const linear = (at: number): number => {
-    const srgb = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
-    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+  return [
+    Number.parseInt(hex.slice(0, 2), 16),
+    Number.parseInt(hex.slice(2, 4), 16),
+    Number.parseInt(hex.slice(4, 6), 16),
+    hex.length === 8 ? Number.parseInt(hex.slice(6), 16) : 255,
+  ];
+}
+
+function linearColorBytes(color: readonly number[]): readonly [number, number, number, number] {
+  if (color.length !== 4 || color.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
+    throw new TypeError('linear RGBA colors must contain four finite channels in [0, 1]');
+  }
+  const srgbByte = (value: number): number => {
+    const srgb = value <= 0.003_130_8 ? value * 12.92 : 1.055 * value ** (1 / 2.4) - 0.055;
+    return Math.round(srgb * 255);
   };
-  return [linear(0), linear(2), linear(4), hex.length === 8 ? Number.parseInt(hex.slice(6), 16) / 255 : 1];
+  return [srgbByte(color[0]!), srgbByte(color[1]!), srgbByte(color[2]!), Math.round(color[3]! * 255)];
 }
 
 function releaseStackLeases(leases: readonly ThreeTextEngineStackLease[]): void {

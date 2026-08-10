@@ -143,6 +143,26 @@ impl Default for ResolvedStyle {
     }
 }
 
+impl ResolvedStyle {
+    fn same_layout_scalars(self, other: Self) -> bool {
+        self.font_stack_handle == other.font_stack_handle
+            && self.font_size.to_bits() == other.font_size.to_bits()
+            && self.line_height.to_bits() == other.line_height.to_bits()
+            && self.has_line_height == other.has_line_height
+            && self.letter_spacing.to_bits() == other.letter_spacing.to_bits()
+            && self.word_spacing.to_bits() == other.word_spacing.to_bits()
+            && self.baseline_shift.to_bits() == other.baseline_shift.to_bits()
+            && self.direction == other.direction
+            && self.bidi_override == other.bidi_override
+    }
+
+    pub(crate) fn same_layout_sources(self, other: Self) -> bool {
+        self.same_layout_scalars(other)
+            && self.language_source == other.language_source
+            && self.features_source == other.features_source
+    }
+}
+
 #[cfg(test)]
 impl ResolvedStyle {
     pub(crate) fn test_typography(font_size: f32, letter_spacing: f32, word_spacing: f32) -> Self {
@@ -506,6 +526,12 @@ impl StyleArena {
         self.records
             .get(index)
             .map_or(&[], |source| self.features(*source))
+    }
+
+    pub(crate) fn same_layout_style(&self, left: ResolvedStyle, right: ResolvedStyle) -> bool {
+        left.same_layout_scalars(right)
+            && self.resolved_language(left) == self.resolved_language(right)
+            && self.resolved_features(left) == self.resolved_features(right)
     }
 
     fn same_resolved(&self, left: ResolvedStyle, right: ResolvedStyle) -> bool {

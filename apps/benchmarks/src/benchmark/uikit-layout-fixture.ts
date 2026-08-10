@@ -1,9 +1,4 @@
-import type {
-  ParagraphAxisConstraint,
-  ParagraphContentBox,
-  ParagraphLayout,
-  ParagraphMeasurement,
-} from '@pmndrs/text';
+import type { ParagraphAxisConstraint, ParagraphContentBox, ParagraphLayout, ParagraphMeasurement } from '@pmndrs/text';
 
 export const YogaMeasureMode = Object.freeze({ Undefined: 0, Exactly: 1, AtMost: 2 });
 
@@ -107,8 +102,8 @@ export function createUikitLayoutFixture<Input>(
       );
       const layout = measuredParagraph.layout({
         ...currentPolicy,
-          width: { mode: 'exact', size: contentWidth },
-          height: { mode: 'exact', size: contentHeight },
+        width: { mode: 'exact', size: contentWidth },
+        height: { mode: 'exact', size: contentHeight },
       });
       const contentLeft = -outerWidth / 2 + borderLeft + paddingLeft;
       const contentTop = outerHeight / 2 - borderTop - paddingTop;

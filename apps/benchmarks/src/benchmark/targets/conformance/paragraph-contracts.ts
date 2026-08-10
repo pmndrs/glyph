@@ -1,10 +1,4 @@
-import type {
-  LoadedFont,
-  ParagraphContentBox,
-  ParagraphLayout,
-  ParagraphLayoutInspection,
-  ParagraphStyle,
-} from '@pmndrs/text';
+import type { LoadedFont, ParagraphContentBox, ParagraphLayoutInspection, ParagraphStyle } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
 import { FontLoader, Text, TextGroup, type TextUpdate } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
@@ -54,7 +48,9 @@ interface BidiContract {
   readonly policies: {
     readonly text: string;
     readonly style: ParagraphStyle;
-    readonly cases: Readonly<Record<string, { readonly constraints: LegacyConstraints; readonly layout: LayoutGolden }>>;
+    readonly cases: Readonly<
+      Record<string, { readonly constraints: LegacyConstraints; readonly layout: LayoutGolden }>
+    >;
   };
   readonly uikit: {
     readonly input: { readonly text: string; readonly style: ParagraphStyle };
@@ -206,7 +202,8 @@ function runContracts(state: Extract<State, { readonly kind: 'ready' }>, signal:
     const layouts = texts.map((text, index) => {
       const layout = text.inspectLayout();
       const contract = expected[index];
-      if (layout === undefined || contract === undefined) throw new Error('paragraph contract layout was not published');
+      if (layout === undefined || contract === undefined)
+        throw new Error('paragraph contract layout was not published');
       assertObject(contract.id, paragraphLayoutContract(layout, contract.full), narrowLayoutGolden(contract.golden));
       return layout;
     });
@@ -367,7 +364,8 @@ function firstDifference(actual: unknown, expected: unknown, path = '$'): string
   if (Array.isArray(actual) && Array.isArray(expected)) {
     if (actual.length !== expected.length) return `${path}.length: ${actual.length} !== ${expected.length}`;
     for (let index = 0; index < actual.length; index += 1) {
-      if (!exactValue(actual[index], expected[index])) return firstDifference(actual[index], expected[index], `${path}[${index}]`);
+      if (!exactValue(actual[index], expected[index]))
+        return firstDifference(actual[index], expected[index], `${path}[${index}]`);
     }
   }
   if (isRecord(actual) && isRecord(expected)) {
@@ -388,7 +386,8 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 }
 
 function assertArray(label: string, actual: ArrayLike<number>, expected: readonly number[]): void {
-  if (actual.length !== expected.length) throw new Error(`${label} length differs from its retained paragraph contract`);
+  if (actual.length !== expected.length)
+    throw new Error(`${label} length differs from its retained paragraph contract`);
   for (let index = 0; index < expected.length; index += 1) {
     if (actual[index] !== expected[index]) {
       throw new Error(

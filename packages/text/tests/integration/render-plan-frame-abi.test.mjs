@@ -83,15 +83,17 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.equal(abi.engine.defaultSessionTextCapacity, 1024);
   assert.deepEqual(abi.engine.semanticF32Fields, {
     blockExtent: 3,
+    blockOrigin: 7,
     blockStart: 1,
     fontSize: 4,
-    foregroundAlpha: 9,
-    foregroundBlue: 8,
-    foregroundGreen: 7,
-    foregroundRed: 6,
+    foregroundAlpha: 11,
+    foregroundBlue: 10,
+    foregroundGreen: 9,
+    foregroundRed: 8,
     inlineExtent: 2,
+    inlineOrigin: 6,
     inlineStart: 0,
-    inverseFontSize: 10,
+    inverseFontSize: 12,
     rasterPixelRatio: 5,
   });
   assert.deepEqual(abi.engine.semanticU32Fields, {
