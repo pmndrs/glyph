@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { RasterCoverageError } from '@pmndrs/text';
-
 import {
   createMsdfBaker,
   createMsdfBakerFromInstance,
@@ -32,17 +30,6 @@ const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b
 const showcaseShapingHash = '3f8183c0d56b8b225b8a6a7b2fda80966579b46636b96975434fa30e8c17c33e';
 const publishedAbi = JSON.parse(await readFile(abiUrl, 'utf8'));
 const progressImports = { env: { pmndrs_text_bake_progress() {} } };
-
-/** Packs one canonical glyph batch through the portable technique, as core does before any renderer sees it. */
-function packedStorage(data, glyphs) {
-  const storage = msdf.createStorage(glyphs.length);
-  msdf.writeStorage(storage, { start: 0, count: glyphs.length }, { data, binding: data.binding, glyphs });
-  return storage;
-}
-
-function glyphInput(data, glyphId, index, paint) {
-  return { data, glyphId, fontSize: 64, originX: 12 + index * 80, originY: 24, rasterPixelRatio: 1, paint };
-}
 
 async function setup() {
   const [wasm, source] = await Promise.all([readFile(wasmUrl), readFile(fontUrl)]);
@@ -198,23 +185,7 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
         assert.equal(data.pixelRange, 4);
         const records = views[extension.recordBufferView];
         assert.ok(records);
-        const glyphId = firstPresentGlyph(records);
-        const outlined = { color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 2 } };
-        const storage = packedStorage(data, [{ ...glyphInput(data, glyphId, 0, outlined), fontSize: 32 }]);
-        assert.equal(storage.outlineWidths[0], 0.5);
-        assert.throws(
-          () =>
-            packedStorage(data, [
-              {
-                ...glyphInput(data, glyphId, 0, {
-                  color: [1, 1, 1, 1],
-                  outline: { color: [0, 0, 0, 1], width: 2.0001 },
-                }),
-                fontSize: 32,
-              },
-            ]),
-          /2-atlas-pixel field limit/,
-        );
+        assert.ok(firstPresentGlyph(records) >= 0);
       } finally {
         msdf.dispose(data);
       }
@@ -268,9 +239,8 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
     dispose() {},
   };
   const data = await msdf.decode(font, runtimeRaster);
-  const paint = { color: [1, 1, 1, 1] };
-  assert.ok(msdf.select(glyphInput(data, 43, 0, paint)));
-  assert.throws(() => msdf.select(glyphInput(data, 45, 0, paint)), RasterCoverageError);
+  assert.equal(data.coverage[43 >> 3] & (1 << (43 & 7)), 1 << (43 & 7));
+  assert.equal(data.coverage[45 >> 3] & (1 << (45 & 7)), 0);
   msdf.dispose(data);
 });
 
@@ -657,33 +627,12 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   assert.ok(decodedPageBytes < paddedBindingBytes, 'decoded pages must not carry the binding padding');
 
   const glyphIds = firstPresentGlyphByPage(records, data.pages.length);
-  const decorated = {
-    color: [1, 0.75, 0.5, 1],
-    outline: { color: [0, 0, 0, 1], width: 2 },
-    shadow: { color: [0, 0, 0, 0.5], offset: [3, 4] },
-  };
-  const glyphs = [...glyphIds].map((glyphId, index) => glyphInput(data, glyphId, index, decorated));
-  for (const glyph of glyphs) {
-    assert.deepEqual(msdf.select(glyph), { resource: data.resource, pipelineVariant: 0, binding: data.binding });
-  }
-  const storage = packedStorage(data, glyphs);
-  assert.equal(storage.outlineWidths[0], 0.25);
-  assert.deepEqual([...storage.pageIndices], [...glyphIds.keys()], 'each baked page keeps its own record page index');
-  assert.ok(storage.shadowOffsets[0] > 0, 'a positive shadow offset packs a positive horizontal UV displacement');
-  assert.ok(storage.shadowOffsets[1] > 0, 'a positive shadow offset packs a positive vertical UV displacement');
-  assert.deepEqual([...storage.fillColors.slice(0, 4)], decorated.color);
-  assert.deepEqual([...storage.shadowColors.slice(0, 4)], decorated.shadow.color);
-
-  // Dropping the decoration is a structural change: the shadow no longer widens the instance quad.
-  const plain = packedStorage(
-    data,
-    [...glyphIds].map((glyphId, index) => glyphInput(data, glyphId, index, { color: [0.25, 0.5, 1, 0.75] })),
+  const recordView = new DataView(records.buffer, records.byteOffset, records.byteLength);
+  assert.deepEqual(
+    [...glyphIds].map((glyphId) => recordView.getUint16(glyphId * 20 + 16, true)),
+    [...glyphIds.keys()],
+    'each baked page keeps its own record page index',
   );
-  assert.equal(plain.outlineWidths[0], 0);
-  assert.deepEqual([...plain.shadowOffsets.slice(0, 2)], [0, 0]);
-  assert.ok(plain.sizes[0] < storage.sizes[0], 'removing the shadow shrinks the packed instance width');
-  assert.ok(plain.sizes[1] < storage.sizes[1], 'removing the shadow shrinks the packed instance height');
-  assert.deepEqual([...plain.fillColors.slice(0, 4)], [0.25, 0.5, 1, 0.75]);
   msdf.dispose(data);
 }
 

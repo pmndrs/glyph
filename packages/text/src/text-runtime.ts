@@ -10,7 +10,13 @@ import {
 } from './loader.js';
 import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
-import type { AnyRasterTechnique, RasterDataOf, RasterOptionsOf, RasterTechniqueTypesOf } from './raster-technique.js';
+import type {
+  AnyRasterTechnique,
+  RasterDataOf,
+  RasterOptionsOf,
+  RasterTechniqueRequest,
+  RasterTechniqueTypesOf,
+} from './raster-technique.js';
 import type {
   RasterKindOf,
   RasterOptionsArgument,
@@ -30,17 +36,9 @@ export type LoadedFontInput =
   | { readonly baked: string | URL }
   | { readonly source: string | URL; readonly runtimeBake: RuntimeFontBake };
 
-type TechniqueRasterRequest<Technique extends AnyRasterTechnique> = {
-  readonly technique: Technique;
-} & ([RasterOptionsOf<Technique>] extends [never]
-  ? { readonly options?: never }
-  : undefined extends RasterOptionsOf<Technique>
-    ? { readonly options?: RasterOptionsOf<Technique> }
-    : { readonly options: RasterOptionsOf<Technique> });
-
 export interface LoadedFontRequest<Technique extends AnyRasterTechnique> {
   readonly input: LoadedFontInput;
-  readonly raster: TechniqueRasterRequest<Technique>;
+  readonly raster: RasterTechniqueRequest<Technique>;
 }
 
 export interface TextRuntime {
