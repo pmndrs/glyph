@@ -41,6 +41,7 @@ import {
 } from '../discovery.js';
 import { composeFontBake } from '../internal/compose-bake.js';
 import { fontBakeDescriptorV0, soleCoreFontArtifact } from '../internal/core-bake-policy.js';
+import { normalizeUnicodeRanges } from '../internal/font-selection.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
 import type { Sha256Hex } from '../identity.js';
@@ -186,7 +187,7 @@ async function bakeFontWithResolvedPlans(
           selection: {
             formatVersion: 0,
             fontFaceIndex: options.font.fontFaceIndex,
-            unicodeRanges: options.unicodeRanges,
+            unicodeRanges: normalizeUnicodeRanges(options.unicodeRanges),
           },
         });
   const source = preparation?.bytes ?? originalSource;
