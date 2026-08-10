@@ -69,7 +69,6 @@ async function fixture(name) {
           format: 'r8unorm',
           resource: defineRasterResourceId(`test.bitmap.${strikeIndex}.${pageIndex}`),
         })),
-        bindings: [],
       })),
     };
     return { core, raster, loaded: { font: core, technique: bitmap, data } };
@@ -101,7 +100,6 @@ async function fixture(name) {
       ...page,
       resource: defineRasterResourceId(`test.slug.${pageIndex}`),
     })),
-    bindings: [],
   };
   return { core, raster, loaded: { font: core, technique: slug, data } };
 }

@@ -81,7 +81,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
           format: 'r8unorm',
           resource: defineRasterResourceId(`coordinator.bitmap.${strikeIndex}.${pageIndex}`),
         })),
-        bindings: [],
       })),
     },
     disposed: false,
@@ -130,7 +129,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
         referenceHeight: page.referenceHeight,
         referenceBytes: page.references.bytes.slice(),
       })),
-      bindings: [],
     },
     disposed: false,
   };
