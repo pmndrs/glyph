@@ -355,8 +355,8 @@ function parseArguments(arguments_) {
     case: readCase('--case'),
     glyphs: read('--glyphs', 22_000),
     height: read('--height', 100_000),
-    repetitions: read('--reps', 11),
-    warmup: read('--warmup', 5),
+    repetitions: read('--reps', 31),
+    warmup: read('--warmup', 8),
   };
 
   function readString(name, fallback) {

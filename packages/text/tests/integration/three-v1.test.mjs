@@ -203,6 +203,52 @@ test('Three retries an unapplied Rust publication before requesting another engi
   runtime.dispose();
 });
 
+test('TextGroup drops disposed descendants and reuses their committed transform identities', async () => {
+  const registry = new FontRegistry();
+  const runtime = await createTextRuntime({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup();
+  const survivor = new Text({ font, text: 'A' });
+  group.add(survivor);
+  scene.add(group);
+  scene.updateMatrixWorld();
+
+  let retainedTransformBytes;
+  for (let index = 0; index < 12; index += 1) {
+    const transient = new Text({ font, text: 'B' });
+    group.add(transient);
+    scene.updateMatrixWorld();
+    const draw = group.children.find((child) => child.isMesh);
+    assert.ok(draw);
+    const transformBytes = draw.geometry.getAttribute('_pmndrsTextTransforms').array.byteLength;
+    retainedTransformBytes ??= transformBytes;
+    assert.equal(transformBytes, retainedTransformBytes, 'committed removals must make transform identities reusable');
+
+    transient.dispose();
+    assert.doesNotThrow(
+      () => scene.updateMatrixWorld(),
+      'a disposed child may remain attached until its host removes it',
+    );
+    assert.equal(group.error, undefined);
+    assert.equal(group.textCount, 1);
+    transient.removeFromParent();
+  }
+
+  const draw = group.children.find((child) => child.isMesh);
+  assert.equal(draw.geometry.instanceCount, 1);
+  group.dispose();
+  survivor.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
 test('Three retires materials bound to a replaced buffer generation', async () => {
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
@@ -390,8 +436,16 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   const originsAttribute = draws[0].geometry.getAttribute('_pmndrsText_1');
   originsAttribute.clearUpdateRanges();
   left.setGlyphOrigins({ layout: leftOrigins.layout, x: shiftedLeftX, y: leftOrigins.shapedY });
+  const leftUploadRanges = originsAttribute.updateRanges.map((range) => ({ ...range }));
   right.setGlyphOrigins({ layout: rightOrigins.layout, x: shiftedRightX, y: rightOrigins.shapedY });
-  assert.equal(originsAttribute.updateRanges.length, 2, 'separate presentation edits must retain both upload ranges');
+  assert.ok(
+    leftUploadRanges.every(({ start: rangeStart, count }) =>
+      originsAttribute.updateRanges.some(
+        (range) => range.start <= rangeStart && range.start + range.count >= rangeStart + count,
+      ),
+    ),
+    'separate presentation edits may coalesce but must retain every earlier upload range',
+  );
   assert.equal(left.snapshotGlyphOrigins().displayedX[0], leftOrigins.shapedX[0] + 2);
   assert.equal(right.snapshotGlyphOrigins().displayedX[0], rightOrigins.shapedX[0] + 4);
 
@@ -405,6 +459,21 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
     right.snapshotGlyphOrigins().displayedX[0],
     rightOrigins.shapedX[0] + 4,
     'transform-only updates must not cross into Rust or discard presentation overrides',
+  );
+
+  originsAttribute.clearUpdateRanges();
+  left.clearGlyphOriginOverrides();
+  const clearedOriginRanges = originsAttribute.updateRanges.map((range) => ({ ...range }));
+  assert.ok(clearedOriginRanges.length > 0);
+  right.style = { ...right.style, color: '#00ff00' };
+  scene.updateMatrixWorld();
+  assert.ok(
+    clearedOriginRanges.every(({ start: rangeStart, count }) =>
+      originsAttribute.updateRanges.some(
+        (range) => range.start <= rangeStart && range.start + range.count >= rangeStart + count,
+      ),
+    ),
+    'a second plan before rendering must retain every earlier pending upload range',
   );
 
   right.style = { ...right.style, fontSize: 20 };
