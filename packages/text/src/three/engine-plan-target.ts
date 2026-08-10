@@ -45,6 +45,7 @@ interface MaterialRealization {
   readonly resourceId: number;
   readonly resourceGeneration: number;
   readonly buffers: readonly Readonly<{ id: number; generation: number }>[];
+  readonly indexedTransform: boolean;
 }
 
 interface OriginSegment {
@@ -73,6 +74,7 @@ interface RecordAddressing {
 export interface ThreeTextEnginePlanOwner {
   readonly drawRoot: THREE.Object3D;
   objectForTransform(transformId: number): THREE.Object3D;
+  transformIds(): Iterable<number>;
   readonly renderOrderBase: number;
 }
 
@@ -126,29 +128,32 @@ export class ThreeTextRenderPlanExecutor {
 
   apply(publication: TextEnginePublication): void {
     if (this.#disposed) throw new Error('Three text-engine plan target has been disposed');
-    this.#restoreOriginTargets();
-    const plan = this.#view.bind(publication);
-    const resources = plan.table('resources');
-    const buffers = plan.table('buffers');
-    const patches = plan.table('patches');
-    const primitives = plan.table('primitives');
-    const draws = plan.table('draws');
-    const retirements = plan.table('retirements');
-    if (resources.count !== 0) this.#readResources(plan, resources);
-    if (buffers.count !== 0) this.#readBuffers(plan, buffers);
-    this.#applyPatches(plan, patches);
-    if (
-      resources.count !== 0 ||
-      buffers.count !== 0 ||
-      primitives.count !== 0 ||
-      draws.count !== 0 ||
-      retirements.count !== 0
-    ) {
-      this.#replaceDraws(plan, draws, primitives, buffers, resources);
-    }
-    this.syncTransforms();
-    this.#applyRetirements(plan, retirements);
-    this.#originRecords.clear();
+    this.#coordinator.applyPlan(() => {
+      for (const buffer of this.#buffers.values()) buffer.attribute.clearUpdateRanges();
+      this.#restoreOriginTargets();
+      const plan = this.#view.bind(publication);
+      const resources = plan.table('resources');
+      const buffers = plan.table('buffers');
+      const patches = plan.table('patches');
+      const primitives = plan.table('primitives');
+      const draws = plan.table('draws');
+      const retirements = plan.table('retirements');
+      if (resources.count !== 0) this.#readResources(plan, resources);
+      if (buffers.count !== 0) this.#readBuffers(plan, buffers);
+      this.#applyPatches(plan, patches);
+      if (
+        resources.count !== 0 ||
+        buffers.count !== 0 ||
+        primitives.count !== 0 ||
+        draws.count !== 0 ||
+        retirements.count !== 0
+      ) {
+        this.#replaceDraws(plan, draws, primitives, buffers, resources);
+      }
+      this.syncTransforms();
+      this.#applyRetirements(plan, retirements);
+      this.#originRecords.clear();
+    });
   }
 
   snapshotGlyphOrigins(
@@ -225,7 +230,7 @@ export class ThreeTextRenderPlanExecutor {
     this.#owner.drawRoot.updateWorldMatrix(true, false);
     this.#rootInverse.copy(this.#owner.drawRoot.matrixWorld).invert();
     const target = this.#transformAttribute.array as Float32Array;
-    let changed = 0;
+    const changedTransforms = new Set<number>();
     let indexedChanged = 0;
     for (const index of this.#activeTransformIndices) {
       const object = this.#owner.objectForTransform(index);
@@ -240,7 +245,7 @@ export class ThreeTextRenderPlanExecutor {
         target.fill(0, offset, offset + 16);
       }
       this.#transformAttribute.addUpdateRange(index * 16, 16);
-      changed += 1;
+      changedTransforms.add(index);
       indexedChanged += 1;
     }
     for (const draw of this.#draws) {
@@ -259,14 +264,14 @@ export class ThreeTextRenderPlanExecutor {
         draw.matrixWorldNeedsUpdate = true;
         drawChanged = true;
       }
-      if (drawChanged) changed += 1;
+      if (drawChanged) changedTransforms.add(transformId);
     }
-    if (changed === 0) return 0;
+    if (changedTransforms.size === 0) return 0;
     if (indexedChanged !== 0) {
       this.#transformAttribute.needsUpdate = true;
       invalidatePboTexture(this.#transformAttribute);
     }
-    return changed;
+    return changedTransforms.size;
   }
 
   dispose(): void {
@@ -345,7 +350,6 @@ export class ThreeTextRenderPlanExecutor {
   #applyPatches(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
     const layout = textShaperAbi.layouts.enginePatch;
     const opcodes = textShaperAbi.engine.patchOpcodes;
-    const touched = new Set<number>();
     for (let index = 0; index < table.count; index += 1) {
       const record = plan.record(table, index);
       const opcode = plan.u16(record + layout.opcode);
@@ -376,8 +380,7 @@ export class ThreeTextRenderPlanExecutor {
       } else {
         throw new Error(`unsupported text-engine patch opcode ${opcode}`);
       }
-      markUpdated(buffer, destinationOffset, byteLength, !touched.has(buffer.id));
-      touched.add(buffer.id);
+      markUpdated(buffer, destinationOffset, byteLength);
     }
   }
 
@@ -403,7 +406,7 @@ export class ThreeTextRenderPlanExecutor {
       previous.set(key, matches);
     }
     const reused = new Set<THREE.Mesh>();
-    const transformIndices = this.#collectTransformIndices(plan, draws, primitives, buffers);
+    const transformIndices = this.#collectTransformIndices(plan, draws);
     this.#ensureTransformCapacity(transformIndices);
     try {
       for (let index = 0; index < draws.count; index += 1) {
@@ -555,45 +558,13 @@ export class ThreeTextRenderPlanExecutor {
     return { kind: 'indexed', indices };
   }
 
-  #collectTransformIndices(
-    plan: TextEngineRenderPlanView,
-    draws: RenderPlanTable,
-    primitives: RenderPlanTable,
-    buffers: RenderPlanTable,
-  ): Set<number> {
+  #collectTransformIndices(plan: TextEngineRenderPlanView, draws: RenderPlanTable): Set<number> {
     const drawLayout = textShaperAbi.layouts.engineDraw;
-    const primitiveLayout = textShaperAbi.layouts.enginePrimitive;
-    const bufferLayout = textShaperAbi.layouts.engineBuffer;
-    const result = new Set<number>();
     for (let drawIndex = 0; drawIndex < draws.count; drawIndex += 1) {
       const draw = plan.record(draws, drawIndex);
-      if (plan.u32(draw + drawLayout.transformId) !== 0) continue;
-      const primitive = plan.record(primitives, plan.u32(draw + drawLayout.primitiveStart));
-      const bufferStart = plan.u32(draw + drawLayout.bufferStart);
-      const bufferEnd = bufferStart + plan.u32(draw + drawLayout.bufferCount);
-      let transformBuffer: RetainedBuffer | undefined;
-      const byPolicyId = new Map<number, RetainedBuffer>();
-      for (let bufferIndex = bufferStart; bufferIndex < bufferEnd; bufferIndex += 1) {
-        const record = plan.record(buffers, bufferIndex);
-        const candidate = this.#buffer(plan.u32(record + bufferLayout.id), plan.u32(record + bufferLayout.generation));
-        byPolicyId.set(candidate.policyBufferId, candidate);
-        if (candidate.policyBufferId === FIRST_PARTY_TRANSFORM_BUFFER_ID) transformBuffer = candidate;
-      }
-      if (transformBuffer === undefined || !(transformBuffer.array instanceof Uint32Array)) {
-        throw new Error('indexed Three draw is missing its u32 transform-index buffer');
-      }
-      const addressing = recordAddressing(plan, draw, primitive, byPolicyId);
-      const start = plan.u32(primitive + primitiveLayout.recordIndex);
-      const end = start + plan.u16(primitive + primitiveLayout.recordCount);
-      for (let recordIndex = start; recordIndex < end; recordIndex += 1) {
-        const transformIndex = transformBuffer.array[physicalRecordIndex(addressing.order, recordIndex)];
-        if (transformIndex === undefined || transformIndex === 0) {
-          throw new Error('indexed Three draw references an invalid transform slot');
-        }
-        result.add(transformIndex);
-      }
+      if (plan.u32(draw + drawLayout.transformId) === 0) return new Set(this.#owner.transformIds());
     }
-    return result;
+    return new Set();
   }
 
   #ensureTransformCapacity(indices: ReadonlySet<number>): void {
@@ -605,8 +576,7 @@ export class ThreeTextRenderPlanExecutor {
     while (capacity < requiredRecords) capacity *= 2;
     this.#transformAttribute = transformAttribute(capacity / 4);
     this.#transformGeneration += 1;
-    for (const realization of this.#materials.values()) realization.material.dispose();
-    this.#materials.clear();
+    this.#disposeMaterials((realization) => realization.indexedTransform);
   }
 
   #bitmapMaterial(
@@ -662,7 +632,7 @@ export class ThreeTextRenderPlanExecutor {
       position,
       createDefaultMaterial: () => bitmapMaterial(shader, position),
     });
-    this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing));
+    this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing), transform.kind);
     return material;
   }
 
@@ -702,14 +672,16 @@ export class ThreeTextRenderPlanExecutor {
     );
     const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
     const publicBuffers = new Map<number, ThreePlanProgramBuffer>(
-      [...buffers].map(([id, buffer]) => [
-        id,
-        {
-          scalarType: buffer.scalarType,
-          vectorWidth: buffer.vectorWidth,
-          attribute: buffer.attribute,
-        },
-      ]),
+      [...buffers]
+        .filter(([id]) => id !== textShaperAbi.engine.internalBufferBindings.order)
+        .map(([id, buffer]) => [
+          id,
+          {
+            scalarType: buffer.scalarType,
+            vectorWidth: buffer.vectorWidth,
+            attribute: buffer.attribute,
+          },
+        ]),
     );
     const material = this.#ownMaterial(
       resolved.program.createMaterial({
@@ -724,7 +696,7 @@ export class ThreeTextRenderPlanExecutor {
             : position,
       }),
     );
-    this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing));
+    this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing), transform.kind);
     return material;
   }
 
@@ -784,7 +756,7 @@ export class ThreeTextRenderPlanExecutor {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing));
+    this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing), transform.kind);
     return material;
   }
 
@@ -899,7 +871,13 @@ export class ThreeTextRenderPlanExecutor {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#retainMaterial(key, material, resource, materialBuffers(required, transformRealization, addressing));
+    this.#retainMaterial(
+      key,
+      material,
+      resource,
+      materialBuffers(required, transformRealization, addressing),
+      transformRealization.kind,
+    );
     return material;
   }
 
@@ -962,12 +940,14 @@ export class ThreeTextRenderPlanExecutor {
     material: THREE.NodeMaterial,
     resource: RetainedResource,
     buffers: readonly RetainedBuffer[],
+    transformKind: TransformRealization['kind'],
   ): void {
     this.#materials.set(key, {
       material,
       resourceId: resource.id,
       resourceGeneration: resource.generation,
       buffers: buffers.map(({ id, generation }) => ({ id, generation })),
+      indexedTransform: transformKind === 'indexed',
     });
   }
 
@@ -1001,11 +981,10 @@ export class ThreeTextRenderPlanExecutor {
       const id = plan.u32(record + layout.id);
       const generation = plan.u32(record + layout.generation);
       if (kind === kinds.buffer) {
-        if (this.#buffers.get(id)?.generation !== generation) continue;
         this.#disposeMaterials((realization) =>
           realization.buffers.some((buffer) => buffer.id === id && buffer.generation === generation),
         );
-        this.#buffers.delete(id);
+        if (this.#buffers.get(id)?.generation === generation) this.#buffers.delete(id);
         continue;
       }
       if (kind === kinds.resource) {
@@ -1298,12 +1277,11 @@ function packReferencePairs(
   return { data, width, height };
 }
 
-function markUpdated(buffer: RetainedBuffer, byteOffset: number, byteLength: number, firstPatch: boolean): void {
+function markUpdated(buffer: RetainedBuffer, byteOffset: number, byteLength: number): void {
   const scalarBytes = buffer.array.BYTES_PER_ELEMENT;
   if (byteOffset % scalarBytes !== 0 || byteLength % scalarBytes !== 0) {
     throw new RangeError('buffer patch is not scalar aligned');
   }
-  if (firstPatch) buffer.attribute.clearUpdateRanges();
   buffer.attribute.addUpdateRange(byteOffset / scalarBytes, byteLength / scalarBytes);
   buffer.attribute.needsUpdate = true;
   invalidatePboTexture(buffer.attribute);
@@ -1311,7 +1289,7 @@ function markUpdated(buffer: RetainedBuffer, byteOffset: number, byteLength: num
 
 function markOriginRanges(ranges: ReadonlyMap<RetainedBuffer, readonly [number, number]>): void {
   for (const [buffer, [start, end]] of ranges) {
-    markUpdated(buffer, start * buffer.array.BYTES_PER_ELEMENT, (end - start) * buffer.array.BYTES_PER_ELEMENT, true);
+    markUpdated(buffer, start * buffer.array.BYTES_PER_ELEMENT, (end - start) * buffer.array.BYTES_PER_ELEMENT);
   }
 }
 

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:c719e6708a954f5918cbfa4e9634551aa22b4f1503e019ae78c7ef371f4f3172'
+source_digest: 'sha256:848403ab5df85b439089e447010f07ae54309de2c3f9eeba994337611160ddaf'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -55,7 +55,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T03:16:26Z'
+  at: '2026-08-10T03:36:54Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -251,6 +251,15 @@ frame preparation, the complete Rust transaction and render-plan publication, an
 GPU submission. An adjacent phase-instrumented run was indistinguishable within process noise. Those temporary profiler
 exports, calls, branches, and clock reads are now absent from the package source and clean publishing output; benchmark
 workload markers and the direct Wasm timer remain outside the shipped library.
+
+After the final plan-application lifecycle audit, Three sizes indexed transforms from live paragraph IDs instead of
+scanning every glyph record in JavaScript. A renderer failure retains an unconsumed owned plan for zero-crossing retry;
+dirty upload ranges accumulate across presentation restoration and Rust patches; buffer/resource generations dispose
+only their exact dependent materials; direct materials survive indexed transform-table growth; and loaded-font disposal
+removes its decoded renderer resources. The unchanged eight-warmup/31-sample public 25,515-glyph lane measures
+17.84/6.32/3.04/13.84 ms medians and 18.99/6.64/4.60/14.01 ms p95 for cold/font-size/width/text. The adjacent recorded
+run was 19.42/6.59/3.10/14.24 ms median; process-separated samples support no regression and a plausible cold-path
+reduction, not causal attribution.
 
 The canonical direct benchmark loads the packaged `dist/text_shaper.wasm`: Cargo release optimization, LTO, one codegen
 unit, default-on `simd128`, stripping, and `wasm-opt -Oz --enable-simd` have already run. On the identical Rust artifact,

@@ -40,7 +40,10 @@ export interface ThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Re
   readonly policy: Omit<PolicyProgram, 'techniqueId' | 'programId'>;
   /** Cold font registration; never runs during frame shaping, layout, packing, or draw submission. */
   compileFont(compiler: ThreePlanProgramFontCompiler<Technique, Resource>): void;
-  /** Renderer realization invoked only when a compatible retained material is absent. */
+  /**
+   * Renderer realization invoked only when a compatible retained material is absent.
+   * The callback receives borrowed plan-backed attributes and must not synchronously update or query text.
+   */
   createMaterial(context: ThreePlanProgramMaterialContext<Resource>): NodeMaterial;
 }
 

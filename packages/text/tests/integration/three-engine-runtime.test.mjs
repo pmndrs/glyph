@@ -14,6 +14,7 @@ import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { compileTextEngineFrameUpdate } from '../../dist/internal/engine-frame-wire.js';
 import { firstPartyThreeRenderPolicyBytes } from '../../dist/internal/render-policy-wire.js';
 import { TextEngineRenderPlanView } from '../../dist/internal/render-plan-view.js';
+import { LoadedFontImpl } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
 import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
@@ -68,7 +69,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
     glyphCount: slugCore.glyphCount,
     glyphIdWidth: 16,
   });
-  const bitmapFont = {
+  const bitmapFont = new LoadedFontImpl({
     runtime: undefined,
     font: registered,
     technique: bitmap,
@@ -83,10 +84,10 @@ test('Three coordinator shares shaping data across technique bindings and refere
         })),
       })),
     },
-    disposed: false,
-  };
+    release: () => undefined,
+  });
   const extension = msdfRaster.document.extensions.PMNDRS_font_distance_field;
-  const msdfFont = {
+  const msdfFont = new LoadedFontImpl({
     runtime: undefined,
     font: registered,
     technique: msdf,
@@ -104,10 +105,10 @@ test('Three coordinator shares shaping data across technique bindings and refere
       records: msdfRaster.records,
       pages: msdfRaster.pages,
     },
-    disposed: false,
-  };
+    release: () => undefined,
+  });
   const slugExtension = slugRaster.document.extensions.PMNDRS_font_slug;
-  const slugFont = {
+  const slugFont = new LoadedFontImpl({
     runtime: undefined,
     font: registered,
     technique: slug,
@@ -130,8 +131,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
         referenceBytes: page.references.bytes.slice(),
       })),
     },
-    disposed: false,
-  };
+    release: () => undefined,
+  });
   const coordinator = new ThreeTextEngineCoordinator(shaper);
   const materialCalls = [];
   const primaryMaterial = coordinator.acquireMaterial(
@@ -344,6 +345,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
       if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
       return object;
     },
+    transformIds: () => paragraphObjects.keys(),
   });
   target.apply(publication);
   assert.equal(target.draws.length, 2);
@@ -656,6 +658,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
       if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
       return object;
     },
+    transformIds: () => paragraphObjects.keys(),
   });
   directTarget.apply(directPublication);
   assert.equal(directTarget.draws.length, 2);
@@ -705,6 +708,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
       if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
       return object;
     },
+    transformIds: () => paragraphObjects.keys(),
   });
   hybridTarget.apply(hybridInitialPublication);
   const hybridPublication = hybridSession.update(
@@ -765,12 +769,19 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(hybridDirectDraw.geometry.getAttribute('_pmndrsText_15'), undefined);
   assert.equal(hybridDirectDraw.geometry.getAttribute('_pmndrsTextTransforms'), undefined);
   assert.equal(hybridDirectDraw.matrix.elements[12], 9);
+  let hybridDirectDisposals = 0;
+  hybridDirectDraw.material.addEventListener('dispose', () => (hybridDirectDisposals += 1));
+  paragraphObjects.set(20, new THREE.Object3D());
+  hybridTarget.apply(hybridPublication);
+  assert.equal(hybridDirectDisposals, 0, 'indexed transform growth must preserve unrelated direct materials');
+  assert.equal(hybridTarget.draws[1].material, hybridDirectDraw.material);
   paragraphObjects.get(1).position.x = 6;
   paragraphObjects.get(2).position.x = 10;
   assert.equal(hybridTarget.syncTransforms(), 2);
-  assert.equal(hybridIndexedDraw.geometry.getAttribute('_pmndrsTextTransforms').array[1 * 16 + 12], 6);
+  assert.equal(hybridTarget.draws[0].geometry.getAttribute('_pmndrsTextTransforms').array[1 * 16 + 12], 6);
   assert.equal(hybridDirectDraw.matrix.elements[12], 10);
   hybridTarget.dispose();
+  paragraphObjects.delete(20);
   hybridSession.dispose();
 
   const stablePolicyHandle = 4;
@@ -812,6 +823,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
       if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
       return object;
     },
+    transformIds: () => paragraphObjects.keys(),
   });
   stableTarget.apply(stableInitialPublication);
   const stableOrder = stableTarget.draws[0].geometry.getAttribute(`_pmndrsText_${orderBinding}`);
@@ -882,6 +894,15 @@ test('Three coordinator shares shaping data across technique bindings and refere
   slugFirst.release();
   primaryMaterial.release();
   secondaryMaterial.release();
+  bitmapFont.dispose();
+  assert.throws(
+    () => coordinator.resolveResource(bitmapReference),
+    /unknown resource/u,
+    'disposed fonts must release decoded renderer resources from the coordinator',
+  );
+  assert.equal(coordinator.resolveResource(msdfReference).technique, msdf.id);
+  msdfFont.dispose();
+  slugFont.dispose();
   coordinator.dispose();
   assert.throws(() => coordinator.acquireFontStack([bitmapFont]), /disposed/);
   shaper.dispose();
