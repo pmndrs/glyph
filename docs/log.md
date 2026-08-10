@@ -2,6 +2,10 @@
 
 ## 2026-08-10
 
+- **Removed product HarfBuzz subprocesses** — `text glyphs`, `text bake --unicodes`, and programmatic
+  `@pmndrs/text/bake` now use the packaged Fontations/Skera baker Wasm. One normalized prepared source feeds core
+  shaping and every requested raster technique; HarfBuzz remains internal test-oracle tooling only.
+
 - **Package-owned font preparation** — Added generated `prepare` and `inspect` Wasm exports backed by Skera and Skrifa. The optional baker alone enables `std`; the same Rust source still passes its `wasm32 --no-default-features` compatibility build, and an ASCII subset is inspected and rebaked through the packaged direct-memory bridge. Measured `opt-level = "z"` plus Binaryen `-Oz` wins for this graph at 1,097,710 raw / 391,557 gzip bytes.
 
 - **Single-package bake ownership** — Folded the portable font-baker Rust/Wasm source, TypeScript bridge, validator, schemas, tests, and build tooling into `@pmndrs/text`. `@pmndrs/text/bake` is now the sole programmatic product surface, while package-boundary tests prove the ordinary root import retains no eager edge to baker Wasm, `std`-enabled subsetting dependencies, Ajv, or glTF Validator.

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:e73273a9d0445e551e376dcc0799a84221910533f5201a525b1d7270a2d59f8b'
+source_digest: 'sha256:c6e0b64b066c02e48fa80fea1bf157b018e42f5af783a83cb49ee1415d8e36be'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -64,7 +64,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T03:47:15Z'
+  at: '2026-08-10T14:29:59Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -116,15 +116,16 @@ compatibility wrapper over the removed batch model.
 The package-owned `text` executable is available through `pnpm exec`; its `bake` command supports both project discovery
 and a direct known-font mode. Its stable packaged shim delegates to the built Node CLI, so workspace installs can link the
 executable before `dist` exists. Direct mode accepts one input/output pair, a collection face, optional shaping-font
-Unicode subsetting through `hb-subset`, and independently selected embedded Bitmap, MSDF, and Slug rasters. `--check`
+Unicode subsetting through the package-owned Fontations/Skera baker Wasm, and independently selected embedded Bitmap,
+MSDF, and Slug rasters. The prepared source bytes feed the core shaping bake and every selected raster bake; neither the
+CLI nor the programmatic `@pmndrs/text/bake` path invokes a platform font tool. `--check`
 publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output. It calls the
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
 
-The `text glyphs` command uses `hb-info` from the same HarfBuzz toolchain to enumerate Unicode mappings and surface names
-retained in a font's `post` or CFF data. Exact repeatable `--name` filters can emit structured JSON or a compressed
-`--unicode-set` accepted by `text bake --unicodes`. HarfBuzz's synthetic `gidN` labels are omitted, so absent font-authored
-names remain absent instead of being presented as semantic icon metadata. Rich vendor labels and aliases remain external
-catalog data.
+The `text glyphs` command uses the same package-owned baker Wasm and Skrifa to enumerate Unicode mappings, exact glyph
+IDs, and names retained in a font's `post` or CFF data. Exact repeatable `--name` filters can emit structured JSON or a
+compressed `--unicode-set` accepted by `text bake --unicodes`. Fonts without authored names still expose exact IDs rather
+than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
 
 One baked GLB may expose several raster techniques without repeating its input identity. `TextRuntime.loadFont()` and
 R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The
