@@ -234,7 +234,10 @@ export function ComparisonWorkloadViewport({
       fontFixture,
       fontSize,
       iconGridView: presentationPreset === 'icon-grid-return' ? 'alternate' : 'origin',
-      layoutWidthRatio,
+      // Runtime defaults and the route update are separate reactive stores. During the transition into Off-axis / 3D,
+      // its authored 120% default can therefore be observed for one render with the preceding workload. Keep every
+      // intermediate configuration valid without weakening the scene's workload-specific contract.
+      layoutWidthRatio: workload === 'off-axis-3d' ? layoutWidthRatio : Math.min(layoutWidthRatio, 1),
       paintOpacity,
       paintShadowEnabled,
       paintStrokeWidth,

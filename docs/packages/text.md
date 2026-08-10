@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:e3c2f2959b1bc39be0add04a7ce0ac91d84ae22bdb03b3189a216a1263ae1f91'
+source_digest: 'sha256:61242870023c632bd2ce25324a2d961b249c6de523013d9935cc1ec1f543319c'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -237,19 +237,26 @@ The latest checked package-size record after the baker ABI cleanup reports:
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
 | Core JavaScript plus shaper Wasm        | 1,247,715 B | 460,130 B | 363,319 B |
-| Three adapter plus core and shaper Wasm | 1,488,082 B | 498,494 B | 395,212 B |
+| Three adapter plus core and shaper Wasm | 1,488,669 B | 498,606 B | 395,276 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
 The optimized shaper is 1,159,317 raw / 442,284 gzip / 347,850 Brotli bytes. The renderer-neutral JavaScript graph is
-88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 328,765 raw / 56,210 gzip /
-47,362 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
+88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 329,352 raw / 56,322 gzip /
+47,426 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
 to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; the later shared-emitter and stable
 range-scan work reduces those totals to 460,416 and 498,437 gzip bytes. The homogeneous-policy dispatch and dirty-range
 alignment correction moved those totals to 460,458 and 498,479 gzip bytes; the focused planner deduplication and current
-Three graph now measure 460,130 and 498,494 gzip bytes. The final renderer-lifecycle fixes leave core and Wasm
-byte-identical and add 764 raw / 118 gzip / 82 Brotli bytes to the complete Three graph.
+Three graph now measure 460,130 and 498,606 gzip bytes. The final renderer-lifecycle fixes and exact WebGL2 PBO range
+copy leave core and Wasm byte-identical and add 1,351 raw / 230 gzip / 146 Brotli bytes to the complete Three graph.
+
+WebGPU continues to alias canonical plan arrays directly. Three's WebGL2 PBO builder replaces a storage attribute's
+array with power-of-two-padded retained texture storage, so later Rust patches copy only their dirty byte ranges into
+that detached upload view before invalidating its texture. A focused integration fixture simulates the replacement and
+proves exact canonical/upload equality with untouched padding. The complete 48-cell presentation matrix keeps every
+Bitmap, MTSDF, and Slug workload visible on WebGPU and forced WebGL2; this is the deliberate one-copy WebGL2 fallback,
+not another renderer-side layout or packing path.
 The corrected complete MTSDF baker remains 552,025 raw / 215,030 gzip / 168,758 Brotli bytes; the earlier 52 KiB
 observation was a kernel-only test artifact that reused the distributable Cargo target directory.
 

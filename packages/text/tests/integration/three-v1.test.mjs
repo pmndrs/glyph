@@ -434,6 +434,10 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   shiftedLeftX[0] += 2;
   shiftedRightX[0] += 4;
   const originsAttribute = draws[0].geometry.getAttribute('_pmndrsText_1');
+  const canonicalOrigins = originsAttribute.array;
+  const pboUploadOrigins = new Float32Array(canonicalOrigins.length + 4);
+  pboUploadOrigins.set(canonicalOrigins);
+  originsAttribute.array = pboUploadOrigins;
   originsAttribute.clearUpdateRanges();
   left.setGlyphOrigins({ layout: leftOrigins.layout, x: shiftedLeftX, y: leftOrigins.shapedY });
   const leftUploadRanges = originsAttribute.updateRanges.map((range) => ({ ...range }));
@@ -448,6 +452,12 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   );
   assert.equal(left.snapshotGlyphOrigins().displayedX[0], leftOrigins.shapedX[0] + 2);
   assert.equal(right.snapshotGlyphOrigins().displayedX[0], rightOrigins.shapedX[0] + 4);
+  assert.deepEqual(
+    pboUploadOrigins.subarray(0, canonicalOrigins.length),
+    canonicalOrigins,
+    'WebGL2 PBO replacement storage must receive the same dirty ranges as canonical plan storage',
+  );
+  assert.deepEqual(pboUploadOrigins.subarray(canonicalOrigins.length), new Float32Array(4));
 
   const version = transforms.version;
   right.position.x = 7;
