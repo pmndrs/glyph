@@ -23,8 +23,8 @@
     "formatVersion": 0,
     "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d",
     "expectedCore": {
-      "artifactBytes": 172156,
-      "artifactSha256": "af7bfb85f04a6a63c6462735a6e8ec6d739576adb354c07ca51e744814db2f7b",
+      "artifactBytes": 172144,
+      "artifactSha256": "edf896923f38c9e6080e176540699a7b96b7cd15606b0522447750e7595170b5",
       "shapingHash": "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
       "shapingSfntBytes": 147192,
       "extentsBytes": 23496,

@@ -9,6 +9,8 @@ import {
   type RuntimeFontBakeRequest,
 } from './loader.js';
 import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
+import { normalizeUnicodeRanges } from './internal/font-selection.js';
+import type { RuntimeBakeRasterV0, RuntimeBakeUnicodeRangeV0 } from './internal/runtime-bake-protocol.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
 import type {
   AnyRasterTechnique,
@@ -34,7 +36,11 @@ export interface TextRuntimeOptions {
 
 export type LoadedFontInput =
   | { readonly baked: string | URL }
-  | { readonly source: string | URL; readonly runtimeBake: RuntimeFontBake };
+  | {
+      readonly source: string | URL;
+      readonly runtimeBake: RuntimeFontBake;
+      readonly unicodeRanges?: readonly RuntimeBakeUnicodeRangeV0[];
+    };
 
 export interface LoadedFontRequest<Technique extends AnyRasterTechnique> {
   readonly input: LoadedFontInput;
@@ -99,7 +105,7 @@ class TextRuntimeImpl implements TextRuntime {
   readonly registry: FontRegistry;
   readonly #shaper: RuntimeShaper;
   readonly #defaultLoader: FontLoader;
-  readonly #sourceLoaders = new Map<RuntimeFontBake, FontLoader>();
+  readonly #sourceLoaders = new Map<RuntimeFontBake, Map<string, FontLoader>>();
   readonly #loaded = new Map<RegisteredFont, Map<AnyRasterTechnique, Map<string, LoadedFont<AnyRasterTechnique>>>>();
   readonly #pending = new Map<RegisteredFont, Map<AnyRasterTechnique, Map<string, PendingTechniqueLoad>>>();
   #disposed = false;
@@ -128,7 +134,8 @@ class TextRuntimeImpl implements TextRuntime {
   ): Promise<unknown> {
     this.#assertActive();
     options.signal?.throwIfAborted();
-    const font = await this.#loadRegisteredFont(request.input, options.signal);
+    const rasterRequests = 'rasters' in request ? request.rasters : [request.raster];
+    const font = await this.#loadRegisteredFont(request.input, rasterRequests, options.signal);
     this.#assertActive();
     options.signal?.throwIfAborted();
     this.#shaper.registerFont(font);
@@ -194,13 +201,41 @@ class TextRuntimeImpl implements TextRuntime {
     this.#shaper.dispose();
   }
 
-  async #loadRegisteredFont(input: LoadedFontInput, signal: AbortSignal | undefined): Promise<RegisteredFont> {
+  async #loadRegisteredFont(
+    input: LoadedFontInput,
+    rasterRequests: readonly RasterTechniqueRequest<AnyRasterTechnique>[],
+    signal: AbortSignal | undefined,
+  ): Promise<RegisteredFont> {
     if ('baked' in input)
       return this.#defaultLoader.load({ baked: input.baked }, signal === undefined ? {} : { signal });
-    let loader = this.#sourceLoaders.get(input.runtimeBake);
+    const unicodeRanges =
+      input.unicodeRanges === undefined ? undefined : normalizeUnicodeRanges(input.unicodeRanges);
+    const rasters = await Promise.all(rasterRequests.map(runtimeBakeRaster));
+    const planKey = canonicalJson(
+      {
+        rasters,
+        unicodeRanges: unicodeRanges ?? null,
+      } as unknown as import('./raster.js').JsonValue,
+    );
+    let loaders = this.#sourceLoaders.get(input.runtimeBake);
+    if (loaders === undefined) {
+      loaders = new Map();
+      this.#sourceLoaders.set(input.runtimeBake, loaders);
+    }
+    let loader = loaders.get(planKey);
     if (loader === undefined) {
-      loader = new FontLoader({ registry: this.registry, runtimeBake: input.runtimeBake });
-      this.#sourceLoaders.set(input.runtimeBake, loader);
+      const runtimeBake: RuntimeFontBake = (request) =>
+        input.runtimeBake({
+          ...request,
+          ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
+          rasters,
+        });
+      loader = new FontLoader({
+        registry: this.registry,
+        runtimeBake,
+        ...(unicodeRanges === undefined ? {} : { runtimeSourceIdentity: 'transformed' }),
+      });
+      loaders.set(planKey, loader);
     }
     return loader.load({ source: input.source, baked: null }, signal === undefined ? {} : { signal });
   }
@@ -357,6 +392,28 @@ class TextRuntimeImpl implements TextRuntime {
     this.#assertActive();
     return this.#shaper;
   }
+}
+
+async function runtimeBakeRaster(
+  request: RasterTechniqueRequest<AnyRasterTechnique>,
+): Promise<RuntimeBakeRasterV0> {
+  const { technique } = request;
+  const descriptor = techniqueOperations(technique).descriptor(
+    request.options as RasterOptionsArgument<RasterOptionsOf<AnyRasterTechnique>>,
+  );
+  const rasterKey = await deriveRasterKey({
+    descriptor,
+    extension: technique.extension,
+    kind: technique.kind,
+    version: technique.version,
+  });
+  return {
+    kind: technique.kind,
+    extension: technique.extension,
+    version: technique.version,
+    rasterKey,
+    descriptor,
+  };
 }
 
 async function decodeTechnique<Technique extends AnyRasterTechnique>(

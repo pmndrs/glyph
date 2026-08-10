@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:2f3229309959f48c90999864cd876d2fa316f31389896d2c0853c7992492f132'
+source_digest: 'sha256:732e2dbc4d1a2f5cbe2791d8fbbc6e4037ca2ba5d553f45ddfac899b654a2f62'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -538,7 +538,7 @@ The size lane is also a package-graph gate. Its consumer builds inspect emitted 
 
 The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, CJK, and advanced-shaping conformance records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
 
-The packed-consumer lane builds and packs both workspace packages, extracts only their published tarballs into an isolated Vite application, and executes `@pmndrs/text/runtime-bake` through the installed module Worker in Chromium. Canonical Inter returns the exact 172,156-byte artifact and SHA-256 `af7bfb85f04a6a63c6462735a6e8ec6d739576adb354c07ca51e744814db2f7b`. This closes the gap between source-workspace Worker evidence and what an installed consumer actually resolves.
+The packed-consumer lane builds and packs both workspace packages, extracts only their published tarballs into an isolated Vite application, and executes `@pmndrs/text/runtime-bake` through the installed module Worker in Chromium. Canonical Inter returns the exact 172,144-byte artifact and SHA-256 `edf896923f38c9e6080e176540699a7b96b7cd15606b0522447750e7595170b5`. This closes the gap between source-workspace Worker evidence and what an installed consumer actually resolves.
 
 The `text:kernel-lab-browser` workflow runs the package-owned scalar, compiler-vectorized, and selected hybrid shaper
 artifacts in the project-pinned Chromium from a trustworthy loopback origin. It consumes the same captured 25,515- and

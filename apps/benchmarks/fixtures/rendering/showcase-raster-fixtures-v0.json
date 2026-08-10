@@ -9,8 +9,8 @@
     {
       "fontFixture": "inter",
       "file": "inter-bitmap-16.font.glb",
-      "bytes": 927164,
-      "sha256": "55e0f03fcd9cec9312b03f58de112d299982e82db368d9a666db120ef8a4f471",
+      "bytes": 927152,
+      "sha256": "6ae4795a1398c3a31aaa10d941fa08e5a1545a3ea86e392bc3f641fd1c1f2d9c",
       "raster": {
         "decodedGpuBytes": 695296,
         "pages": [

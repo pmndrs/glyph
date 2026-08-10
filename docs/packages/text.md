@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:d9f951f42a66b591999ad9b7628a6c39e02636ffb5d7bade24ffdbe3054751a7'
+source_digest: 'sha256:a78c58b729c09c6ba948ce10355a4f8ad3577dcacb2a257e97d54cd76f2283ae'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -132,6 +132,17 @@ R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preservi
 artifact is fetched, validated, registered with the shaper, and retained once; each requested technique still derives
 its exact descriptor, resolves and decodes its own raster resource, and retains its associated data type. A mapped tuple
 keeps required Bitmap options and custom third-party technique types enforceable at every position.
+
+When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
+and feeds those exact prepared bytes to the shaping bake and every requested Bitmap, MSDF, or Slug bake. The Worker
+composes and validates one canonical GLB before transferring it. Its `asset.generator` is the publishing package identity
+`@pmndrs/text`, independent of whether the producer was the CLI, Node API, or runtime Worker.
+
+The Worker caches only that final validated GLB in `CacheStorage`; partial preparation and raster outputs never become
+cache entries. Identity covers source bytes, face, normalized ranges, ordered raster descriptors and keys, and all
+relevant format/baker versions. Entries expire after 30 days and the application-owned cache is pruned to 24 entries and
+128 MiB, with a 64 MiB per-entry ceiling. Cache absence, quota rejection, privacy restrictions, and storage corruption
+are transparent misses followed by the same canonical bake.
 
 ## Retained frame transaction
 

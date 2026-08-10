@@ -21,6 +21,14 @@ async function loadTargetV1Fonts(): Promise<void> {
   bitmapFont satisfies import('../../src/index.js').LoadedFont<typeof bitmap>;
   msdfFont satisfies import('../../src/index.js').LoadedFont<typeof msdf>;
   slugFont satisfies import('../../src/index.js').LoadedFont<typeof slug>;
+  await created.loadFont({
+    input: {
+      source: '/fonts/Inter.ttf',
+      runtimeBake: async () => new Uint8Array(),
+      unicodeRanges: [{ start: 0x20, end: 0x7e }],
+    },
+    rasters: [{ technique: bitmap, options: { strikes: [16] } }, { technique: slug }],
+  });
 
   created.loadFont({
     input: { baked: '/fonts/Inter.font.glb' },
