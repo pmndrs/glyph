@@ -3,8 +3,17 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-const version = '13.0.0';
-const archiveSha256 = '1626ebc763d28f4bcca1531fef42e92ca995d45f8ad90ad2ae0b5d1a567fe67a';
+const archiveSha256ByVersion = {
+  '13.0.0': '1626ebc763d28f4bcca1531fef42e92ca995d45f8ad90ad2ae0b5d1a567fe67a',
+  '14.2.0': '94017020f96d025bb66ae91574e4cf334bcad23e8175a8a40565b3721bc2eaff',
+} as const;
+const versionArgument = process.argv.find((argument) => argument.startsWith('--version='));
+const requestedVersion = versionArgument?.slice('--version='.length) ?? '13.0.0';
+if (!(requestedVersion in archiveSha256ByVersion)) {
+  throw new Error(`unsupported HarfBuzz utility version ${requestedVersion}`);
+}
+const version = requestedVersion as keyof typeof archiveSha256ByVersion;
+const archiveSha256 = archiveSha256ByVersion[version];
 const cacheDirectory = resolve('.cache/harfbuzz', version);
 const executable = resolve(cacheDirectory, 'build/util/hb-shape');
 const subsetExecutable = resolve(cacheDirectory, 'build/util/hb-subset');
@@ -108,7 +117,8 @@ async function run(command: string, arguments_: readonly string[]): Promise<void
   "name": "fixture:harfbuzz:provision",
   "summary": "Provision authenticated HarfBuzz command-line tools.",
   "requirements": "Scoped benchmark mise tools, Meson, Ninja, GLib, and network access.",
-  "writes": "Ignored HarfBuzz tool cache."
+  "writes": "Ignored HarfBuzz tool cache.",
+  "args": ["--version=13.0.0", "--version=14.2.0"]
 }
 */
 /* @workflow

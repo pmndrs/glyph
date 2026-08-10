@@ -2,6 +2,13 @@
 
 ## 2026-08-10
 
+- **Provisioned the R3F asset subsetter on clean CI hosts** — The example's byte-exact asset check requires HarfBuzz
+  14.2.0, but CI had provisioned only the separate 13.0.0 shaping oracle and CJK fixture tool. The authenticated utility
+  provisioner now accepts either recorded release, verifies the 14.2.0 source archive as
+  `94017020…eaff`, and keeps each build in its versioned ignored cache. CI publishes only the 14.2.0 utility directory to
+  later steps. A fresh source build self-identifies as 14.2.0, and the complete R3F type/lint/format, byte-exact asset,
+  production build, and live GPU interaction gate passes without changing either checked font artifact.
+
 - **Fixed stacked-PR size reporting at the action boundary** — The pinned Size Limit action executes its configured
   command directly rather than through a shell, so the compatibility pipe had been passed to the measurement script as
   inert arguments and the action received the full report object. The workflow now supplies the same base-compatible

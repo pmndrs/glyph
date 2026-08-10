@@ -45,6 +45,7 @@ and React Three Fiber remain ordinary workspace peers rather than part of the co
 ## Commands
 
 ```sh
+mise -C apps/benchmarks exec -- node ./scripts/provision-harfbuzz.mts --version=14.2.0
 mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world dev
 mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world check
 ```
