@@ -1528,12 +1528,16 @@ not an ellipsis-only attribution.
 ## Hard gates for every implementation stage
 
 - never regenerate a golden or official Unicode fixture to accept a behavior change;
-- `mise exec -- pnpm --filter @pmndrs/text test` remains 190 passing, 0 failing;
-- `mise exec -- pnpm --filter @pmndrs/text check` passes lint, format, types, and tests;
-- the benchmark application's 117 tests and 20 headless conformance cases pass;
+- `mise exec -- pnpm --filter @pmndrs/text check` passes Rust and TypeScript tests, lint, format, types, official Unicode
+  vectors, browser consumers, and packaging; the current closure checkpoint contains 158 Rust library tests and 164
+  Node integration tests, but executable manifests—not frozen counts—remain authoritative as coverage grows;
+- the benchmark application's complete `check` passes its current executable manifest; the closure checkpoint contains
+  111 Vitest cases and 16 isolated headless Chromium targets, with the manifest authoritative rather than these counts;
 - the mixed-direction Amiri golden and packed-consumer contract remain exact until an explicitly versioned render-plan
   contract replaces the latter;
-- `text:layout-benchmark -- --glyphs 22000` reports both baseline and candidate tables at every stage;
+- `text:rust-layout-benchmark -- --glyphs 22000` measures the packaged release Wasm's complete `text_update` and render
+  plan for every current technique. Historical TypeScript tables remain labeled evidence; deleted code is not rebuilt as
+  a second implementation merely to manufacture a live baseline;
 - Unicode segmentation and line breaking pass the repository's unchanged official vectors;
 - scalar and SIMD paths produce identical declared output bytes; and
 - each adapter proves patch application from the stated base revision and checkpoint recovery after a skipped revision.

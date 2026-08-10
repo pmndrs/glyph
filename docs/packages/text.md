@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:fc3cc8108476ab425f8bb5c9286ebc8382e2ede2faf42b13a31df2b35272f659'
+source_digest: 'sha256:600087bce3db441d2b24107f64609647660be3fd2baa4e49f1d510d383469ed8'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -273,6 +273,21 @@ The canonical direct benchmark loads the packaged `dist/text_shaper.wasm`: Cargo
 unit, default-on `simd128`, stripping, and `wasm-opt -Oz --enable-simd` have already run. On the identical Rust artifact,
 Binaryen `-O3` and `-O4` added 11,976 and 13,661 raw bytes without a demonstrated latency improvement, so `-Oz` remains
 the evidence-backed setting. The `<4 ms` warm-path target and stable p95 closure remain open.
+
+The final sequential eight-warmup/31-sample checkpoint uses the unchanged 22,000-target corpus, which resolves to 25,515
+positioned and 21,805 renderable glyphs. Values below are medians in milliseconds for the complete packaged Rust
+transaction and technique-specific render plan; GPU submission is outside this direct benchmark.
+
+| Technique |  Cold | Font size | Column width | Suffix edit | Local edit | Middle splice |
+| --------- | ----: | --------: | -----------: | ----------: | ---------: | ------------: |
+| Bitmap    | 16.02 |      6.01 |         2.77 |       13.73 |       1.19 |          8.35 |
+| MTSDF     | 16.60 |      6.42 |         2.77 |       13.75 |       1.20 |          8.75 |
+| Slug      | 16.83 |      6.67 |         2.87 |       13.59 |       1.19 |          8.84 |
+
+The comparable retained TypeScript checkpoint measured 55.25/11.90/8.36/38.55 ms for cold/font-size/width/suffix edit,
+so every comparable median is faster through Rust. This proves the migration comparison on this machine; it does not
+close the stricter p95-under-4-ms objective. Local-edit p95 remains about 6 ms and high-variance, while width p95 ranges
+from 4.29 to 4.94 ms across techniques.
 
 The preceding unchanged 22,000-glyph localized-edit lane measured the complete production `text_update` plus Bitmap render
 plan at 2.607 ms median / 6.184 ms p95 after 40 warmups over 101 updates. The fast ASCII-letter path reuses Unicode and
