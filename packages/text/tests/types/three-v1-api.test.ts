@@ -7,8 +7,8 @@ declare const bitmapFont: LoadedFont<typeof bitmap>;
 declare const mtsdfFont: LoadedFont<typeof msdf>;
 
 const emphasis = span(bitmapFont, { color: '#ff00ff' });
-const label = new Text({ font: bitmapFont, text: txt`Typed ${emphasis`span`}` });
-const labels = new TextGroup({ compositing: 'independent' });
+const label = new Text({ font: bitmapFont, pixelSnapping: true, text: txt`Typed ${emphasis`span`}` });
+const labels = new TextGroup({ compositing: 'independent', pixelSnapping: true });
 const compositing: 'ordered' | 'independent' = labels.compositing;
 labels.add(label);
 label.text = 'Updated';

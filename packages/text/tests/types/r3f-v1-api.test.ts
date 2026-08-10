@@ -12,8 +12,8 @@ declare const mtsdfFont: LoadedFont<typeof msdf>;
 declare const material: ThreeTextMaterial;
 
 const inline = createElement(Text<typeof bitmap>, { paint: { color: '#ff00ff' } }, 'span');
-const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material }, 'Typed ', inline);
-const labels = createElement(TextGroup, { compositing: 'independent', material }, label);
+const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material, pixelSnapping: true }, 'Typed ', inline);
+const labels = createElement(TextGroup, { compositing: 'independent', material, pixelSnapping: true }, label);
 
 function FontConsumer(): null {
   const loaded: LoadedFont<typeof bitmap> = useFont({

@@ -73,6 +73,7 @@ interface RecordAddressing {
 
 export interface ThreeTextEnginePlanOwner {
   readonly drawRoot: THREE.Object3D;
+  readonly pixelSnapping: boolean;
   objectForTransform(transformId: number): THREE.Object3D;
   transformIds(): Iterable<number>;
   readonly renderOrderBase: number;
@@ -595,7 +596,7 @@ export class ThreeTextRenderPlanExecutor {
       if (buffer === undefined) throw new Error(`Bitmap draw is missing policy buffer ${id}`);
       return buffer;
     });
-    const key = `${resource.id}:${resource.generation}:${materialId}:${required
+    const key = `${resource.id}:${resource.generation}:${materialId}:snap=${String(this.#owner.pixelSnapping)}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
       .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
     const cached = this.#materials.get(key);
@@ -623,6 +624,7 @@ export class ThreeTextRenderPlanExecutor {
           .element(instance),
       },
       { page: texture },
+      { pixelSnapping: this.#owner.pixelSnapping },
     );
     const position =
       transform.kind === 'indexed'

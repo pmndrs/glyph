@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:fe60b323e68fa859d9dda679967b03c0f4644aa949c205d1498271dbe6786371'
+source_digest: 'sha256:6db607aae17f4364c9093af29caf0bafbe56c82a45176d65604c9d72458cde1e'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -64,7 +64,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T18:05:44Z'
+  at: '2026-08-10T20:05:07Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -231,6 +231,17 @@ The semantic values preserve information useful to callers:
 The host pins request/result staging views and re-pins after any `memory.grow()`, because growth detaches existing views.
 Growth is permitted only at the `text_update` boundary. Result capacity is negotiated and retried without publishing a
 partial revision.
+
+Batch and paragraph capacities are intentionally separate. Request/result arenas scale with aggregate `TextGroup`
+content, while Rust line and text scratch are bounded by the longest paragraph. Feeding aggregate text length into the
+per-paragraph line bound multiplied retained scratch by paragraph count: a 684-paragraph recycling regression grew Wasm
+memory from roughly 2.07 GB to the 4.29 GB address ceiling in 17 updates. The corrected bound completes 200 update cycles
+and settles near 105 MB for that deliberately larger 8,000-glyph fixture. This regression also guards against forwarding
+aggregate glyph capacity as one paragraph's text reservation.
+
+Bitmap vertex pixel snapping is an explicit immutable Three/R3F option and defaults off. The unsnapped graph uses the
+ordinary model-view-projection position so shared-root or camera animation preserves subpixel movement; callers targeting
+a pixel-art presentation can opt in without changing shaping, layout, or render-plan records.
 
 WebGPU may alias compatible Wasm-backed typed arrays. Three's WebGL2 PBO path owns a padded array and therefore requires
 one retained copy. The architecture does not add complexity to pretend WebGL2 can preserve a Wasm alias it replaces.
