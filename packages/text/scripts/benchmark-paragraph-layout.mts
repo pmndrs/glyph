@@ -21,8 +21,8 @@ import {
  *
  * Every number here is a median of repetitions taken after the measured code has been warmed, because a first call
  * measures the optimizing compiler rather than the algorithm. The report carries the relative standard deviation beside
- * each median so a reader can tell a real change from sampling noise, and the phase table attributes the median to the
- * pipeline stage that spent it, so an optimization is aimed rather than guessed.
+ * each median so a reader can tell a real change from sampling noise. This outside-only workflow deliberately owns one
+ * host timer around the complete public update. `benchmark:paragraph-stress-timing` owns browser phase attribution.
  *
  * The cases are kept apart rather than averaged. They invalidate different caches: a size change reuses the shaped run
  * and recomputes every measurement, a width change reuses shaping and measurement and replans lines, and a text change
