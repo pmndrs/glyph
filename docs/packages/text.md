@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:94a04c1dd7cf680fb0e340dd0e664059de5c93d1ff453f5057eb8dd670b4f3fb'
+source_digest: 'sha256:c719e6708a954f5918cbfa4e9634551aa22b4f1503e019ae78c7ef371f4f3172'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -55,7 +55,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T02:40:43Z'
+  at: '2026-08-10T03:16:26Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -229,17 +229,18 @@ The latest checked package-size record after the baker ABI cleanup reports:
 
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
-| Core JavaScript plus shaper Wasm        | 1,248,721 B | 460,416 B | 363,830 B |
-| Three adapter plus core and shaper Wasm | 1,487,349 B | 498,437 B | 395,363 B |
+| Core JavaScript plus shaper Wasm        | 1,248,903 B | 460,458 B | 364,063 B |
+| Three adapter plus core and shaper Wasm | 1,487,531 B | 498,479 B | 395,596 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
-The optimized shaper is 1,160,323 raw / 442,570 gzip / 348,361 Brotli bytes. The renderer-neutral JavaScript graph is
+The optimized shaper is 1,160,505 raw / 442,612 gzip / 348,594 Brotli bytes. The renderer-neutral JavaScript graph is
 88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 327,026 raw / 55,867 gzip /
 47,002 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
 to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; the later shared-emitter and stable
-range-scan work reduces those final totals to 460,416 and 498,437 gzip bytes.
+range-scan work reduces those totals to 460,416 and 498,437 gzip bytes. The homogeneous-policy dispatch and dirty-range
+alignment correction move the current totals to 460,458 and 498,479 gzip bytes.
 The corrected complete MTSDF baker remains 552,025 raw / 215,030 gzip / 168,758 Brotli bytes; the earlier 52 KiB
 observation was a kernel-only test artifact that reused the distributable Cargo target directory.
 
@@ -295,6 +296,14 @@ sorted writes to the requested range reduces stable font-size from 350.136 to 7.
 1.083 ms versus ordered-direct's 0.001 ms, so stable remains an explicit policy rather than the first-party default. The
 sequential benchmark high-water marks are 107.56 MiB ordered and 114.25 MiB stable; retained-memory right-sizing remains
 open and neither figure is presented as ordinary application demand.
+
+The first-party policy declares one allocation strategy for every registered technique. Rust now resolves that uniform
+strategy once per update instead of looking up a program for every glyph before the selected planner performs its own
+validated compilation. Mixed-strategy policies retain the per-glyph discovery path and stop once both strategies are
+observed. A five-warmup/11-sample ordered run measures 6.005 ms font-size, 2.813 ms column-resize, 1.212 ms localized-edit,
+and 8.281 ms middle-splice medians. The adjacent prior medians were 6.178, 2.817, 1.353, and 8.452 ms; these short runs
+show no regression and suggest a small scan reduction, but do not establish a latency win. The same change preserves
+whole-buffer update alignment after dirty-range promotion and costs 182 raw / 42 gzip / 233 Brotli bytes.
 
 ## Merge gates still open
 

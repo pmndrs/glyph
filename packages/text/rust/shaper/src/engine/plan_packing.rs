@@ -290,10 +290,12 @@ pub fn coalesce_buffer_ranges(
     if upload_cost.saturating_mul(10_000)
         >= full_bytes.saturating_mul(u32::from(capability.whole_buffer_threshold_basis_points))
     {
+        let record_alignment =
+            capability.update_alignment / gcd(capability.update_alignment, bytes_per_record);
         ranges.clear();
         ranges.push(RecordRange {
             start: 0,
-            end: live_records,
+            end: align_up(live_records, record_alignment)?,
         });
     }
     Ok(())
@@ -420,6 +422,17 @@ mod tests {
             coalesce_buffer_ranges(&mut overflow, 2, &capability(), u32::MAX),
             Err(PackingError::ArithmeticOverflow)
         );
+    }
+
+    #[test]
+    fn whole_buffer_promotion_preserves_the_declared_byte_alignment() {
+        let mut aligned = vec![RecordRange { start: 0, end: 2 }];
+        let mut capability = capability();
+        capability.update_alignment = 16;
+
+        coalesce_buffer_ranges(&mut aligned, 8, &capability, 3).unwrap();
+
+        assert_eq!(aligned, [RecordRange { start: 0, end: 4 }]);
     }
 
     #[test]

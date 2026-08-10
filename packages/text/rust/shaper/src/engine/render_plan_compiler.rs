@@ -198,16 +198,25 @@ impl RenderPlanCompiler {
         validate_input(input)?;
         self.clear_merged_plan();
 
-        let mut ordered_input = false;
-        let mut stable_input = false;
-        for glyph in input.glyphs {
-            let program = policy
-                .program(capability_set, glyph.technique, glyph.program_variant)
-                .ok_or(RenderPlanCompilerError::ProgramMissing)?;
-            match program.allocation_strategy {
-                ALLOCATION_ORDERED_DIRECT => ordered_input = true,
-                ALLOCATION_STABLE_INDIRECT => stable_input = true,
-                _ => return Err(RenderPlanCompilerError::UnsupportedStrategy),
+        let (mut ordered_input, mut stable_input) = (false, false);
+        match policy.uniform_allocation_strategy(capability_set) {
+            Some(ALLOCATION_ORDERED_DIRECT) => ordered_input = !input.glyphs.is_empty(),
+            Some(ALLOCATION_STABLE_INDIRECT) => stable_input = !input.glyphs.is_empty(),
+            Some(_) => return Err(RenderPlanCompilerError::UnsupportedStrategy),
+            None => {
+                for glyph in input.glyphs {
+                    let program = policy
+                        .program(capability_set, glyph.technique, glyph.program_variant)
+                        .ok_or(RenderPlanCompilerError::ProgramMissing)?;
+                    match program.allocation_strategy {
+                        ALLOCATION_ORDERED_DIRECT => ordered_input = true,
+                        ALLOCATION_STABLE_INDIRECT => stable_input = true,
+                        _ => return Err(RenderPlanCompilerError::UnsupportedStrategy),
+                    }
+                    if ordered_input && stable_input {
+                        break;
+                    }
+                }
             }
         }
 
