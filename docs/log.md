@@ -2,6 +2,12 @@
 
 ## 2026-08-10
 
+- **Removed redundant warm transform scans** — `TextGroup` now consumes Three's completed scene traversal and tracks
+  transform changes below the shared draw root. Camera or group motion leaves indexed transform storage untouched;
+  actual text, nested-parent, visibility, reparenting, and manual-matrix changes patch only their paragraph IDs. A
+  compiled-Wasm integration regression proves shared-root motion performs zero forced per-text world updates and no GPU
+  attribute version change, while a direct child move still updates its retained slot.
+
 - **Stabilized retained Icon Grid recycling** — Corrected the engine host's aggregate/per-paragraph limit split so 684
   paragraphs no longer each reserve line scratch for the entire batch. A deterministic 200-cycle regression replaces
   the former 17-update, 4.29 GB status-7 failure. Icon Grid now scrolls through its camera, avoids layout queries in
