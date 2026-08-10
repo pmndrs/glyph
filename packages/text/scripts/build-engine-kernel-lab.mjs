@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { reproducibleRustEnvironment } from '../../font-baker/scripts/reproducible-rust-env.mjs';
+import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));

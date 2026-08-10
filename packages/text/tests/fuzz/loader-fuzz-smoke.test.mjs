@@ -3,14 +3,14 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { FontLoadError, FontRegistry } from '../../dist/index.js';
-import { createFontBaker } from '@pmndrs/text-font-baker';
+import { createFontBaker } from '@pmndrs/text/bake';
 
 import { ARTIFACT_FUZZ_SEED, mutateArtifact } from '../support/artifact-mutations.mjs';
 
 test('fixed-seed loader artifact mutations fail safely, purely, and deterministically', async () => {
   const [source, wasm] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
-    readFile(new URL('../../../font-baker/dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
   ]);
   const baker = await createFontBaker(wasm);
   const artifact = baker.bake({

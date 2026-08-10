@@ -29,6 +29,8 @@ test('the published contract is ESM-only', async () => {
           './mtsdf-abi.json',
           './slug-baker.wasm',
           './slug-abi.json',
+          './font-baker.wasm',
+          './font-baker-abi.json',
           './text-shaper.wasm',
           './shaper-abi.json',
         ].includes(subpath),
@@ -64,7 +66,7 @@ test('the public loader graph exposes registration without eager baker or Node h
   assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\/runtime-bake-worker\.js["']/);
   assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
   assert.match(serialWorkerHost, /type:\s*["']module["']/);
-  assert.match(runtimeWorker, /from ["']@pmndrs\/text-font-baker\/wasm-url["']/);
+  assert.match(runtimeWorker, /from ["']\.\/font-baker\/wasm-url\.js["']/);
   assert.doesNotMatch(
     `${runtimeHost}\n${runtimeWorker}`,
     /(?:node:|font-baker\/validate|compose-bake|compiler-adapter|discovery|gltf-validator|ktx-parse|ajv)/,
@@ -73,8 +75,5 @@ test('the public loader graph exposes registration without eager baker or Node h
     const source = await readFile(new URL(`../../dist/internal/${helper}`, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /(?:^|\n)\s*(?:import|export\s+\{.*\}\s+from)\s/m);
   }
-  await assert.rejects(
-    readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
-    (error) => error?.code === 'ENOENT',
-  );
+  assert.ok((await readFile(new URL('../../dist/font_baker.wasm', import.meta.url))).byteLength > 0);
 });

@@ -28,7 +28,6 @@ let server: ViteDevServer | undefined;
 let browser: Browser | undefined;
 try {
   await Promise.all([
-    packAndExtract('packages/font-baker', 'pmndrs-text-font-baker-0.0.0.tgz', 'text-font-baker'),
     packAndExtract('packages/text', 'pmndrs-text-0.0.0.tgz', 'text'),
     copyFile(
       join(appDirectory, 'fixtures/fonts/inter-v4.1/Inter-Regular.ttf'),
@@ -60,7 +59,7 @@ try {
   server = await createServer({
     root: consumerDirectory,
     logLevel: 'silent',
-    optimizeDeps: { exclude: ['@pmndrs/text', '@pmndrs/text-font-baker'] },
+    optimizeDeps: { exclude: ['@pmndrs/text'] },
     server: { host: '127.0.0.1', port: 5183, strictPort: true },
   });
   await server.listen();

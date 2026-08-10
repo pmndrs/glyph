@@ -9,10 +9,10 @@ sources:
     resource: ../../.agents/skills/maintainability-review/SKILL.md
     title: Maintainability review workflow
   - id: font-baker-wasm
-    resource: ../../packages/font-baker/rust/src/wasm.rs
+    resource: ../../packages/text/rust/font-baker/src/wasm.rs
     title: Portable font-baker Wasm boundary
   - id: font-baker-typescript
-    resource: ../../packages/font-baker/src/index.ts
+    resource: ../../packages/text/src/font-baker/index.ts
     title: Portable font-baker TypeScript boundary
   - id: runtime-protocol
     resource: ../../packages/text/src/internal/runtime-bake-protocol.ts

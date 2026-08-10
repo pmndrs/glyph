@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
-import { createFontBaker, type FontBakeCore, type SerializedBakeError } from '@pmndrs/text-font-baker';
-import { fontBakerWasmUrl } from '@pmndrs/text-font-baker/wasm-url';
+import { createFontBaker, type FontBakeCore, type SerializedBakeError } from './font-baker/index.js';
+import { fontBakerWasmUrl } from './font-baker/wasm-url.js';
 
 import { soleCoreFontArtifact } from './internal/core-bake-policy.js';
 import { copyToOwnedArrayBuffer } from './internal/owned-array-buffer.js';

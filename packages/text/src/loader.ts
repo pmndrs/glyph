@@ -1,8 +1,8 @@
-import type { ParsedGlb, ValidatedFontArtifactV0 } from '@pmndrs/text-font-baker/validate';
+import type { ParsedGlb, ValidatedFontArtifactV0 } from './font-baker/validator.js';
 import {
   FONT_BAKER_VERSION as CORE_BAKER_VERSION,
   FONT_FORMAT_VERSION as CORE_FORMAT_VERSION,
-} from '@pmndrs/text-font-baker/contract';
+} from './font-baker/contract.js';
 
 import type { FontInput, FontMetrics, RegisteredFont } from './font.js';
 import type { FontHandle, FontKey, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
@@ -32,7 +32,7 @@ const DEFAULT_MAX_RASTERS = 256;
 let nextRegistryId = 1;
 let nextFontHandle = 1;
 let nextRasterHandle = 1;
-let validatorPromise: Promise<typeof import('@pmndrs/text-font-baker/validate')> | undefined;
+let validatorPromise: Promise<typeof import('./font-baker/validator.js')> | undefined;
 let defaultRuntimeBakePromise: Promise<RuntimeFontBake> | undefined;
 
 export interface FontLoadOptions {
@@ -1271,8 +1271,8 @@ function consumeSharedLoad(shared: SharedFontLoad, signal: AbortSignal | undefin
   });
 }
 
-function loadValidator(): Promise<typeof import('@pmndrs/text-font-baker/validate')> {
-  return (validatorPromise ??= import('@pmndrs/text-font-baker/validate'));
+function loadValidator(): Promise<typeof import('./font-baker/validator.js')> {
+  return (validatorPromise ??= import('./font-baker/validator.js'));
 }
 
 async function readResponseBytes(

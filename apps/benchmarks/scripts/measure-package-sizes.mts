@@ -78,7 +78,7 @@ async function bundle(
                   }
                 }
               }
-              if (!changed || (!id.includes('/packages/text/') && !id.includes('/packages/font-baker/'))) return;
+              if (!changed || !id.includes('/packages/text/')) return;
               return transformed;
             },
           },
@@ -336,9 +336,7 @@ const coreJavaScript = await measureJavaScript(
       '/packages/text/dist/raster/slug-technique.js',
       '/packages/text/dist/bakers/msdf.js',
       '/packages/text/dist/node/',
-      '/packages/font-baker/dist/index.js',
-      '/packages/font-baker/dist/wasm.js',
-      '/packages/font-baker/dist/validator.js',
+      '/packages/text/dist/font-baker/',
     ],
   },
 );
@@ -502,7 +500,7 @@ const entries: SizeEntry[] = [
   await measureWasm(
     'portable-baker-wasm',
     'Portable baker Wasm',
-    new URL('../../../packages/font-baker/dist/font_baker.wasm', import.meta.url),
+    new URL('../../../packages/text/dist/font_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'unicode-analysis-js',

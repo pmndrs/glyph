@@ -5,7 +5,7 @@ import {
   validateWithKhronos,
   type KhronosValidationReport,
   type ParsedGlb,
-} from '@pmndrs/text-font-baker/validate';
+} from '../font-baker/validator.js';
 import {
   VK_FORMAT_ASTC_4x4_UNORM_BLOCK,
   VK_FORMAT_BC4_UNORM_BLOCK,

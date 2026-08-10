@@ -18,7 +18,7 @@ import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { Worker as NodeWorker } from 'node:worker_threads';
 
-import { reproducibleRustEnvironment } from '../../font-baker/scripts/reproducible-rust-env.mjs';
+import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
+import { validateFontArtifact } from '@pmndrs/text/bake';
 
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';

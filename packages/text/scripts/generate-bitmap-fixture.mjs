@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
-import { createFontBaker } from '@pmndrs/text-font-baker';
-import { fontBakerWasmUrl } from '@pmndrs/text-font-baker/wasm-url';
+import { createFontBaker } from '@pmndrs/text/bake';
+import { fontBakerWasmUrl } from '@pmndrs/text/bake';
 
 import { bitmapBakerFromCore, createBitmapBaker } from '../dist/bakers/bitmap.js';
 import { validateBitmapArtifact } from '../dist/bakers/bitmap-validator.js';

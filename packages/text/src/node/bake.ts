@@ -5,9 +5,25 @@ import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 
-import { createFontBaker, type FontBakeDescriptorV0 } from '@pmndrs/text-font-baker';
-import { fontBakerWasmUrl } from '@pmndrs/text-font-baker/wasm-url';
-import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
+import { createFontBaker, type FontBakeDescriptorV0 } from '../font-baker/index.js';
+import { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
+import { validateFontArtifact } from '../font-baker/validator.js';
+
+export {
+  FontBakeError,
+  createFontBaker,
+  createFontBakerFromInstance,
+  fontBakerAbi,
+  type FontBakeCore,
+  type FontBakeDescriptorV0,
+  type FontBakeRequestV0,
+  type FontBakeResultV0,
+  type FontBakerAbiV0,
+  type FontBakerWasmSource,
+  type SerializedBakeError,
+} from '../font-baker/index.js';
+export { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
+export * from '../font-baker/validator.js';
 
 import type { AnyRasterBakerModule, BakeArtifactV0, BakeWarning, FontPayloadReport, RasterBakePlan } from '../bake.js';
 import {

@@ -1,5 +1,5 @@
-import type { FontBakeResultV0 } from '@pmndrs/text-font-baker';
-import { parseGlb } from '@pmndrs/text-font-baker/validate';
+import type { FontBakeResultV0 } from '../font-baker/index.js';
+import { parseGlb } from '../font-baker/validator.js';
 
 import type { BakeArtifactV0, BakeWarning, FontPayloadReport, RasterBakeArtifact, RasterPackagingV0 } from '../bake.js';
 import type { Sha256Hex } from '../identity.js';

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 
 import type { ParagraphStyle } from '@pmndrs/text';
-import { createFontBaker } from '@pmndrs/text-font-baker';
+import { createFontBaker } from '@pmndrs/text/bake';
 
 import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
 import {
@@ -27,7 +27,7 @@ const coverage = Object.values(retained.cases)
   .replace(/[\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}]/gu, '');
 const [source, bakerWasm] = await Promise.all([
   readFile(new URL('../fixtures/fonts/noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf', import.meta.url)),
-  readFile(new URL('../../../packages/font-baker/dist/font_baker.wasm', import.meta.url)),
+  readFile(new URL('../../../packages/text/dist/font_baker.wasm', import.meta.url)),
 ]);
 const baker = await createFontBaker(bakerWasm);
 const artifact = baker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } }).artifacts[0];

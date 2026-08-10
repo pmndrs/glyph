@@ -222,7 +222,7 @@ describe('canonical Noto Sans CJK fixtures', () => {
     const inspectorArguments = [
       'run',
       '--manifest-path',
-      fileURLToPath(new URL('../../../../packages/font-baker/rust/Cargo.toml', import.meta.url)),
+      fileURLToPath(new URL('../../../../packages/text/rust/font-baker/Cargo.toml', import.meta.url)),
       '--bin',
       'inspect-font-fixture',
       '--features',

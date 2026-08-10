@@ -1,4 +1,4 @@
-import type { ParsedGlb } from '@pmndrs/text-font-baker/validate';
+import type { ParsedGlb } from '../font-baker/validator.js';
 import {
   RasterKtxValidationError,
   validateNativeKtx2 as validateNativeKtx2Container,

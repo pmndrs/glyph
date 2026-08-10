@@ -93,6 +93,8 @@
     "./mtsdf-abi.json": "./dist/mtsdf-baker-abi-v1.json",
     "./slug-baker.wasm": "./dist/slug_baker.wasm",
     "./slug-abi.json": "./dist/slug-baker-abi-v0.json",
+    "./font-baker.wasm": "./dist/font_baker.wasm",
+    "./font-baker-abi.json": "./dist/font-baker-abi-v0.json",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -102,7 +104,8 @@
   },
   "dependencies": {
     "@cto.af/linebreak": "4.0.3",
-    "@pmndrs/text-font-baker": "workspace:*",
+    "ajv": "6.15.0",
+    "gltf-validator": "2.0.0-dev.3.10",
     "ktx-parse": "1.1.0",
     "typescript": "7.0.2",
     "unicode-segmenter": "0.15.0"

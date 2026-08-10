@@ -2,6 +2,7 @@ import { isMainModule, runCargo, runNode, runNodeTests } from './support/command
 
 const completeRustManifests = [
   'rust/bitmap-baker/Cargo.toml',
+  'rust/font-baker/Cargo.toml',
   'rust/shaper/Cargo.toml',
   'rust/slug-baker/Cargo.toml',
 ] as const;
@@ -29,6 +30,9 @@ export async function runTextTest(): Promise<void> {
   await runNode('scripts/sync-unicode-test-data.mjs', ['--check']);
   await runNodeTests(['tests/package/*.test.mjs', 'tests/integration/*.test.mjs']);
   await runNodeTests(['tests/fuzz/*.test.mjs']);
+  await runNodeTests(['tests/font-baker/integration/*.test.mjs']);
+  await runNodeTests(['tests/font-baker/fuzz/*.test.mjs']);
+  await runNodeTests(['tests/font-baker/e2e/*.test.mjs']);
 }
 
 if (isMainModule(import.meta.url)) {

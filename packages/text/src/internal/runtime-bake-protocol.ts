@@ -1,4 +1,4 @@
-import type { FontBakeDescriptorV0, SerializedBakeError } from '@pmndrs/text-font-baker';
+import type { FontBakeDescriptorV0, SerializedBakeError } from '../font-baker/index.js';
 
 export interface RuntimeBakeRequestV0 {
   readonly type: 'bake-font-v0';

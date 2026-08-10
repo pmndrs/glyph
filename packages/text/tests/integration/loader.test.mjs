@@ -8,7 +8,7 @@ import test, { after, before } from 'node:test';
 import { FontLoader, FontLoadError, FontRegistry } from '@pmndrs/text';
 import { bakeFont } from '@pmndrs/text/bake';
 import { bitmapBaker } from '@pmndrs/text/bakers/bitmap';
-import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
+import { validateFontArtifact } from '@pmndrs/text/bake';
 
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 
