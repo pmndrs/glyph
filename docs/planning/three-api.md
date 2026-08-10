@@ -158,8 +158,9 @@ Offsets match JavaScript and DOM selection APIs and cannot split a surrogate pai
 inserted text inherits a span only when inserted strictly inside it, so span-boundary affinity does not become hidden
 mutable state.
 
-Errors are retained on `text.error` or `group.error` and forwarded to `onError`. They do not escape Three.js scene
-traversal. `retry()` reapplies a retained publication after a renderer-side failure.
+Errors are retained on `text.error` and the owning `group.error`, then forwarded to `onError`. They do not escape Three.js
+scene traversal. A renderer-side failure leaves the Rust publication unconsumed; `retry()` or the next group traversal
+reapplies its owned bytes before another engine delta is requested.
 
 ## Query committed layout
 
@@ -192,6 +193,8 @@ const label = new Text({ font, text: 'Custom', material });
 
 The factory is renderer-owned. Rust carries a numeric `materialId` through style resolution and draw planning; it does not
 execute the factory. Three invokes `create()` when it needs a material for a concrete Bitmap, MSDF, or Slug pipeline.
+Material creation runs while Three holds borrowed plan-backed attributes. It must return synchronously and must not query
+or update text; the coordinator rejects such reentrancy before another Wasm call can detach those views.
 
 `ThreeTextMaterialContext` is a discriminated union on `technique`. Each branch provides the concrete technique shader,
 the final policy-selected position node, and `createDefaultMaterial()`.

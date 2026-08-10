@@ -33,6 +33,7 @@ import {
   type TextEngineSession,
 } from '../internal/text-engine-host.js';
 import { readTextEngineLayouts, readTextEngineMeasurements } from '../internal/layout-query-view.js';
+import { TextEngineRenderPlanView } from '../internal/render-plan-view.js';
 import type { ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
@@ -147,7 +148,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     return this.#disposed;
   }
   get error(): unknown {
-    return this.#error ?? this.#binding?.error;
+    return this.#error ?? this.#textGroup?.error;
   }
   get gpuBytes(): number {
     return this.#binding?.gpuBytes ?? 0;
@@ -399,7 +400,7 @@ export class TextGroup extends THREE.Object3D {
     return this.#disposed;
   }
   get error(): unknown {
-    return this.#error ?? this.#binding?.error;
+    return this.#error;
   }
   get gpuBytes(): number {
     return this.#binding?.gpuBytes ?? 0;
@@ -502,6 +503,7 @@ class ThreeTextBatchBinding {
   readonly #removed: RetainedEngineParagraph[] = [];
   readonly #measurements = new Map<Text<AnyRasterTechnique>, ParagraphLayoutSummary>();
   readonly #layoutInspections = new Map<Text<AnyRasterTechnique>, ParagraphLayoutInspection>();
+  readonly #queryPlanView = new TextEngineRenderPlanView();
   #nextParagraphId = 1;
   #engineRevision = 0;
   #planRevision = 0;
@@ -538,13 +540,13 @@ class ThreeTextBatchBinding {
         if (text === undefined) throw new Error(`Three command buffer references unknown transform ${transformId}`);
         return text;
       },
+      transformIds() {
+        return owner.#textsByParagraph.keys();
+      },
     });
   }
   get textCount(): number {
     return this.#paragraphs.size;
-  }
-  get error(): unknown {
-    return undefined;
   }
   get gpuBytes(): number {
     return this.#target.gpuBytes;
@@ -591,6 +593,8 @@ class ThreeTextBatchBinding {
   }
   synchronize(semanticViewMask = 0): void {
     if (this.#disposed) return;
+    this.#coordinator.assertFrameUpdateAllowed();
+    if (this.#lastPublication !== undefined) this.retry();
     const ordered = [...this.#paragraphs.entries()].sort(
       ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
     );
@@ -696,7 +700,6 @@ class ThreeTextBatchBinding {
         throw error;
       }
       this.#engineRevision = publication.engineRevision;
-      this.#planRevision = publication.planRevision;
       for (const removed of this.#removed) releaseStackLeases(removed.stackLeases);
       for (const removed of this.#removed) releaseMaterialLeases(removed.materialLeases);
       this.#removed.length = 0;
@@ -723,6 +726,7 @@ class ThreeTextBatchBinding {
       committed = true;
       try {
         this.#target.apply(publication);
+        this.#planRevision = publication.planRevision;
         this.#lastPublication = undefined;
       } catch (error) {
         this.#lastPublication = ownPublication(publication);
@@ -751,6 +755,7 @@ class ThreeTextBatchBinding {
     const publication = this.#lastPublication;
     if (publication === undefined) return;
     this.#target.apply(publication);
+    this.#planRevision = publication.planRevision;
     this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
     this.#lastPublication = undefined;
   }
@@ -831,6 +836,11 @@ class ThreeTextBatchBinding {
         ),
       }),
     );
+    const plan = this.#queryPlanView.bind(publication);
+    for (const table of ['resources', 'buffers', 'patches', 'primitives', 'draws', 'retirements'] as const) {
+      if (plan.table(table).count !== 0)
+        throw new Error('a semantic-only text query unexpectedly published render work');
+    }
     this.#engineRevision = publication.engineRevision;
     this.#planRevision = publication.planRevision;
     return publication;

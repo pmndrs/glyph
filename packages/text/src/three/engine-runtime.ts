@@ -1,4 +1,4 @@
-import type { LoadedFont } from '../loaded-font.js';
+import { observeLoadedFontDispose, type LoadedFont } from '../loaded-font.js';
 import { bitmap, type BitmapData, type BitmapPageData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugData, type SlugPageData } from '../raster/slug-technique.js';
@@ -35,6 +35,10 @@ interface RetainedMaterial {
   references: number;
 }
 
+interface RetainedResourceOwners {
+  readonly owners: Map<LoadedFont<AnyRasterTechnique>, ThreeTextEngineResource>;
+}
+
 export type ThreeTextEngineResource =
   | Readonly<{ technique: typeof bitmap.id; page: BitmapPageData }>
   | Readonly<{ technique: typeof msdf.id; data: MsdfData }>
@@ -50,7 +54,9 @@ export interface ThreeTextEngineCoordinatorOptions {
 export class ThreeTextEngineCoordinator {
   readonly host: TextEngineHost;
   readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, number>();
-  readonly #resources = new Map<number, ThreeTextEngineResource>();
+  readonly #resources = new Map<number, RetainedResourceOwners>();
+  readonly #fontResourceReferences = new Map<LoadedFont<AnyRasterTechnique>, Set<number>>();
+  readonly #fontDisposeObservers = new Map<LoadedFont<AnyRasterTechnique>, () => void>();
   readonly #stacks = new Map<string, RetainedStack>();
   readonly #materialHandles = new WeakMap<ThreeTextMaterial, RetainedMaterial>();
   readonly #materials = new Map<number, RetainedMaterial>();
@@ -59,6 +65,7 @@ export class ThreeTextEngineCoordinator {
   #nextStackHandle = 1;
   #nextSessionHandle = 1;
   #nextMaterialHandle = 1;
+  #applyingPlan = false;
   #disposed = false;
 
   constructor(
@@ -80,6 +87,20 @@ export class ThreeTextEngineCoordinator {
 
   get policyHandle(): number {
     return POLICY_HANDLE;
+  }
+
+  assertFrameUpdateAllowed(): void {
+    if (this.#applyingPlan) throw new Error('text updates and queries cannot reenter Three render-plan application');
+  }
+
+  applyPlan<Result>(apply: () => Result): Result {
+    if (this.#applyingPlan) throw new Error('Three render-plan application cannot be reentered');
+    this.#applyingPlan = true;
+    try {
+      return apply();
+    } finally {
+      this.#applyingPlan = false;
+    }
   }
 
   acquireFontStack(
@@ -143,7 +164,7 @@ export class ThreeTextEngineCoordinator {
   }
 
   resolveResource(referenceId: number): ThreeTextEngineResource {
-    const resource = this.#resources.get(referenceId);
+    const resource = this.#resources.get(referenceId)?.owners.values().next().value;
     if (resource === undefined) throw new Error(`Three text command buffer references unknown resource ${referenceId}`);
     return resource;
   }
@@ -151,6 +172,10 @@ export class ThreeTextEngineCoordinator {
   dispose(): void {
     if (this.#disposed) return;
     this.host.dispose();
+    for (const stopObserving of this.#fontDisposeObservers.values()) stopObserving();
+    this.#fontDisposeObservers.clear();
+    this.#fontResourceReferences.clear();
+    this.#resources.clear();
     this.#stacks.clear();
     this.#materials.clear();
     this.#disposed = true;
@@ -160,6 +185,7 @@ export class ThreeTextEngineCoordinator {
     if (font.disposed) throw new TypeError('cannot register a disposed loaded font with the Three text engine');
     const existing = this.#bindingHandles.get(font);
     if (existing !== undefined) return existing;
+    this.#observeFont(font);
     const handle = this.#allocateBindingHandle();
     const program = this.#planPrograms.get(font.technique.id);
     if (program === undefined) {
@@ -172,7 +198,7 @@ export class ThreeTextEngineCoordinator {
     } else {
       const compiled = program.compileFont(font, this.host.wireIdentities);
       for (const [key, resource] of compiled.resources) {
-        this.#retainResource(key, { technique: font.technique.id, resource, program });
+        this.#retainResource(font, key, { technique: font.technique.id, resource, program });
       }
       this.host.registerFontBinding(handle, font.font.handle, compiled.binding);
     }
@@ -184,30 +210,58 @@ export class ThreeTextEngineCoordinator {
     if (font.technique.id === bitmap.id) {
       const data = font.data as BitmapData;
       for (const strike of data.strikes) {
-        for (const page of strike.pages) this.#retainResource(page.resource, { technique: bitmap.id, page });
+        for (const page of strike.pages) this.#retainResource(font, page.resource, { technique: bitmap.id, page });
       }
       return;
     }
     if (font.technique.id === msdf.id) {
       const data = font.data as MsdfData;
-      this.#retainResource(data.resource, { technique: msdf.id, data });
+      this.#retainResource(font, data.resource, { technique: msdf.id, data });
       return;
     }
     if (font.technique.id === slug.id) {
       const data = font.data as SlugData;
-      for (const page of data.pages) this.#retainResource(page.resource, { technique: slug.id, page });
+      for (const page of data.pages) this.#retainResource(font, page.resource, { technique: slug.id, page });
       return;
     }
     throw new TypeError(`no first-party Three resource resolver is registered for "${font.technique.id}"`);
   }
 
-  #retainResource(key: string, resource: ThreeTextEngineResource): void {
+  #retainResource(font: LoadedFont<AnyRasterTechnique>, key: string, resource: ThreeTextEngineResource): void {
     const referenceId = this.host.wireIdentities.resolve(key);
-    const existing = this.#resources.get(referenceId);
+    let retained = this.#resources.get(referenceId);
+    const existing = retained?.owners.values().next().value;
     if (existing !== undefined && existing.technique !== resource.technique) {
       throw new TypeError(`Three text resource ${referenceId} is registered for incompatible techniques`);
     }
-    if (existing === undefined) this.#resources.set(referenceId, resource);
+    if (retained === undefined) {
+      retained = { owners: new Map() };
+      this.#resources.set(referenceId, retained);
+    }
+    retained.owners.set(font, resource);
+    let references = this.#fontResourceReferences.get(font);
+    if (references === undefined) {
+      references = new Set();
+      this.#fontResourceReferences.set(font, references);
+    }
+    references.add(referenceId);
+  }
+
+  #observeFont(font: LoadedFont<AnyRasterTechnique>): void {
+    if (this.#fontDisposeObservers.has(font)) return;
+    const stopObserving = observeLoadedFontDispose(font, () => this.#releaseFontResources(font));
+    this.#fontDisposeObservers.set(font, stopObserving);
+  }
+
+  #releaseFontResources(font: LoadedFont<AnyRasterTechnique>): void {
+    for (const referenceId of this.#fontResourceReferences.get(font) ?? []) {
+      const retained = this.#resources.get(referenceId);
+      retained?.owners.delete(font);
+      if (retained?.owners.size === 0) this.#resources.delete(referenceId);
+    }
+    this.#fontResourceReferences.delete(font);
+    this.#fontDisposeObservers.delete(font);
+    this.#bindingHandles.delete(font);
   }
 
   #allocateBindingHandle(): number {

@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { createTextRuntime, FontRegistry } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/three/bitmap';
-import { Text, TextGroup } from '@pmndrs/text/three';
+import { defineTextMaterial, Text, TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -155,6 +155,86 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   runtime.dispose();
 });
 
+test('Three retries an unapplied Rust publication before requesting another engine delta', async () => {
+  const registry = new FontRegistry();
+  const instrumented = await createInstrumentedRuntime(registry);
+  const runtime = instrumented.runtime;
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  let failMaterial = true;
+  let label;
+  const material = defineTextMaterial((context) => {
+    if (failMaterial) {
+      assert.throws(() => label.measureLayout(), /cannot reenter Three render-plan application/u);
+      throw new Error('deliberate material realization failure');
+    }
+    return context.createDefaultMaterial();
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup();
+  label = new Text({ font, material, text: 'Retry me' });
+  group.add(label);
+  scene.add(group);
+
+  scene.updateMatrixWorld();
+  assert.match(String(group.error), /deliberate material realization failure/u);
+  assert.equal(label.error, group.error, 'group-owned failures must remain visible from the child Text');
+  assert.equal(instrumented.crossings, 1);
+  assert.equal(group.children.filter((child) => child.isMesh).length, 0);
+
+  failMaterial = false;
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined);
+  assert.equal(label.error, undefined);
+  assert.equal(instrumented.crossings, 1, 'retrying an owned command buffer must not cross into Rust again');
+  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
+
+  group.dispose();
+  label.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
+test('Three retires materials bound to a replaced buffer generation', async () => {
+  const registry = new FontRegistry();
+  const runtime = await createTextRuntime({
+    registry,
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const materials = [];
+  const disposed = new Set();
+  const material = defineTextMaterial((context) => {
+    const created = context.createDefaultMaterial();
+    created.addEventListener('dispose', () => disposed.add(created));
+    materials.push(created);
+    return created;
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup({ capacity: { size: 2, policy: 'grow' } });
+  const label = new Text({ font, material, text: 'AB' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld();
+  const initialMaterial = group.children.find((child) => child.isMesh)?.material;
+  assert.equal(initialMaterial, materials[0]);
+
+  label.text = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  scene.updateMatrixWorld();
+  assert.ok(materials.length > 1, 'growing physical buffers must realize a material for the new generation');
+  assert.ok(disposed.has(initialMaterial), 'the material retaining the retired generation must be disposed');
+
+  group.dispose();
+  label.dispose();
+  font.dispose();
+  runtime.dispose();
+});
+
 test('TextGroup realizes two public Text objects as one indexed Rust draw', async () => {
   const registry = new FontRegistry();
   const instrumented = await createInstrumentedRuntime(registry);
@@ -248,9 +328,15 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.equal(leftOrigins.shapedX.length, 2);
   assert.equal(rightOrigins.shapedX.length, 2);
   const shiftedRightX = rightOrigins.shapedX.slice();
+  const shiftedLeftX = leftOrigins.shapedX.slice();
+  shiftedLeftX[0] += 2;
   shiftedRightX[0] += 4;
+  const originsAttribute = draws[0].geometry.getAttribute('_pmndrsText_1');
+  originsAttribute.clearUpdateRanges();
+  left.setGlyphOrigins({ layout: leftOrigins.layout, x: shiftedLeftX, y: leftOrigins.shapedY });
   right.setGlyphOrigins({ layout: rightOrigins.layout, x: shiftedRightX, y: rightOrigins.shapedY });
-  assert.equal(left.snapshotGlyphOrigins().displayedX[0], leftOrigins.shapedX[0]);
+  assert.equal(originsAttribute.updateRanges.length, 2, 'separate presentation edits must retain both upload ranges');
+  assert.equal(left.snapshotGlyphOrigins().displayedX[0], leftOrigins.shapedX[0] + 2);
   assert.equal(right.snapshotGlyphOrigins().displayedX[0], rightOrigins.shapedX[0] + 4);
 
   const version = transforms.version;
