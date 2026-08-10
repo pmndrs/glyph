@@ -5,7 +5,6 @@ import fontAwesomeIcons from '../../../fixtures/fonts/font-awesome-free-6.7.2/ic
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
-  committedTextMetrics,
   exactWidth,
   paintColor,
   publishWorkloadTexts,
@@ -28,6 +27,8 @@ const ICON_GRID_MAX_FRAME_DELTA_MULTIPLIER = 2;
 const ICON_GRID_FONT_UNITS_PER_EM = 512;
 const ICON_GRID_MAX_ADVANCE = 640;
 const ICON_GRID_MAX_ADVANCE_EM = ICON_GRID_MAX_ADVANCE / ICON_GRID_FONT_UNITS_PER_EM;
+const iconGridTimingsEnabled =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).get('textTimings') === '1';
 export const ICON_GRID_ITEMS = fontAwesomeIcons.icons;
 const ICON_GRID_CONTENT = ICON_GRID_ITEMS.map((icon) => {
   const glyph = String.fromCodePoint(icon.codePoint);
@@ -160,13 +161,14 @@ export function positionIconGridEntry(
   row: number,
   iconSize: number,
 ): void {
-  const iconLayout = committedTextMetrics(entry.text);
   entry.node.position.set(
     layout.inset + column * (layout.cellWidth + layout.gap),
     -(layout.inset + row * (layout.cellHeight + layout.gap)),
     0,
   );
-  entry.text.position.set((layout.cellWidth - iconLayout.width) / 2, 0, 0);
+  // Keep virtualized scrolling independent from synchronous layout queries. Font Awesome's authored icons target a
+  // one-em visual cell, so center that nominal cell while the wider grid cell preserves its documented 1.25-em max.
+  entry.text.position.set((layout.cellWidth - iconSize) / 2, 0, 0);
   entry.labelText?.position.set(
     (layout.cellWidth - ICON_GRID_LABEL_WIDTH) / 2,
     -(iconSize * LIVE_TEXT_LINE_HEIGHT + ICON_GRID_LABEL_GAP),
@@ -340,6 +342,7 @@ export interface IconGridWorkloadInstance {
   ): void;
   settle(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport, scene: THREE.Scene): void;
   suspend(): void;
+  view(): { readonly scrollX: number; readonly scrollY: number };
 }
 
 export function createIconGridWorkloadInstance(
@@ -437,14 +440,13 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     if (!configuration.animationEnabled || window === undefined) return;
     advanceIconGridAutoPan(
       this.#autoPan,
-      -scene.position.x,
-      scene.position.y,
+      this.#autoPan.scrollX,
+      this.#autoPan.scrollY,
       window.maximumScrollX,
       window.maximumScrollY,
       smoothIconGridFrameDelta(this.#frameDelta, elapsedMs),
       ICON_GRID_AUTO_PAN_PX_PER_SECOND * animationRate,
     );
-    scene.position.set(-this.#autoPan.scrollX, this.#autoPan.scrollY, 0);
     updateIconGridEntryVisibility(
       this.#pool.entries(),
       window.layout,
@@ -470,8 +472,8 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
         this.#iconSize,
         viewport.width,
         viewport.height,
-        -scene.position.x,
-        scene.position.y,
+        this.#autoPan.scrollX,
+        this.#autoPan.scrollY,
       );
     let assignedCount = 0;
     let renderVisibleCount = 0;
@@ -511,13 +513,13 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     this.#assertLive();
     const horizontal = finite(deltaX, 'workload horizontal pan');
     const vertical = finite(deltaY, 'workload vertical pan');
-    const previousX = scene.position.x;
-    const previousY = scene.position.y;
-    scene.position.x += horizontal;
-    scene.position.y -= vertical;
-    this.#clampScene(configuration.fontSize, viewport, scene);
+    const previousX = this.#autoPan.scrollX;
+    const previousY = this.#autoPan.scrollY;
+    this.#autoPan.scrollX -= horizontal;
+    this.#autoPan.scrollY += vertical;
+    this.#clampScroll(configuration.fontSize, viewport);
     this.requestRefresh(configuration, viewport, scene, onError);
-    return { deltaX: scene.position.x - previousX, deltaY: previousY - scene.position.y };
+    return { deltaX: previousX - this.#autoPan.scrollX, deltaY: this.#autoPan.scrollY - previousY };
   }
 
   async reconfigure(
@@ -533,15 +535,15 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
       nextAutoPan !== undefined
         ? [nextAutoPan.scrollX, nextAutoPan.scrollY]
         : next.fontSize === previous.fontSize
-          ? [-scene.position.x, scene.position.y]
+          ? [this.#autoPan.scrollX, this.#autoPan.scrollY]
           : iconGridCenteredScroll(
               ICON_GRID_ITEMS.length,
               previous.fontSize,
               next.fontSize,
               viewport.width,
               viewport.height,
-              -scene.position.x,
-              scene.position.y,
+              this.#autoPan.scrollX,
+              this.#autoPan.scrollY,
             );
     const nextWindow = iconGridVirtualWindow(
       ICON_GRID_ITEMS.length,
@@ -559,7 +561,8 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
       this.#frameDelta.smoothedElapsedMs = undefined;
     }
     this.#iconSize = next.fontSize;
-    scene.position.set(-nextWindow.scrollX, nextWindow.scrollY, 0);
+    this.#autoPan.scrollX = nextWindow.scrollX;
+    this.#autoPan.scrollY = nextWindow.scrollY;
     this.#applyWindow(nextWindow, next.fontSize, viewport, scene);
   }
 
@@ -570,8 +573,8 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     onError: (error: unknown) => void,
   ): void {
     if (!this.#isLive()) return;
-    this.#requestScrollX = -scene.position.x;
-    this.#requestScrollY = scene.position.y;
+    this.#requestScrollX = this.#autoPan.scrollX;
+    this.#requestScrollY = this.#autoPan.scrollY;
     if (this.#suspended) {
       this.#refreshDeferred = true;
       return;
@@ -615,7 +618,6 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     this.#autoPan.scrollY = 0;
     this.#autoPanTimestamp = undefined;
     this.#frameDelta.smoothedElapsedMs = undefined;
-    scene.position.set(0, 0, 0);
     this.requestRefresh(configuration, viewport, scene, onError);
   }
 
@@ -638,6 +640,10 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     this.#refreshDeferred = true;
   }
 
+  view(): { readonly scrollX: number; readonly scrollY: number } {
+    return { scrollX: this.#autoPan.scrollX, scrollY: this.#autoPan.scrollY };
+  }
+
   settle(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport, scene: THREE.Scene): void {
     this.#iconSize = configuration.fontSize;
     this.#settleWindow(
@@ -646,8 +652,8 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
         configuration.fontSize,
         viewport.width,
         viewport.height,
-        -scene.position.x,
-        scene.position.y,
+        this.#autoPan.scrollX,
+        this.#autoPan.scrollY,
       ),
       viewport,
       scene,
@@ -655,6 +661,7 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
   }
 
   #applyWindow(window: IconGridVirtualWindow, iconSize: number, viewport: IconGridViewport, scene: THREE.Scene): void {
+    const updateStarted = iconGridTimingsEnabled ? performance.now() : 0;
     const entries = this.#pool.entries();
     if (window.poolCapacity !== entries.length) {
       throw new Error('icon grid pool capacity changed without a scene rebuild');
@@ -694,9 +701,7 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
       entry.labelText?.set({ text: iconGridLabel(iconIndex) });
       this.#pendingEntries.push(entry);
     }
-    // Recycled tiles share the workload's batch, so one publication commits every reassigned Text at once.
-    publishWorkloadTexts(scene, this.#pendingEntries);
-    if (!this.#isLive()) return;
+    const updateAndPositionStarted = iconGridTimingsEnabled ? performance.now() : 0;
     for (const [poolIndex, entry] of this.#pendingEntries.entries()) {
       if (entry.disposed) continue;
       const iconIndex = this.#missingIndices[poolIndex]!;
@@ -707,6 +712,17 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
       const row = Math.floor(iconIndex / window.layout.columns);
       positionIconGridEntry(entry, window.layout, column, row, iconSize);
     }
+    if (iconGridTimingsEnabled) {
+      performance.measure('@pmndrs/benchmark icon-grid.update-and-position', { start: updateAndPositionStarted });
+    }
+    if (!this.#isLive()) return;
+    const publishStarted = iconGridTimingsEnabled ? performance.now() : 0;
+    // The nominal icon-cell alignment above needs no synchronous layout query. Publish every staged string and its
+    // already-final transform through one retained update.
+    publishWorkloadTexts(scene, this.#pendingEntries);
+    if (iconGridTimingsEnabled) {
+      performance.measure('@pmndrs/benchmark icon-grid.publish', { start: publishStarted });
+    }
     for (let index = this.#missingIndices.length; index < this.#availableEntries.length; index += 1) {
       const entry = this.#availableEntries[index]!;
       entry.node.visible = false;
@@ -714,18 +730,19 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     }
     this.#recycleCount += this.#missingIndices.length;
     this.#settleWindow(window, viewport, scene);
+    if (iconGridTimingsEnabled) performance.measure('@pmndrs/benchmark icon-grid.update', { start: updateStarted });
   }
 
   #assertLive(): void {
     if (!this.#isLive()) throw new DOMException('The Icon Grid workload instance is disposed', 'AbortError');
   }
 
-  #clampScene(iconSize: number, viewport: IconGridViewport, scene: THREE.Scene): void {
+  #clampScroll(iconSize: number, viewport: IconGridViewport): void {
     const layout = iconGridLayout(ICON_GRID_ITEMS.length, iconSize, viewport.width);
     const maximumScrollX = Math.max(0, layout.width - viewport.width);
     const maximumScrollY = Math.max(0, layout.height - viewport.height);
-    scene.position.x = Math.min(0, Math.max(-maximumScrollX, scene.position.x));
-    scene.position.y = Math.min(maximumScrollY, Math.max(0, scene.position.y));
+    this.#autoPan.scrollX = Math.min(maximumScrollX, Math.max(0, this.#autoPan.scrollX));
+    this.#autoPan.scrollY = Math.min(maximumScrollY, Math.max(0, this.#autoPan.scrollY));
   }
 
   #isLive(): boolean {
@@ -740,7 +757,13 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     ) {
       throw new Error('icon grid cannot publish a window before every assignment is coherent');
     }
-    updateIconGridEntryVisibility(this.#pool.entries(), window.layout, -scene.position.x, scene.position.y, viewport);
+    updateIconGridEntryVisibility(
+      this.#pool.entries(),
+      window.layout,
+      this.#autoPan.scrollX,
+      this.#autoPan.scrollY,
+      viewport,
+    );
     this.#settledWindow = window;
     this.#assignmentSignature = JSON.stringify(assignments);
     this.#windowRevision += 1;
@@ -895,10 +918,7 @@ export function iconGridLayout(itemCount: number, iconSize: number, viewportWidt
   }
   positive(iconSize, 'icon grid icon size');
   positive(viewportWidth, 'icon grid viewport width');
-  const cellWidth = Math.max(
-    ICON_GRID_MIN_CELL_WIDTH,
-    iconSize * ICON_GRID_MAX_ADVANCE_EM + ICON_GRID_ICON_PADDING * 2,
-  );
+  const cellWidth = iconGridCellWidth(iconSize);
   const cellHeight = (iconSize + ICON_GRID_LABEL_SIZE) * LIVE_TEXT_LINE_HEIGHT + ICON_GRID_LABEL_GAP;
   const columns = Math.ceil(Math.sqrt(itemCount));
   const rows = Math.ceil(itemCount / columns);
@@ -912,6 +932,10 @@ export function iconGridLayout(itemCount: number, iconSize: number, viewportWidt
     width: ICON_GRID_INSET * 2 + columns * cellWidth + Math.max(0, columns - 1) * ICON_GRID_GAP,
     height: ICON_GRID_INSET * 2 + rows * cellHeight + Math.max(0, rows - 1) * ICON_GRID_GAP,
   };
+}
+
+function iconGridCellWidth(iconSize: number): number {
+  return Math.max(ICON_GRID_MIN_CELL_WIDTH, iconSize * ICON_GRID_MAX_ADVANCE_EM + ICON_GRID_ICON_PADDING * 2);
 }
 
 export function iconGridVirtualWindow(

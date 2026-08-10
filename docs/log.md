@@ -2,6 +2,12 @@
 
 ## 2026-08-10
 
+- **Stabilized retained Icon Grid recycling** — Corrected the engine host's aggregate/per-paragraph limit split so 684
+  paragraphs no longer each reserve line scratch for the entire batch. A deterministic 200-cycle regression replaces
+  the former 17-update, 4.29 GB status-7 failure. Icon Grid now scrolls through its camera, avoids layout queries in
+  renderer telemetry and recycling, publishes each recycled window once, and leaves Bitmap pixel snapping opt-in.
+  Clean Chrome samples on the 120 Hz development display held roughly 116–120 FPS across Bitmap, MSDF, and Slug.
+
 - **Restored retained paragraph scaling and Bitmap CPU batching** — Metric-only style mutations now refresh shaping-run
   typography before rebuilding cluster advances while retaining the HarfRust glyph result. Optimized-Wasm tests prove a
   2× font-size change produces a 2× inline advance. Bitmap strikes now bind all atlas pages as one texture array with a

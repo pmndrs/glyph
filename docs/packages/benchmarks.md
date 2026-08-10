@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:6a8e67bcd52842ba4821661fd96ba3e4bfeaed2022ba188f75615e32b0266a97'
+source_digest: 'sha256:c95c78e90c29a7736717d6241ba7ab961aed991ee67c3fc610f9ed9e7e42424c'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -205,7 +205,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T02:40:43Z'
+  at: '2026-08-10T20:05:07Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -370,7 +370,9 @@ without splitting the shared draw or rerunning layout. Two samples per backend r
 
 Timed playback compares each frame with the latest requested location rather than the last committed scene, so an in-flight preload receives exactly one request and cannot be superseded by a duplicate transition that skips workload-default initialization. Presentation captures Space at the window capture boundary to start or stop timed playback even while a button, switch, slider, select, or combobox owns focus; matching key-up activation is suppressed, while inputs, textareas, and editable text retain ordinary space entry. Arrow navigation remains disabled on interactive controls.
 
-Icon Grid auto-pan integrates a bounded exponential average of observed frame deltas so a delayed display frame does not become a visually abrupt catch-up jump. This affects motion only: the virtual window still traverses the complete 1,402-glyph catalog, retains its overscanned pool, and requests content reassignment after crossing a complete cell pitch. Its second timed appearance, after Text Ladder, starts at a different catalog position and reverses both axes. Content changes use the generic `Text` update contract and retained raster capacity; catalog glyph/label strings, assignment epochs, recyclable-entry lists, visible-entry metrics, geometry deduplication, font totals, and bitmap atlas-page reports retain caller-owned storage instead of allocating on every frame or recycle. Pool growth remains genuinely cold and detached until ready, then publishes size, view position, and assignments in one continuation. A 20-second WebGPU/Bitmap trace traversed 660 recycled glyph assignments across 31 coherent windows at 60.05 average FPS, 18.60 ms p95, 18.64 ms maximum, and zero frames over 20 ms; 20 minor and five major GC events each remained below 2.6 ms and produced no visible cadence miss. Renderer-wide batching across separate `Text` objects remains outside this milestone.
+Icon Grid auto-pan integrates a bounded exponential average of observed frame deltas so a delayed display frame does not become a visually abrupt catch-up jump. This affects motion only: the virtual window still traverses the complete 1,402-glyph catalog, retains its overscanned pool, and requests content reassignment after crossing a complete cell pitch. Its second timed appearance, after Text Ladder, starts at a different catalog position and reverses both axes. The orthographic camera owns scrolling, leaving retained text transforms stable instead of invalidating every world transform through a moving scene root. Recycled strings are staged together and published once; nominal one-em icon-cell alignment avoids a synchronous layout query. Icon Grid telemetry reads draw and glyph counts from realized command-buffer geometry and never calls `measureLayout`, so observing the demo cannot trigger a second full-batch semantic query. Query-gated DevTools measures expose update, publication, and renderer-submit phases without entering customer builds by default.
+
+Clean Chrome/WebGPU samples on the 120 Hz development display, after a server restart, reported Bitmap at roughly 116 FPS with 9.17 ms p95 and 16.59 ms p99 frame intervals, MSDF at 120 FPS with 9.23/16.65 ms p95/p99, and Slug at 120 FPS with 9.07/9.27 ms p95/p99. Median CPU submit time was 2.67/2.78/1.27 ms and median GPU time 0.85/1.05/3.74 ms for Bitmap/MSDF/Slug. These are host observations rather than CI thresholds. The core 684-paragraph, 200-cycle regression owns the sustained-retention gate that prevents the former status-7 failure and multi-gigabyte line-scratch amplification from returning.
 
 Rapid Presentation controls compose against a requested-location revision rather than the last React commit, so a workload selection made while a technique preload is pending retains both requested changes and only the newest preload may commit. Retained Bitmap, MSDF, and Slug controls may arrive before cold scene activation; an activation gate releases them to a latest-value serialized queue, preventing animated text from starving layout completion. Bitmap's exact glyph assertion is committed with the workload instead of leaking from Benchmark Ipsum into Advanced Shaping, and zero-glyph intermediate generations are hidden from GPU submission.
 
