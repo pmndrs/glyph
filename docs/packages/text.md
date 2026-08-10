@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6c314281ce6d33391e3d7f09114ec688d60138ec21445ef60f41b9d9460bd21a'
+source_digest: 'sha256:e3c2f2959b1bc39be0add04a7ce0ac91d84ae22bdb03b3189a216a1263ae1f91'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -280,14 +280,27 @@ transaction and technique-specific render plan; GPU submission is outside this d
 
 | Technique |  Cold | Font size | Column width | Suffix edit | Local edit | Middle splice |
 | --------- | ----: | --------: | -----------: | ----------: | ---------: | ------------: |
-| Bitmap    | 16.02 |      6.01 |         2.77 |       13.73 |       1.19 |          8.35 |
-| MTSDF     | 16.60 |      6.42 |         2.77 |       13.75 |       1.20 |          8.75 |
-| Slug      | 16.83 |      6.67 |         2.87 |       13.59 |       1.19 |          8.84 |
+| Bitmap    | 15.90 |      6.04 |         2.78 |       13.48 |       1.18 |          8.52 |
+| MTSDF     | 16.50 |      6.41 |         2.73 |       13.52 |       1.18 |          8.73 |
+| Slug      | 16.73 |      6.64 |         2.96 |       14.37 |       1.31 |          8.94 |
 
-The comparable retained TypeScript checkpoint measured 55.25/11.90/8.36/38.55 ms for cold/font-size/width/suffix edit,
-so every comparable median is faster through Rust. This proves the migration comparison on this machine; it does not
-close the stricter p95-under-4-ms objective. Local-edit p95 remains about 6 ms and high-variance, while width p95 ranges
-from 4.29 to 4.94 ms across techniques.
+The migration comparison is checked evidence rather than a reconstructed recollection. Commit `90964be0`, the exact
+`feat/three-api` base, was rebuilt in an isolated worktree using its own lockfile and original
+`text:layout-benchmark` workflow on this Darwin arm64 host. At the same eight-warmup/31-sample cadence its retained
+TypeScript path measured 58.32/12.09/9.15/39.61 ms for cold/font-size/width/suffix-edit medians. The current Bitmap,
+MTSDF, and Slug records all use one byte-identical optimized shaper Wasm and the complete `text_update` plus
+technique-specific Rust render plan. The base reports 25,515 positioned glyphs; the current plan reports 21,805
+renderable instances from the unchanged 22,000-glyph target because it omits non-rendering glyphs from GPU records.
+
+The exact [TypeScript baseline](../../apps/benchmarks/fixtures/results/typescript-layout-baseline-90964be0-darwin-arm64.json)
+and current [Bitmap](../../apps/benchmarks/fixtures/results/rust-layout-bitmap-0bdb9e93-darwin-arm64.json),
+[MTSDF](../../apps/benchmarks/fixtures/results/rust-layout-mtsdf-0bdb9e93-darwin-arm64.json), and
+[Slug](../../apps/benchmarks/fixtures/results/rust-layout-slug-0bdb9e93-darwin-arm64.json) records are authenticated by
+the benchmark fixture gate. Every comparable median is faster through Rust: Bitmap is 3.67× faster cold, 2.00× on font
+size, 3.29× on width, and 2.94× on suffix edit; even the slowest technique for each case remains 3.49×, 1.82×, 3.09×,
+and 2.76× faster. This proves the migration comparison on this machine; it does not close the stricter p95-under-4-ms
+objective. Local-edit p95 remains about 6 ms and high-variance, while width p95 ranges from 4.29 to 4.75 ms across
+techniques.
 
 The preceding unchanged 22,000-glyph localized-edit lane measured the complete production `text_update` plus Bitmap render
 plan at 2.607 ms median / 6.184 ms p95 after 40 warmups over 101 updates. The fast ASCII-letter path reuses Unicode and
