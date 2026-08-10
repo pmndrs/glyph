@@ -13,7 +13,7 @@ tags:
   - abi
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T14:25:40Z'
+  at: '2026-08-10T02:15:49Z'
 sources:
   - id: layout-benchmark
     resource: ../../packages/text/scripts/benchmark-paragraph-layout.mts
@@ -900,14 +900,26 @@ bytes, but source size is not binary contribution and the data section also cont
 external tables alone cannot be claimed to reduce the runtime to a small basic-font-parser footprint; a feature-stripped
 build must measure the executable floor.
 
-Two independent experiments are reserved for a later stack:
+The preferred delivery experiment is now compile-time runtime profiles with one source tree and one public ABI. Each
+profile is a separate Wasm asset selected during initialization, so a lite consumer does not download the full artifact.
+Provisional profiles are `lite` (Latin/EFIGS-oriented), `cjk` (lite plus the CJK-relevant analysis/layout machinery), and
+`full`; exact names and membership wait for section-level artifact measurements. Font-local GSUB/GPOS and selected glyph
+coverage remain in baked font assets and are not language-whitelisted by the runtime profile. SIMD remains the published
+default, with the existing compile-time scalar switch orthogonal to the language/runtime profile; no scalar artifact is
+published until a target requires it.
+
+Three related experiments are reserved for a later stack:
 
 1. Replace compiled Unicode property arrays with a versioned, little-endian, aligned data-pack format. The core reserves
    one retained region, validates the pack version, section directory, lengths, and digest once, and thereafter reads
    bounded slices directly. The initial implementation should fetch a plain binary blob and copy it once into the
    reserved Wasm region. A data-only Wasm side module that imports the core memory and initializes the region with active
    data segments is a benchmark candidate, not an assumed improvement.
-2. Measure an EFIGS/Cyrillic/default-shaper executable profile separately from optional complex-script profiles. HarfRust
+2. Measure the provisional compile-time profiles, including a build that omits stable-indirect planning when its declared
+   policy capability supports ordered-direct only. A symbol-bearing `-Oz` build currently attributes about 50.1 KiB of
+   optimized function bodies to stable planning plus separate stable order/pool support; this is an upper-bound signal,
+   not a measured stripped-artifact saving. Profile selection must reject an incompatible policy before any text update.
+3. Measure an EFIGS/Cyrillic/default-shaper executable profile separately from optional complex-script profiles. HarfRust
    0.12 has no script-level Cargo feature gates, so isolating Arabic/Indic/Khmer and related specialized shaper code would
    require an upstream feature design or a narrowly maintained fork. CJK/default OpenType shaping, Unicode line breaking,
    emoji grapheme behavior, and font-local GSUB/GPOS data must not be conflated with those specialized code paths.

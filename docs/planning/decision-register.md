@@ -43,7 +43,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T10:13:02Z'
+  at: '2026-08-10T02:15:49Z'
 ---
 
 # Decision register
@@ -321,6 +321,7 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-234 | The Rust render-plan cutover has one blessed executable path. The TypeScript paragraph engine, paragraph batch/attachment transaction, preparation worker, direct shaping/bidi/reshape ABI and readback, and first-generation `/typegpu` target are deleted rather than retained as compatibility implementations. Public `TextRuntime` owns the internal shaper; package-owned hosts alone access its direct-memory engine exports. Three and R3F consume the Rust command buffer. TypeGPU is a later from-scratch consumer of the same render-plan/policy contract and may not restore renderer-side layout or candidate/current target state. After cleanup, optimized SIMD Wasm is 1,113,113 raw / 422,035 gzip / 333,171 Brotli bytes. With `three`, React, and R3F external as optional peers, renderer-neutral JS + Wasm totals 1,211,173 / 440,875 / 349,703 raw/gzip/Brotli bytes and the complete Three adapter JS + Wasm totals 1,454,561 / 479,863 / 381,897. | Accepted |
 
 | D-235 | Raster techniques stop at identity, artifact decoding, retained CPU resource ownership, and disposal. The obsolete TypeScript `RasterRuntime`, candidate/commit raster transaction, glyph `select`, storage allocation, and record writers are deleted; Rust policy programs are the only production instance packers and dirty-range publishers. A Mori 0.19.1 structural scan corroborates the removed parallel path and flags similar ordered-direct/stable-indirect draw emission for evidence-gated extraction, not deletion: the strategies have distinct slot, order-buffer, and retirement semantics. All 154 Rust engine tests, all 161 package integration tests, Unicode 17 bidi/line-break conformance, both TypeScript projects, lint, and formatting pass. The cleanup leaves Wasm unchanged and reduces measured renderer-neutral JS + Wasm from 461,917 to 460,901 gzip bytes and complete Three + Wasm from 501,815 to 498,922 gzip bytes, with Three, React, and R3F external. | Accepted |
+| D-236 | Ordered-direct and stable-indirect retain distinct storage engines but share one non-generic, out-of-line primitive/draw command emitter after resolving physical addressing. A symbol-bearing optimized build attributes 33.3 KiB and 50.1 KiB of function bodies to the respective planners; that is an attribution bound, not a duplicate-byte claim. Exact range partitioning also replaces stable planning's quadratic changed-range × slot-write dependency scan, reducing the 22k-target font-size median from 350.136 to 7.982 ms. The combined artifact is 1,160,323 raw / 442,570 gzip / 348,361 Brotli bytes, 220 / 485 / 423 bytes below the pre-extraction artifact. Future transfer-size work compiles separate ABI-identical runtime profiles selected at initialization; provisional `lite`, `cjk`, and `full` membership must be established by final-artifact measurement, and the scalar/SIMD build switch remains orthogonal. | Accepted |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 

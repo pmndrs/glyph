@@ -28,6 +28,7 @@ mod state;
 pub(crate) mod transport;
 
 pub mod ordered_plan;
+mod plan_draw;
 pub mod plan_input;
 mod plan_packing;
 pub mod policy;
