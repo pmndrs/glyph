@@ -55,6 +55,38 @@ test('the TypeScript wrapper returns structured Rust errors', async () => {
   );
 });
 
+test('prepares and inspects one reusable subset through the packaged Wasm API', async () => {
+  const source = await readFile(
+    new URL('../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url),
+  );
+  const baker = await createFontBaker(wasm);
+  const prepared = baker.prepare({
+    source,
+    selection: {
+      formatVersion: 0,
+      fontFaceIndex: 0,
+      unicodeRanges: [{ start: 0x20, end: 0x7e }],
+    },
+  });
+
+  assert.equal(prepared.report.sourceBytes, source.byteLength);
+  assert.equal(prepared.report.preparedBytes, prepared.bytes.byteLength);
+  assert.ok(prepared.bytes.byteLength < source.byteLength);
+  const inspection = baker.inspect({
+    source: prepared.bytes,
+    descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+  });
+  assert.equal(inspection.glyphNameSource, 'none');
+  assert.ok(inspection.glyphs.some(({ codePoint }) => codePoint === 0x41));
+  assert.ok(!inspection.glyphs.some(({ codePoint }) => codePoint === 0xe9));
+  assert.doesNotThrow(() =>
+    baker.bake({
+      source: prepared.bytes,
+      descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+    }),
+  );
+});
+
 test('the direct-memory shim releases earlier allocations when a later copy fails', () => {
   const released = [];
   let allocations = 0;
@@ -170,6 +202,8 @@ function fakeFontBakerInstance({ allocate = () => 0, deallocate = () => undefine
       pmndrs_font_baker_alloc: allocate,
       pmndrs_font_baker_dealloc: deallocate,
       pmndrs_font_baker_bake: () => (response === undefined ? 0 : responsePointer),
+      pmndrs_font_baker_prepare: () => (response === undefined ? 0 : responsePointer),
+      pmndrs_font_baker_inspect: () => (response === undefined ? 0 : responsePointer),
       pmndrs_font_baker_result_len: () => response?.byteLength ?? 0,
     },
   };

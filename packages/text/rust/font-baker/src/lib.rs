@@ -13,7 +13,10 @@ mod glb;
 mod report;
 mod sfnt;
 
-#[cfg(all(target_arch = "wasm32", not(feature = "std")))]
+#[cfg(feature = "subsetting")]
+mod source_font;
+
+#[cfg(target_arch = "wasm32")]
 mod wasm;
 
 pub use error::{BakeError, BakeErrorCode};
@@ -21,6 +24,11 @@ pub use report::{
     BakeArtifactV0, BakeDescriptorV0, BakeReportV0, BakeResultV0, BakeWarning,
     ContainerPayloadReport, FontMetricsV0, ProvenanceV0, ShapingPayloadReportV0,
     TablePayloadReport, TransportPayloadReport,
+};
+#[cfg(feature = "subsetting")]
+pub use source_font::{
+    FontInspectionV0, FontSelectionV0, GlyphInspectionV0, PreparedFontReportV0, PreparedFontV0,
+    UnicodeRangeV0, inspect_font, prepare_font,
 };
 
 /// Return the compile-time-generated C ABI description embedded in this build.

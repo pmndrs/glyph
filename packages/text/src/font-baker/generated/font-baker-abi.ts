@@ -26,6 +26,26 @@ export const fontBakerAbi = {
         "byteLength"
       ]
     },
+    "inspect": {
+      "export": "pmndrs_font_baker_inspect",
+      "parameters": [
+        "sourcePointer",
+        "sourceByteLength",
+        "descriptorPointer",
+        "descriptorByteLength"
+      ],
+      "result": "responsePointer"
+    },
+    "prepare": {
+      "export": "pmndrs_font_baker_prepare",
+      "parameters": [
+        "sourcePointer",
+        "sourceByteLength",
+        "selectionPointer",
+        "selectionByteLength"
+      ],
+      "result": "responsePointer"
+    },
     "responseByteLength": {
       "export": "pmndrs_font_baker_result_len",
       "parameters": [],

@@ -20,6 +20,14 @@ fn generated_abi_is_valid_and_names_the_public_exports() {
     assert_eq!(abi["versions"]["binaryen"], "129.0.0");
     assert_eq!(abi["pointerWidth"], 32);
     assert_eq!(abi["functions"]["bake"]["export"], "pmndrs_font_baker_bake");
+    assert_eq!(
+        abi["functions"]["prepare"]["export"],
+        "pmndrs_font_baker_prepare"
+    );
+    assert_eq!(
+        abi["functions"]["inspect"]["export"],
+        "pmndrs_font_baker_inspect"
+    );
     assert_eq!(abi["response"]["payloadOffset"], 16);
 }
 

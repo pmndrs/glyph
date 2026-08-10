@@ -209,6 +209,8 @@ await run(
     '--release',
     '--locked',
     '--no-default-features',
+    '--features',
+    'subsetting',
   ],
   rustEnvironment,
 );

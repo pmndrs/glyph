@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6b997ac16ad957dd991dc2416c3e2654cf4b8ccdfa58c8dbdb18cbefa2e58a0e'
+source_digest: 'sha256:e73273a9d0445e551e376dcc0799a84221910533f5201a525b1d7270a2d59f8b'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -84,7 +84,7 @@ The package owns five runtime layers:
 | React integration       | `@pmndrs/text/r3f`   | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                        |
 
 Runtime Rust and all shared Rust code remain `no_std + alloc` compatible with the package allocator contract. The optional
-font-baker Wasm alone may enable a feature-gated `std` adapter for Fontations subsetting; the same crate must continue to
+font-baker Wasm alone enables a feature-gated `std` adapter for Fontations subsetting; the same crate continues to
 pass its `wasm32-unknown-unknown --no-default-features` build. The text engine uses the existing compile-time direct-memory mapping
 for font registrations and the single `text_update(requestOffset, requestLength)` export for retained engine sessions.
 TypeScript does not independently shape, lay out, or pack paragraphs.
