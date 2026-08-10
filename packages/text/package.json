@@ -8,6 +8,7 @@
     "text": "./bin/text.js"
   },
   "files": [
+    "LICENSE",
     "bin",
     "dist",
     "!dist/.tsbuildinfo",
