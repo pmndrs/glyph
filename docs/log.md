@@ -2,6 +2,14 @@
 
 ## 2026-08-09
 
+- **Ported the external raster proof off the deleted host packer** — The private glyph-example consumer now uses the
+  same public boundary required of third parties: its portable technique owns only identity, decode, retained resource,
+  and disposal, while its Three registration supplies the declarative policy program and material realization. Removed
+  its stale selector, binding object, canonical storage allocator, TypeScript glyph writer, paint hook, and exported
+  legacy types. The focused compiled-Wasm lifecycle verifies Rust-produced sizes and colors before checking retained
+  draw and geometry identity; no test-only core API or compatibility contract was added. All six package tests and its
+  TypeScript, lint, and formatting gates pass.
+
 - **Shared the compiled draw emitter and removed a quadratic stable-plan scan** — A symbol-bearing `-Oz` build attributes
   33.3 KiB of optimized function bodies to ordered planning and 50.1 KiB to stable planning, while confirming that the
   planners retain different storage, order-buffer, and retirement work. Their identical final primitive/draw record
