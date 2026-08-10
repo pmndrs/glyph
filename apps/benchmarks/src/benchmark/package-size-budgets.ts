@@ -23,17 +23,19 @@ export const packageSizeBudgets = {
     gzipBytes: 3_200,
     brotliBytes: 2_850,
   },
+  // Complete Rust shaping, layout, policy, and command-plan publication. The aggregate ceilings below add only their
+  // independently measured JavaScript graph and leave narrow reviewed headroom for cross-architecture tool output.
   'text-shaper-wasm': {
-    rawBytes: 1_125_000,
-    minifiedBytes: 1_125_000,
-    gzipBytes: 430_000,
-    brotliBytes: 340_000,
+    rawBytes: 1_165_000,
+    minifiedBytes: 1_165_000,
+    gzipBytes: 445_000,
+    brotliBytes: 350_000,
   },
   'renderer-neutral-core-total': {
-    rawBytes: 1_230_000,
-    minifiedBytes: 1_200_000,
-    gzipBytes: 450_000,
-    brotliBytes: 360_000,
+    rawBytes: 1_265_000,
+    minifiedBytes: 1_235_000,
+    gzipBytes: 465_000,
+    brotliBytes: 367_000,
   },
   'three-runtime-js': {
     rawBytes: 350_000,
@@ -42,10 +44,10 @@ export const packageSizeBudgets = {
     brotliBytes: 51_000,
   },
   'three-renderer-total': {
-    rawBytes: 1_480_000,
-    minifiedBytes: 1_360_000,
-    gzipBytes: 490_000,
-    brotliBytes: 390_000,
+    rawBytes: 1_515_000,
+    minifiedBytes: 1_395_000,
+    gzipBytes: 505_000,
+    brotliBytes: 400_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,

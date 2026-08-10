@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:45bd229154c46ae55792637f90932ef600fa7ad524fa3b680338cf13f4f28161'
+source_digest: 'sha256:1ed5591cfb6b3ccef72987d9c9cac3b4f7dfa8deee20b46bf82498992f879c57'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -125,8 +125,12 @@ compiled policy; it never invokes a JavaScript callback in shaping, layout, or p
 
 The first-party policy can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits
-draws by transform for integrations that prefer ordinary object matrices. `TextGroup.compositing` determines whether
-Rust must preserve authored ordering or may reorder independent work.
+draws by transform for integrations that prefer ordinary object matrices. Policy programs may use ordered-direct or
+stable-indirect physical storage. Stable draws carry one reserved u32 order buffer; Three validates its draw/primitive
+addressing once, then uses the same logical-to-physical mapping for technique records, transform indices, explicit origin
+queries, and third-party program material contexts. `TextGroup.compositing` determines whether Rust must preserve authored
+ordering or may reorder independent work. Ordered-direct remains the first-party default until stable planning meets the
+same tail-latency target.
 
 `materialId` is explicit through the frame ABI and render plan. Three maps it to a `defineTextMaterial()` factory. Material
 identity may split draws without forcing a second copy of the canonical glyph buffers.
@@ -172,18 +176,23 @@ There are no instance-ignoring runtime ABI readers. Package builds isolate the d
 `artifact-baker` feature sets from kernel-only test targets and reject an optimized module missing any contract-declared
 artifact export, preventing Cargo's shared top-level artifact path from silently publishing a smaller test variant.
 
-Asynchronous Worker execution is a follow-on host concern. Transfer buffers must return to the Worker when retired so
-their final collection occurs in the owning realm. It does not restore the deleted TypeScript shaping Worker.
+The renderer-neutral core owns the completed asynchronous Worker transfer contract: it copies opaque frame bytes once
+into a bounded worker-owned transferable pool, applies explicit backpressure, and requires root to transfer each retired
+buffer back so reuse or final collection occurs in the owning realm. Adopting that mode in the Three host is deferred;
+the synchronous Three path does not restore the deleted TypeScript shaping Worker. TypeGPU is likewise a later adapter
+slice built directly against the Rust render plan.
 
 ## Current correctness evidence
 
 The foundation currently has:
 
-- 150 passing Rust engine tests, including exact retained-cluster, revision-range, immediate line-convergence, and
+- 154 passing Rust engine tests, including exact retained-cluster, revision-range, immediate line-convergence, and
   later cursor-convergence regressions;
 - the package JavaScript/integration gate passing through the single-path public exports;
 - exact retained Amiri bidi, policy, ellipsis, clipping, UIKit-layout, and CJK contracts exercised by the browser
   `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `measureLayout()`, and `inspectLayout()`;
+- 32/32 pixel-exact public Bitmap WebGL2 frames against the independent CPU oracle, including resize and clipping, with
+  zero differing channel bytes and pinned SHA-256 `a47930d3…15e893`;
 - source-font SHA-256, registered shaping hashes, and HarfRust/HarfBuzz oracle identities authenticated independently of
   the browser behavior check;
 - byte-identical Bitmap, MSDF, and Slug packing/consumer gates retained elsewhere in the benchmark suite.
@@ -194,22 +203,40 @@ publication. The retained engine deliberately receives that style scalar as f32,
 narrows published values once. An independent calculation from the f32 line box reproduces the corrected final baseline,
 centered glyph row, content height, and complete layout hash exactly; no runtime precision or tolerance changed.
 
+## Legacy-path and duplication audit
+
+The Rust command buffer is the only glyph-packing implementation. The former TypeScript `RasterRuntime`, raster
+candidate/commit transaction, `select`, `createStorage`, and `writeStorage` surfaces are deleted from production source
+and public exports. Current raster techniques own identity, artifact decoding, retained CPU resource data, and disposal;
+Rust policy programs own instance packing and dirty-range publication. The package gate retains production render-plan,
+font-binding, Three execution, artifact-validation, and Unicode conformance coverage instead of test-only TypeScript
+packers.
+
+A Mori 0.19.1 production-source scan (review profile, same-language threshold 0.85, minimum 40 tokens) corroborated the
+deleted parallel path and identified smaller repeated validation helpers. It also highlighted similar draw emission in
+`ordered_plan.rs` and `stable_plan.rs`; those modules are not duplicate implementations of one behavior. Ordered-direct
+compacts physical records in draw order, while stable-indirect preserves slots, publishes an order buffer, and quarantines
+retirements until renderer acknowledgement. Shared emission logic may be extracted only if compiled-size and benchmark
+evidence show a benefit; a generic source refactor that monomorphizes twice is not assumed to shrink or accelerate Wasm.
+
 ## Current size and performance evidence
 
 The latest checked package-size record after the baker ABI cleanup reports:
 
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
-| Core JavaScript plus shaper Wasm        | 1,224,539 B | 447,121 B | 353,986 B |
-| Three adapter plus core and shaper Wasm | 1,466,450 B | 485,864 B | 385,930 B |
+| Core JavaScript plus shaper Wasm        | 1,248,941 B | 460,901 B | 364,253 B |
+| Three adapter plus core and shaper Wasm | 1,487,569 B | 498,922 B | 395,786 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
-Relative to the preceding checked record, browser-core JavaScript is effectively flat (+96 raw, +7 gzip, -5 Brotli),
-the Three adapter shrinks by 1,381 raw / 238 gzip / 255 Brotli bytes, and the shaper Wasm grows by 13,270 raw / 6,239
-gzip / 4,288 Brotli bytes. The corrected complete MTSDF baker is 552,025 raw / 215,030 gzip / 168,758 Brotli bytes;
-the earlier 52 KiB observation was a kernel-only test artifact that reused the distributable Cargo target directory.
+The optimized shaper is 1,160,543 raw / 443,055 gzip / 348,784 Brotli bytes. The renderer-neutral JavaScript graph is
+88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 327,026 raw / 55,867 gzip /
+47,002 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
+to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; Wasm did not change in that cleanup.
+The corrected complete MTSDF baker remains 552,025 raw / 215,030 gzip / 168,758 Brotli bytes; the earlier 52 KiB
+observation was a kernel-only test artifact that reused the distributable Cargo target directory.
 
 The public Three benchmark now supports an outside-only mode that leaves the internal phase collector disabled and wraps
 one `updateMatrixWorld()` call with a host timer. An eight-warmup/31-sample run over 25,515 positioned glyphs measured
@@ -245,12 +272,24 @@ identity; the first storage mismatch falls back to complete batch discovery. Thr
 shaper is 1,157,311 raw bytes, a 4,189-byte increase, and retained high-water memory is 79.81 MiB. The repeated median gain
 is established; the roughly 5.74 ms p95 and 81.4–81.6% RSD still fail the tail-latency gate.
 
-The direct benchmark now also keeps an independent middle-splice lane. Alternating one UTF-16 insertion/deletion through
-ordered-direct storage measures 9.119 ms median / 10.016 ms p95 and writes 511.3 KiB because following physical records
-move. Stable-indirect reduces that publication to 452 B, but its current compiler measures 10.776/51.067 ms; even its
-equal-length replacement path measures 2.903/19.312 ms. This establishes the storage-policy tradeoff without changing the
-default: stable planning and Three shader indirection remain optimization/correctness work, and chunk-local text storage
-cannot be claimed as the dominant splice fix while the physical plan has this cost.
+The direct benchmark also keeps an independent middle-splice lane. On the current optimized artifact, a sequential
+eight-warmup/31-sample run measures ordered-direct insertion/deletion at 8.369/8.473 ms median/p95 and 511.3 KiB written
+because following physical records move. Stable-indirect reduces that publication to 452 B but measures 10.683/11.149 ms.
+The earlier 51.067 ms figure was the maximum selected as p95 from only 11 samples and did not reproduce. This establishes
+the storage-policy tradeoff without changing the default: stable planning remains optimization/correctness work, and
+chunk-local text storage cannot be claimed as the dominant splice fix while the physical plan has this cost.
+
+Three now consumes stable-indirect plans through one shared record-addressing abstraction rather than technique-specific
+branches. A Rust/Three integration regression proves lifecycle reorder mutates only the order table and preserves physical
+glyph bytes and draw objects. A two-record GPU oracle makes slot zero green and slot one red, then renders logical slot zero
+through `order[0] = 1`: forced WebGL2 and hardware WebGPU both return 16/16 exact red pixels and the same readback hash.
+The complete ordered Bitmap/MSDF/Slug/custom-material matrix remains green on both backends. Reusing the stable pool's
+committed identity index improved two short 22k equal-length runs to 2.446/6.862 and 2.376/6.704 ms median/p95, but a
+stricter 31-sample run detected late Wasm growth before producing a report. Stable-indirect is therefore renderer-proven
+but not the first-party default or a closed performance lane. The optimized shaper is 1,159,121 raw / 441,811 gzip /
+347,554 Brotli bytes. The explicit raster-origin correction adds 818 raw bytes without increasing the measured retained
+high-water mark: one render-to-semantic `u32` index replaces a duplicate hot-record identity, while origins remain in the
+existing semantic glyph record rather than two additional retained float lanes.
 
 ## Merge gates still open
 

@@ -4,7 +4,7 @@ title: Raster technique and engine resource API
 description: Canonical boundary between portable raster baking and decoding, core glyph packing, reusable shader backends, and engine-specific GPU targets.
 documentation_type: reference
 tags: [api, raster, baking, resources, shaders, engines, typegpu, tsl]
-status: stable
+status: deprecated
 sources:
   - id: core-api
     resource: core-api.md
@@ -43,6 +43,10 @@ generated:
   by: openai-codex/gpt-5.6
   at: '2026-08-07T04:49:05Z'
 ---
+
+> Historical design record. The Rust render-plan cutover superseded the TypeScript glyph binding, storage, and packing
+> interfaces described below. Use [the current package reference](../packages/text.md),
+> [core API](core-api.md), and [Three API](three-api.md) for the blessed surface.
 
 # Raster technique and engine resource API
 

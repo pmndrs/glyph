@@ -2,6 +2,47 @@
 
 ## 2026-08-09
 
+- **Deleted the duplicate TypeScript raster packing and lifecycle path** — Raster techniques now stop at identity,
+  artifact decoding, retained CPU resource ownership, and disposal; Rust policy programs remain the only production
+  instance packers and dirty-range publishers. Removed `RasterRuntime`, candidate/commit staging, glyph selection,
+  storage allocation, record writers, their obsolete public types, and tests that reconstructed the deleted packers.
+  A Mori 0.19.1 production scan corroborated the parallel path and separated it from the live ordered-direct and
+  stable-indirect planners, whose shared draw-emission shape has distinct allocation and retirement semantics. All 154
+  Rust engine tests, all 161 package integration tests, Unicode 17 conformance, TypeScript, lint, formatting, and OKF
+  validation pass. The cleanup leaves Wasm unchanged and reduces core JS + Wasm from 461,917 to 460,901 gzip bytes and
+  complete Three + Wasm from 501,815 to 498,922 gzip bytes, with renderer peers external.
+
+- **Made raster policy origins exact without widening retained glyph storage** — The first-party policy had treated
+  positioned ink-box starts as baseline origins, then subtracted the baked raster plane a second time. The mapping was
+  dormant while the legacy TypeScript renderer remained authoritative and became visible only after the single-path
+  Rust cutover. The independent Bitmap CPU oracle exposed a 12 px vertical displacement and 33,492 differing channel
+  bytes; no tolerance or fixture changed. Rust now exposes explicit origin policy fields and maps each renderable glyph
+  to its existing semantic-glyph record with one `u32` index. The already-retained cluster-ID lane supplies plan semantic
+  identity, so the hot render glyph record does not grow. The public WebGL2 Bitmap target passes 32/32 exact frames with
+  zero differing bytes and pinned SHA-256 `a47930d3…15e893`; the complete paragraph matrix passes 32/32. The 22k direct
+  benchmark returns to the pre-fix 107.56 MiB retained high-water mark. Optimized Wasm is 1,159,121 raw / 441,811 gzip /
+  347,554 Brotli bytes, 818 / 451 / 415 bytes above the prior checkpoint.
+
+- **Regenerated package-size and edit-latency truth from the final stable-addressing artifact** — The renderer-neutral
+  core is 1,257,322 raw / 460,673 gzip / 364,097 Brotli bytes, including the 1,159,121 raw / 441,811 gzip /
+  347,554 Brotli shaper Wasm. The complete Three adapter plus engine is 1,505,897 / 500,509 / 396,903 bytes; Three,
+  React, and React Three Fiber remain external peers. A sequential eight-warmup/31-sample 22k Bitmap run measures the
+  ordered-direct equal-length edit at 1.330/6.328 ms and middle splice at 8.369/8.473 ms median/p95. Stable-indirect
+  middle splice measures 10.683/11.149 ms and writes only 452 B. The earlier 51.067 ms stable figure was the maximum of
+  an 11-sample run (the benchmark's percentile index selects the maximum at that sample count), did not reproduce, and
+  is not retained as ordinary latency evidence. A stricter stable equal-length run detected late Wasm growth before it
+  could publish a report, so stable-indirect remains a correctness capability rather than the first-party default.
+
+- **Completed stable-indirect Three record addressing without changing the default** — The Three executor now resolves
+  one validated logical-to-physical record address for Bitmap, MSDF, Slug, custom programs, indexed transforms, and
+  origin augmentation. A product integration regression proves a paragraph reorder patches only the Rust order buffer,
+  retains physical glyph storage, and reuses the existing draw objects. The shared nested-storage oracle renders the
+  red record behind a green decoy exactly on forced WebGL2 and hardware WebGPU (16/16 pixels, identical SHA-256), while
+  the complete ordered Bitmap/MSDF/Slug/custom-material matrix remains green on both backends. Stable slot lookup reuses
+  the committed identity index for revision-only/reorder updates, improving two short 22k localized-edit medians from
+  2.903 to 2.446 and 2.376 ms. Those runs are implementation checkpoints, not final tail evidence; the stricter current
+  measurement and growth result are recorded above. Optimized Wasm grows 992 bytes from 1,157,311 to 1,158,303 raw bytes.
+
 - **Added the missing middle-splice workload before choosing edit storage** — The unchanged replacement case remains the
   canonical comparison, while a new `localized-splice` case alternates one UTF-16 insertion and deletion in the middle
   of the same 22,000-glyph fixture. Ordered-direct measures 9.119 ms median / 10.016 ms p95 and writes 511.3 KiB because

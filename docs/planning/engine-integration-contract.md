@@ -4,7 +4,7 @@ title: Engine integration contract
 description: Exact storage, batching, ordering, transform, publication, and lifetime boundary between core text preparation and an engine renderer.
 documentation_type: reference
 tags: [api, engine, rendering, batching, storage, revisions]
-status: stable
+status: deprecated
 sources:
   - id: core-api
     resource: core-api.md
@@ -37,6 +37,10 @@ generated:
   by: openai-codex/gpt-5.6
   at: '2026-08-07T03:25:58Z'
 ---
+
+> Historical design record. The Rust command buffer superseded the target preparation and TypeScript storage contract
+> described below. Use [the current package reference](../packages/text.md) and
+> [Rust layout-engine design](rust-layout-engine.md) for the blessed integration boundary.
 
 # Engine integration contract
 
