@@ -349,6 +349,23 @@ impl ValidatedPolicy {
             })
     }
 
+    pub(crate) fn uniform_allocation_strategy(
+        &self,
+        capability_set: CapabilitySetId,
+    ) -> Option<u16> {
+        let mut strategy = None;
+        for program in self.programs.iter().filter(|program| {
+            program.capability_set == capability_set || program.capability_set.0 == 0
+        }) {
+            match strategy {
+                Some(existing) if existing != program.allocation_strategy => return None,
+                Some(_) => {}
+                None => strategy = Some(program.allocation_strategy),
+            }
+        }
+        strategy
+    }
+
     pub fn execute(
         &self,
         capability_set: CapabilitySetId,
@@ -1917,6 +1934,23 @@ mod tests {
             policy.buffer_dependency_masks(CAPABILITY, BITMAP, 0),
             Some([0b11].as_slice())
         );
+    }
+
+    #[test]
+    fn reports_only_a_truly_uniform_allocation_strategy() {
+        let ordered = valid_program();
+        let uniform = ValidatedPolicy::new(descriptor(vec![ordered.clone()])).unwrap();
+        assert_eq!(
+            uniform.uniform_allocation_strategy(CAPABILITY),
+            Some(ALLOCATION_ORDERED_DIRECT)
+        );
+
+        let mut stable = ordered;
+        stable.technique = TechniqueId(2);
+        stable.id = ProgramId(2);
+        stable.allocation_strategy = ALLOCATION_STABLE_INDIRECT;
+        let mixed = ValidatedPolicy::new(descriptor(vec![valid_program(), stable])).unwrap();
+        assert_eq!(mixed.uniform_allocation_strategy(CAPABILITY), None);
     }
 
     #[test]
