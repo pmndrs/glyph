@@ -7,7 +7,7 @@
   "entries": [
     {
       "id": "browser-core",
-      "label": "Renderer-neutral core JS (peers and Wasm external)",
+      "label": "Core JS",
       "status": "measured",
       "format": "javascript",
       "sha256": "e0c1574d31cee981f61c20ff9685cc64523c91dec320cafcc0860189856c5e7a",
@@ -18,7 +18,7 @@
     },
     {
       "id": "text-shaper-wasm",
-      "label": "Text engine Wasm",
+      "label": "Shaper Wasm",
       "status": "measured",
       "format": "wasm",
       "sha256": "f74f96a6214532271296c8165738d14f71c0642aca4af9050a0363aed2a4d576",
@@ -28,19 +28,8 @@
       "brotliBytes": 347850
     },
     {
-      "id": "renderer-neutral-core-total",
-      "label": "Renderer-neutral core total (JS + Wasm)",
-      "status": "measured",
-      "format": "aggregate",
-      "sha256": "c5ab94ae437e8bea42b3d73a44042c265fa94c8797e4b2d015c41c8c2bd9cf38",
-      "rawBytes": 1247715,
-      "minifiedBytes": 1223474,
-      "gzipBytes": 460130,
-      "brotliBytes": 363319
-    },
-    {
       "id": "three-runtime-js",
-      "label": "Complete Three adapter JS (peers and Wasm external)",
+      "label": "Three.js adapter JS",
       "status": "measured",
       "format": "javascript",
       "sha256": "9444aa8cbcb6a770b8dcac9fdfd36d64b488226b60bce09d7f20a2e26d892d17",
@@ -50,19 +39,8 @@
       "brotliBytes": 47426
     },
     {
-      "id": "three-renderer-total",
-      "label": "Complete Three text renderer total (adapter JS + Wasm; peers external)",
-      "status": "measured",
-      "format": "aggregate",
-      "sha256": "3f56579adfd50b68a73efae8b5c36f0ee64cbdcd142ae684e85791482afa6766",
-      "rawBytes": 1488669,
-      "minifiedBytes": 1376470,
-      "gzipBytes": 498606,
-      "brotliBytes": 395276
-    },
-    {
       "id": "font-inter-bitmap-16-32",
-      "label": "Inter 4.1 Bitmap font asset (16 + 32 ppem)",
+      "label": "Inter font · Bitmap",
       "status": "measured",
       "format": "font-asset",
       "sha256": "b8143dc39a49199c934f4cee493ddb6acbbfff34716f5332afd4e8b9cb8e785f",
@@ -73,7 +51,7 @@
     },
     {
       "id": "font-inter-mtsdf",
-      "label": "Inter 4.1 MTSDF font asset",
+      "label": "Inter font · MTSDF",
       "status": "measured",
       "format": "font-asset",
       "sha256": "1e1980e2b20341c5e7f531e970e37cb879da2907d5c84e9603414717bcf495c0",
@@ -84,7 +62,7 @@
     },
     {
       "id": "font-inter-slug",
-      "label": "Inter 4.1 Slug font asset",
+      "label": "Inter font · Slug",
       "status": "measured",
       "format": "font-asset",
       "sha256": "1c3f8fea27d1f404f77e47c4dd4929c122e12091a3d91cd92c30a6b9d6ece094",
@@ -95,7 +73,7 @@
     },
     {
       "id": "font-icons-bitmap-16-32",
-      "label": "Font Awesome Free 6.7.2 Bitmap icon asset (16 + 32 ppem)",
+      "label": "Font Awesome icons · Bitmap",
       "status": "measured",
       "format": "font-asset",
       "sha256": "95550c860396470f8583a990a8e2081289a6a87781836c17b488527c8c4eca45",
@@ -106,7 +84,7 @@
     },
     {
       "id": "font-icons-mtsdf",
-      "label": "Font Awesome Free 6.7.2 MTSDF icon asset",
+      "label": "Font Awesome icons · MTSDF",
       "status": "measured",
       "format": "font-asset",
       "sha256": "75ef82e7ee28d6ee6135634fc13b68ba8fc8fe808c8ec3d8428d8e33cf37c3b6",
@@ -117,7 +95,7 @@
     },
     {
       "id": "font-icons-slug",
-      "label": "Font Awesome Free 6.7.2 Slug icon asset",
+      "label": "Font Awesome icons · Slug",
       "status": "measured",
       "format": "font-asset",
       "sha256": "dda2ea68d49f45cdfbf48c3a505718eb62931753834e1d175270ae40d2b40b1d",
@@ -125,72 +103,6 @@
       "minifiedBytes": 2945412,
       "gzipBytes": 658012,
       "brotliBytes": 484998
-    },
-    {
-      "id": "delivery-three-inter-bitmap",
-      "label": "Three + engine + Inter Bitmap delivery total",
-      "status": "measured",
-      "format": "aggregate",
-      "sha256": "e1719028cb54697f95123f10700fe0812a43f069a6585b3e55929a65eb01780f",
-      "rawBytes": 4638317,
-      "minifiedBytes": 4526118,
-      "gzipBytes": 1056914,
-      "brotliBytes": 815866
-    },
-    {
-      "id": "delivery-three-inter-mtsdf",
-      "label": "Three + engine + Inter MTSDF delivery total",
-      "status": "measured",
-      "format": "aggregate",
-      "sha256": "ec082d87f3caf869018a7d82b0a721720bc125500527053528189d79663997da",
-      "rawBytes": 40836381,
-      "minifiedBytes": 40724182,
-      "gzipBytes": 7297018,
-      "brotliBytes": 3635648
-    },
-    {
-      "id": "delivery-three-inter-slug",
-      "label": "Three + engine + Inter Slug delivery total",
-      "status": "measured",
-      "format": "aggregate",
-      "sha256": "65c45011697a54fa549facc7cf0379b001b292c153b55b6e2be7c04a5f6c4478",
-      "rawBytes": 4933585,
-      "minifiedBytes": 4821386,
-      "gzipBytes": 1117093,
-      "brotliBytes": 805311
-    },
-    {
-      "id": "delivery-three-icons-bitmap",
-      "label": "Three + engine + Font Awesome Bitmap delivery total",
-      "status": "measured",
-      "format": "aggregate",
-      "sha256": "5920d74a2e6d53335190ae5070da9417b596082c48a5e4c26fd500ecf7a08db6",
-      "rawBytes": 3870401,
-      "minifiedBytes": 3758202,
-      "gzipBytes": 948653,
-      "brotliBytes": 750825
-    },
-    {
-      "id": "delivery-three-icons-mtsdf",
-      "label": "Three + engine + Font Awesome MTSDF delivery total",
-      "status": "measured",
-      "format": "aggregate",
-      "sha256": "5c91d2c6c0291976500ccfdb780b6a9ebafaf8fd880a5299ce014e085a75707a",
-      "rawBytes": 34069569,
-      "minifiedBytes": 33957370,
-      "gzipBytes": 7726430,
-      "brotliBytes": 3720179
-    },
-    {
-      "id": "delivery-three-icons-slug",
-      "label": "Three + engine + Font Awesome Slug delivery total",
-      "status": "measured",
-      "format": "aggregate",
-      "sha256": "95e97a04e8e9baafb8d543a499faeee1b561e13a1f592ae3e2caf8e438266016",
-      "rawBytes": 4434081,
-      "minifiedBytes": 4321882,
-      "gzipBytes": 1156618,
-      "brotliBytes": 880274
     },
     {
       "id": "font-validator-js",
@@ -263,11 +175,11 @@
       "label": "Bitmap fixed baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "bdcf6215905e47be09d8a1a8e5122e95c07c4e4b93509bf8f4a74d043e0438a8",
+      "sha256": "fb2abdcb7f85eef80218b3bcdb134bb05deeef95d4f23725946bb0e40bdfa1bc",
       "rawBytes": 626940,
       "minifiedBytes": 626940,
-      "gzipBytes": 234735,
-      "brotliBytes": 180620
+      "gzipBytes": 234736,
+      "brotliBytes": 180717
     },
     {
       "id": "bitmap-baker-js",
@@ -307,11 +219,11 @@
       "label": "MSDF fixed baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "ec6eb1640d587ba8ce9b614aa334c7a93b4a5c36a6c12ee1dba725d7adce7de8",
+      "sha256": "1ba27cd121447ca271e7040e07ba681fe016e90e41c4810ff485bfd7da6ad792",
       "rawBytes": 552025,
       "minifiedBytes": 552025,
-      "gzipBytes": 215030,
-      "brotliBytes": 168758
+      "gzipBytes": 215027,
+      "brotliBytes": 169341
     },
     {
       "id": "mtsdf-baker-js",
@@ -329,11 +241,11 @@
       "label": "Slug fixed baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "38d461e1ccfd9be05cccff46c6ee4993c785602ba3cafe170abf4eefdecd8f94",
+      "sha256": "68d7cdb6a5c593765674c36d62390392174ad5e780b109d8c923a4d78985f65c",
       "rawBytes": 465031,
       "minifiedBytes": 465031,
-      "gzipBytes": 186665,
-      "brotliBytes": 146606
+      "gzipBytes": 186664,
+      "brotliBytes": 146682
     },
     {
       "id": "slug-baker-js",

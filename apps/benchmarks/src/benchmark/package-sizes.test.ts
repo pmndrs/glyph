@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import report from '../generated/package-sizes.json';
 import { packageSizeBudgets } from './package-size-budgets';
 import { assertPackageSizeReportFresh } from './package-size-report';
+import { sizeLimitRows, summarizePackageSizes } from './package-size-summary';
 
 describe('independent package-size report', () => {
   it('identifies every measured payload by SHA-256', () => {
@@ -27,9 +28,7 @@ describe('independent package-size report', () => {
       'runtime-baker-host-js',
       'runtime-baker-worker-js',
       'text-shaper-wasm',
-      'renderer-neutral-core-total',
       'three-runtime-js',
-      'three-renderer-total',
       'bitmap-runtime-js',
       'mtsdf-runtime-js',
       'slug-runtime-js',
@@ -67,39 +66,28 @@ describe('independent package-size report', () => {
     }
   });
 
-  it('reports separately delivered JS and Wasm as exact consumer totals', () => {
-    const measured = new Map(report.entries.map((entry) => [entry.id, entry]));
-    const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;
-    for (const [aggregateId, javascriptId] of [
-      ['renderer-neutral-core-total', 'browser-core'],
-      ['three-renderer-total', 'three-runtime-js'],
-    ] as const) {
-      const aggregate = measured.get(aggregateId);
-      const javascript = measured.get(javascriptId);
-      const wasm = measured.get('text-shaper-wasm');
-      expect(aggregate?.format).toBe('aggregate');
-      if (aggregate === undefined || javascript === undefined || wasm === undefined) {
-        throw new Error(`Missing aggregate size inputs for ${aggregateId}`);
-      }
-      for (const field of fields) expect(aggregate[field]).toBe(javascript[field] + wasm[field]);
-    }
+  it('projects the nine useful gzip measurements for people and pull requests', () => {
+    const summary = summarizePackageSizes(report);
+    expect(summary.map(({ label }) => label)).toEqual([
+      'Core JS',
+      'Shaper Wasm',
+      'Three.js adapter JS',
+      'Inter font · Bitmap',
+      'Inter font · MTSDF',
+      'Inter font · Slug',
+      'Font Awesome icons · Bitmap',
+      'Font Awesome icons · MTSDF',
+      'Font Awesome icons · Slug',
+    ]);
+    expect(sizeLimitRows(report)).toEqual(
+      summary.map(({ label, gzipBytes }) => ({ name: `${label} (gzip)`, size: gzipBytes })),
+    );
+  });
 
-    for (const [aggregateId, assetId] of [
-      ['delivery-three-inter-bitmap', 'font-inter-bitmap-16-32'],
-      ['delivery-three-inter-mtsdf', 'font-inter-mtsdf'],
-      ['delivery-three-inter-slug', 'font-inter-slug'],
-      ['delivery-three-icons-bitmap', 'font-icons-bitmap-16-32'],
-      ['delivery-three-icons-mtsdf', 'font-icons-mtsdf'],
-      ['delivery-three-icons-slug', 'font-icons-slug'],
-    ] as const) {
-      const aggregate = measured.get(aggregateId);
-      const renderer = measured.get('three-renderer-total');
-      const asset = measured.get(assetId);
-      if (aggregate === undefined || renderer === undefined || asset === undefined) {
-        throw new Error(`Missing delivery size inputs for ${aggregateId}`);
-      }
-      for (const field of fields) expect(aggregate[field]).toBe(renderer[field] + asset[field]);
-    }
+  it('rejects incomplete package-size summaries instead of publishing misleading rows', () => {
+    const incomplete = structuredClone(report);
+    incomplete.entries = incomplete.entries.filter(({ id }) => id !== 'text-shaper-wasm');
+    expect(() => summarizePackageSizes(incomplete)).toThrow(/text-shaper-wasm/);
   });
 
   it('keeps the lazy validator out of the initial browser-core measurement', () => {

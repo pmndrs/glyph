@@ -10,7 +10,7 @@ interface MeasuredEntry {
   readonly id: string;
   readonly label: string;
   readonly status: 'measured';
-  readonly format: 'javascript' | 'wasm' | 'font-asset' | 'aggregate';
+  readonly format: 'javascript' | 'wasm' | 'font-asset';
   readonly sha256: string;
   readonly rawBytes: number;
   readonly minifiedBytes: number;
@@ -274,21 +274,6 @@ async function measureFontAsset(
   };
 }
 
-function aggregateSize(id: string, label: string, parts: readonly MeasuredEntry[]): MeasuredEntry {
-  const identity = new TextEncoder().encode(parts.map((part) => `${part.id}:${part.sha256}`).join('\n'));
-  return {
-    id,
-    label,
-    status: 'measured',
-    format: 'aggregate',
-    sha256: sha256(identity),
-    rawBytes: parts.reduce((total, part) => total + part.rawBytes, 0),
-    minifiedBytes: parts.reduce((total, part) => total + part.minifiedBytes, 0),
-    gzipBytes: parts.reduce((total, part) => total + part.gzipBytes, 0),
-    brotliBytes: parts.reduce((total, part) => total + part.brotliBytes, 0),
-  };
-}
-
 async function measureAdmittedMsdfGenerator(): Promise<MeasuredEntry> {
   const evidence = JSON.parse(
     await readFile(
@@ -332,9 +317,9 @@ async function measureAdmittedMsdfGenerator(): Promise<MeasuredEntry> {
   };
 }
 
-const browserCore = await measureJavaScript(
+const coreJavaScript = await measureJavaScript(
   'browser-core',
-  'Renderer-neutral core JS (peers and Wasm external)',
+  'Core JS',
   new URL('../size-entries/text-core.ts', import.meta.url),
   false,
   true,
@@ -359,12 +344,12 @@ const browserCore = await measureJavaScript(
 );
 const textShaperWasm = await measureWasm(
   'text-shaper-wasm',
-  'Text engine Wasm',
+  'Shaper Wasm',
   new URL('../../../packages/text/dist/text_shaper.wasm', import.meta.url),
 );
 const threeRuntime = await measureJavaScript(
   'three-runtime-js',
-  'Complete Three adapter JS (peers and Wasm external)',
+  'Three.js adapter JS',
   new URL('../size-entries/three-runtime.ts', import.meta.url),
   false,
   true,
@@ -372,89 +357,51 @@ const threeRuntime = await measureJavaScript(
 );
 const interBitmap = await measureFontAsset(
   'font-inter-bitmap-16-32',
-  'Inter 4.1 Bitmap font asset (16 + 32 ppem)',
+  'Inter font · Bitmap',
   new URL('../fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url),
   'identity',
 );
 const interMsdf = await measureFontAsset(
   'font-inter-mtsdf',
-  'Inter 4.1 MTSDF font asset',
+  'Inter font · MTSDF',
   new URL('../fixtures/rendering/inter-mtsdf.font.glb.gz', import.meta.url),
   'gzip',
 );
 const interSlug = await measureFontAsset(
   'font-inter-slug',
-  'Inter 4.1 Slug font asset',
+  'Inter font · Slug',
   new URL('../fixtures/rendering/inter-slug.font.glb.gz', import.meta.url),
   'gzip',
 );
 const iconsBitmap = await measureFontAsset(
   'font-icons-bitmap-16-32',
-  'Font Awesome Free 6.7.2 Bitmap icon asset (16 + 32 ppem)',
+  'Font Awesome icons · Bitmap',
   new URL('../fixtures/rendering/font-awesome-free-6.7.2-bitmap-16-32.font.glb', import.meta.url),
   'identity',
 );
 const iconsMsdf = await measureFontAsset(
   'font-icons-mtsdf',
-  'Font Awesome Free 6.7.2 MTSDF icon asset',
+  'Font Awesome icons · MTSDF',
   new URL('../fixtures/rendering/font-awesome-free-6.7.2-mtsdf.font.glb.gz', import.meta.url),
   'gzip',
 );
 const iconsSlug = await measureFontAsset(
   'font-icons-slug',
-  'Font Awesome Free 6.7.2 Slug icon asset',
+  'Font Awesome icons · Slug',
   new URL('../fixtures/rendering/font-awesome-free-6.7.2-slug.font.glb.gz', import.meta.url),
   'gzip',
 );
 
 const entries: SizeEntry[] = [
-  browserCore,
+  coreJavaScript,
   textShaperWasm,
-  aggregateSize('renderer-neutral-core-total', 'Renderer-neutral core total (JS + Wasm)', [
-    browserCore,
-    textShaperWasm,
-  ]),
   threeRuntime,
-  aggregateSize('three-renderer-total', 'Complete Three text renderer total (adapter JS + Wasm; peers external)', [
-    threeRuntime,
-    textShaperWasm,
-  ]),
   interBitmap,
   interMsdf,
   interSlug,
   iconsBitmap,
   iconsMsdf,
   iconsSlug,
-  aggregateSize('delivery-three-inter-bitmap', 'Three + engine + Inter Bitmap delivery total', [
-    threeRuntime,
-    textShaperWasm,
-    interBitmap,
-  ]),
-  aggregateSize('delivery-three-inter-mtsdf', 'Three + engine + Inter MTSDF delivery total', [
-    threeRuntime,
-    textShaperWasm,
-    interMsdf,
-  ]),
-  aggregateSize('delivery-three-inter-slug', 'Three + engine + Inter Slug delivery total', [
-    threeRuntime,
-    textShaperWasm,
-    interSlug,
-  ]),
-  aggregateSize('delivery-three-icons-bitmap', 'Three + engine + Font Awesome Bitmap delivery total', [
-    threeRuntime,
-    textShaperWasm,
-    iconsBitmap,
-  ]),
-  aggregateSize('delivery-three-icons-mtsdf', 'Three + engine + Font Awesome MTSDF delivery total', [
-    threeRuntime,
-    textShaperWasm,
-    iconsMsdf,
-  ]),
-  aggregateSize('delivery-three-icons-slug', 'Three + engine + Font Awesome Slug delivery total', [
-    threeRuntime,
-    textShaperWasm,
-    iconsSlug,
-  ]),
   await measureJavaScript(
     'font-validator-js',
     'Lazy font validator JS',
@@ -574,31 +521,7 @@ const report = {
 };
 const output = new URL('../src/generated/package-sizes.json', import.meta.url);
 const serialized = `${JSON.stringify(report, null, 2)}\n`;
-const sizeLimitJson = process.argv.includes('--size-limit-json');
-if (sizeLimitJson) {
-  const committed = await readFile(output, 'utf8');
-  assertPackageSizeReportFresh(JSON.parse(committed) as PackageSizeReport, report);
-  const results = entries.flatMap((entry) => {
-    if (entry.status !== 'measured') return [];
-    switch (entry.format) {
-      case 'javascript':
-        return [{ name: `${entry.id} (brotli)`, size: entry.brotliBytes }];
-      case 'wasm':
-      case 'font-asset':
-        return [
-          { name: `${entry.id} (raw)`, size: entry.rawBytes },
-          { name: `${entry.id} (gzip)`, size: entry.gzipBytes },
-          { name: `${entry.id} (brotli)`, size: entry.brotliBytes },
-        ];
-      case 'aggregate':
-        return [
-          { name: `${entry.id} (gzip)`, size: entry.gzipBytes },
-          { name: `${entry.id} (brotli)`, size: entry.brotliBytes },
-        ];
-    }
-  });
-  process.stdout.write(JSON.stringify(results));
-} else if (process.argv.includes('--check')) {
+if (process.argv.includes('--check')) {
   const committed = await readFile(output, 'utf8');
   assertPackageSizeReportFresh(JSON.parse(committed) as PackageSizeReport, report);
 } else {

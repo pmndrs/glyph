@@ -2,6 +2,12 @@
 
 ## 2026-08-10
 
+- **Simplified publishing-size evidence** — The benchmark UI and Size Limit pull-request comment now share one strict
+  nine-row projection: gzip for Core JS, Shaper Wasm, Three.js adapter JS, and Inter plus Font Awesome across Bitmap,
+  MTSDF, and Slug. Confusing arithmetic runtime/delivery totals and alternate compression columns no longer enter the
+  human report. The canonical record retains detailed independent measurements and budgets used by internal telemetry
+  and regression checks; Three.js, React, and R3F remain external peers.
+
 - **Provisioned the R3F asset subsetter on clean CI hosts** — The example's byte-exact asset check requires HarfBuzz
   14.2.0, but CI had provisioned only the separate 13.0.0 shaping oracle and CJK fixture tool. The authenticated utility
   provisioner now accepts either recorded release, verifies the 14.2.0 source archive as

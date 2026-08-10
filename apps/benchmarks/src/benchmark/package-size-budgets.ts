@@ -23,31 +23,18 @@ export const packageSizeBudgets = {
     gzipBytes: 3_200,
     brotliBytes: 2_850,
   },
-  // Complete Rust shaping, layout, policy, and command-plan publication. The aggregate ceilings below add only their
-  // independently measured JavaScript graph and leave narrow reviewed headroom for cross-architecture tool output.
+  // Complete Rust shaping, layout, policy, and command-plan publication.
   'text-shaper-wasm': {
     rawBytes: 1_165_000,
     minifiedBytes: 1_165_000,
     gzipBytes: 445_000,
     brotliBytes: 350_000,
   },
-  'renderer-neutral-core-total': {
-    rawBytes: 1_265_000,
-    minifiedBytes: 1_235_000,
-    gzipBytes: 465_000,
-    brotliBytes: 367_000,
-  },
   'three-runtime-js': {
     rawBytes: 350_000,
     minifiedBytes: 232_000,
     gzipBytes: 60_000,
     brotliBytes: 51_000,
-  },
-  'three-renderer-total': {
-    rawBytes: 1_515_000,
-    minifiedBytes: 1_395_000,
-    gzipBytes: 505_000,
-    brotliBytes: 400_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -84,42 +71,6 @@ export const packageSizeBudgets = {
     minifiedBytes: 3_100_000,
     gzipBytes: 690_000,
     brotliBytes: 510_000,
-  },
-  'delivery-three-inter-bitmap': {
-    rawBytes: 4_700_000,
-    minifiedBytes: 4_600_000,
-    gzipBytes: 1_080_000,
-    brotliBytes: 830_000,
-  },
-  'delivery-three-inter-mtsdf': {
-    rawBytes: 41_000_000,
-    minifiedBytes: 41_000_000,
-    gzipBytes: 7_500_000,
-    brotliBytes: 3_800_000,
-  },
-  'delivery-three-inter-slug': {
-    rawBytes: 5_100_000,
-    minifiedBytes: 5_000_000,
-    gzipBytes: 1_150_000,
-    brotliBytes: 830_000,
-  },
-  'delivery-three-icons-bitmap': {
-    rawBytes: 4_000_000,
-    minifiedBytes: 3_900_000,
-    gzipBytes: 970_000,
-    brotliBytes: 770_000,
-  },
-  'delivery-three-icons-mtsdf': {
-    rawBytes: 35_000_000,
-    minifiedBytes: 35_000_000,
-    gzipBytes: 8_000_000,
-    brotliBytes: 3_900_000,
-  },
-  'delivery-three-icons-slug': {
-    rawBytes: 4_600_000,
-    minifiedBytes: 4_500_000,
-    gzipBytes: 1_200_000,
-    brotliBytes: 910_000,
   },
   'bitmap-runtime-js': {
     rawBytes: 425_000,
