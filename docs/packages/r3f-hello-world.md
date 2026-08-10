@@ -5,7 +5,7 @@ description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Sl
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/text-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:1b020863ebda8b47c742ba60e9579324b6d743a96451678230e33040611fde99'
+source_digest: 'sha256:98b85591af3d54252c12d996c7d284d550ca30b62506bae6d4aba6704ce6759d'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -24,7 +24,8 @@ generated:
 This private Vite application is the minimal product-shaped React Three Fiber example. One full-page canvas renders
 `Hello world` through the public `@pmndrs/text/r3f` `Text` component and resolves a Font Awesome globe through an ordered
 font stack. In-canvas MSDF controls replace the rendered text component between Bitmap, MSDF, and Slug; the example does
-not retain a second renderer path or manually pack glyph data.
+not retain a second renderer path or manually pack glyph data. Separate world and UI `TextGroup` roots batch their text
+descendants explicitly; ordinary nested groups only position individual buttons and their background meshes.
 
 The checked-in assets are deliberately bounded at source before baking:
 
