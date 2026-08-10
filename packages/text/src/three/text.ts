@@ -441,11 +441,11 @@ export class TextGroup extends THREE.Object3D {
     if (!this.#disposed) {
       const texts = collectTextDescendants(this);
       if (texts.length !== 0) {
-        const first = texts[0]!;
-        validateText(first);
-        this.#binding ??= new ThreeTextBatchBinding(first.runtime, this.#capacity, this);
-        this.#binding.reconcile(texts);
         try {
+          const runtime = texts[0]!.runtime;
+          for (const text of texts) validateBinding(runtime, text);
+          this.#binding ??= new ThreeTextBatchBinding(runtime, this.#capacity, this);
+          this.#binding.reconcile(texts);
           this.#binding.synchronize();
           this.#error = undefined;
         } catch (error) {
@@ -504,6 +504,7 @@ class ThreeTextBatchBinding {
   readonly #measurements = new Map<Text<AnyRasterTechnique>, ParagraphLayoutSummary>();
   readonly #layoutInspections = new Map<Text<AnyRasterTechnique>, ParagraphLayoutInspection>();
   readonly #queryPlanView = new TextEngineRenderPlanView();
+  readonly #freeParagraphIds: number[] = [];
   #nextParagraphId = 1;
   #engineRevision = 0;
   #planRevision = 0;
@@ -702,6 +703,7 @@ class ThreeTextBatchBinding {
       this.#engineRevision = publication.engineRevision;
       for (const removed of this.#removed) releaseStackLeases(removed.stackLeases);
       for (const removed of this.#removed) releaseMaterialLeases(removed.materialLeases);
+      for (const removed of this.#removed) this.#freeParagraphIds.push(removed.id);
       this.#removed.length = 0;
       for (const [order, [text, paragraph]] of ordered.entries()) {
         const semanticChanges = pendingChanges.get(paragraph) ?? 0;
@@ -782,12 +784,13 @@ class ThreeTextBatchBinding {
     this.#measurements.clear();
     this.#layoutInspections.clear();
     this.#removed.length = 0;
+    this.#freeParagraphIds.length = 0;
   }
   #ensureText(text: Text<AnyRasterTechnique>, group: TextGroup | undefined): void {
     validateBinding(this.#runtime, text);
     let paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined) {
-      const id = this.#nextParagraphId++;
+      const id = this.#freeParagraphIds.pop() ?? this.#nextParagraphId++;
       paragraph = {
         id,
         textLength: 0,
@@ -836,12 +839,14 @@ class ThreeTextBatchBinding {
         ),
       }),
     );
+    this.#engineRevision = publication.engineRevision;
     const plan = this.#queryPlanView.bind(publication);
     for (const table of ['resources', 'buffers', 'patches', 'primitives', 'draws', 'retirements'] as const) {
-      if (plan.table(table).count !== 0)
+      if (plan.table(table).count !== 0) {
+        this.#lastPublication = ownPublication(publication);
         throw new Error('a semantic-only text query unexpectedly published render work');
+      }
     }
-    this.#engineRevision = publication.engineRevision;
     this.#planRevision = publication.planRevision;
     return publication;
   }
@@ -1276,7 +1281,7 @@ function collectTextDescendants(group: TextGroup): Text<AnyRasterTechnique>[] {
   return texts;
   function collect(object: THREE.Object3D, result: Text<AnyRasterTechnique>[]): void {
     if (object instanceof TextGroup) return;
-    if (object instanceof Text) result.push(object as Text<AnyRasterTechnique>);
+    if (object instanceof Text && !object.disposed) result.push(object as Text<AnyRasterTechnique>);
     for (const child of object.children) collect(child, result);
   }
 }

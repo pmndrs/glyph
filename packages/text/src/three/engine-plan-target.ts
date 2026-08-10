@@ -129,7 +129,6 @@ export class ThreeTextRenderPlanExecutor {
   apply(publication: TextEnginePublication): void {
     if (this.#disposed) throw new Error('Three text-engine plan target has been disposed');
     this.#coordinator.applyPlan(() => {
-      for (const buffer of this.#buffers.values()) buffer.attribute.clearUpdateRanges();
       this.#restoreOriginTargets();
       const plan = this.#view.bind(publication);
       const resources = plan.table('resources');
@@ -1282,9 +1281,23 @@ function markUpdated(buffer: RetainedBuffer, byteOffset: number, byteLength: num
   if (byteOffset % scalarBytes !== 0 || byteLength % scalarBytes !== 0) {
     throw new RangeError('buffer patch is not scalar aligned');
   }
-  buffer.attribute.addUpdateRange(byteOffset / scalarBytes, byteLength / scalarBytes);
+  mergeUpdateRange(buffer.attribute, byteOffset / scalarBytes, byteLength / scalarBytes);
   buffer.attribute.needsUpdate = true;
   invalidatePboTexture(buffer.attribute);
+}
+
+function mergeUpdateRange(attribute: THREE.BufferAttribute, start: number, count: number): void {
+  let mergedStart = start;
+  let mergedEnd = start + count;
+  for (let index = attribute.updateRanges.length - 1; index >= 0; index -= 1) {
+    const range = attribute.updateRanges[index]!;
+    const rangeEnd = range.start + range.count;
+    if (rangeEnd < mergedStart || mergedEnd < range.start) continue;
+    mergedStart = Math.min(mergedStart, range.start);
+    mergedEnd = Math.max(mergedEnd, rangeEnd);
+    attribute.updateRanges.splice(index, 1);
+  }
+  attribute.addUpdateRange(mergedStart, mergedEnd - mergedStart);
 }
 
 function markOriginRanges(ranges: ReadonlyMap<RetainedBuffer, readonly [number, number]>): void {

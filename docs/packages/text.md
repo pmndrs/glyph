@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:600087bce3db441d2b24107f64609647660be3fd2baa4e49f1d510d383469ed8'
+source_digest: 'sha256:e78a16856ea65f8749d9573503ed17a209291c7c9811f033f8d47c0306e9f05f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -336,6 +336,17 @@ observed. A five-warmup/11-sample ordered run measures 6.005 ms font-size, 2.813
 and 8.281 ms middle-splice medians. The adjacent prior medians were 6.178, 2.817, 1.353, and 8.452 ms; these short runs
 show no regression and suggest a small scan reduction, but do not establish a latency win. The same change preserves
 whole-buffer update alignment after dirty-range promotion and costs 182 raw / 42 gzip / 233 Brotli bytes.
+
+Three retains pending attribute upload ranges until its renderer consumes them. Consecutive Rust publications,
+presentation-origin restoration, and a retry before rendering coalesce overlapping or adjacent ranges instead of
+clearing earlier writes. Paragraph transform identities return to a binding-local free list only after the Rust removal
+transaction commits, bounding the indexed transform table under create/dispose churn. A disposed `Text` may remain in
+the Three scene graph until its host detaches it without poisoning the surviving batch, and batch-wide runtime validation
+runs inside the group error boundary before reconciliation mutates ownership. An internal semantic-query contract failure
+advances the observed engine revision and retains unexpected render work for the ordinary zero-crossing retry path rather
+than leaving the Wasm session permanently revision-conflicted. The focused public integration exercises all four
+lifecycles, and the complete package gate passes 158 Rust and 165 Node tests. The canonical direct benchmark now defaults
+to eight warmups and 31 measured samples so its reported p95 is not the maximum of an 11-sample run.
 
 ## Merge gates still open
 

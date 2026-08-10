@@ -1529,7 +1529,7 @@ not an ellipsis-only attribution.
 
 - never regenerate a golden or official Unicode fixture to accept a behavior change;
 - `mise exec -- pnpm --filter @pmndrs/text check` passes Rust and TypeScript tests, lint, format, types, official Unicode
-  vectors, browser consumers, and packaging; the current closure checkpoint contains 158 Rust library tests and 164
+  vectors, browser consumers, and packaging; the current closure checkpoint contains 158 Rust library tests and 165
   Node integration tests, but executable manifests—not frozen counts—remain authoritative as coverage grows;
 - the benchmark application's complete `check` passes its current executable manifest; the closure checkpoint contains
   111 Vitest cases and 16 isolated headless Chromium targets, with the manifest authoritative rather than these counts;
