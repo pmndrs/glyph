@@ -255,7 +255,8 @@ test('the CLI directly bakes and checks one known font from arguments', async (t
   t.after(() => rm(root, { recursive: true, force: true }));
   const input = join(root, 'Inter-Regular.ttf');
   const output = join(root, 'Inter.font.glb');
-  await writeFile(input, await readFile(fontUrl));
+  const source = await readFile(fontUrl);
+  await writeFile(input, source);
 
   const bake = captureIo();
   assert.equal(
@@ -273,6 +274,31 @@ test('the CLI directly bakes and checks one known font from arguments', async (t
     0,
     check.stderr(),
   );
+
+  const subsetOutput = join(root, 'Inter-latin.font.glb');
+  const subset = captureIo();
+  assert.equal(
+    await runCli(
+      [
+        'bake',
+        '--input',
+        input,
+        '--output',
+        subsetOutput,
+        '--unicodes',
+        'U+0061-007A,U+0020,U+0041-005A,U+0041',
+        '--json',
+      ],
+      subset.io,
+    ),
+    0,
+    subset.stderr(),
+  );
+  const subsetReport = JSON.parse(subset.stdout());
+  assert.equal(subsetReport.preparation.sourceBytes, source.byteLength);
+  assert.ok(subsetReport.preparation.preparedBytes < subsetReport.preparation.sourceBytes);
+  assert.ok(subsetReport.preparation.glyphCount < (await validateFontArtifact(await readFile(output))).glyphCount);
+  assert.equal((await validateFontArtifact(await readFile(subsetOutput))).glyphCount, subsetReport.preparation.glyphCount);
 });
 
 test('pre-cancellation and source/output overlap fail before filesystem mutation', async (t) => {
@@ -383,7 +409,8 @@ test('CLI help and malformed arguments are deterministic and side-effect free', 
   assert.equal(await runCli(['bake', '--help'], bakeHelp.io), 0);
   assert.match(bakeHelp.stdout(), /^Usage:\n  text bake/);
   assert.match(bakeHelp.stdout(), /U\+0020-007E,U\+00A0-00FF,U\+4E00-9FFF/);
-  assert.match(bakeHelp.stdout(), /Selects code points, not raw glyph IDs; requires hb-subset/);
+  assert.match(bakeHelp.stdout(), /Selects code points, not raw glyph IDs/);
+  assert.doesNotMatch(bakeHelp.stdout(), /HarfBuzz|hb-subset/);
 
   const glyphHelp = captureIo();
   assert.equal(await runCli(['glyphs', '--help'], glyphHelp.io), 0);

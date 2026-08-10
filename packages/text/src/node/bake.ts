@@ -5,7 +5,13 @@ import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 
-import { createFontBaker, type FontBakeDescriptorV0 } from '../font-baker/index.js';
+import {
+  createFontBaker,
+  type FontBakeDescriptorV0,
+  type FontInspectionV0,
+  type PreparedFontReportV0,
+  type UnicodeRangeV0,
+} from '../font-baker/index.js';
 import { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
 import { validateFontArtifact } from '../font-baker/validator.js';
 
@@ -45,6 +51,7 @@ export interface NodeBakeOptions<
   readonly input: string | URL;
   readonly output: string | URL;
   readonly font: Omit<FontBakeDescriptorV0, 'formatVersion'>;
+  readonly unicodeRanges?: readonly UnicodeRangeV0[];
   readonly rasters?: Rasters;
   readonly signal?: AbortSignal;
 }
@@ -83,7 +90,13 @@ export interface NodeBakeExecutionReport {
 }
 
 export interface NodeFontBakeReport extends FontPayloadReport {
+  readonly preparation?: PreparedFontReportV0;
   readonly execution: NodeBakeExecutionReport;
+}
+
+export interface NodeFontInspectOptions {
+  readonly input: string | URL;
+  readonly fontFaceIndex?: number;
 }
 
 export interface ProjectBakeOptions extends DiscoveryOptions {
@@ -129,6 +142,15 @@ export async function bakeFont<const Rasters extends readonly RasterBakePlan<Any
   return bakeFontWithResolvedPlans(options);
 }
 
+export async function inspectFont(options: NodeFontInspectOptions): Promise<FontInspectionV0> {
+  const source = new Uint8Array(await readFile(filePath(options.input, 'input')));
+  const fontBaker = await defaultFontBaker();
+  return fontBaker.inspect({
+    source,
+    descriptor: fontBakeDescriptorV0(options.fontFaceIndex ?? 0),
+  });
+}
+
 async function bakeFontWithResolvedPlans(
   options: NodeBakeOptions,
   preparedRasters?: readonly ResolvedRasterBakePlan[],
@@ -150,15 +172,28 @@ async function bakeFontWithResolvedPlans(
   await assertDistinctInputOutput(input, output);
 
   let phase = performance.now();
-  const source = new Uint8Array(await readFile(input));
+  const originalSource = new Uint8Array(await readFile(input));
   timings.read = performance.now() - phase;
   options.signal?.throwIfAborted();
 
   phase = performance.now();
   const fontBaker = await defaultFontBaker();
+  const preparation =
+    options.unicodeRanges === undefined
+      ? undefined
+      : fontBaker.prepare({
+          source: originalSource,
+          selection: {
+            formatVersion: 0,
+            fontFaceIndex: options.font.fontFaceIndex,
+            unicodeRanges: options.unicodeRanges,
+          },
+        });
+  const source = preparation?.bytes ?? originalSource;
+  const fontFaceIndex = preparation?.report.fontFaceIndex ?? options.font.fontFaceIndex;
   const core = fontBaker.bake({
     source,
-    descriptor: fontBakeDescriptorV0(options.font.fontFaceIndex),
+    descriptor: fontBakeDescriptorV0(fontFaceIndex),
   });
   timings.coreBake = performance.now() - phase;
   options.signal?.throwIfAborted();
@@ -174,7 +209,7 @@ async function bakeFontWithResolvedPlans(
     const raster = await plan.baker.bake({
       font: {
         source,
-        fontFaceIndex: options.font.fontFaceIndex,
+        fontFaceIndex,
         glyphCount: coreValidation.glyphCount,
         shapingHash: coreValidation.shapingHash as Sha256Hex,
       },
@@ -206,6 +241,7 @@ async function bakeFontWithResolvedPlans(
   const rssAfterBytes = process.memoryUsage.rss();
   return {
     ...report,
+    ...(preparation === undefined ? {} : { preparation: preparation.report }),
     execution: {
       timingsMs: { ...timings, total: performance.now() - started },
       memory: {

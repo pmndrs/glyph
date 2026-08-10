@@ -1,16 +1,20 @@
 #!/usr/bin/env node
 
-import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
 
 import type { AnyRasterBakerModule, RasterBakePlan } from '../bake.js';
-import { bakeFont, bakeProject, NodeBakeError, type NodeFontBakeReport, type ProjectBakeOptions } from './bake.js';
-
-const run = promisify(execFile);
+import type { UnicodeRangeV0 } from '../font-baker/index.js';
+import {
+  bakeFont,
+  bakeProject,
+  inspectFont,
+  NodeBakeError,
+  type NodeFontBakeReport,
+  type ProjectBakeOptions,
+} from './bake.js';
 
 export interface CliIo {
   readonly stdout: { write(value: string): unknown };
@@ -96,7 +100,7 @@ interface GlyphArguments {
 interface GlyphRecord {
   readonly unicode: string;
   readonly codePoint: number;
-  readonly glyphId?: number;
+  readonly glyphId: number;
   readonly name?: string;
 }
 
@@ -122,9 +126,7 @@ async function runGlyphsCommand(argv: readonly string[], io: CliIo): Promise<num
       io.stdout.write(`${formatUnicodeSet(glyphs.map(({ codePoint }) => codePoint))}\n`);
     } else {
       for (const glyph of glyphs) {
-        io.stdout.write(
-          `${glyph.unicode}\t${glyph.glyphId === undefined ? '-' : String(glyph.glyphId)}\t${glyph.name ?? '-'}\n`,
-        );
+        io.stdout.write(`${glyph.unicode}\t${glyph.glyphId}\t${glyph.name ?? '-'}\n`);
       }
     }
     return 0;
@@ -168,46 +170,28 @@ function parseGlyphArguments(argv: readonly string[]): GlyphArguments {
 }
 
 async function inspectGlyphs(options: GlyphArguments): Promise<readonly GlyphRecord[]> {
-  let stdout: string;
+  let inspection;
   try {
-    const result = await run(
-      'hb-info',
-      ['-q', `--face-index=${options.fontFaceIndex}`, '--list-unicodes', '--list-glyphs', options.input],
-      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
-    );
-    stdout = result.stdout;
+    inspection = await inspectFont({ input: options.input, fontFaceIndex: options.fontFaceIndex });
   } catch (error) {
+    if (error instanceof NodeBakeError) throw error;
     throw new NodeBakeError(
       'FONT_INSPECTION_FAILED',
-      `hb-info failed: ${error instanceof Error ? error.message : String(error)}`,
+      `font inspection failed: ${error instanceof Error ? error.message : String(error)}`,
       options.input,
     );
-  }
-  const glyphIds = new Map<string, number | undefined>();
-  for (const line of stdout.split('\n')) {
-    const match = /^(\d+)\t(.+)$/u.exec(line);
-    if (match === null) continue;
-    const glyphId = Number(match[1]);
-    const name = match[2]!;
-    const previous = glyphIds.get(name);
-    glyphIds.set(name, previous === undefined && !glyphIds.has(name) ? glyphId : undefined);
   }
   const requestedNames = new Set(options.names);
   const foundNames = new Set<string>();
   const glyphs: GlyphRecord[] = [];
-  for (const line of stdout.split('\n')) {
-    const match = /^(U\+([0-9A-Fa-f]{4,6}))\t(.+)$/u.exec(line);
-    if (match === null) continue;
-    const codePoint = Number.parseInt(match[2]!, 16);
-    const rawName = match[3]!;
-    const name = /^gid\d+$/u.test(rawName) ? undefined : rawName;
+  for (const glyph of inspection.glyphs) {
+    const { codePoint, glyphId, name } = glyph;
     if (requestedNames.size !== 0 && (name === undefined || !requestedNames.has(name))) continue;
     if (name !== undefined) foundNames.add(name);
-    const glyphId = glyphIds.get(rawName);
     glyphs.push({
       unicode: formatCodePoint(codePoint),
       codePoint,
-      ...(glyphId === undefined ? {} : { glyphId }),
+      glyphId,
       ...(name === undefined ? {} : { name }),
     });
   }
@@ -259,7 +243,7 @@ interface DirectBakeArguments {
   readonly bitmapStrikes?: readonly [number, ...number[]];
   readonly msdf: boolean;
   readonly slug: boolean;
-  readonly unicodes?: string;
+  readonly unicodeRanges?: readonly UnicodeRangeV0[];
   readonly check: boolean;
 }
 
@@ -275,7 +259,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let bitmapStrikes: readonly [number, ...number[]] | undefined;
   let msdf = false;
   let slug = false;
-  let unicodes: string | undefined;
+  let unicodeRanges: readonly UnicodeRangeV0[] | undefined;
   let check = false;
   let json = false;
   let help = false;
@@ -309,7 +293,8 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     } else if (argument === '--slug') {
       slug = true;
     } else if (argument === '--unicodes') {
-      unicodes = uniqueValue(unicodes, valueAfter(argv, ++index, argument), argument);
+      if (unicodeRanges !== undefined) throw new TypeError('--unicodes may be provided only once');
+      unicodeRanges = parseUnicodeSet(valueAfter(argv, ++index, argument));
     } else if (argument === '--check') {
       check = true;
     } else {
@@ -322,7 +307,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     bitmapStrikes !== undefined ||
     msdf ||
     slug ||
-    unicodes !== undefined ||
+    unicodeRanges !== undefined ||
     check ||
     fontFaceIndexSet;
   const projectSelected =
@@ -348,7 +333,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
             ...(bitmapStrikes === undefined ? {} : { bitmapStrikes }),
             msdf,
             slug,
-            ...(unicodes === undefined ? {} : { unicodes }),
+            ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
             check,
           },
         }
@@ -377,15 +362,40 @@ function bitmapStrikeList(value: string): readonly [number, ...number[]] {
   return strikes as [number, ...number[]];
 }
 
+function parseUnicodeSet(value: string): readonly UnicodeRangeV0[] {
+  const ranges = value.split(',').map((part) => {
+    const match = /^U\+([0-9A-Fa-f]{1,6})(?:-U\+?([0-9A-Fa-f]{1,6})|-([0-9A-Fa-f]{1,6}))?$/u.exec(part.trim());
+    if (match === null) throw new TypeError('--unicodes requires comma-separated U+XXXX or U+XXXX-YYYY ranges');
+    const start = Number.parseInt(match[1]!, 16);
+    const end = Number.parseInt(match[2] ?? match[3] ?? match[1]!, 16);
+    if (start > end || end > 0x10ffff) {
+      throw new TypeError('--unicodes ranges must be ordered Unicode scalar values at or below U+10FFFF');
+    }
+    return { start, end };
+  });
+  if (ranges.length === 0) throw new TypeError('--unicodes requires at least one range');
+  ranges.sort((left, right) => left.start - right.start || left.end - right.end);
+  const normalized: UnicodeRangeV0[] = [];
+  for (const range of ranges) {
+    const previous = normalized.at(-1);
+    if (previous !== undefined && range.start <= previous.end + 1) {
+      normalized[normalized.length - 1] = { start: previous.start, end: Math.max(previous.end, range.end) };
+    } else {
+      normalized.push(range);
+    }
+  }
+  return normalized;
+}
+
 async function bakeDirect(options: DirectBakeArguments): Promise<NodeFontBakeReport> {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'text-bake-'));
   try {
-    const input = await subsetInput(options, temporaryDirectory);
     const output = options.check ? join(temporaryDirectory, 'checked.font.glb') : options.output;
     const report = await bakeFont({
-      input,
+      input: options.input,
       output,
-      font: { fontFaceIndex: options.unicodes === undefined ? options.fontFaceIndex : 0 },
+      font: { fontFaceIndex: options.fontFaceIndex },
+      ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
       rasters: await directRasterPlans(options),
     });
     if (options.check) {
@@ -402,26 +412,6 @@ async function bakeDirect(options: DirectBakeArguments): Promise<NodeFontBakeRep
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }
-}
-
-async function subsetInput(options: DirectBakeArguments, temporaryDirectory: string): Promise<string> {
-  if (options.unicodes === undefined) return options.input;
-  const output = join(temporaryDirectory, 'subset.ttf');
-  try {
-    await run('hb-subset', [
-      options.input,
-      `--face-index=${options.fontFaceIndex}`,
-      `--unicodes=${options.unicodes}`,
-      `--output-file=${output}`,
-    ]);
-  } catch (error) {
-    throw new NodeBakeError(
-      'SUBSET_FAILED',
-      `hb-subset failed: ${error instanceof Error ? error.message : String(error)}`,
-      options.input,
-    );
-  }
-  return output;
 }
 
 async function directRasterPlans(options: DirectBakeArguments): Promise<RasterBakePlan<AnyRasterBakerModule>[]> {
@@ -491,7 +481,7 @@ function glyphUsage(): string {
   return `Usage: text glyphs <font> [options]
 
 List the font's Unicode mappings and surface glyph names retained in its post or
-CFF data. Synthetic HarfBuzz gid names are omitted. Requires the hb-info utility.
+CFF data. Fonts without authored names still report exact glyph IDs.
 
 Options:
   --font-face-index <n>  Collection face to inspect (default: 0)
@@ -519,9 +509,9 @@ Direct font options:
   --input <path>         Source TTF, OTF, TTC, or OTC font
   --output <path>        Output GLB containing shaping data and selected rasters
   --font-face-index <n>  Collection face to bake (default: 0)
-  --unicodes <set>       HarfBuzz Unicode set used to subset the source font
+  --unicodes <set>       Unicode set used to prepare a smaller source font
                         Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
-                        Selects code points, not raw glyph IDs; requires hb-subset
+                        Selects code points, not raw glyph IDs
 
 Raster options:
   --bitmap <ppem,...>    Embed Bitmap at positive integer ppem strikes (example: 16,32)
