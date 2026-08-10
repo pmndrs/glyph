@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6a8ea805a76457c08c6f7d4427c8b301ab0cce44cb7890076710d0493614c3ce'
+source_digest: 'sha256:fe60b323e68fa859d9dda679967b03c0f4644aa949c205d1498271dbe6786371'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -64,7 +64,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T14:36:32Z'
+  at: '2026-08-10T18:05:44Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -164,6 +164,12 @@ Rust publishes one revision containing:
 - ordered draw commands with technique/program, resource, material, transform, and clip identity;
 - optional semantic measurement or inspection sections only when explicitly demanded.
 
+Metric-only style changes refresh retained shaping-run typography before cluster aggregation but reuse the HarfRust glyph
+result. Font size, letter spacing, word spacing, line height, and baseline changes therefore rebuild advances and
+positioning without treating glyph identities as newly shaped content. A public optimized-Wasm regression doubles a
+paragraph's font size and proves its retained inline advance doubles; the live Paragraph Stress scene additionally keeps
+correct spacing through intermediate animated sizes for Bitmap, MSDF, and Slug.
+
 The Three executor does not infer paragraph layout from GPU records and does not maintain a parallel candidate/current
 target state machine. It applies the Rust command buffer transactionally and retains only renderer resources required by
 future deltas.
@@ -184,6 +190,13 @@ same tail-latency target.
 
 `materialId` is explicit through the frame ABI and render plan. Three maps it to a `defineTextMaterial()` factory. Material
 identity may split draws without forcing a second copy of the canonical glyph buffers.
+
+Bitmap atlas pages within one strike are renderer layers, not independent draw resources. The font binding exposes one
+strike resource, the Rust policy writes the selected page as one u32 instance lane, and Three uploads the strike as one
+R8 texture array. This preserves authored glyph order while preventing page transitions inside ordinary prose from
+splitting a paragraph into hundreds of draws. The multi-page integration fixture asserts one ordered draw and a live
+Chrome run reduced the sampled Paragraph Stress CPU frame from roughly 80 ms before the correction to 0.47–1.3 ms after
+it; the sampled GPU frame remained a separate 1–5 ms concern.
 
 ## Font fallback and techniques
 
