@@ -54,7 +54,7 @@ sources:
     resource: https://www.npmjs.com/package/ajv/v/6.15.0
     title: Ajv 6.15.0
   - id: abi-source
-    resource: ../../packages/font-baker/rust/src/abi_contract.rs
+    resource: ../../packages/text/rust/font-baker/src/abi_contract.rs
     title: Generated ABI and version-contract source
   - id: shaper-abi-source
     resource: ../../packages/text/rust/shaper/src/abi_contract.rs
@@ -119,7 +119,7 @@ GLib development metadata is a native build-host prerequisite for the HarfBuzz b
 
 ## Generated contract
 
-The Rust ABI sources generate all three published JSON contracts at build time. Their `versions` objects carry the applicable baker, bitmap generator, format, shaper, oracle, Unicode, glTF schema, validator, and Binaryen pins; Rust provenance and the TypeScript direct-memory shims consume those sources rather than relying on a hand-authored contract artifact. Rust package/generator versions derive from Cargo metadata. The contract-only `@pmndrs/text-font-baker/contract` subpath gives the TypeScript loader, validator, and direct-memory bridge one version authority without pulling the bridge into the browser graph.
+The Rust ABI sources generate all three published JSON contracts at build time. Their `versions` objects carry the applicable baker, bitmap generator, format, shaper, oracle, Unicode, glTF schema, validator, and Binaryen pins; Rust provenance and the TypeScript direct-memory shims consume those sources rather than relying on a hand-authored contract artifact. Rust package/generator versions derive from Cargo metadata. The package-internal contract module gives the TypeScript loader, validator, and direct-memory bridge one version authority without exposing another package or pulling the bridge into the root browser graph.
 
 Every raster generator stamps its exact owning package semantic version into its canonical descriptor and artifact provenance. A generator upgrade changes its descriptor hash and therefore its raster key. The bitmap generator begins at `0.0.0`; additional raster generators receive their own exact pins when their packages enter the roadmap.
 

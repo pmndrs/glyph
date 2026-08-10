@@ -1,4 +1,4 @@
-import { FontBakeError } from '@pmndrs/text-font-baker';
+import { FontBakeError } from './font-baker/index.js';
 
 import type { RuntimeFontBake, RuntimeFontBakeRequest } from './loader.js';
 import { fontBakeDescriptorV0 } from './internal/core-bake-policy.js';

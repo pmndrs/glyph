@@ -1,14 +1,14 @@
 /* @workflow {
   "name": "text:rust-layout-benchmark",
   "summary": "Measures the complete retained Rust text_update path with real font data and render-plan publication.",
-  "requirements": "Built @pmndrs/text and @pmndrs/text-font-baker packages. Accepts --glyphs, --reps, --warmup, and --json.",
+  "requirements": "Built @pmndrs/text and @pmndrs/text/bake packages. Accepts --glyphs, --reps, --warmup, and --json.",
   "writes": "stdout and the optional JSON report path"
 } */
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 
-import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
+import { validateFontArtifact } from '@pmndrs/text/bake';
 import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
 import { validateMsdfArtifact } from '@pmndrs/text/bakers/msdf/validate';
 import { validateSlugArtifact } from '@pmndrs/text/bakers/slug/validate';

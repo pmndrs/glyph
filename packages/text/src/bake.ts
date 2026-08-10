@@ -1,7 +1,7 @@
 import type { JsonValue } from './raster.js';
 import type { RasterKey, Sha256Hex } from './identity.js';
 
-export type { BakeWarning, SerializedBakeError } from '@pmndrs/text-font-baker';
+export type { BakeWarning, SerializedBakeError } from './font-baker/index.js';
 
 export type BakeProgressPhase =
   | 'queued'

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:649d41b71383300aa4cea6f367338c8c8fc893948bfed95d920eb5acda35861f'
+source_digest: 'sha256:6b997ac16ad957dd991dc2416c3e2654cf4b8ccdfa58c8dbdb18cbefa2e58a0e'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -20,6 +20,12 @@ sources:
   - id: node-cli
     resource: ../../packages/text/src/node/cli.ts
     title: Project-discovery and direct font-bake CLI
+  - id: font-baker
+    resource: ../../packages/text/rust/font-baker
+    title: Optional portable font-baker Wasm
+  - id: bake-api
+    resource: ../../packages/text/src/node/bake.ts
+    title: Programmatic bake subpath
   - id: text-properties
     resource: ../../packages/text/src/text-properties.ts
     title: Paragraph input contract
@@ -77,7 +83,9 @@ The package owns five runtime layers:
 | Three.js integration    | `@pmndrs/text/three` | Compile policy programs, resolve font/material resources, apply command-buffer deltas, upload dirty ranges, and maintain draw proxies. |
 | React integration       | `@pmndrs/text/r3f`   | Reconcile React values into the same imperative `Text` and `TextGroup` objects.                                                        |
 
-Rust remains `no_std + alloc` with the package allocator contract. It uses the existing compile-time direct-memory mapping
+Runtime Rust and all shared Rust code remain `no_std + alloc` compatible with the package allocator contract. The optional
+font-baker Wasm alone may enable a feature-gated `std` adapter for Fontations subsetting; the same crate must continue to
+pass its `wasm32-unknown-unknown --no-default-features` build. The text engine uses the existing compile-time direct-memory mapping
 for font registrations and the single `text_update(requestOffset, requestLength)` export for retained engine sessions.
 TypeScript does not independently shape, lay out, or pack paragraphs.
 
@@ -91,8 +99,15 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 | `@pmndrs/text/three/msdf`   | MSDF technique, policy program, and canonical TSL shader.                                                                        |
 | `@pmndrs/text/three/slug`   | Slug technique, policy program, and canonical TSL shader.                                                                        |
 | `@pmndrs/text/r3f`          | React Three Fiber `<Text>`, `<TextGroup>`, and `useFont`.                                                                        |
+| `@pmndrs/text/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `text` CLI.                                      |
+| `@pmndrs/text/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                        |
 | `@pmndrs/text/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                 |
 | `@pmndrs/text/bakers/*`     | Optional portable raster bakers and validators.                                                                                  |
+
+The font-baker Rust source, direct-memory wrapper, schemas, tests, build pipeline, optimized Wasm, and generated ABI are
+owned by this package. There is no separately published font-baker package. The root entry has no static edge to the
+baker, its `std`-enabled dependencies, Ajv, glTF Validator, or the baker Wasm; only explicit bake/runtime-bake surfaces can
+load those bytes.
 
 `@pmndrs/text/typegpu`, the TypeScript paragraph engine, paragraph batches/attachments, direct shaping exports, and the
 text-preparation Worker are removed. TypeGPU is a later adapter stack built against the Rust render plan; it is not a

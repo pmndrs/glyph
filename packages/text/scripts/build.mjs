@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { captureCommand } from '../../font-baker/scripts/capture-command.mjs';
-import { reproducibleRustEnvironment } from '../../font-baker/scripts/reproducible-rust-env.mjs';
-import { writeGeneratedTypescriptAbi } from '../../font-baker/scripts/generated-typescript-abi.mjs';
+import { captureCommand } from './support/capture-command.mjs';
+import { writeGeneratedTypescriptAbi } from './support/generated-typescript-abi.mjs';
+import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -52,8 +52,12 @@ const mtsdfWasm = join(mtsdfArtifactTargetDirectory, 'wasm32-unknown-unknown/rel
 const distributedMtsdfWasm = fileURLToPath(new URL('../dist/mtsdf_baker.wasm', import.meta.url));
 const slugWasm = join(slugArtifactTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_text_slug_baker.wasm');
 const distributedSlugWasm = fileURLToPath(new URL('../dist/slug_baker.wasm', import.meta.url));
+const fontBakerWasm = fileURLToPath(
+  new URL('../rust/font-baker/target/wasm32-unknown-unknown/release/pmndrs_text_font_baker.wasm', import.meta.url),
+);
+const distributedFontBakerWasm = fileURLToPath(new URL('../dist/font_baker.wasm', import.meta.url));
 
-const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson, slugAbiJson] = await Promise.all([
+const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson, slugAbiJson, fontBakerAbiJson] = await Promise.all([
   runCapture('cargo', [
     'run',
     '--manifest-path',
@@ -90,6 +94,15 @@ const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson, slugAbiJson] = await Promise.
     '--locked',
     '--quiet',
   ]),
+  runCapture('cargo', [
+    'run',
+    '--manifest-path',
+    'rust/font-baker/Cargo.toml',
+    '--bin',
+    'generate-abi',
+    '--locked',
+    '--quiet',
+  ]),
 ]);
 await Promise.all([
   writeGeneratedTypescriptAbi(
@@ -114,6 +127,12 @@ await Promise.all([
     new URL('../src/generated/slug-baker-abi.ts', import.meta.url),
     'slugBakerAbi',
     slugAbiJson,
+    { check: process.env.CI === 'true' },
+  ),
+  writeGeneratedTypescriptAbi(
+    new URL('../src/font-baker/generated/font-baker-abi.ts', import.meta.url),
+    'fontBakerAbi',
+    fontBakerAbiJson,
     { check: process.env.CI === 'true' },
   ),
 ]);
@@ -179,6 +198,20 @@ await run(
   ],
   shaperRustEnvironment,
 );
+await run(
+  'cargo',
+  [
+    'build',
+    '--manifest-path',
+    'rust/font-baker/Cargo.toml',
+    '--target',
+    'wasm32-unknown-unknown',
+    '--release',
+    '--locked',
+    '--no-default-features',
+  ],
+  rustEnvironment,
+);
 await rm(new URL('../dist/', import.meta.url), { recursive: true, force: true });
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
 await run(tsc, ['-p', 'tsconfig.build.json']);
@@ -215,6 +248,14 @@ await run(wasmOpt, [
   '-o',
   distributedSlugWasm,
 ]);
+await run(wasmOpt, [
+  '--enable-bulk-memory',
+  '--enable-nontrapping-float-to-int',
+  '-Oz',
+  fontBakerWasm,
+  '-o',
+  distributedFontBakerWasm,
+]);
 await Promise.all([
   assertMtsdfArtifactBakerExports(distributedMtsdfWasm, mtsdfAbiJson),
   assertSlugArtifactBakerExports(distributedSlugWasm, slugAbiJson),
@@ -223,6 +264,16 @@ await writeFile(new URL('../dist/bitmap-baker-abi-v0.json', import.meta.url), bi
 await writeFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), shaperAbiJson);
 await writeFile(new URL('../dist/mtsdf-baker-abi-v1.json', import.meta.url), mtsdfAbiJson);
 await writeFile(new URL('../dist/slug-baker-abi-v0.json', import.meta.url), slugAbiJson);
+await writeFile(new URL('../dist/font-baker-abi-v0.json', import.meta.url), fontBakerAbiJson);
+await mkdir(new URL('../dist/font-baker/schemas/', import.meta.url), { recursive: true });
+await copyFile(
+  new URL('../src/font-baker/schemas/KHRONOS-SPEC-LICENSE.txt', import.meta.url),
+  new URL('../dist/font-baker/schemas/KHRONOS-SPEC-LICENSE.txt', import.meta.url),
+);
+await copyFile(
+  new URL('../src/font-baker/schemas/README.md', import.meta.url),
+  new URL('../dist/font-baker/schemas/README.md', import.meta.url),
+);
 if (process.platform !== 'win32') {
   await chmod(new URL('../dist/node/cli.js', import.meta.url), 0o755);
 }

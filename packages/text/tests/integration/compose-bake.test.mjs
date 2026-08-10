@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { before } from 'node:test';
 
-import { createFontBaker } from '@pmndrs/text-font-baker';
-import { parseGlb, validateFontArtifact } from '@pmndrs/text-font-baker/validate';
+import { createFontBaker } from '@pmndrs/text/bake';
+import { parseGlb, validateFontArtifact } from '@pmndrs/text/bake';
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/text/bakers/bitmap';
 import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
 import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
@@ -19,7 +19,7 @@ let golden;
 before(async () => {
   const [source, fontWasm, bitmapWasm, goldenBytes] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
-    readFile(new URL('../../../font-baker/dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
     readFile(new URL('../../dist/bitmap_baker.wasm', import.meta.url)),
     readFile(new URL('../fixtures/inter-bitmap-v0.json', import.meta.url)),
   ]);

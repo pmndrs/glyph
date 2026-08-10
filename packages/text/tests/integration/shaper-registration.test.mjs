@@ -4,8 +4,8 @@ import test from 'node:test';
 
 import { FontRegistry } from '@pmndrs/text';
 import { createRuntimeShaper } from '../../dist/shaper.js';
-import { createFontBaker } from '@pmndrs/text-font-baker';
-import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
+import { createFontBaker } from '@pmndrs/text/bake';
+import { validateFontArtifact } from '@pmndrs/text/bake';
 import { fontBindingBytes, renderPolicyBytes, renderPolicyBytesFromPrograms } from '../support/engine-abi.mjs';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
@@ -14,7 +14,7 @@ const shaperAbiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.u
 async function fixture() {
   const [source, bakerWasm, shaperWasm] = await Promise.all([
     readFile(new URL('Inter-Regular.ttf', fixtureDirectory)),
-    readFile(new URL('../../../font-baker/dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
     readFile(shaperWasmUrl),
   ]);
   const baker = await createFontBaker(bakerWasm);

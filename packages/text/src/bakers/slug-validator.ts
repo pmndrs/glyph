@@ -5,7 +5,7 @@ import {
   validateWithKhronos,
   type KhronosValidationReport,
   type ParsedGlb,
-} from '@pmndrs/text-font-baker/validate';
+} from '../font-baker/validator.js';
 import {
   KHR_DF_CHANNEL_RGBSDA_ALPHA,
   KHR_DF_CHANNEL_RGBSDA_BLUE,

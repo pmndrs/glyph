@@ -2,6 +2,8 @@
 
 ## 2026-08-10
 
+- **Single-package bake ownership** — Folded the portable font-baker Rust/Wasm source, TypeScript bridge, validator, schemas, tests, and build tooling into `@pmndrs/text`. `@pmndrs/text/bake` is now the sole programmatic product surface, while package-boundary tests prove the ordinary root import retains no eager edge to baker Wasm, `std`-enabled subsetting dependencies, Ajv, or glTF Validator.
+
 - **Made multi-technique fonts one authored load and one CLI bake** — Direct `text bake` arguments now accept a
   known input/output, shaping-font Unicode subsetting, Bitmap strikes, MSDF, Slug, and byte-exact check mode. The R3F
   hello-world example deletes its custom baker script and invokes only that published CLI for both checked assets. Its

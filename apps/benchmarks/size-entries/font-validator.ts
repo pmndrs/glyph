@@ -1,1 +1,1 @@
-export * from '@pmndrs/text-font-baker/validate';
+export * from '@pmndrs/text/bake';

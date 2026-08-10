@@ -7,8 +7,8 @@ import test from 'node:test';
 import { FontLoader } from '@pmndrs/text';
 import { bakeFont } from '@pmndrs/text/bake';
 import { bakeFontInWorker } from '@pmndrs/text/runtime-bake';
-import { createFontBaker } from '@pmndrs/text-font-baker';
-import { fontBakerWasmUrl } from '@pmndrs/text-font-baker/wasm-url';
+import { createFontBaker } from '@pmndrs/text/bake';
+import { fontBakerWasmUrl } from '@pmndrs/text/bake';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
 const fixturePromise = Promise.all([

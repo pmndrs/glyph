@@ -1,4 +1,4 @@
-import type { FontBakeDescriptorV0 } from '@pmndrs/text-font-baker';
+import type { FontBakeDescriptorV0 } from '../font-baker/index.js';
 
 interface CoreFontArtifact {
   readonly role: 'font';
