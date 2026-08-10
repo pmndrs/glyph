@@ -1786,7 +1786,11 @@ impl ParagraphState {
 
     fn prepare_shaping_runs(&mut self) -> Result<(), EngineError> {
         self.abort_shaping_runs();
-        if !self.text_prepared && !self.style_invalidation.shaping && !self.bidi_prepared {
+        if !self.text_prepared
+            && !self.style_invalidation.shaping
+            && !self.style_invalidation.metrics
+            && !self.bidi_prepared
+        {
             return Ok(());
         }
         let text = if self.text_prepared {
@@ -1839,7 +1843,12 @@ impl ParagraphState {
         font_bindings: &[RegisteredFontBinding],
     ) -> Result<(), EngineError> {
         self.abort_shape();
-        if !self.shaping_runs_prepared {
+        // Metric-only styles must refresh the retained run values consumed by cluster aggregation, but the underlying
+        // HarfRust result remains valid. Keeping those two invalidations distinct avoids reshaping on size, tracking,
+        // word-spacing, line-height, or baseline changes while still rebuilding advances from the new run styles.
+        if !self.shaping_runs_prepared
+            || (!self.text_prepared && !self.style_invalidation.shaping && !self.bidi_prepared)
+        {
             return Ok(());
         }
         if self.try_prepare_incremental_shape(shaper)? {
