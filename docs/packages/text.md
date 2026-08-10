@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:a78c58b729c09c6ba948ce10355a4f8ad3577dcacb2a257e97d54cd76f2283ae'
+source_digest: 'sha256:6a8ea805a76457c08c6f7d4427c8b301ab0cce44cb7890076710d0493614c3ce'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -140,9 +140,10 @@ composes and validates one canonical GLB before transferring it. Its `asset.gene
 
 The Worker caches only that final validated GLB in `CacheStorage`; partial preparation and raster outputs never become
 cache entries. Identity covers source bytes, face, normalized ranges, ordered raster descriptors and keys, and all
-relevant format/baker versions. Entries expire after 30 days and the application-owned cache is pruned to 24 entries and
-128 MiB, with a 64 MiB per-entry ceiling. Cache absence, quota rejection, privacy restrictions, and storage corruption
-are transparent misses followed by the same canonical bake.
+relevant format/baker versions. Persistence is inherited from the source response: `no-store`, `no-cache`, missing
+freshness metadata, and already-expired responses remain memory-only, while `max-age` or `Expires` supplies the exact
+derived-artifact expiration. Browser quota eviction owns storage pressure. Cache absence, quota rejection, privacy
+restrictions, and storage corruption are transparent misses followed by the same canonical bake.
 
 ## Retained frame transaction
 
@@ -285,20 +286,20 @@ The latest checked package-size record after the baker ABI cleanup reports:
 
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
-| Core JavaScript plus shaper Wasm        | 1,247,715 B | 460,130 B | 363,319 B |
-| Three adapter plus core and shaper Wasm | 1,488,669 B | 498,606 B | 395,276 B |
+| Core JavaScript plus shaper Wasm        | 1,251,867 B | 460,943 B | 364,027 B |
+| Three adapter plus core and shaper Wasm | 1,493,805 B | 499,537 B | 396,100 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
 The optimized shaper is 1,159,317 raw / 442,284 gzip / 347,850 Brotli bytes. The renderer-neutral JavaScript graph is
-88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 329,352 raw / 56,322 gzip /
-47,426 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
+92,550 raw / 18,659 gzip / 16,177 Brotli, and the complete Three JavaScript graph is 334,488 raw / 57,253 gzip /
+48,250 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
 to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; the later shared-emitter and stable
 range-scan work reduces those totals to 460,416 and 498,437 gzip bytes. The homogeneous-policy dispatch and dirty-range
 alignment correction moved those totals to 460,458 and 498,479 gzip bytes; the focused planner deduplication and current
-Three graph now measure 460,130 and 498,606 gzip bytes. The final renderer-lifecycle fixes and exact WebGL2 PBO range
-copy leave core and Wasm byte-identical and add 1,351 raw / 230 gzip / 146 Brotli bytes to the complete Three graph.
+Three graph measured 460,130 and 498,606 gzip bytes. The current source-response cache policy and publishing changes
+measure 460,943 and 499,537 gzip bytes respectively.
 
 WebGPU continues to alias canonical plan arrays directly. Three's WebGL2 PBO builder replaces a storage attribute's
 array with power-of-two-padded retained texture storage, so later Rust patches copy only their dirty byte ranges into

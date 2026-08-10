@@ -66,7 +66,7 @@ describe('independent package-size report', () => {
     }
   });
 
-  it('projects the nine useful gzip measurements for people and pull requests', () => {
+  it('projects the useful gzip measurements for people and pull requests', () => {
     const summary = summarizePackageSizes(report);
     expect(summary.map(({ label }) => label)).toEqual([
       'Core JS',
@@ -78,6 +78,17 @@ describe('independent package-size report', () => {
       'Font Awesome icons · Bitmap',
       'Font Awesome icons · MTSDF',
       'Font Awesome icons · Slug',
+      'Font validator JS',
+      'Runtime bake host JS',
+      'Runtime bake Worker JS',
+      'Font baker JS',
+      'Font baker Wasm',
+      'Bitmap baker JS',
+      'Bitmap baker Wasm',
+      'MTSDF baker JS',
+      'MTSDF baker Wasm',
+      'Slug baker JS',
+      'Slug baker Wasm',
     ]);
     expect(sizeLimitRows(report)).toEqual(
       summary.map(({ label, gzipBytes }) => ({ name: `${label} (gzip)`, size: gzipBytes })),

@@ -29,6 +29,7 @@ const host = new SerialWorkerHost<
         id,
         source,
         font: fontBakeDescriptorV0(0),
+        ...(request.cache === undefined ? {} : { cache: request.cache }),
         ...(request.unicodeRanges === undefined
           ? {}
           : { unicodeRanges: normalizeUnicodeRanges(request.unicodeRanges) }),

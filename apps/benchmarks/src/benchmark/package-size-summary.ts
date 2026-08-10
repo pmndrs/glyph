@@ -19,6 +19,17 @@ const summaryDefinitions = [
   { id: 'font-icons-bitmap-16-32', label: 'Font Awesome icons · Bitmap' },
   { id: 'font-icons-mtsdf', label: 'Font Awesome icons · MTSDF' },
   { id: 'font-icons-slug', label: 'Font Awesome icons · Slug' },
+  { id: 'font-validator-js', label: 'Font validator JS' },
+  { id: 'runtime-baker-host-js', label: 'Runtime bake host JS' },
+  { id: 'runtime-baker-worker-js', label: 'Runtime bake Worker JS' },
+  { id: 'portable-baker-js', label: 'Font baker JS' },
+  { id: 'portable-baker-wasm', label: 'Font baker Wasm' },
+  { id: 'bitmap-baker-js', label: 'Bitmap baker JS' },
+  { id: 'bitmap-baker-wasm', label: 'Bitmap baker Wasm' },
+  { id: 'mtsdf-baker-js', label: 'MTSDF baker JS' },
+  { id: 'mtsdf-baker-wasm', label: 'MTSDF baker Wasm' },
+  { id: 'slug-baker-js', label: 'Slug baker JS' },
+  { id: 'slug-baker-wasm', label: 'Slug baker Wasm' },
 ] as const satisfies readonly SummaryDefinition[];
 
 export function summarizePackageSizes(report: unknown): readonly PackageSizeSummaryEntry[] {
