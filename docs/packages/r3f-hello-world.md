@@ -5,7 +5,7 @@ description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Sl
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/text-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:44849706fcd065b4c335e90265bc73fe89c8ef0f96407d93a2d2ddb88773b35c'
+source_digest: 'sha256:e13744eb1f7b218f5bf3bbc2efc3dd0bdb87eea3f3cc859a01bd97523234f897'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -22,7 +22,7 @@ sources:
     title: Authenticated checked-in example assets
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T18:38:19Z'
+  at: '2026-08-10T03:47:15Z'
 ---
 
 # Package reference: `@pmndrs/text-r3f-hello-world`
@@ -49,7 +49,7 @@ mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world dev
 mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world check
 ```
 
-The check runs TypeScript 7 isolated typechecking, Oxlint with warnings denied, Oxfmt, deterministic asset rebaking, and a
-production Vite build. Live acceptance additionally clicks all three in-canvas controls on a real WebGPU canvas and
-requires thirteen rendered glyphs, zero missing glyphs, and two Rust-planned meshes: one for Latin and one for the icon
-fallback resource.
+The check runs TypeScript 7 isolated typechecking, React Compiler-aware Oxlint with warnings denied, Oxfmt, deterministic
+asset rebaking, a production Vite build, and a GPU Chromium acceptance probe. The probe clicks all three in-canvas
+controls through pointer events and requires 13 laid-out glyphs—11 visible records plus two spaces—in two Rust-planned
+meshes: one for Latin and one for the icon fallback resource.

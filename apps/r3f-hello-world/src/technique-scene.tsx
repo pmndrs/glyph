@@ -4,7 +4,8 @@ import { bitmap } from '@pmndrs/text/three/bitmap';
 import { msdf } from '@pmndrs/text/three/msdf';
 import { slug } from '@pmndrs/text/three/slug';
 import { useThree, type ThreeEvent } from '@react-three/fiber/webgpu';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import type { Group, InstancedBufferGeometry, Mesh } from 'three/webgpu';
 
 import iconFontUrl from '../assets/font-awesome-world.font.glb?url';
 import latinFontUrl from '../assets/inter-latin.font.glb?url';
@@ -49,9 +50,32 @@ const slugIconRequest = {
 export function TechniqueScene({ onTechniqueChange, technique }: TechniqueSceneProps) {
   const viewport = useThree((state) => state.viewport);
   const buttonFont = useFont(msdfLatinRequest);
+  const root = useRef<Group>(null);
+
+  useEffect(() => {
+    const canvas = document.querySelector('canvas');
+    if (!(canvas instanceof HTMLCanvasElement)) throw new Error('R3F hello-world canvas is missing');
+    canvas.dataset.exampleReady = 'false';
+    const frame = requestAnimationFrame(() => {
+      const copy = root.current?.getObjectByName('r3f-example-copy');
+      let draws = 0;
+      let records = 0;
+      copy?.traverse((object) => {
+        const mesh = object as Mesh<InstancedBufferGeometry>;
+        if (mesh.isMesh !== true || mesh.userData.pmndrsTextRunStart === undefined) return;
+        draws += 1;
+        records += mesh.geometry.instanceCount;
+      });
+      canvas.dataset.exampleTechnique = technique;
+      canvas.dataset.exampleDraws = String(draws);
+      canvas.dataset.exampleRecords = String(records);
+      canvas.dataset.exampleReady = draws === 2 && records === 11 ? 'true' : 'false';
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [technique]);
 
   return (
-    <group position={[-viewport.width / 2, viewport.height / 2, 0]}>
+    <group ref={root} position={[-viewport.width / 2, viewport.height / 2, 0]}>
       <TechniqueCopy technique={technique} />
       <TechniqueButtons font={buttonFont} onTechniqueChange={onTechniqueChange} selected={technique} />
     </group>
@@ -100,6 +124,7 @@ function Copy<TechniqueType extends typeof bitmap | typeof msdf | typeof slug>({
   return (
     <TextComponent
       font={font}
+      name="r3f-example-copy"
       paint={{ color: '#f4f7ff' }}
       position={[48, -92, 0]}
       style={{ fontSize: 64, lineHeight: 1 }}

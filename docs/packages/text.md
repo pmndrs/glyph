@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:848403ab5df85b439089e447010f07ae54309de2c3f9eeba994337611160ddaf'
+source_digest: 'sha256:6b57735a2d735419b5b5dbcb75becef566617d1241a5343342399bdf6dd5edc5'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -55,7 +55,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T03:36:54Z'
+  at: '2026-08-10T03:47:15Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -143,6 +143,9 @@ font for each cluster and partitions the render plan according to the active ren
 
 This permits an MSDF or Bitmap prose font to fall back to a Slug emoji font while keeping third-party renderers safe: an
 unregistered technique fails at the policy boundary instead of producing an unsupported draw.
+A public compiled-Wasm integration loads Bitmap Inter plus Slug Font Awesome, shapes one paragraph through that ordered
+fallback stack, and observes two Rust-planned draws with exact Bitmap `vec2` and Slug `vec4` physical records. The
+selected font binding—not a `Text` technique selector—carries the renderer program and resource.
 
 ## Semantic queries
 
