@@ -384,6 +384,8 @@ export class TextGroup extends THREE.Object3D {
   readonly #pixelSnapping: boolean;
   #material: ThreeTextMaterial | undefined;
   #binding: ThreeTextBatchBinding | undefined;
+  readonly #transformTracker = new TextTransformTracker();
+  readonly #texts: Text<AnyRasterTechnique>[] = [];
   #disposed = false;
   #error: unknown;
   onError: ((error: unknown) => void) | undefined;
@@ -450,14 +452,19 @@ export class TextGroup extends THREE.Object3D {
   }
 
   override updateMatrixWorld(force?: boolean): void {
+    super.updateMatrixWorld(force);
     if (!this.#disposed) {
-      const texts = collectTextDescendants(this);
+      const texts = collectTextDescendants(this, this.#texts);
       if (texts.length !== 0) {
         try {
           const runtime = texts[0]!.runtime;
           for (const text of texts) validateBinding(runtime, text);
           this.#binding ??= new ThreeTextBatchBinding(runtime, this.#capacity, this);
           this.#binding.reconcile(texts);
+          this.#transformTracker.beginFrame();
+          for (const text of texts) {
+            if (this.#transformTracker.pathChanged(text, this)) this.#binding.markTransformDirty(text);
+          }
           this.#binding.synchronize();
           this.#error = undefined;
         } catch (error) {
@@ -475,7 +482,6 @@ export class TextGroup extends THREE.Object3D {
         }
       }
     }
-    super.updateMatrixWorld(force);
   }
 
   bindText(text: Text<AnyRasterTechnique>): void {
@@ -517,6 +523,8 @@ class ThreeTextBatchBinding {
   readonly #layoutInspections = new Map<Text<AnyRasterTechnique>, ParagraphLayoutInspection>();
   readonly #queryPlanView = new TextEngineRenderPlanView();
   readonly #freeParagraphIds: number[] = [];
+  readonly #dirtyTransformIds = new Set<number>();
+  readonly #desiredTexts = new Set<Text<AnyRasterTechnique>>();
   #nextParagraphId = 1;
   #engineRevision = 0;
   #planRevision = 0;
@@ -600,12 +608,17 @@ class ThreeTextBatchBinding {
     if (layout !== undefined) this.#target.clearGlyphOriginOverrides(layout.glyphStableIds);
   }
   reconcile(texts: readonly Text<AnyRasterTechnique>[]): void {
-    const desired = new Set(texts);
-    for (const text of [...this.#paragraphs.keys()]) if (!desired.has(text)) this.removeText(text);
+    this.#desiredTexts.clear();
+    for (const text of texts) this.#desiredTexts.add(text);
+    for (const text of this.#paragraphs.keys()) if (!this.#desiredTexts.has(text)) this.removeText(text);
     for (const text of texts) this.#ensureText(text, this.#group);
   }
   reconcileStandalone(text: Text<AnyRasterTechnique>): void {
     this.#ensureText(text, undefined);
+  }
+  markTransformDirty(text: Text<AnyRasterTechnique>): void {
+    const paragraph = this.#paragraphs.get(text);
+    if (paragraph !== undefined) this.#dirtyTransformIds.add(paragraph.id);
   }
   synchronize(semanticViewMask = 0): void {
     if (this.#disposed) return;
@@ -623,7 +636,8 @@ class ThreeTextBatchBinding {
         : [];
     });
     if (changed.length === 0 && this.#removed.length === 0) {
-      this.#target.syncTransforms();
+      this.#target.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
+      this.#dirtyTransformIds.clear();
       if (semanticViewMask !== 0 && !this.#hasSemanticViews(semanticViewMask)) {
         this.#retainSemanticViews(this.#querySemanticViews(semanticViewMask), semanticViewMask);
       }
@@ -750,6 +764,7 @@ class ThreeTextBatchBinding {
       committed = true;
       try {
         this.#target.apply(publication);
+        this.#dirtyTransformIds.clear();
         this.#planRevision = publication.planRevision;
         this.#lastPublication = undefined;
       } catch (error) {
@@ -812,6 +827,7 @@ class ThreeTextBatchBinding {
     if (paragraph === undefined) return;
     this.#paragraphs.delete(text);
     this.#textsByParagraph.delete(paragraph.id);
+    this.#dirtyTransformIds.delete(paragraph.id);
     this.#removed.push(paragraph);
     text.unbindFrom(this);
   }
@@ -831,6 +847,8 @@ class ThreeTextBatchBinding {
     this.#layoutInspections.clear();
     this.#removed.length = 0;
     this.#freeParagraphIds.length = 0;
+    this.#dirtyTransformIds.clear();
+    this.#desiredTexts.clear();
   }
   #ensureText(text: Text<AnyRasterTechnique>, group: TextGroup | undefined): void {
     validateBinding(this.#runtime, text);
@@ -1340,14 +1358,69 @@ function nearestTextGroup(object: THREE.Object3D): TextGroup | undefined {
 function eraseTextTechnique<Technique extends AnyRasterTechnique>(text: Text<Technique>): Text<AnyRasterTechnique> {
   return text as unknown as Text<AnyRasterTechnique>;
 }
-function collectTextDescendants(group: TextGroup): Text<AnyRasterTechnique>[] {
-  const texts: Text<AnyRasterTechnique>[] = [];
+function collectTextDescendants(group: TextGroup, texts: Text<AnyRasterTechnique>[]): Text<AnyRasterTechnique>[] {
+  texts.length = 0;
   for (const child of group.children) collect(child, texts);
   return texts;
   function collect(object: THREE.Object3D, result: Text<AnyRasterTechnique>[]): void {
     if (object instanceof TextGroup) return;
     if (object instanceof Text && !object.disposed) result.push(object as Text<AnyRasterTechnique>);
     for (const child of object.children) collect(child, result);
+  }
+}
+
+interface ObservedTextTransform {
+  readonly matrix: Float64Array;
+  parent: THREE.Object3D | null;
+  visible: boolean;
+  frame: number;
+  changed: boolean;
+}
+
+class TextTransformTracker {
+  readonly #observed = new WeakMap<THREE.Object3D, ObservedTextTransform>();
+  #frame = 0;
+
+  beginFrame(): void {
+    this.#frame += 1;
+  }
+
+  pathChanged(text: Text<AnyRasterTechnique>, boundary: TextGroup): boolean {
+    let changed = false;
+    let object: THREE.Object3D | null = text;
+    while (object !== null && object !== boundary) {
+      if (this.#objectChanged(object)) changed = true;
+      object = object.parent;
+    }
+    return object !== boundary || changed;
+  }
+
+  #objectChanged(object: THREE.Object3D): boolean {
+    const existing = this.#observed.get(object);
+    if (existing?.frame === this.#frame) return existing.changed;
+    const elements = object.matrix.elements;
+    let changed = existing === undefined || existing.parent !== object.parent || existing.visible !== object.visible;
+    if (existing === undefined) {
+      const matrix = new Float64Array(elements);
+      this.#observed.set(object, {
+        matrix,
+        parent: object.parent,
+        visible: object.visible,
+        frame: this.#frame,
+        changed: true,
+      });
+      return true;
+    }
+    for (let index = 0; index < 16; index += 1) {
+      if (existing.matrix[index] === elements[index]) continue;
+      existing.matrix[index] = elements[index]!;
+      changed = true;
+    }
+    existing.parent = object.parent;
+    existing.visible = object.visible;
+    existing.frame = this.#frame;
+    existing.changed = changed;
+    return changed;
   }
 }
 function validateText(text: Text<AnyRasterTechnique>): void {

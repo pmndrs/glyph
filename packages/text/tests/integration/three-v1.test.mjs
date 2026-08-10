@@ -478,11 +478,39 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.deepEqual(pboUploadOrigins.subarray(canonicalOrigins.length), new Float32Array(4));
 
   const version = transforms.version;
+  let forcedTextWorldUpdates = 0;
+  const updateRightWorldMatrix = right.updateWorldMatrix.bind(right);
+  right.updateWorldMatrix = (...arguments_) => {
+    forcedTextWorldUpdates += 1;
+    return updateRightWorldMatrix(...arguments_);
+  };
+  group.position.x = 11;
+  scene.updateMatrixWorld();
+  assert.equal(transforms.version, version, 'moving the shared root must not upload unchanged relative transforms');
+  assert.equal(forcedTextWorldUpdates, 0, 'moving the shared root must not force each Text world matrix a second time');
+
   right.position.x = 7;
   scene.updateMatrixWorld();
   assert.equal(group.children.filter((child) => child.isMesh)[0], draws[0]);
   assert.equal(transforms.version, version + 1);
   assert.equal(transforms.array[2 * 16 + 12], 7);
+  assert.equal(forcedTextWorldUpdates, 0, 'the normal Three traversal supplies current matrices to transform patches');
+
+  const nestedParent = new THREE.Group();
+  group.add(nestedParent);
+  nestedParent.add(right);
+  nestedParent.position.x = 3;
+  scene.updateMatrixWorld();
+  assert.equal(transforms.array[2 * 16 + 12], 10, 'nested parent motion patches only the affected transform path');
+  nestedParent.visible = false;
+  scene.updateMatrixWorld();
+  assert.deepEqual(
+    Array.from(transforms.array.subarray(2 * 16, 3 * 16)),
+    Array(16).fill(0),
+    'nested parent visibility suppresses instances whose draw proxy lives at the shared root',
+  );
+  nestedParent.visible = true;
+  scene.updateMatrixWorld();
   assert.equal(
     right.snapshotGlyphOrigins().displayedX[0],
     rightOrigins.shapedX[0] + 4,

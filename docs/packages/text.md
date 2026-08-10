@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6db607aae17f4364c9093af29caf0bafbe56c82a45176d65604c9d72458cde1e'
+source_digest: 'sha256:53af21e8321a9bad7643741019c453d6a618f7a0de1304af90891a28e8fee944'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -64,7 +64,7 @@ sources:
     title: Three.js text API reference
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T20:05:07Z'
+  at: '2026-08-10T23:30:00Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -154,6 +154,13 @@ One `TextGroup` owns one Rust engine session. A traversal sends only changed par
 - content-box changes send geometry;
 - transform and visibility changes update Three's renderer-local sidecar without calling Wasm;
 - an empty or normalized-equal update sends nothing.
+
+Three's ordinary scene traversal owns world-matrix composition. `TextGroup` tracks local matrices, visibility, and
+parent identity only below its shared draw root, then gives the executor the paragraph IDs whose relative transform
+path changed. Camera and `TextGroup` motion therefore move the shared draw without forcing every `Text` world matrix a
+second time, multiplying every relative matrix, or scheduling transform-table uploads. Direct `Text` motion, nested
+ancestor motion, visibility, reparenting, and manual matrix changes still patch the affected renderer-local slots and do
+not enter Wasm.
 
 Rust publishes one revision containing:
 

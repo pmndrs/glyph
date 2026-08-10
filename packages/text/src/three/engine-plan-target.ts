@@ -92,6 +92,7 @@ export class ThreeTextRenderPlanExecutor {
   readonly #materials = new Map<string, MaterialRealization>();
   readonly #ownedMaterials = new WeakSet<THREE.NodeMaterial>();
   readonly #activeTransformIndices = new Set<number>();
+  readonly #directDrawsByTransform = new Map<number, THREE.Mesh[]>();
   readonly #originRecords = new Map<number, OriginRecord>();
   readonly #rootInverse = new THREE.Matrix4();
   readonly #relativeTransform = new THREE.Matrix4();
@@ -151,6 +152,7 @@ export class ThreeTextRenderPlanExecutor {
         this.#replaceDraws(plan, draws, primitives, buffers, resources);
       }
       this.syncTransforms();
+      for (const draw of this.#draws) draw.updateMatrixWorld(false);
       this.#applyRetirements(plan, retirements);
       this.#originRecords.clear();
     });
@@ -221,57 +223,68 @@ export class ThreeTextRenderPlanExecutor {
   }
 
   /** Upload changed scene transforms without crossing into Wasm or invalidating text layout. */
-  syncTransforms(): number {
+  syncTransforms(transformIds: Iterable<number> = this.#owner.transformIds(), worldMatricesCurrent = false): number {
     for (const [index, draw] of this.#draws.entries()) {
       draw.renderOrder = this.#owner.renderOrderBase + index;
     }
-    const hasDirectTransforms = this.#draws.some((draw) => directTransformId(draw) !== 0);
-    if (this.#activeTransformIndices.size === 0 && !hasDirectTransforms) return 0;
-    this.#owner.drawRoot.updateWorldMatrix(true, false);
-    this.#rootInverse.copy(this.#owner.drawRoot.matrixWorld).invert();
     const target = this.#transformAttribute.array as Float32Array;
-    const changedTransforms = new Set<number>();
+    let rootPrepared = false;
+    let changedTransforms = 0;
     let indexedChanged = 0;
-    for (const index of this.#activeTransformIndices) {
-      const object = this.#owner.objectForTransform(index);
-      object.updateWorldMatrix(true, false);
-      this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
-      const offset = index * 16;
-      if (object.visible) {
-        if (matrixEquals(target, offset, this.#relativeTransform.elements)) continue;
-        target.set(this.#relativeTransform.elements, offset);
-      } else {
-        if (zeroMatrixEquals(target, offset)) continue;
-        target.fill(0, offset, offset + 16);
+    for (const transformId of transformIds) {
+      const indexed = this.#activeTransformIndices.has(transformId);
+      const directDraws = this.#directDrawsByTransform.get(transformId);
+      if (!indexed && directDraws === undefined) continue;
+      if (!rootPrepared) {
+        if (!worldMatricesCurrent) this.#owner.drawRoot.updateWorldMatrix(true, false);
+        this.#rootInverse.copy(this.#owner.drawRoot.matrixWorld).invert();
+        rootPrepared = true;
       }
-      this.#transformAttribute.addUpdateRange(index * 16, 16);
-      changedTransforms.add(index);
-      indexedChanged += 1;
-    }
-    for (const draw of this.#draws) {
-      const transformId = directTransformId(draw);
-      if (transformId === 0) continue;
       const object = this.#owner.objectForTransform(transformId);
-      let drawChanged = false;
-      if (draw.visible !== object.visible) {
-        draw.visible = object.visible;
-        drawChanged = true;
-      }
-      object.updateWorldMatrix(true, false);
+      if (!worldMatricesCurrent) object.updateWorldMatrix(true, false);
       this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
-      if (!draw.matrix.equals(this.#relativeTransform)) {
-        draw.matrix.copy(this.#relativeTransform);
-        draw.matrixWorldNeedsUpdate = true;
-        drawChanged = true;
+      const visible = visibleBelowRoot(object, this.#owner.drawRoot);
+      let transformChanged = false;
+      if (indexed) {
+        const offset = transformId * 16;
+        if (visible) {
+          if (!matrixEquals(target, offset, this.#relativeTransform.elements)) {
+            target.set(this.#relativeTransform.elements, offset);
+            transformChanged = true;
+          }
+        } else if (!zeroMatrixEquals(target, offset)) {
+          target.fill(0, offset, offset + 16);
+          transformChanged = true;
+        }
+        if (transformChanged) {
+          this.#transformAttribute.addUpdateRange(offset, 16);
+          indexedChanged += 1;
+        }
       }
-      if (drawChanged) changedTransforms.add(transformId);
+      for (const draw of directDraws ?? []) {
+        let drawChanged = false;
+        if (draw.visible !== visible) {
+          draw.visible = visible;
+          drawChanged = true;
+        }
+        if (!draw.matrix.equals(this.#relativeTransform)) {
+          draw.matrix.copy(this.#relativeTransform);
+          draw.matrixWorldNeedsUpdate = true;
+          drawChanged = true;
+        }
+        if (drawChanged) {
+          draw.updateMatrixWorld(false);
+          transformChanged = true;
+        }
+      }
+      if (transformChanged) changedTransforms += 1;
     }
-    if (changedTransforms.size === 0) return 0;
+    if (changedTransforms === 0) return 0;
     if (indexedChanged !== 0) {
       this.#transformAttribute.needsUpdate = true;
       invalidatePboTexture(this.#transformAttribute);
     }
-    return changedTransforms.size;
+    return changedTransforms;
   }
 
   dispose(): void {
@@ -289,6 +302,7 @@ export class ThreeTextRenderPlanExecutor {
     this.#buffers.clear();
     this.#resources.clear();
     this.#activeTransformIndices.clear();
+    this.#directDrawsByTransform.clear();
     this.#originRecords.clear();
     this.#originSegments = [];
   }
@@ -507,6 +521,14 @@ export class ThreeTextRenderPlanExecutor {
     this.#originSegments = nextOriginSegments;
     this.#activeTransformIndices.clear();
     for (const transformIndex of transformIndices) this.#activeTransformIndices.add(transformIndex);
+    this.#directDrawsByTransform.clear();
+    for (const draw of this.#draws) {
+      const transformId = directTransformId(draw);
+      if (transformId === 0) continue;
+      const transformDraws = this.#directDrawsByTransform.get(transformId) ?? [];
+      transformDraws.push(draw);
+      this.#directDrawsByTransform.set(transformId, transformDraws);
+    }
   }
 
   #restoreOriginTargets(): void {
@@ -1132,6 +1154,15 @@ function transformProgramKey(transform: TransformRealization, generation: number
 
 function directTransformId(draw: THREE.Mesh): number {
   return (draw.userData.pmndrsTextTransformId as number | undefined) ?? 0;
+}
+
+function visibleBelowRoot(object: THREE.Object3D, root: THREE.Object3D): boolean {
+  let current: THREE.Object3D | null = object;
+  while (current !== null && current !== root) {
+    if (!current.visible) return false;
+    current = current.parent;
+  }
+  return current === root;
 }
 
 function bitmapMaterial(
