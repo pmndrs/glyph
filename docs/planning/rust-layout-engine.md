@@ -892,6 +892,33 @@ derivable starts. Optimized Wasm measures 964,019 / 360,765 / 288,742 raw/gzip/B
 895,593 / 335,396 / 264,355 checkpoint. This is shared runtime data and code, not per-font shaping payload. The number
 does not claim layout or shaping latency because neither has consumed these products yet.
 
+#### Future optimized-runtime delivery research
+
+The complete optimized shaper currently contains 939,488 bytes of Wasm code and 218,958 bytes of initialized data before
+transfer compression. The repository-owned generated Unicode 17 script, bidi, and line-break Rust sources total 150,408
+bytes, but source size is not binary contribution and the data section also contains unrelated constants. Consequently,
+external tables alone cannot be claimed to reduce the runtime to a small basic-font-parser footprint; a feature-stripped
+build must measure the executable floor.
+
+Two independent experiments are reserved for a later stack:
+
+1. Replace compiled Unicode property arrays with a versioned, little-endian, aligned data-pack format. The core reserves
+   one retained region, validates the pack version, section directory, lengths, and digest once, and thereafter reads
+   bounded slices directly. The initial implementation should fetch a plain binary blob and copy it once into the
+   reserved Wasm region. A data-only Wasm side module that imports the core memory and initializes the region with active
+   data segments is a benchmark candidate, not an assumed improvement.
+2. Measure an EFIGS/Cyrillic/default-shaper executable profile separately from optional complex-script profiles. HarfRust
+   0.12 has no script-level Cargo feature gates, so isolating Arabic/Indic/Khmer and related specialized shaper code would
+   require an upstream feature design or a narrowly maintained fork. CJK/default OpenType shaping, Unicode line breaking,
+   emoji grapheme behavior, and font-local GSUB/GPOS data must not be conflated with those specialized code paths.
+
+Font-local OpenType payloads remain in each baked font or fallback font; applications already control their glyph and
+font-stack subsets. Data-pack discovery should therefore be driven before font registration by declared Unicode/script
+coverage. A cold unexpected script may report a stable missing-pack identifier and retry after asynchronous loading, but
+steady-state `text_update` remains one synchronous call and never initiates I/O. Native consumers may memory-map the same
+pack format, while browsers retain the initialized bytes in Wasm linear memory. Each experiment must report raw, gzip,
+Brotli, compile/startup, retained-memory, cold-load, and hot-path results before changing the default package.
+
 Retained bidi and run-itemization now consume those products inside the same transaction. UAX #9 output is copied into
 reusable active/pending level, class, paragraph, and equal-level-run arrays. Text or root base-direction changes re-run
 bidi; unchanged text and style do not. Root direction selects paragraph base level, while a nested stated LTR/RTL value
@@ -1001,8 +1028,10 @@ Horizontal positioning now completes the first nonempty production frame path. R
 #9 L1 resets before L2 reorders logical cluster slices into visual order. Each editorial slot positions independently,
 including direction-aware alignment and non-final-line space justification. HarfRust offsets and actual fallback-font
 metrics accumulate in `f64`; baked glyph extents become positive-down primitive bounds after one `f32` narrowing, while
-non-rendering glyphs advance the cursor without producing instances. Six F32 semantic lanes carry bounds, font size,
-and raster ratio; four U32 lanes carry foreground, cluster, region, and flow-thread identity. Exact float bits plus all
+non-rendering glyphs advance the cursor without producing instances. Six retained F32 semantic lanes carry bounds, font
+size, and raster ratio; explicit baseline-origin policy fields resolve through each renderable glyph's packed index into
+the existing semantic-glyph records instead of duplicating two float arrays. Six U32 lanes carry foreground, cluster,
+region, flow-thread, transform, and stable-glyph identity. Exact float bits plus all
 integer and semantic fields determine a monotonic transactional `content_revision`. A unit fixture retains revisions
 `[1,2]` across an identical rebuild and advances to `[3,4]` after shifting the slot one pixel. A compiled real-Inter
 `text_update` publishes nonzero resource/buffer/patch/primitive/draw tables; the identical next call keeps the same Wasm
@@ -1244,8 +1273,9 @@ GPU schemas: five Bitmap buffers totaling 48 bytes per instance, seven MTSDF vec
 Slug float vec4 plus two unsigned vec4 buffers totaling 112 bytes. The same stress text positions 25,515 glyphs and
 selects 21,805 renderable raster instances, matching the portable techniques' deliberate omission of absent records.
 Policy validation now propagates semantic input dependencies through the straight-line program once and stores a mask
-per physical output. Positioning records exact six-F32/four-U32 change bits in a compact side lane without enlarging the
-60-byte `PlanGlyph`; ordered-direct and stable-indirect planning intersect the two masks. New or rebound records remain
+per physical output. Positioning records exact eight-F32/six-U32 dependency change bits in a compact side lane without
+enlarging the 64-byte `PlanGlyph`; ordered-direct and stable-indirect planning intersect the two masks. New or rebound
+records remain
 conservative full writes. For 21,805 renderable instances, full-column resize now emits one position/geometry patch:
 170.4 KiB for Bitmap and 340.7 KiB for MTSDF or Slug, down from cold-plan writes of 1,022.1, 2,384.9, and 2,384.9 KiB.
 Font-size emits 340.7/340.7/681.4 KiB because Bitmap size and Slug inverse scale also change. Static UV, color, bounds,

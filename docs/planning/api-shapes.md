@@ -34,6 +34,10 @@ generated:
   at: '2026-08-07T05:01:15Z'
 ---
 
+> Historical merged-v0 fixture. Names such as `RasterRuntime`, `RasterModule`, and the TypeScript paragraph target below
+> are retained only for migration archaeology; they are not current exports. Use
+> [the current package reference](../packages/text.md) for the single Rust render-plan path.
+
 # Merged v0 runtime and bake API fixture
 
 Status: merged v0 surfaces are implemented but unreleased; sections labeled deferred remain proposals
