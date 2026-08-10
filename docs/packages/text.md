@@ -237,18 +237,19 @@ The latest checked package-size record after the baker ABI cleanup reports:
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
 | Core JavaScript plus shaper Wasm        | 1,247,715 B | 460,130 B | 363,319 B |
-| Three adapter plus core and shaper Wasm | 1,487,318 B | 498,376 B | 395,130 B |
+| Three adapter plus core and shaper Wasm | 1,488,082 B | 498,494 B | 395,212 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
 The optimized shaper is 1,159,317 raw / 442,284 gzip / 347,850 Brotli bytes. The renderer-neutral JavaScript graph is
-88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 328,001 raw / 56,092 gzip /
-47,280 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
+88,398 raw / 17,846 gzip / 15,469 Brotli, and the complete Three JavaScript graph is 328,765 raw / 56,210 gzip /
+47,362 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
 to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; the later shared-emitter and stable
 range-scan work reduces those totals to 460,416 and 498,437 gzip bytes. The homogeneous-policy dispatch and dirty-range
 alignment correction moved those totals to 460,458 and 498,479 gzip bytes; the focused planner deduplication and current
-Three graph now measure 460,130 and 498,376 gzip bytes.
+Three graph now measure 460,130 and 498,494 gzip bytes. The final renderer-lifecycle fixes leave core and Wasm
+byte-identical and add 764 raw / 118 gzip / 82 Brotli bytes to the complete Three graph.
 The corrected complete MTSDF baker remains 552,025 raw / 215,030 gzip / 168,758 Brotli bytes; the earlier 52 KiB
 observation was a kernel-only test artifact that reused the distributable Cargo target directory.
 
