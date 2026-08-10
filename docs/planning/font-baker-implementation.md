@@ -59,8 +59,8 @@ The portable TypeScript package remains intentionally internal. The public `@pmn
 
 Following the Rust/Wasm code-size guidance, the subsetting build measures `opt-level = "s"` and `"z"` rather than
 assuming either result, retains LTO and one codegen unit, strips symbols, and runs Binaryen `-Oz`. The measured winner is
-`"z"`. The current prepare/inspect artifact is 1,097,710 raw bytes and 391,557 bytes with Node best-level gzip, versus
-the preceding 422,538 raw / 163,865 gzip artifact. The +675,172 raw / +227,692 gzip capability cost is isolated from the
+`"z"`. The current prepare/inspect artifact is 1,097,702 raw bytes and 391,576 bytes with Node best-level gzip, versus
+the preceding 422,538 raw / 163,865 gzip artifact. The +675,164 raw / +227,711 gzip capability cost is isolated from the
 root and shaper graphs. Preserved Twiggy evidence attributes 506,797 raw bytes to the subset entry and its retained writer,
 parser, and collection graph; `wasm-snip` remains an experiment, not a license to remove malformed-font error handling.
 

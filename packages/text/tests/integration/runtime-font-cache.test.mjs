@@ -13,14 +13,11 @@ test('runtime GLB cache keys include source, normalized ranges, and exact raster
 
   assert.equal(await cache.key(source, runtimeRequest()), key);
   assert.notEqual(await cache.key(new Uint8Array([1, 2, 4]), request), key);
-  assert.notEqual(
-    await cache.key(source, { ...request, unicodeRanges: [{ start: 0x20, end: 0x7f }] }),
-    key,
-  );
+  assert.notEqual(await cache.key(source, { ...request, unicodeRanges: [{ start: 0x20, end: 0x7f }] }), key);
   assert.notEqual(await cache.key(source, { ...request, rasters: [] }), key);
 });
 
-test('runtime GLB cache returns exact bytes, expires entries, and prunes oldest entries', async () => {
+test('runtime GLB cache returns exact bytes and honors the source response expiration', async () => {
   const storage = new MemoryCacheStorage();
   let now = 1_000;
   const cache = createCache(storage, 'https://assets.test', () => now);
@@ -29,30 +26,22 @@ test('runtime GLB cache returns exact bytes, expires entries, and prunes oldest 
     bytes: new Uint8Array([4, 5, 6]),
     sha256: sha256(new Uint8Array([4, 5, 6])),
   };
-  await cache.put('fixture', artifact);
+  await cache.put('fixture', artifact, 2_000);
   assert.deepEqual(await cache.match('fixture'), artifact);
 
-  now += 31 * 24 * 60 * 60 * 1_000;
+  now = 2_000;
   assert.equal(await cache.match('fixture'), undefined);
 
-  for (let index = 0; index < 25; index += 1) {
-    now += 1;
-    await cache.put(`entry-${index}`, {
-      id: `font-${index}`,
-      bytes: new Uint8Array([index]),
-      sha256: sha256(new Uint8Array([index])),
-    });
-  }
-  assert.equal(storage.cache.responses.size, 24);
-  assert.equal(await cache.match('entry-0'), undefined);
-  assert.ok(await cache.match('entry-24'));
+  await cache.put('already-expired', artifact, now);
+  assert.equal(await cache.match('already-expired'), undefined);
+  assert.equal(storage.cache.responses.size, 0);
 });
 
 test('runtime GLB cache failure remains a transparent miss', async () => {
   const cache = createCache(new ThrowingCacheStorage(), 'https://assets.test', () => 1_000);
   assert.equal(await cache.match('fixture'), undefined);
   await assert.doesNotReject(
-    cache.put('fixture', { id: 'font-fixture', bytes: new Uint8Array([1]), sha256: 'b'.repeat(64) }),
+    cache.put('fixture', { id: 'font-fixture', bytes: new Uint8Array([1]), sha256: 'b'.repeat(64) }, 2_000),
   );
 });
 

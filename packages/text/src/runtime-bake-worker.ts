@@ -38,7 +38,8 @@ scope.addEventListener('message', (event: MessageEvent<unknown>) => {
 async function handleMessage(value: RuntimeBakeRequestV0): Promise<void> {
   try {
     const source = new Uint8Array(value.source);
-    const cache = createRuntimeFontCache();
+    const cache =
+      value.cache === undefined || value.cache.expiresAt <= Date.now() ? undefined : createRuntimeFontCache();
     const cacheKey = await cache?.key(source, value);
     const cached = cacheKey === undefined ? undefined : await cache?.match(cacheKey);
     if (cached !== undefined) {
@@ -66,7 +67,7 @@ async function handleMessage(value: RuntimeBakeRequestV0): Promise<void> {
       throw new Error('runtime bake must produce exactly one embedded font artifact');
     }
     const artifact = result.composed.artifacts[0];
-    if (cacheKey !== undefined) await cache?.put(cacheKey, artifact);
+    if (cacheKey !== undefined) await cache?.put(cacheKey, artifact, value.cache!.expiresAt);
     scope.postMessage(bakeProgressMessage(value.id, 'font', 'transferring', 0, 1));
     scope.postMessage(bakeProgressMessage(value.id, 'font', 'complete', 1, 1));
     postSuccess(value.id, artifact, result.composed.report, result.composed.warnings);
@@ -81,12 +82,7 @@ async function handleMessage(value: RuntimeBakeRequestV0): Promise<void> {
   }
 }
 
-function postSuccess(
-  id: number,
-  artifact: CachedFontArtifact,
-  report: unknown,
-  warnings: readonly unknown[],
-): void {
+function postSuccess(id: number, artifact: CachedFontArtifact, report: unknown, warnings: readonly unknown[]): void {
   const artifacts: RuntimeBakeSuccessV0['artifacts'] = [
     {
       role: 'font',
@@ -103,7 +99,10 @@ function postSuccess(
     report,
     warnings,
   };
-  scope.postMessage(response, artifacts.map(({ bytes }) => bytes));
+  scope.postMessage(
+    response,
+    artifacts.map(({ bytes }) => bytes),
+  );
 }
 
 async function resolveRasters(rasters: readonly RuntimeBakeRasterV0[]): Promise<readonly ResolvedRasterBakePlan[]> {

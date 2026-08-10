@@ -51,6 +51,8 @@ export interface RuntimeFontBakeRequest {
   readonly source: Uint8Array;
   readonly sourceUrl: string;
   readonly bakedUrl?: string;
+  /** Persistent derived-artifact lifetime inherited from the source response. Omitted means memory-only. */
+  readonly cache?: { readonly expiresAt: number };
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRangeV0[];
   readonly rasters?: readonly RuntimeBakeRasterV0[];
   readonly signal?: AbortSignal;
@@ -483,11 +485,13 @@ export class FontLoader {
     }
     const runtimeBake = this.#runtimeBake ?? (await loadDefaultRuntimeBake(request.sourceUrl));
     signal.throwIfAborted();
-    const source = await this.#fetchRequired(request.sourceUrl, 'FONT_SOURCE_FETCH', signal);
+    const sourceResponse = await this.#fetchRequired(request.sourceUrl, 'FONT_SOURCE_FETCH', signal);
+    const { bytes: source } = sourceResponse;
     const baked = await runtimeBake({
       source,
       sourceUrl: request.sourceUrl,
       ...(request.bakedUrl === undefined ? {} : { bakedUrl: request.bakedUrl }),
+      ...(sourceResponse.expiresAt === undefined ? {} : { cache: { expiresAt: sourceResponse.expiresAt } }),
       signal,
     });
     signal.throwIfAborted();
@@ -555,7 +559,11 @@ export class FontLoader {
     }
   }
 
-  async #fetchRequired(url: string, code: string, signal: AbortSignal): Promise<Uint8Array> {
+  async #fetchRequired(
+    url: string,
+    code: string,
+    signal: AbortSignal,
+  ): Promise<{ readonly bytes: Uint8Array; readonly expiresAt?: number }> {
     let response: Response;
     try {
       response = await this.#fetch(url, { signal });
@@ -568,7 +576,15 @@ export class FontLoader {
         url,
       });
     }
-    return readResponseBytes(response, this.registry._artifactByteLimit(), 'FONT_SOURCE_RESOURCE_LIMIT', url, signal);
+    const bytes = await readResponseBytes(
+      response,
+      this.registry._artifactByteLimit(),
+      'FONT_SOURCE_RESOURCE_LIMIT',
+      url,
+      signal,
+    );
+    const expiresAt = persistentResponseExpiration(response);
+    return { bytes, ...(expiresAt === undefined ? {} : { expiresAt }) };
   }
 
   #warnMissing(url: string): void {
@@ -1225,6 +1241,27 @@ function normalizeUrl(value: string | URL, baseUrl: URL | undefined): string {
   }
   url.hash = '';
   return url.href;
+}
+
+function persistentResponseExpiration(response: Response, now = Date.now()): number | undefined {
+  const cacheControl = response.headers.get('cache-control')?.toLowerCase();
+  if (cacheControl !== undefined) {
+    const directives = cacheControl.split(',').map((directive) => directive.trim());
+    if (directives.includes('no-store') || directives.includes('no-cache')) return undefined;
+    const maxAge = directives
+      .map((directive) => /^max-age=(?:"(\d+)"|(\d+))$/.exec(directive))
+      .find((match) => match !== null);
+    if (maxAge !== undefined) {
+      const seconds = Number(maxAge[1] ?? maxAge[2]);
+      if (!Number.isSafeInteger(seconds) || seconds <= 0) return undefined;
+      const responseDate = Date.parse(response.headers.get('date') ?? '');
+      const base = Number.isFinite(responseDate) ? responseDate : now;
+      const expiresAt = base + seconds * 1_000;
+      return Number.isSafeInteger(expiresAt) && expiresAt > now ? expiresAt : undefined;
+    }
+  }
+  const expiresAt = Date.parse(response.headers.get('expires') ?? '');
+  return Number.isFinite(expiresAt) && expiresAt > now ? expiresAt : undefined;
 }
 
 function resolveBaseUrl(value: string | URL | undefined): URL | undefined {

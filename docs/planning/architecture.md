@@ -382,8 +382,9 @@ V0 requires:
 
 Runtime baking persists only the final validated canonical GLB in Worker-owned `CacheStorage`. The exact key includes the
 source hash, face, normalized Unicode ranges, ordered raster descriptors and keys, and format/baker/generator versions.
-The cache has an application-enforced 30-day TTL, 24-entry and 128 MiB total bounds, and a 64 MiB entry ceiling; storage
-failures are transparent misses. Preparation intermediates and partial raster results are never cached.
+Persistence and expiration inherit the source response's cache policy; responses without reusable freshness, including
+`no-store` and `no-cache`, remain memory-only. Browser quota eviction owns storage pressure and storage failures are
+transparent misses. Preparation intermediates and partial raster results are never cached.
 
 ## Failure and warning model
 

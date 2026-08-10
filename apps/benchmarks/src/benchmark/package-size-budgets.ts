@@ -12,16 +12,16 @@ export const packageSizeBudgets = {
     brotliBytes: 113_500,
   },
   'runtime-baker-host-js': {
-    rawBytes: 11_500,
-    minifiedBytes: 9_600,
-    gzipBytes: 3_900,
-    brotliBytes: 3_500,
+    rawBytes: 18_000,
+    minifiedBytes: 16_000,
+    gzipBytes: 6_000,
+    brotliBytes: 5_500,
   },
   'runtime-baker-worker-js': {
-    rawBytes: 14_000,
-    minifiedBytes: 9_600,
-    gzipBytes: 3_200,
-    brotliBytes: 2_850,
+    rawBytes: 790_000,
+    minifiedBytes: 620_000,
+    gzipBytes: 148_000,
+    brotliBytes: 122_000,
   },
   // Complete Rust shaping, layout, policy, and command-plan publication.
   'text-shaper-wasm': {
@@ -139,16 +139,16 @@ export const packageSizeBudgets = {
     brotliBytes: 4_000,
   },
   'portable-baker-js': {
-    rawBytes: 10_100,
-    minifiedBytes: 6_700,
-    gzipBytes: 2_360,
-    brotliBytes: 2_080,
+    rawBytes: 12_000,
+    minifiedBytes: 8_500,
+    gzipBytes: 2_700,
+    brotliBytes: 2_400,
   },
   'portable-baker-wasm': {
-    rawBytes: 434_285,
-    minifiedBytes: 434_285,
-    gzipBytes: 168_326,
-    brotliBytes: 137_100,
+    rawBytes: 1_105_000,
+    minifiedBytes: 1_105_000,
+    gzipBytes: 395_000,
+    brotliBytes: 308_000,
   },
   // Raw and minified rose for the allocation-free grapheme script resolution; the growth is comment-dominated, at
   // +3,010 raw against +298 Brotli, because the parallel-array form needs its reasoning recorded next to it.

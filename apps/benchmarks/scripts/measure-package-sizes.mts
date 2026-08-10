@@ -336,7 +336,9 @@ const coreJavaScript = await measureJavaScript(
       '/packages/text/dist/raster/slug-technique.js',
       '/packages/text/dist/bakers/msdf.js',
       '/packages/text/dist/node/',
-      '/packages/text/dist/font-baker/',
+      '/packages/text/dist/font-baker/index.js',
+      '/packages/text/dist/font-baker/validator.js',
+      '/packages/text/dist/font-baker/wasm-url.js',
     ],
   },
 );
@@ -402,19 +404,19 @@ const entries: SizeEntry[] = [
   iconsSlug,
   await measureJavaScript(
     'font-validator-js',
-    'Lazy font validator JS',
+    'Font validator JS',
     new URL('../size-entries/font-validator.ts', import.meta.url),
   ),
   await measureJavaScript(
     'runtime-baker-host-js',
-    'Runtime baker host JS',
+    'Runtime bake host JS',
     new URL('../size-entries/runtime-bake.ts', import.meta.url),
   ),
   await measureJavaScript(
     'runtime-baker-worker-js',
-    'Runtime baker Worker JS',
+    'Runtime bake Worker JS',
     new URL('../../../packages/text/dist/runtime-bake-worker.js', import.meta.url),
-    true,
+    false,
     true,
   ),
   await measureJavaScript(
@@ -443,12 +445,12 @@ const entries: SizeEntry[] = [
   ),
   await measureWasm(
     'bitmap-baker-wasm',
-    'Bitmap fixed baker Wasm',
+    'Bitmap baker Wasm',
     new URL('../../../packages/text/dist/bitmap_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'bitmap-baker-js',
-    'Bitmap fixed baker host JS',
+    'Bitmap baker JS',
     new URL('../size-entries/bitmap-baker.ts', import.meta.url),
     false,
     true,
@@ -464,12 +466,12 @@ const entries: SizeEntry[] = [
   await measureAdmittedMsdfGenerator(),
   await measureWasm(
     'mtsdf-baker-wasm',
-    'MSDF fixed baker Wasm',
+    'MTSDF baker Wasm',
     new URL('../../../packages/text/dist/mtsdf_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'mtsdf-baker-js',
-    'MSDF fixed baker host JS',
+    'MTSDF baker JS',
     new URL('../size-entries/mtsdf-baker.ts', import.meta.url),
     false,
     true,
@@ -479,12 +481,12 @@ const entries: SizeEntry[] = [
   ),
   await measureWasm(
     'slug-baker-wasm',
-    'Slug fixed baker Wasm',
+    'Slug baker Wasm',
     new URL('../../../packages/text/dist/slug_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'slug-baker-js',
-    'Slug fixed baker host JS',
+    'Slug baker JS',
     new URL('../size-entries/slug-baker.ts', import.meta.url),
     false,
     true,
@@ -494,12 +496,13 @@ const entries: SizeEntry[] = [
   ),
   await measureJavaScript(
     'portable-baker-js',
-    'Portable baker JS',
+    'Font baker JS',
     new URL('../size-entries/font-baker.ts', import.meta.url),
+    false,
   ),
   await measureWasm(
     'portable-baker-wasm',
-    'Portable baker Wasm',
+    'Font baker Wasm',
     new URL('../../../packages/text/dist/font_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(

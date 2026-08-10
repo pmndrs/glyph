@@ -20,6 +20,7 @@ export interface RuntimeBakeRequestV0 {
   readonly id: number;
   readonly source: ArrayBuffer;
   readonly font: FontBakeDescriptorV0;
+  readonly cache?: { readonly expiresAt: number };
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRangeV0[];
   readonly rasters?: readonly RuntimeBakeRasterV0[];
 }
@@ -82,6 +83,10 @@ export function isRuntimeBakeRequestV0(value: unknown): value is RuntimeBakeRequ
     typeof value.font.fontFaceIndex === 'number' &&
     Number.isSafeInteger(value.font.fontFaceIndex) &&
     value.font.fontFaceIndex >= 0 &&
+    (value.cache === undefined ||
+      (isNonArrayObject(value.cache) &&
+        Number.isSafeInteger(value.cache.expiresAt) &&
+        (value.cache.expiresAt as number) > 0)) &&
     (value.unicodeRanges === undefined || isUnicodeRanges(value.unicodeRanges)) &&
     (value.rasters === undefined || isRasters(value.rasters))
   );
@@ -131,8 +136,7 @@ function isJsonValue(value: unknown, seen = new Set<object>(), depth = 0): value
   seen.add(value);
   const valid = Array.isArray(value)
     ? value.length <= 4_096 && value.every((child) => isJsonValue(child, seen, depth + 1))
-    : Object.keys(value).length <= 256 &&
-      Object.values(value).every((child) => isJsonValue(child, seen, depth + 1));
+    : Object.keys(value).length <= 256 && Object.values(value).every((child) => isJsonValue(child, seen, depth + 1));
   seen.delete(value);
   return valid;
 }

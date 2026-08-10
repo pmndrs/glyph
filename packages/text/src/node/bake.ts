@@ -31,12 +31,11 @@ export { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
 export * from '../font-baker/validator.js';
 
 import type { AnyRasterBakerModule, BakeArtifactV0, BakeWarning, FontPayloadReport, RasterBakePlan } from '../bake.js';
-import {
-  discoverProjectFonts,
-  type DiscoveryDiagnostic,
-  type DiscoveredFontDefinition,
-  type DiscoveryOptions,
-  type ResolvedRasterBaker,
+import type {
+  DiscoveryDiagnostic,
+  DiscoveredFontDefinition,
+  DiscoveryOptions,
+  ResolvedRasterBaker,
 } from '../discovery.js';
 import { fontBakeDescriptorV0 } from '../internal/core-bake-policy.js';
 import { bakeFontPipeline } from '../internal/font-bake-pipeline.js';
@@ -220,6 +219,7 @@ async function bakeFontWithResolvedPlans(
 
 export async function bakeProject(options: ProjectBakeOptions = {}): Promise<ProjectBakeReport> {
   options.signal?.throwIfAborted();
+  const { discoverProjectFonts } = await import('../discovery.js');
   const discovery = await discoverProjectFonts(options);
   const projectRoot = await canonicalProjectRoot(options.projectRoot);
   const outputRoot =
