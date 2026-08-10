@@ -610,6 +610,11 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   scene.add(group);
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
+  const initialDraw = group.children.find((child) => child.isMesh);
+  assert.ok(initialDraw);
+  const initialStart = initialDraw.userData.pmndrsTextRunStart;
+  const initialOrigins = initialDraw.geometry.getAttribute('_pmndrsText_1').array;
+  const initialAdvance = initialOrigins[(initialStart + 1) * 2] - initialOrigins[initialStart * 2];
 
   label.style = { ...label.style, fontSize: 16 };
   scene.updateMatrixWorld();
@@ -619,6 +624,12 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   const start = draw.userData.pmndrsTextRunStart;
   const transforms = draw.geometry.getAttribute('_pmndrsText_15').array;
   assert.deepEqual(Array.from(transforms.subarray(start, start + draw.geometry.instanceCount)), [1, 1]);
+  const scaledOrigins = draw.geometry.getAttribute('_pmndrsText_1').array;
+  const scaledAdvance = scaledOrigins[(start + 1) * 2] - scaledOrigins[start * 2];
+  assert.ok(
+    Math.abs(scaledAdvance - initialAdvance * 2) < 1e-5,
+    'a metric-only font-size mutation must rebuild advances without reshaping',
+  );
 
   label.contentBox = { ...label.contentBox, width: { mode: 'exact', size: 40 } };
   scene.updateMatrixWorld();
