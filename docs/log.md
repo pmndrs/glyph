@@ -2,15 +2,24 @@
 
 ## 2026-08-10
 
+- **Restored executable contract generation and compiled-ABI fuzzing** — Bidi/policy/UIKit and full CJK paragraph
+  contracts now regenerate through the public Rust-plan `Text` query path and run in `--check` mode from ordinary
+  benchmark gates. The checked fixtures stay byte-identical: a pre-f32-ABI numeric literal survives only when the current
+  value is exactly f32-equivalent, and the known UIKit rounding seam is recomputed independently. A new fixed-seed Wasm
+  smoke corpus mutates 64 policy and frame requests twice, requires identical bounded statuses with both valid and invalid
+  paths, and proves a fresh valid transaction succeeds after every mutation. This replaces the deleted legacy-export
+  fuzzing at the actual `text_update` and policy-registration boundaries; the package now passes 165 integration and
+  three fuzz-smoke tests in addition to 158 Rust tests.
+
 - **Closed the final adversarial Three lifecycle findings** — Consecutive render plans now accumulate and coalesce
   attribute upload ranges until Three consumes them, preserving presentation restoration and retry writes across
   multiple updates before one render. Disposed descendants leave the active batch without requiring synchronous host
   detachment; complete batch validation stays inside the group error boundary; committed paragraph removals recycle
   transform identities instead of growing the indexed table forever; and an unexpected semantic-query plan remains
   recoverable through the owned-publication retry path. Focused regressions cover pending-range unions, attached disposal,
-  survivor rendering, and twelve create/remove cycles at constant transform capacity. All 158 Rust and 165 Node package
-  tests pass. The direct benchmark's default changes from 5/11 to 8/31 warmup/measured samples so p95 is no longer the
-  maximum observation by construction.
+  survivor rendering, and twelve create/remove cycles at constant transform capacity. All 158 Rust and 165 Node
+  integration tests pass. The direct benchmark's default changes from 5/11 to 8/31 warmup/measured samples so p95 is no
+  longer the maximum observation by construction.
 
 - **Passed the complete foundation gate and refreshed release evidence** — The root check passes 158 Rust library tests,
   165 Node integration tests, unchanged Unicode 17 vectors, 111 benchmark-app tests, all 16 isolated Chromium targets,

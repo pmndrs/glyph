@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:e78a16856ea65f8749d9573503ed17a209291c7c9811f033f8d47c0306e9f05f'
+source_digest: 'sha256:6c314281ce6d33391e3d7f09114ec688d60138ec21445ef60f41b9d9460bd21a'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -347,6 +347,12 @@ advances the observed engine revision and retains unexpected render work for the
 than leaving the Wasm session permanently revision-conflicted. The focused public integration exercises all four
 lifecycles, and the complete package gate passes 158 Rust and 165 Node tests. The canonical direct benchmark now defaults
 to eight warmups and 31 measured samples so its reported p95 is not the maximum of an 11-sample run.
+
+The Wasm boundary also retains fixed-seed mutation coverage for the two replacement parsers. Sixty-four policy and frame
+mutations run twice with identical status sequences, include accepted and rejected paths, and prove that every malformed
+input leaves a fresh valid transaction usable. This supplements the Rust parser unit cases at the compiled ABI rather
+than restoring any deleted `shapeBatch`, `reshapeRanges`, or TypeScript paragraph state machine. The package gate now
+contains 165 Node integration tests plus three deterministic fuzz-smoke tests.
 
 ## Merge gates still open
 
