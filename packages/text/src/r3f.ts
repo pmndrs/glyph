@@ -1,9 +1,9 @@
-import { useThree, type ThreeElements } from '@react-three/fiber/webgpu';
+import { extend, useThree, type ThreeElements } from '@react-three/fiber/webgpu';
 import {
   createElement,
+  forwardRef,
   isValidElement,
   use,
-  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -15,7 +15,7 @@ import {
 } from 'react';
 
 import type { GlyphPaintInput } from './formatted-text.js';
-import type { FontSelection, LoadedFont } from './loaded-font.js';
+import type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
 import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 import type { LoadedFontRequest, LoadedFontTechniques, LoadedFonts, LoadedFontsRequest } from './text-runtime.js';
@@ -39,8 +39,19 @@ export type R3fTextChild<Technique extends AnyRasterTechnique> =
   | ReactElement<R3fTextProps<Technique>>
   | readonly R3fTextChild<Technique>[];
 
+type R3fFontSelection<Technique extends AnyRasterTechnique> =
+  | FontSelection<Technique>
+  | (Technique extends AnyRasterTechnique ? FontSelection<Technique> : never);
+
+type FontSelectionTechnique<Selection> =
+  Selection extends LoadedFont<infer Technique>
+    ? Technique
+    : Selection extends FontStack<infer Technique>
+      ? Technique
+      : never;
+
 export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps & {
-  readonly font?: FontSelection<Technique>;
+  readonly font?: R3fFontSelection<Technique>;
   readonly children?: R3fTextChild<Technique>;
   readonly contentBox?: ParagraphContentBox;
   readonly style?: ParagraphStyle;
@@ -72,6 +83,11 @@ interface InlineProperties<Technique extends AnyRasterTechnique> {
   readonly material?: ThreeTextMaterial;
 }
 
+type DesiredR3fTextProperties<Technique extends AnyRasterTechnique> = Partial<StandaloneTextProperties<Technique>> & {
+  readonly font: FontSelection<Technique>;
+  readonly text: string;
+};
+
 interface UseFont {
   <Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): LoadedFont<Technique>;
   <const Techniques extends LoadedFontTechniques>(request: LoadedFontsRequest<Techniques>): LoadedFonts<Techniques>;
@@ -88,41 +104,66 @@ type AnyLoadedFontResult = LoadedFont<AnyRasterTechnique> | readonly LoadedFont<
 const fontPromises = new Map<string, Promise<AnyLoadedFontResult>>();
 const techniqueIds = new WeakMap<object, number>();
 let nextTechniqueId = 1;
+const ThreeTextElement = extend(ThreeText);
+const ThreeTextGroupElement = extend(ThreeTextGroup);
 
-export function Text<Technique extends AnyRasterTechnique>(input: R3fTextProps<Technique>): ReactElement | null {
-  const { ref: forwardedRef, ...properties } = input;
+interface TextComponent {
+  <const Selection, Technique extends AnyRasterTechnique = FontSelectionTechnique<Selection>>(
+    input: Omit<R3fTextProps<Technique>, 'font'> & {
+      readonly font: Selection & ([FontSelectionTechnique<Selection>] extends [never] ? never : unknown);
+    },
+  ): ReactElement | null;
+  <Technique extends AnyRasterTechnique>(input: R3fTextProps<Technique>): ReactElement | null;
+}
+
+export const Text = forwardRef(function Text<Technique extends AnyRasterTechnique>(
+  properties: Omit<R3fTextProps<Technique>, 'ref'>,
+  forwardedRef: Ref<ThreeText<Technique>>,
+): ReactElement | null {
   const flattened = useMemo(() => flattenText<Technique>(properties.children), [properties.children]);
   const desired = textProperties(properties, flattened);
-  const appliedRef = useRef<typeof desired | undefined>(undefined);
-  const capacityRef = useRef(properties.capacity);
-  const [store] = useState(() => createObjectStore<ThreeText<Technique>>());
+  const [object, publishObject] = useState<ThreeText<Technique> | null>(null);
+  useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
+  if (desired.font === undefined) throw new TypeError('an outer R3F Text requires a font');
+  return createElement(TextObject, {
+    key: properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped',
+    desired: desired as DesiredR3fTextProperties<AnyRasterTechnique>,
+    object: objectProperties(properties),
+    onError: properties.onError,
+    publishObject: publishObject as (value: ThreeText<AnyRasterTechnique> | null) => void,
+  });
+}) as TextComponent;
+
+function TextObject({
+  desired,
+  object: objectProps,
+  onError,
+  publishObject: publishCommittedObject,
+}: {
+  readonly desired: DesiredR3fTextProperties<AnyRasterTechnique>;
+  readonly object: Object3DProps;
+  readonly onError: ((error: unknown) => void) | undefined;
+  readonly publishObject: (value: ThreeText<AnyRasterTechnique> | null) => void;
+}): ReactElement {
+  const [constructorArguments] = useState(() => [desired as StandaloneTextProperties<AnyRasterTechnique>] as const);
+  const appliedRef = useRef(desired);
+  const capacityRef = useRef(desired.capacity);
+  const [store] = useState(() => createObjectStore<ThreeText<AnyRasterTechnique>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
-  const onErrorRef = useRef(properties.onError);
-  const createObject = useEffectEvent(() => {
-    if (desired.font === undefined) throw new TypeError('an outer R3F Text requires a font');
-    const created = new ThreeText(desired as StandaloneTextProperties<Technique>);
-    created.onError = (error: unknown) => onErrorRef.current?.(error);
-    appliedRef.current = desired;
-    return created;
-  });
+  const publishObject = useMemo(
+    () => (value: ThreeText<AnyRasterTechnique> | null) => {
+      store.publish(value ?? undefined);
+      publishCommittedObject(value);
+    },
+    [publishCommittedObject, store],
+  );
 
   useLayoutEffect(() => {
-    const created = createObject();
-    store.publish(created);
-    return () => {
-      store.publish(undefined);
-      created.dispose();
-    };
-  }, [properties.pixelSnapping, store]);
-
-  useLayoutEffect(() => assignRef(forwardedRef, object), [forwardedRef, object]);
-
-  useLayoutEffect(() => {
-    if (object === undefined || desired.font === undefined) return;
+    if (object === undefined) return;
     const { capacity, pixelSnapping: _pixelSnapping, ...update } = desired;
     if (!sameDesiredText(appliedRef.current, desired)) {
-      object.set(update as StandaloneTextProperties<Technique>);
+      object.set(update);
       appliedRef.current = desired;
     }
     if (capacity !== undefined && !sameCapacity(capacity, capacityRef.current)) object.setCapacity(capacity);
@@ -130,66 +171,76 @@ export function Text<Technique extends AnyRasterTechnique>(input: R3fTextProps<T
     invalidate();
   }, [desired, invalidate, object]);
 
-  useLayoutEffect(() => {
-    onErrorRef.current = properties.onError;
-  }, [properties.onError]);
-
-  if (object === undefined) return null;
-  return createElement('primitive', {
-    ...objectProperties(properties),
-    object,
+  return createElement(ThreeTextElement, {
+    ...objectProps,
+    args: constructorArguments as unknown as readonly [StandaloneTextProperties<AnyRasterTechnique>],
+    onError,
+    ref: publishObject,
   });
 }
 
-export function TextGroup(input: R3fTextGroupProps): ReactElement | null {
-  const { ref: forwardedRef, ...properties } = input;
+export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forwardRef(function TextGroup(
+  properties: Omit<R3fTextGroupProps, 'ref'>,
+  forwardedRef: Ref<ThreeTextGroup>,
+): ReactElement | null {
+  const [object, publishObject] = useState<ThreeTextGroup | null>(null);
+  useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
+  return createElement(TextGroupObject, {
+    key: `${properties.compositing ?? 'ordered'}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
+    object: groupObjectProperties(properties),
+    options: properties,
+    publishObject,
+  });
+}) as (input: R3fTextGroupProps) => ReactElement | null;
+
+function TextGroupObject({
+  object: objectProps,
+  options,
+  publishObject: publishCommittedObject,
+}: {
+  readonly object: Object3DProps;
+  readonly options: Omit<R3fTextGroupProps, 'ref'>;
+  readonly publishObject: (value: ThreeTextGroup | null) => void;
+}): ReactElement {
+  const [constructorArguments] = useState(
+    () =>
+      [
+        {
+          ...(options.capacity === undefined ? {} : { capacity: options.capacity }),
+          ...(options.compositing === undefined ? {} : { compositing: options.compositing }),
+          ...(options.renderOrder === undefined ? {} : { renderOrder: options.renderOrder }),
+          ...(options.material === undefined ? {} : { material: options.material }),
+          ...(options.pixelSnapping === undefined ? {} : { pixelSnapping: options.pixelSnapping }),
+        },
+      ] as const,
+  );
   const [store] = useState(() => createObjectStore<ThreeTextGroup>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
-  const onErrorRef = useRef(properties.onError);
-  const createObject = useEffectEvent(() => {
-    const created = new ThreeTextGroup({
-      ...(properties.capacity === undefined ? {} : { capacity: properties.capacity }),
-      ...(properties.compositing === undefined ? {} : { compositing: properties.compositing }),
-      ...(properties.renderOrder === undefined ? {} : { renderOrder: properties.renderOrder }),
-      ...(properties.material === undefined ? {} : { material: properties.material }),
-      ...(properties.pixelSnapping === undefined ? {} : { pixelSnapping: properties.pixelSnapping }),
-    });
-    created.onError = (error: unknown) => onErrorRef.current?.(error);
-    return created;
-  });
-
-  useLayoutEffect(() => {
-    const created = createObject();
-    store.publish(created);
-    return () => {
-      store.publish(undefined);
-      created.dispose();
-    };
-  }, [properties.pixelSnapping, store]);
-
-  useLayoutEffect(() => assignRef(forwardedRef, object), [forwardedRef, object]);
+  const publishObject = useMemo(
+    () => (value: ThreeTextGroup | null) => {
+      store.publish(value ?? undefined);
+      publishCommittedObject(value);
+    },
+    [publishCommittedObject, store],
+  );
 
   useLayoutEffect(() => {
     if (object === undefined) return;
-    if (properties.capacity !== undefined && !sameCapacity(properties.capacity, object))
-      object.setCapacity(properties.capacity);
-    object.setMaterial(properties.material);
+    if (options.capacity !== undefined && !sameCapacity(options.capacity, object)) object.setCapacity(options.capacity);
+    object.setMaterial(options.material);
     invalidate();
-  }, [invalidate, object, properties.capacity, properties.material]);
+  }, [invalidate, object, options.capacity, options.material]);
 
-  useLayoutEffect(() => {
-    onErrorRef.current = properties.onError;
-  }, [properties.onError]);
-
-  if (object === undefined) return null;
   return createElement(
-    'primitive',
+    ThreeTextGroupElement,
     {
-      ...groupObjectProperties(properties),
-      object,
+      ...objectProps,
+      args: constructorArguments as unknown as readonly [TextGroupOptions],
+      onError: options.onError,
+      ref: publishObject,
     },
-    properties.children,
+    options.children,
   );
 }
 

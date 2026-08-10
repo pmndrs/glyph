@@ -76,6 +76,9 @@ export function createReactTextTarget(): BenchmarkTarget {
       if (state.kind !== 'ready') return;
       const resources = state.resources;
       state = { kind: 'empty' };
+      // R3F schedules host disposal at idle priority. Release the paragraph lease explicitly before the target-owned
+      // font so teardown remains deterministic; the later host disposal is intentionally idempotent.
+      resources.reference.current?.dispose();
       flushSync(() => resources.root.unmount());
       resources.font.dispose();
       useFont.clear(fontRequest);
@@ -194,9 +197,8 @@ async function renderCommittedText(
   accent = '#ff8a00',
 ): Promise<{ readonly core: BitmapTextObject; readonly store: RootStore }> {
   const committed = deferred<void>();
-  // Target v1 constructs its Three object in a layout effect and publishes it on the following render, so a parent
-  // effect would still observe an empty ref. The ref callback is the first point where the object exists, and it is
-  // composed here rather than inside the component so the component never writes through a prop.
+  // The host ref is the causal signal that R3F committed the Three object. Compose it here rather than making the
+  // component write through a ref prop while React may still replay the surrounding StrictMode commit.
   const publish = (object: BitmapTextObject | null): void => {
     reference.current = object;
     if (object !== null) committed.resolve();
@@ -205,8 +207,7 @@ async function renderCommittedText(
   flushSync(() => {
     store = root.render(renderText(publish, failures, width, accent));
   });
-  // The commit only signals that an object reached the ref; StrictMode may remount before the flush settles, so the
-  // retained object is always read back from the ref rather than captured at the first commit.
+  // StrictMode may remount after the first host ref callback, so always read the retained object back from the ref.
   await committed.promise;
   const core = requiredCoreText(reference);
   if (store === undefined) throw new Error('R3F did not publish its root store');

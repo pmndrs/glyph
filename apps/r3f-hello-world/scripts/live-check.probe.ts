@@ -1,17 +1,19 @@
 export {};
 
+const { _roots } = await import('@react-three/fiber/webgpu');
+
 const canvas = await waitForCanvas();
-for (const [technique, clientX] of [
-  ['msdf', 224],
-  ['bitmap', 96],
-  ['slug', 352],
+for (const [technique, centerOffset] of [
+  ['msdf', 0],
+  ['bitmap', -128],
+  ['slug', 128],
 ] as const) {
-  if (canvas.dataset.exampleTechnique !== technique) clickCanvas(canvas, clientX, 200);
-  await waitForTechnique(canvas, technique);
-  if (canvas.dataset.exampleDraws !== '2' || canvas.dataset.exampleRecords !== '11') {
+  clickCanvas(canvas, canvas.getBoundingClientRect().width / 2 + centerOffset, 48);
+  const counts = await waitForTechnique(canvas, technique);
+  if (counts.draws !== 2 || counts.records !== 11) {
     throw new Error(
-      `${technique} rendered ${String(canvas.dataset.exampleRecords)} records in ` +
-        `${String(canvas.dataset.exampleDraws)} draws; expected 11 records in two Rust-planned draws`,
+      `${technique} rendered ${String(counts.records)} records in ` +
+        `${String(counts.draws)} draws; expected 11 records in two Rust-planned draws`,
     );
   }
 }
@@ -27,9 +29,27 @@ async function waitForCanvas(): Promise<HTMLCanvasElement> {
   throw new Error('R3F hello-world did not create a canvas');
 }
 
-async function waitForTechnique(targetCanvas: HTMLCanvasElement, technique: string): Promise<void> {
+async function waitForTechnique(
+  targetCanvas: HTMLCanvasElement,
+  technique: string,
+): Promise<{ readonly draws: number; readonly records: number }> {
   for (let frame = 0; frame < 600; frame += 1) {
-    if (targetCanvas.dataset.exampleTechnique === technique && targetCanvas.dataset.exampleReady === 'true') return;
+    const root = _roots.get(targetCanvas);
+    const scene = root?.store.getState().scene;
+    const worldLayer = scene?.getObjectByName('world-text');
+    let draws = 0;
+    let records = 0;
+    worldLayer?.traverse((object) => {
+      if (object.userData.pmndrsTextRunStart === undefined || !('geometry' in object)) return;
+      const geometry = object.geometry;
+      if (typeof geometry !== 'object' || geometry === null || !('instanceCount' in geometry)) return;
+      const instanceCount = geometry.instanceCount;
+      if (typeof instanceCount !== 'number') return;
+      draws += 1;
+      records += instanceCount;
+    });
+    const selected = worldLayer?.getObjectByName(`world-${technique}`);
+    if (selected?.visible === true && draws === 6 && records === 33) return { draws: draws / 3, records: records / 3 };
     await nextFrame();
   }
   throw new Error(`R3F hello-world did not settle the ${technique} technique`);
