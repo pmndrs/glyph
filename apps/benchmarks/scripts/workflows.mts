@@ -23,7 +23,6 @@ const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const roots = [
   'apps/benchmarks/scripts',
   'apps/benchmarks/vitexec',
-  'packages/text/scripts/font-baker',
   'packages/text/scripts',
 ];
 const workflowPattern = /\/\* @workflow\s+(\{[\s\S]*?\})\s+\*\//g;
