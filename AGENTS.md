@@ -8,6 +8,11 @@ Use the repository-local `tsl` skill before implementing or reviewing Three.js S
 
 Use the repository-local `claude-review` skill when invoking Claude Code for an adversarial or external-model review. Keep reviews read-only, stream visible progress, and retain the complete trace in the ignored repository cache instead of launching an opaque buffered subprocess.
 
+Use the repository-local `gh-stack` skill for every dependent branch or pull-request workflow. Create, adopt, navigate,
+rebase, push, submit, sync, link, and merge stacks through non-interactive `gh stack` commands; ordinary `git push`,
+`gh pr create`, and `gh pr merge` are not substitutes for GitHub Stack state. Always use `gh stack submit --auto` and
+`gh stack view --json`, and provide every branch or checkout argument explicitly as required by the skill.
+
 Consult the repository-local `evidence-first` skill as the default style guidance for human-facing engineering communication, including chat updates and final answers, reports, reviews, handoffs, PR and issue prose, READMEs, and technical documentation. It offers situational cues rather than a fixed template. Domain skills still determine the work and valid evidence, `open-knowledge-format` governs bundle structure and provenance, and `diataxis-docs` governs the purpose and top-level structure of reader-facing documentation.
 
 Use these canonical sources instead of creating shadow plans or duplicate status prose:
