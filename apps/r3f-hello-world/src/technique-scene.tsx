@@ -1,11 +1,12 @@
 import { createFontStack, type FontSelection, type LoadedFont } from '@pmndrs/text';
-import { Text, useFont } from '@pmndrs/text/r3f';
+import { Text, TextGroup, useFont } from '@pmndrs/text/r3f';
+import type { TextGroup as ThreeTextGroup } from '@pmndrs/text/three';
 import { bitmap } from '@pmndrs/text/three/bitmap';
 import { msdf } from '@pmndrs/text/three/msdf';
 import { slug } from '@pmndrs/text/three/slug';
 import { useThree, type ThreeEvent } from '@react-three/fiber/webgpu';
 import { useEffect, useMemo, useRef } from 'react';
-import type { Group, InstancedBufferGeometry, Mesh } from 'three/webgpu';
+import type { InstancedBufferGeometry, Mesh } from 'three/webgpu';
 
 import iconFontUrl from '../assets/font-awesome-world.font.glb?url';
 import latinFontUrl from '../assets/inter-latin.font.glb?url';
@@ -15,6 +16,12 @@ export type Technique = 'bitmap' | 'msdf' | 'slug';
 interface TechniqueSceneProps {
   readonly onTechniqueChange: (technique: Technique) => void;
   readonly technique: Technique;
+}
+
+interface CopyFonts {
+  readonly bitmap: FontSelection<typeof bitmap>;
+  readonly msdf: FontSelection<typeof msdf>;
+  readonly slug: FontSelection<typeof slug>;
 }
 
 const WORLD_ICON = '\uf0ac';
@@ -35,20 +42,24 @@ export function TechniqueScene({ onTechniqueChange, technique }: TechniqueSceneP
   const viewport = useThree((state) => state.viewport);
   const [bitmapLatin, msdfLatin, slugLatin] = useFont(latinRequest);
   const [bitmapIcons, msdfIcons, slugIcons] = useFont(iconRequest);
-  const bitmapFont = useMemo(() => createFontStack(bitmapLatin, bitmapIcons), [bitmapIcons, bitmapLatin]);
-  const msdfFont = useMemo(() => createFontStack(msdfLatin, msdfIcons), [msdfIcons, msdfLatin]);
-  const slugFont = useMemo(() => createFontStack(slugLatin, slugIcons), [slugIcons, slugLatin]);
-  const root = useRef<Group>(null);
+  const copyFonts = useMemo<CopyFonts>(
+    () => ({
+      bitmap: createFontStack(bitmapLatin, bitmapIcons),
+      msdf: createFontStack(msdfLatin, msdfIcons),
+      slug: createFontStack(slugLatin, slugIcons),
+    }),
+    [bitmapIcons, bitmapLatin, msdfIcons, msdfLatin, slugIcons, slugLatin],
+  );
+  const worldLayer = useRef<ThreeTextGroup>(null);
 
   useEffect(() => {
     const canvas = document.querySelector('canvas');
     if (!(canvas instanceof HTMLCanvasElement)) throw new Error('R3F hello-world canvas is missing');
     canvas.dataset.exampleReady = 'false';
     const frame = requestAnimationFrame(() => {
-      const copy = root.current?.getObjectByName('r3f-example-copy');
       let draws = 0;
       let records = 0;
-      copy?.traverse((object) => {
+      worldLayer.current?.traverse((object) => {
         const mesh = object as Mesh<InstancedBufferGeometry>;
         if (mesh.isMesh !== true || mesh.userData.pmndrsTextRunStart === undefined) return;
         draws += 1;
@@ -63,52 +74,43 @@ export function TechniqueScene({ onTechniqueChange, technique }: TechniqueSceneP
   }, [technique]);
 
   return (
-    <group ref={root} position={[-viewport.width / 2, viewport.height / 2, 0]}>
-      <TechniqueCopy bitmapFont={bitmapFont} msdfFont={msdfFont} slugFont={slugFont} technique={technique} />
-      <TechniqueButtons font={msdfLatin} onTechniqueChange={onTechniqueChange} selected={technique} />
-    </group>
+    <>
+      <TextGroup ref={worldLayer} compositing="independent" position={[-viewport.width / 2, viewport.height / 2, 0]}>
+        <Copy fonts={copyFonts} technique={technique} />
+      </TextGroup>
+      <TextGroup compositing="independent" position={[-viewport.width / 2, viewport.height / 2, 0]}>
+        <TechniqueButtons font={msdfLatin} onTechniqueChange={onTechniqueChange} selected={technique} />
+      </TextGroup>
+    </>
   );
 }
 
-function TechniqueCopy({
-  bitmapFont,
-  msdfFont,
-  slugFont,
-  technique,
-}: {
-  readonly bitmapFont: FontSelection<typeof bitmap>;
-  readonly msdfFont: FontSelection<typeof msdf>;
-  readonly slugFont: FontSelection<typeof slug>;
-  readonly technique: Technique;
-}) {
+function Copy({ fonts, technique }: { readonly fonts: CopyFonts; readonly technique: Technique }) {
+  const properties = {
+    paint: { color: '#f4f7ff' },
+    position: [48, -92, 0],
+    style: { fontSize: 64, lineHeight: 1 },
+  } as const;
   switch (technique) {
     case 'bitmap':
-      return <Copy TextComponent={BitmapText} font={bitmapFont} />;
+      return (
+        <BitmapText {...properties} font={fonts.bitmap}>
+          Hello world {WORLD_ICON}
+        </BitmapText>
+      );
     case 'msdf':
-      return <Copy TextComponent={MsdfText} font={msdfFont} />;
+      return (
+        <MsdfText {...properties} font={fonts.msdf}>
+          Hello world {WORLD_ICON}
+        </MsdfText>
+      );
     case 'slug':
-      return <Copy TextComponent={SlugText} font={slugFont} />;
+      return (
+        <SlugText {...properties} font={fonts.slug}>
+          Hello world {WORLD_ICON}
+        </SlugText>
+      );
   }
-}
-
-function Copy<TechniqueType extends typeof bitmap | typeof msdf | typeof slug>({
-  TextComponent,
-  font,
-}: {
-  readonly TextComponent: typeof Text<TechniqueType>;
-  readonly font: FontSelection<TechniqueType>;
-}) {
-  return (
-    <TextComponent
-      font={font}
-      name="r3f-example-copy"
-      paint={{ color: '#f4f7ff' }}
-      position={[48, -92, 0]}
-      style={{ fontSize: 64, lineHeight: 1 }}
-    >
-      Hello world {WORLD_ICON}
-    </TextComponent>
-  );
 }
 
 function TechniqueButtons({
