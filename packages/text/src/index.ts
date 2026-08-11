@@ -65,6 +65,7 @@ export type {
   ParagraphContentProperties,
   ParagraphProperties,
   ParagraphStyle,
+  TextDecorationStyle,
 } from './text-properties.js';
 
 export type {

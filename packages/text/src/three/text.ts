@@ -24,6 +24,7 @@ import {
   type TextEngineFrameLimits,
   type TextEngineRegion,
   type TextEngineStyleMutation,
+  type TextEngineDecoration,
   type TextEngineStyleValue,
   type TextEngineTextMutation,
 } from '../internal/engine-frame-wire.js';
@@ -1059,6 +1060,22 @@ function engineStyleValue(
           })),
         }),
     ...(paint === undefined ? {} : { foregroundRgba: packedForeground(paint) }),
+    ...(style.decoration === undefined ? {} : { decoration: engineDecoration(style.decoration, paint) }),
+  };
+}
+
+function engineDecoration(
+  decoration: NonNullable<ParagraphStyle['decoration']>,
+  paint: GlyphPaintInput | undefined,
+): TextEngineDecoration {
+  return {
+    style: decoration.style ?? 'solid',
+    rgba: packedForeground(decoration.color === undefined ? (paint ?? {}) : { color: decoration.color }),
+    ...(decoration.underline === undefined ? {} : { underline: decoration.underline }),
+    ...(decoration.overline === undefined ? {} : { overline: decoration.overline }),
+    ...(decoration.lineThrough === undefined ? {} : { lineThrough: decoration.lineThrough }),
+    thickness: decoration.thickness ?? 0,
+    offset: decoration.offset ?? 0,
   };
 }
 

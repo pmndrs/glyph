@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use super::{
     plan_input::PlanGlyph,
-    render_plan::{DrawRecord, PrimitiveRecord},
+    render_plan::{DrawRecord, PRIMITIVE_DECORATION, PrimitiveRecord},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,7 +98,7 @@ pub fn push_glyph_draw(
         buffer_start: emission.buffer_start,
         buffer_count: emission.buffer_count,
         resource_start,
-        resource_count: 1,
+        resource_count: u32::from(emission.primitive_kind != PRIMITIVE_DECORATION),
         order_token: logical_order,
         indirect_buffer_id: if emission.indirect {
             emission.buffer_id

@@ -30,6 +30,22 @@ export interface ParagraphStyle {
   readonly language?: string;
   readonly direction?: 'auto' | 'ltr' | 'rtl';
   readonly features?: readonly FontFeature[];
+  readonly decoration?: TextDecorationStyle;
+}
+
+/**
+ * Text decoration lines for a styled range. Geometry comes from the font's baked
+ * underline and strikeout metrics; `thickness` and `offset` override in layout units
+ * when nonzero. Non-solid line styles render as solid until patterned paint lands.
+ */
+export interface TextDecorationStyle {
+  readonly underline?: boolean;
+  readonly overline?: boolean;
+  readonly lineThrough?: boolean;
+  readonly color?: GlyphPaintInput['color'];
+  readonly style?: 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy';
+  readonly thickness?: number;
+  readonly offset?: number;
 }
 
 export interface ParagraphBaseProperties<Technique extends AnyRasterTechnique> {

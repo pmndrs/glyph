@@ -480,9 +480,10 @@ impl PolicyGatherWorkspace {
 
     /// Appends resource-free decoration records after glyph gather. Rows carry the
     /// decoration program's technique, a dedicated identity namespace (top bit set), and
-    /// a fixed lane convention: f32 lanes 0-3 hold the decoration rectangle and u32
-    /// lanes 0-1 hold color and flags. Returns false when the policy declares no
-    /// decoration program, leaving the gather output untouched.
+    /// a fixed lane convention mirroring the first-party u32 prefix: f32 lanes 0-3 hold
+    /// the decoration rectangle; u32 lanes hold transform index, stable identity, color,
+    /// then flags with the line style in bits 8-15. Returns false when the policy
+    /// declares no decoration program, leaving the gather output untouched.
     pub fn append_decorations(
         &mut self,
         policy: &ValidatedPolicy,
@@ -525,8 +526,10 @@ impl PolicyGatherWorkspace {
             }
             for (index, field) in self.u32_fields.iter_mut().enumerate() {
                 let value = match index {
-                    0 => record.color,
-                    1 => record.flags | (u32::from(record.style) << 8),
+                    0 => transform_id,
+                    1 => stable_id,
+                    2 => record.color,
+                    3 => record.flags | (u32::from(record.style) << 8),
                     _ => 0,
                 };
                 field.push(value)?;
@@ -1551,8 +1554,10 @@ mod tests {
         assert_eq!(view.f32_fields[1][0], 9.0);
         assert_eq!(view.f32_fields[2][0], 12.0);
         assert_eq!(view.f32_fields[3][0], 0.5);
-        assert_eq!(view.u32_fields[0][0], 0xff00_00ff);
-        assert_eq!(view.u32_fields[1][0], 1 | (3 << 8));
+        assert_eq!(view.u32_fields[0][0], 3);
+        assert_eq!(view.u32_fields[1][0], DECORATION_STABLE_ID_BASE);
+        assert_eq!(view.u32_fields[2][0], 0xff00_00ff);
+        assert_eq!(view.u32_fields[3][0], 1 | (3 << 8));
 
         let plain = policy();
         let mut plain_workspace = PolicyGatherWorkspace::default();

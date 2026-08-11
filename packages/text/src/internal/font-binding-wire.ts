@@ -47,6 +47,7 @@ export function firstPartyFontBindingBytes(
     bitmap: identities.resolve(bitmap.id),
     msdf: identities.resolve(msdf.id),
     slug: identities.resolve(slug.id),
+    decoration: identities.resolve('pmndrs.decoration'),
   };
   if (font.technique.id === bitmap.id && isBitmapData(font.data)) {
     return compileBitmap(font.font.glyphCount, font.data, techniqueIds.bitmap, identities);

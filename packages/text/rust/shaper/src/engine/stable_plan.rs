@@ -362,11 +362,13 @@ impl StablePlanCompiler {
                 }
                 continue;
             }
-            let resource_bit = 1_u32
-                .checked_shl(u32::from(glyph.resource_kind - 1))
-                .ok_or(StablePlanError::InvalidResource)?;
-            if program.resource_kind_mask & resource_bit == 0 {
-                return Err(StablePlanError::InvalidResource);
+            if program.primitive_kind != PRIMITIVE_DECORATION {
+                let resource_bit = 1_u32
+                    .checked_shl(u32::from(glyph.resource_kind - 1))
+                    .ok_or(StablePlanError::InvalidResource)?;
+                if program.resource_kind_mask & resource_bit == 0 {
+                    return Err(StablePlanError::InvalidResource);
+                }
             }
             let key = BatchKey {
                 technique: glyph.technique,
@@ -1313,6 +1315,10 @@ impl StablePlanCompiler {
             if self.input_batches[input_index] == NONE {
                 continue;
             }
+            // Decoration records are resource-free and publish no resource lifecycle.
+            if glyph.resource_id == 0 && glyph.resource_kind == 0 {
+                continue;
+            }
             if let Some(resource) = self.resources.iter().find(|resource| {
                 resource.id == glyph.resource_id && resource.generation == glyph.resource_generation
             }) {
@@ -1402,14 +1408,17 @@ impl StablePlanCompiler {
                 .map_err(|_| StablePlanError::ArithmeticOverflow)?;
             let (inline_start, block_start, inline_extent, block_extent) =
                 span_bounds(&context.input.glyphs[input_index..end])?;
-            let resource_start = self
-                .resources
-                .iter()
-                .position(|resource| {
-                    resource.id == first.resource_id
-                        && resource.generation == first.resource_generation
-                })
-                .ok_or(StablePlanError::InvalidResource)?;
+            let resource_start = if program.primitive_kind == PRIMITIVE_DECORATION {
+                0
+            } else {
+                self.resources
+                    .iter()
+                    .position(|resource| {
+                        resource.id == first.resource_id
+                            && resource.generation == first.resource_generation
+                    })
+                    .ok_or(StablePlanError::InvalidResource)?
+            };
             push_glyph_draw(
                 &mut self.primitives,
                 &mut self.draws,
@@ -1490,14 +1499,17 @@ impl StablePlanCompiler {
                         .iter()
                         .map(|input_index| *input_index as usize),
                 )?;
-                let resource_start = self
-                    .resources
-                    .iter()
-                    .position(|resource| {
-                        resource.id == first.resource_id
-                            && resource.generation == first.resource_generation
-                    })
-                    .ok_or(StablePlanError::InvalidResource)?;
+                let resource_start = if program.primitive_kind == PRIMITIVE_DECORATION {
+                    0
+                } else {
+                    self.resources
+                        .iter()
+                        .position(|resource| {
+                            resource.id == first.resource_id
+                                && resource.generation == first.resource_generation
+                        })
+                        .ok_or(StablePlanError::InvalidResource)?
+                };
                 let semantic_id = if input_indices[start..end].iter().all(|input_index| {
                     context.input.glyphs[*input_index as usize].semantic_id == first.semantic_id
                 }) {

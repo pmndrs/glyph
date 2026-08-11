@@ -413,11 +413,13 @@ impl OrderedPlanCompiler {
                 }
                 continue;
             }
-            let resource_bit = 1_u32
-                .checked_shl(u32::from(glyph.resource_kind - 1))
-                .ok_or(OrderedPlanError::InvalidResource)?;
-            if program.resource_kind_mask & resource_bit == 0 {
-                return Err(OrderedPlanError::InvalidResource);
+            if program.primitive_kind != PRIMITIVE_DECORATION {
+                let resource_bit = 1_u32
+                    .checked_shl(u32::from(glyph.resource_kind - 1))
+                    .ok_or(OrderedPlanError::InvalidResource)?;
+                if program.resource_kind_mask & resource_bit == 0 {
+                    return Err(OrderedPlanError::InvalidResource);
+                }
             }
             let key = batch_key(program, glyph);
             let batch_index = match self
@@ -972,6 +974,10 @@ impl OrderedPlanCompiler {
             if self.input_batches[input_index] == NONE {
                 continue;
             }
+            // Decoration records are resource-free and publish no resource lifecycle.
+            if glyph.resource_id == 0 && glyph.resource_kind == 0 {
+                continue;
+            }
             if let Some(resource) = self.resources.iter().find(|resource| {
                 resource.id == glyph.resource_id && resource.generation == glyph.resource_generation
             }) {
@@ -1062,14 +1068,17 @@ impl OrderedPlanCompiler {
             let (inline_start, block_start, inline_extent, block_extent) =
                 span_bounds(&context.input.glyphs[input_index..end])?;
             let batch = self.pending_batches[batch_index];
-            let resource_start = self
-                .resources
-                .iter()
-                .position(|resource| {
-                    resource.id == first.resource_id
-                        && resource.generation == first.resource_generation
-                })
-                .ok_or(OrderedPlanError::InvalidResource)?;
+            let resource_start = if program.primitive_kind == PRIMITIVE_DECORATION {
+                0
+            } else {
+                self.resources
+                    .iter()
+                    .position(|resource| {
+                        resource.id == first.resource_id
+                            && resource.generation == first.resource_generation
+                    })
+                    .ok_or(OrderedPlanError::InvalidResource)?
+            };
             push_glyph_draw(
                 &mut self.primitives,
                 &mut self.draws,
@@ -1149,14 +1158,17 @@ impl OrderedPlanCompiler {
                         .iter()
                         .map(|instance| instance.input_index as usize),
                 )?;
-                let resource_start = self
-                    .resources
-                    .iter()
-                    .position(|resource| {
-                        resource.id == first.resource_id
-                            && resource.generation == first.resource_generation
-                    })
-                    .ok_or(OrderedPlanError::InvalidResource)?;
+                let resource_start = if program.primitive_kind == PRIMITIVE_DECORATION {
+                    0
+                } else {
+                    self.resources
+                        .iter()
+                        .position(|resource| {
+                            resource.id == first.resource_id
+                                && resource.generation == first.resource_generation
+                        })
+                        .ok_or(OrderedPlanError::InvalidResource)?
+                };
                 let semantic_id = if instances[start..end].iter().all(|instance| {
                     context.input.glyphs[instance.input_index as usize].semantic_id
                         == first.semantic_id
@@ -1886,6 +1898,74 @@ mod tests {
         policy_with_material_storage(false)
     }
 
+    const DECORATION_TECHNIQUE: TechniqueId = TechniqueId(99);
+
+    fn decoration_row(stable_id: u32) -> OrderedGlyph {
+        OrderedGlyph {
+            stable_id,
+            content_revision: 1,
+            technique: DECORATION_TECHNIQUE,
+            program_variant: 0,
+            resource_id: 0,
+            resource_generation: 0,
+            resource_kind: 0,
+            resource_reference: 0,
+            semantic_id: stable_id,
+            transform_id: 1,
+            material_id: 1,
+            clip_id: 0,
+            depth_key: 0,
+            inline_start: 4.0,
+            block_start: 9.0,
+            inline_extent: 12.0,
+            block_extent: 0.5,
+        }
+    }
+
+    #[test]
+    fn decoration_rows_pack_and_draw_without_resources() {
+        let policy = {
+            // Reuse the standard descriptor and add a resource-free decoration program.
+            let mut descriptor = descriptor_with_options(false, 1024, true);
+            let mut program = descriptor.programs[0].clone();
+            program.primitive_kind = PRIMITIVE_DECORATION;
+            program.technique = DECORATION_TECHNIQUE;
+            program.id = ProgramId(9);
+            program.resource_kind_mask = 0;
+            program.buffers[0].id = BufferId(9);
+            for operation in &mut program.operations {
+                if let Operation::StoreF32 { buffer, .. } = operation {
+                    *buffer = BufferId(9);
+                }
+            }
+            descriptor.programs.push(program);
+            ValidatedPolicy::new(descriptor).unwrap()
+        };
+        let mut compiler = OrderedPlanCompiler::default();
+        let rows = [glyph(1, 1), decoration_row(0x8000_0000)];
+        prepare(&mut compiler, &policy, &rows, &[1.0, 4.0], true);
+        let view = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        assert_eq!(view.primitives.len(), 2);
+        let decoration = view
+            .primitives
+            .iter()
+            .find(|primitive| primitive.kind == PRIMITIVE_DECORATION)
+            .expect("decoration primitive");
+        assert_eq!(decoration.technique_id, DECORATION_TECHNIQUE.0);
+        assert_eq!(decoration.resource_id, 0);
+        assert_eq!(view.draws.len(), 2);
+        let decoration_draw = view
+            .draws
+            .iter()
+            .find(|draw| {
+                view.primitives[draw.primitive_start as usize].kind == PRIMITIVE_DECORATION
+            })
+            .expect("decoration draw");
+        assert_eq!(decoration_draw.resource_count, 0);
+    }
+
     fn policy_with_material_storage(partition_materials: bool) -> ValidatedPolicy {
         policy_with_limits(partition_materials, 1024)
     }
@@ -1899,7 +1979,20 @@ mod tests {
         max_buffer_bytes: u32,
         split_transform: bool,
     ) -> ValidatedPolicy {
-        ValidatedPolicy::new(PolicyDescriptor {
+        ValidatedPolicy::new(descriptor_with_options(
+            partition_materials,
+            max_buffer_bytes,
+            split_transform,
+        ))
+        .unwrap()
+    }
+
+    fn descriptor_with_options(
+        partition_materials: bool,
+        max_buffer_bytes: u32,
+        split_transform: bool,
+    ) -> PolicyDescriptor {
+        PolicyDescriptor {
             capability_sets: vec![CapabilitySet {
                 id: CAPABILITY,
                 flags: CAP_ORDERED_DIRECT,
@@ -1959,8 +2052,7 @@ mod tests {
                     },
                 ],
             }],
-        })
-        .unwrap()
+        }
     }
 
     fn read_f32(bytes: &[u8], offset: usize) -> f32 {

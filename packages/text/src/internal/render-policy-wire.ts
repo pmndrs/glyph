@@ -35,6 +35,8 @@ export interface PolicyOperation {
 export interface PolicyProgram {
   readonly techniqueId: number;
   readonly programId: number;
+  /** Plan primitive kind this program's records publish as; glyph when omitted. */
+  readonly primitiveKind?: number;
   readonly capabilitySetId?: number;
   readonly resourceKindMask?: number;
   readonly semanticViewMask?: number;
@@ -98,6 +100,7 @@ export interface FirstPartyTechniqueWireIds {
   readonly bitmap: number;
   readonly msdf: number;
   readonly slug: number;
+  readonly decoration: number;
 }
 
 export type ThreeTransformMode = 'direct' | 'indexed';
@@ -113,6 +116,7 @@ export const firstPartyTechniqueWireIds: FirstPartyTechniqueWireIds = Object.fre
   bitmap: renderWireId('pmndrs.bitmap'),
   msdf: renderWireId('pmndrs.msdf'),
   slug: renderWireId('pmndrs.slug'),
+  decoration: renderWireId('pmndrs.decoration'),
 });
 
 /** Compiler-mapped Three policy covering every first-party raster technique in one registration. */
@@ -125,6 +129,7 @@ export function firstPartyThreeRenderPolicyBytes(
   const bitmap = identities.resolve('pmndrs.bitmap');
   const msdf = identities.resolve('pmndrs.msdf');
   const slug = identities.resolve('pmndrs.slug');
+  const decoration = identities.resolve('pmndrs.decoration');
   const modes =
     typeof transformMode === 'string'
       ? { bitmap: transformMode, msdf: transformMode, slug: transformMode }
@@ -133,6 +138,7 @@ export function firstPartyThreeRenderPolicyBytes(
     bitmapProgram(bitmap, 1, modes.bitmap, allocationMode),
     msdfProgram(msdf, 2, modes.msdf, allocationMode),
     slugProgram(slug, 3, modes.slug, allocationMode),
+    decorationProgram(decoration, 4, modes.bitmap, allocationMode),
     ...additionalPrograms,
   ];
   if (new Set(programs.map((program) => program.techniqueId)).size !== programs.length) {
@@ -408,6 +414,46 @@ function createProgram(
   };
 }
 
+/**
+ * Resource-free decoration quads. Decoration rows fill the gather lanes directly —
+ * f32 lanes 0-3 carry the rectangle and u32 lanes carry transform, stable identity,
+ * color, then flags — so the loads below read lanes by index; the semantic input
+ * declarations exist to satisfy policy validation and are not sourced per glyph.
+ */
+function decorationProgram(
+  techniqueId: number,
+  programId: number,
+  transformMode: ThreeTransformMode,
+  allocationMode: ThreeAllocationMode,
+): PolicyProgram {
+  const context = programContext('glyph', 0, 2);
+  const { loadF32, loadU32, storeF32, storeU32 } = context;
+  loadF32(4);
+  loadU32(28, 0);
+  loadU32(29, 1);
+  loadU32(30, 2);
+  loadU32(31, 3);
+  stores(storeF32, [[1, [0, 1, 2, 3]]]);
+  storeU32(2, 0, 30);
+  storeU32(2, 1, 31);
+  if (transformMode === 'indexed') storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 28);
+  storeU32(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, 0, 29);
+  return {
+    ...createProgram(
+      techniqueId,
+      programId,
+      context,
+      transformMode === 'indexed'
+        ? [...floatBuffers([4]), ...u32Buffers([2], 2), stableGlyphIdBuffer(), transformIndexBuffer()]
+        : [...floatBuffers([4]), ...u32Buffers([2], 2), stableGlyphIdBuffer()],
+      transformMode,
+      allocationMode,
+    ),
+    primitiveKind: textShaperAbi.engine.primitiveKinds.decoration,
+    resourceKindMask: 0,
+  };
+}
+
 function stores(
   write: (buffer: number, lane: number, register: number) => void,
   groups: readonly (readonly [number, readonly number[]])[],
@@ -545,6 +591,11 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     view.setUint16(
       offset + programLayout.allocationStrategy,
       value.allocationStrategy ?? textShaperAbi.policy.allocationStrategies.orderedDirect,
+      true,
+    );
+    view.setUint16(
+      offset + programLayout.primitiveKind,
+      value.primitiveKind ?? textShaperAbi.engine.primitiveKinds.glyph,
       true,
     );
     view.setUint8(offset + programLayout.f32InputCount, value.f32InputCount);
