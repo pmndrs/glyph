@@ -1,5 +1,9 @@
 # pmndrs/text documentation update log
 
+## 2026-08-11
+
+- **Reconciled the public README and formatter-owned boundaries** — Replaced the obsolete TypeScript batch-target walkthrough with the shipped React and Three `Text`, `TextGroup`, span, mixed-technique font, Rust policy, and retained render-plan APIs. Added a compact Mermaid flow from mutations through renderer draws and stated the current third-party renderer boundary without claiming a stable TypeGPU host. Markdown now relies on viewer word wrapping. Canonical extension schemas and generated ABIs are excluded from formatting at their absorbed `packages/text` paths; the packaged font schema again matches its authoritative repository copy byte for byte, and the font-baker ABI again matches its Rust generator.
+
 ## 2026-08-10
 
 - **Standardized the React entry and polished the R3F example** — Renamed the sole declarative package entry from the
