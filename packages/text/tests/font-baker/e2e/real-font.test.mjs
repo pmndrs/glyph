@@ -94,6 +94,11 @@ test('the canonical Inter fixture bakes deterministically and retains HarfRust s
   assert.equal(extension.metrics.ascender, expected.ascender);
   assert.equal(extension.metrics.descender, expected.descender);
   assert.equal(extension.metrics.lineGap, expected.lineGap);
+  // Independently parsed from Inter-Regular 4.1: post and OS/2 decoration values.
+  assert.equal(extension.metrics.underlinePosition, -348);
+  assert.equal(extension.metrics.underlineThickness, 140);
+  assert.equal(extension.metrics.strikeoutPosition, 671);
+  assert.equal(extension.metrics.strikeoutSize, 140);
   assert.equal(extension.provenance.sourceHash, manifest.source.fontSha256);
   assert.equal(extension.provenance.descriptorHash, manifest.bake.descriptorHash);
   assert.equal(inspected.khronos.validatorVersion, manifest.versions.gltfValidator);
@@ -144,6 +149,10 @@ test('the canonical Amiri fixture preserves exact complex shaping through the GL
     glyphIdWidth: 16,
     lineGap: expected.lineGap,
     unitsPerEm: expected.unitsPerEm,
+    underlinePosition: expected.underlinePosition,
+    underlineThickness: expected.underlineThickness,
+    strikeoutPosition: expected.strikeoutPosition,
+    strikeoutSize: expected.strikeoutSize,
   });
   assert.equal(extension.provenance.sourceHash, manifest.source.fontSha256);
 
@@ -217,6 +226,10 @@ test('the authenticated Noto CJK fixture retains the closed shaping profile at t
     glyphIdWidth: 16,
     lineGap: expected.lineGap,
     unitsPerEm: expected.unitsPerEm,
+    underlinePosition: expected.underlinePosition,
+    underlineThickness: expected.underlineThickness,
+    strikeoutPosition: expected.strikeoutPosition,
+    strikeoutSize: expected.strikeoutSize,
   });
   assert.equal(extension.provenance.sourceHash, manifest.source.fontSha256);
   assert.equal(extension.provenance.descriptorHash, manifest.bake.descriptorHash);

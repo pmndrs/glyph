@@ -5,7 +5,7 @@ description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Sl
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/text-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:f6d00a2f8f68d99a5b3846c3a93950400924db180b4f8179ef250d09d2a6eba1'
+source_digest: 'sha256:dc0e2489cc5bc8cbdc121865edfe3cdc373c5e80afc25c25945d756ef14708f3'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest

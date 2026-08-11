@@ -149,3 +149,29 @@ fn two_face_collection(font: &[u8]) -> Vec<u8> {
     }
     collection
 }
+
+#[test]
+fn baked_metrics_carry_underline_and_strikeout_values() {
+    let result = bake_font(INTER, BakeDescriptorV0::new(0)).expect("Inter must bake");
+    let glb = &result
+        .artifacts
+        .iter()
+        .find(|artifact| artifact.role == "font")
+        .expect("font artifact")
+        .bytes;
+
+    assert_eq!(&glb[0..4], b"glTF");
+    let json_length = u32::from_le_bytes(glb[12..16].try_into().expect("chunk length")) as usize;
+    assert_eq!(&glb[16..20], b"JSON");
+    let document: serde_json::Value =
+        serde_json::from_slice(&glb[20..20 + json_length]).expect("GLB JSON chunk");
+    let metrics = &document["extensions"]["PMNDRS_font"]["metrics"];
+
+    // Independently parsed from Inter-Regular 4.1: post.underlinePosition/Thickness
+    // and OS/2.yStrikeoutPosition/Size at 2048 units per em.
+    assert_eq!(metrics["unitsPerEm"], 2048);
+    assert_eq!(metrics["underlinePosition"], -348);
+    assert_eq!(metrics["underlineThickness"], 140);
+    assert_eq!(metrics["strikeoutPosition"], 671);
+    assert_eq!(metrics["strikeoutSize"], 140);
+}

@@ -7,6 +7,10 @@ export interface FontMetrics {
   readonly ascender: number;
   readonly descender: number;
   readonly lineGap: number;
+  readonly underlinePosition: number;
+  readonly underlineThickness: number;
+  readonly strikeoutPosition: number;
+  readonly strikeoutSize: number;
 }
 
 export interface RegisteredFont {

@@ -121,6 +121,19 @@ pub(crate) fn build_shaping_payload(
     let use_typo = os2
         .fs_selection()
         .contains(SelectionFlags::USE_TYPO_METRICS);
+    // Decoration metrics: underline from `post`, strikeout from `OS/2`. `post` is not a
+    // required shaping table, so a font without one falls back to a conservative derived
+    // rule (thickness em/14, position -em/10) instead of baking invisible zero values.
+    let (underline_position, underline_thickness) = match font.post() {
+        Ok(post) => (
+            post.underline_position().to_i16(),
+            post.underline_thickness().to_i16(),
+        ),
+        Err(_) => (
+            -(i16::try_from(units_per_em / 10).unwrap_or(i16::MAX)),
+            i16::try_from(units_per_em / 14).unwrap_or(i16::MAX).max(1),
+        ),
+    };
     let metrics = FontMetricsV0 {
         glyph_count,
         glyph_id_width: 16,
@@ -140,6 +153,10 @@ pub(crate) fn build_shaping_payload(
         } else {
             hhea.line_gap().to_i16()
         },
+        underline_position,
+        underline_thickness,
+        strikeout_position: os2.y_strikeout_position(),
+        strikeout_size: os2.y_strikeout_size(),
     };
 
     let (sfnt, tables) = rebuild_sfnt(&font)?;

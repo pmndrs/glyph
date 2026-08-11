@@ -93,6 +93,10 @@ test('canonical source forms converge on one validated baked hit without source 
   assert.equal(first.glyphCount, 2937);
   assert.equal(first.glyphIdWidth, 16);
   assert.equal(first.metrics.unitsPerEm, 2048);
+  assert.equal(first.metrics.underlinePosition, -348);
+  assert.equal(first.metrics.underlineThickness, 140);
+  assert.equal(first.metrics.strikeoutPosition, 671);
+  assert.equal(first.metrics.strikeoutSize, 140);
   assert.equal(registry.get(first.key), first);
   assert.equal(registry.getByHandle(first.handle), first);
 

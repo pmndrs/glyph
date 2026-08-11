@@ -23,8 +23,8 @@
     "formatVersion": 0,
     "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d",
     "expectedCore": {
-      "artifactBytes": 172144,
-      "artifactSha256": "edf896923f38c9e6080e176540699a7b96b7cd15606b0522447750e7595170b5",
+      "artifactBytes": 172240,
+      "artifactSha256": "af2ae9489ad453bfbc4967bfee388d8ea60e3469e16eaec5386a021f57508cd1",
       "shapingHash": "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
       "shapingSfntBytes": 147192,
       "extentsBytes": 23496,
@@ -34,6 +34,10 @@
       "ascender": 1984,
       "descender": -494,
       "lineGap": 0,
+      "underlinePosition": -348,
+      "underlineThickness": 140,
+      "strikeoutPosition": 671,
+      "strikeoutSize": 140,
       "tables": [
         { "tag": "GDEF", "rawBytes": 1036, "paddedBytes": 1036 },
         { "tag": "GPOS", "rawBytes": 83724, "paddedBytes": 83724 },

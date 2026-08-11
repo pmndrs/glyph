@@ -174,11 +174,18 @@ test('covers every PMNDRS_font required field and raster-source union one field 
     [...fontPath, 'shaping', 'fontFunctions', 'glyphExtentsBufferView'],
     [...fontPath, 'shaping', 'fontFunctions', 'glyphExtentsStride'],
     [...fontPath, 'shaping', 'fontFunctions', 'glyphExtentsAvailabilityBufferView'],
-    ...['glyphCount', 'glyphIdWidth', 'unitsPerEm', 'ascender', 'descender', 'lineGap'].map((name) => [
-      ...fontPath,
-      'metrics',
-      name,
-    ]),
+    ...[
+      'glyphCount',
+      'glyphIdWidth',
+      'unitsPerEm',
+      'ascender',
+      'descender',
+      'lineGap',
+      'underlinePosition',
+      'underlineThickness',
+      'strikeoutPosition',
+      'strikeoutSize',
+    ].map((name) => [...fontPath, 'metrics', name]),
     ...[
       'sourceHash',
       'descriptorHash',

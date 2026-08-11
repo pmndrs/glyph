@@ -203,6 +203,10 @@ export class FontRegistry {
         ascender: integer(metricsValue.ascender, 'metrics.ascender'),
         descender: integer(metricsValue.descender, 'metrics.descender'),
         lineGap: integer(metricsValue.lineGap, 'metrics.lineGap'),
+        underlinePosition: integer(metricsValue.underlinePosition, 'metrics.underlinePosition'),
+        underlineThickness: integer(metricsValue.underlineThickness, 'metrics.underlineThickness'),
+        strikeoutPosition: integer(metricsValue.strikeoutPosition, 'metrics.strikeoutPosition'),
+        strikeoutSize: integer(metricsValue.strikeoutSize, 'metrics.strikeoutSize'),
       },
     });
     const rasterSources = new Map<string, RegisteredRasterSourceData>();

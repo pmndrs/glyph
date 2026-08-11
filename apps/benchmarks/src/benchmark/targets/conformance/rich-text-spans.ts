@@ -113,6 +113,19 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
         if (body === undefined || foreign === undefined || emphasis === undefined) {
           throw new Error('rich text conformance did not load its three fixtures');
         }
+        // Decoration-metrics probe: every baked font this workload touches must expose the
+        // underline and strikeout values the artifact bakes from `post` and `OS/2`, so a
+        // regression in the bake or decode path fails this lane before any renderer work.
+        for (const loadedFont of [body, foreign, emphasis]) {
+          const { underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize } = loadedFont.font.metrics;
+          const values = [underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize];
+          if (!values.every(Number.isFinite) || underlineThickness <= 0 || strikeoutSize <= 0) {
+            throw new Error(
+              `baked decoration metrics are missing or degenerate for ${loadedFont.font.key}: ` +
+                `underline ${underlinePosition}/${underlineThickness}, strikeout ${strikeoutPosition}/${strikeoutSize}`,
+            );
+          }
+        }
         state = { kind: 'ready', loader, body, companions: { emphasis, foreign } };
       } catch (error) {
         for (const font of loaded) font.dispose();

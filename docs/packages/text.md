@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:c3642725db288146c34fe9aaa5c87e412dfdc8306ff9ab0f4876ed9d82fcc1c7'
+source_digest: 'sha256:9d8998b71a2c5b9f7cf805cd345a288031df2c5f1c6ea1580509083e2ca21948'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -139,6 +139,11 @@ R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preservi
 artifact is fetched, validated, registered with the shaper, and retained once; each requested technique still derives
 its exact descriptor, resolves and decodes its own raster resource, and retains its associated data type. A mapped tuple
 keeps required Bitmap options and custom third-party technique types enforceable at every position.
+
+Artifact metrics carry text decoration from bake time (D-246): required `underlinePosition`/`underlineThickness` from
+`post` and `strikeoutPosition`/`strikeoutSize` from `OS/2`, with a conservative derived fallback when a source font
+omits `post`. The loader decodes all four into public `FontMetrics`, and the rich-text conformance lane probes every
+font it loads for finite, positive-thickness values. Decoration rendering remains a later additive renderer feature.
 
 When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
 and feeds those exact prepared bytes to the shaping bake and every requested Bitmap, MSDF, or Slug bake. The Worker

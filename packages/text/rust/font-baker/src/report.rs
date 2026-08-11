@@ -79,6 +79,10 @@ pub struct FontMetricsV0 {
     pub ascender: i16,
     pub descender: i16,
     pub line_gap: i16,
+    pub underline_position: i16,
+    pub underline_thickness: i16,
+    pub strikeout_position: i16,
+    pub strikeout_size: i16,
 }
 
 #[derive(Clone, Debug, Serialize)]

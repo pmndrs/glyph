@@ -65,8 +65,8 @@
     "formatVersion": 0,
     "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d",
     "expectedCore": {
-      "artifactBytes": 1540468,
-      "artifactSha256": "0c9ba1a75fa5d98c6b11a28402bf6e7c87ca2226870d7423d121c7ec1549783c",
+      "artifactBytes": 1540560,
+      "artifactSha256": "dbe41e519333db7aaad4fcad5f9a77db7b0421637a3c341957364d0cd9e36915",
       "shapingHash": "f4e77de31444f3ee9e4a7cbdded5d0c3077455275bf81ec5def82e31f6379d58",
       "shapingSfntBytes": 1006900,
       "shapingSfntSha256": "0461316ade447b891e027b2deb4d8cdde0a6a31feb5dc7a529d556be311118d7",
@@ -77,6 +77,10 @@
       "ascender": 1160,
       "descender": -288,
       "lineGap": 0,
+      "underlinePosition": -125,
+      "underlineThickness": 50,
+      "strikeoutPosition": 325,
+      "strikeoutSize": 50,
       "tables": [
         { "tag": "BASE", "rawBytes": 240, "paddedBytes": 240 },
         { "tag": "GDEF", "rawBytes": 28, "paddedBytes": 28 },

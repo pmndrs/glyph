@@ -2,6 +2,12 @@
 
 ## 2026-08-11
 
+- **Baked decoration metrics (D-246)** — Font artifacts now bake underline position/thickness from `post` and
+  strikeout position/size from `OS/2` as required metrics fields, decoded into public `FontMetrics` and probed by the
+  rich-text conformance lane. Every baked fixture and pinned identity regenerated once, pre-v1, with byte-identical
+  shaping payloads; text decoration itself stays a later additive renderer feature. Raw-node fixture regeneration also
+  repaired: benchmark contract JSON imports now carry explicit `type: 'json'` attributes.
+
 - **Kernel-lab SIMD admission evidence (D-245)** — The complete scalar/auto-vectorized/explicit kernel comparison over
   real paragraph arrays is recorded as shaper evidence. Explicit break-mask, bidi-transition-mask, and chunk-summary
   kernels measure 7.6×, 4.8×, and 2.2× their auto-vectorized forms and are admitted with named consumers in the 11.14
