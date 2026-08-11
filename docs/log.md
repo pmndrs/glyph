@@ -2,6 +2,11 @@
 
 ## 2026-08-11
 
+- **Break-inserted hyphen contract proof (D-247)** — An exact positioning test proves any flow fragment may carry a
+  boundary record with an empty source span and an inserted shaped glyph: own stable identity, the boundary text
+  position as its semantic cluster, neighbor-anchored style, alignment participation, and an unaffected following
+  line. The contract needed no fix; roadmap item 11.13 closes.
+
 - **Baked decoration metrics (D-246)** — Font artifacts now bake underline position/thickness from `post` and
   strikeout position/size from `OS/2` as required metrics fields, decoded into public `FontMetrics` and probed by the
   rich-text conformance lane. Every baked fixture and pinned identity regenerated once, pre-v1, with byte-identical

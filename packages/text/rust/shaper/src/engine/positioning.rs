@@ -1314,6 +1314,212 @@ mod tests {
         assert_eq!(justification_space_advance(22.0, 0), 0.0);
     }
 
+    /// Roadmap 11.13: the contract must represent a break-inserted hyphen glyph that has
+    /// no source cluster. The proof drives a NON-final soft-wrapped fragment through a
+    /// boundary record whose source span is empty and whose inserted span is one shaped
+    /// hyphen: the hyphen positions at the line end with its own glyph identity from the
+    /// boundary arena, cluster-level semantics anchored to the boundary neighbor, and the
+    /// following line is unaffected. Nothing in the path is ellipsis-specific.
+    #[test]
+    fn break_inserted_hyphen_glyph_positions_without_a_source_cluster() {
+        let text = vec![0x61, 0x62, 0x63, 0x64];
+        let style = ResolvedStyle::test_typography(10.0, 1.0, 0.0);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 4,
+            style,
+        }];
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end: 4,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 0,
+            bidi_level: 0,
+            style,
+        }];
+        let clusters = ClusterArena {
+            starts: vec![0, 1, 2, 3],
+            ends: vec![1, 2, 3, 4],
+            advances: vec![6.0, 6.0, 6.0, 6.0],
+            flags: vec![
+                CLUSTER_SAFE_BEFORE,
+                CLUSTER_SAFE_BEFORE,
+                CLUSTER_SAFE_BEFORE,
+                CLUSTER_SAFE_BEFORE,
+            ],
+            style_indexes: vec![0, 0, 0, 0],
+            source_runs: vec![0, 0, 0, 0],
+            binding_handles: vec![11, 11, 11, 11],
+            font_handles: vec![1, 1, 1, 1],
+            stable_ids: vec![10, 20, 30, 40],
+            glyph_starts: vec![0, 1, 2, 3],
+            glyph_counts: vec![1, 1, 1, 1],
+            glyph_indices: vec![0, 1, 2, 3],
+            glyph_stable_ids: vec![100, 200, 300, 400],
+            index_at: vec![0, 1, 2, 3, 4],
+            ..ClusterArena::default()
+        };
+        let shape = ShapeArena {
+            runs: vec![],
+            glyph_ids: vec![1, 2, 3, 4],
+            clusters: vec![0, 1, 2, 3],
+            x_advances: vec![500, 500, 500, 500],
+            y_advances: vec![0, 0, 0, 0],
+            x_offsets: vec![0, 0, 0, 0],
+            y_offsets: vec![0, 0, 0, 0],
+            glyph_flags: vec![0, 0, 0, 0],
+        };
+        let bidi = BidiAnalysis {
+            levels: vec![0, 0, 0, 0],
+            classes: vec![0, 0, 0, 0],
+            paragraph_starts: vec![0],
+            paragraph_ends: vec![4],
+            paragraph_levels: vec![0],
+            runs: vec![],
+        };
+        let boundary = BoundaryShapeArena {
+            records: vec![BoundaryShape {
+                flow_thread_id: 7,
+                source_run: 0,
+                cluster_start: 2,
+                cluster_end: 2,
+                text_end: 2,
+                source_binding_handle: 11,
+                source_font_handle: 1,
+                ellipsis_binding_handle: 11,
+                ellipsis_font_handle: 1,
+                source_glyph_start: 0,
+                source_glyph_count: 0,
+                ellipsis_glyph_start: 0,
+                ellipsis_glyph_count: 1,
+            }],
+            shape: ShapeArena {
+                runs: vec![],
+                glyph_ids: vec![45],
+                clusters: vec![2],
+                x_advances: vec![300],
+                y_advances: vec![0],
+                x_offsets: vec![0],
+                y_offsets: vec![0],
+                glyph_flags: vec![0],
+            },
+            stable_ids: vec![777],
+        };
+        let lines = [
+            FlowLine {
+                flow_thread_id: 7,
+                region_id: 9,
+                transform_index: 9,
+                clip_id: 9,
+                fragment_start: 0,
+                fragment_count: 1,
+                align: ALIGN_CENTER,
+                block_start: 0.0,
+                baseline: 8.0,
+                height: 10.0,
+            },
+            FlowLine {
+                flow_thread_id: 7,
+                region_id: 9,
+                transform_index: 9,
+                clip_id: 9,
+                fragment_start: 1,
+                fragment_count: 1,
+                align: ALIGN_CENTER,
+                block_start: 10.0,
+                baseline: 8.0,
+                height: 10.0,
+            },
+        ];
+        let flow = FlowLayoutArena {
+            lines: lines.to_vec(),
+            fragments: vec![
+                FlowFragment {
+                    line: ComposedLine {
+                        cluster_start: 0,
+                        cluster_end: 2,
+                        text_start: 0,
+                        text_end: 2,
+                        advance: 15.0,
+                        hard_break: false,
+                    },
+                    slot_start: 0.0,
+                    slot_end: 20.0,
+                    boundary_index: 0,
+                },
+                FlowFragment {
+                    line: ComposedLine {
+                        cluster_start: 2,
+                        cluster_end: 4,
+                        text_start: 2,
+                        text_end: 4,
+                        advance: 12.0,
+                        hard_break: false,
+                    },
+                    slot_start: 0.0,
+                    slot_end: 20.0,
+                    boundary_index: NO_BOUNDARY,
+                },
+            ],
+            ..FlowLayoutArena::default()
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+            })
+        };
+        let extents = |_, _| {
+            Some(FontGlyphExtents {
+                x_min: 0,
+                y_min: 0,
+                x_max: 500,
+                y_max: 700,
+            })
+        };
+        let mut index = IdentityIndex::default();
+        let mut active = PositionedGlyphArena::default();
+        let mut next_revision = 1;
+        active
+            .build(
+                &PositionedGlyphArena::default(),
+                &flow,
+                &text,
+                &clusters,
+                &runs,
+                &shape,
+                &boundary,
+                &styles,
+                &bidi,
+                &mut index,
+                &mut next_revision,
+                metrics,
+                extents,
+            )
+            .unwrap();
+
+        assert_eq!(active.glyphs.len(), 5);
+        // Line one centers its 15.0 advance (12.0 retained + 3.0 hyphen) in the 20.0 slot.
+        assert_eq!(active.semantic_glyphs[0].inline_origin, 2.5);
+        assert_eq!(active.semantic_glyphs[1].inline_origin, 8.5);
+        // The inserted hyphen follows the retained clusters with its own glyph identity.
+        assert_eq!(active.glyphs[2].glyph_id, 45);
+        assert_eq!(active.glyphs[2].stable_id, 777);
+        assert_eq!(active.semantic_glyphs[2].inline_origin, 14.5);
+        assert_eq!(active.semantic_glyphs[2].block_origin, 8.0);
+        // The inserted glyph has no source cluster: its published cluster is the boundary
+        // text position itself, while style and paint anchor to the neighbor cluster.
+        assert_eq!(active.semantic_glyphs[2].cluster, 2);
+        // The following line is unaffected by the inserted glyph.
+        assert_eq!(active.semantic_glyphs[3].inline_origin, 4.0);
+        assert_eq!(active.semantic_glyphs[4].inline_origin, 10.0);
+        assert_eq!(active.semantic_glyphs[3].block_origin, 18.0);
+        // Every glyph, inserted included, receives a content revision.
+        assert_eq!(next_revision, 6);
+    }
+
     #[test]
     fn positions_once_and_revisions_only_exact_content_changes() {
         let text = vec![0x61, 0x62, 0x0a];
