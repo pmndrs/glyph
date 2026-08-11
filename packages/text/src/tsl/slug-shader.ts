@@ -1,13 +1,13 @@
 import * as TSL from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
 
-import { slugDilate, slugDilateMatrix, slugRender, type SlugRenderOptions } from '../internal/slug-shaders/index.js';
+import { slugDilate, slugDilateMatrix, slugRender, type SlugRenderOptions } from './slug-shaders/index.js';
 
 /**
  * One glyph instance's canonical Slug fields, already resolved to nodes. The address and count fields locate the
  * glyph's band tables inside the shared page; core owns their meaning, and a program owns how it stores them.
  */
-export interface ThreeSlugInstanceNodes {
+export interface TslSlugInstanceNodes {
   /** Paragraph-local glyph origin, in layout units, with y measured downward. */
   readonly origin: Node<'vec2'>;
   /** Glyph quad extent in layout units. */
@@ -31,7 +31,7 @@ export interface ThreeSlugInstanceNodes {
 }
 
 /** The three integer textures one decoded Slug page publishes, plus the row widths that address them. */
-export interface ThreeSlugPageResources {
+export interface TslSlugPageResources {
   readonly curveTexture: DataTexture;
   readonly curveWidth: number;
   readonly headerTexture: DataTexture;
@@ -41,7 +41,7 @@ export interface ThreeSlugPageResources {
 }
 
 /** Optional coverage controls. Omitted fields keep the canonical non-zero winding rule with no weight compensation. */
-export interface ThreeSlugFillRule {
+export interface TslSlugFillRule {
   readonly evenOdd?: Node<'bool'>;
   readonly weightBoost?: Node<'bool'>;
   readonly stemDarken?: Node<'float'>;
@@ -53,10 +53,10 @@ export interface ThreeSlugFillRule {
  * dilation, so they must describe the same draw the returned position node feeds.
  */
 interface ThreeSlugShaderResourceBase {
-  readonly page: ThreeSlugPageResources;
+  readonly page: TslSlugPageResources;
   /** Drawing-buffer size in device pixels. */
   readonly viewport: Node<'vec2'>;
-  readonly fillRule?: ThreeSlugFillRule;
+  readonly fillRule?: TslSlugFillRule;
 }
 
 interface ThreeSlugShaderRowResources extends ThreeSlugShaderResourceBase {
@@ -74,7 +74,7 @@ interface ThreeSlugShaderMatrixResources extends ThreeSlugShaderResourceBase {
   readonly modelViewProjectionRow3?: never;
 }
 
-export type ThreeSlugShaderResources = ThreeSlugShaderRowResources | ThreeSlugShaderMatrixResources;
+export type TslSlugShaderResources = ThreeSlugShaderRowResources | ThreeSlugShaderMatrixResources;
 
 /**
  * Everything the canonical Slug graph produces, so a program can consume a stage or compose over its final output.
@@ -82,7 +82,7 @@ export type ThreeSlugShaderResources = ThreeSlugShaderRowResources | ThreeSlugSh
  * Unlike Bitmap this output publishes no `clipPosition`: Slug integrates coverage analytically from outlines, so it is
  * correct at any subpixel placement and must keep the default projection rather than snap to the physical pixel grid.
  */
-export interface ThreeSlugShaderOutput {
+export interface TslSlugShaderOutput {
   /** Dilated glyph-quad position. Reading it from a vertex node is what publishes `renderCoordinate`. */
   readonly position: Node<'vec3'>;
   /** Interpolated em-space coordinate the coverage integral is evaluated at. */
@@ -103,10 +103,7 @@ export interface ThreeSlugShaderOutput {
  * The graph reads `positionLocal` from the technique's unit quad, which must span `[0, 1]` with the origin at the
  * glyph's upper-left corner. A program supplying different geometry owns that correspondence.
  */
-export function slugShader(
-  instance: ThreeSlugInstanceNodes,
-  resources: ThreeSlugShaderResources,
-): ThreeSlugShaderOutput {
+export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugShaderResources): TslSlugShaderOutput {
   const renderCoordinate = TSL.varyingProperty('vec2', 'pmndrsSlugRenderCoordinate');
   const position = TSL.Fn(() => {
     const localPosition = TSL.vec2(
@@ -170,7 +167,7 @@ export function slugShader(
   };
 }
 
-function renderOptions(rule: ThreeSlugFillRule | undefined): SlugRenderOptions {
+function renderOptions(rule: TslSlugFillRule | undefined): SlugRenderOptions {
   return {
     evenOdd: rule?.evenOdd ?? TSL.bool(false),
     weightBoost: rule?.weightBoost ?? TSL.bool(false),

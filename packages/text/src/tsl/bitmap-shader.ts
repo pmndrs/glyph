@@ -5,7 +5,7 @@ import type { Node, Texture } from 'three/webgpu';
  * One glyph instance's canonical Bitmap fields, already resolved to nodes. Core owns what each field means; how a
  * program addresses it — storage buffers, instanced attributes, or a texture — stays the program's own choice.
  */
-export interface ThreeBitmapInstanceNodes {
+export interface TslBitmapInstanceNodes {
   /** Paragraph-local glyph origin, in layout units, with y measured downward. */
   readonly origin: Node<'vec2'>;
   /** Glyph quad extent in layout units. */
@@ -21,18 +21,18 @@ export interface ThreeBitmapInstanceNodes {
 }
 
 /** The GPU resources one Bitmap glyph batch binds: the single-channel coverage page its strike binding selected. */
-export interface ThreeBitmapShaderResources {
+export interface TslBitmapShaderResources {
   /** Coverage page uploaded in the atlas's own top-down row order, so `flipY` must stay disabled. */
   readonly page: Texture;
 }
 
-export interface ThreeBitmapShaderOptions {
+export interface TslBitmapShaderOptions {
   /** Snap projected vertices to physical pixels. Disabled by default so animated transforms retain subpixel motion. */
   readonly pixelSnapping?: boolean;
 }
 
 /** Everything the canonical Bitmap graph produces, so a program can consume a stage or compose over its final output. */
-export interface ThreeBitmapShaderOutput {
+export interface TslBitmapShaderOutput {
   readonly position: Node<'vec3'>;
   /**
    * Clip-space vertex position selected by the shader options. Pixel snapping is opt-in because it preserves strike
@@ -57,10 +57,10 @@ export interface ThreeBitmapShaderOutput {
  * the glyph's upper-left corner. A program supplying different geometry owns that correspondence.
  */
 export function bitmapShader(
-  instance: ThreeBitmapInstanceNodes,
-  resources: ThreeBitmapShaderResources,
-  options: ThreeBitmapShaderOptions = {},
-): ThreeBitmapShaderOutput {
+  instance: TslBitmapInstanceNodes,
+  resources: TslBitmapShaderResources,
+  options: TslBitmapShaderOptions = {},
+): TslBitmapShaderOutput {
   const atlasUv = TSL.vec2(
     instance.uvOrigin.x.add(TSL.uv().x.mul(instance.uvSize.x)),
     instance.uvOrigin.y.add(TSL.uv().y.mul(instance.uvSize.y)),

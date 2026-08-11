@@ -1,26 +1,26 @@
 import type { Node, NodeMaterial } from 'three/webgpu';
 
-import type { ThreeBitmapShaderOutput } from './bitmap-shader.js';
-import type { ThreeMsdfShaderOutput } from './msdf-shader.js';
-import type { ThreeSlugShaderOutput } from './slug-shader.js';
+import type { TslBitmapShaderOutput } from '../tsl/bitmap-shader.js';
+import type { TslMsdfShaderOutput } from '../tsl/msdf-shader.js';
+import type { TslSlugShaderOutput } from '../tsl/slug-shader.js';
 
 export type ThreeTextMaterialContext =
   | Readonly<{
       technique: 'pmndrs.bitmap';
-      shader: ThreeBitmapShaderOutput;
+      shader: TslBitmapShaderOutput;
       /** Final renderer-local position including policy-selected transform indirection. */
       position: Node<'vec3'>;
       createDefaultMaterial(): NodeMaterial;
     }>
   | Readonly<{
       technique: 'pmndrs.msdf';
-      shader: ThreeMsdfShaderOutput;
+      shader: TslMsdfShaderOutput;
       position: Node<'vec3'>;
       createDefaultMaterial(): NodeMaterial;
     }>
   | Readonly<{
       technique: 'pmndrs.slug';
-      shader: ThreeSlugShaderOutput;
+      shader: TslSlugShaderOutput;
       position: Node<'vec3'>;
       createDefaultMaterial(): NodeMaterial;
     }>;

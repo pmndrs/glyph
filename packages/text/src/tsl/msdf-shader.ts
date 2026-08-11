@@ -5,7 +5,7 @@ import type { Node, Texture } from 'three/webgpu';
  * One glyph instance's canonical MSDF fields, already resolved to nodes. Core owns what each field means; how a
  * program packs them — the first-party target interleaves them into seven `vec4` storage buffers — stays its own choice.
  */
-export interface ThreeMsdfInstanceNodes {
+export interface TslMsdfInstanceNodes {
   /** Paragraph-local glyph origin, in layout units, with y measured downward. */
   readonly origin: Node<'vec2'>;
   /** Glyph quad extent in layout units. */
@@ -28,7 +28,7 @@ export interface ThreeMsdfInstanceNodes {
 }
 
 /** The GPU resources one MSDF glyph batch binds, plus the baked constants its distance field was generated with. */
-export interface ThreeMsdfShaderResources {
+export interface TslMsdfShaderResources {
   /** Layered atlas whose RGB channels carry the multi-channel field and whose alpha carries the true distance. */
   readonly atlas: Texture;
   readonly atlasWidth: number;
@@ -44,7 +44,7 @@ export interface ThreeMsdfShaderResources {
  * gradient, so it is correct at any subpixel placement and must keep the default projection rather than snap to the
  * physical pixel grid.
  */
-export interface ThreeMsdfShaderOutput {
+export interface TslMsdfShaderOutput {
   readonly position: Node<'vec3'>;
   /** Unclamped atlas coordinate the glyph cell is sampled at. */
   readonly atlasUv: Node<'vec2'>;
@@ -64,10 +64,7 @@ export interface ThreeMsdfShaderOutput {
  * The graph reads `positionLocal` and `uv()` from the technique's unit quad: both must span `[0, 1]` with the origin at
  * the glyph's upper-left corner. A program supplying different geometry owns that correspondence.
  */
-export function msdfShader(
-  instance: ThreeMsdfInstanceNodes,
-  resources: ThreeMsdfShaderResources,
-): ThreeMsdfShaderOutput {
+export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfShaderResources): TslMsdfShaderOutput {
   const atlasU = instance.uvOrigin.x.add(TSL.uv().x.mul(instance.uvSize.x));
   const atlasV = instance.uvOrigin.y.add(TSL.uv().y.mul(instance.uvSize.y));
   const minimumU = instance.uvBounds.x.add(0.5 / resources.atlasWidth);
@@ -127,7 +124,7 @@ function median3(value: Node<'vec3'>): Node<'float'> {
 function screenPixelRange(
   atlasU: Node<'float'>,
   atlasV: Node<'float'>,
-  resources: ThreeMsdfShaderResources,
+  resources: TslMsdfShaderResources,
 ): Node<'float'> {
   const screenTexelsU = TSL.float(1).div(TSL.max(TSL.fwidth(atlasU), 1e-6));
   const screenTexelsV = TSL.float(1).div(TSL.max(TSL.fwidth(atlasV), 1e-6));

@@ -40,7 +40,7 @@ sources:
     resource: ../../packages/text/src/raster/slug-technique.ts
     title: Merged v0 Slug TSL implementation
   - id: slug-texture-v0
-    resource: ../../packages/text/src/internal/slug-shaders/slug-texture.ts
+    resource: ../../packages/text/src/tsl/slug-shaders/slug-texture.ts
     title: Merged v0 Slug texture access
   - id: gpucat
     resource: https://github.com/isaac-mason/gpucat/tree/11cf91b5172cc5143f68ff6ebf01c5e815de4e94

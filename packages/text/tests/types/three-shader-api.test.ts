@@ -2,25 +2,25 @@ import { mul, vec3 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 
+import { defineTextMaterial } from '../../src/three.js';
 import {
   bitmapShader,
-  defineTextMaterial,
   msdfShader,
   slugShader,
-  type ThreeBitmapInstanceNodes,
-  type ThreeBitmapShaderResources,
-  type ThreeMsdfInstanceNodes,
-  type ThreeMsdfShaderResources,
-  type ThreeSlugInstanceNodes,
-  type ThreeSlugShaderResources,
-} from '../../src/three.js';
+  type TslBitmapInstanceNodes,
+  type TslBitmapShaderResources,
+  type TslMsdfInstanceNodes,
+  type TslMsdfShaderResources,
+  type TslSlugInstanceNodes,
+  type TslSlugShaderResources,
+} from '../../src/tsl.js';
 
-declare const bitmapInstance: ThreeBitmapInstanceNodes;
-declare const bitmapResources: ThreeBitmapShaderResources;
-declare const mtsdfInstance: ThreeMsdfInstanceNodes;
-declare const mtsdfResources: ThreeMsdfShaderResources;
-declare const slugInstance: ThreeSlugInstanceNodes;
-declare const slugResources: ThreeSlugShaderResources;
+declare const bitmapInstance: TslBitmapInstanceNodes;
+declare const bitmapResources: TslBitmapShaderResources;
+declare const mtsdfInstance: TslMsdfInstanceNodes;
+declare const mtsdfResources: TslMsdfShaderResources;
+declare const slugInstance: TslSlugInstanceNodes;
+declare const slugResources: TslSlugShaderResources;
 
 const bitmapOutput = bitmapShader(bitmapInstance, bitmapResources);
 const mtsdfOutput = msdfShader(mtsdfInstance, mtsdfResources);

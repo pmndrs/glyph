@@ -1,14 +1,14 @@
 import * as TSL from 'three/tsl';
 import type { Node } from 'three/webgpu';
 
-export interface ThreeDecorationInstanceNodes {
+export interface TslDecorationInstanceNodes {
   /** Decoration rectangle: inline start, block start, inline extent, block extent. */
   readonly rect: Node<'vec4'>;
   /** Packed decoration lanes: x carries little-endian RGBA color, y carries flags and line style. */
   readonly packed: Node<'uvec2'>;
 }
 
-export interface ThreeDecorationShaderOutput {
+export interface TslDecorationShaderOutput {
   readonly position: Node<'vec3'>;
   readonly color: Node<'vec3'>;
   readonly opacity: Node<'float'>;
@@ -30,7 +30,7 @@ const srgbTransferEotf = TSL.sRGBTransferEOTF as unknown as (color: Node<'vec3'>
  * the Rust gather decodes through its sRGB-to-linear table — so the color channels pass
  * through the sRGB EOTF into the renderer's linear working space. Alpha stays linear.
  */
-export function decorationShader(instance: ThreeDecorationInstanceNodes): ThreeDecorationShaderOutput {
+export function decorationShader(instance: TslDecorationInstanceNodes): TslDecorationShaderOutput {
   const byte = TSL.float(1 / 255);
   const color = srgbTransferEotf(
     TSL.vec3(

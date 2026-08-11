@@ -8,11 +8,11 @@ import { TextEngineRenderPlanView, type RenderPlanTable } from '../core/plan-vie
 import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugPageData } from '../raster/slug-technique.js';
-import { decorationShader } from './decoration-shader.js';
-import { bitmapShader } from './bitmap-shader.js';
+import { decorationShader } from '../tsl/decoration-shader.js';
+import { bitmapShader } from '../tsl/bitmap-shader.js';
 import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-runtime.js';
-import { msdfShader } from './msdf-shader.js';
-import { slugShader, type ThreeSlugPageResources } from './slug-shader.js';
+import { msdfShader } from '../tsl/msdf-shader.js';
+import { slugShader, type TslSlugPageResources } from '../tsl/slug-shader.js';
 import type { ThreeTextMaterialContext } from './material.js';
 import type { ThreePlanProgramBuffer } from './plan-program-registry.js';
 
@@ -36,7 +36,7 @@ interface RetainedResource {
   readonly referenceId: number;
 }
 
-interface RetainedSlugPage extends ThreeSlugPageResources {
+interface RetainedSlugPage extends TslSlugPageResources {
   readonly byteLength: number;
   dispose(): void;
 }

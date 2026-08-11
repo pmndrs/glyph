@@ -10,14 +10,14 @@
     "types": ["node"]
   },
   "files": [
-    "src/internal/slug-shaders/calc-coverage.ts",
-    "src/internal/slug-shaders/calc-root-code.ts",
-    "src/internal/slug-shaders/slug-dilate.ts",
-    "src/internal/slug-shaders/slug-band.ts",
-    "src/internal/slug-shaders/slug-render.ts",
-    "src/internal/slug-shaders/slug-texture.ts",
-    "src/internal/slug-shaders/solve-quadratic.ts",
-    "src/internal/slug-shaders/tsl-compat.ts",
+    "src/tsl/slug-shaders/calc-coverage.ts",
+    "src/tsl/slug-shaders/calc-root-code.ts",
+    "src/tsl/slug-shaders/slug-dilate.ts",
+    "src/tsl/slug-shaders/slug-band.ts",
+    "src/tsl/slug-shaders/slug-render.ts",
+    "src/tsl/slug-shaders/slug-texture.ts",
+    "src/tsl/slug-shaders/solve-quadratic.ts",
+    "src/tsl/slug-shaders/tsl-compat.ts",
     "tests/types/tsl-scalar-operations.test.ts"
   ]
 }

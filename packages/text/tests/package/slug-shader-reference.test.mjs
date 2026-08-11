@@ -11,7 +11,7 @@ import {
   referenceVerticalIntersections,
   resolveSlugCurveTexel,
   slugGridCoordinate,
-} from '../../dist/internal/slug-shaders/reference.js';
+} from '../../dist/tsl/slug-shaders/reference.js';
 
 test('V0 header decoding preserves exact unsigned count and glyph-local offset', () => {
   assert.deepEqual(decodeSlugHeader(0xabcd_fffe), {
