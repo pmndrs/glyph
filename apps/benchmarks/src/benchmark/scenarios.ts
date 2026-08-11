@@ -360,7 +360,7 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
  * shaper's font selection; and the `.notdef` pin proves the fallback span is what resolved the Devanagari at all.
  */
 const RICH_TEXT_SPAN_EVIDENCE = {
-  hash: 'f73e324f',
+  hash: 'd51b40e5',
   glyphCount: 175,
   renderedGlyphCount: 149,
   drawCount: 7,
@@ -382,6 +382,10 @@ const RICH_TEXT_SPAN_EVIDENCE = {
   tintPaintGlyphs: 3,
   paragraphPaintGlyphs: 114,
   nestedGlyphCount: 9,
+  // One instance per continuous decorating box per line (D-248): the emphasis span underlines as a single
+  // run, while line-through covers the tint span once and the accent span's two wrapped lines.
+  underlineCount: 1,
+  lineThroughCount: 3,
 } as const;
 
 /**

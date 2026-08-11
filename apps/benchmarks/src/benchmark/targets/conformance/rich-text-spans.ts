@@ -30,6 +30,12 @@ type BitmapTechnique = typeof bitmap;
 const CONTENT_WIDTH = 700;
 const BODY_FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
+// Decoration gather convention (D-248): buffer 2 packs [color, flags | style << 8] per instance. The bit values are
+// the shaper ABI's `engine.decorationFlags` / `engine.decorationStyles`, pinned here because a silent renumbering
+// must fail this lane rather than shift what the probe counts.
+const DECORATION_UNDERLINE_FLAG = 0b0001;
+const DECORATION_LINE_THROUGH_FLAG = 0b0100;
+const DECORATION_SOLID_STYLE = 1;
 const bitmapRaster: LoadedFontRequest<BitmapTechnique>['raster'] = {
   technique: bitmap,
   options: { strikes: [16] },
@@ -71,6 +77,8 @@ interface CaseEvidence {
   readonly lineTextEnds: readonly number[];
   readonly notdefCount: number;
   readonly renderedGlyphCount: number;
+  readonly underlineCount: number;
+  readonly lineThroughCount: number;
   readonly x: readonly number[];
 }
 
@@ -203,6 +211,15 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
       const nestedGlyphCount = glyphsInRange(composed, nested).length;
       const nestedPaintDelta = countColor(noNesting, accentColor) - accentPaintGlyphs;
 
+      // Decoration probe (D-248): the composed paragraph declares an underline on the emphasis span and line-through
+      // on the tint and accent spans, so both kinds must be published as decoration instances in every case.
+      if (composed.underlineCount === 0 || composed.lineThroughCount === 0) {
+        throw new Error(
+          `composed paragraph published ${composed.underlineCount} underline and ` +
+            `${composed.lineThroughCount} line-through decoration instances; both must be nonzero`,
+        );
+      }
+
       const hashes = CASE_IDS.map((caseId) => {
         const value = required(evidence, caseId);
         // Glyph selection and topology remain exact. Positions are public f32 values, so the semantic digest quantizes
@@ -218,6 +235,7 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
           value.lineTextEnds.join(','),
           value.contentWidth.toFixed(2),
           [...value.colors].sort().join(','),
+          `${value.underlineCount}/${value.lineThroughCount}`,
         ].join('|');
       });
 
@@ -259,6 +277,8 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
           nestedPaintDelta,
           accentSpanGlyphCount: glyphsInRange(composed, accent).length,
           tintSpanGlyphCount: glyphsInRange(composed, tint).length,
+          underlineCount: composed.underlineCount,
+          lineThroughCount: composed.lineThroughCount,
         },
       };
     },
@@ -333,8 +353,27 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
   const colors: string[] = [];
   let drawCount = 0;
   let renderedGlyphCount = 0;
+  let underlineCount = 0;
+  let lineThroughCount = 0;
   text.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || !(child.geometry instanceof THREE.InstancedBufferGeometry)) return;
+    if (child.userData.pmndrsTextPrimitiveKind === 'decoration') {
+      const rect = child.geometry.getAttribute('_pmndrsText_1');
+      const packed = child.geometry.getAttribute('_pmndrsText_2');
+      if (!(rect?.array instanceof Float32Array) || !(packed?.array instanceof Uint32Array)) {
+        throw new Error('decoration draw is missing its rect lane 1 or packed color/flags lane 2');
+      }
+      const start = (child.userData.pmndrsTextRunStart as number | undefined) ?? 0;
+      for (let instance = 0; instance < child.geometry.instanceCount; instance += 1) {
+        const value = packed.array[(start + instance) * 2 + 1] ?? 0;
+        if ((value >>> 8) & 0xff && ((value >>> 8) & 0xff) !== DECORATION_SOLID_STYLE) {
+          throw new Error(`decoration instance carries unimplemented line style ${(value >>> 8) & 0xff}`);
+        }
+        if (value & DECORATION_UNDERLINE_FLAG) underlineCount += 1;
+        if (value & DECORATION_LINE_THROUGH_FLAG) lineThroughCount += 1;
+      }
+      return;
+    }
     drawCount += 1;
     const attribute = child.geometry.getAttribute('_pmndrsText_5');
     if (attribute === undefined) throw new Error('Bitmap draw is missing command-buffer color lane 5');
@@ -363,6 +402,8 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
     lineTextEnds: [...layout.lineTextEnds],
     notdefCount: [...layout.glyphIds].reduce((count, id) => count + (id === 0 ? 1 : 0), 0),
     renderedGlyphCount,
+    underlineCount,
+    lineThroughCount,
     x: [...layout.x],
   };
 }
