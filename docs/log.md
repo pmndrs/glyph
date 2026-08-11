@@ -4,11 +4,13 @@
 
 - **Standardized the React entry and polished the R3F example** — Renamed the sole declarative package entry from the
   stale `@pmndrs/text/r3f` path to the originally specified `@pmndrs/text/react` path; React Three Fiber remains the
-  internal host reconciler and an optional peer rather than part of the public name. The hello-world controls now use a
-  local `Button` component with a memoized TSL capsule-distance node over plane geometry, active and hover colors, and
-  Inter uppercase labels with tracked spacing. Each label is vertically centered by a shaped 44-unit line box whose
-  extra leading is divided around the font metrics, rather than by an arbitrary visual offset. A clean WebGPU browser
-  run switches Bitmap, MSDF, and Slug without shader errors or warnings.
+  internal host reconciler and an optional peer rather than part of the public name. The hello-world example preloads
+  each multi-raster asset through the public hook cache, renders its controls with Slug, and uses a local `Button`
+  component with a TSL capsule-distance node over plane geometry. Technique colors connect each tracked uppercase label
+  to a nested globe span that binds its subsetted Font Awesome raster directly instead of requiring a font stack. Each
+  label is vertically centered by a shaped 44-unit line box whose extra leading is divided around the font metrics,
+  rather than by an arbitrary visual offset. A clean WebGPU browser run switches Bitmap, MSDF, and Slug without shader
+  errors or warnings.
 
 - **Removed redundant warm transform scans** — `TextGroup` now consumes Three's completed scene traversal and tracks
   transform changes below the shared draw root. Camera or group motion leaves indexed transform storage untouched;

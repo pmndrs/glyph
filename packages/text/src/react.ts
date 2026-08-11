@@ -236,7 +236,7 @@ function TextGroupObject({
     ThreeTextGroupElement,
     {
       ...objectProps,
-      args: constructorArguments as unknown as readonly [TextGroupOptions],
+      args: constructorArguments,
       onError: options.onError,
       ref: publishObject,
     },

@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: '@pmndrs/text-r3f-hello-world'
-description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Slug, and font-stack fallback.
+description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Slug, and nested font spans.
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/text-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:e9a02cae665c10851ca8592c4482696d599d31bd88f0ae8c23665d0e1e31d0f4'
+source_digest: 'sha256:f6d00a2f8f68d99a5b3846c3a93950400924db180b4f8179ef250d09d2a6eba1'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -13,25 +13,27 @@ sources:
     title: Example application manifest
   - id: scene
     resource: ../../apps/r3f-hello-world/src/app.tsx
-    title: Public R3F technique and fallback example
+    title: Public R3F technique and nested font-span example
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-11T01:48:53Z'
+  at: '2026-08-11T03:15:33Z'
 ---
 
 # Package reference: `@pmndrs/text-r3f-hello-world`
 
 This private Vite application is the minimal product-shaped React Three Fiber example. One full-page canvas renders
-`Hello world` through the public `@pmndrs/text/react` `Text` component and resolves a Font Awesome globe through an ordered
-font stack. One `App` component owns the font loads, technique state, three React `Activity` branches, and its in-canvas
-MSDF controls. Each hidden branch pre-renders a complete `TextGroup` and world `Text`; changing technique reveals the
-already committed Bitmap, MSDF, or Slug branch rather than initializing one after the click. The example does not retain
-a second renderer path or manually pack glyph data. The UI `TextGroup` batches its labels explicitly. The controls sit
-in one centered row at the top of the viewport, while the world copy remains centered in the available canvas. One local
-`Button` component owns each transform group, plane mesh, hover state, and text label. Its memoized `pillNode()` graph
-rounds the plane without tessellated shape geometry. Inter labels use a 44-unit shaped line box, centered font metrics,
-and tracked uppercase text. Neither text layer opts into independent compositing because authored order is the honest
-default for this small scene.
+`Hello world` through the public `@pmndrs/text/react` `Text` component. The globe is a nested `Text` span bound directly
+to the matching subsetted Font Awesome raster rather than an automatically resolved font-stack fallback. Public
+`useFont.preload()` calls start both multi-raster asset requests before the scene suspends on the same cache entries.
+One `App` component owns the loaded fonts, technique state, three React `Activity` branches, and its in-canvas Slug
+controls. Each hidden branch pre-renders a standalone world `Text`; changing technique reveals the already committed
+Bitmap, MSDF, or Slug branch rather than initializing one after the click. The selected technique color appears on both
+the globe and its control label. The example does not retain a second renderer path or manually pack glyph data. The UI
+`TextGroup` batches its labels explicitly. The controls sit in one centered row at the top of the viewport, while the
+world copy remains centered in the available canvas. One local `Button` component owns each transform group, plane mesh,
+hover state, and text label. Its `pillNode()` graph rounds the plane without tessellated shape geometry. Labels use a
+44-unit shaped line box, centered font metrics, and tracked uppercase text. Neither text layer opts into independent
+compositing because authored order is the honest default for this small scene.
 
 The checked-in assets are deliberately bounded at source before baking:
 
@@ -62,5 +64,5 @@ check mode. The complete check runs TypeScript 7 isolated typechecking, React Co
 Oxfmt, deterministic asset rebaking, a production Vite build, and a GPU Chromium acceptance probe. The probe clicks all three in-canvas
 controls through pointer events, reads the named R3F world layer directly through Vitexec, and first requires all three
 hidden `Activity` branches to own their two Rust-planned meshes. Every revealed branch contains 13 laid-out glyphs—11
-visible records plus two spaces—with one mesh for Latin and one for the icon fallback resource. The teaching component
+visible records plus two spaces—with one mesh for Latin and one for the explicitly bound icon-span resource. The teaching component
 carries no probe-only effect, ref, frame callback, or canvas data attributes.

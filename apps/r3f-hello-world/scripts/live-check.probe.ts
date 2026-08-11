@@ -48,7 +48,7 @@ async function waitForTechnique(
       draws += 1;
       records += instanceCount;
     });
-    const selected = worldLayer?.getObjectByName(`world-${technique}`);
+    const selected = worldLayer?.getObjectByName(`font-${technique}`);
     if (selected?.visible === true && draws === 6 && records === 33) return { draws: draws / 3, records: records / 3 };
     await nextFrame();
   }
