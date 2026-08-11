@@ -25,10 +25,10 @@ export const packageSizeBudgets = {
   },
   // Complete Rust shaping, layout, policy, and command-plan publication.
   'text-shaper-wasm': {
-    rawBytes: 1_165_000,
-    minifiedBytes: 1_165_000,
-    gzipBytes: 445_000,
-    brotliBytes: 350_000,
+    rawBytes: 1_107_000,
+    minifiedBytes: 1_107_000,
+    gzipBytes: 428_000,
+    brotliBytes: 338_000,
   },
   'three-runtime-js': {
     rawBytes: 350_000,
@@ -91,10 +91,10 @@ export const packageSizeBudgets = {
     brotliBytes: 75_000,
   },
   'bitmap-baker-wasm': {
-    rawBytes: 630_000,
-    minifiedBytes: 630_000,
-    gzipBytes: 240_000,
-    brotliBytes: 185_000,
+    rawBytes: 626_000,
+    minifiedBytes: 626_000,
+    gzipBytes: 236_000,
+    brotliBytes: 181_000,
   },
   'bitmap-baker-js': {
     rawBytes: 23_500,
@@ -115,10 +115,10 @@ export const packageSizeBudgets = {
     brotliBytes: 21_000,
   },
   'mtsdf-baker-wasm': {
-    rawBytes: 557_000,
-    minifiedBytes: 557_000,
-    gzipBytes: 218_000,
-    brotliBytes: 171_000,
+    rawBytes: 551_000,
+    minifiedBytes: 551_000,
+    gzipBytes: 216_000,
+    brotliBytes: 170_000,
   },
   'mtsdf-baker-js': {
     rawBytes: 27_500,
@@ -127,10 +127,10 @@ export const packageSizeBudgets = {
     brotliBytes: 5_100,
   },
   'slug-baker-wasm': {
-    rawBytes: 485_000,
-    minifiedBytes: 485_000,
-    gzipBytes: 195_000,
-    brotliBytes: 155_000,
+    rawBytes: 464_000,
+    minifiedBytes: 464_000,
+    gzipBytes: 187_000,
+    brotliBytes: 147_000,
   },
   'slug-baker-js': {
     rawBytes: 20_000,
@@ -145,10 +145,10 @@ export const packageSizeBudgets = {
     brotliBytes: 2_400,
   },
   'portable-baker-wasm': {
-    rawBytes: 1_105_000,
-    minifiedBytes: 1_105_000,
-    gzipBytes: 395_000,
-    brotliBytes: 308_000,
+    rawBytes: 1_086_000,
+    minifiedBytes: 1_086_000,
+    gzipBytes: 391_000,
+    brotliBytes: 305_000,
   },
   // Raw and minified rose for the allocation-free grapheme script resolution; the growth is comment-dominated, at
   // +3,010 raw against +298 Brotli, because the parallel-array form needs its reasoning recorded next to it.
