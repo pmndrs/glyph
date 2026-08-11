@@ -8,6 +8,7 @@ import { TextEngineRenderPlanView, type RenderPlanTable } from '../internal/rend
 import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugPageData } from '../raster/slug-technique.js';
+import { decorationShader } from './decoration-shader.js';
 import { bitmapShader } from './bitmap-shader.js';
 import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-runtime.js';
 import { msdfShader } from './msdf-shader.js';
@@ -430,8 +431,12 @@ export class ThreeTextRenderPlanExecutor {
         }
         const primitiveIndex = plan.u32(draw + drawLayout.primitiveStart);
         const primitive = plan.record(primitives, primitiveIndex);
-        if (plan.u16(primitive + primitiveLayout.kind) !== textShaperAbi.engine.primitiveKinds.glyph) {
-          throw new Error('first-party Three plan target does not yet realize non-glyph primitives');
+        const primitiveKind = plan.u16(primitive + primitiveLayout.kind);
+        if (
+          primitiveKind !== textShaperAbi.engine.primitiveKinds.glyph &&
+          primitiveKind !== textShaperAbi.engine.primitiveKinds.decoration
+        ) {
+          throw new Error('first-party Three plan target does not yet realize this primitive kind');
         }
         const drawBufferStart = plan.u32(draw + drawLayout.bufferStart);
         const drawBufferCount = plan.u32(draw + drawLayout.bufferCount);
@@ -441,18 +446,26 @@ export class ThreeTextRenderPlanExecutor {
           const buffer = this.#buffer(plan.u32(record + bufferLayout.id), plan.u32(record + bufferLayout.generation));
           byPolicyId.set(buffer.policyBufferId, buffer);
         }
-        const resourceRecord = plan.record(resources, plan.u32(draw + drawLayout.resourceStart));
-        const resource = this.#resources.get(plan.u32(resourceRecord + resourceLayout.id));
-        if (resource === undefined) throw new Error('draw references an unknown retained resource');
+        const decoration = primitiveKind === textShaperAbi.engine.primitiveKinds.decoration;
+        const resource = decoration
+          ? undefined
+          : this.#resources.get(
+              plan.u32(plan.record(resources, plan.u32(draw + drawLayout.resourceStart)) + resourceLayout.id),
+            );
+        if (!decoration && resource === undefined) {
+          throw new Error('draw references an unknown retained resource');
+        }
         const materialId = plan.u32(draw + drawLayout.materialId);
         const transformId = plan.u32(draw + drawLayout.transformId);
         const recordIndex = plan.u32(primitive + primitiveLayout.recordIndex);
         const recordCount = plan.u16(primitive + primitiveLayout.recordCount);
         const addressing = recordAddressing(plan, draw, primitive, byPolicyId);
         const transform = this.#transformRealization(byPolicyId, transformId);
-        const material = this.#material(resource, byPolicyId, materialId, transform, addressing);
-        const origins = byPolicyId.get(1);
-        const stableIds = byPolicyId.get(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID);
+        const material = decoration
+          ? this.#decorationMaterial(byPolicyId, transform, addressing)
+          : this.#material(resource!, byPolicyId, materialId, transform, addressing);
+        const origins = decoration ? undefined : byPolicyId.get(1);
+        const stableIds = decoration ? undefined : byPolicyId.get(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID);
         if (origins !== undefined && stableIds !== undefined) {
           if (!(origins.array instanceof Float32Array) || !(stableIds.array instanceof Uint32Array)) {
             throw new TypeError('glyph-origin augmentation buffers have invalid scalar types');
@@ -659,6 +672,42 @@ export class ThreeTextRenderPlanExecutor {
       createDefaultMaterial: () => bitmapMaterial(shader, position),
     });
     this.#retainMaterial(key, material, resource, materialBuffers(required, transform, addressing), transform.kind);
+    return material;
+  }
+
+  #decorationMaterial(
+    buffers: ReadonlyMap<number, RetainedBuffer>,
+    transform: TransformRealization,
+    addressing: RecordAddressing,
+  ): THREE.NodeMaterial {
+    const rect = buffers.get(1);
+    const packed = buffers.get(2);
+    if (rect === undefined || packed === undefined) {
+      throw new Error('decoration draw is missing its rectangle or packed policy buffer');
+    }
+    const key = `decoration:${rect.id}:${rect.generation}:${packed.id}:${packed.generation}:${transformProgramKey(
+      transform,
+      this.#transformGeneration,
+    )}:${addressingProgramKey(addressing)}`;
+    const cached = this.#materials.get(key);
+    if (cached !== undefined) return cached.material;
+    const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
+      ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
+    );
+    const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
+    const shader = decorationShader({
+      rect: TSL.storage(rect.attribute, 'vec4', rect.attribute.count).setPBO(true).element(instance),
+      packed: TSL.storage(packed.attribute, 'uvec2', packed.attribute.count).setPBO(true).element(instance),
+    });
+    const position =
+      transform.kind === 'indexed'
+        ? indexedTransformPosition(shader.position, transform.indices.attribute, this.#transformAttribute, instance)
+        : shader.position;
+    const material = baseTextMaterial();
+    material.positionNode = position;
+    material.colorNode = shader.color;
+    material.opacityNode = shader.opacity;
+    this.#retainMaterial(key, material, undefined, materialBuffers([rect, packed], transform, addressing), transform.kind);
     return material;
   }
 
@@ -977,14 +1026,14 @@ export class ThreeTextRenderPlanExecutor {
   #retainMaterial(
     key: string,
     material: THREE.NodeMaterial,
-    resource: RetainedResource,
+    resource: RetainedResource | undefined,
     buffers: readonly RetainedBuffer[],
     transformKind: TransformRealization['kind'],
   ): void {
     this.#materials.set(key, {
       material,
-      resourceId: resource.id,
-      resourceGeneration: resource.generation,
+      resourceId: resource?.id ?? 0,
+      resourceGeneration: resource?.generation ?? 0,
       buffers: buffers.map(({ id, generation }) => ({ id, generation })),
       indexedTransform: transformKind === 'indexed',
     });
@@ -1060,7 +1109,7 @@ export class ThreeTextRenderPlanExecutor {
 
 function drawRealizationKey(
   programId: number,
-  resource: RetainedResource,
+  resource: RetainedResource | undefined,
   materialId: number,
   buffers: ReadonlyMap<number, RetainedBuffer>,
   clipId: number,
@@ -1076,7 +1125,8 @@ function drawRealizationKey(
     transform.kind === 'direct'
       ? `direct:${transform.transformId}`
       : transformProgramKey(transform, transformGeneration);
-  return `${programId}:${resource.id}:${resource.generation}:${materialId}:${clipId}:${depthKey}:${transformKey}:${bufferKey}`;
+  const resourceKey = resource === undefined ? 'decoration' : `${resource.id}:${resource.generation}`;
+  return `${programId}:${resourceKey}:${materialId}:${clipId}:${depthKey}:${transformKey}:${bufferKey}`;
 }
 
 function recordAddressing(

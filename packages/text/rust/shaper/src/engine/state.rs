@@ -1092,6 +1092,16 @@ fn append_session_gather(
                 .find(|binding| binding.handle == handle)
                 .map(|binding| &binding.binding)
         };
+        gather
+            .append_decorations(
+                policy,
+                capability_set,
+                positioned.decorations(),
+                ordered.id,
+                session.revision.engine.max(1),
+                super::policy_gather::DecorationPass::Under,
+            )
+            .map_err(gather_error)?;
         if retaining {
             match gather
                 .append_retained(policy, capability_set, input, binding_for_font)
@@ -1131,6 +1141,7 @@ fn append_session_gather(
                 positioned.decorations(),
                 ordered.id,
                 session.revision.engine.max(1),
+                super::policy_gather::DecorationPass::Over,
             )
             .map_err(gather_error)?;
     }

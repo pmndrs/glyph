@@ -69,17 +69,19 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
     bitmap: 0x1775_3b8c,
     msdf: 0xf9a7_e4fd,
     slug: 0xf22c_7908,
+    decoration: 0x3455fa81,
   });
   const bytes = firstPartyThreeRenderPolicyBytes();
   const request = abi.layouts.policyRequest;
   const program = abi.layouts.policyProgram;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  assert.equal(view.getUint32(request.programCount, true), 3);
+  assert.equal(view.getUint32(request.programCount, true), 4);
   const programsOffset = view.getUint32(request.programsOffset, true);
   const expectedTechniques = [
     firstPartyTechniqueWireIds.bitmap,
     firstPartyTechniqueWireIds.msdf,
     firstPartyTechniqueWireIds.slug,
+    firstPartyTechniqueWireIds.decoration,
   ];
   for (const [index, techniqueId] of expectedTechniques.entries()) {
     const offset = programsOffset + index * program.size;
@@ -87,6 +89,11 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
     assert.equal(view.getUint32(offset + program.programId, true), index + 1);
     assert.ok(view.getUint32(offset + program.drawKeyMask, true) & abi.policy.batchFields.material);
     assert.equal(view.getUint32(offset + program.storageKeyMask, true) & abi.policy.batchFields.material, 0);
+    const expectedKind =
+      techniqueId === firstPartyTechniqueWireIds.decoration
+        ? abi.engine.primitiveKinds.decoration
+        : abi.engine.primitiveKinds.glyph;
+    assert.equal(view.getUint16(offset + program.primitiveKind, true), expectedKind);
   }
 
   const shaper = await createRuntimeShaper({ wasm });

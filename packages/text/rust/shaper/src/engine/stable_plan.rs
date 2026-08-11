@@ -2274,7 +2274,77 @@ mod tests {
     }
 
     fn policy_with_budget(partition_materials: bool, fragmentation_budget: u16) -> ValidatedPolicy {
-        ValidatedPolicy::new(PolicyDescriptor {
+        ValidatedPolicy::new(descriptor_with_budget(
+            partition_materials,
+            fragmentation_budget,
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn stable_decoration_rows_pack_and_draw_without_resources() {
+        let policy = {
+            let mut descriptor = descriptor_with_budget(false, 8);
+            let mut program = descriptor.programs[0].clone();
+            program.primitive_kind = PRIMITIVE_DECORATION;
+            program.technique = TechniqueId(99);
+            program.id = ProgramId(9);
+            program.resource_kind_mask = 0;
+            program.buffers[0].id = BufferId(9);
+            for operation in &mut program.operations {
+                if let Operation::StoreF32 { buffer, .. } = operation {
+                    *buffer = BufferId(9);
+                }
+            }
+            descriptor.programs.push(program);
+            ValidatedPolicy::new(descriptor).unwrap()
+        };
+        let mut compiler = StablePlanCompiler::default();
+        let decoration = StableGlyph {
+            stable_id: 0x8000_0000,
+            content_revision: 1,
+            technique: TechniqueId(99),
+            program_variant: 0,
+            resource_id: 0,
+            resource_generation: 0,
+            resource_kind: 0,
+            resource_reference: 0,
+            semantic_id: 0x8000_0000,
+            transform_id: 1,
+            material_id: 1,
+            clip_id: 0,
+            depth_key: 0,
+            inline_start: 4.0,
+            block_start: 9.0,
+            inline_extent: 12.0,
+            block_extent: 0.5,
+        };
+        let rows = [glyph(1, 1), decoration];
+        prepare(&mut compiler, &policy, &rows, &[1.0, 4.0], true, 1, 0);
+        let view = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        let primitive = view
+            .primitives
+            .iter()
+            .find(|primitive| primitive.kind == PRIMITIVE_DECORATION)
+            .expect("decoration primitive");
+        assert_eq!(primitive.resource_id, 0);
+        let draw = view
+            .draws
+            .iter()
+            .find(|draw| {
+                view.primitives[draw.primitive_start as usize].kind == PRIMITIVE_DECORATION
+            })
+            .expect("decoration draw");
+        assert_eq!(draw.resource_count, 0);
+    }
+
+    fn descriptor_with_budget(
+        partition_materials: bool,
+        fragmentation_budget: u16,
+    ) -> PolicyDescriptor {
+        PolicyDescriptor {
             capability_sets: vec![CapabilitySet {
                 id: CAPABILITY,
                 flags: CAP_STABLE_INDIRECT,
@@ -2334,8 +2404,7 @@ mod tests {
                     },
                 ],
             }],
-        })
-        .unwrap()
+        }
     }
 
     fn read_f32(bytes: &[u8], offset: usize) -> f32 {

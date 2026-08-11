@@ -119,11 +119,11 @@ export function richTextLiteral(
     ? span(fonts.emphasis, { features: [{ tag: RICH_TEXT_SMALL_CAPS_FEATURE }] })
     : span(fonts.emphasis);
   const tracked = span({ letterSpacing: composition.letterSpacing });
-  const emphasis = span({ fontSize: composition.emphasisFontSize });
+  const emphasis = span({ decoration: { underline: true }, fontSize: composition.emphasisFontSize });
   const face = span(fonts.emphasis);
   const foreign = span(fonts.foreign);
   const accent = span({ color: RICH_TEXT_ACCENT_COLOR, fontSize: composition.accentFontSize });
-  const tint = span({ color: composition.tintColor });
+  const tint = span({ color: composition.tintColor, decoration: { lineThrough: true } });
   // Interpolating the same word as a plain string keeps the paragraph text — and therefore every other span range —
   // byte-identical, so the only difference the control introduces is the nesting itself.
   const inner = composition.nested ? span({ fontSize: composition.nestedFontSize })`virtually` : 'virtually';

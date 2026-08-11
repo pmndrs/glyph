@@ -1068,6 +1068,11 @@ function engineDecoration(
   decoration: NonNullable<ParagraphStyle['decoration']>,
   paint: GlyphPaintInput | undefined,
 ): TextEngineDecoration {
+  if (decoration.style !== undefined && decoration.style !== 'solid') {
+    throw new TypeError(
+      `'${decoration.style}' decoration lines are not implemented yet; only 'solid' is supported`,
+    );
+  }
   return {
     style: decoration.style ?? 'solid',
     rgba: packedForeground(decoration.color === undefined ? (paint ?? {}) : { color: decoration.color }),

@@ -108,6 +108,24 @@ pub enum RetainedGather {
 /// Decoration rows use the top identity bit; session glyph identities stay below it.
 pub const DECORATION_STABLE_ID_BASE: u32 = 0x8000_0000;
 
+/// CSS paint order for decoration appends: underline and overline draw under the text,
+/// line-through draws over it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecorationPass {
+    Under,
+    Over,
+}
+
+impl DecorationPass {
+    fn admits(self, flags: u32) -> bool {
+        let over = flags & super::frame::DECORATION_LINE_THROUGH != 0;
+        match self {
+            Self::Under => !over,
+            Self::Over => over,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct PolicyGatherWorkspace {
     glyphs: Vec<PlanGlyph>,
@@ -478,12 +496,15 @@ impl PolicyGatherWorkspace {
         Ok(())
     }
 
-    /// Appends resource-free decoration records after glyph gather. Rows carry the
+    /// Appends resource-free decoration records around glyph gather. Rows carry the
     /// decoration program's technique, a dedicated identity namespace (top bit set), and
     /// a fixed lane convention mirroring the first-party u32 prefix: f32 lanes 0-3 hold
     /// the decoration rectangle; u32 lanes hold transform index, stable identity, color,
-    /// then flags with the line style in bits 8-15. Returns false when the policy
-    /// declares no decoration program, leaving the gather output untouched.
+    /// then flags with the line style in bits 8-15. `pass` selects CSS paint order:
+    /// underline and overline records append before the paragraph's glyphs and
+    /// line-through records after, so draw order tokens place them under and over the
+    /// text respectively. Returns false when the policy declares no decoration program,
+    /// leaving the gather output untouched.
     pub fn append_decorations(
         &mut self,
         policy: &ValidatedPolicy,
@@ -491,10 +512,15 @@ impl PolicyGatherWorkspace {
         decorations: &[super::positioning::DecorationRecord],
         transform_id: u32,
         content_revision: u32,
+        pass: DecorationPass,
     ) -> Result<bool, GatherError> {
         let Some(program) = policy.decoration_program(capability_set) else {
             return Ok(false);
         };
+        let decorations: alloc::vec::Vec<&super::positioning::DecorationRecord> = decorations
+            .iter()
+            .filter(|record| pass.admits(record.flags))
+            .collect();
         if decorations.is_empty() {
             return Ok(true);
         }
@@ -511,7 +537,7 @@ impl PolicyGatherWorkspace {
                 .reserve(decorations.len())
                 .map_err(|_| GatherError::AllocationFailed)?;
         }
-        for (ordinal, record) in decorations.iter().enumerate() {
+        for (ordinal, &record) in decorations.iter().enumerate() {
             let stable_id = DECORATION_STABLE_ID_BASE
                 | u32::try_from(base + ordinal).map_err(|_| GatherError::AllocationFailed)?;
             for (index, field) in self.f32_fields.iter_mut().enumerate() {
@@ -1536,7 +1562,14 @@ mod tests {
         workspace.begin(&decorated, 4).unwrap();
         assert!(
             workspace
-                .append_decorations(&decorated, CAPABILITY, &[record], 3, 5)
+                .append_decorations(
+                    &decorated,
+                    CAPABILITY,
+                    &[record],
+                    3,
+                    5,
+                    DecorationPass::Under
+                )
                 .unwrap()
         );
         let view = workspace.view();
@@ -1558,13 +1591,42 @@ mod tests {
         assert_eq!(view.u32_fields[1][0], DECORATION_STABLE_ID_BASE);
         assert_eq!(view.u32_fields[2][0], 0xff00_00ff);
         assert_eq!(view.u32_fields[3][0], 1 | (3 << 8));
+        // The under pass rejects line-through records and the over pass accepts them.
+        let mut line_through = record;
+        line_through.flags = crate::engine::frame::DECORATION_LINE_THROUGH;
+        assert!(
+            workspace
+                .append_decorations(
+                    &decorated,
+                    CAPABILITY,
+                    &[line_through],
+                    3,
+                    5,
+                    DecorationPass::Under
+                )
+                .unwrap()
+        );
+        assert_eq!(workspace.view().glyphs.len(), 1);
+        assert!(
+            workspace
+                .append_decorations(
+                    &decorated,
+                    CAPABILITY,
+                    &[line_through],
+                    3,
+                    5,
+                    DecorationPass::Over
+                )
+                .unwrap()
+        );
+        assert_eq!(workspace.view().glyphs.len(), 2);
 
         let plain = policy();
         let mut plain_workspace = PolicyGatherWorkspace::default();
         plain_workspace.begin(&plain, 4).unwrap();
         assert!(
             !plain_workspace
-                .append_decorations(&plain, CAPABILITY, &[record], 3, 5)
+                .append_decorations(&plain, CAPABILITY, &[record], 3, 5, DecorationPass::Under)
                 .unwrap()
         );
         assert_eq!(plain_workspace.view().glyphs.len(), 0);

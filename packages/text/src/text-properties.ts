@@ -36,7 +36,8 @@ export interface ParagraphStyle {
 /**
  * Text decoration lines for a styled range. Geometry comes from the font's baked
  * underline and strikeout metrics; `thickness` and `offset` override in layout units
- * when nonzero. Non-solid line styles render as solid until patterned paint lands.
+ * when nonzero. Only `solid` lines are implemented: requesting another line style is
+ * rejected at the boundary rather than silently rendered as solid.
  */
 export interface TextDecorationStyle {
   readonly underline?: boolean;
