@@ -707,7 +707,13 @@ export class ThreeTextRenderPlanExecutor {
     material.positionNode = position;
     material.colorNode = shader.color;
     material.opacityNode = shader.opacity;
-    this.#retainMaterial(key, material, undefined, materialBuffers([rect, packed], transform, addressing), transform.kind);
+    this.#retainMaterial(
+      key,
+      material,
+      undefined,
+      materialBuffers([rect, packed], transform, addressing),
+      transform.kind,
+    );
     return material;
   }
 
