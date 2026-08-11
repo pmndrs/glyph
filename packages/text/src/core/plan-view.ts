@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { TextEnginePublication } from './text-engine-host.js';
+import type { TextEnginePublication } from './host.js';
 
 export interface RenderPlanTable {
   readonly offset: number;

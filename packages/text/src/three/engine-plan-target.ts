@@ -2,9 +2,9 @@ import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { TextEnginePublication } from '../internal/text-engine-host.js';
-import { FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, FIRST_PARTY_TRANSFORM_BUFFER_ID } from '../internal/render-policy-wire.js';
-import { TextEngineRenderPlanView, type RenderPlanTable } from '../internal/render-plan-view.js';
+import type { TextEnginePublication } from '../core/host.js';
+import { FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, FIRST_PARTY_TRANSFORM_BUFFER_ID } from './render-policy.js';
+import { TextEngineRenderPlanView, type RenderPlanTable } from '../core/plan-view.js';
 import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugPageData } from '../raster/slug-technique.js';

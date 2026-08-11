@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { compileTextEngineFrameUpdate } from '../../dist/internal/engine-frame-wire.js';
+import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 
 const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);

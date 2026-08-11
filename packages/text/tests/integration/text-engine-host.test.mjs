@@ -2,11 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { TextEngineHost } from '../../dist/internal/text-engine-host.js';
-import {
-  firstPartyTechniqueWireIds,
-  firstPartyThreeRenderPolicyBytes,
-} from '../../dist/internal/render-policy-wire.js';
+import { TextEngineHost } from '../../dist/core/host.js';
+import { firstPartyTechniqueWireIds } from '../../dist/core/render-policy.js';
+import { firstPartyThreeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
 

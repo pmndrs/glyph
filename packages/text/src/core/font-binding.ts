@@ -4,7 +4,7 @@ import { bitmap, type BitmapData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
-import { RenderWireIdentityRegistry, type FirstPartyTechniqueWireIds } from './render-policy-wire.js';
+import { RenderWireIdentityRegistry, type FirstPartyTechniqueWireIds } from './render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
 const ABSENT_PAGE = 0xffff;

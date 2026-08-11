@@ -1,6 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
-import type { TextEnginePublication } from './text-engine-host.js';
+import type { TextEnginePublication } from './host.js';
 
 /** Reads an explicitly requested semantic sidecar. Rendering never calls this reader. */
 export function readTextEngineMeasurements(

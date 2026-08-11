@@ -8,7 +8,7 @@ import { validateFontArtifact } from '@pmndrs/text/bake';
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
-import { firstPartyFontBindingBytes } from '../../dist/internal/font-binding-wire.js';
+import { firstPartyFontBindingBytes } from '../../dist/core/font-binding.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
 import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';

@@ -4,9 +4,9 @@ import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugData, type SlugPageData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { textRuntimeShaper, type TextRuntime } from '../text-runtime.js';
-import { firstPartyFontBindingBytes } from '../internal/font-binding-wire.js';
-import { firstPartyThreeRenderPolicyBytes, type ThreeTransformMode } from '../internal/render-policy-wire.js';
-import { TextEngineHost, type TextEngineSession, type TextEngineSessionOptions } from '../internal/text-engine-host.js';
+import { firstPartyFontBindingBytes } from '../core/font-binding.js';
+import { firstPartyThreeRenderPolicyBytes, type ThreeTransformMode } from './render-policy.js';
+import { TextEngineHost, type TextEngineSession, type TextEngineSessionOptions } from '../core/host.js';
 import type { ThreeTextMaterial } from './material.js';
 import { compiledThreeRasterPlanPrograms, type CompiledThreeRasterPlanProgram } from './plan-program-registry.js';
 

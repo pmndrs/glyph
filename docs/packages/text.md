@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:d7d4c376a07d2e237b35c6923ef22b7556c1c042618eb7e8a33b400e31028797'
+source_digest: 'sha256:59b7ea711afa68e58594a0ea71adae087af34db89eba86c69d158477cf4acfd3'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -36,7 +36,7 @@ sources:
     resource: ../../packages/text/rust/shaper/src/engine/state.rs
     title: Retained Rust text engine
   - id: frame-host
-    resource: ../../packages/text/src/internal/text-engine-host.ts
+    resource: ../../packages/text/src/core/host.ts
     title: Single-export Wasm host
   - id: three-api
     resource: ../../packages/text/src/three.ts

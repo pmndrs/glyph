@@ -1,10 +1,10 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { FontBindingDescriptor, FontBindingFieldTable } from '../internal/font-binding-wire.js';
-import { compileFontBinding, emptyFontBindingTable, fontBindingResources } from '../internal/font-binding-wire.js';
-import type { PolicyProgram } from '../internal/render-policy-wire.js';
-import { RenderWireIdentityRegistry } from '../internal/render-policy-wire.js';
+import type { FontBindingDescriptor, FontBindingFieldTable } from '../core/font-binding.js';
+import { compileFontBinding, emptyFontBindingTable, fontBindingResources } from '../core/font-binding.js';
+import type { PolicyProgram } from '../core/render-policy.js';
+import { RenderWireIdentityRegistry } from '../core/render-policy.js';
 import type { LoadedFont } from '../loaded-font.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
 import type { ThreeTextMaterial } from './material.js';

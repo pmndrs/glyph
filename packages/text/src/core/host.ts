@@ -1,6 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
-import { RenderWireIdentityRegistry } from './render-policy-wire.js';
+import { RenderWireIdentityRegistry } from './render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
 

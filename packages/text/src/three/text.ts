@@ -27,14 +27,10 @@ import {
   type TextEngineDecoration,
   type TextEngineStyleValue,
   type TextEngineTextMutation,
-} from '../internal/engine-frame-wire.js';
-import {
-  TextEngineStatusError,
-  type TextEnginePublication,
-  type TextEngineSession,
-} from '../internal/text-engine-host.js';
-import { readTextEngineLayouts, readTextEngineMeasurements } from '../internal/layout-query-view.js';
-import { TextEngineRenderPlanView } from '../internal/render-plan-view.js';
+} from '../core/frame-wire.js';
+import { TextEngineStatusError, type TextEnginePublication, type TextEngineSession } from '../core/host.js';
+import { readTextEngineLayouts, readTextEngineMeasurements } from '../core/layout-query-view.js';
+import { TextEngineRenderPlanView } from '../core/plan-view.js';
 import type { ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
