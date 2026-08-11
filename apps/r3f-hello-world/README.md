@@ -1,11 +1,15 @@
 # React Three Fiber hello world
 
-This is the smallest product-shaped `@pmndrs/text` example in the workspace. It renders `Hello world` through the public React Three Fiber API, resolves the globe from a Font Awesome fallback font, and switches between Bitmap, MSDF, and Slug using controls rendered inside the canvas.
+This is the smallest product-shaped `@pmndrs/text` example in the workspace. It renders `Hello world` through the
+public React Three Fiber API, binds the globe span to a subsetted Font Awesome font, and switches between Bitmap, MSDF,
+and Slug using controls rendered inside the canvas.
 
-The complete scene lives in `src/app.tsx`. Its local technique state reveals one of three pre-rendered React `Activity`
-branches; each branch contains a `TextGroup` and `Text` whose font stack carries the technique binding. The UI controls
-use their own `TextGroup` so their labels batch explicitly. The controls are centered across the top of the canvas and
-the world copy is centered in the viewport.
+The complete scene lives in `src/app.tsx`. Two public `useFont.preload()` calls begin loading the checked assets before
+the scene suspends on the same cached requests. Local technique state reveals one of three pre-rendered React `Activity`
+branches. Each branch contains one standalone Inter `Text` with a nested `Text` span that selects the matching Font
+Awesome raster directly, so this known icon does not require a font stack. The technique color is shared by that globe
+span and its in-canvas button label. The Slug-rendered controls use a `TextGroup` so their three labels can batch
+explicitly; the row stays centered across the top while the world copy stays centered in the viewport.
 
 ```sh
 mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world dev
