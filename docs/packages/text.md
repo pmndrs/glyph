@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:8222c8a2c84f34b669b80a8a0d375102985cece1a1c5519f85d2d01a55373296'
+source_digest: 'sha256:39b612f93a0db7344f490fb0a24fcc5172599702dc7fd572b66b86532e4a66d3'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -324,14 +324,15 @@ The latest checked package-size record after the baker ABI cleanup reports:
 
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
-| Core JavaScript plus shaper Wasm        | 1,202,284 B | 447,017 B | 353,629 B |
-| Three adapter plus core and shaper Wasm | 1,450,594 B | 486,528 B | 386,433 B |
+| Core JavaScript plus shaper Wasm        | 1,194,036 B | 443,967 B | 351,843 B |
+| Three adapter plus core and shaper Wasm | 1,442,346 B | 483,478 B | 384,647 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
-The optimized shaper is 1,109,644 raw / 428,350 gzip / 337,447 Brotli bytes after the shared sort kernel (D-243)
-replaced twelve per-type engine sort instantiations; the prior checkpoint measured 1,160,223 / 442,808 / 348,415. The renderer-neutral JavaScript graph is
+The optimized shaper is 1,101,396 raw / 425,300 gzip / 335,661 Brotli bytes after the shared sort kernel (D-243)
+replaced twelve per-type engine sort instantiations and the Binaryen merge pipeline landed (D-244); the pre-golf
+checkpoint measured 1,160,223 / 442,808 / 348,415. The renderer-neutral JavaScript graph is
 92,550 raw / 18,659 gzip / 16,177 Brotli, and the complete Three JavaScript graph is 334,488 raw / 57,253 gzip /
 48,250 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
 to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; the later shared-emitter and stable
@@ -368,8 +369,11 @@ reduction, not causal attribution.
 
 The canonical direct benchmark loads the packaged `dist/text_shaper.wasm`: Cargo release optimization, LTO, one codegen
 unit, default-on `simd128`, stripping, and `wasm-opt -Oz --enable-simd` have already run. On the identical Rust artifact,
-Binaryen `-O3` and `-O4` added 11,976 and 13,661 raw bytes without a demonstrated latency improvement, so `-Oz` remains
-the evidence-backed setting. The `<4 ms` warm-path target and stable p95 closure remain open.
+Binaryen `-O3` and `-O4` added 11,976 and 13,661 raw bytes without a demonstrated latency improvement. The
+evidence-backed pipeline is now `--merge-similar-functions -Oz --merge-similar-functions -Oz` (D-244): the merge pass
+finds nothing after `-Oz` alone, but sandwiched runs remove 8,248 raw bytes from the shaper and 29,289 across the four
+bakers with hot-path lanes unchanged within noise. Explicit `#[inline(never)]` stage seams in the update path measured
+size-neutral (+241 raw) and were rejected — the large export body is stage aggregation, not duplication. The `<4 ms` warm-path target and stable p95 closure remain open.
 
 Cargo `opt-level` is likewise evidence-pinned per crate (D-242). A four-variant shaper matrix (whole-`z`,
 dependency-only `z`, HarfRust-family `s`, whole-`s`) shrank the 1,160,223-byte artifact to 890,381–1,076,427 raw bytes,
