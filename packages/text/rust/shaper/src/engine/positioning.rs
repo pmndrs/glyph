@@ -85,9 +85,19 @@ pub(crate) struct PositionedGlyphArena {
     decorations: Vec<DecorationRecord>,
 }
 
+/// Two resolved styles share one decoration line when every declared decoration field
+/// matches: the CSS decorating-box group.
+fn same_decoration_group(left: &ResolvedStyle, right: &ResolvedStyle) -> bool {
+    left.decoration_flags == right.decoration_flags
+        && left.decoration_rgba == right.decoration_rgba
+        && left.decoration_style == right.decoration_style
+        && left.decoration_thickness.to_bits() == right.decoration_thickness.to_bits()
+        && left.decoration_offset.to_bits() == right.decoration_offset.to_bits()
+        && left.decoration_font_size.to_bits() == right.decoration_font_size.to_bits()
+}
+
 #[derive(Clone, Copy)]
 struct DecoratedRun {
-    style_index: usize,
     style: ResolvedStyle,
     font_handle: u32,
     start: f64,
@@ -602,14 +612,22 @@ impl PositionedGlyphArena {
                 cursor += per_space;
             }
             if style.decoration_flags == 0 {
-                self.flush_decorated_run(&mut decorated_run, line, metrics_for)?;
+                if decorated_run.is_some() {
+                    self.flush_decorated_run(&mut decorated_run, line, metrics_for)?;
+                }
             } else {
                 match decorated_run {
-                    Some(ref mut run) if run.style_index == style_index => run.end = cursor,
+                    // One continuous line per CSS decorating box: nested spans that inherit
+                    // the same declared decoration extend the run across style changes.
+                    Some(ref mut run)
+                        if run.font_handle == font_handle
+                            && same_decoration_group(&run.style, &style) =>
+                    {
+                        run.end = cursor
+                    }
                     _ => {
                         self.flush_decorated_run(&mut decorated_run, line, metrics_for)?;
                         decorated_run = Some(DecoratedRun {
-                            style_index,
                             style,
                             font_handle,
                             start: cluster_origin,
@@ -619,7 +637,9 @@ impl PositionedGlyphArena {
                 }
             }
         }
-        self.flush_decorated_run(&mut decorated_run, line, metrics_for)?;
+        if decorated_run.is_some() {
+            self.flush_decorated_run(&mut decorated_run, line, metrics_for)?;
+        }
         if let Some(boundary) = boundary {
             let _ = self.position_boundary(
                 line,
@@ -651,7 +671,12 @@ impl PositionedGlyphArena {
         if metrics.units_per_em == 0 {
             return Err(EngineError::InvalidRequest);
         }
-        let scale = f64::from(run.style.font_size) / f64::from(metrics.units_per_em);
+        let decoration_font_size = if run.style.decoration_font_size > 0.0 {
+            run.style.decoration_font_size
+        } else {
+            run.style.font_size
+        };
+        let scale = f64::from(decoration_font_size) / f64::from(metrics.units_per_em);
         let baseline = line.block_start + line.baseline;
         let inline_start = finite_f32(run.start)?;
         let inline_extent = nonnegative_f32((run.end - run.start).max(0.0))?;
@@ -1436,6 +1461,151 @@ mod tests {
     fn justification_expands_only_lines_with_expandable_spaces() {
         assert_eq!(justification_space_advance(22.0, 2), 11.0);
         assert_eq!(justification_space_advance(22.0, 0), 0.0);
+    }
+
+    /// CSS decorating box: a nested font-size change inside one declared decoration
+    /// keeps a single continuous line at the declaring span's geometry.
+    #[test]
+    fn nested_size_changes_keep_one_continuous_decoration_line() {
+        let text = vec![0x61, 0x62, 0x0a];
+        let mut declaring = ResolvedStyle::test_typography(10.0, 0.0, 0.0);
+        declaring.decoration_flags = crate::engine::frame::DECORATION_UNDERLINE;
+        declaring.decoration_rgba = 0xff00_00ff;
+        declaring.decoration_font_size = 10.0;
+        let mut nested = declaring;
+        nested.font_size = 7.0;
+        let styles = [
+            StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style: declaring,
+            },
+            StyleSegment {
+                text_start: 1,
+                text_end: 3,
+                style: nested,
+            },
+        ];
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end: 2,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 0,
+            bidi_level: 0,
+            style: declaring,
+        }];
+        let clusters = ClusterArena {
+            starts: vec![0, 1, 2],
+            ends: vec![1, 2, 3],
+            advances: vec![6.0, 4.2, 0.0],
+            flags: vec![CLUSTER_SAFE_BEFORE, CLUSTER_SAFE_BEFORE, CLUSTER_HARD_BREAK],
+            style_indexes: vec![0, 1, 0],
+            source_runs: vec![0, 0, u32::MAX],
+            binding_handles: vec![11, 11, 0],
+            font_handles: vec![1, 1, 0],
+            stable_ids: vec![10, 20, 30],
+            glyph_starts: vec![0, 1, 2],
+            glyph_counts: vec![1, 1, 0],
+            glyph_indices: vec![0, 1],
+            glyph_stable_ids: vec![100, 200],
+            index_at: vec![0, 1, 2, 3],
+            ..ClusterArena::default()
+        };
+        let shape = ShapeArena {
+            runs: vec![],
+            glyph_ids: vec![1, 2],
+            clusters: vec![0, 1],
+            x_advances: vec![500, 500],
+            y_advances: vec![0, 0],
+            x_offsets: vec![0, 0],
+            y_offsets: vec![0, 0],
+            glyph_flags: vec![0, 0],
+        };
+        let bidi = BidiAnalysis {
+            levels: vec![0, 0, BIDI_B],
+            classes: vec![0, 0, BIDI_B],
+            paragraph_starts: vec![0],
+            paragraph_ends: vec![3],
+            paragraph_levels: vec![0],
+            runs: vec![],
+        };
+        let flow = FlowLayoutArena {
+            lines: vec![FlowLine {
+                flow_thread_id: 7,
+                region_id: 9,
+                transform_index: 9,
+                clip_id: 9,
+                fragment_start: 0,
+                fragment_count: 1,
+                align: ALIGN_CENTER,
+                block_start: 0.0,
+                baseline: 8.0,
+                height: 10.0,
+            }],
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 0,
+                    cluster_end: 3,
+                    text_start: 0,
+                    text_end: 2,
+                    advance: 10.2,
+                    hard_break: true,
+                },
+                slot_start: 0.0,
+                slot_end: 20.0,
+                boundary_index: NO_BOUNDARY,
+            }],
+            ..FlowLayoutArena::default()
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let extents = |_, _| {
+            Some(FontGlyphExtents {
+                x_min: 0,
+                y_min: 0,
+                x_max: 500,
+                y_max: 700,
+            })
+        };
+        let mut index = IdentityIndex::default();
+        let mut active = PositionedGlyphArena::default();
+        let mut next_revision = 1;
+        active
+            .build(
+                &PositionedGlyphArena::default(),
+                &flow,
+                &text,
+                &clusters,
+                &runs,
+                &shape,
+                &BoundaryShapeArena::default(),
+                &styles,
+                &bidi,
+                &mut index,
+                &mut next_revision,
+                metrics,
+                extents,
+            )
+            .unwrap();
+
+        assert_eq!(active.decorations.len(), 1);
+        let underline = active.decorations[0];
+        // One line spans both clusters: centered 10.2 advance in the 20.0 slot.
+        assert_eq!(underline.inline_start, 4.9);
+        assert_eq!(underline.inline_extent, 10.2);
+        // Geometry from the declaring 10.0 size, not the nested 7.0: 8.0 + 100 * 0.01.
+        assert_eq!(underline.block_start, 9.0);
+        assert_eq!(underline.block_extent, 0.5);
     }
 
     /// Decoration slice: a styled run with underline and line-through flags emits

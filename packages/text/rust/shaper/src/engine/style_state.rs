@@ -86,6 +86,10 @@ pub(crate) struct ResolvedStyle {
     pub decoration_style: u8,
     pub decoration_thickness: f32,
     pub decoration_offset: f32,
+    /// Resolved font size of the span that declared the decoration group: the CSS
+    /// decorating box. Descendants inherit it unchanged, so a nested size change keeps
+    /// the declared line geometry continuous. Zero falls back to the run's font size.
+    pub decoration_font_size: f32,
     language_source: u32,
     features_source: u32,
     pub has_line_height: bool,
@@ -136,6 +140,7 @@ impl Default for ResolvedStyle {
             decoration_style: DECORATION_NONE,
             decoration_thickness: 0.0,
             decoration_offset: 0.0,
+            decoration_font_size: 0.0,
             language_source: NO_STYLE_SOURCE,
             features_source: NO_STYLE_SOURCE,
             has_line_height: false,
@@ -667,6 +672,7 @@ fn apply_style(mut resolved: ResolvedStyle, style: RetainedStyle, source: usize)
         resolved.decoration_style = style.decoration_style;
         resolved.decoration_thickness = style.decoration_thickness;
         resolved.decoration_offset = style.decoration_offset;
+        resolved.decoration_font_size = resolved.font_size;
     }
     resolved
 }

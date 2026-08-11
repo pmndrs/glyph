@@ -348,10 +348,22 @@ impl StablePlanCompiler {
         self.input_order_records.resize(input.glyphs.len(), 0);
         self.batch_pending_indices.resize(self.batches.len(), NONE);
 
+        let mut cached_kind_program = None;
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
-            let program = policy
-                .program(capability_set, glyph.technique, glyph.program_variant)
-                .ok_or(StablePlanError::ProgramMissing)?;
+            let program = match cached_kind_program {
+                Some((technique, variant, program))
+                    if technique == glyph.technique && variant == glyph.program_variant =>
+                {
+                    program
+                }
+                _ => {
+                    let program = policy
+                        .program(capability_set, glyph.technique, glyph.program_variant)
+                        .ok_or(StablePlanError::ProgramMissing)?;
+                    cached_kind_program = Some((glyph.technique, glyph.program_variant, program));
+                    program
+                }
+            };
             validate_glyph(glyph, program.primitive_kind == PRIMITIVE_DECORATION)?;
             if !self.identity_set.insert(glyph.stable_id) {
                 return Err(StablePlanError::DuplicateIdentity);

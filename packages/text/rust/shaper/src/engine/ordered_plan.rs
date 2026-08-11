@@ -399,10 +399,22 @@ impl OrderedPlanCompiler {
         self.input_slots.resize(input.glyphs.len(), 0);
         self.identity_set.prepare(input.glyphs.len())?;
 
+        let mut cached_kind_program = None;
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
-            let program = policy
-                .program(capability_set, glyph.technique, glyph.program_variant)
-                .ok_or(OrderedPlanError::ProgramMissing)?;
+            let program = match cached_kind_program {
+                Some((technique, variant, program))
+                    if technique == glyph.technique && variant == glyph.program_variant =>
+                {
+                    program
+                }
+                _ => {
+                    let program = policy
+                        .program(capability_set, glyph.technique, glyph.program_variant)
+                        .ok_or(OrderedPlanError::ProgramMissing)?;
+                    cached_kind_program = Some((glyph.technique, glyph.program_variant, program));
+                    program
+                }
+            };
             validate_glyph(glyph, program.primitive_kind == PRIMITIVE_DECORATION)?;
             if !self.identity_set.insert(glyph.stable_id) {
                 return Err(OrderedPlanError::DuplicateIdentity);
@@ -478,10 +490,22 @@ impl OrderedPlanCompiler {
             return Ok(false);
         }
         self.identity_set.prepare(input.glyphs.len())?;
+        let mut cached_kind_program = None;
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
-            let program = policy
-                .program(capability_set, glyph.technique, glyph.program_variant)
-                .ok_or(OrderedPlanError::ProgramMissing)?;
+            let program = match cached_kind_program {
+                Some((technique, variant, program))
+                    if technique == glyph.technique && variant == glyph.program_variant =>
+                {
+                    program
+                }
+                _ => {
+                    let program = policy
+                        .program(capability_set, glyph.technique, glyph.program_variant)
+                        .ok_or(OrderedPlanError::ProgramMissing)?;
+                    cached_kind_program = Some((glyph.technique, glyph.program_variant, program));
+                    program
+                }
+            };
             validate_glyph(glyph, program.primitive_kind == PRIMITIVE_DECORATION)?;
             if !self.identity_set.insert(glyph.stable_id) {
                 return Err(OrderedPlanError::DuplicateIdentity);
