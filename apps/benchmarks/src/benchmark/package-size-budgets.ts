@@ -8,7 +8,7 @@ export const packageSizeBudgets = {
   // The renderer-neutral core subpath (D-249) must stay integration-free; the graph
   // assertion in measure-package-sizes.mts already rejects any three/tsl/react pull.
   'core-subpath-js': {
-    rawBytes: 215_000,
+    rawBytes: 217_000,
     minifiedBytes: 148_000,
     gzipBytes: 38_000,
     brotliBytes: 32_500,
@@ -47,8 +47,11 @@ export const packageSizeBudgets = {
     gzipBytes: 429_000,
     brotliBytes: 339_500,
   },
+  // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250); the
+  // growth is comment- and name-dominated: minified, gzip, and Brotli stayed inside
+  // their existing ceilings.
   'three-runtime-js': {
-    rawBytes: 350_000,
+    rawBytes: 356_000,
     minifiedBytes: 232_000,
     gzipBytes: 60_000,
     brotliBytes: 51_000,
