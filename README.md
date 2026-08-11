@@ -147,13 +147,21 @@ Call `dispose()` when a `Text`, `TextGroup`, loaded font, or loader will not be 
 
 ## Bake fonts
 
-The package CLI bakes the same canonical font GLB consumed by the loader:
+The `text` CLI bakes the canonical font GLB consumed by the loader. Bake one known font directly:
 
 ```sh
 pnpm exec text bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --msdf --slug
 ```
 
-Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporarily and require byte-identical output. Runtime baking uses the same baker Wasm in a Worker and is opt-in; it is dynamicly imported and split into it's own chunk as to not pull it into the default bundle.
+Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporarily and require byte-identical output.
+
+Or let the CLI discover every `defineFont()` declaration in a project and write each artifact beside its source asset:
+
+```sh
+pnpm exec text bake --project-root . --entry src/text.ts --asset-root public
+```
+
+Discovery scans the declared entries, resolves each font's raster requirements from its declaration, and mirrors asset-relative outputs under `--output-root` when the artifacts belong somewhere other than the asset root. `text bake --help` lists every option. Runtime baking uses the same baker Wasm in a Worker and is opt-in; it is dynamically imported and split into its own chunk so it never reaches the default bundle.
 
 Inspect authored `post` or CFF glyph names to find icon code points or produce a bake-ready Unicode set:
 
@@ -163,6 +171,103 @@ pnpm exec text glyphs fa-solid-900.ttf --name globe --name earth-americas --unic
 ```
 
 Fonts without authored glyph names still report exact glyph IDs.
+
+## Core API
+
+Every Three primitive above is built on a renderer-neutral core with four moves: load a font into the Wasm shaper, describe text as one serialized frame, register a validated render policy, and consume the revisioned render plan each update publishes. The engine never calls back into JavaScript during shaping, layout, or packing — a renderer only encodes requests and reads fixed-record results.
+
+> These modules currently live under `internal/` without a stable subpath; Three consumes exactly this surface, and the wire contracts are versioned and integration-tested. Import paths below name the modules, not a published subpath.
+
+Load a font and own the engine lifecycle once:
+
+```ts
+import { createTextRuntime } from '@pmndrs/text';
+import { textRuntimeShaper } from '…/text-runtime';
+import { TextEngineHost } from '…/internal/text-engine-host';
+import { firstPartyThreeRenderPolicyBytes } from '…/internal/render-policy-wire';
+
+const runtime = await createTextRuntime();
+const [inter] = await runtime.loadFont({
+  input: { baked: '/fonts/Inter.font.glb' },
+  raster: { technique: msdf },
+});
+
+const host = new TextEngineHost(textRuntimeShaper(runtime));
+host.registerPolicy(POLICY, firstPartyThreeRenderPolicyBytes());
+```
+
+Shape text — a session update is one serialized frame of mutations, constraints, and the revision handshake:
+
+```ts
+import { compileTextEngineFrameUpdate } from '…/internal/engine-frame-wire';
+
+const session = host.createSession({ handle: SESSION, requestCapacity: 4096, resultCapacity: 65536 });
+const publication = session.update(
+  compileTextEngineFrameUpdate({
+    sessionId: SESSION,
+    policyHandle: POLICY,
+    capabilitySet: 1,
+    expectedEngineRevision: 0,
+    consumedPlanRevision: 0,
+    acknowledgedPublicationGeneration: 0,
+    limits,
+    paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
+    textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'Hello' }],
+    styleMutations: [rootStyle],
+    constraints: [paragraphConstraint],
+    regions: [paragraphRegion],
+  }),
+);
+```
+
+Consume the plan. A publication is borrowed A/B memory — its bytes stay readable only until the next call into the same Wasm module, so a synchronous renderer walks it before touching the engine again. The static path applies buffer patches, then issues one draw per packet:
+
+```ts
+import { TextEngineRenderPlanView } from '…/internal/render-plan-view';
+import { textShaperAbi } from '…/generated/text-shaper-abi';
+
+const plan = new TextEngineRenderPlanView().bind(publication);
+
+const patches = plan.table('patches');
+const patchLayout = textShaperAbi.layouts.enginePatch;
+for (let index = 0; index < patches.count; index += 1) {
+  const patch = plan.record(patches, index);
+  // Copy plan.u32(patch + patchLayout.byteLength) bytes into the GPU buffer named by
+  // plan.u32(patch + patchLayout.bufferId) at plan.u32(patch + patchLayout.destinationOffset).
+}
+
+const draws = plan.table('draws');
+const drawLayout = textShaperAbi.layouts.engineDraw;
+for (let index = 0; index < draws.count; index += 1) {
+  const draw = plan.record(draws, index);
+  // One instanced draw: program, material, buffer, and ordering identities are all
+  // explicit fields — plan.u32(draw + drawLayout.programId), materialId, clipId, depthKey.
+}
+```
+
+The frame loop echoes what it consumed. Adjacent revisions publish minimal policy-costed patches; a consumer that fell behind the required base revision receives a complete checkpoint instead of an unsafe delta:
+
+```ts
+let previous = publication;
+function frame(edits) {
+  const next = session.update(
+    compileTextEngineFrameUpdate({
+      sessionId: SESSION,
+      policyHandle: POLICY,
+      capabilitySet: 1,
+      expectedEngineRevision: previous.engineRevision,
+      consumedPlanRevision: previous.planRevision,
+      acknowledgedPublicationGeneration: previous.publicationGeneration,
+      limits,
+      textMutations: edits,
+    }),
+  );
+  plan.bind(next); // apply patches, draw, then acknowledge next frame
+  previous = next;
+}
+```
+
+Record layouts come from the versioned ABI (`@pmndrs/text/shaper-abi.json`); the next section describes what policies and plans mean, and `dispose()` on the host releases every registered policy, font stack, and session.
 
 ## Render policy and render plan
 
