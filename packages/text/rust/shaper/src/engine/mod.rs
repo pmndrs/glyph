@@ -41,6 +41,7 @@ pub(crate) mod render_plan_wire;
 pub(crate) mod semantic_view;
 mod semantic_wire;
 mod shaping_state;
+pub(crate) mod sort;
 #[cfg_attr(not(test), allow(dead_code))]
 mod stable_order;
 pub mod stable_plan;

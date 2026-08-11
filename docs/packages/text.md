@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:247699e3c0290cc64c13174b17570de1458ae3793c24654a1f7b84206c0ccc43'
+source_digest: 'sha256:8222c8a2c84f34b669b80a8a0d375102985cece1a1c5519f85d2d01a55373296'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -324,13 +324,14 @@ The latest checked package-size record after the baker ABI cleanup reports:
 
 | Graph                                   |         Raw |      gzip |    Brotli |
 | --------------------------------------- | ----------: | --------: | --------: |
-| Core JavaScript plus shaper Wasm        | 1,251,867 B | 460,943 B | 364,027 B |
-| Three adapter plus core and shaper Wasm | 1,493,805 B | 499,537 B | 396,100 B |
+| Core JavaScript plus shaper Wasm        | 1,202,284 B | 447,017 B | 353,629 B |
+| Three adapter plus core and shaper Wasm | 1,450,594 B | 486,528 B | 386,433 B |
 
 Three, React, and React Three Fiber are optional peers and excluded from these bundle totals. JavaScript and Wasm are
 measured independently and then summed because browsers transfer them as separate assets.
 
-The optimized shaper is 1,159,317 raw / 442,284 gzip / 347,850 Brotli bytes. The renderer-neutral JavaScript graph is
+The optimized shaper is 1,109,644 raw / 428,350 gzip / 337,447 Brotli bytes after the shared sort kernel (D-243)
+replaced twelve per-type engine sort instantiations; the prior checkpoint measured 1,160,223 / 442,808 / 348,415. The renderer-neutral JavaScript graph is
 92,550 raw / 18,659 gzip / 16,177 Brotli, and the complete Three JavaScript graph is 334,488 raw / 57,253 gzip /
 48,250 Brotli. Deleting the legacy TypeScript raster packing/lifecycle path reduced the measured core total from 461,917
 to 460,901 gzip bytes and the complete Three total from 501,815 to 498,922 gzip bytes; the later shared-emitter and stable
@@ -378,6 +379,15 @@ shaping hot path. The inverse holds for the parser-generic bakers: forcing `z` o
 Slug bakers by 26–123 KB over their `-O3` builds, and rebuilding the font baker at `3` or `s` inflates it by 192 or
 95 KB over its current `z`, so every crate already sits at its measured per-crate optimum and further size reduction
 proceeds through code-shape changes rather than optimizer flags.
+
+The first such change is the shared engine sort kernel (D-243). Every engine ordering now lowers its key into a
+`u64` — packed integer fields, or the order-preserving bit image of an `f64` under `total_cmp` — and sorts retained
+`(key, source index)` pairs through one instantiation, applying the permutation by cycle walking; the four-field style
+cascade key runs as two stable passes over the same kernel. The index tiebreak makes every engine ordering total and
+deterministic, sort-algorithm independent, and allocation-free in steady state. This removed 50,579 raw / 14,458 gzip
+bytes; measured sort bodies fell from 115.5 KiB in 64 functions to 79.5 KiB in 45, of which 45.5 KiB is HarfRust-internal
+and unreachable without a fork. The 22k-glyph benchmark lanes are unchanged within noise (cold 16.41 vs 16.51 ms,
+suffix-edit 14.01 vs 13.93 ms medians).
 
 The final sequential eight-warmup/31-sample checkpoint uses the unchanged 22,000-target corpus, which resolves to 25,515
 positioned and 21,805 renderable glyphs. Values below are medians in milliseconds for the complete packaged Rust

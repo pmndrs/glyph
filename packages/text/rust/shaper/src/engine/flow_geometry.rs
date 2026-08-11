@@ -7,6 +7,7 @@ use super::{
         EXCLUSION_WRAP_LARGEST, SHAPE_POLYGON, SHAPE_RECTANGLE,
     },
     semantic_wire::{FlowConstraint, FlowExclusion, FlowRegion, FlowVertex, GeometryBatch},
+    sort,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -22,6 +23,7 @@ pub(crate) struct InlineSlotArena {
     section: Vec<InlineSlot>,
     crossings: Vec<f64>,
     critical_blocks: Vec<f64>,
+    sort_pairs: Vec<(u64, u32)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -233,7 +235,7 @@ impl InlineSlotArena {
             }
         }
         self.critical_blocks.push(block_end);
-        self.critical_blocks.sort_by(f64::total_cmp);
+        sort::sort_f64_total(&mut self.critical_blocks);
         self.critical_blocks.dedup();
         let mut sample_index = 0usize;
         while sample_index < self.critical_blocks.len() {
@@ -263,6 +265,7 @@ impl InlineSlotArena {
             block,
             &mut self.crossings,
             &mut self.section,
+            &mut self.sort_pairs,
             max_slots,
         )?;
         self.scratch.clear();
@@ -292,6 +295,7 @@ fn polygon_section(
     block: f64,
     crossings: &mut Vec<f64>,
     output: &mut Vec<InlineSlot>,
+    sort_pairs: &mut Vec<(u64, u32)>,
     max_slots: usize,
 ) -> Result<(), EngineError> {
     crossings.clear();
@@ -328,7 +332,7 @@ fn polygon_section(
             );
         }
     }
-    crossings.sort_by(f64::total_cmp);
+    sort::sort_f64_total(crossings);
     for pair in crossings.chunks_exact(2) {
         push_raw_nonempty(
             output,
@@ -338,7 +342,7 @@ fn polygon_section(
             },
         );
     }
-    normalize_slots(output);
+    normalize_slots(output, sort_pairs)?;
     if output.len() > max_slots {
         return Err(EngineError::ResultTooLarge);
     }
@@ -411,8 +415,16 @@ fn intersect_sorted(
     Ok(())
 }
 
-fn normalize_slots(slots: &mut Vec<InlineSlot>) {
-    slots.sort_by(|first, second| first.start.total_cmp(&second.start));
+fn normalize_slots(
+    slots: &mut Vec<InlineSlot>,
+    sort_pairs: &mut Vec<(u64, u32)>,
+) -> Result<(), EngineError> {
+    sort::prepare_pairs(sort_pairs, slots.len())?;
+    for (index, slot) in slots.iter().enumerate() {
+        sort_pairs.push((sort::f64_key(slot.start), index as u32));
+    }
+    sort::sort_pairs(sort_pairs);
+    sort::apply_pair_order(slots, sort_pairs);
     let mut write = 0usize;
     for read in 0..slots.len() {
         let slot = slots[read];
@@ -424,6 +436,7 @@ fn normalize_slots(slots: &mut Vec<InlineSlot>) {
         }
     }
     slots.truncate(write);
+    Ok(())
 }
 
 fn subtract_slot(

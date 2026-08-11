@@ -32,6 +32,7 @@ use super::{
         RESOURCE_ACTION_RETAIN, RETIRE_BUFFER, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView,
         ResourceRecord, RetirementRecord,
     },
+    sort,
     stable_order::{
         ChunkedOrder, ChunkedOrderError, ORDER_CHUNK_RECORDS, OrderEntry, PendingChunk,
     },
@@ -207,6 +208,7 @@ pub struct StablePlanCompiler {
     order_entries: Vec<OrderEntry>,
     order_chunk_scratch: Vec<PendingChunk>,
     slot_writes: Vec<SlotWrite>,
+    sort_pairs: Vec<(u64, u32)>,
     changed_ranges: Vec<RecordRange>,
     buffer_ranges: [Vec<RecordRange>; MAX_PHYSICAL_BUFFERS],
     range_jobs: Vec<RangeJob>,
@@ -825,7 +827,13 @@ impl StablePlanCompiler {
                 changed: assignment.changed,
             });
         }
-        self.slot_writes.sort_unstable_by_key(|write| write.slot);
+        self.sort_pairs.clear();
+        reserve(&mut self.sort_pairs, self.slot_writes.len())?;
+        for (index, write) in self.slot_writes.iter().enumerate() {
+            self.sort_pairs.push((u64::from(write.slot), index as u32));
+        }
+        sort::sort_pairs(&mut self.sort_pairs);
+        sort::apply_pair_order(&mut self.slot_writes, &mut self.sort_pairs);
         self.changed_ranges.clear();
         reserve(&mut self.changed_ranges, self.slot_writes.len())?;
         for write in &self.slot_writes {
@@ -876,6 +884,7 @@ impl StablePlanCompiler {
             &mut self.range_jobs,
             &self.buffer_ranges,
             program.buffers.len(),
+            &mut self.sort_pairs,
         )?;
         for job_index in 0..self.range_jobs.len() {
             let RangeJob {
@@ -1060,8 +1069,13 @@ impl StablePlanCompiler {
                 order_alignment,
             )?);
         }
-        self.changed_ranges
-            .sort_unstable_by_key(|range| range.start);
+        self.sort_pairs.clear();
+        reserve(&mut self.sort_pairs, self.changed_ranges.len())?;
+        for (index, range) in self.changed_ranges.iter().enumerate() {
+            self.sort_pairs.push((u64::from(range.start), index as u32));
+        }
+        sort::sort_pairs(&mut self.sort_pairs);
+        sort::apply_pair_order(&mut self.changed_ranges, &mut self.sort_pairs);
         coalesce_buffer_ranges(
             &mut self.changed_ranges,
             4,
@@ -1520,7 +1534,14 @@ impl StablePlanCompiler {
                 start = end;
             }
         }
-        self.draws.sort_unstable_by_key(|draw| draw.order_token);
+        self.sort_pairs.clear();
+        reserve(&mut self.sort_pairs, self.draws.len())?;
+        for (index, draw) in self.draws.iter().enumerate() {
+            self.sort_pairs
+                .push((u64::from(draw.order_token), index as u32));
+        }
+        sort::sort_pairs(&mut self.sort_pairs);
+        sort::apply_pair_order(&mut self.draws, &mut self.sort_pairs);
         Ok(())
     }
 

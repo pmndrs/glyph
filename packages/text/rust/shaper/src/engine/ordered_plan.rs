@@ -30,6 +30,7 @@ use super::{
         RETIRE_BUFFER, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView, ResourceRecord,
         RetirementRecord,
     },
+    sort,
 };
 
 pub use super::plan_error::PlanError as OrderedPlanError;
@@ -113,6 +114,7 @@ pub struct OrderedPlanCompiler {
     plan_buffers: Vec<BufferRecord>,
     primitives: Vec<PrimitiveRecord>,
     draws: Vec<DrawRecord>,
+    sort_pairs: Vec<(u64, u32)>,
     live_primitives: Vec<PrimitiveRecord>,
     live_draws: Vec<DrawRecord>,
     patches: Vec<PatchRecord>,
@@ -810,6 +812,7 @@ impl OrderedPlanCompiler {
             &mut self.range_jobs,
             &self.buffer_ranges,
             program.buffers.len(),
+            &mut self.sort_pairs,
         )?;
         for job_index in 0..self.range_jobs.len() {
             let RangeJob {
@@ -1188,7 +1191,14 @@ impl OrderedPlanCompiler {
                 start = end;
             }
         }
-        self.draws.sort_unstable_by_key(|draw| draw.order_token);
+        self.sort_pairs.clear();
+        reserve(&mut self.sort_pairs, self.draws.len())?;
+        for (index, draw) in self.draws.iter().enumerate() {
+            self.sort_pairs
+                .push((u64::from(draw.order_token), index as u32));
+        }
+        sort::sort_pairs(&mut self.sort_pairs);
+        sort::apply_pair_order(&mut self.draws, &mut self.sort_pairs);
         Ok(())
     }
 

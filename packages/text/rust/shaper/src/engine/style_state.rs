@@ -17,7 +17,7 @@ use crate::{
     valid_utf16_boundary,
 };
 
-use super::EngineError;
+use super::{EngineError, sort};
 
 const ROOT_REQUIRED_FIELDS: u32 =
     STYLE_FIELD_FONT_STACK | STYLE_FIELD_FONT_SIZE | STYLE_FIELD_RASTER_PIXEL_RATIO;
@@ -271,6 +271,7 @@ impl StyleArena {
         committed: &Self,
         mutations: StyleMutationBatch<'_>,
         scratch: &mut Vec<MutationKey>,
+        sort_pairs: &mut Vec<(u64, u32)>,
     ) -> Result<(), EngineError> {
         self.clear();
         scratch.clear();
@@ -290,7 +291,12 @@ impl StyleArena {
                 request_index,
             });
         }
-        scratch.sort_unstable_by_key(|key| (key.style_id, key.request_index));
+        sort::prepare_pairs(sort_pairs, scratch.len())?;
+        for (index, key) in scratch.iter().enumerate() {
+            sort_pairs.push((sort::pack2(key.style_id, index as u32), index as u32));
+        }
+        sort::sort_pairs(sort_pairs);
+        sort::apply_pair_order(scratch, sort_pairs);
         collapse_to_last_mutation(scratch);
 
         self.records
@@ -344,6 +350,8 @@ impl StyleArena {
         mut font_stack_exists: impl FnMut(u32) -> bool,
         order_scratch: &mut Vec<usize>,
         nesting_scratch: &mut Vec<u32>,
+        sort_pairs: &mut Vec<(u64, u32)>,
+        sort_pairs_pass: &mut Vec<(u64, u32)>,
     ) -> Result<(), EngineError> {
         if self.records.is_empty() {
             return Ok(());
@@ -384,16 +392,30 @@ impl StyleArena {
         order_scratch
             .try_reserve(self.records.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
-        order_scratch.extend(0..self.records.len());
-        order_scratch.sort_unstable_by_key(|index| {
-            let style = self.records[*index];
-            (
-                style.text_start,
-                core::cmp::Reverse(style.text_end),
-                !style.root,
-                style.cascade_order,
-            )
-        });
+        // Two stable passes over the shared kernel replace one wide-key sort: the
+        // second pass orders by (text_start, descending text_end) and preserves the
+        // first pass's (!root, cascade_order) order for equal keys, so the composite
+        // order matches the previous four-field key exactly.
+        sort::prepare_pairs(sort_pairs, self.records.len())?;
+        for (index, style) in self.records.iter().enumerate() {
+            sort_pairs.push((
+                (u64::from(!style.root) << 32) | u64::from(style.cascade_order),
+                index as u32,
+            ));
+        }
+        sort::sort_pairs(sort_pairs);
+        sort::prepare_pairs(sort_pairs_pass, self.records.len())?;
+        for (position, &(_, record_index)) in sort_pairs.iter().enumerate() {
+            let style = self.records[record_index as usize];
+            sort_pairs_pass.push((
+                sort::pack2(style.text_start, !style.text_end),
+                position as u32,
+            ));
+        }
+        sort::sort_pairs(sort_pairs_pass);
+        for &(_, position) in sort_pairs_pass.iter() {
+            order_scratch.push(sort_pairs[position as usize].1 as usize);
+        }
         if order_scratch.windows(2).any(|pair| {
             let left = self.records[pair[0]];
             let right = self.records[pair[1]];
@@ -798,7 +820,14 @@ mod tests {
         let mut order = Vec::new();
         let mut nesting = Vec::new();
         arena
-            .validate(&[0x61; 8], |handle| handle == 7, &mut order, &mut nesting)
+            .validate(
+                &[0x61; 8],
+                |handle| handle == 7,
+                &mut order,
+                &mut nesting,
+                &mut Vec::new(),
+                &mut Vec::new(),
+            )
             .unwrap();
         let mut resolved = ResolvedStyleArena::default();
         let mut scopes = Vec::new();

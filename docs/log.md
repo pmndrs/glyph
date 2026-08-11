@@ -2,6 +2,12 @@
 
 ## 2026-08-11
 
+- **Shared engine sort kernel (D-243)** — Twelve per-type engine sort call sites now lower their ordering keys into
+  `u64` images and run through one retained `(key, index)` pair instantiation plus one raw-key instantiation, with the
+  wide style-cascade key as two stable passes and permutations applied by cycle walking. Equal-key order becomes total
+  and deterministic. The optimized shaper drops 50,579 raw / 14,458 gzip bytes to 1,109,644 / 428,350 / 337,447 with all
+  tests, bake goldens, and benchmark lanes unchanged; the remaining 45.5 KiB of sort bodies are HarfRust-internal.
+
 - **Recorded per-crate `opt-level` evidence (D-242)** — A measured matrix over the shaper (whole-`z`, dependency-`z`,
   HarfRust-family-`s`, whole-`s`) and all four bakers (`z`, `s`, `3`) proved every crate already sits at its per-crate
   optimum: size-level builds shrink the shaper by 84–270 KB but regress shaping-bound benchmark lanes 22–98%, while

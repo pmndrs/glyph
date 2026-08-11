@@ -25,6 +25,7 @@ use super::{
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
+    sort,
     style_state::{
         DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
         StyleInvalidation,
@@ -118,6 +119,7 @@ struct EngineSession {
     paragraphs: Vec<RetainedParagraph>,
     ordered_paragraphs: Vec<ParagraphOrder>,
     pending_ordered_paragraphs: Vec<ParagraphOrder>,
+    order_sort_scratch: Vec<(u64, u32)>,
     lifecycle_prepared: bool,
     lifecycle_changed: bool,
     compositing_independent: bool,
@@ -189,6 +191,8 @@ struct ParagraphState {
     pending_fallback_spans: Vec<FallbackSpan>,
     fallback_span_scratch: Vec<FallbackSpan>,
     fallback_cluster_scratch: Vec<ClusterRecord>,
+    sort_pair_scratch: Vec<(u64, u32)>,
+    style_sort_pair_scratch: Vec<(u64, u32)>,
     style_mutation_scratch: Vec<MutationKey>,
     style_order_scratch: Vec<usize>,
     style_nesting_scratch: Vec<u32>,
@@ -1211,8 +1215,25 @@ impl EngineSession {
                     id: paragraph.id,
                 });
             }
-            self.pending_ordered_paragraphs
-                .sort_unstable_by_key(|paragraph| (paragraph.order, paragraph.id));
+            sort::prepare_pairs(
+                &mut self.order_sort_scratch,
+                self.pending_ordered_paragraphs.len(),
+            )?;
+            for (index, paragraph) in self.pending_ordered_paragraphs.iter().enumerate() {
+                self.order_sort_scratch
+                    .push((sort::pack2(paragraph.order, paragraph.id), index as u32));
+            }
+            sort::sort_pairs(&mut self.order_sort_scratch);
+            for (paragraph, &(key, _)) in self
+                .pending_ordered_paragraphs
+                .iter_mut()
+                .zip(self.order_sort_scratch.iter())
+            {
+                *paragraph = ParagraphOrder {
+                    order: (key >> 32) as u32,
+                    id: key as u32,
+                };
+            }
             if self
                 .pending_ordered_paragraphs
                 .windows(2)
@@ -1488,6 +1509,7 @@ impl ParagraphState {
         self.pending_resolved_styles.reserve_default()?;
         reserve_vec(&mut self.style_mutation_scratch, DEFAULT_STYLE_CAPACITY)?;
         reserve_vec(&mut self.style_order_scratch, DEFAULT_STYLE_CAPACITY)?;
+        reserve_vec(&mut self.style_sort_pair_scratch, DEFAULT_STYLE_CAPACITY)?;
         reserve_vec(&mut self.style_nesting_scratch, DEFAULT_STYLE_CAPACITY)?;
         reserve_vec(&mut self.style_resolution_scratch, DEFAULT_STYLE_CAPACITY)
     }
@@ -1531,7 +1553,8 @@ impl ParagraphState {
         reserve_vec(&mut self.fallback_spans, capacity)?;
         reserve_vec(&mut self.pending_fallback_spans, capacity)?;
         reserve_vec(&mut self.fallback_span_scratch, capacity)?;
-        reserve_vec(&mut self.fallback_cluster_scratch, glyph_capacity)
+        reserve_vec(&mut self.fallback_cluster_scratch, glyph_capacity)?;
+        reserve_vec(&mut self.sort_pair_scratch, glyph_capacity)
     }
 
     fn prepare_text(
@@ -1625,12 +1648,15 @@ impl ParagraphState {
                 font_stack_exists,
                 &mut self.style_order_scratch,
                 &mut self.style_nesting_scratch,
+                &mut self.sort_pair_scratch,
+                &mut self.style_sort_pair_scratch,
             );
         }
         self.pending_styles.prepare_from(
             &self.styles,
             mutations,
             &mut self.style_mutation_scratch,
+            &mut self.sort_pair_scratch,
         )?;
         if self.styles.len() != 0 && self.pending_styles.len() == 0 {
             self.abort_styles();
@@ -1646,6 +1672,8 @@ impl ParagraphState {
             font_stack_exists,
             &mut self.style_order_scratch,
             &mut self.style_nesting_scratch,
+            &mut self.sort_pair_scratch,
+            &mut self.style_sort_pair_scratch,
         ) {
             self.abort_styles();
             return Err(error);
@@ -1922,7 +1950,11 @@ impl ParagraphState {
                     )
                     .map_err(shaper_error)?;
             }
-            collect_cluster_records(&self.pending_shape, &mut self.fallback_cluster_scratch)?;
+            collect_cluster_records(
+                &self.pending_shape,
+                &mut self.fallback_cluster_scratch,
+                &mut self.sort_pair_scratch,
+            )?;
             self.fallback_span_scratch.clear();
             let mut changed = false;
             let mut cluster_index = 0usize;
@@ -3259,6 +3291,7 @@ fn push_fallback_span(
 fn collect_cluster_records(
     shape: &ShapeArena,
     records: &mut Vec<ClusterRecord>,
+    sort_pairs: &mut Vec<(u64, u32)>,
 ) -> Result<(), EngineError> {
     records.clear();
     reserve_vec(records, shape.glyph_ids.len())?;
@@ -3283,7 +3316,12 @@ fn collect_cluster_records(
             });
         }
     }
-    records.sort_unstable_by_key(|record| (record.source_run, record.cluster));
+    sort::prepare_pairs(sort_pairs, records.len())?;
+    for (index, record) in records.iter().enumerate() {
+        sort_pairs.push((sort::pack2(record.source_run, record.cluster), index as u32));
+    }
+    sort::sort_pairs(sort_pairs);
+    sort::apply_pair_order(records, sort_pairs);
     let mut write_index = 0usize;
     for read_index in 0..records.len() {
         let record = records[read_index];
@@ -3527,7 +3565,7 @@ mod tests {
             glyph_flags: vec![],
         };
         let mut records = Vec::new();
-        collect_cluster_records(&shape, &mut records).unwrap();
+        collect_cluster_records(&shape, &mut records, &mut Vec::new()).unwrap();
         assert_eq!(
             records,
             vec![

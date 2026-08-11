@@ -324,6 +324,7 @@ pub fn collect_range_jobs(
     jobs: &mut alloc::vec::Vec<RangeJob>,
     buffer_ranges: &[alloc::vec::Vec<RecordRange>; MAX_PHYSICAL_BUFFERS],
     buffer_count: usize,
+    sort_pairs: &mut alloc::vec::Vec<(u64, u32)>,
 ) -> Result<(), PackingError> {
     jobs.clear();
     let range_count = buffer_ranges[..buffer_count]
@@ -344,7 +345,18 @@ pub fn collect_range_jobs(
             }
         }
     }
-    jobs.sort_unstable_by_key(|job| (job.range.start, job.range.end));
+    sort_pairs.clear();
+    sort_pairs
+        .try_reserve(jobs.len())
+        .map_err(|_| PackingError::AllocationFailed)?;
+    for (index, job) in jobs.iter().enumerate() {
+        sort_pairs.push((
+            super::sort::pack2(job.range.start, job.range.end),
+            index as u32,
+        ));
+    }
+    super::sort::sort_pairs(sort_pairs);
+    super::sort::apply_pair_order(jobs, sort_pairs);
     Ok(())
 }
 
@@ -465,7 +477,7 @@ mod tests {
         ranges[1].push(RecordRange { start: 0, end: 10 });
         let mut jobs = alloc::vec::Vec::new();
 
-        collect_range_jobs(&mut jobs, &ranges, 2).unwrap();
+        collect_range_jobs(&mut jobs, &ranges, 2, &mut alloc::vec::Vec::new()).unwrap();
 
         assert_eq!(
             jobs,
