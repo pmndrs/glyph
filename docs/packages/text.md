@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:42b8c934459e7b6fe9c588f26e940a040c049d226ed1fcbf6e7866c1aea598ca'
+source_digest: 'sha256:bd67e5e192fd4f8b8339a559f153638da79ce2c68b4dbf9a945f27b8af59c6ae'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -143,7 +143,14 @@ keeps required Bitmap options and custom third-party technique types enforceable
 Artifact metrics carry text decoration from bake time (D-246): required `underlinePosition`/`underlineThickness` from
 `post` and `strikeoutPosition`/`strikeoutSize` from `OS/2`, with a conservative derived fallback when a source font
 omits `post`. The loader decodes all four into public `FontMetrics`, and the rich-text conformance lane probes every
-font it loads for finite, positive-thickness values. Decoration rendering remains a later additive renderer feature.
+font it loads for finite, positive-thickness values. Decoration rendering consumes those metrics end-to-end (D-248):
+spans declare `decoration` (solid underline, overline, and line-through; other line styles are rejected at the
+boundary), the engine cascade stamps the CSS decorating box so one continuous line spans nested font-size changes at
+the declaring span's scale, and records flow through both planners as resource-free rows of the reserved
+`pmndrs.decoration` technique. Plan programs carry a primitive kind in the former reserved wire field; underline and
+overline rows precede the paragraph's glyphs while line-through follows them, matching CSS paint order, and Three
+realizes every decoration draw with one shared flat-quad TSL material. Decorated sessions rebuild their gather output;
+the undecorated retained fast path is unchanged.
 
 When runtime baking is required, one Worker request normalizes the Unicode ranges, prepares the selected source once,
 and feeds those exact prepared bytes to the shaping bake and every requested Bitmap, MSDF, or Slug bake. The Worker

@@ -2,6 +2,12 @@
 
 ## 2026-08-11
 
+- **Decoration rendering (D-248)** — Underline, overline, and line-through render end-to-end from baked font
+  metrics: public span `decoration` styles, decorating-box cascade stamping, continuous merged lines across nested
+  spans, CSS paint order via record placement, resource-free decoration draws through both planners, and one shared
+  Three flat-quad material. Solid lines only; other styles are rejected at the boundary. A same-window interleaved
+  A/B against the pre-decoration checkpoint shows the undecorated fast path within noise.
+
 - **Break-inserted hyphen contract proof (D-247)** — An exact positioning test proves any flow fragment may carry a
   boundary record with an empty source span and an inserted shaped glyph: own stable identity, the boundary text
   position as its semantic cluster, neighbor-anchored style, alignment participation, and an unaffected following
