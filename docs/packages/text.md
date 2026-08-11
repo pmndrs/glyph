@@ -38,6 +38,12 @@ sources:
   - id: frame-host
     resource: ../../packages/text/src/core/host.ts
     title: Single-export Wasm host
+  - id: core-api
+    resource: ../../packages/text/src/core.ts
+    title: Public renderer-neutral core subpath
+  - id: tsl-shaders
+    resource: ../../packages/text/src/tsl.ts
+    title: Public technique shader library subpath
   - id: three-api
     resource: ../../packages/text/src/three.ts
     title: Three.js public exports
@@ -278,6 +284,13 @@ TypeScript hosts consume those generated constants directly and validate the dec
 There are no instance-ignoring runtime ABI readers. Package builds isolate the distributable MTSDF and Slug
 `artifact-baker` feature sets from kernel-only test targets and reject an optimized module missing any contract-declared
 artifact export, preventing Cargo's shared top-level artifact path from silently publishing a smaller test variant.
+
+The renderer-neutral core publishes as `@pmndrs/text/core` (D-249): runtime shaper creation, the engine host and
+sessions, frame-wire serialization, render-plan and layout views, font-binding compilation, the versioned ABI, and the
+policy-authoring toolkit. The four technique TSL node graphs publish as `@pmndrs/text/tsl` under Tsl-prefixed names,
+including the Slug shader tree that previously lived in core internals. Three's first-party policy is authored with the
+same public toolkit in `three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any
+import from `internal/` or `generated/`, so the first-party integrations consume exactly the surface a third party gets.
 
 The renderer-neutral core owns the completed asynchronous Worker transfer contract: it copies opaque frame bytes once
 into a bounded worker-owned transferable pool, applies explicit backpressure, and requires root to transfer each retired

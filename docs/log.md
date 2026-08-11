@@ -2,6 +2,11 @@
 
 ## 2026-08-11
 
+- **Core API surface (D-249)** — The renderer-neutral engine publishes as `@pmndrs/text/core` and the technique
+  shader library as `@pmndrs/text/tsl`. Three's first-party policy and the Slug shader tree leave core internals,
+  and a scoped import lint holds the first-party integrations to the same public surface a third party gets.
+  Behavior is unchanged; subpath type tests pin both surfaces.
+
 - **Decoration rendering (D-248)** — Underline, overline, and line-through render end-to-end from baked font
   metrics: public span `decoration` styles, decorating-box cascade stamping, continuous merged lines across nested
   spans, CSS paint order via record placement, resource-free decoration draws through both planners, and one shared

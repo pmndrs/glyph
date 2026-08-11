@@ -107,11 +107,7 @@ import { slug } from '@pmndrs/text/three/slug';
 
 const [interBitmap, interMsdf, interSlug] = await loader.loadAsync({
   input: { baked: '/fonts/Inter.font.glb' },
-  rasters: [
-    { technique: bitmap, options: { strikes: [32] } },
-    { technique: msdf },
-    { technique: slug }
-  ],
+  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
 });
 ```
 
@@ -176,15 +172,11 @@ Fonts without authored glyph names still report exact glyph IDs.
 
 Every Three primitive above is built on a renderer-neutral core with four moves: load a font into the Wasm shaper, describe text as one serialized frame, register a validated render policy, and consume the revisioned render plan each update publishes. The engine never calls back into JavaScript during shaping, layout, or packing — a renderer only encodes requests and reads fixed-record results.
 
-> These modules currently live under `internal/` without a stable subpath; Three consumes exactly this surface, and the wire contracts are versioned and integration-tested. Import paths below name the modules, not a published subpath.
-
 Load a font and own the engine lifecycle once:
 
 ```ts
 import { createTextRuntime } from '@pmndrs/text';
-import { textRuntimeShaper } from '…/text-runtime';
-import { TextEngineHost } from '…/internal/text-engine-host';
-import { firstPartyThreeRenderPolicyBytes } from '…/internal/render-policy-wire';
+import { compileRenderPolicy, TextEngineHost, textRuntimeShaper } from '@pmndrs/text/core';
 
 const runtime = await createTextRuntime();
 const [inter] = await runtime.loadFont({
@@ -193,13 +185,15 @@ const [inter] = await runtime.loadFont({
 });
 
 const host = new TextEngineHost(textRuntimeShaper(runtime));
-host.registerPolicy(POLICY, firstPartyThreeRenderPolicyBytes());
+host.registerPolicy(POLICY, compileRenderPolicy(myPolicy));
 ```
+
+The policy is your own declaration — `@pmndrs/text/core` exports the authoring toolkit (`compileRenderPolicy`, `programContext`, the wire-identity registry) that Three's first-party policy is itself built with.
 
 Shape text — a session update is one serialized frame of mutations, constraints, and the revision handshake:
 
 ```ts
-import { compileTextEngineFrameUpdate } from '…/internal/engine-frame-wire';
+import { compileTextEngineFrameUpdate } from '@pmndrs/text/core';
 
 const session = host.createSession({ handle: SESSION, requestCapacity: 4096, resultCapacity: 65536 });
 const publication = session.update(
@@ -223,8 +217,7 @@ const publication = session.update(
 Consume the plan. A publication is borrowed A/B memory — its bytes stay readable only until the next call into the same Wasm module, so a synchronous renderer walks it before touching the engine again. The static path applies buffer patches, then issues one draw per packet:
 
 ```ts
-import { TextEngineRenderPlanView } from '…/internal/render-plan-view';
-import { textShaperAbi } from '…/generated/text-shaper-abi';
+import { TextEngineRenderPlanView, textShaperAbi } from '@pmndrs/text/core';
 
 const plan = new TextEngineRenderPlanView().bind(publication);
 
@@ -313,7 +306,7 @@ A renderer integration has five responsibilities:
 
 Three is the maintained reference executor. Importing `@pmndrs/text/three/bitmap`, `/msdf`, or `/slug` registers that technique's policy program and TSL material implementation. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
 
-The portable policy and render-plan wire contract is implemented and documented, but a renderer-neutral host is not yet exposed as a stable package subpath. A new engine integration should currently follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference. TypeGPU support will be built against this contract in an upcoming release.
+The renderer-neutral host, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/text/core`, and the technique shader library as `@pmndrs/text/tsl` — the [Core API](#core-api) section shows the four moves. A new engine integration can follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference; Three itself consumes only these public surfaces, enforced by lint. TypeGPU support will be built against the same contract.
 
 ## Develop
 
