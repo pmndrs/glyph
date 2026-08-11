@@ -52,21 +52,21 @@ export interface TslSlugFillRule {
  * The GPU resources one Slug glyph batch binds. The clip-space rows and viewport drive the analytic half-pixel
  * dilation, so they must describe the same draw the returned position node feeds.
  */
-interface ThreeSlugShaderResourceBase {
+interface TslSlugShaderResourceBase {
   readonly page: TslSlugPageResources;
   /** Drawing-buffer size in device pixels. */
   readonly viewport: Node<'vec2'>;
   readonly fillRule?: TslSlugFillRule;
 }
 
-interface ThreeSlugShaderRowResources extends ThreeSlugShaderResourceBase {
+interface TslSlugShaderRowResources extends TslSlugShaderResourceBase {
   readonly modelViewProjectionRow0: Node<'vec4'>;
   readonly modelViewProjectionRow1: Node<'vec4'>;
   readonly modelViewProjectionRow3: Node<'vec4'>;
   readonly modelViewProjection?: never;
 }
 
-interface ThreeSlugShaderMatrixResources extends ThreeSlugShaderResourceBase {
+interface TslSlugShaderMatrixResources extends TslSlugShaderResourceBase {
   /** Exact MVP selected per glyph when a renderer batches multiple model transforms into one draw. */
   readonly modelViewProjection: Node<'mat4'>;
   readonly modelViewProjectionRow0?: never;
@@ -74,7 +74,7 @@ interface ThreeSlugShaderMatrixResources extends ThreeSlugShaderResourceBase {
   readonly modelViewProjectionRow3?: never;
 }
 
-export type TslSlugShaderResources = ThreeSlugShaderRowResources | ThreeSlugShaderMatrixResources;
+export type TslSlugShaderResources = TslSlugShaderRowResources | TslSlugShaderMatrixResources;
 
 /**
  * Everything the canonical Slug graph produces, so a program can consume a stage or compose over its final output.

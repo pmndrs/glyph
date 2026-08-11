@@ -1,8 +1,9 @@
 /**
  * The technique shader library: TSL node graphs for the Bitmap, MSDF, Slug, and
- * decoration techniques, importable without the Three integration so any renderer
- * that consumes TSL — including future TypeGPU integrations — reuses one canonical
- * shading implementation per technique.
+ * decoration techniques, importable without the Three scene integration. The graphs
+ * build on `three/tsl` nodes; an integration that renders through a TSL-consuming
+ * backend reuses one canonical shading implementation per technique instead of
+ * reimplementing coverage math.
  */
 export {
   bitmapShader,

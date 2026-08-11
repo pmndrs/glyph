@@ -11,7 +11,7 @@ import {
   RenderWireIdentityRegistry,
   type PolicyAllocationMode,
   type PolicyTransformMode,
-} from '../core/render-policy.js';
+} from '../core.js';
 import { textShaperAbi } from '../core.js';
 
 export const FIRST_PARTY_TRANSFORM_BUFFER_ID = 15;

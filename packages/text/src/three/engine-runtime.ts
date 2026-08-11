@@ -1,12 +1,18 @@
-import { observeLoadedFontDispose, type LoadedFont } from '../loaded-font.js';
+import type { LoadedFont } from '../loaded-font.js';
 import { bitmap, type BitmapData, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugData, type SlugPageData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import { textRuntimeShaper, type TextRuntime } from '../text-runtime.js';
-import { firstPartyFontBindingBytes } from '../core/font-binding.js';
+import type { TextRuntime } from '../text-runtime.js';
+import {
+  firstPartyFontBindingBytes,
+  observeLoadedFontDispose,
+  TextEngineHost,
+  textRuntimeShaper,
+  type TextEngineSession,
+  type TextEngineSessionOptions,
+} from '../core.js';
 import { firstPartyThreeRenderPolicyBytes, type ThreeTransformMode } from './render-policy.js';
-import { TextEngineHost, type TextEngineSession, type TextEngineSessionOptions } from '../core/host.js';
 import type { ThreeTextMaterial } from './material.js';
 import { compiledThreeRasterPlanPrograms, type CompiledThreeRasterPlanProgram } from './plan-program-registry.js';
 

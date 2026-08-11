@@ -1,8 +1,6 @@
 import type { Node, NodeMaterial } from 'three/webgpu';
 
-import type { TslBitmapShaderOutput } from '../tsl/bitmap-shader.js';
-import type { TslMsdfShaderOutput } from '../tsl/msdf-shader.js';
-import type { TslSlugShaderOutput } from '../tsl/slug-shader.js';
+import type { TslBitmapShaderOutput, TslMsdfShaderOutput, TslSlugShaderOutput } from '../tsl.js';
 
 export type ThreeTextMaterialContext =
   | Readonly<{

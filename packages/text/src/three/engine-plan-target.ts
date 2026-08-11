@@ -2,17 +2,14 @@ import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { textShaperAbi } from '../core.js';
-import type { TextEnginePublication } from '../core/host.js';
 import { FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, FIRST_PARTY_TRANSFORM_BUFFER_ID } from './render-policy.js';
-import { TextEngineRenderPlanView, type RenderPlanTable } from '../core/plan-view.js';
+import { TextEngineRenderPlanView, type RenderPlanTable, type TextEnginePublication } from '../core.js';
 import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugPageData } from '../raster/slug-technique.js';
-import { decorationShader } from '../tsl/decoration-shader.js';
-import { bitmapShader } from '../tsl/bitmap-shader.js';
+
+import { bitmapShader, decorationShader, msdfShader, slugShader, type TslSlugPageResources } from '../tsl.js';
 import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-runtime.js';
-import { msdfShader } from '../tsl/msdf-shader.js';
-import { slugShader, type TslSlugPageResources } from '../tsl/slug-shader.js';
 import type { ThreeTextMaterialContext } from './material.js';
 import type { ThreePlanProgramBuffer } from './plan-program-registry.js';
 

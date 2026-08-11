@@ -5,13 +5,19 @@
  */
 export {
   createRuntimeShaper,
-  runtimeShaperEngineExports,
   type RuntimeShaper,
   type RuntimeShaperMemoryReport,
   type RuntimeShaperOptions,
   type TextShaperWasmSource,
 } from './shaper.js';
 export { textRuntimeShaper } from './text-runtime.js';
+export {
+  acquireFontSelectionForRuntime,
+  assertFontSelectionForRuntime,
+  concreteFonts,
+  observeLoadedFontDispose,
+  releaseFontSelection,
+} from './loaded-font.js';
 export {
   TextEngineHost,
   TextEngineSession,
@@ -24,7 +30,9 @@ export {
   type TextEngineConstraint,
   type TextEngineDecoration,
   type TextEngineExclusion,
+  type TextEngineFeature,
   type TextEngineFrameLimits,
+  type TextEngineFlowVertex,
   type TextEngineFrameUpdate,
   type TextEngineInlineObject,
   type TextEngineParagraphMutation,
@@ -38,6 +46,7 @@ export { readTextEngineLayouts, readTextEngineMeasurements } from './core/layout
 export {
   compileFontBinding,
   emptyFontBindingTable,
+  firstPartyFontBindingBytes,
   fontBindingResources,
   type BindingResource,
   type FontBindingDescriptor,

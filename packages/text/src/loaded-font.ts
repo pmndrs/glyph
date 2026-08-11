@@ -119,7 +119,7 @@ export function acquireFontSelection<Technique extends AnyRasterTechnique>(
   }
 }
 
-/** @internal Acquire one renderer lease without imposing a single raster technique on the selection. */
+/** Acquire one renderer lease without imposing a single raster technique on the selection. Public through `@pmndrs/text/core`. */
 export function acquireFontSelectionForRuntime(
   selection: FontSelection<AnyRasterTechnique>,
   runtime: TextRuntime,
@@ -137,7 +137,7 @@ export function acquireFontSelectionForRuntime(
   }
 }
 
-/** @internal Release one retained paragraph lease from every concrete font. */
+/** Release one retained renderer or paragraph lease from every concrete font. Public through `@pmndrs/text/core`. */
 export function releaseFontSelection<Technique extends AnyRasterTechnique>(selection: FontSelection<Technique>): void {
   for (const font of concreteFonts(selection)) {
     const state = stateOf(font);
@@ -155,7 +155,7 @@ export function assertFontSelection<Technique extends AnyRasterTechnique>(
   for (const font of concreteFonts(selection)) assertCompatibleFont(font, runtime, technique);
 }
 
-/** @internal Validate renderer ownership without imposing a single raster technique on the selection. */
+/** Validate renderer ownership without imposing a single raster technique on the selection. Public through `@pmndrs/text/core`. */
 export function assertFontSelectionForRuntime(
   selection: FontSelection<AnyRasterTechnique>,
   runtime: TextRuntime,
@@ -163,7 +163,7 @@ export function assertFontSelectionForRuntime(
   for (const font of concreteFonts(selection)) assertFontForRuntime(font, runtime);
 }
 
-/** @internal Return the immutable concrete fallback order. */
+/** Return the immutable concrete fallback order. Public through `@pmndrs/text/core`. */
 export function concreteFonts<Technique extends AnyRasterTechnique>(
   selection: FontSelection<Technique>,
 ): readonly [LoadedFont<Technique>, ...LoadedFont<Technique>[]] {
@@ -180,7 +180,7 @@ export function disposeLoadedFontFromRuntime(font: LoadedFont<AnyRasterTechnique
   notifyDisposed(state);
 }
 
-/** @internal Observe successful loaded-font disposal without wrapping its identity. */
+/** Observe successful loaded-font disposal without wrapping its identity. Public through `@pmndrs/text/core`. */
 export function observeLoadedFontDispose(font: LoadedFont<AnyRasterTechnique>, listener: () => void): () => void {
   const state = stateOf(font);
   if (state.disposed) {

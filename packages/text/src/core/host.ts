@@ -52,7 +52,7 @@ export class TextEngineStatusError extends Error {
   }
 }
 
-/** Internal lifecycle owner for retained policy, font-stack, and session state in a RuntimeShaper's Wasm instance. */
+/** Lifecycle owner for retained policy, font-stack, and session state in a RuntimeShaper's Wasm instance. */
 export class TextEngineHost {
   readonly wireIdentities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry();
   readonly #exports;
@@ -166,6 +166,7 @@ export class TextEngineSession {
   #textCapacity: number;
   #disposed = false;
 
+  /** @internal Sessions are created through {@link TextEngineHost.createSession}. */
   constructor(
     exports: ReturnType<typeof runtimeShaperEngineExports>,
     handle: number,

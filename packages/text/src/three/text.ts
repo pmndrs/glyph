@@ -6,9 +6,8 @@ import {
   assertFontSelectionForRuntime,
   concreteFonts,
   releaseFontSelection,
-  type FontSelection,
-  type LoadedFont,
-} from '../loaded-font.js';
+} from '../core.js';
+import type { FontSelection, LoadedFont } from '../loaded-font.js';
 import type {
   GlyphBufferCapacity,
   ParagraphBaseProperties,
@@ -20,19 +19,22 @@ import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import {
   compileTextEngineFrameUpdate,
+  readTextEngineLayouts,
+  readTextEngineMeasurements,
+  TextEngineRenderPlanView,
+  TextEngineStatusError,
+  textShaperAbi,
   type TextEngineConstraint,
-  type TextEngineFrameLimits,
-  type TextEngineRegion,
-  type TextEngineStyleMutation,
   type TextEngineDecoration,
+  type TextEngineFrameLimits,
+  type TextEnginePublication,
+  type TextEngineRegion,
+  type TextEngineSession,
+  type TextEngineStyleMutation,
   type TextEngineStyleValue,
   type TextEngineTextMutation,
-} from '../core/frame-wire.js';
-import { TextEngineStatusError, type TextEnginePublication, type TextEngineSession } from '../core/host.js';
-import { readTextEngineLayouts, readTextEngineMeasurements } from '../core/layout-query-view.js';
-import { TextEngineRenderPlanView } from '../core/plan-view.js';
+} from '../core.js';
 import type { ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
-import { textShaperAbi } from '../core.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import {
   threeTextEngineCoordinator,
