@@ -496,6 +496,7 @@ export class ThreeTextRenderPlanExecutor {
           reusable.geometry.instanceCount = recordCount;
           reusable.userData.pmndrsTextRunStart = recordIndex;
           reusable.userData.pmndrsTextTransformId = transformId;
+          reusable.userData.pmndrsTextPrimitiveKind = decoration ? 'decoration' : 'glyph';
           reusable.matrixAutoUpdate = transform.kind !== 'direct';
           reusable.renderOrder = this.#owner.renderOrderBase + index;
           if (reusable.parent !== this.#owner.drawRoot) this.#owner.drawRoot.add(reusable);
@@ -513,6 +514,7 @@ export class ThreeTextRenderPlanExecutor {
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.pmndrsTextRunStart = recordIndex;
         mesh.userData.pmndrsTextTransformId = transformId;
+        mesh.userData.pmndrsTextPrimitiveKind = decoration ? 'decoration' : 'glyph';
         mesh.matrixAutoUpdate = transform.kind !== 'direct';
         mesh.frustumCulled = false;
         mesh.renderOrder = this.#owner.renderOrderBase + index;
