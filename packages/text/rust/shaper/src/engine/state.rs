@@ -1860,6 +1860,10 @@ impl ParagraphState {
         } else {
             self.text.as_slice()
         };
+        if text.is_empty() {
+            self.shape_prepared = true;
+            return Ok(());
+        }
         let styles = if self.styles_prepared {
             &self.pending_styles
         } else {

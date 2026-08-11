@@ -666,7 +666,10 @@ class ThreeTextBatchBinding {
         const content = properties.text as string;
         if (semanticChanges & TEXT_CHANGE) {
           const pending = paragraph.created ? [{ start: 0, deleteCount: 0, insert: content }] : text.textMutations();
-          for (const mutation of pending) textMutations.push({ paragraphId: paragraph.id, ...mutation });
+          for (const mutation of pending) {
+            if (mutation.deleteCount === 0 && mutation.insert.length === 0) continue;
+            textMutations.push({ paragraphId: paragraph.id, ...mutation });
+          }
         }
         if (semanticChanges & STYLE_CHANGE) {
           const leases: ThreeTextEngineStackLease[] = [];

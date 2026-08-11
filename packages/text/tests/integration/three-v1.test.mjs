@@ -51,6 +51,17 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
+  const emptyScene = new THREE.Scene();
+  const initiallyEmpty = new Text({ font, text: '' });
+  emptyScene.add(initiallyEmpty);
+  emptyScene.updateMatrixWorld(true);
+  assert.equal(initiallyEmpty.error, undefined, 'an empty paragraph must publish without a no-op text mutation');
+  initiallyEmpty.text = 'A';
+  emptyScene.updateMatrixWorld(true);
+  assert.equal(initiallyEmpty.error, undefined, 'an initially empty paragraph must accept its first text edit');
+  assert.equal(initiallyEmpty.measureLayout()?.glyphCount, 1);
+  initiallyEmpty.dispose();
+
   const editedSpans = new Text({
     font,
     text: 'ABCD',
