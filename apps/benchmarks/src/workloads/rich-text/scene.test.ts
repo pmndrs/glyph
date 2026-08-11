@@ -63,7 +63,7 @@ describe('rich text composition', () => {
     expect(face?.font).toBe(companionFonts.emphasis);
     expect(foreign?.font).toBe(companionFonts.foreign);
     expect(accent?.paint).toEqual({ color: RICH_TEXT_ACCENT_COLOR });
-    expect(accent?.style).toEqual({ fontSize: BODY * 1.25 });
+    expect(accent?.style).toEqual({ decoration: { lineThrough: true }, fontSize: BODY * 1.25 });
     // The nested span states a size and no paint, so it must inherit the enclosing paint rather than restate it.
     expect(nested?.style).toEqual({ fontSize: BODY * 0.78 });
     expect(nested?.paint).toBeUndefined();
