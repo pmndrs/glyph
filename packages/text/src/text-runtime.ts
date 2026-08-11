@@ -208,15 +208,12 @@ class TextRuntimeImpl implements TextRuntime {
   ): Promise<RegisteredFont> {
     if ('baked' in input)
       return this.#defaultLoader.load({ baked: input.baked }, signal === undefined ? {} : { signal });
-    const unicodeRanges =
-      input.unicodeRanges === undefined ? undefined : normalizeUnicodeRanges(input.unicodeRanges);
+    const unicodeRanges = input.unicodeRanges === undefined ? undefined : normalizeUnicodeRanges(input.unicodeRanges);
     const rasters = await Promise.all(rasterRequests.map(runtimeBakeRaster));
-    const planKey = canonicalJson(
-      {
-        rasters,
-        unicodeRanges: unicodeRanges ?? null,
-      } as unknown as import('./raster.js').JsonValue,
-    );
+    const planKey = canonicalJson({
+      rasters,
+      unicodeRanges: unicodeRanges ?? null,
+    } as unknown as import('./raster.js').JsonValue);
     let loaders = this.#sourceLoaders.get(input.runtimeBake);
     if (loaders === undefined) {
       loaders = new Map();
@@ -394,9 +391,7 @@ class TextRuntimeImpl implements TextRuntime {
   }
 }
 
-async function runtimeBakeRaster(
-  request: RasterTechniqueRequest<AnyRasterTechnique>,
-): Promise<RuntimeBakeRasterV0> {
+async function runtimeBakeRaster(request: RasterTechniqueRequest<AnyRasterTechnique>): Promise<RuntimeBakeRasterV0> {
   const { technique } = request;
   const descriptor = techniqueOperations(technique).descriptor(
     request.options as RasterOptionsArgument<RasterOptionsOf<AnyRasterTechnique>>,

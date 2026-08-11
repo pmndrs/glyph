@@ -15,7 +15,7 @@ const fixtureDirectory = new URL('../../../../../apps/benchmarks/fixtures/fonts/
 const shapingDirectory = new URL('../../../../../apps/benchmarks/fixtures/shaping/inter-regular/', import.meta.url);
 const executeFile = promisify(execFile);
 
-async function shapeReducedFont(t, shapingSfnt, fontFile, shapingDirectory) {
+async function shapeReducedFont(t, shapingSfnt, fontFile, shapingCasesDirectory) {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-text-reduced-sfnt-'));
   t.after(() => rm(temporaryDirectory, { recursive: true, force: true }));
   const reducedFont = join(temporaryDirectory, fontFile);
@@ -33,7 +33,7 @@ async function shapeReducedFont(t, shapingSfnt, fontFile, shapingDirectory) {
     '--quiet',
     '--',
     reducedFont,
-    fileURLToPath(new URL('cases.json', shapingDirectory)),
+    fileURLToPath(new URL('cases.json', shapingCasesDirectory)),
     '--output',
     reducedOracle,
   ]);

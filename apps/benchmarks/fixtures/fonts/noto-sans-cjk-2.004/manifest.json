@@ -65,8 +65,8 @@
     "formatVersion": 0,
     "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d",
     "expectedCore": {
-      "artifactBytes": 1540480,
-      "artifactSha256": "d0023acf5415027667a5e3caa831ceeae74665de460744123e09ccd35002b44c",
+      "artifactBytes": 1540468,
+      "artifactSha256": "0c9ba1a75fa5d98c6b11a28402bf6e7c87ca2226870d7423d121c7ec1549783c",
       "shapingHash": "f4e77de31444f3ee9e4a7cbdded5d0c3077455275bf81ec5def82e31f6379d58",
       "shapingSfntBytes": 1006900,
       "shapingSfntSha256": "0461316ade447b891e027b2deb4d8cdde0a6a31feb5dc7a529d556be311118d7",
@@ -95,7 +95,7 @@
       "transport": {
         "compression": { "gzipLevel": 9, "brotliQuality": 9 },
         "shapingPayload": { "rawBytes": 1539372, "gzipBytes": 654925, "brotliBytes": 514547 },
-        "artifact": { "rawBytes": 1540480, "gzipBytes": 654597, "brotliBytes": 515676 }
+        "artifact": { "rawBytes": 1540468, "gzipBytes": 655925, "brotliBytes": 515615 }
       }
     }
   },

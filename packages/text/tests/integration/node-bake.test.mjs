@@ -298,7 +298,10 @@ test('the CLI directly bakes and checks one known font from arguments', async (t
   assert.equal(subsetReport.preparation.sourceBytes, source.byteLength);
   assert.ok(subsetReport.preparation.preparedBytes < subsetReport.preparation.sourceBytes);
   assert.ok(subsetReport.preparation.glyphCount < (await validateFontArtifact(await readFile(output))).glyphCount);
-  assert.equal((await validateFontArtifact(await readFile(subsetOutput))).glyphCount, subsetReport.preparation.glyphCount);
+  assert.equal(
+    (await validateFontArtifact(await readFile(subsetOutput))).glyphCount,
+    subsetReport.preparation.glyphCount,
+  );
 });
 
 test('pre-cancellation and source/output overlap fail before filesystem mutation', async (t) => {

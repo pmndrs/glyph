@@ -62,12 +62,12 @@ test('validates the canonical Inter artifact through every core layer', async ()
 
 test('validates Node Buffer inputs repeatedly without mutating artifact bytes', async () => {
   const input = Buffer.from(artifact);
-  const before = Buffer.from(input);
+  const original = Buffer.from(input);
 
   const first = await validateFontArtifact(input);
   const second = await validateFontArtifact(input);
 
-  assert.deepEqual(input, before);
+  assert.deepEqual(input, original);
   assert.equal(second.shapingHash, first.shapingHash);
   assert.deepEqual(second.shapingSfnt, first.shapingSfnt);
 });
@@ -300,7 +300,7 @@ function decodeDocument(bytes) {
 }
 
 function encodeDocument(source, document) {
-  const decoded = decodeDocument(source);
+  decodeDocument(source);
   const oldJsonLength = readU32(source, 12);
   const oldBinHeader = 20 + oldJsonLength;
   const binLength = readU32(source, oldBinHeader);

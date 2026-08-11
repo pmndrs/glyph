@@ -335,6 +335,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
     [1, new THREE.Object3D()],
     [2, new THREE.Object3D()],
   ]);
+  drawRoot.add(...paragraphObjects.values());
   paragraphObjects.get(1).position.x = 3;
   paragraphObjects.get(2).position.x = 7;
   const target = new ThreeTextRenderPlanExecutor(coordinator, {
@@ -771,7 +772,9 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(hybridDirectDraw.matrix.elements[12], 9);
   let hybridDirectDisposals = 0;
   hybridDirectDraw.material.addEventListener('dispose', () => (hybridDirectDisposals += 1));
-  paragraphObjects.set(20, new THREE.Object3D());
+  const growthObject = new THREE.Object3D();
+  drawRoot.add(growthObject);
+  paragraphObjects.set(20, growthObject);
   hybridTarget.apply(hybridPublication);
   assert.equal(hybridDirectDisposals, 0, 'indexed transform growth must preserve unrelated direct materials');
   assert.equal(hybridTarget.draws[1].material, hybridDirectDraw.material);
@@ -781,6 +784,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(hybridTarget.draws[0].geometry.getAttribute('_pmndrsTextTransforms').array[1 * 16 + 12], 6);
   assert.equal(hybridDirectDraw.matrix.elements[12], 10);
   hybridTarget.dispose();
+  growthObject.removeFromParent();
   paragraphObjects.delete(20);
   hybridSession.dispose();
 
