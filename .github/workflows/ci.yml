@@ -37,56 +37,9 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      # Keep these as independent steps with `always()` so one formatting or
-      # lint failure does not hide another package's diagnostics.
-      - name: Check repository formatting
-        run: pnpm exec oxfmt --check .claude/hooks .claude/settings.json .claude/tsconfig.json package.json docs/log.md
-
-      - name: Check core package formatting
-        if: always()
-        working-directory: packages/text
-        run: pnpm exec oxfmt --check .
-
-      - name: Check glyph example formatting
-        if: always()
-        working-directory: packages/glyph-example-raster
-        run: pnpm exec oxfmt --check package.json src tests tsconfig.json tsconfig.build.json
-
-      - name: Check benchmark application formatting
-        if: always()
+      - name: Run static test suite
         working-directory: apps/benchmarks
-        run: pnpm exec oxfmt --check .
-
-      - name: Check React Three Fiber example formatting
-        if: always()
-        working-directory: apps/r3f-hello-world
-        run: pnpm exec oxfmt --check .
-
-      - name: Lint core package
-        if: always()
-        run: pnpm --filter @pmndrs/text exec oxlint --deny-warnings .
-
-      - name: Lint glyph example package
-        if: always()
-        run: pnpm --filter @pmndrs/text-glyph-example-raster exec oxlint --deny-warnings .
-
-      - name: Lint benchmark application
-        if: always()
-        run: pnpm --filter @pmndrs/text-benchmarks exec oxlint --deny-warnings .
-
-      - name: Lint React Three Fiber example
-        if: always()
-        run: pnpm --filter @pmndrs/text-r3f-hello-world exec oxlint --deny-warnings .
-
-      - name: Check repository tooling
-        if: always()
-        run: |
-          tsc -p .claude/tsconfig.json
-          node --test .claude/hooks/sync-agent-config.test.ts
-
-      - name: Validate knowledge base
-        if: always()
-        run: ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb docs --workspace-root .
+        run: pnpm exec vitest run --config vitest.ci.config.ts scripts/static.ci.vitest.mts
 
   size:
     name: Package size report
@@ -129,6 +82,7 @@ jobs:
 
   check:
     name: Check
+    needs: static
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -179,81 +133,9 @@ jobs:
           "$chromium_executable" --version
           printf 'PMNDRS_TEXT_CHROMIUM_EXECUTABLE_PATH=%s\n' "$chromium_executable" >> "$GITHUB_ENV"
 
-      # Run package and fixture gates independently. A failure remains visible
-      # in the job conclusion, while `always()` lets later suites report too.
-      - name: Check core package
-        run: pnpm --filter @pmndrs/text check
-
-      - name: Check glyph example package
-        if: always()
-        run: pnpm --filter @pmndrs/text-glyph-example-raster check
-
-      - name: Build benchmark runtime dependency
-        if: always()
-        run: pnpm --filter @pmndrs/text build
-
-      - name: Type-check benchmark application
-        if: always()
+      - name: Run runtime test suite
         working-directory: apps/benchmarks
-        run: pnpm exec tsc -p tsconfig.json --noEmit
-
-      - name: Type-check benchmark scripts
-        if: always()
-        working-directory: apps/benchmarks
-        run: pnpm exec tsc -p tsconfig.scripts.json --noEmit
-
-      - name: Check benchmark package-size contract
-        if: always()
-        working-directory: apps/benchmarks
-        run: node scripts/measure-package-sizes.mts --check
-
-      - name: Check benchmark paragraph fixture references
-        if: always()
-        working-directory: apps/benchmarks
-        run: node scripts/check-paragraph-contract-fixtures.mts
-
-      - name: Check benchmark bidi contract
-        if: always()
-        working-directory: apps/benchmarks
-        run: node scripts/generate-paragraph-bidi-contract.mts --check
-
-      - name: Check benchmark CJK contract
-        if: always()
-        working-directory: apps/benchmarks
-        run: node scripts/generate-paragraph-cjk-contract.mts --check
-
-      - name: Run benchmark unit tests
-        if: always()
-        working-directory: apps/benchmarks
-        run: pnpm exec vitest run
-
-      - name: Check benchmark workflow registry
-        if: always()
-        working-directory: apps/benchmarks
-        run: node --test scripts/workflows.test.mts
-
-      - name: Run benchmark browser conformance
-        if: always()
-        working-directory: apps/benchmarks
-        run: node scripts/run-headless.mts --suite conformance --dpr 1 --samples 3 --warmup 1 --port 5181
-
-      - name: Run benchmark packed-consumer contract
-        if: always()
-        working-directory: apps/benchmarks
-        run: node scripts/run-packed-consumer.mts
-
-      - name: Build benchmark application
-        if: always()
-        working-directory: apps/benchmarks
-        run: node scripts/build.mts
-
-      - name: Check React Three Fiber example
-        if: always()
-        run: pnpm --filter @pmndrs/text-r3f-hello-world check
-
-      - name: Check Japanese showcase fixture
-        if: always()
-        run: pnpm scripts run fixture:japanese-showcase:check
+        run: pnpm exec vitest run --config vitest.ci.config.ts scripts/runtime.ci.vitest.mts
 
       - name: Retain Wasm failure evidence
         if: failure()
