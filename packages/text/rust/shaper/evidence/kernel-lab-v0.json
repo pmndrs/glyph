@@ -1,0 +1,363 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "text:kernel-lab",
+  "measurementHost": {
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
+  "lab": {
+    "generatedBy": "text:kernel-lab",
+    "environment": {
+      "runtime": "Node 24.18.0",
+      "platform": "darwin/arm64",
+      "cpu": "target machine; report with host inventory"
+    },
+    "warmup": 40,
+    "samples": 101,
+    "variants": [
+      {
+        "name": "scalar",
+        "rawBytes": 1112683,
+        "brotliBytes": 339037,
+        "instructions": {
+          "v128Loads": 0,
+          "v128Stores": 0,
+          "f32x4": 0,
+          "bitmasks": 0,
+          "shuffles": 0,
+          "i64x2": 0
+        },
+        "workloads": [
+          {
+            "label": "25515-glyphs",
+            "glyphs": 25515,
+            "outputHash": "e79081ca22e1b77d1efa89722e62219f1d956e10086f44c81f4bdf0374f4e2de",
+            "alignedOutputHash": "d09fc4222557819ad5d0338692dcd6be7214edf244039790e6d225f641b33ac1",
+            "unalignedOutputHash": "d09fc4222557819ad5d0338692dcd6be7214edf244039790e6d225f641b33ac1",
+            "verticalOutputHash": "d6928fd5613959815d8cbd98198ecf137380c79fdb484d9be6aaa429049bcb91",
+            "warmMemoryGrowth": false,
+            "timings": {
+              "pack": {
+                "p50Ms": 0.0446458750000005,
+                "p95Ms": 0.04780206250000063,
+                "p99Ms": 0.04985418749999582
+              },
+              "breakMasks": {
+                "p50Ms": 0.012563796874999866,
+                "p95Ms": 0.013007812499999716,
+                "p99Ms": 0.013185546874998622
+              },
+              "bidiMasks": {
+                "p50Ms": 0.010630203125000293,
+                "p95Ms": 0.010975265625001285,
+                "p99Ms": 0.011086593750000873
+              },
+              "policy": {
+                "p50Ms": 1.3160416249999969,
+                "p95Ms": 1.3668021249999924,
+                "p99Ms": 1.608523437499997
+              },
+              "chunk32": {
+                "p50Ms": 0.01525912500000004,
+                "p95Ms": 0.015899750000002655,
+                "p99Ms": 0.01618100000000311
+              },
+              "chunk64": {
+                "p50Ms": 0.01558465624999883,
+                "p95Ms": 0.01625521875000402,
+                "p99Ms": 0.016308593749997158
+              },
+              "chunk128": {
+                "p50Ms": 0.01569921875000091,
+                "p95Ms": 0.01633071874999814,
+                "p99Ms": 0.016489562499998556
+              }
+            }
+          },
+          {
+            "label": "100602-glyphs",
+            "glyphs": 100602,
+            "outputHash": "221b06997b4c0ded29a8bd21d42745111400910c95f5baf625a2210db93417f5",
+            "alignedOutputHash": "91880136cbab52cfb21da0081ff1cd441624fbda08d5ce73fa686cd405463f4a",
+            "unalignedOutputHash": "91880136cbab52cfb21da0081ff1cd441624fbda08d5ce73fa686cd405463f4a",
+            "verticalOutputHash": "82bf7cfd5a643ce70beb1dfbef03894ea82ec2610f4906d7ce37b84e614d5c3a",
+            "warmMemoryGrowth": false,
+            "timings": {
+              "pack": {
+                "p50Ms": 0.17181249999998727,
+                "p95Ms": 0.17430212499994013,
+                "p99Ms": 0.17707287499990798
+              },
+              "breakMasks": {
+                "p50Ms": 0.04990624999999227,
+                "p95Ms": 0.05067968750000773,
+                "p99Ms": 0.0591757812500191
+              },
+              "bidiMasks": {
+                "p50Ms": 0.04225131249998526,
+                "p95Ms": 0.04326953124999022,
+                "p99Ms": 0.04419531250002251
+              },
+              "policy": {
+                "p50Ms": 5.334546875000001,
+                "p95Ms": 5.432999999999993,
+                "p99Ms": 5.469442749999871
+              },
+              "chunk32": {
+                "p50Ms": 0.059557312499919135,
+                "p95Ms": 0.061096374999920045,
+                "p99Ms": 0.061945312500029104
+              },
+              "chunk64": {
+                "p50Ms": 0.060632812499989086,
+                "p95Ms": 0.06204424999998537,
+                "p99Ms": 0.0622448125000119
+              },
+              "chunk128": {
+                "p50Ms": 0.06102343750001182,
+                "p95Ms": 0.062302062499952626,
+                "p99Ms": 0.06300781250001819
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "auto",
+        "rawBytes": 1113388,
+        "brotliBytes": 339078,
+        "instructions": {
+          "v128Loads": 1184,
+          "v128Stores": 1294,
+          "f32x4": 19,
+          "bitmasks": 2,
+          "shuffles": 80,
+          "i64x2": 21
+        },
+        "workloads": [
+          {
+            "label": "25515-glyphs",
+            "glyphs": 25515,
+            "outputHash": "e79081ca22e1b77d1efa89722e62219f1d956e10086f44c81f4bdf0374f4e2de",
+            "alignedOutputHash": "d09fc4222557819ad5d0338692dcd6be7214edf244039790e6d225f641b33ac1",
+            "unalignedOutputHash": "d09fc4222557819ad5d0338692dcd6be7214edf244039790e6d225f641b33ac1",
+            "verticalOutputHash": "d6928fd5613959815d8cbd98198ecf137380c79fdb484d9be6aaa429049bcb91",
+            "warmMemoryGrowth": false,
+            "timings": {
+              "pack": {
+                "p50Ms": 0.012559937499986518,
+                "p95Ms": 0.013434875000029933,
+                "p99Ms": 0.013713499999994383
+              },
+              "breakMasks": {
+                "p50Ms": 0.011254546874994276,
+                "p95Ms": 0.011620437499999525,
+                "p99Ms": 0.011682296874994336
+              },
+              "bidiMasks": {
+                "p50Ms": 0.012440765625001404,
+                "p95Ms": 0.012772140625003203,
+                "p99Ms": 0.013180343750008205
+              },
+              "policy": {
+                "p50Ms": 1.3166119999999637,
+                "p95Ms": 1.3371067499999754,
+                "p99Ms": 1.3655129999999644
+              },
+              "chunk32": {
+                "p50Ms": 0.009790375000022777,
+                "p95Ms": 0.010457031249984539,
+                "p99Ms": 0.011016937499960022
+              },
+              "chunk64": {
+                "p50Ms": 0.008726562499987267,
+                "p95Ms": 0.009260406249950393,
+                "p99Ms": 0.009911468750033237
+              },
+              "chunk128": {
+                "p50Ms": 0.008222656250040927,
+                "p95Ms": 0.00943096875005267,
+                "p99Ms": 0.010420593750041007
+              }
+            }
+          },
+          {
+            "label": "100602-glyphs",
+            "glyphs": 100602,
+            "outputHash": "221b06997b4c0ded29a8bd21d42745111400910c95f5baf625a2210db93417f5",
+            "alignedOutputHash": "91880136cbab52cfb21da0081ff1cd441624fbda08d5ce73fa686cd405463f4a",
+            "unalignedOutputHash": "91880136cbab52cfb21da0081ff1cd441624fbda08d5ce73fa686cd405463f4a",
+            "verticalOutputHash": "82bf7cfd5a643ce70beb1dfbef03894ea82ec2610f4906d7ce37b84e614d5c3a",
+            "warmMemoryGrowth": false,
+            "timings": {
+              "pack": {
+                "p50Ms": 0.05903650000027483,
+                "p95Ms": 0.06229162499994345,
+                "p99Ms": 0.06490100000019083
+              },
+              "breakMasks": {
+                "p50Ms": 0.044708312500006286,
+                "p95Ms": 0.04505596875003448,
+                "p99Ms": 0.04635287500002505
+              },
+              "bidiMasks": {
+                "p50Ms": 0.04929946874995039,
+                "p95Ms": 0.049760437500026455,
+                "p99Ms": 0.05006378124994626
+              },
+              "policy": {
+                "p50Ms": 5.192406249999749,
+                "p95Ms": 5.494140625,
+                "p99Ms": 5.76835412499986
+              },
+              "chunk32": {
+                "p50Ms": 0.03795837500001653,
+                "p95Ms": 0.03932549999990442,
+                "p99Ms": 0.039502562500047134
+              },
+              "chunk64": {
+                "p50Ms": 0.03408075000015742,
+                "p95Ms": 0.03540362500007177,
+                "p99Ms": 0.035645812499979
+              },
+              "chunk128": {
+                "p50Ms": 0.03208593749991451,
+                "p95Ms": 0.0334349375000329,
+                "p99Ms": 0.03361718750011278
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "explicit",
+        "rawBytes": 1117738,
+        "brotliBytes": 339801,
+        "instructions": {
+          "v128Loads": 1216,
+          "v128Stores": 1313,
+          "f32x4": 27,
+          "bitmasks": 5,
+          "shuffles": 91,
+          "i64x2": 32
+        },
+        "workloads": [
+          {
+            "label": "25515-glyphs",
+            "glyphs": 25515,
+            "outputHash": "e79081ca22e1b77d1efa89722e62219f1d956e10086f44c81f4bdf0374f4e2de",
+            "alignedOutputHash": "d09fc4222557819ad5d0338692dcd6be7214edf244039790e6d225f641b33ac1",
+            "unalignedOutputHash": "d09fc4222557819ad5d0338692dcd6be7214edf244039790e6d225f641b33ac1",
+            "verticalOutputHash": "d6928fd5613959815d8cbd98198ecf137380c79fdb484d9be6aaa429049bcb91",
+            "warmMemoryGrowth": false,
+            "timings": {
+              "pack": {
+                "p50Ms": 0.012554687499914507,
+                "p95Ms": 0.013429687500092768,
+                "p99Ms": 0.0136796875001437
+              },
+              "breakMasks": {
+                "p50Ms": 0.0014772031249776774,
+                "p95Ms": 0.0015494843750047949,
+                "p99Ms": 0.0016803281250190594
+              },
+              "bidiMasks": {
+                "p50Ms": 0.002574874999993426,
+                "p95Ms": 0.0027376250000088476,
+                "p99Ms": 0.0028137968749888387
+              },
+              "policy": {
+                "p50Ms": 0.4557916875000956,
+                "p95Ms": 0.46307549999983166,
+                "p99Ms": 0.46576037499994527
+              },
+              "chunk32": {
+                "p50Ms": 0.0042044062499826396,
+                "p95Ms": 0.004526031250065898,
+                "p99Ms": 0.004682281249984044
+              },
+              "chunk64": {
+                "p50Ms": 0.0038176875000317523,
+                "p95Ms": 0.004109374999984539,
+                "p99Ms": 0.004257812499986358
+              },
+              "chunk128": {
+                "p50Ms": 0.004123718749951877,
+                "p95Ms": 0.004527343750055479,
+                "p99Ms": 0.004817718750018685
+              }
+            }
+          },
+          {
+            "label": "100602-glyphs",
+            "glyphs": 100602,
+            "outputHash": "221b06997b4c0ded29a8bd21d42745111400910c95f5baf625a2210db93417f5",
+            "alignedOutputHash": "91880136cbab52cfb21da0081ff1cd441624fbda08d5ce73fa686cd405463f4a",
+            "unalignedOutputHash": "91880136cbab52cfb21da0081ff1cd441624fbda08d5ce73fa686cd405463f4a",
+            "verticalOutputHash": "82bf7cfd5a643ce70beb1dfbef03894ea82ec2610f4906d7ce37b84e614d5c3a",
+            "warmMemoryGrowth": false,
+            "timings": {
+              "pack": {
+                "p50Ms": 0.05859375,
+                "p95Ms": 0.06181762500000332,
+                "p99Ms": 0.06289587500032212
+              },
+              "breakMasks": {
+                "p50Ms": 0.005640625000069122,
+                "p95Ms": 0.006065093750066808,
+                "p99Ms": 0.006812500000023647
+              },
+              "bidiMasks": {
+                "p50Ms": 0.009967468750005537,
+                "p95Ms": 0.010643218750033157,
+                "p99Ms": 0.010906249999948159
+              },
+              "policy": {
+                "p50Ms": 1.7981770000001234,
+                "p95Ms": 1.8077865000000202,
+                "p99Ms": 1.8845937500000218
+              },
+              "chunk32": {
+                "p50Ms": 0.016169312500096567,
+                "p95Ms": 0.017039062499861757,
+                "p99Ms": 0.0172786250000172
+              },
+              "chunk64": {
+                "p50Ms": 0.014653625000164539,
+                "p95Ms": 0.01569793749990822,
+                "p99Ms": 0.015979187499851832
+              },
+              "chunk128": {
+                "p50Ms": 0.015692749999971056,
+                "p95Ms": 0.01677087500002017,
+                "p99Ms": 0.01707031249998181
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "decision": {
+    "pack": {
+      "selected": "shared-scalar",
+      "reason": "explicit shuffle matches autovectorized scalar (12.6 vs 12.6 \u00b5s p50 small workload); retained prior rejection"
+    },
+    "policy": {
+      "selected": "explicit-simd128",
+      "reason": "confirms the production execute_simd_records choice: 456 vs 1,317 \u00b5s p50 against the auto-vectorized build (2.9x)"
+    },
+    "breakMasks": {
+      "selected": "explicit-simd128-pending-consumer",
+      "reason": "1.48 vs 11.25 \u00b5s p50 (7.6x); production line breaking does not consume mask lanes yet \u2014 adopt with the 11.14 line-planner work"
+    },
+    "bidiMasks": {
+      "selected": "explicit-simd128-pending-consumer",
+      "reason": "2.57 vs 12.44 \u00b5s p50 (4.8x); production bidi analysis does not consume transition masks yet"
+    },
+    "chunkSummaries": {
+      "selected": "explicit-simd128-pending-consumer",
+      "reason": "3.82 vs 8.73 \u00b5s p50 at chunk 64 (2.2x); consumer is the measured-cluster line tier"
+    }
+  }
+}

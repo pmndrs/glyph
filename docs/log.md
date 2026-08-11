@@ -2,6 +2,11 @@
 
 ## 2026-08-11
 
+- **Kernel-lab SIMD admission evidence (D-245)** — The complete scalar/auto-vectorized/explicit kernel comparison over
+  real paragraph arrays is recorded as shaper evidence. Explicit break-mask, bidi-transition-mask, and chunk-summary
+  kernels measure 7.6×, 4.8×, and 2.2× their auto-vectorized forms and are admitted with named consumers in the 11.14
+  line-planner tier; the pack loop and production policy interpreter confirm their prior scalar and explicit choices.
+
 - **Binaryen merge pipeline and outlining verdict (D-244)** — Every distributed Wasm artifact now optimizes through
   `--merge-similar-functions -Oz --merge-similar-functions -Oz`, removing 8,248 raw bytes from the shaper and 29,214
   across the four bakers with unchanged benchmark lanes and byte-identical bake goldens. Explicit stage-seam outlining

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:39b612f93a0db7344f490fb0a24fcc5172599702dc7fd572b66b86532e4a66d3'
+source_digest: 'sha256:c3642725db288146c34fe9aaa5c87e412dfdc8306ff9ab0f4876ed9d82fcc1c7'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -373,7 +373,13 @@ Binaryen `-O3` and `-O4` added 11,976 and 13,661 raw bytes without a demonstrate
 evidence-backed pipeline is now `--merge-similar-functions -Oz --merge-similar-functions -Oz` (D-244): the merge pass
 finds nothing after `-Oz` alone, but sandwiched runs remove 8,248 raw bytes from the shaper and 29,289 across the four
 bakers with hot-path lanes unchanged within noise. Explicit `#[inline(never)]` stage seams in the update path measured
-size-neutral (+241 raw) and were rejected — the large export body is stage aggregation, not duplication. The `<4 ms` warm-path target and stable p95 closure remain open.
+size-neutral (+241 raw) and were rejected — the large export body is stage aggregation, not duplication.
+
+SIMD expansion follows recorded kernel-lab admission (D-245). The complete scalar/auto-vectorized/explicit comparison
+over real paragraph arrays is checked in as shaper evidence: explicit break-opportunity masks run 7.6×, bidi transition
+masks 4.8×, and chunk-64 advance summaries 2.2× faster than auto-vectorization, while the pack loop and the production
+policy interpreter confirm their earlier scalar and explicit choices. The mask and chunk kernels have no production
+consumer yet; they adopt alongside the 11.14 line-planner work behind `cfg(simd128)` with exact scalar-parity tests. The `<4 ms` warm-path target and stable p95 closure remain open.
 
 Cargo `opt-level` is likewise evidence-pinned per crate (D-242). A four-variant shaper matrix (whole-`z`,
 dependency-only `z`, HarfRust-family `s`, whole-`s`) shrank the 1,160,223-byte artifact to 890,381–1,076,427 raw bytes,
