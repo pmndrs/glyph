@@ -105,6 +105,9 @@ pub enum RetainedGather {
     RebuildFrom(usize),
 }
 
+/// Decoration rows use the top identity bit; session glyph identities stay below it.
+pub const DECORATION_STABLE_ID_BASE: u32 = 0x8000_0000;
+
 #[derive(Default)]
 pub struct PolicyGatherWorkspace {
     glyphs: Vec<PlanGlyph>,
@@ -473,6 +476,84 @@ impl PolicyGatherWorkspace {
             );
         }
         Ok(())
+    }
+
+    /// Appends resource-free decoration records after glyph gather. Rows carry the
+    /// decoration program's technique, a dedicated identity namespace (top bit set), and
+    /// a fixed lane convention: f32 lanes 0-3 hold the decoration rectangle and u32
+    /// lanes 0-1 hold color and flags. Returns false when the policy declares no
+    /// decoration program, leaving the gather output untouched.
+    pub fn append_decorations(
+        &mut self,
+        policy: &ValidatedPolicy,
+        capability_set: CapabilitySetId,
+        decorations: &[super::positioning::DecorationRecord],
+        transform_id: u32,
+        content_revision: u32,
+    ) -> Result<bool, GatherError> {
+        let Some(program) = policy.decoration_program(capability_set) else {
+            return Ok(false);
+        };
+        if decorations.is_empty() {
+            return Ok(true);
+        }
+        let base = self.glyphs.len();
+        reserve(&mut self.glyphs, decorations.len())?;
+        reserve(&mut self.semantic_change_masks, decorations.len())?;
+        for field in &mut self.f32_fields {
+            field
+                .reserve(decorations.len())
+                .map_err(|_| GatherError::AllocationFailed)?;
+        }
+        for field in &mut self.u32_fields {
+            field
+                .reserve(decorations.len())
+                .map_err(|_| GatherError::AllocationFailed)?;
+        }
+        for (ordinal, record) in decorations.iter().enumerate() {
+            let stable_id = DECORATION_STABLE_ID_BASE
+                | u32::try_from(base + ordinal).map_err(|_| GatherError::AllocationFailed)?;
+            for (index, field) in self.f32_fields.iter_mut().enumerate() {
+                let value = match index {
+                    0 => record.inline_start,
+                    1 => record.block_start,
+                    2 => record.inline_extent,
+                    3 => record.block_extent,
+                    _ => 0.0,
+                };
+                field.push(value)?;
+            }
+            for (index, field) in self.u32_fields.iter_mut().enumerate() {
+                let value = match index {
+                    0 => record.color,
+                    1 => record.flags | (u32::from(record.style) << 8),
+                    _ => 0,
+                };
+                field.push(value)?;
+            }
+            self.glyphs.push(PlanGlyph {
+                stable_id,
+                content_revision,
+                technique: program.technique,
+                program_variant: program.variant,
+                resource_id: 0,
+                resource_generation: 0,
+                resource_kind: 0,
+                resource_reference: 0,
+                semantic_id: stable_id,
+                transform_id,
+                material_id: record.color,
+                clip_id: record.clip_id,
+                depth_key: 0,
+                inline_start: record.inline_start,
+                block_start: record.block_start,
+                inline_extent: record.inline_extent,
+                block_extent: record.block_extent,
+            });
+            self.semantic_change_masks
+                .push(super::positioning::ALL_SEMANTIC_CHANGES);
+        }
+        Ok(true)
     }
 
     pub fn view(&self) -> GatheredPlanInput<'_> {
@@ -1411,7 +1492,81 @@ mod tests {
     }
 
     fn policy() -> ValidatedPolicy {
-        ValidatedPolicy::new(PolicyDescriptor {
+        ValidatedPolicy::new(base_descriptor()).unwrap()
+    }
+
+    fn policy_with_decorations() -> ValidatedPolicy {
+        let mut descriptor = base_descriptor();
+        let mut program = descriptor.programs[0].clone();
+        program.primitive_kind = 2;
+        program.technique = TechniqueId(99);
+        program.variant = 0;
+        program.id = ProgramId(9);
+        program.resource_kind_mask = 0;
+        program.buffers[0].id = BufferId(9);
+        for operation in &mut program.operations {
+            if let Operation::StoreF32 { buffer, .. } = operation {
+                *buffer = BufferId(9);
+            }
+        }
+        descriptor.programs.push(program);
+        ValidatedPolicy::new(descriptor).unwrap()
+    }
+
+    #[test]
+    fn append_decorations_appends_resource_free_rows_with_lane_convention() {
+        let record = crate::engine::positioning::DecorationRecord {
+            flags: 1,
+            style: 3,
+            color: 0xff00_00ff,
+            inline_start: 4.0,
+            inline_extent: 12.0,
+            block_start: 9.0,
+            block_extent: 0.5,
+            clip_id: 9,
+            region_id: 9,
+            flow_thread_id: 7,
+            transform_index: 9,
+        };
+        let decorated = policy_with_decorations();
+        let mut workspace = PolicyGatherWorkspace::default();
+        workspace.begin(&decorated, 4).unwrap();
+        assert!(
+            workspace
+                .append_decorations(&decorated, CAPABILITY, &[record], 3, 5)
+                .unwrap()
+        );
+        let view = workspace.view();
+        assert_eq!(view.glyphs.len(), 1);
+        let row = view.glyphs[0];
+        assert_eq!(row.stable_id, DECORATION_STABLE_ID_BASE);
+        assert_eq!(row.technique, TechniqueId(99));
+        assert_eq!(row.content_revision, 5);
+        assert_eq!(row.transform_id, 3);
+        assert_eq!(row.resource_id, 0);
+        assert_eq!(row.resource_generation, 0);
+        assert_eq!(row.resource_kind, 0);
+        assert_eq!(row.clip_id, 9);
+        assert_eq!(view.f32_fields[0][0], 4.0);
+        assert_eq!(view.f32_fields[1][0], 9.0);
+        assert_eq!(view.f32_fields[2][0], 12.0);
+        assert_eq!(view.f32_fields[3][0], 0.5);
+        assert_eq!(view.u32_fields[0][0], 0xff00_00ff);
+        assert_eq!(view.u32_fields[1][0], 1 | (3 << 8));
+
+        let plain = policy();
+        let mut plain_workspace = PolicyGatherWorkspace::default();
+        plain_workspace.begin(&plain, 4).unwrap();
+        assert!(
+            !plain_workspace
+                .append_decorations(&plain, CAPABILITY, &[record], 3, 5)
+                .unwrap()
+        );
+        assert_eq!(plain_workspace.view().glyphs.len(), 0);
+    }
+
+    fn base_descriptor() -> PolicyDescriptor {
+        PolicyDescriptor {
             capability_sets: vec![CapabilitySet {
                 id: CAPABILITY,
                 flags: CAP_ORDERED_DIRECT | CAP_STORAGE_BUFFERS,
@@ -1492,7 +1647,6 @@ mod tests {
                     },
                 ],
             }],
-        })
-        .unwrap()
+        }
     }
 }

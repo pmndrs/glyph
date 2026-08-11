@@ -58,11 +58,17 @@ pub fn validate_input(input: PlanInput<'_>) -> Result<(), PlanInputError> {
     Ok(())
 }
 
-pub fn validate_glyph(glyph: PlanGlyph) -> Result<(), PlanInputError> {
+/// `resource_free` admits records of decoration-kind programs, which draw without any
+/// raster resource; every other record must name a complete resource identity.
+pub fn validate_glyph(glyph: PlanGlyph, resource_free: bool) -> Result<(), PlanInputError> {
     if glyph.stable_id == 0 || glyph.content_revision == 0 || glyph.transform_id == 0 {
         return Err(PlanInputError::InvalidIdentity);
     }
-    if glyph.resource_id == 0
+    if resource_free {
+        if glyph.resource_id != 0 || glyph.resource_generation != 0 || glyph.resource_kind != 0 {
+            return Err(PlanInputError::InvalidResource);
+        }
+    } else if glyph.resource_id == 0
         || glyph.resource_generation == 0
         || !(1..=32).contains(&glyph.resource_kind)
     {

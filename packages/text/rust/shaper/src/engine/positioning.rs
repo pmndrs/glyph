@@ -52,7 +52,7 @@ pub(crate) struct SemanticGlyph {
 /// decoration paint. Non-solid line styles carry their style bits for later paint work
 /// and render as solid geometry until then.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct DecorationRecord {
+pub struct DecorationRecord {
     pub flags: u32,
     pub style: u8,
     pub color: u32,
@@ -354,6 +354,10 @@ impl PositionedGlyphArena {
         self.visual_levels.clear();
         self.line_levels.clear();
         self.recomposed_glyphs = None;
+    }
+
+    pub(crate) fn decorations(&self) -> &[DecorationRecord] {
+        &self.decorations
     }
 
     pub(crate) fn glyphs(&self) -> &[LayoutGlyph] {

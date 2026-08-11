@@ -28,9 +28,9 @@ use super::{
     },
     render_plan::{
         BUFFER_STABLE_INDIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
-        POLICY_BUFFER_ORDER, PatchRecord, PrimitiveRecord, RESOURCE_ACTION_CREATE,
-        RESOURCE_ACTION_RETAIN, RETIRE_BUFFER, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView,
-        ResourceRecord, RetirementRecord,
+        POLICY_BUFFER_ORDER, PRIMITIVE_DECORATION, PatchRecord, PrimitiveRecord,
+        RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RETIRE_BUFFER, RETIRE_RESOURCE,
+        RETIRE_SLOT_RANGE, RenderPlanView, ResourceRecord, RetirementRecord,
     },
     sort,
     stable_order::{
@@ -349,13 +349,13 @@ impl StablePlanCompiler {
         self.batch_pending_indices.resize(self.batches.len(), NONE);
 
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
-            validate_glyph(glyph)?;
-            if !self.identity_set.insert(glyph.stable_id) {
-                return Err(StablePlanError::DuplicateIdentity);
-            }
             let program = policy
                 .program(capability_set, glyph.technique, glyph.program_variant)
                 .ok_or(StablePlanError::ProgramMissing)?;
+            validate_glyph(glyph, program.primitive_kind == PRIMITIVE_DECORATION)?;
+            if !self.identity_set.insert(glyph.stable_id) {
+                return Err(StablePlanError::DuplicateIdentity);
+            }
             if program.allocation_strategy != ALLOCATION_STABLE_INDIRECT {
                 if strict_strategy {
                     return Err(StablePlanError::UnsupportedStrategy);

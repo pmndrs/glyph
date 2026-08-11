@@ -35,6 +35,7 @@ use super::{
 
 pub use super::plan_error::PlanError as OrderedPlanError;
 
+use super::render_plan::PRIMITIVE_DECORATION;
 #[cfg(test)]
 use super::render_plan::PRIMITIVE_GLYPH;
 
@@ -399,13 +400,13 @@ impl OrderedPlanCompiler {
         self.identity_set.prepare(input.glyphs.len())?;
 
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
-            validate_glyph(glyph)?;
-            if !self.identity_set.insert(glyph.stable_id) {
-                return Err(OrderedPlanError::DuplicateIdentity);
-            }
             let program = policy
                 .program(capability_set, glyph.technique, glyph.program_variant)
                 .ok_or(OrderedPlanError::ProgramMissing)?;
+            validate_glyph(glyph, program.primitive_kind == PRIMITIVE_DECORATION)?;
+            if !self.identity_set.insert(glyph.stable_id) {
+                return Err(OrderedPlanError::DuplicateIdentity);
+            }
             if program.allocation_strategy != ALLOCATION_ORDERED_DIRECT {
                 if strict_strategy {
                     return Err(OrderedPlanError::UnsupportedStrategy);
@@ -476,7 +477,10 @@ impl OrderedPlanCompiler {
         }
         self.identity_set.prepare(input.glyphs.len())?;
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
-            validate_glyph(glyph)?;
+            let program = policy
+                .program(capability_set, glyph.technique, glyph.program_variant)
+                .ok_or(OrderedPlanError::ProgramMissing)?;
+            validate_glyph(glyph, program.primitive_kind == PRIMITIVE_DECORATION)?;
             if !self.identity_set.insert(glyph.stable_id) {
                 return Err(OrderedPlanError::DuplicateIdentity);
             }

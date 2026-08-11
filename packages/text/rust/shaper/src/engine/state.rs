@@ -1044,6 +1044,24 @@ fn append_session_gather(
 ) -> Result<(), EngineError> {
     let incremental = retained;
     let mut retaining = retained;
+    // Decoration rows bypass the retained gather cursor arithmetic, so a session with any
+    // decorated paragraph rebuilds its gather output; the undecorated fast path is untouched.
+    if retaining {
+        for ordered in session.active_order() {
+            let Some(paragraph) = session.paragraph(ordered.id) else {
+                continue;
+            };
+            let positioned = if paragraph.state.positioned_prepared {
+                &paragraph.state.pending_positioned
+            } else {
+                &paragraph.state.positioned
+            };
+            if !positioned.decorations().is_empty() {
+                retaining = false;
+                break;
+            }
+        }
+    }
     for ordered in session.active_order() {
         let paragraph = session
             .paragraph(ordered.id)
@@ -1106,6 +1124,15 @@ fn append_session_gather(
                 )
                 .map_err(gather_error)?;
         }
+        gather
+            .append_decorations(
+                policy,
+                capability_set,
+                positioned.decorations(),
+                ordered.id,
+                session.revision.engine.max(1),
+            )
+            .map_err(gather_error)?;
     }
     if retaining && !gather.finish_retained() {
         gather.truncate_to_retained_prefix();
