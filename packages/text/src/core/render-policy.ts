@@ -95,14 +95,14 @@ export class RenderWireIdentityRegistry {
   }
 }
 
-export interface FirstPartyTechniqueWireIds {
+export interface TechniqueWireIds {
   readonly bitmap: number;
   readonly msdf: number;
   readonly slug: number;
   readonly decoration: number;
 }
 
-export const firstPartyTechniqueWireIds: FirstPartyTechniqueWireIds = Object.freeze({
+export const techniqueWireIds: TechniqueWireIds = Object.freeze({
   bitmap: renderWireId('pmndrs.bitmap'),
   msdf: renderWireId('pmndrs.msdf'),
   slug: renderWireId('pmndrs.slug'),

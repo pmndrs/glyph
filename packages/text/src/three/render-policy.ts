@@ -14,9 +14,9 @@ import {
 } from '../core.js';
 import { textShaperAbi } from '../core.js';
 
-export const FIRST_PARTY_TRANSFORM_BUFFER_ID = 15;
+export const TRANSFORM_BUFFER_ID = 15;
 
-export const FIRST_PARTY_STABLE_GLYPH_BUFFER_ID = 14;
+export const STABLE_GLYPH_BUFFER_ID = 14;
 
 export type ThreeTransformMode = PolicyTransformMode;
 
@@ -29,7 +29,7 @@ export interface ThreeTechniqueTransformModes {
 }
 
 /** Compiler-mapped Three policy covering every first-party raster technique in one registration. */
-export function firstPartyThreeRenderPolicyBytes(
+export function threeRenderPolicyBytes(
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
   transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
   additionalPrograms: readonly PolicyProgram[] = [],
@@ -98,8 +98,8 @@ function bitmapProgram(
     [4, [13, 14]],
     [5, [3, 4, 5, 6]],
   ]);
-  if (transformMode === 'indexed') storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
-  storeU32(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, 0, 30);
+  if (transformMode === 'indexed') storeU32(TRANSFORM_BUFFER_ID, 0, 31);
+  storeU32(STABLE_GLYPH_BUFFER_ID, 0, 30);
   storeU32(6, 0, 29);
   return createProgram(
     techniqueId,
@@ -142,8 +142,8 @@ function msdfProgram(
     [6, [25, 25, 25, 25]],
     [7, [25, 25, 25, 24]],
   ]);
-  if (transformMode === 'indexed') storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
-  storeU32(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, 0, 30);
+  if (transformMode === 'indexed') storeU32(TRANSFORM_BUFFER_ID, 0, 31);
+  storeU32(STABLE_GLYPH_BUFFER_ID, 0, 30);
   return createProgram(
     techniqueId,
     programId,
@@ -189,8 +189,8 @@ function slugProgram(
     [6, [21, 22, 23, 24]],
     [7, [25, 26, 29, 29]],
   ]);
-  if (transformMode === 'indexed') storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 31);
-  storeU32(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, 0, 30);
+  if (transformMode === 'indexed') storeU32(TRANSFORM_BUFFER_ID, 0, 31);
+  storeU32(STABLE_GLYPH_BUFFER_ID, 0, 30);
   return createProgram(
     techniqueId,
     programId,
@@ -228,8 +228,8 @@ function decorationProgram(
   stores(storeF32, [[1, [0, 1, 2, 3]]]);
   storeU32(2, 0, 30);
   storeU32(2, 1, 31);
-  if (transformMode === 'indexed') storeU32(FIRST_PARTY_TRANSFORM_BUFFER_ID, 0, 28);
-  storeU32(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, 0, 29);
+  if (transformMode === 'indexed') storeU32(TRANSFORM_BUFFER_ID, 0, 28);
+  storeU32(STABLE_GLYPH_BUFFER_ID, 0, 29);
   return {
     ...createProgram(
       techniqueId,
@@ -248,7 +248,7 @@ function decorationProgram(
 
 function transformIndexBuffer(): PolicyBuffer {
   return {
-    id: FIRST_PARTY_TRANSFORM_BUFFER_ID,
+    id: TRANSFORM_BUFFER_ID,
     scalar: textShaperAbi.policy.scalarTypes.u32,
     vectorWidth: 1,
   };
@@ -256,7 +256,7 @@ function transformIndexBuffer(): PolicyBuffer {
 
 function stableGlyphIdBuffer(): PolicyBuffer {
   return {
-    id: FIRST_PARTY_STABLE_GLYPH_BUFFER_ID,
+    id: STABLE_GLYPH_BUFFER_ID,
     scalar: textShaperAbi.policy.scalarTypes.u32,
     vectorWidth: 1,
   };

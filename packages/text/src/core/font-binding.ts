@@ -4,7 +4,7 @@ import { bitmap, type BitmapData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
-import { RenderWireIdentityRegistry, type FirstPartyTechniqueWireIds } from './render-policy.js';
+import { RenderWireIdentityRegistry, type TechniqueWireIds } from './render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
 const ABSENT_PAGE = 0xffff;
@@ -39,11 +39,11 @@ export interface FontBindingDescriptor {
 }
 
 /** Compile one first-party loaded font into the Rust engine's field-major immutable binding. */
-export function firstPartyFontBindingBytes(
+export function loadedFontBindingBytes(
   font: LoadedFont<AnyRasterTechnique>,
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
 ): Uint8Array {
-  const techniqueIds: FirstPartyTechniqueWireIds = {
+  const techniqueIds: TechniqueWireIds = {
     bitmap: identities.resolve(bitmap.id),
     msdf: identities.resolve(msdf.id),
     slug: identities.resolve(slug.id),

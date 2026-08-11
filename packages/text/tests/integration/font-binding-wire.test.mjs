@@ -8,7 +8,7 @@ import { validateFontArtifact } from '@pmndrs/text/bake';
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
-import { firstPartyFontBindingBytes } from '../../dist/core/font-binding.js';
+import { loadedFontBindingBytes } from '../../dist/core/font-binding.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
 import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
@@ -22,7 +22,7 @@ test('production first-party bindings preserve every proven field-major raster l
   const abi = JSON.parse(await readFile(abiUrl, 'utf8'));
   for (const name of ['bitmap', 'mtsdf', 'slug']) {
     const { core, raster, loaded } = await fixture(name);
-    const actual = firstPartyFontBindingBytes(loaded);
+    const actual = loadedFontBindingBytes(loaded);
     const expected = techniqueProof(abi, name, raster).bindingBytes;
     const strikeRows = core.glyphCount * (name === 'bitmap' ? raster.strikes.length : 1);
     for (const [table, rows] of [

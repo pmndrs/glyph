@@ -12,7 +12,7 @@ import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
-import { firstPartyThreeRenderPolicyBytes } from '../../dist/three/render-policy.js';
+import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { TextEngineRenderPlanView } from '../../dist/core/plan-view.js';
 import { LoadedFontImpl } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
@@ -629,7 +629,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const directPolicyHandle = 2;
   coordinator.host.registerPolicy(
     directPolicyHandle,
-    firstPartyThreeRenderPolicyBytes(coordinator.host.wireIdentities, 'direct'),
+    threeRenderPolicyBytes(coordinator.host.wireIdentities, 'direct'),
   );
   const directSession = coordinator.createSession({
     requestCapacity: 4_096,
@@ -685,7 +685,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const hybridPolicyHandle = 3;
   coordinator.host.registerPolicy(
     hybridPolicyHandle,
-    firstPartyThreeRenderPolicyBytes(coordinator.host.wireIdentities, {
+    threeRenderPolicyBytes(coordinator.host.wireIdentities, {
       bitmap: 'indexed',
       msdf: 'direct',
       slug: 'indexed',
@@ -791,7 +791,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const stablePolicyHandle = 4;
   coordinator.host.registerPolicy(
     stablePolicyHandle,
-    firstPartyThreeRenderPolicyBytes(coordinator.host.wireIdentities, 'indexed', [], 'stable'),
+    threeRenderPolicyBytes(coordinator.host.wireIdentities, 'indexed', [], 'stable'),
   );
   const stableSession = coordinator.createSession({
     requestCapacity: 4_096,

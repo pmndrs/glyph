@@ -5,14 +5,14 @@ import { slug, type SlugData, type SlugPageData } from '../raster/slug-technique
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import {
-  firstPartyFontBindingBytes,
+  loadedFontBindingBytes,
   observeLoadedFontDispose,
   TextEngineHost,
   textRuntimeShaper,
   type TextEngineSession,
   type TextEngineSessionOptions,
 } from '../core.js';
-import { firstPartyThreeRenderPolicyBytes, type ThreeTransformMode } from './render-policy.js';
+import { threeRenderPolicyBytes, type ThreeTransformMode } from './render-policy.js';
 import type { ThreeTextMaterial } from './material.js';
 import { compiledThreeRasterPlanPrograms, type CompiledThreeRasterPlanProgram } from './plan-program-registry.js';
 
@@ -83,7 +83,7 @@ export class ThreeTextEngineCoordinator {
     this.#planPrograms = new Map(planPrograms.map((program) => [program.technique.id, program]));
     this.host.registerPolicy(
       POLICY_HANDLE,
-      firstPartyThreeRenderPolicyBytes(
+      threeRenderPolicyBytes(
         this.host.wireIdentities,
         options.transformMode,
         planPrograms.map((program) => program.policy),
@@ -196,11 +196,7 @@ export class ThreeTextEngineCoordinator {
     const program = this.#planPrograms.get(font.technique.id);
     if (program === undefined) {
       this.#registerResources(font);
-      this.host.registerFontBinding(
-        handle,
-        font.font.handle,
-        firstPartyFontBindingBytes(font, this.host.wireIdentities),
-      );
+      this.host.registerFontBinding(handle, font.font.handle, loadedFontBindingBytes(font, this.host.wireIdentities));
     } else {
       const compiled = program.compileFont(font, this.host.wireIdentities);
       for (const [key, resource] of compiled.resources) {

@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { TextEngineHost } from '../../dist/core/host.js';
-import { firstPartyTechniqueWireIds } from '../../dist/core/render-policy.js';
-import { firstPartyThreeRenderPolicyBytes } from '../../dist/three/render-policy.js';
+import { techniqueWireIds } from '../../dist/core/render-policy.js';
+import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
 
@@ -63,23 +63,23 @@ test('production text-engine host publishes borrowed A/B plans through the runti
 
 test('one deterministic Three policy registers Bitmap, MSDF, and Slug with material-directed draws', async () => {
   const [wasm, abi] = await Promise.all([readFile(wasmUrl), readFile(abiUrl, 'utf8').then(JSON.parse)]);
-  assert.deepEqual(firstPartyTechniqueWireIds, {
+  assert.deepEqual(techniqueWireIds, {
     bitmap: 0x1775_3b8c,
     msdf: 0xf9a7_e4fd,
     slug: 0xf22c_7908,
     decoration: 0x3455fa81,
   });
-  const bytes = firstPartyThreeRenderPolicyBytes();
+  const bytes = threeRenderPolicyBytes();
   const request = abi.layouts.policyRequest;
   const program = abi.layouts.policyProgram;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   assert.equal(view.getUint32(request.programCount, true), 4);
   const programsOffset = view.getUint32(request.programsOffset, true);
   const expectedTechniques = [
-    firstPartyTechniqueWireIds.bitmap,
-    firstPartyTechniqueWireIds.msdf,
-    firstPartyTechniqueWireIds.slug,
-    firstPartyTechniqueWireIds.decoration,
+    techniqueWireIds.bitmap,
+    techniqueWireIds.msdf,
+    techniqueWireIds.slug,
+    techniqueWireIds.decoration,
   ];
   for (const [index, techniqueId] of expectedTechniques.entries()) {
     const offset = programsOffset + index * program.size;
@@ -88,7 +88,7 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
     assert.ok(view.getUint32(offset + program.drawKeyMask, true) & abi.policy.batchFields.material);
     assert.equal(view.getUint32(offset + program.storageKeyMask, true) & abi.policy.batchFields.material, 0);
     const expectedKind =
-      techniqueId === firstPartyTechniqueWireIds.decoration
+      techniqueId === techniqueWireIds.decoration
         ? abi.engine.primitiveKinds.decoration
         : abi.engine.primitiveKinds.glyph;
     assert.equal(view.getUint16(offset + program.primitiveKind, true), expectedKind);

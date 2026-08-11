@@ -2,7 +2,7 @@ import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { textShaperAbi } from '../core.js';
-import { FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, FIRST_PARTY_TRANSFORM_BUFFER_ID } from './render-policy.js';
+import { STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from './render-policy.js';
 import { TextEngineRenderPlanView, type RenderPlanTable, type TextEnginePublication } from '../core.js';
 import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
@@ -462,7 +462,7 @@ export class ThreeTextRenderPlanExecutor {
           ? this.#decorationMaterial(byPolicyId, transform, addressing)
           : this.#material(resource!, byPolicyId, materialId, transform, addressing);
         const origins = decoration ? undefined : byPolicyId.get(1);
-        const stableIds = decoration ? undefined : byPolicyId.get(FIRST_PARTY_STABLE_GLYPH_BUFFER_ID);
+        const stableIds = decoration ? undefined : byPolicyId.get(STABLE_GLYPH_BUFFER_ID);
         if (origins !== undefined && stableIds !== undefined) {
           if (!(origins.array instanceof Float32Array) || !(stableIds.array instanceof Uint32Array)) {
             throw new TypeError('glyph-origin augmentation buffers have invalid scalar types');
@@ -585,7 +585,7 @@ export class ThreeTextRenderPlanExecutor {
 
   #transformRealization(buffers: ReadonlyMap<number, RetainedBuffer>, transformId: number): TransformRealization {
     if (transformId !== 0) return { kind: 'direct', transformId };
-    const indices = buffers.get(FIRST_PARTY_TRANSFORM_BUFFER_ID);
+    const indices = buffers.get(TRANSFORM_BUFFER_ID);
     if (indices === undefined || !(indices.array instanceof Uint32Array)) {
       throw new Error('indexed Three draw is missing its u32 transform-index buffer');
     }

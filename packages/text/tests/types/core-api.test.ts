@@ -57,7 +57,7 @@ void code;
 // compiles them to validated bytes without touching Three.
 import {
   compileRenderPolicy,
-  firstPartyTechniqueWireIds,
+  techniqueWireIds,
   programContext,
   renderWireId,
   RenderWireIdentityRegistry,
@@ -67,7 +67,7 @@ import {
 } from '@pmndrs/text/core';
 
 const techniqueId: number = renderWireId('example.technique');
-void firstPartyTechniqueWireIds.decoration;
+void techniqueWireIds.decoration;
 const registry = new RenderWireIdentityRegistry();
 void registry;
 
