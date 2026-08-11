@@ -14,6 +14,10 @@ export interface ThreeDecorationShaderOutput {
   readonly opacity: Node<'float'>;
 }
 
+// @types/three 0.185 declares sRGBTransferEOTF as `(color: Node) => Node`, but the installed
+// runtime Fn is laid out as vec3 -> vec3 (ColorSpaceFunctions `setLayout({ type: 'vec3', ... })`).
+const srgbTransferEotf = TSL.sRGBTransferEOTF as unknown as (color: Node<'vec3'>) => Node<'vec3'>;
+
 /**
  * Builds the canonical decoration node graph: a solid quad covering the record's
  * rectangle, colored by the packed decoration paint. The graph reads `positionLocal`
@@ -21,13 +25,19 @@ export interface ThreeDecorationShaderOutput {
  * corner, matching the glyph techniques. Only solid lines reach this graph: the public
  * boundary rejects other line styles, and `packed.y` retains the style bits for the
  * later patterned-paint implementation.
+ *
+ * The packed bytes are sRGB-encoded — the same wire encoding whose glyph counterpart
+ * the Rust gather decodes through its sRGB-to-linear table — so the color channels pass
+ * through the sRGB EOTF into the renderer's linear working space. Alpha stays linear.
  */
 export function decorationShader(instance: ThreeDecorationInstanceNodes): ThreeDecorationShaderOutput {
   const byte = TSL.float(1 / 255);
-  const color = TSL.vec3(
-    TSL.float(instance.packed.x.bitAnd(TSL.uint(0xff))).mul(byte),
-    TSL.float(instance.packed.x.shiftRight(TSL.uint(8)).bitAnd(TSL.uint(0xff))).mul(byte),
-    TSL.float(instance.packed.x.shiftRight(TSL.uint(16)).bitAnd(TSL.uint(0xff))).mul(byte),
+  const color = srgbTransferEotf(
+    TSL.vec3(
+      TSL.float(instance.packed.x.bitAnd(TSL.uint(0xff))).mul(byte),
+      TSL.float(instance.packed.x.shiftRight(TSL.uint(8)).bitAnd(TSL.uint(0xff))).mul(byte),
+      TSL.float(instance.packed.x.shiftRight(TSL.uint(16)).bitAnd(TSL.uint(0xff))).mul(byte),
+    ),
   );
   const alpha = TSL.float(instance.packed.x.shiftRight(TSL.uint(24)).bitAnd(TSL.uint(0xff))).mul(byte);
   return {
