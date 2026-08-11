@@ -5,6 +5,20 @@ export const packageSizeBudgets = {
     gzipBytes: 82_400,
     brotliBytes: 63_500,
   },
+  // The renderer-neutral core subpath (D-249) must stay integration-free; the graph
+  // assertion in measure-package-sizes.mts already rejects any three/tsl/react pull.
+  'core-subpath-js': {
+    rawBytes: 215_000,
+    minifiedBytes: 148_000,
+    gzipBytes: 38_000,
+    brotliBytes: 32_500,
+  },
+  'tsl-subpath-js': {
+    rawBytes: 27_000,
+    minifiedBytes: 14_000,
+    gzipBytes: 4_200,
+    brotliBytes: 3_700,
+  },
   'font-validator-js': {
     rawBytes: 741_000,
     minifiedBytes: 585_000,

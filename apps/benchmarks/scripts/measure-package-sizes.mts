@@ -347,6 +347,38 @@ const textShaperWasm = await measureWasm(
   'Shaper Wasm',
   new URL('../../../packages/text/dist/text_shaper.wasm', import.meta.url),
 );
+const coreSubpath = await measureJavaScript(
+  'core-subpath-js',
+  'Renderer-neutral core JS',
+  new URL('../size-entries/text-core-subpath.ts', import.meta.url),
+  false,
+  true,
+  true,
+  {
+    // The renderer-neutral subpath must not pull any renderer integration.
+    expectedDynamic: [],
+    excludedInitial: [
+      '/packages/text/dist/react.js',
+      '/packages/text/dist/three.js',
+      '/packages/text/dist/tsl.js',
+      '/packages/text/dist/three/',
+      '/packages/text/dist/tsl/',
+    ],
+  },
+);
+const tslSubpath = await measureJavaScript(
+  'tsl-subpath-js',
+  'Technique shader library JS',
+  new URL('../size-entries/text-tsl.ts', import.meta.url),
+  false,
+  true,
+  true,
+  {
+    // The shader library must not pull the Three scene integration or React.
+    expectedDynamic: [],
+    excludedInitial: ['/packages/text/dist/react.js', '/packages/text/dist/three.js', '/packages/text/dist/three/'],
+  },
+);
 const threeRuntime = await measureJavaScript(
   'three-runtime-js',
   'Three.js adapter JS',
@@ -393,6 +425,8 @@ const iconsSlug = await measureFontAsset(
 );
 
 const entries: SizeEntry[] = [
+  coreSubpath,
+  tslSubpath,
   coreJavaScript,
   textShaperWasm,
   threeRuntime,
