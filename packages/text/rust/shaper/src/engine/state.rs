@@ -705,7 +705,12 @@ impl TextEngine {
                 *gather_cache = None;
                 *prepared_gather_cache = None;
                 let capability_set = CapabilitySetId(request.capability_set);
-                let attempted_retained = cached_gather == Some(current_gather_key);
+                // Decoration rows bypass the retained gather cursor arithmetic, so a session with
+                // any decorated paragraph must rebuild from a reset workspace; entering the
+                // retained path and falling back mid-append would stack fresh rows onto the
+                // previous update's buffers.
+                let attempted_retained =
+                    cached_gather == Some(current_gather_key) && !session_has_decorations(session);
                 let retained = attempted_retained
                     && gather
                         .begin_retained(policy, record_count)
@@ -1033,6 +1038,21 @@ fn prepared_gather_key(prepared: PreparedUpdate, revision: SessionRevision) -> G
     }
 }
 
+/// Whether any live paragraph carries decoration records, using pending state when prepared —
+/// the same view `append_session_gather` reads.
+fn session_has_decorations(session: &EngineSession) -> bool {
+    session.active_order().iter().any(|ordered| {
+        session.paragraph(ordered.id).is_some_and(|paragraph| {
+            let positioned = if paragraph.state.positioned_prepared {
+                &paragraph.state.pending_positioned
+            } else {
+                &paragraph.state.positioned
+            };
+            !positioned.decorations().is_empty()
+        })
+    })
+}
+
 fn append_session_gather(
     gather: &mut PolicyGatherWorkspace,
     session: &EngineSession,
@@ -1044,24 +1064,6 @@ fn append_session_gather(
 ) -> Result<(), EngineError> {
     let incremental = retained;
     let mut retaining = retained;
-    // Decoration rows bypass the retained gather cursor arithmetic, so a session with any
-    // decorated paragraph rebuilds its gather output; the undecorated fast path is untouched.
-    if retaining {
-        for ordered in session.active_order() {
-            let Some(paragraph) = session.paragraph(ordered.id) else {
-                continue;
-            };
-            let positioned = if paragraph.state.positioned_prepared {
-                &paragraph.state.pending_positioned
-            } else {
-                &paragraph.state.positioned
-            };
-            if !positioned.decorations().is_empty() {
-                retaining = false;
-                break;
-            }
-        }
-    }
     for ordered in session.active_order() {
         let paragraph = session
             .paragraph(ordered.id)

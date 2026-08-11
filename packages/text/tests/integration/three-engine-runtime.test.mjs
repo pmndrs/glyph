@@ -883,6 +883,166 @@ test('Three coordinator shares shaping data across technique bindings and refere
   stableTarget.dispose();
   stableSession.dispose();
 
+  const decorationSession = coordinator.createSession({
+    requestCapacity: 4_096,
+    resultCapacity: 1024 * 1024,
+    textCapacity: 16,
+  });
+  const decorationPublication = decorationSession.update(
+    compileTextEngineFrameUpdate({
+      sessionId: decorationSession.handle,
+      policyHandle: coordinator.policyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: 0,
+      consumedPlanRevision: 0,
+      acknowledgedPublicationGeneration: 0,
+      limits: {
+        maxParagraphs: 2,
+        maxClusters: 16,
+        maxLines: 8,
+        maxRegions: 2,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
+      textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'abc' }],
+      styleMutations: [
+        {
+          opcode: 'upsert',
+          paragraphId: 1,
+          styleId: 1,
+          cascadeOrder: 0,
+          start: 0,
+          end: 3,
+          root: true,
+          value: {
+            fontStackHandle: first.handle,
+            materialId: primaryMaterial.id,
+            fontSize: 16,
+            rasterPixelRatio: 1,
+            foregroundRgba: 0xffff_ffff,
+            decoration: {
+              style: 'solid',
+              rgba: 0xff00_00ff,
+              underline: true,
+              lineThrough: true,
+              thickness: 0,
+              offset: 0,
+            },
+          },
+        },
+      ],
+      constraints: [
+        {
+          paragraphId: 1,
+          flowThreadId: 1,
+          geometryRevision: 1,
+          width: 256,
+          height: 128,
+          viewportBlockStart: 0,
+          viewportBlockEnd: 128,
+          resumeBlockOffset: 0,
+          maxLines: 8,
+          regionStart: 0,
+          resumeCluster: 0,
+          regionCount: 1,
+          resumeRegion: 0,
+          widthMode: 'at-most',
+          heightMode: 'at-most',
+          wrap: 'word',
+          align: 'start',
+          overflow: 'visible',
+          blockAlign: 'start',
+        },
+      ],
+      regions: [
+        {
+          id: 1,
+          geometryRevision: 1,
+          shape: 'rectangle',
+          exclusionStart: 0,
+          exclusionCount: 0,
+          writingMode: 'horizontal-tb',
+          textOrientation: 'mixed',
+          inlineStart: 0,
+          blockStart: 0,
+          inlineEnd: 256,
+          blockEnd: 128,
+          clipInlineStart: 0,
+          clipBlockStart: 0,
+          clipInlineEnd: 256,
+          clipBlockEnd: 128,
+        },
+      ],
+    }),
+  );
+  const decorationTarget = new ThreeTextRenderPlanExecutor(coordinator, {
+    drawRoot,
+    renderOrderBase: 60,
+    objectForTransform(transformId) {
+      const object = paragraphObjects.get(transformId);
+      if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
+      return object;
+    },
+    transformIds: () => paragraphObjects.keys(),
+  });
+  decorationTarget.apply(decorationPublication);
+  const primitiveKinds = decorationTarget.draws.map(
+    (decorationDraw) => decorationDraw.userData.pmndrsTextPrimitiveKind,
+  );
+  assert.ok(
+    primitiveKinds.includes('decoration') && primitiveKinds.includes('glyph'),
+    'a decorated publication realizes draws of both primitive kinds',
+  );
+  assert.equal(primitiveKinds[0], 'decoration', 'the underline row paints before its glyph run');
+  assert.equal(primitiveKinds.at(-1), 'decoration', 'the line-through row paints after its glyph run');
+  for (const [index, decorationDraw] of decorationTarget.draws.entries()) {
+    if (primitiveKinds[index] !== 'decoration') continue;
+    assert.ok(decorationDraw.geometry.getAttribute('_pmndrsText_1').array instanceof Float32Array);
+    assert.ok(decorationDraw.geometry.getAttribute('_pmndrsText_2').array instanceof Uint32Array);
+  }
+  const decorationInstanceTotal = decorationTarget.draws.reduce(
+    (total, decorationDraw) => total + decorationDraw.geometry.instanceCount,
+    0,
+  );
+  const decorationEditPublication = decorationSession.update(
+    compileTextEngineFrameUpdate({
+      sessionId: decorationSession.handle,
+      policyHandle: coordinator.policyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: decorationPublication.engineRevision,
+      consumedPlanRevision: decorationPublication.planRevision,
+      acknowledgedPublicationGeneration: decorationPublication.publicationGeneration,
+      limits: {
+        maxParagraphs: 2,
+        maxClusters: 16,
+        maxLines: 8,
+        maxRegions: 2,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      textMutations: [{ paragraphId: 1, start: 0, deleteCount: 3, insert: 'abc' }],
+    }),
+  );
+  assert.equal(
+    decorationEditPublication.primitiveCount,
+    decorationPublication.primitiveCount,
+    'editing a decorated paragraph must not accumulate stale gather rows',
+  );
+  assert.equal(decorationEditPublication.drawCount, decorationPublication.drawCount);
+  decorationTarget.apply(decorationEditPublication);
+  assert.equal(
+    decorationTarget.draws.reduce((total, decorationDraw) => total + decorationDraw.geometry.instanceCount, 0),
+    decorationInstanceTotal,
+    'an identity-preserving edit must republish the same number of instances',
+  );
+  decorationTarget.dispose();
+  decorationSession.dispose();
+
   target.dispose();
   session.dispose();
   first.release();
