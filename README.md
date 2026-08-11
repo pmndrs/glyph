@@ -2,400 +2,215 @@
 
 Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
 
-This README specifies the target v1 API. The repository's merged implementation is v0; v1 is declared only after the core API and
-engine integrations below are implemented and pass their portability gates.
+`@pmndrs/text` shapes and lays out text in Rust/Wasm, then publishes a retained render plan for the active renderer. The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
 
 ## Render text with React Three Fiber
 
 ```tsx
 import { Text, TextGroup, useFont } from '@pmndrs/text/react';
-import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import { msdf } from '@pmndrs/text/three/msdf';
+
+const fontRequest = {
+  input: { baked: '/fonts/Inter.font.glb' },
+  raster: { technique: msdf },
+} as const;
+
+useFont.preload(fontRequest);
 
 function Labels() {
-  const Inter = useFont({
-    input: { baked: '/fonts/Inter.font.glb' },
-    raster: { technique: mtsdf },
-  });
+  const inter = useFont(fontRequest);
 
   return (
-    <TextGroup technique={mtsdf}>
-      <Text font={Inter}>Hello, world!</Text>
+    <TextGroup compositing="independent">
+      <Text
+        font={inter}
+        contentBox={{ width: { mode: 'at-most', size: 480 }, wrap: 'word' }}
+        style={{ fontSize: 32, lineHeight: 1.2 }}
+        paint={{ color: '#f4f7ff' }}
+      >
+        Hello <Text paint={{ color: '#70d6ff' }}>world</Text>
+      </Text>
     </TextGroup>
   );
 }
 ```
 
+`Text` is a retained paragraph and a Three `Object3D`. An outer `Text` requires a font; a nested `Text` is a span and inherits the surrounding font, style, paint, and material unless it overrides them. Nested spans do not create another scene object or draw by themselves.
+
+`TextGroup` is an optional batching boundary. It collects descendant `Text` objects through the ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text semantics and lazily owns an implicit batch of one.
+
+`compositing="ordered"` preserves authored draw order and is the default. Use `independent` only when overlapping text does not depend on blending order; it lets the Rust planner reorder compatible work into fewer draws.
+
 ## Render text with Three.js
 
 ```ts
-import { FontLoader, Text, TextGroup } from '@pmndrs/text/three';
-import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import { FontLoader, Text, TextGroup, span, txt } from '@pmndrs/text/three';
+import { msdf } from '@pmndrs/text/three/msdf';
 
 const loader = new FontLoader();
-const Inter = await loader.loadAsync({
+const inter = await loader.loadAsync({
   input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: mtsdf },
+  raster: { technique: msdf },
 });
 
-const labels = new TextGroup({ technique: mtsdf });
-labels.add(new Text({ font: Inter, text: 'Hello, world!' }));
+const accent = span({ color: '#70d6ff' });
+const labels = new TextGroup({ compositing: 'independent' });
+const label = new Text({
+  font: inter,
+  text: txt`Hello ${accent`world`}`,
+  contentBox: { width: { mode: 'at-most', size: 480 }, wrap: 'word' },
+  style: { fontSize: 32, lineHeight: 1.2 },
+  paint: { color: '#f4f7ff' },
+});
+
+labels.add(label);
 
 scene.add(labels);
 ```
 
-Both integrations load fonts explicitly and add one same-technique text batch to the scene. Three.js owns shaping and buffer synchronization inside its normal render lifecycle.
+Three uses `txt` and `span` where React uses nested `Text`. A span may override its font selection, shaping style, paint, or material without manually maintaining UTF-16 ranges. Plain strings remain valid.
 
-## Batch text with `TextGroup`
+Add a `Text` directly to the scene when it does not need to share a batch:
+
+```ts
+scene.add(new Text({ font: inter, text: 'Standalone label' }));
+```
+
+Setters update desired state. The nearest `TextGroup` applies all pending descendant changes together during Three's normal scene traversal; transform-only changes update the transform buffer without reshaping the paragraph.
+
+```ts
+label.text = 'Updated label';
+label.style = { ...label.style, letterSpacing: 0.5 };
+label.position.x += 1;
+```
+
+For editor-style changes, `insertText`, `deleteText`, and `replaceText` queue narrow UTF-16 edits for the same next update. `measureLayout()` returns a compact committed paragraph summary; `inspectLayout()` explicitly requests line and glyph details. Layout query data is not carried through the ordinary render plan.
+
+## Fonts and fallback
+
+A loaded font carries its raster technique and resources. `Text`, `TextGroup`, and font stacks do not repeat a technique selector. That allows one paragraph to fall back across techniques—for example, MSDF prose with a Slug emoji font—when the active renderer policy supports both.
 
 ```ts
 import { createFontStack } from '@pmndrs/text';
-import { FontLoader, Text, TextGroup, span, txt, type SpanStyle } from '@pmndrs/text/three';
-import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import { slug } from '@pmndrs/text/three/slug';
 
-const loader = new FontLoader();
-const loadMSDF = (baked: string) =>
-  loader.loadAsync({
-    input: { baked },
-    raster: { technique: mtsdf },
-  });
-
-const [Inter, Noto, IconFont] = await Promise.all([
-  loadMSDF('/fonts/Inter.font.glb'),
-  loadMSDF('/fonts/NotoSans.font.glb'),
-  loadMSDF('/fonts/Icons.font.glb'),
-]);
-
-const BodyFont = createFontStack(Inter, Noto);
-
-const labels = new TextGroup({
-  technique: mtsdf,
+const emoji = await loader.loadAsync({
+  input: { baked: '/fonts/Emoji.font.glb' },
+  raster: { technique: slug },
 });
 
-scene.add(labels);
+const prose = createFontStack(inter, emoji);
+scene.add(new Text({ font: prose, text: 'Status 🌍' }));
 ```
 
-Create retained `Text` objects, then add them through the ordinary Three scene graph:
+One baked GLB may contain several raster techniques. Load them together when the application needs each typed font:
 
 ```ts
-const body = new Text({
-  font: BodyFont,
-  text: 'This paragraph uses Noto when Inter is missing a glyph.',
-  contentBox: {
-    width: { mode: 'at-most', size: 480 },
-    wrap: 'word',
-  },
+import { bitmap } from '@pmndrs/text/three/bitmap';
+import { slug } from '@pmndrs/text/three/slug';
+
+const [interBitmap, interMsdf, interSlug] = await loader.loadAsync({
+  input: { baked: '/fonts/Inter.font.glb' },
+  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
 });
-const score = new Text({ font: Inter, text: 'Player 1' });
-
-labels.add(body, score);
-
-score.position.set(0, 2, 0);
-score.rotation.y = Math.PI / 4;
 ```
 
-`TextGroup.add()` binds a `Text` to the batch; `TextGroup.remove()` unbinds it without disposing the retained object. Internal glyph slots are created later, when Three synchronizes the group for rendering.
+## Capacity, materials, and ownership
 
-Grouped glyph buffers belong to `TextGroup`, not to each `Text`. Moving `score` lets the old group recycle its slot and gives the destination a new paragraph membership; the old group's retained buffer stays alive for its other text and future reuse.
-
-```ts
-const overlayLabels = new TextGroup({ technique: mtsdf });
-
-overlayLabels.add(score); // Three removes it from labels and binds it to overlayLabels
-
-score.removeFromParent(); // reusable desired state; no batch membership while detached
-score.dispose(); // permanent: score cannot be added again
-```
-
-Disposing a populated group destroys the batch, not its retained `Text` children:
-
-```ts
-labels.dispose();
-
-body.disposed; // false
-body.bound; // false
-
-overlayLabels.add(body); // creates fresh membership; no old buffer or paragraph transfers
-```
-
-`body` keeps its desired state, transform, glyph overrides, and font leases. The disposed group cannot be reused. Destination validation happens before reparenting, so an incompatible technique or invalid font leaves `body` unbound instead of partially moving it.
-
-Call `dispose()` when the public `Text` will never be reused. It releases text-owned cached state and any standalone batch, but it does not dispose a group's shared buffers or the loaded font. Dispose the `TextGroup` when that render phase is done, then dispose fonts after no retained `Text` or core `Paragraph` holds them. A `FontStack` is an immutable selection value, not an owner; retaining the value does not prevent font disposal, and a stack containing a disposed font cannot be used again.
-
-Construction alone owns no renderer resource. A `Text` gets a text-owned implicit batch only after it is attached outside a `TextGroup` and synchronized for rendering. Moving that rendered standalone text into a group publishes new group membership before retiring its implicit target at a GPU-safe boundary. Calling `dispose()` after removal is therefore not a no-op or a defensive convention: it cancels pending work, clears retained caches and references, marks the object permanently disposed, and prevents it from being attached again.
-
-## Text spans
-
-Compose typed spans without managing UTF-16 ranges by hand:
-
-```ts
-const AlertStyle = {
-  color: '#ffddff',
-  fontSize: 18,
-} satisfies SpanStyle;
-
-const alert = span(Noto, AlertStyle);
-
-score.text = txt`
-  Player ${alert`Two`}
-`;
-```
-
-`span(inter)`, `span(uiFont)`, `span(importantStyle)`, and `span(inter, { color: '#ffddff' })` are the same composition path.
-A style-only span inherits its surrounding font. The Three entry point re-exports the renderer-neutral `txt`, `span`, and
-style types from `@pmndrs/text`. A plain string remains valid anywhere a formatted text literal is accepted.
-
-Keep the inputs as a tuple when they need to be extended before binding:
-
-```ts
-const AlertFormat = [Inter, AlertStyle] as const;
-const alertFormat = span(...AlertFormat);
-```
-
-An unattached `Text` stores desired state without shaping. When it is added, the nearest `TextGroup` allocates it before the
-first shape and render. Moving it to another group removes its old paragraph allocation and adds a new allocation while
-retaining the same `Text` object, properties, and transform.
-
-```ts
-score.text = 'First value';
-score.text = 'Second value';
-score.text = 'Player 2';
-
-renderer.render(scene, camera); // shapes only "Player 2"
-```
-
-One `TextGroup` is one intentional text render phase. Create separate groups for simultaneous scene placements, different
-renderer lifetimes, or places where non-text draws must appear between text draws. Ordinary Three reparenting may move one
-group between scenes. Every `Text` owns its `Font` or `FontStack`; every effective font must use the group's rendering
-technique.
-
-## Preallocate glyph buffers when it matters
-
-Capacity is optional. A `TextGroup` defaults to 4,096-glyph chunks if unspecified. Ordinary applications do not need to size batches up front. Paragraph handles and their metadata are not capacity-limited.
-
-Set capacity when a workload has a known upper bound or needs a different overflow policy:
+Capacity is optional. A `TextGroup` defaults to 4,096-glyph chunks; a standalone `Text` defaults to a 256-glyph growing buffer. Set an explicit policy only for known bounds or memory behavior:
 
 ```ts
 const denseLabels = new TextGroup({
-  technique: mtsdf,
   capacity: { size: 20_000, policy: 'chunk' },
 });
 ```
 
-- `size` is the number of glyph-instance slots in each physical raster-resource buffer.
-- `policy: chunk` preserves existing buffers and allocates another when one fills.
-- `policy: grow` replaces a full buffer and doubles its capacity until the pending glyphs fit.
-- `policy: fixed` turns `size` into a hard limit.
+- `chunk` retains bounded chunks as demand grows.
+- `grow` replaces full storage with a larger allocation.
+- `fixed` rejects an update that exceeds the declared capacity and keeps the last complete revision visible.
 
-Core preserves paragraph order when text crosses physical buffers.
-
-`TextGroup.add()` validates ownership and technique compatibility, but it does not shape and therefore cannot know final glyph
-demand. A fixed-capacity overflow is discovered by synchronization: core reports a typed `capacity-exceeded` preparation
-error before publication and keeps the prior revision current. The Three.js integration catches that failure inside its
-render synchronization, keeps the last complete text visible, and exposes it through the owning
-`TextGroup.error` plus a deferred `onError` callback.
-
-Applications that manage fixed capacity resize explicitly:
+Custom materials are renderer-owned factories. Rust carries their numeric `materialId` through planning, while Three creates the actual material only when a draw needs it. Different materials may still share instance buffers.
 
 ```ts
-const overflow = labels.error;
-if (overflow?.kind !== 'capacity-exceeded') throw new Error('No fixed-capacity overflow to resize');
+import { defineTextMaterial } from '@pmndrs/text/three';
 
-labels.setCapacity({ size: overflow.required, policy: 'fixed' });
-```
-
-## Control batch render order
-
-A `TextGroup` is an `Object3D`, so its program-compiled draws naturally retain the nearest parent Three `Group` order:
-
-```ts
-const hud = new THREE.Group();
-hud.renderOrder = 100;
-
-const labels = new TextGroup({ technique: mtsdf });
-
-hud.add(labels); // text draws use groupOrder 100
-scene.add(hud);
-```
-
-Set the batch's secondary render-order base through the ordinary Three property:
-
-```ts
-labels.renderOrder = 10;
-```
-
-Core sorts each `Text.renderOrder` inside the batch. The integration assigns the program's ordered physical draws
-consecutive Three render orders beginning at `TextGroup.renderOrder`. Use separate `TextGroup`s when unrelated Three draws
-must appear between text phases.
-
-## Core API
-
-Baking, loading, shaping, layout, and physical glyph batching are renderer-neutral core concepts.
-
-### Bake fonts
-
-```ts
-import { rasterBake } from '@pmndrs/text';
-import { bakeFont } from '@pmndrs/text/bake';
-import mtsdfBaker from '@pmndrs/text/raster/mtsdf/baker';
-
-await bakeFont({
-  input: new URL('./Inter-Regular.ttf', import.meta.url),
-  output: new URL('./Inter.font.glb', import.meta.url),
-  font: { fontFaceIndex: 0 },
-  rasters: [
-    rasterBake(mtsdfBaker, {
-      packaging: { artifact: 'embedded', pages: 'embedded' },
-      options: undefined,
-    }),
-  ],
+const material = defineTextMaterial((context) => {
+  const value = context.createDefaultMaterial();
+  // Customize the technique-specific TSL material here.
+  return value;
 });
+
+const custom = new Text({ font: inter, text: 'Custom material', material });
 ```
 
-Baking creates font metrics, glyph records, and technique resources before the application runs. Development fallback can perform the same work in a Worker. Loading remains explicit either way.
+Call `dispose()` when a `Text`, `TextGroup`, loaded font, or loader will not be reused. Disposing a group releases its session and renderer resources but does not dispose descendant `Text` objects, which may move to another live group.
 
-For a known local font, the CLI exposes the same path without a project-discovery module:
+## Bake fonts
+
+The package CLI bakes the same canonical font GLB consumed by the loader:
 
 ```sh
 pnpm exec text bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --msdf --slug
 ```
 
-Add `--unicodes U+0020-007E` to subset the shaping font through the package-owned baker Wasm, or `--check` to rebuild temporarily and
-require byte-identical output.
+Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporarily and require byte-identical output. Runtime baking uses the same baker Wasm in a Worker and is opt-in; it is not pulled into the default renderer bundle.
 
-Use the font's retained `post`/CFF glyph names to find icon code points or produce a bake-ready Unicode set:
+Inspect authored `post` or CFF glyph names to find icon code points or produce a bake-ready Unicode set:
 
 ```sh
 pnpm exec text glyphs fa-solid-900.ttf --name globe --json
 pnpm exec text glyphs fa-solid-900.ttf --name globe --name earth-americas --unicode-set
 ```
 
-`text glyphs` uses the package-owned baker Wasm; fonts without authored names still report exact glyph IDs.
+Fonts without authored glyph names still report exact glyph IDs.
 
-### Load, shape, and render
+## Render policy and render plan
 
-```ts
-import { createFontStack, createTextRuntime } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/raster/bitmap';
-import { mtsdf } from '@pmndrs/text/raster/mtsdf';
-import { slug } from '@pmndrs/text/raster/slug';
+The public text API describes typography. A renderer policy describes how that semantic result becomes physical instance records and compatible draws. It is registered once as validated numeric data, not called as JavaScript during layout or packing.
 
-const runtime = await createTextRuntime({
-  async: {
-    createWorker: () => new Worker(new URL('./text-worker.js', import.meta.url)),
-  },
-});
-
-const Inter = await runtime.loadFont({
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: mtsdf },
-});
-const Noto = await runtime.loadFont({
-  input: { baked: '/fonts/NotoSans.font.glb' },
-  raster: { technique: mtsdf },
-});
-
-const [InterBitmap, InterMsdf, InterSlug] = await runtime.loadFont({
-  input: { baked: '/fonts/Inter.font.glb' },
-  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: mtsdf }, { technique: slug }],
-});
-
-const UiFont = createFontStack(Inter, Noto);
-
-const paragraphs = runtime.createParagraphBatch({
-  technique: mtsdf,
-});
-
-const label = paragraphs.add({
-  font: UiFont,
-  text: 'Player 1',
-});
+```mermaid
+flowchart LR
+  mutations["Text and font mutations"] --> layout["Rust shaping and layout"]
+  layout --> policy["Validated renderer policy"]
+  policy --> plan["Revisioned render plan"]
+  plan --> render["Renderer resources, uploads, materials, and draws"]
 ```
 
-Change desired state, then choose the synchronization boundary explicitly:
+The policy declares:
 
-```ts
-label.text = 'Player 2';
+- supported raster techniques and paint/compositing capabilities;
+- physical buffer schemas and the semantic fields they consume;
+- storage and draw compatibility keys, including resource, material, clipping, depth, and ordering identity;
+- allocation strategy and backend limits; and
+- an upload cost model for coalescing dirty ranges or replacing a whole buffer update.
 
-const revision = runtime.update();
-// or: const outcome = await runtime.updateAsync();
-```
+Its small forward-only packing program is the only bytecode in this design. Rust validates it before use and executes it over the semantic records, including SIMD lanes where available. It cannot branch backward, allocate, call JavaScript, or change shaping and layout.
 
-Core returns technique-specific canonical CPU storage, exact adjacent-revision dirty ranges, and ordered glyph runs carrying
-the paragraph/span render variant. An integration maps those ranges into its own buffers and compiles compatible runs into
-engine draws; it never reshapes, re-sorts source text, or rediscovers physical resource membership.
+The resulting render plan is fixed-record data—a retained display-list and resource transaction, not executable bytecode and not a GPU-specific command stream. It contains:
 
-## How a rendering engine uses core
+- identity and revision requirements;
+- resource and physical-buffer lifetimes;
+- allocate, resize, write, copy, and retirement patches;
+- ordered glyph, decoration, inline-object, and clip primitives; and
+- draw packets with exact buffer, resource, program, material, and ordering identities.
 
-Call core once after application text changes and before the engine submits text. Everything marked `RENDERER` is the thin
-technique adapter the engine implements for Bitmap, MTSDF, or Slug.
+No GPU is required to shape, lay out, execute the policy, or produce this plan. The renderer begins GPU work only when it realizes the plan. Adjacent revisions carry minimal policy-costed patches; a consumer that misses the required base revision receives a complete checkpoint instead of applying an unsafe delta.
 
-```text
-CREATE target implementing ParagraphBatchTarget for the selected raster technique
+### Implement a renderer
 
-target.stage(previous, prepared):
-  FOR EACH glyphBatch IN prepared.glyphBatches:
-    RENDERER create or reuse safe unpublished buffers for:
-      glyphBatch.key
-      glyphBatch.capacity
-      glyphBatch.storage fields defined by GlyphBatchStorageOf<Technique>
+A renderer integration has five responsibilities:
 
-    IF previous.sourceRevision is the immediately preceding batch revision:
-      ranges = glyphBatch.dirtyRanges
-    ELSE:
-      ranges = the live ranges for glyphBatch named by prepared.glyphRuns
+1. Register one policy and capability set before the first text update.
+2. Compile each loaded font's technique resources into the policy's cold binding table.
+3. Apply plan resource and buffer operations, then upload the declared patch ranges.
+4. Realize materials and submit draw packets without re-shaping, re-sorting, or reconstructing layout.
+5. Acknowledge completed publication generations before Rust reuses retired storage.
 
-    FOR EACH range IN ranges:
-      RENDERER upload that range from every glyphBatch.storage field
+Three is the maintained reference executor. Importing `@pmndrs/text/three/bitmap`, `/msdf`, or `/slug` registers that technique's policy program and TSL material implementation. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
 
-    RENDERER realize glyphBatch.binding from glyphBatch.font.data
-    RENDERER retain those font resources with the instance buffers
-    RASTER TECHNIQUE defines the portable data, binding, and instance semantics
-    RASTER PROGRAM defines shader and pipeline semantics for this renderer backend
+The portable policy and render-plan wire contract is implemented and documented, but a renderer-neutral host is not yet exposed as a stable package subpath. A new engine integration should currently follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference. TypeGPU is intentionally deferred and will be rebuilt against this contract rather than preserving the removed TypeScript layout path.
 
-  RASTER PROGRAM compile prepared.glyphRuns into ordered compatible draws
-    it may coalesce adjacent compatible variants or split for engine limits
-    it must preserve order unless its compositing policy proves another order equivalent
-  RETURN a ready ParagraphBatchTargetStage
-    commit() publishes this complete target revision
-    abort() releases only this unpublished target revision
-
-target.dispose():
-  RENDERER retire target resources after in-flight work finishes
-
-CALL attachment = paragraphs.attach(target) once
-
-BEFORE EACH TEXT RENDER PHASE:
-  CALL runtime.update()
-    core shapes every dirty paragraph across the runtime
-    core publishes prepared paragraph batches atomically
-    attachments record their newest source revision without touching renderer resources
-
-  CALL attachment.prepare()
-    calls target.stage(previous, prepared) only for this observed render phase
-    repeated calls are no-ops when that source revision is already prepared
-
-  CALL attachment.commit()
-    publishes a ready renderer revision at this safe frame boundary
-
-  READ prepared = paragraphs.current
-  READ live = attachment.current
-
-  FOR EACH paragraph IN prepared.paragraphs:
-    RENDERER update the current engine transform for paragraph.paragraph
-    transform-only changes do not call runtime.update()
-
-  FOR EACH draw IN live.draws, in the compiled order:
-    RENDERER select the physical buffers and resources identified by draw
-    RENDERER bind the raster program, variant data, and pipeline
-    RENDERER encode the draw
-```
-
-Read the complete [Three.js API](docs/planning/three-api.md), [core API](docs/planning/core-api.md),
-[engine integration contract](docs/planning/engine-integration-contract.md), and
-[raster technique boundary](docs/planning/raster-technique-api.md),
-[TypeGPU program and engine API](docs/planning/typegpu-api.md), the
-[TypeGPU-first shader authority research](docs/planning/typegpu-first-shader-authority.md), then the
-[implementation plan](docs/planning/engine-integration-boundary.md).
+## Develop
 
 ```sh
 mise install
