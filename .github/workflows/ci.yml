@@ -84,7 +84,9 @@ jobs:
     name: Check
     needs: static
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # The runtime suite alone runs ~15 minutes; 20 left no headroom once the
+    # decoration conformance cases landed and the job died at the wall.
+    timeout-minutes: 30
     env:
       CI: true
 
