@@ -1,4 +1,3 @@
-import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
 import { fontBakerAbi, type FontBakerAbi } from './generated/font-baker-abi.js';
 
 export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';

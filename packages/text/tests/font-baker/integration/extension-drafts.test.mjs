@@ -10,7 +10,7 @@ let validateDistanceField;
 let validateSlug;
 
 before(async () => {
-  const [distanceField, slug, resourceSource, texturePages, textureResource, binaryResource] = await Promise.all([
+  const [distanceField, slug, resourceSource, texturePages, textureResourceSchema, binaryResource] = await Promise.all([
     readSchema('PMNDRS_font_distance_field/schema/glTF.PMNDRS_font_distance_field.schema.json'),
     readSchema('PMNDRS_font_slug/schema/glTF.PMNDRS_font_slug.schema.json'),
     readSchema('schema/resourceSource.PMNDRS_font.schema.json'),
@@ -24,7 +24,7 @@ before(async () => {
   for (const [id, schema] of [
     ['schema/resourceSource.PMNDRS_font.schema.json', resourceSource],
     ['schema/texturePages.PMNDRS_font.schema.json', texturePages],
-    ['schema/textureResource.PMNDRS_font.schema.json', textureResource],
+    ['schema/textureResource.PMNDRS_font.schema.json', textureResourceSchema],
     ['schema/binaryResource.PMNDRS_font.schema.json', binaryResource],
   ]) {
     ajv.addSchema({ ...schema, id });
