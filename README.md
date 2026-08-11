@@ -35,11 +35,11 @@ function Labels() {
 }
 ```
 
-`Text` is a retained paragraph and a Three `Object3D`. An outer `Text` requires a font; a nested `Text` is a span and inherits the surrounding font, style, paint, and material unless it overrides them. Nested spans do not create another scene object or draw by themselves.
+`Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is a span and inherits the surrounding font, style, paint, and material unless it overrides them. Nested spans may not always be in the same draw if they can't be batched with their parents.
 
-`TextGroup` is an optional batching boundary. It collects descendant `Text` objects through the ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text semantics and lazily owns an implicit batch of one.
+`TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text semantics and lazily owns an implicit batch of one.
 
-`compositing="ordered"` preserves authored draw order and is the default. Use `independent` only when overlapping text does not depend on blending order; it lets the Rust planner reorder compatible work into fewer draws.
+`compositing="ordered"` preserves authored draw order and is the default. Use `independent` only when overlapping text does not depend on blending order as it lets the planner reorder compatible work into fewer draws.
 
 ## Render text with Three.js
 
@@ -64,19 +64,14 @@ const label = new Text({
 });
 
 labels.add(label);
-
 scene.add(labels);
 ```
 
-Three uses `txt` and `span` where React uses nested `Text`. A span may override its font selection, shaping style, paint, or material without manually maintaining UTF-16 ranges. Plain strings remain valid.
+Three uses `txt` and `span` where React uses nested `Text`. A span may override its font selection, shaping style, paint, or material without manually maintaining UTF-16 ranges.
 
-Add a `Text` directly to the scene when it does not need to share a batch:
+Add a `Text` directly to the scene when it does not need to share a batch. The nearest `TextGroup` applies all pending descendant changes together during Three's normal scene traversal.
 
-```ts
-scene.add(new Text({ font: inter, text: 'Standalone label' }));
-```
-
-Setters update desired state. The nearest `TextGroup` applies all pending descendant changes together during Three's normal scene traversal; transform-only changes update the transform buffer without reshaping the paragraph.
+Setters update the desired state, mutating the text or style property will not mark the label as dirty:
 
 ```ts
 label.text = 'Updated label';
@@ -84,11 +79,12 @@ label.style = { ...label.style, letterSpacing: 0.5 };
 label.position.x += 1;
 ```
 
-For editor-style changes, `insertText`, `deleteText`, and `replaceText` queue narrow UTF-16 edits for the same next update. `measureLayout()` returns a compact committed paragraph summary; `inspectLayout()` explicitly requests line and glyph details. Layout query data is not carried through the ordinary render plan.
+For targeted changes, `insertText`, `deleteText`, and `replaceText` queue narrow UTF-16 edits for the next update.
+`measureLayout()` returns a compact committed paragraph summary; `inspectLayout()` explicitly requests line and glyph details.
 
-## Fonts and fallback
+## Font Stacks - fallback fonts for missing glyphs
 
-A loaded font carries its raster technique and resources. `Text`, `TextGroup`, and font stacks do not repeat a technique selector. That allows one paragraph to fall back across techniques—for example, MSDF prose with a Slug emoji font—when the active renderer policy supports both.
+A FontStack created with `createFontStack` allows you to use additional fonts to lookup missing glyphs if your primary font doesn't contain that glyph. This can be helpful for rendering emoji or icons as well as using additional fonts for other languages or character sets.
 
 ```ts
 import { createFontStack } from '@pmndrs/text';
@@ -103,7 +99,7 @@ const prose = createFontStack(inter, emoji);
 scene.add(new Text({ font: prose, text: 'Status 🌍' }));
 ```
 
-One baked GLB may contain several raster techniques. Load them together when the application needs each typed font:
+One baked GLB may contain several raster techniques, or you may bake each technique into it's own GLB font asset. Load them together when the application needs each typed font:
 
 ```ts
 import { bitmap } from '@pmndrs/text/three/bitmap';
@@ -111,13 +107,17 @@ import { slug } from '@pmndrs/text/three/slug';
 
 const [interBitmap, interMsdf, interSlug] = await loader.loadAsync({
   input: { baked: '/fonts/Inter.font.glb' },
-  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
+  rasters: [
+    { technique: bitmap, options: { strikes: [32] } },
+    { technique: msdf },
+    { technique: slug }
+  ],
 });
 ```
 
 ## Capacity, materials, and ownership
 
-Capacity is optional. A `TextGroup` defaults to 4,096-glyph chunks; a standalone `Text` defaults to a 256-glyph growing buffer. Set an explicit policy only for known bounds or memory behavior:
+Capacity is optional. A `TextGroup` defaults to 4,096-glyph chunks; a standalone `Text` defaults to a 256-glyph growing buffer. Set an explicit policy for known bounds or memory behavior:
 
 ```ts
 const denseLabels = new TextGroup({
@@ -153,7 +153,7 @@ The package CLI bakes the same canonical font GLB consumed by the loader:
 pnpm exec text bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --msdf --slug
 ```
 
-Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporarily and require byte-identical output. Runtime baking uses the same baker Wasm in a Worker and is opt-in; it is not pulled into the default renderer bundle.
+Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporarily and require byte-identical output. Runtime baking uses the same baker Wasm in a Worker and is opt-in; it is dynamicly imported and split into it's own chunk as to not pull it into the default bundle.
 
 Inspect authored `post` or CFF glyph names to find icon code points or produce a bake-ready Unicode set:
 
@@ -186,7 +186,7 @@ The policy declares:
 
 Its small forward-only packing program is the only bytecode in this design. Rust validates it before use and executes it over the semantic records, including SIMD lanes where available. It cannot branch backward, allocate, call JavaScript, or change shaping and layout.
 
-The resulting render plan is fixed-record data—a retained display-list and resource transaction, not executable bytecode and not a GPU-specific command stream. It contains:
+The resulting render plan is fixed-record data. A retained display-list and resource transaction, not executable bytecode and not a GPU-specific command stream. It contains:
 
 - identity and revision requirements;
 - resource and physical-buffer lifetimes;
@@ -204,11 +204,11 @@ A renderer integration has five responsibilities:
 2. Compile each loaded font's technique resources into the policy's cold binding table.
 3. Apply plan resource and buffer operations, then upload the declared patch ranges.
 4. Realize materials and submit draw packets without re-shaping, re-sorting, or reconstructing layout.
-5. Acknowledge completed publication generations before Rust reuses retired storage.
+5. Acknowledge completed publication generations before the planner reuses retired storage.
 
 Three is the maintained reference executor. Importing `@pmndrs/text/three/bitmap`, `/msdf`, or `/slug` registers that technique's policy program and TSL material implementation. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
 
-The portable policy and render-plan wire contract is implemented and documented, but a renderer-neutral host is not yet exposed as a stable package subpath. A new engine integration should currently follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference. TypeGPU is intentionally deferred and will be rebuilt against this contract rather than preserving the removed TypeScript layout path.
+The portable policy and render-plan wire contract is implemented and documented, but a renderer-neutral host is not yet exposed as a stable package subpath. A new engine integration should currently follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference. TypeGPU support will be built against this contract in an upcoming release.
 
 ## Develop
 
