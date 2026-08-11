@@ -2,6 +2,13 @@
 
 ## 2026-08-11
 
+- **Policy interpreter tail measurement** — Driving the kernel-lab explicit artifact at controlled record counts:
+  a 4-record vector iteration costs ~50–75 ns and each scalar tail record ~50 ns, so a span of 7 records
+  (1 vector + 3 scalar, 282 ns) costs more than the 8-record two-vector shape (181 ns) that a tail-overlap
+  rewrite would produce. Overlap would therefore save roughly 100 ns per tailed draw-span — real but bounded:
+  a frame needs thousands of tailed spans before it reaches microseconds. Not wired per the D-245 admission
+  bar; revisit if a workload profile ever shows many small draw-spans dominating the packing pass.
+
 - **Policy authoring DSL (D-250)** — Policy programs are written against named semantic and binding handles with
   automatic register allocation; the four Three programs ported with a decoded-bytes equivalence proof against the
   hand-numbered fixtures and re-pinned goldens. Wire format and interpreter unchanged.
