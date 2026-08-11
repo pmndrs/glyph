@@ -7,7 +7,7 @@ import { bitmap } from '@pmndrs/text/three/bitmap';
 import { Text, useFont } from '@pmndrs/text/react';
 import type { LoadedFontRequest, ParagraphContentBox, Text as CoreText } from '@pmndrs/text/three';
 
-import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json';
+import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json' with { type: 'json' };
 import bitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
 import { hashParagraphLayout } from '../../paragraph-layout-digest';

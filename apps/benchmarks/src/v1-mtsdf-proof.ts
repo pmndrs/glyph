@@ -3,7 +3,7 @@ import { msdf as mtsdf } from '@pmndrs/text/three/msdf';
 import { FontLoader, Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 import interCompressedFontUrl from '../fixtures/rendering/inter-mtsdf.font.glb.gz?url';
-import showcaseManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
+import showcaseManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
 
 declare global {

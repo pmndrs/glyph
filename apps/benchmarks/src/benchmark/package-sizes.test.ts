@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import report from '../generated/package-sizes.json';
+import report from '../generated/package-sizes.json' with { type: 'json' };
 import { packageSizeBudgets } from './package-size-budgets';
 import { assertPackageSizeReportFresh } from './package-size-report';
 import { sizeLimitRows, summarizePackageSizes } from './package-size-summary';

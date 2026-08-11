@@ -1,7 +1,7 @@
 import { bakeFontInWorker } from '@pmndrs/text/runtime-bake';
 
 import canonicalFontUrl from '../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url';
-import canonicalFontManifest from '../../fixtures/fonts/inter-v4.1/manifest.json';
+import canonicalFontManifest from '../../fixtures/fonts/inter-v4.1/manifest.json' with { type: 'json' };
 
 export interface WorkerQueueEvidence {
   readonly artifactHash: string;

@@ -1,7 +1,7 @@
 import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
-import fontAwesomeIcons from '../../../fixtures/fonts/font-awesome-free-6.7.2/icons.json';
+import fontAwesomeIcons from '../../../fixtures/fonts/font-awesome-free-6.7.2/icons.json' with { type: 'json' };
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {

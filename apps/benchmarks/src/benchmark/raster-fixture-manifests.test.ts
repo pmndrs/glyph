@@ -4,10 +4,10 @@ import { createGunzip } from 'node:zlib';
 
 import { describe, expect, it } from 'vitest';
 
-import bitmapManifest from '../../fixtures/rendering/showcase-raster-fixtures-v0.json';
-import bitmapDensityManifest from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json';
-import mtsdfManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
-import fontAwesomeIcons from '../../fixtures/fonts/font-awesome-free-6.7.2/icons.json';
+import bitmapManifest from '../../fixtures/rendering/showcase-raster-fixtures-v0.json' with { type: 'json' };
+import bitmapDensityManifest from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json' with { type: 'json' };
+import mtsdfManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
+import fontAwesomeIcons from '../../fixtures/fonts/font-awesome-free-6.7.2/icons.json' with { type: 'json' };
 import { exactBaseTextureArrayBytes } from './texture-memory';
 
 interface FixtureIdentity {

@@ -1,7 +1,7 @@
 import { FontLoader, FontRegistry } from '@pmndrs/text';
 
 import canonicalFontUrl from '../../../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url';
-import canonicalFontManifest from '../../../../fixtures/fonts/inter-v4.1/manifest.json';
+import canonicalFontManifest from '../../../../fixtures/fonts/inter-v4.1/manifest.json' with { type: 'json' };
 import type { BenchmarkTarget } from '../../contracts';
 import { sha256 } from '../shared';
 

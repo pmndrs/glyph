@@ -3,7 +3,7 @@ import { slug } from '@pmndrs/text/three/slug';
 import { FontLoader, Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 import interCompressedFontUrl from '../fixtures/rendering/inter-slug.font.glb.gz?url';
-import showcaseManifest from '../fixtures/rendering/showcase-slug-fixtures-v0.json';
+import showcaseManifest from '../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
 
 declare global {

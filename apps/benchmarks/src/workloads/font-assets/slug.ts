@@ -8,7 +8,7 @@ import interCompressedFontUrl from '../../../fixtures/rendering/inter-slug.font.
 import devanagariCompressedFontUrl from '../../../fixtures/rendering/noto-sans-devanagari-slug.font.glb.gz?url';
 import notoCjkShowcaseCompressedFontUrl from '../../../fixtures/rendering/noto-sans-cjk-showcase-slug.font.glb.gz?url';
 import sourceSerifCompressedFontUrl from '../../../fixtures/rendering/source-serif-4-slug.font.glb.gz?url';
-import showcaseManifest from '../../../fixtures/rendering/showcase-slug-fixtures-v0.json';
+import showcaseManifest from '../../../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import { fetchAuthenticatedGzipAsset, preloadFontAssetUrls } from './authenticated-gzip';
 import type {

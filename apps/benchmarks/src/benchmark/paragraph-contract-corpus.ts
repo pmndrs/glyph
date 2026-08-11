@@ -1,4 +1,4 @@
-import cjkContract from '../../fixtures/contracts/paragraph-cjk-layout-v0.json';
+import cjkContract from '../../fixtures/contracts/paragraph-cjk-layout-v0.json' with { type: 'json' };
 
 export const paragraphCjkCoverageText = Object.values(cjkContract.cases)
   .map(({ text }) => text)
