@@ -74,4 +74,20 @@ export {
   type PolicyTransformMode,
   type ProgramContext,
 } from './core/render-policy.js';
+export {
+  addF32,
+  constantF32,
+  constantU32,
+  multiplyF32,
+  policyProgram,
+  subtractF32,
+  u32ToF32,
+  type CompiledPolicyProgramBody,
+  type PolicyColorChannels,
+  type PolicyF32Value,
+  type PolicyProgramBuilder,
+  type PolicyProgramOptions,
+  type PolicyProgramSemantics,
+  type PolicyU32Value,
+} from './core/policy-program.js';
 export { textShaperAbi } from './generated/text-shaper-abi.js';

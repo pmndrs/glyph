@@ -1,15 +1,20 @@
 import {
+  addF32,
   compileRenderPolicy,
+  constantF32,
+  constantU32,
   createProgram,
   floatBuffers,
-  programContext,
-  stores,
+  multiplyF32,
+  policyProgram,
+  RenderWireIdentityRegistry,
+  subtractF32,
   u32Buffers,
+  u32ToF32,
+  type PolicyAllocationMode,
   type PolicyBuffer,
   type PolicyCapabilitySet,
   type PolicyProgram,
-  RenderWireIdentityRegistry,
-  type PolicyAllocationMode,
   type PolicyTransformMode,
 } from '../core.js';
 import { textShaperAbi } from '../core.js';
@@ -73,38 +78,59 @@ function threeCapabilitySet(): PolicyCapabilitySet {
   };
 }
 
+// Buffer ids are wire integers; these names map each technique's physical buffers
+// to what its shader reads from them.
+const BITMAP_ORIGIN = 1;
+const BITMAP_SIZE = 2;
+const BITMAP_UV_ORIGIN = 3;
+const BITMAP_UV_SIZE = 4;
+const BITMAP_COLOR = 5;
+const BITMAP_PAGE = 6;
+const MSDF_RECT = 1;
+const MSDF_UV_RECT = 2;
+const MSDF_UV_BOUNDS = 3;
+const MSDF_COLOR = 4;
+const MSDF_EFFECT_A = 5;
+const MSDF_EFFECT_B = 6;
+const MSDF_PAGE = 7;
+const SLUG_RECT = 1;
+const SLUG_PLANE_RECT = 2;
+const SLUG_BAND_TRANSFORM = 3;
+const SLUG_COLOR = 4;
+const SLUG_INVERSE_FONT_SIZE = 5;
+const SLUG_TABLE_STARTS = 6;
+const SLUG_BAND_COUNTS = 7;
+const DECORATION_RECT = 1;
+const DECORATION_PACKED = 2;
+
 function bitmapProgram(
   techniqueId: number,
   programId: number,
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
-  const context = programContext('strike', 8, 1);
-  const { loadF32, loadU32, binary, storeF32, storeU32 } = context;
-  loadF32(15);
-  loadU32(31, 0);
-  loadU32(30, 1);
-  loadU32(29, 2);
-  binary('multiplyF32', 15, 7, 2);
-  binary('addF32', 16, 0, 15);
-  binary('multiplyF32', 17, 8, 2);
-  binary('subtractF32', 18, 1, 17);
-  binary('multiplyF32', 19, 9, 2);
-  binary('multiplyF32', 20, 10, 2);
-  stores(storeF32, [
-    [1, [16, 18]],
-    [2, [19, 20]],
-    [3, [11, 12]],
-    [4, [13, 14]],
-    [5, [3, 4, 5, 6]],
+  const p = policyProgram({
+    scope: 'strike',
+    bindingF32: ['bearingX', 'bearingY', 'width', 'height', 'uvOriginX', 'uvOriginY', 'uvSizeX', 'uvSizeY'],
+    bindingU32: ['page'],
+  });
+  const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
+  const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, page } = p.binding;
+  p.storeF32(BITMAP_ORIGIN, [
+    addF32(inlineOrigin, multiplyF32(bearingX, fontSize)),
+    subtractF32(blockOrigin, multiplyF32(bearingY, fontSize)),
   ]);
-  if (transformMode === 'indexed') storeU32(TRANSFORM_BUFFER_ID, 0, 31);
-  storeU32(STABLE_GLYPH_BUFFER_ID, 0, 30);
-  storeU32(6, 0, 29);
+  p.storeF32(BITMAP_SIZE, [multiplyF32(width, fontSize), multiplyF32(height, fontSize)]);
+  p.storeF32(BITMAP_UV_ORIGIN, [uvOriginX, uvOriginY]);
+  p.storeF32(BITMAP_UV_SIZE, [uvSizeX, uvSizeY]);
+  p.storeF32(BITMAP_COLOR, [color.red, color.green, color.blue, color.alpha]);
+  if (transformMode === 'indexed') p.storeU32(TRANSFORM_BUFFER_ID, [transformIndex]);
+  p.storeU32(STABLE_GLYPH_BUFFER_ID, [stableGlyphId]);
+  p.storeU32(BITMAP_PAGE, [page]);
   return createProgram(
     techniqueId,
     programId,
-    context,
+    p.compile(),
     transformMode === 'indexed'
       ? [...floatBuffers([2, 2, 2, 2, 4]), ...u32Buffers([1], 6), stableGlyphIdBuffer(), transformIndexBuffer()]
       : [...floatBuffers([2, 2, 2, 2, 4]), ...u32Buffers([1], 6), stableGlyphIdBuffer()],
@@ -119,35 +145,43 @@ function msdfProgram(
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
-  const context = programContext('glyph', 10, 1);
-  const { operations, loadF32, loadU32, binary, constantF32, storeF32, storeU32 } = context;
-  loadF32(17);
-  loadU32(17, 2);
-  loadU32(31, 0);
-  loadU32(30, 1);
-  binary('multiplyF32', 18, 7, 2);
-  binary('addF32', 19, 0, 18);
-  binary('multiplyF32', 20, 8, 2);
-  binary('subtractF32', 21, 1, 20);
-  binary('multiplyF32', 22, 9, 2);
-  binary('multiplyF32', 23, 10, 2);
-  operations.push({ opcode: textShaperAbi.policy.opcodes.convertU32ToF32, target: 24, operand0: 17 });
-  constantF32(25, 0);
-  stores(storeF32, [
-    [1, [19, 21, 22, 23]],
-    [2, [11, 12, 13, 14]],
-    [3, [11, 12, 15, 16]],
-    [4, [3, 4, 5, 6]],
-    [5, [25, 25, 25, 25]],
-    [6, [25, 25, 25, 25]],
-    [7, [25, 25, 25, 24]],
+  const p = policyProgram({
+    scope: 'glyph',
+    bindingF32: [
+      'bearingX',
+      'bearingY',
+      'width',
+      'height',
+      'uvOriginX',
+      'uvOriginY',
+      'uvSizeX',
+      'uvSizeY',
+      'uvMaxX',
+      'uvMaxY',
+    ],
+    bindingU32: ['page'],
+  });
+  const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
+  const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } = p.binding;
+  const zero = constantF32(0);
+  p.storeF32(MSDF_RECT, [
+    addF32(inlineOrigin, multiplyF32(bearingX, fontSize)),
+    subtractF32(blockOrigin, multiplyF32(bearingY, fontSize)),
+    multiplyF32(width, fontSize),
+    multiplyF32(height, fontSize),
   ]);
-  if (transformMode === 'indexed') storeU32(TRANSFORM_BUFFER_ID, 0, 31);
-  storeU32(STABLE_GLYPH_BUFFER_ID, 0, 30);
+  p.storeF32(MSDF_UV_RECT, [uvOriginX, uvOriginY, uvSizeX, uvSizeY]);
+  p.storeF32(MSDF_UV_BOUNDS, [uvOriginX, uvOriginY, uvMaxX, uvMaxY]);
+  p.storeF32(MSDF_COLOR, [color.red, color.green, color.blue, color.alpha]);
+  p.storeF32(MSDF_EFFECT_A, [zero, zero, zero, zero]);
+  p.storeF32(MSDF_EFFECT_B, [zero, zero, zero, zero]);
+  p.storeF32(MSDF_PAGE, [zero, zero, zero, u32ToF32(page)]);
+  if (transformMode === 'indexed') p.storeU32(TRANSFORM_BUFFER_ID, [transformIndex]);
+  p.storeU32(STABLE_GLYPH_BUFFER_ID, [stableGlyphId]);
   return createProgram(
     techniqueId,
     programId,
-    context,
+    p.compile(),
     [
       ...floatBuffers([4, 4, 4, 4, 4, 4, 4]),
       stableGlyphIdBuffer(),
@@ -164,37 +198,51 @@ function slugProgram(
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
-  const context = programContext('glyph', 8, 6, true);
-  const { loadF32, loadU32, binary, constantF32, constantU32, storeF32, storeU32 } = context;
-  loadF32(16);
-  loadU32(31, 0);
-  loadU32(30, 1);
-  for (let field = 0; field < 6; field += 1) loadU32(21 + field, field + 2);
-  binary('multiplyF32', 16, 8, 2);
-  binary('addF32', 17, 0, 16);
-  binary('multiplyF32', 18, 9, 2);
-  binary('subtractF32', 19, 1, 18);
-  binary('multiplyF32', 20, 10, 2);
-  binary('multiplyF32', 27, 11, 2);
-  constantF32(28, 0);
-  constantU32(29, 0);
-  stores(storeF32, [
-    [1, [17, 19, 20, 27]],
-    [2, [8, 9, 10, 11]],
-    [3, [12, 13, 14, 15]],
-    [4, [3, 4, 5, 6]],
-    [5, [7, 28, 28, 28]],
+  const p = policyProgram({
+    scope: 'glyph',
+    inverseFontSize: true,
+    bindingF32: ['bearingX', 'bearingY', 'width', 'height', 'bandScaleX', 'bandScaleY', 'bandOffsetX', 'bandOffsetY'],
+    bindingU32: ['curveStart', 'headerStart', 'referenceStart', 'bandStart', 'horizontalBands', 'verticalBands'],
+  });
+  const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
+  const inverseFontSize = p.semantics.inverseFontSize;
+  if (inverseFontSize === undefined) throw new TypeError('the Slug program declares inverseFontSize');
+  const {
+    bearingX,
+    bearingY,
+    width,
+    height,
+    bandScaleX,
+    bandScaleY,
+    bandOffsetX,
+    bandOffsetY,
+    curveStart,
+    headerStart,
+    referenceStart,
+    bandStart,
+    horizontalBands,
+    verticalBands,
+  } = p.binding;
+  const zeroF32 = constantF32(0);
+  const zeroU32 = constantU32(0);
+  p.storeF32(SLUG_RECT, [
+    addF32(inlineOrigin, multiplyF32(bearingX, fontSize)),
+    subtractF32(blockOrigin, multiplyF32(bearingY, fontSize)),
+    multiplyF32(width, fontSize),
+    multiplyF32(height, fontSize),
   ]);
-  stores(storeU32, [
-    [6, [21, 22, 23, 24]],
-    [7, [25, 26, 29, 29]],
-  ]);
-  if (transformMode === 'indexed') storeU32(TRANSFORM_BUFFER_ID, 0, 31);
-  storeU32(STABLE_GLYPH_BUFFER_ID, 0, 30);
+  p.storeF32(SLUG_PLANE_RECT, [bearingX, bearingY, width, height]);
+  p.storeF32(SLUG_BAND_TRANSFORM, [bandScaleX, bandScaleY, bandOffsetX, bandOffsetY]);
+  p.storeF32(SLUG_COLOR, [color.red, color.green, color.blue, color.alpha]);
+  p.storeF32(SLUG_INVERSE_FONT_SIZE, [inverseFontSize, zeroF32, zeroF32, zeroF32]);
+  p.storeU32(SLUG_TABLE_STARTS, [curveStart, headerStart, referenceStart, bandStart]);
+  p.storeU32(SLUG_BAND_COUNTS, [horizontalBands, verticalBands, zeroU32, zeroU32]);
+  if (transformMode === 'indexed') p.storeU32(TRANSFORM_BUFFER_ID, [transformIndex]);
+  p.storeU32(STABLE_GLYPH_BUFFER_ID, [stableGlyphId]);
   return createProgram(
     techniqueId,
     programId,
-    context,
+    p.compile(),
     [
       ...floatBuffers([4, 4, 4, 4, 4]),
       ...u32Buffers([4, 4], 6),
@@ -209,8 +257,9 @@ function slugProgram(
 /**
  * Resource-free decoration quads. Decoration rows fill the gather lanes directly —
  * f32 lanes 0-3 carry the rectangle and u32 lanes carry transform, stable identity,
- * color, then flags — so the loads below read lanes by index; the semantic input
- * declarations exist to satisfy policy validation and are not sourced per glyph.
+ * color, then flags — so the semantic handles below address gather lanes by
+ * position, not per-glyph meaning: the "inlineOrigin" lane is the rect's inline
+ * start, and the paint arrives through the binding's packed u32 pair.
  */
 function decorationProgram(
   techniqueId: number,
@@ -218,23 +267,17 @@ function decorationProgram(
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
-  const context = programContext('glyph', 0, 2);
-  const { loadF32, loadU32, storeF32, storeU32 } = context;
-  loadF32(4);
-  loadU32(28, 0);
-  loadU32(29, 1);
-  loadU32(30, 2);
-  loadU32(31, 3);
-  stores(storeF32, [[1, [0, 1, 2, 3]]]);
-  storeU32(2, 0, 30);
-  storeU32(2, 1, 31);
-  if (transformMode === 'indexed') storeU32(TRANSFORM_BUFFER_ID, 0, 28);
-  storeU32(STABLE_GLYPH_BUFFER_ID, 0, 29);
+  const p = policyProgram({ scope: 'glyph', bindingU32: ['color', 'flags'] });
+  const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
+  p.storeF32(DECORATION_RECT, [inlineOrigin, blockOrigin, fontSize, color.red]);
+  p.storeU32(DECORATION_PACKED, [p.binding.color, p.binding.flags]);
+  if (transformMode === 'indexed') p.storeU32(TRANSFORM_BUFFER_ID, [transformIndex]);
+  p.storeU32(STABLE_GLYPH_BUFFER_ID, [stableGlyphId]);
   return {
     ...createProgram(
       techniqueId,
       programId,
-      context,
+      p.compile(),
       transformMode === 'indexed'
         ? [...floatBuffers([4]), ...u32Buffers([2], 2), stableGlyphIdBuffer(), transformIndexBuffer()]
         : [...floatBuffers([4]), ...u32Buffers([2], 2), stableGlyphIdBuffer()],

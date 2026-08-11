@@ -195,10 +195,17 @@ export function programContext(
   };
 }
 
+export interface ProgramBody {
+  readonly inputs: PolicyInput[];
+  readonly operations: PolicyOperation[];
+  readonly f32InputCount: number;
+  readonly u32InputCount: number;
+}
+
 export function createProgram(
   techniqueId: number,
   programId: number,
-  context: ProgramContext,
+  context: ProgramBody,
   buffers: readonly PolicyBuffer[],
   transformMode: PolicyTransformMode,
   allocationMode: PolicyAllocationMode,

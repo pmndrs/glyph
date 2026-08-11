@@ -5,16 +5,17 @@ import test from 'node:test';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 
 /**
- * The policy DSL must be a pure authoring-layer change: every variant of the Three
- * render policy compiles to byte-identical wire records before and after. These
- * digests were captured from the hand-numbered programContext programs; a digest
- * change here means the wire encoding changed, not just its authoring.
+ * Byte identity for the DSL-authored Three render policy. Register numbering is
+ * program-private, so the DSL port re-pinned these digests once — with the
+ * semantic-equivalence test proving the input tables, buffer schemas, and per-lane
+ * store dataflow unchanged against the hand-numbered fixtures. From here, any
+ * digest drift means the compiled wire records changed and must be re-justified.
  */
 const GOLDEN = new Map([
-  ['direct/ordered', '974cfbfcb258a6fb064a65a9b74106482ca6ae58956bfb246058b7fbb0635b90'],
-  ['direct/stable', 'ad1030dd5c3218b7335a6c35fe665cc85b14dab3ed32fb0f028261111823963b'],
-  ['indexed/ordered', '7a234623f9935d21068801fb29f8e26c8dcdf1346e92a9e3c36617b18f837705'],
-  ['indexed/stable', '7611048f41341bbf7962fd29ffe2b9a318e5e97cbece394043265df11c91cb6d'],
+  ['direct/ordered', 'd8c0dc43246ec9b75a0ba38ee7d75bfd4ce38667f8f1a4a2b39fe46f6aa66964'],
+  ['direct/stable', '19bcd518b14608b123533eaebee66b5b6e8e509432f28b8f21d4aa16c68788c5'],
+  ['indexed/ordered', '2da9a64cffb939c3020dcece3368010713835e7573a29674aa2e2c9c18e717a0'],
+  ['indexed/stable', '9bada50f28f087b5f55df8ae502be6a059a144b0b6cb6c4f1e3bae57055fd088'],
 ]);
 
 test('the Three render policy compiles to its golden bytes for every variant', () => {

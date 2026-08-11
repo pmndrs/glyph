@@ -2,6 +2,10 @@
 
 ## 2026-08-11
 
+- **Policy authoring DSL (D-250)** — Policy programs are written against named semantic and binding handles with
+  automatic register allocation; the four Three programs ported with a decoded-bytes equivalence proof against the
+  hand-numbered fixtures and re-pinned goldens. Wire format and interpreter unchanged.
+
 - **Core API surface (D-249)** — The renderer-neutral engine publishes as `@pmndrs/text/core` and the technique
   shader library as `@pmndrs/text/tsl`. Three's first-party policy and the Slug shader tree leave core internals,
   and a scoped import lint holds the first-party integrations to the same public surface a third party gets.
