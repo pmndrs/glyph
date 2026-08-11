@@ -45,6 +45,8 @@ interface ShaperExports {
     extentsLength: number,
     availabilityPointer: number,
     availabilityLength: number,
+    underlinePacked: number,
+    strikeoutPacked: number,
   ) => number;
   readonly disposeFont: (handle: number) => number;
   readonly fontCount: () => number;
@@ -110,7 +112,14 @@ class RuntimeShaperImpl implements RuntimeShaper {
     }
     if (this.#registered.get(font.handle) === font) return;
     const data = getRegisteredFontData(font);
-    this.#registerFontBytes(font.handle, data.shapingSfnt, data.glyphExtents, data.glyphExtentsAvailability);
+    this.#registerFontBytes(
+      font.handle,
+      data.shapingSfnt,
+      data.glyphExtents,
+      data.glyphExtentsAvailability,
+      packDecorationMetrics(font.metrics.underlinePosition, font.metrics.underlineThickness),
+      packDecorationMetrics(font.metrics.strikeoutPosition, font.metrics.strikeoutSize),
+    );
     this.#registered.set(font.handle, font);
   }
 
@@ -119,6 +128,8 @@ class RuntimeShaperImpl implements RuntimeShaper {
     shapingSfnt: Uint8Array,
     glyphExtents: Uint8Array,
     glyphExtentsAvailability: Uint8Array,
+    underlinePacked: number,
+    strikeoutPacked: number,
   ): void {
     let sfnt: { readonly pointer: number; readonly length: number } | undefined;
     let extents: { readonly pointer: number; readonly length: number } | undefined;
@@ -135,6 +146,8 @@ class RuntimeShaperImpl implements RuntimeShaper {
         extents.length,
         availability.pointer,
         availability.length,
+        underlinePacked,
+        strikeoutPacked,
       );
       if (status !== 0) throw shaperStatusError(status, 'register font');
     } finally {
@@ -260,6 +273,11 @@ function uint32(value: number, label: string): number {
     throw new RangeError(`${label} must be an unsigned 32-bit integer`);
   }
   return value;
+}
+
+/** Packs a decoration metric pair as `(position << 16) | value`, both i16 bit patterns, matching the Wasm ABI. */
+function packDecorationMetrics(position: number, value: number): number {
+  return (((position & 0xffff) << 16) | (value & 0xffff)) >>> 0;
 }
 
 function shaperStatusError(status: number, action: string): Error {

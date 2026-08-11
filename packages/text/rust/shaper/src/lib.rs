@@ -75,6 +75,22 @@ pub(crate) struct FontMetrics {
     pub ascender: i16,
     pub descender: i16,
     pub line_gap: i16,
+    pub underline_position: i16,
+    pub underline_thickness: i16,
+    pub strikeout_position: i16,
+    pub strikeout_size: i16,
+}
+
+/// Packs a decoration metric pair as `(position << 16) | thickness`, both `i16` bit patterns.
+/// The host supplies values from the validated artifact metrics; the shaping SFNT does not
+/// retain `post`, so underline values cannot be re-derived in the engine.
+#[cfg(test)]
+pub(crate) fn pack_decoration_metrics(position: i16, value: i16) -> u32 {
+    (u32::from(position as u16) << 16) | u32::from(value as u16)
+}
+
+fn unpack_decoration_metrics(packed: u32) -> (i16, i16) {
+    ((packed >> 16) as u16 as i16, packed as u16 as i16)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -158,6 +174,8 @@ impl ShaperRegistry {
         sfnt: &[u8],
         extents: &[u8],
         availability: &[u8],
+        underline_packed: u32,
+        strikeout_packed: u32,
     ) -> u32 {
         if handle == 0 {
             return STATUS_INVALID_HANDLE;
@@ -173,12 +191,18 @@ impl ShaperRegistry {
         if !valid_extents(glyph_count, extents, availability) {
             return STATUS_INVALID_EXTENTS;
         }
+        let (underline_position, underline_thickness) = unpack_decoration_metrics(underline_packed);
+        let (strikeout_position, strikeout_size) = unpack_decoration_metrics(strikeout_packed);
         let metrics = match (font.head(), font.hhea()) {
             (Ok(head), Ok(hhea)) => FontMetrics {
                 units_per_em: head.units_per_em(),
                 ascender: hhea.ascender().to_i16(),
                 descender: hhea.descender().to_i16(),
                 line_gap: hhea.line_gap().to_i16(),
+                underline_position,
+                underline_thickness,
+                strikeout_position,
+                strikeout_size,
             },
             _ => return STATUS_INVALID_FONT,
         };
@@ -700,14 +724,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn registration_retains_packed_decoration_metrics() {
+        const INTER: &[u8] = include_bytes!(
+            "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
+        );
+        let glyph_count = 2937usize;
+        let extents = alloc::vec![0u8; glyph_count * 8];
+        let availability = alloc::vec![0u8; glyph_count.div_ceil(8)];
+        let mut registry = ShaperRegistry::default();
+        // Inter-Regular 4.1: post -348/140, OS/2 671/140 — packed as (position << 16) | thickness.
+        assert_eq!(
+            registry.register_font(
+                7,
+                INTER,
+                &extents,
+                &availability,
+                pack_decoration_metrics(-348, 140),
+                pack_decoration_metrics(671, 140),
+            ),
+            STATUS_OK
+        );
+        let metrics = registry.font_metrics(7).expect("registered font metrics");
+        assert_eq!(metrics.underline_position, -348);
+        assert_eq!(metrics.underline_thickness, 140);
+        assert_eq!(metrics.strikeout_position, 671);
+        assert_eq!(metrics.strikeout_size, 140);
+    }
+
+    #[test]
     fn registration_rejects_invalid_payloads_and_disposes_owned_state() {
         let mut registry = ShaperRegistry::default();
         assert_eq!(
-            registry.register_font(0, &[], &[], &[]),
+            registry.register_font(0, &[], &[], &[], 0, 0),
             STATUS_INVALID_HANDLE
         );
         assert_eq!(
-            registry.register_font(1, &[], &[], &[]),
+            registry.register_font(1, &[], &[], &[], 0, 0),
             STATUS_INVALID_FONT
         );
         assert_eq!(registry.font_count(), 0);

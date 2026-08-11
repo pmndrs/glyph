@@ -819,6 +819,10 @@ mod tests {
                 ascender: 800,
                 descender: -200,
                 line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
             })
         };
         let mut clusters = ClusterArena::default();
@@ -986,6 +990,10 @@ mod tests {
                         ascender: 800,
                         descender: -200,
                         line_gap: 0,
+                        underline_position: -100,
+                        underline_thickness: 50,
+                        strikeout_position: 300,
+                        strikeout_size: 50,
                     })
                 },
             )
@@ -1054,6 +1062,10 @@ mod tests {
                         ascender: 800,
                         descender: -200,
                         line_gap: 0,
+                        underline_position: -100,
+                        underline_thickness: 50,
+                        strikeout_position: 300,
+                        strikeout_size: 50,
                     })
                 },
             )
@@ -1113,6 +1125,10 @@ mod tests {
                 ascender: 800,
                 descender: -200,
                 line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
             })
         };
         let mut previous = ClusterArena::default();

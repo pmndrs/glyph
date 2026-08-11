@@ -57,6 +57,8 @@ pub unsafe extern "C" fn pmndrs_text_shaper_register_font(
     extents_length: u32,
     availability_pointer: u32,
     availability_length: u32,
+    underline_packed: u32,
+    strikeout_packed: u32,
 ) -> u32 {
     with_state(|state| {
         let WasmState {
@@ -75,7 +77,14 @@ pub unsafe extern "C" fn pmndrs_text_shaper_register_font(
         else {
             return 3;
         };
-        registry.register_font(handle, sfnt, extents, availability)
+        registry.register_font(
+            handle,
+            sfnt,
+            extents,
+            availability,
+            underline_packed,
+            strikeout_packed,
+        )
     })
 }
 
