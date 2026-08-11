@@ -260,6 +260,9 @@ pub enum Operation {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProgramDescriptor {
+    /// `PRIMITIVE_GLYPH` or `PRIMITIVE_DECORATION`: the plan primitive kind this
+    /// program's records publish as.
+    pub primitive_kind: u16,
     pub technique: TechniqueId,
     pub variant: u16,
     pub id: ProgramId,
@@ -1875,6 +1878,7 @@ mod tests {
 
     fn valid_program() -> ProgramDescriptor {
         ProgramDescriptor {
+            primitive_kind: 1,
             technique: BITMAP,
             variant: 0,
             id: PROGRAM,
@@ -2239,6 +2243,7 @@ mod tests {
         let object = BufferId(2);
         let page = BufferId(3);
         let policy = ValidatedPolicy::new(descriptor(vec![ProgramDescriptor {
+            primitive_kind: 1,
             technique: BITMAP,
             variant: 0,
             id: PROGRAM,

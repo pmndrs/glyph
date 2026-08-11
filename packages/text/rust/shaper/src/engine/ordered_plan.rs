@@ -1071,6 +1071,7 @@ impl OrderedPlanCompiler {
                 &mut self.draws,
                 GlyphDraw {
                     glyph: first,
+                    primitive_kind: program.primitive_kind,
                     record_count: count,
                     buffer_id: batch.buffer_ids[0],
                     record_index: first_slot,
@@ -1165,6 +1166,7 @@ impl OrderedPlanCompiler {
                     &mut self.draws,
                     GlyphDraw {
                         glyph: first,
+                        primitive_kind: program.primitive_kind,
                         record_count: count,
                         buffer_id: batch.buffer_ids[0],
                         record_index: u32::try_from(start)
@@ -1908,6 +1910,7 @@ mod tests {
                 whole_buffer_threshold_basis_points: 10_000,
             }],
             programs: vec![ProgramDescriptor {
+                primitive_kind: 1,
                 technique: TECHNIQUE,
                 variant: 0,
                 id: ProgramId(5),

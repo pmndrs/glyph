@@ -1415,6 +1415,7 @@ impl StablePlanCompiler {
                 &mut self.draws,
                 GlyphDraw {
                     glyph: first,
+                    primitive_kind: program.primitive_kind,
                     program_id: batch.key.program_id,
                     record_count: count,
                     buffer_id: pending.order_buffer_id,
@@ -1509,6 +1510,7 @@ impl StablePlanCompiler {
                     &mut self.draws,
                     GlyphDraw {
                         glyph: first,
+                        primitive_kind: program.primitive_kind,
                         program_id: key.program_id,
                         record_count: count,
                         buffer_id: pending.order_buffer_id,
@@ -2275,6 +2277,7 @@ mod tests {
                 whole_buffer_threshold_basis_points: 10_000,
             }],
             programs: vec![ProgramDescriptor {
+                primitive_kind: 1,
                 technique: TECHNIQUE,
                 variant: 0,
                 id: ProgramId(5),

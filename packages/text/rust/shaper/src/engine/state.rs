@@ -4347,6 +4347,7 @@ mod tests {
                 },
             ],
             programs: vec![ProgramDescriptor {
+                primitive_kind: 1,
                 technique,
                 variant: 0,
                 id: ProgramId(1),

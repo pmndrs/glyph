@@ -929,6 +929,7 @@ mod tests {
         allocation_strategy: u16,
     ) -> ProgramDescriptor {
         ProgramDescriptor {
+            primitive_kind: 1,
             technique,
             variant,
             id,

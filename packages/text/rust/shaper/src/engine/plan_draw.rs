@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use super::{
     plan_input::PlanGlyph,
-    render_plan::{DrawRecord, PRIMITIVE_GLYPH, PrimitiveRecord},
+    render_plan::{DrawRecord, PrimitiveRecord},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,6 +16,7 @@ pub enum PlanDrawError {
 #[derive(Clone, Copy)]
 pub struct GlyphDraw {
     pub glyph: PlanGlyph,
+    pub primitive_kind: u16,
     pub program_id: u32,
     pub record_count: u16,
     pub buffer_id: u32,
@@ -62,7 +63,7 @@ pub fn push_glyph_draw(
         .map_err(|_| PlanDrawError::AllocationFailed)?;
     primitives.push(PrimitiveRecord {
         id: emission.glyph.stable_id,
-        kind: PRIMITIVE_GLYPH,
+        kind: emission.primitive_kind,
         technique_id: emission.glyph.technique.0,
         resource_id: emission.glyph.resource_id,
         resource_generation: emission.glyph.resource_generation,

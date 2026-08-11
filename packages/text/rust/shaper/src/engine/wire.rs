@@ -6,6 +6,7 @@
 
 use alloc::vec::Vec;
 
+use super::render_plan::{PRIMITIVE_DECORATION, PRIMITIVE_GLYPH};
 use crate::{
     STATUS_INVALID_REQUEST,
     abi_contract::{
@@ -33,7 +34,7 @@ use crate::{
         POLICY_PROGRAM_DRAW_KEY_MASK, POLICY_PROGRAM_F32_INPUT_COUNT, POLICY_PROGRAM_ID,
         POLICY_PROGRAM_INPUT_COUNT, POLICY_PROGRAM_INPUT_START, POLICY_PROGRAM_OPERATION_COUNT,
         POLICY_PROGRAM_OPERATION_START, POLICY_PROGRAM_PAINT_CAPABILITIES,
-        POLICY_PROGRAM_RECORD_ALIGNMENT, POLICY_PROGRAM_RECORD_SIZE, POLICY_PROGRAM_RESERVED0,
+        POLICY_PROGRAM_PRIMITIVE_KIND, POLICY_PROGRAM_RECORD_ALIGNMENT, POLICY_PROGRAM_RECORD_SIZE,
         POLICY_PROGRAM_RESERVED1, POLICY_PROGRAM_RESOURCE_KIND_MASK,
         POLICY_PROGRAM_SEMANTIC_VIEW_MASK, POLICY_PROGRAM_STORAGE_KEY_MASK,
         POLICY_PROGRAM_TECHNIQUE_ID, POLICY_PROGRAM_U32_INPUT_COUNT, POLICY_PROGRAM_VARIANT,
@@ -131,9 +132,12 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
         .try_reserve_exact(usize::try_from(program_count).map_err(|_| STATUS_INVALID_REQUEST)?)
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in programs.chunks_exact(POLICY_PROGRAM_RECORD_SIZE as usize) {
-        if read_u16(record, POLICY_PROGRAM_RESERVED0)? != 0
-            || read_u16(record, POLICY_PROGRAM_RESERVED1)? != 0
-        {
+        let primitive_kind = match read_u16(record, POLICY_PROGRAM_PRIMITIVE_KIND)? {
+            0 | PRIMITIVE_GLYPH => PRIMITIVE_GLYPH,
+            PRIMITIVE_DECORATION => PRIMITIVE_DECORATION,
+            _ => return Err(STATUS_INVALID_REQUEST),
+        };
+        if read_u16(record, POLICY_PROGRAM_RESERVED1)? != 0 {
             return Err(STATUS_INVALID_REQUEST);
         }
         let selected_buffers = indexed_records(
@@ -155,6 +159,7 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
             POLICY_INPUT_RECORD_SIZE,
         )?;
         decoded.push(ProgramDescriptor {
+            primitive_kind,
             technique: TechniqueId(read_u32(record, POLICY_PROGRAM_TECHNIQUE_ID)?),
             variant: read_u16(record, POLICY_PROGRAM_VARIANT)?,
             id: ProgramId(read_u32(record, POLICY_PROGRAM_ID)?),
@@ -519,13 +524,13 @@ mod tests {
         );
         assert_eq!(parse_policy(&overlap), Err(STATUS_INVALID_REQUEST));
 
-        let mut reserved = valid_policy_bytes();
+        let mut unknown_kind = valid_policy_bytes();
         put_u16(
-            &mut reserved[PROGRAMS_OFFSET..],
-            POLICY_PROGRAM_RESERVED0,
-            1,
+            &mut unknown_kind[PROGRAMS_OFFSET..],
+            POLICY_PROGRAM_PRIMITIVE_KIND,
+            7,
         );
-        assert_eq!(parse_policy(&reserved), Err(STATUS_INVALID_REQUEST));
+        assert_eq!(parse_policy(&unknown_kind), Err(STATUS_INVALID_REQUEST));
 
         let mut unknown_input = valid_policy_bytes();
         unknown_input[INPUTS_OFFSET + POLICY_INPUT_SCOPE] = u8::MAX;

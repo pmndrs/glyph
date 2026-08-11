@@ -107,7 +107,7 @@ struct PolicyProgramRecord {
     allocation_strategy: u16,
     f32_input_count: u8,
     u32_input_count: u8,
-    reserved0: u16,
+    primitive_kind: u16,
     draw_key_mask: u32,
     input_start: u32,
     input_count: u16,
@@ -692,7 +692,11 @@ field_offset!(
     PolicyProgramRecord,
     buffer_count
 );
-field_offset!(POLICY_PROGRAM_RESERVED0, PolicyProgramRecord, reserved0);
+field_offset!(
+    POLICY_PROGRAM_PRIMITIVE_KIND,
+    PolicyProgramRecord,
+    primitive_kind
+);
 field_offset!(
     POLICY_PROGRAM_OPERATION_START,
     PolicyProgramRecord,
@@ -1848,7 +1852,7 @@ pub fn json() -> String {
                 "compositingCapabilities": POLICY_PROGRAM_COMPOSITING_CAPABILITIES,
                 "bufferStart": POLICY_PROGRAM_BUFFER_START,
                 "bufferCount": POLICY_PROGRAM_BUFFER_COUNT,
-                "reserved0": POLICY_PROGRAM_RESERVED0,
+                "primitiveKind": POLICY_PROGRAM_PRIMITIVE_KIND,
                 "operationStart": POLICY_PROGRAM_OPERATION_START,
                 "operationCount": POLICY_PROGRAM_OPERATION_COUNT,
                 "allocationStrategy": POLICY_PROGRAM_ALLOCATION_STRATEGY,

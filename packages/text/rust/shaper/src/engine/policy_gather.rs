@@ -1426,6 +1426,7 @@ mod tests {
                 whole_buffer_threshold_basis_points: 7_500,
             }],
             programs: vec![ProgramDescriptor {
+                primitive_kind: 1,
                 technique: TechniqueId(7),
                 variant: 2,
                 id: ProgramId(1),
