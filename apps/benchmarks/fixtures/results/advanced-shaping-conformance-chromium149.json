@@ -15,7 +15,7 @@
       "sample": 0,
       "durationMs": 11.300000004470348,
       "outputBytes": 17362,
-      "hash": "51ba1d14",
+      "hash": "75ecd481",
       "metrics": {
         "caseCount": 5,
         "frameCount": 68,
@@ -24,14 +24,14 @@
         "glyphCount": 709,
         "missingGlyphCount": 0,
         "renderedGlyphCount": 625,
-        "drawCount": 72
+        "drawCount": 63
       }
     },
     {
       "sample": 1,
       "durationMs": 8.5,
       "outputBytes": 17362,
-      "hash": "51ba1d14",
+      "hash": "75ecd481",
       "metrics": {
         "caseCount": 5,
         "frameCount": 68,
@@ -40,14 +40,14 @@
         "glyphCount": 709,
         "missingGlyphCount": 0,
         "renderedGlyphCount": 625,
-        "drawCount": 72
+        "drawCount": 63
       }
     },
     {
       "sample": 2,
       "durationMs": 8.799999997019768,
       "outputBytes": 17362,
-      "hash": "51ba1d14",
+      "hash": "75ecd481",
       "metrics": {
         "caseCount": 5,
         "frameCount": 68,
@@ -56,7 +56,7 @@
         "glyphCount": 709,
         "missingGlyphCount": 0,
         "renderedGlyphCount": 625,
-        "drawCount": 72
+        "drawCount": 63
       }
     }
   ],

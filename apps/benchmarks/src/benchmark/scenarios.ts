@@ -1,6 +1,6 @@
 import type { BenchmarkScenario } from './contracts';
 import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
-const ADVANCED_SHAPING_HASH = '51ba1d14';
+const ADVANCED_SHAPING_HASH = '75ecd481';
 const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
 function deterministicValidation(hashes: readonly string[]): string {
@@ -327,6 +327,7 @@ function paragraphContractsValidation(values: readonly import('./contracts').Ben
 function advancedShapingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
   deterministicValidation(values.map((value) => value.hash));
   const frameCount = ADVANCED_SHAPING_CASES.reduce((count, definition) => count + definition.revealUnits.length + 1, 0);
+  const nonemptyFrameCount = frameCount - ADVANCED_SHAPING_CASES.length;
   for (const value of values) {
     const metrics = value.metrics;
     if (
@@ -339,7 +340,7 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
       metrics.missingGlyphCount !== 0 ||
       metrics.glyphCount !== 709 ||
       metrics.renderedGlyphCount !== 625 ||
-      metrics.drawCount !== 72 ||
+      metrics.drawCount !== nonemptyFrameCount ||
       metrics.coldReadyObservationCount !== ADVANCED_SHAPING_CASES.length ||
       metrics.warmLifecyclePublicationCount !== frameCount - ADVANCED_SHAPING_CASES.length ||
       metrics.warmReadyWaitCount !== 0
