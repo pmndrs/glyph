@@ -14,7 +14,8 @@
     "packages/text/dist/**",
     "packages/text/rust/mtsdf-admission/evidence/**",
     "packages/text/src/bakers/schemas/**",
-    "packages/**/src/generated/**",
+    "packages/text/src/font-baker/schemas/**",
+    "packages/**/src/**/generated/**",
     "packages/**/tests/fixtures/**"
   ]
 }
