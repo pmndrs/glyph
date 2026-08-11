@@ -2,6 +2,13 @@
 
 ## 2026-08-11
 
+- **Recorded per-crate `opt-level` evidence (D-242)** — A measured matrix over the shaper (whole-`z`, dependency-`z`,
+  HarfRust-family-`s`, whole-`s`) and all four bakers (`z`, `s`, `3`) proved every crate already sits at its per-crate
+  optimum: size-level builds shrink the shaper by 84–270 KB but regress shaping-bound benchmark lanes 22–98%, while
+  the parser-generic bakers inflate 26–123 KB under size levels and the font baker inflates 96–192 KB away from its
+  current `z`. The decision register and package concept now pin these settings and direct further size reduction to
+  code-shape changes.
+
 - **Reconciled the public README and formatter-owned boundaries** — Replaced the obsolete TypeScript batch-target walkthrough with the shipped React and Three `Text`, `TextGroup`, span, mixed-technique font, Rust policy, and retained render-plan APIs. Added a compact Mermaid flow from mutations through renderer draws and stated the current third-party renderer boundary without claiming a stable TypeGPU host. Markdown now relies on viewer word wrapping. Canonical extension schemas and generated ABIs are excluded from formatting at their absorbed `packages/text` paths; the packaged font schema again matches its authoritative repository copy byte for byte, and the font-baker ABI again matches its Rust generator.
 
 ## 2026-08-10

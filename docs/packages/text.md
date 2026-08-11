@@ -370,6 +370,15 @@ unit, default-on `simd128`, stripping, and `wasm-opt -Oz --enable-simd` have alr
 Binaryen `-O3` and `-O4` added 11,976 and 13,661 raw bytes without a demonstrated latency improvement, so `-Oz` remains
 the evidence-backed setting. The `<4 ms` warm-path target and stable p95 closure remain open.
 
+Cargo `opt-level` is likewise evidence-pinned per crate (D-242). A four-variant shaper matrix (whole-`z`,
+dependency-only `z`, HarfRust-family `s`, whole-`s`) shrank the 1,160,223-byte artifact to 890,381–1,076,427 raw bytes,
+but every variant regressed shaping-bound benchmark lanes beyond acceptance — whole-`z` roughly doubled all five lanes,
+and even HarfRust-`s` cost +22% cold and +27% suffix-edit — because the HarfRust bytes that dominate size are the
+shaping hot path. The inverse holds for the parser-generic bakers: forcing `z` or `s` inflates the Bitmap, MTSDF, and
+Slug bakers by 26–123 KB over their `-O3` builds, and rebuilding the font baker at `3` or `s` inflates it by 192 or
+95 KB over its current `z`, so every crate already sits at its measured per-crate optimum and further size reduction
+proceeds through code-shape changes rather than optimizer flags.
+
 The final sequential eight-warmup/31-sample checkpoint uses the unchanged 22,000-target corpus, which resolves to 25,515
 positioned and 21,805 renderable glyphs. Values below are medians in milliseconds for the complete packaged Rust
 transaction and technique-specific render plan; GPU submission is outside this direct benchmark.
