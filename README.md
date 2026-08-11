@@ -176,16 +176,20 @@ Load a font and own the engine lifecycle once:
 
 ```ts
 import { createTextRuntime } from '@pmndrs/text';
+import { msdf } from '@pmndrs/text/raster/msdf';
 import { compileRenderPolicy, TextEngineHost, textRuntimeShaper } from '@pmndrs/text/core';
 
 const runtime = await createTextRuntime();
-const [inter] = await runtime.loadFont({
+const inter = await runtime.loadFont({
   input: { baked: '/fonts/Inter.font.glb' },
   raster: { technique: msdf },
 });
 
+// Styles reference fonts through stack handles, so bind and stack the loaded font once.
 const host = new TextEngineHost(textRuntimeShaper(runtime));
 host.registerPolicy(POLICY, compileRenderPolicy(myPolicy));
+host.registerFontBinding(BINDING, inter.font.handle, myBindingBytes);
+host.registerFontStack(STACK, [BINDING]);
 ```
 
 The policy is your own declaration — `@pmndrs/text/core` exports the authoring toolkit (`compileRenderPolicy`, `programContext`, the wire-identity registry) that Three's first-party policy is itself built with.
@@ -225,8 +229,10 @@ const patches = plan.table('patches');
 const patchLayout = textShaperAbi.layouts.enginePatch;
 for (let index = 0; index < patches.count; index += 1) {
   const patch = plan.record(patches, index);
-  // Copy plan.u32(patch + patchLayout.byteLength) bytes into the GPU buffer named by
-  // plan.u32(patch + patchLayout.bufferId) at plan.u32(patch + patchLayout.destinationOffset).
+  // Dispatch on plan.u8(patch + patchLayout.opcode): allocate and retire manage buffer
+  // lifetimes, write copies plan.u32(patch + patchLayout.byteLength) payload bytes into
+  // the buffer named by patchLayout.bufferId at patchLayout.destinationOffset, and
+  // fill/copy move data without a payload.
 }
 
 const draws = plan.table('draws');
@@ -304,7 +310,7 @@ A renderer integration has five responsibilities:
 4. Realize materials and submit draw packets without re-shaping, re-sorting, or reconstructing layout.
 5. Acknowledge completed publication generations before the planner reuses retired storage.
 
-Three is the maintained reference executor. Importing `@pmndrs/text/three/bitmap`, `/msdf`, or `/slug` registers that technique's policy program and TSL material implementation. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
+Three is the maintained reference executor. `@pmndrs/text/three/bitmap`, `/msdf`, and `/slug` export each technique's raster contract; the Three runtime resolves the matching policy program and TSL material when a loaded font requests that technique. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
 
 The renderer-neutral host, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/text/core`, and the technique shader library as `@pmndrs/text/tsl` — the [Core API](#core-api) section shows the four moves. A new engine integration can follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference; Three itself consumes only these public surfaces, enforced by lint. TypeGPU support will be built against the same contract.
 
