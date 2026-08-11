@@ -41,6 +41,7 @@ export function createBitmapConformanceLine(
   const object = new Text({
     font,
     text,
+    pixelSnapping: true,
     contentBox: { align: 'start' },
     style: { fontSize: cssFontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT, language: 'en', direction: 'ltr', features: [] },
     paint: { color: CONFORMANCE_TEXT_COLOR },

@@ -21,20 +21,23 @@ const cacheDirectory = join(appDirectory, '.cache');
 await mkdir(cacheDirectory, { recursive: true });
 const consumerDirectory = await mkdtemp(join(cacheDirectory, 'packed-consumer-'));
 const archiveDirectory = join(consumerDirectory, 'archives');
-const modulesDirectory = join(consumerDirectory, 'node_modules', '@pmndrs');
-await Promise.all([mkdir(archiveDirectory, { recursive: true }), mkdir(modulesDirectory, { recursive: true })]);
+await mkdir(archiveDirectory, { recursive: true });
 
 let server: ViteDevServer | undefined;
 let browser: Browser | undefined;
 try {
   await Promise.all([
-    packAndExtract('packages/text', 'pmndrs-text-0.0.0.tgz', 'text'),
+    packPackage('packages/text'),
     copyFile(
       join(appDirectory, 'fixtures/fonts/inter-v4.1/Inter-Regular.ttf'),
       join(consumerDirectory, 'Inter-Regular.ttf'),
     ),
   ]);
   await Promise.all([
+    writeFile(
+      join(consumerDirectory, 'package.json'),
+      `${JSON.stringify({ private: true, type: 'module', dependencies: { '@pmndrs/text': 'file:archives/pmndrs-text-0.0.0.tgz' } }, undefined, 2)}\n`,
+    ),
     writeFile(
       join(consumerDirectory, 'index.html'),
       '<!doctype html><link rel="icon" href="data:," /><script type="module" src="/entry.js"></script>\n',
@@ -55,11 +58,16 @@ try {
 `,
     ),
   ]);
+  await execFile('pnpm', ['install', '--ignore-workspace', '--offline', '--config.node-linker=hoisted'], {
+    cwd: consumerDirectory,
+    env: { ...process.env, CI: 'true' },
+  });
 
   server = await createServer({
     root: consumerDirectory,
     logLevel: 'silent',
-    optimizeDeps: { exclude: ['@pmndrs/text'] },
+    optimizeDeps: { include: ['ajv', 'gltf-validator'] },
+    resolve: { preserveSymlinks: true },
     server: { host: '127.0.0.1', port: 5183, strictPort: true },
   });
   await server.listen();
@@ -72,6 +80,10 @@ try {
   const page = await browser.newPage();
   const completion = Promise.withResolvers<PackedResult>();
   const errors: string[] = [];
+  page.context().on('weberror', (webError) => {
+    const error = webError.error();
+    errors.push(error.stack ?? error.message);
+  });
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
     const location = message.location();
@@ -89,7 +101,9 @@ try {
   });
   await page.goto(`http://127.0.0.1:${address.port}/`, { waitUntil: 'domcontentloaded' });
   const result = await completion.promise;
-  if (result.error !== undefined) throw new Error(result.error);
+  if (result.error !== undefined) {
+    throw new Error(`${result.error}${errors.length === 0 ? '' : `\nBrowser errors:\n${errors.join('\n')}`}`);
+  }
   if (errors.length > 0) throw new Error(`packed consumer browser errors: ${errors.join(' | ')}`);
 
   const manifest = JSON.parse(await readFile(join(appDirectory, 'fixtures/fonts/inter-v4.1/manifest.json'), 'utf8'));
@@ -107,17 +121,10 @@ try {
   await rm(consumerDirectory, { recursive: true, force: true });
 }
 
-async function packAndExtract(packagePath: string, archiveName: string, installedName: string) {
+async function packPackage(packagePath: string): Promise<void> {
   const packageDirectory = join(workspaceDirectory, packagePath);
   await execFile('pnpm', ['pack', '--pack-destination', archiveDirectory], {
     cwd: packageDirectory,
     env: { ...process.env, CI: 'true' },
   });
-  const installedDirectory = join(modulesDirectory, installedName);
-  await mkdir(installedDirectory, { recursive: true });
-  await execFile(
-    'tar',
-    ['-xzf', join(archiveDirectory, archiveName), '--strip-components=1', '-C', installedDirectory],
-    { cwd: consumerDirectory },
-  );
 }
