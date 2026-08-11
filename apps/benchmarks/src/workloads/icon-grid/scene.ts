@@ -464,7 +464,7 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     }
   }
 
-  metrics(viewport: IconGridViewport, scene: THREE.Scene): IconGridWorkloadMetrics {
+  metrics(viewport: IconGridViewport, _scene: THREE.Scene): IconGridWorkloadMetrics {
     const window =
       this.#settledWindow ??
       iconGridVirtualWindow(
@@ -749,7 +749,7 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     return !this.#disposed && this.#isCurrent();
   }
 
-  #settleWindow(window: IconGridVirtualWindow, viewport: IconGridViewport, scene: THREE.Scene): void {
+  #settleWindow(window: IconGridVirtualWindow, viewport: IconGridViewport, _scene: THREE.Scene): void {
     const assignments = iconGridAssignments(this.#pool.entries());
     if (
       assignments.length !== window.indices.length ||
