@@ -12,7 +12,7 @@ import {
   type PolicyAllocationMode,
   type PolicyTransformMode,
 } from '../core/render-policy.js';
-import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import { textShaperAbi } from '../core.js';
 
 export const FIRST_PARTY_TRANSFORM_BUFFER_ID = 15;
 

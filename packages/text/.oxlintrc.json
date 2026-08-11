@@ -2,9 +2,21 @@
   "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
   "plugins": ["react"],
   "jsPlugins": ["eslint-plugin-react-you-might-not-need-an-effect"],
-  "categories": { "correctness": "error", "perf": "warn", "suspicious": "warn" },
-  "env": { "browser": true, "node": true, "es2025": true },
-  "settings": { "react": { "version": "19.2.8" } },
+  "categories": {
+    "correctness": "error",
+    "perf": "warn",
+    "suspicious": "warn"
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2025": true
+  },
+  "settings": {
+    "react": {
+      "version": "19.2.8"
+    }
+  },
   "rules": {
     "react/react-in-jsx-scope": "off",
     "react/react-compiler": "error",
@@ -28,5 +40,19 @@
     "react-you-might-not-need-an-effect/no-external-store-subscription": "error",
     "react-you-might-not-need-an-effect/no-initialize-state": "error"
   },
-  "ignorePatterns": ["**/.cache/**", "dist/**", "src/generated/**", "**/target/**", "tests/fixtures/**"]
+  "ignorePatterns": ["**/.cache/**", "dist/**", "src/generated/**", "**/target/**", "tests/fixtures/**"],
+  "overrides": [
+    {
+      "files": ["src/three/**", "src/three.ts", "src/react.ts", "src/tsl/**", "src/tsl.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "paths": ["three", "@react-three/fiber"],
+            "patterns": ["three/src/*", "three/addons/*", "three/examples/*", "**/internal/**", "**/generated/**"]
+          }
+        ]
+      }
+    }
+  ]
 }

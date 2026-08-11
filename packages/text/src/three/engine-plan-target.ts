@@ -1,7 +1,7 @@
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
-import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import { textShaperAbi } from '../core.js';
 import type { TextEnginePublication } from '../core/host.js';
 import { FIRST_PARTY_STABLE_GLYPH_BUFFER_ID, FIRST_PARTY_TRANSFORM_BUFFER_ID } from './render-policy.js';
 import { TextEngineRenderPlanView, type RenderPlanTable } from '../core/plan-view.js';

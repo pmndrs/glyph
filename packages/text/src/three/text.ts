@@ -32,7 +32,7 @@ import { TextEngineStatusError, type TextEnginePublication, type TextEngineSessi
 import { readTextEngineLayouts, readTextEngineMeasurements } from '../core/layout-query-view.js';
 import { TextEngineRenderPlanView } from '../core/plan-view.js';
 import type { ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
-import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import { textShaperAbi } from '../core.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import {
   threeTextEngineCoordinator,

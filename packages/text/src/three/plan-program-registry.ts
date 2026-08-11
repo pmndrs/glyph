@@ -1,6 +1,6 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
-import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import { textShaperAbi } from '../core.js';
 import type { FontBindingDescriptor, FontBindingFieldTable } from '../core/font-binding.js';
 import { compileFontBinding, emptyFontBindingTable, fontBindingResources } from '../core/font-binding.js';
 import type { PolicyProgram } from '../core/render-policy.js';
