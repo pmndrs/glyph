@@ -61,6 +61,11 @@ export function editorialColumnWidth(
   return Math.max(220, baseWidth * (0.82 + Math.sin(phase) * 0.16));
 }
 
+/** The columned body keeps a fixed page height; reflow refills it as the measure breathes. */
+export function editorialBodyHeight(fontSize: number): number {
+  return Math.ceil(fontSize * LIVE_TEXT_LINE_HEIGHT * 11);
+}
+
 export function createEditorialEntries(
   context: WorkloadTextFactoryContext &
     Pick<ComparisonWorkloadConfiguration, 'amount' | 'animationSpeed' | 'fontSize' | 'layoutWidthRatio'> & {
@@ -69,43 +74,52 @@ export function createEditorialEntries(
     },
 ): readonly ComparisonWorkloadEntry[] {
   const width = editorialColumnWidth(context, context.viewportWidth, context.animationElapsedMs);
-  // The amount control repeats the editorial cycle: 50 keeps one full column,
-  // and larger volumes stack additional justified pages onto the same measure.
-  const paragraphCount = Math.max(EDITORIAL_TEXT.length, Math.round((context.amount / 50) * EDITORIAL_TEXT.length));
-  const sourceTexts = Array.from(
-    { length: paragraphCount },
-    (_, index) => EDITORIAL_TEXT[index % EDITORIAL_TEXT.length]!,
-  );
-  return sourceTexts.map((sourceText, index) => {
-    const text = new Text({
-      font: context.font,
-      rasterPixelRatio: context.dpr,
-      text: sourceText,
-      style: {
-        fontSize: context.fontSize,
-        lineHeight: LIVE_TEXT_LINE_HEIGHT,
-        wordSpacing: index % EDITORIAL_TEXT.length === 1 ? context.fontSize * 0.05 : 0,
-      },
-      paint: { color: paintColor(LIVE_TEXT_COLOR) },
-      contentBox: {
-        width: exactWidth(width),
-        wrap: 'word',
-        align: 'justify',
-        firstLineIndent: index % EDITORIAL_TEXT.length === 0 && index === 0 ? 0 : context.fontSize * 1.5,
-        spaceBefore: index === 0 ? 0 : context.fontSize * 0.6,
-        spaceAfter: context.fontSize * 0.4,
-        justify: EDITORIAL_JUSTIFY,
-        lastLine: index === sourceTexts.length - 1 ? 'justify' : 'auto',
-      },
-    });
-    return {
-      node: text,
-      role: index === 0 ? 'primary' : 'secondary',
-      sourceText,
-      text,
-      lastWidth: width,
-    };
+  // A real editorial page: one single-measure justified lede, then the body
+  // flowing through two ordered justified columns under it. The amount control
+  // scales how much body text refills the fixed page height.
+  const repeats = Math.max(1, Math.round(context.amount / 25));
+  const bodyText = Array.from({ length: repeats }, (_, cycle) =>
+    EDITORIAL_TEXT.slice(cycle === 0 ? 1 : 0).join(' '),
+  ).join(' ');
+  const lede = new Text({
+    font: context.font,
+    rasterPixelRatio: context.dpr,
+    text: EDITORIAL_TEXT[0],
+    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
+    paint: { color: paintColor(LIVE_TEXT_COLOR) },
+    contentBox: {
+      width: exactWidth(width),
+      wrap: 'word',
+      align: 'justify',
+      spaceAfter: context.fontSize * 0.8,
+      justify: EDITORIAL_JUSTIFY,
+    },
   });
+  const body = new Text({
+    font: context.font,
+    rasterPixelRatio: context.dpr,
+    text: bodyText,
+    style: {
+      fontSize: context.fontSize,
+      lineHeight: LIVE_TEXT_LINE_HEIGHT,
+      wordSpacing: context.fontSize * 0.05,
+    },
+    paint: { color: paintColor(LIVE_TEXT_COLOR) },
+    contentBox: {
+      width: exactWidth(width),
+      height: { mode: 'exact', size: editorialBodyHeight(context.fontSize) },
+      columns: { count: 2, gap: context.fontSize },
+      wrap: 'word',
+      align: 'justify',
+      firstLineIndent: context.fontSize * 1.5,
+      justify: EDITORIAL_JUSTIFY,
+      overflow: 'clip',
+    },
+  });
+  return [
+    { node: lede, role: 'primary', sourceText: EDITORIAL_TEXT[0], text: lede, lastWidth: width },
+    { node: body, role: 'secondary', sourceText: bodyText, text: body, lastWidth: width },
+  ];
 }
 
 export function animateEditorialEntries(

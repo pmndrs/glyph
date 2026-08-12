@@ -240,6 +240,65 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     paragraph.dispose();
   }
 
+  // Column flow: one paragraph fills side-by-side ordered regions without
+  // balancing. The column height is the flow signal, so the reference layout is
+  // one column at the exact column measure; halving its height (plus a line of
+  // slack) must push the tail of the text into the second column.
+  const columnText = 'the quick brown fox jumps over the lazy dog and keeps running until the column turns';
+  const columnMeasureWidth = (420 - 20) / 2;
+  const reference = new Text({
+    font,
+    text: columnText,
+    contentBox: { width: { mode: 'exact', size: columnMeasureWidth } },
+  });
+  scene.add(reference);
+  scene.updateMatrixWorld();
+  const referenceMeasure = reference.measureLayout();
+  assert.ok(referenceMeasure.lineCount >= 4, 'the fixture text must wrap well past two lines at the column measure');
+  const columnHeight = Math.ceil(referenceMeasure.contentHeight * 0.6);
+  const twoColumns = new Text({
+    font,
+    text: columnText,
+    contentBox: {
+      width: { mode: 'exact', size: 420 },
+      height: { mode: 'exact', size: columnHeight },
+      columns: { count: 2, gap: 20 },
+    },
+  });
+  scene.add(twoColumns);
+  scene.updateMatrixWorld();
+  const doubleMeasure = twoColumns.measureLayout();
+  assert.equal(doubleMeasure.overflowed, false, 'two columns at 60% height must hold the whole text');
+  assert.ok(
+    doubleMeasure.contentHeight <= columnHeight,
+    'the columned block extent must stay inside the column height',
+  );
+  const columnStarts = twoColumns.inspectLayout().x;
+  const secondColumnStart = columnMeasureWidth + 20;
+  assert.ok(
+    Array.from(columnStarts).some((x) => x >= secondColumnStart),
+    'glyphs must flow into the second column',
+  );
+  assert.throws(
+    () => new Text({ font, text: columnText, contentBox: { columns: { count: 2 } } }),
+    /columns/,
+    'columns without an exact width must be rejected',
+  );
+  assert.throws(
+    () =>
+      new Text({
+        font,
+        text: columnText,
+        contentBox: { width: { mode: 'exact', size: 420 }, columns: { count: 2 } },
+      }),
+    /columns/,
+    'columns without a bounded height must be rejected',
+  );
+  for (const paragraph of [reference, twoColumns]) {
+    paragraph.removeFromParent();
+    paragraph.dispose();
+  }
+
   label.removeFromParent();
   label.dispose();
   font.dispose();

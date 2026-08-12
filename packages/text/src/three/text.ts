@@ -691,7 +691,7 @@ class ThreeTextBatchBinding {
         if (semanticChanges & GEOMETRY_CHANGE) {
           const geometry = compileEngineGeometry(paragraph, properties.contentBox, regions.length, content.length);
           constraints.push(geometry.constraint);
-          regions.push(geometry.region);
+          regions.push(...geometry.regions);
         }
       }
       let totalTextLength = 0;
@@ -1081,18 +1081,52 @@ function engineDecoration(
   };
 }
 
+/**
+ * Column region ids stride the high byte so every paragraph's extra columns
+ * stay unique in the frame's region table while column zero keeps the
+ * paragraph id itself — the single-column request bytes are unchanged.
+ */
+const COLUMN_REGION_ID_STRIDE = 0x01_00_00_00;
+
+function normalizedColumns(contentBox: ParagraphContentBox | undefined): { count: number; gap: number } {
+  const columns = contentBox?.columns;
+  if (columns === undefined) return { count: 1, gap: 0 };
+  const gap = columns.gap ?? 0;
+  if (!Number.isSafeInteger(columns.count) || columns.count < 1 || columns.count > 16) {
+    throw new RangeError('contentBox columns count must be an integer between 1 and 16');
+  }
+  if (!Number.isFinite(gap) || gap < 0) {
+    throw new RangeError('contentBox columns gap must be a nonnegative finite number');
+  }
+  if (columns.count > 1 && contentBox?.width?.mode !== 'exact') {
+    throw new TypeError('contentBox columns require an exact width to derive the column measure');
+  }
+  // Ordered columns fill without balancing, so the column height is the only
+  // signal that advances flow into the next region: unbounded height would
+  // keep every line in the first column forever.
+  if (columns.count > 1 && contentBox?.height === undefined) {
+    throw new TypeError('contentBox columns require a bounded height to fill columns in order');
+  }
+  return { count: columns.count, gap };
+}
+
 function compileEngineGeometry(
   paragraph: RetainedEngineParagraph,
   contentBox: ParagraphContentBox | undefined,
   regionStart: number,
   textLength: number,
-): { readonly constraint: TextEngineConstraint; readonly region: TextEngineRegion } {
+): { readonly constraint: TextEngineConstraint; readonly regions: readonly TextEngineRegion[] } {
   const width = axis(contentBox?.width);
   const height = axis(contentBox?.height);
+  const columns = normalizedColumns(contentBox);
   const inlineEnd = width.mode === 'unconstrained' ? 0x01_00_00_00 : width.size;
   const blockEnd = height.mode === 'unconstrained' ? 0x01_00_00_00 : height.size;
   const maxLines = contentBox?.maxLines ?? Math.max(1, textLength);
   const geometryRevision = paragraph.geometryRevision + 1;
+  const columnWidth = (inlineEnd - columns.gap * (columns.count - 1)) / columns.count;
+  if (columns.count > 1 && columnWidth <= 0) {
+    throw new RangeError('contentBox columns and gap leave no positive column measure');
+  }
   return {
     constraint: {
       paragraphId: paragraph.id,
@@ -1106,7 +1140,7 @@ function compileEngineGeometry(
       maxLines,
       regionStart,
       resumeCluster: 0,
-      regionCount: 1,
+      regionCount: columns.count,
       resumeRegion: 0,
       widthMode: width.mode,
       heightMode: height.mode,
@@ -1120,24 +1154,28 @@ function compileEngineGeometry(
       ...(contentBox?.justify === undefined ? {} : { justify: contentBox.justify }),
       ...(contentBox?.lastLine === undefined ? {} : { lastLine: contentBox.lastLine }),
     },
-    region: {
-      id: paragraph.id,
-      geometryRevision,
-      transformIndex: paragraph.id,
-      shape: 'rectangle',
-      exclusionStart: 0,
-      exclusionCount: 0,
-      writingMode: 'horizontal-tb',
-      textOrientation: 'mixed',
-      inlineStart: 0,
-      blockStart: 0,
-      inlineEnd,
-      blockEnd,
-      clipInlineStart: 0,
-      clipBlockStart: 0,
-      clipInlineEnd: inlineEnd,
-      clipBlockEnd: blockEnd,
-    },
+    regions: Array.from({ length: columns.count }, (_, column) => {
+      const inlineStart = column * (columnWidth + columns.gap);
+      const columnInlineEnd = column === columns.count - 1 ? inlineEnd : inlineStart + columnWidth;
+      return {
+        id: paragraph.id + COLUMN_REGION_ID_STRIDE * column,
+        geometryRevision,
+        transformIndex: paragraph.id,
+        shape: 'rectangle' as const,
+        exclusionStart: 0,
+        exclusionCount: 0,
+        writingMode: 'horizontal-tb' as const,
+        textOrientation: 'mixed' as const,
+        inlineStart,
+        blockStart: 0,
+        inlineEnd: columnInlineEnd,
+        blockEnd,
+        clipInlineStart: inlineStart,
+        clipBlockStart: 0,
+        clipInlineEnd: columnInlineEnd,
+        clipBlockEnd: blockEnd,
+      };
+    }),
   };
 }
 
@@ -1319,6 +1357,9 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
   properties: TextProperties<Technique>,
 ): DesiredTextState<Technique> {
   if (properties === undefined) throw new TypeError('Text properties are required');
+  // Column geometry is validated here so an impossible combination fails at
+  // construction or set() instead of surfacing later as a bind-time error.
+  normalizedColumns(properties.contentBox);
   const formatted = typeof properties.text === 'string' ? undefined : (properties.text as FormattedText<Technique>);
   return Object.freeze({
     font: properties.font,

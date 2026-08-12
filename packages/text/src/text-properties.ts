@@ -41,6 +41,13 @@ export interface ParagraphContentBox {
   };
   /** Whether the final and hard-broken lines also justify. Defaults to 'auto'. */
   readonly lastLine?: 'auto' | 'justify';
+  /**
+   * Flow the paragraph through side-by-side ordered columns inside the exact
+   * content-box width. Text fills each column in order without balancing, so
+   * the final column may run short. Requires an exact `width`; `gap` is the
+   * inline space between adjacent columns in layout units.
+   */
+  readonly columns?: { readonly count: number; readonly gap?: number };
 }
 
 export interface ParagraphStyle {

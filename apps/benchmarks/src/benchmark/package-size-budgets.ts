@@ -47,8 +47,9 @@ export const packageSizeBudgets = {
   // rendering feature (D-248): decorating-box cascade state, per-cluster run aggregation, resource-free plan rows,
   // and paint-order gather passes. The 11.14 typography tier re-priced the ceilings once for all of its layers:
   // constraint decode/validation, paragraph spacing, first-line indent, bounded justification, and the graduated
-  // D-245 kernels total roughly +1.3 KB raw, with the margins sized to cover the Linux CI toolchain's slightly
-  // larger gzip output alongside the recorded macOS host.
+  // D-245 kernels total roughly +1.3 KB raw. The margins cover cross-host build variance: the Linux toolchain
+  // emits equal-length but byte-different wasm (different sha256) whose compressed sizes run a few hundred bytes
+  // above the recorded macOS host's.
   'text-shaper-wasm': {
     rawBytes: 1_112_000,
     minifiedBytes: 1_112_000,
@@ -60,11 +61,13 @@ export const packageSizeBudgets = {
   // of schema-derived executor lookups, program buffer derivation, and the
   // glyph-origin schema map replacing literal id ranges. Real code, not comments;
   // the compressed ceilings hold with tight headroom by design.
+  // Column flow (contentBox columns over ordered regions) added ~+1.7 KB raw of
+  // geometry derivation and validation in the Three adapter.
   'three-runtime-js': {
-    rawBytes: 368_000,
-    minifiedBytes: 240_500,
-    gzipBytes: 62_300,
-    brotliBytes: 52_500,
+    rawBytes: 370_000,
+    minifiedBytes: 241_500,
+    gzipBytes: 62_500,
+    brotliBytes: 52_800,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
