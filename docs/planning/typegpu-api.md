@@ -313,15 +313,23 @@ interface TypeGpuParagraphState {
   readonly visible: boolean;
 }
 
-interface TypeGpuParagraphBatchTarget<Technique extends AnyRasterTechnique, Variant, Draw, Revision>
-  extends ParagraphBatchTarget<Technique, Variant, Revision> {
+interface TypeGpuParagraphBatchTarget<
+  Technique extends AnyRasterTechnique,
+  Variant,
+  Draw,
+  Revision,
+> extends ParagraphBatchTarget<Technique, Variant, Revision> {
   readonly root: TgpuRoot;
   setParagraphState(paragraph: ParagraphId, state: TypeGpuParagraphState | undefined): void;
   encode(pass: GPURenderPassEncoder, revision: Revision, frame: TypeGpuFrame): void;
 }
 
-interface TypeGpuRasterProgram<Technique extends AnyRasterTechnique, Variant, Draw, Revision>
-  extends AnyTypeGpuRasterProgram<Technique> {
+interface TypeGpuRasterProgram<
+  Technique extends AnyRasterTechnique,
+  Variant,
+  Draw,
+  Revision,
+> extends AnyTypeGpuRasterProgram<Technique> {
   createTarget(options: {
     readonly root: TgpuRoot;
     readonly technique: Technique;

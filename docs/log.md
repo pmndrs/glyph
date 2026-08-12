@@ -2,6 +2,12 @@
 
 ## 2026-08-11
 
+- **Technique schema authority (D-251)** — Buffer ids, lanes, and binding fields are declared once per technique
+  by colocated schemas; programs store through schema handles, the executor reads declared ids, and a repository
+  gate forbids literal buffer identity anywhere else. Policy bytes proven byte-identical across the change. The
+  full contract plan — shader-interface derivation, data origins including the reserved `pretext` fallback, and
+  the tsdown build — is recorded in docs/planning/raster-technique-contract.md.
+
 - **Policy interpreter tail measurement** — Driving the kernel-lab explicit artifact at controlled record counts:
   a 4-record vector iteration costs ~50–75 ns and each scalar tail record ~50 ns, so a span of 7 records
   (1 vector + 3 scalar, 282 ns) costs more than the 8-record two-vector shape (181 ns) that a tail-overlap

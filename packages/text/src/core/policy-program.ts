@@ -1,5 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { PolicyInput, PolicyInputScope, PolicyOperation } from './render-policy.js';
+import type { PolicyBufferDeclaration, TechniqueSchema } from './technique-schema.js';
 
 /**
  * Expression DSL over the policy-program register machine. Authors reference named
@@ -123,16 +124,39 @@ export interface CompiledPolicyProgramBody {
 export interface PolicyProgramBuilder<F32 extends readonly string[], U32 extends readonly string[]> {
   readonly semantics: PolicyProgramSemantics;
   readonly binding: Readonly<Record<F32[number], PolicyF32Value> & Record<U32[number], PolicyU32Value>>;
+  /** Store into a declared buffer; value kinds and lane count come from the declaration. */
+  store<Buffer extends PolicyBufferDeclaration>(
+    buffer: Buffer,
+    lanes: Buffer['scalar'] extends 'f32' ? readonly PolicyF32Value[] : readonly PolicyU32Value[],
+  ): void;
   storeF32(buffer: number, lanes: readonly PolicyF32Value[]): void;
   storeU32(buffer: number, lanes: readonly PolicyU32Value[]): void;
   compile(): CompiledPolicyProgramBody;
 }
+
+type BindingNames<Names> = Names extends readonly string[] ? Names : readonly [];
 
 interface StoreRecord {
   readonly opcode: number;
   readonly buffer: number;
   readonly lane: number;
   readonly node: Node;
+}
+
+/** Build a program against one technique's authoritative schema. */
+export function techniqueProgram<
+  const Buffers extends import('./technique-schema.js').PolicyBufferDeclarations,
+  const Binding extends import('./technique-schema.js').TechniqueBindingDeclaration,
+>(
+  schema: TechniqueSchema<Buffers, Binding>,
+  options: { readonly inverseFontSize?: boolean } = {},
+): PolicyProgramBuilder<BindingNames<Binding['f32']>, BindingNames<Binding['u32']>> {
+  return policyProgram({
+    scope: schema.scope,
+    bindingF32: (schema.binding.f32 ?? []) as BindingNames<Binding['f32']>,
+    bindingU32: (schema.binding.u32 ?? []) as BindingNames<Binding['u32']>,
+    ...(options.inverseFontSize === undefined ? {} : { inverseFontSize: options.inverseFontSize }),
+  });
 }
 
 export function policyProgram<
@@ -196,6 +220,17 @@ export function policyProgram<
   return {
     semantics,
     binding: binding as PolicyProgramBuilder<F32, U32>['binding'],
+    store(buffer, lanes) {
+      if (lanes.length !== buffer.lanes.length) {
+        throw new RangeError(
+          `buffer ${buffer.id} declares ${buffer.lanes.length} lanes (${buffer.lanes.join(', ')}); got ${lanes.length} values`,
+        );
+      }
+      const opcode = buffer.scalar === 'f32' ? opcodes.storeF32 : opcodes.storeU32;
+      for (const [lane, value] of lanes.entries()) {
+        stores.push({ opcode, buffer: buffer.id, lane, node: nodeOf(value) });
+      }
+    },
     storeF32(buffer, lanes) {
       for (const [lane, value] of lanes.entries()) {
         stores.push({ opcode: opcodes.storeF32, buffer, lane, node: nodeOf(value) });

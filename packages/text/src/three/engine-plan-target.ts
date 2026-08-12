@@ -2,7 +2,8 @@ import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { textShaperAbi } from '../core.js';
-import { STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from './render-policy.js';
+import { decorationSchema, threeSystemBuffers } from './render-policy.js';
+import { bitmapSchema } from '../raster/bitmap-technique.js';
 import { TextEngineRenderPlanView, type RenderPlanTable, type TextEnginePublication } from '../core.js';
 import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
@@ -461,8 +462,8 @@ export class ThreeTextRenderPlanExecutor {
         const material = decoration
           ? this.#decorationMaterial(byPolicyId, transform, addressing)
           : this.#material(resource!, byPolicyId, materialId, transform, addressing);
-        const origins = decoration ? undefined : byPolicyId.get(1);
-        const stableIds = decoration ? undefined : byPolicyId.get(STABLE_GLYPH_BUFFER_ID);
+        const origins = decoration ? undefined : byPolicyId.get(bitmapSchema.buffers.origin.id);
+        const stableIds = decoration ? undefined : byPolicyId.get(threeSystemBuffers.stableGlyphId.id);
         if (origins !== undefined && stableIds !== undefined) {
           if (!(origins.array instanceof Float32Array) || !(stableIds.array instanceof Uint32Array)) {
             throw new TypeError('glyph-origin augmentation buffers have invalid scalar types');
@@ -585,7 +586,7 @@ export class ThreeTextRenderPlanExecutor {
 
   #transformRealization(buffers: ReadonlyMap<number, RetainedBuffer>, transformId: number): TransformRealization {
     if (transformId !== 0) return { kind: 'direct', transformId };
-    const indices = buffers.get(TRANSFORM_BUFFER_ID);
+    const indices = buffers.get(threeSystemBuffers.transformIndex.id);
     if (indices === undefined || !(indices.array instanceof Uint32Array)) {
       throw new Error('indexed Three draw is missing its u32 transform-index buffer');
     }
@@ -679,8 +680,8 @@ export class ThreeTextRenderPlanExecutor {
     transform: TransformRealization,
     addressing: RecordAddressing,
   ): THREE.NodeMaterial {
-    const rect = buffers.get(1);
-    const packed = buffers.get(2);
+    const rect = buffers.get(decorationSchema.buffers.rect.id);
+    const packed = buffers.get(decorationSchema.buffers.packed.id);
     if (rect === undefined || packed === undefined) {
       throw new Error('decoration draw is missing its rectangle or packed policy buffer');
     }

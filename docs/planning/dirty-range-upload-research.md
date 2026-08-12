@@ -106,12 +106,12 @@ scratch vectors rather than allocating one tracker object per frame.[^text-order
 
 `coalesce_ranges` then applies four renderer-declared controls:[^text-packing]
 
-| Capability | First-party Three value | Effect |
-| --- | ---: | --- |
-| update alignment | 4 bytes | expands record ranges to legal backend alignment |
-| accepted gap | max(128, 256) bytes | merges neighboring ranges when uploading the gap is cheaper than another call |
-| fragmentation budget | 8 ranges | collapses excess fragments to one first-to-last span |
-| whole-buffer threshold | 7,500 basis points | selects `0..live_records` when modeled partial cost reaches 75% of live bytes; later alignment may include initialized capacity padding |
+| Capability             | First-party Three value | Effect                                                                                                                                  |
+| ---------------------- | ----------------------: | --------------------------------------------------------------------------------------------------------------------------------------- |
+| update alignment       |                 4 bytes | expands record ranges to legal backend alignment                                                                                        |
+| accepted gap           |     max(128, 256) bytes | merges neighboring ranges when uploading the gap is cheaper than another call                                                           |
+| fragmentation budget   |                8 ranges | collapses excess fragments to one first-to-last span                                                                                    |
+| whole-buffer threshold |      7,500 basis points | selects `0..live_records` when modeled partial cost reaches 75% of live bytes; later alignment may include initialized capacity padding |
 
 This is the Flatland policy generalized from fixed buckets into exact ranges and an explicit byte/call cost model. It is
 also already in the correct ownership layer: the renderer supplies capabilities as static data, while Rust makes one
@@ -180,15 +180,15 @@ renderer-neutral patch ABI.
 
 ## Proposed ownership
 
-| Concern | Owner | Reason |
-| --- | --- | --- |
-| semantic dependency and changed glyph records | Rust retained engine | only this layer knows what changed and why |
-| exact range, gap, fragmentation, and full-live decision | Rust render-plan compiler | one deterministic decision before publication |
-| cost constants and backend limits | registered renderer capability set | renderer knowledge expressed as validated data, not a callback |
-| packing math | policy program executed by Rust | existing straight-line data transformation boundary |
-| byte-range to Three update-range translation | Three executor | backend object and scalar-width knowledge |
-| scene matrices and presentation-origin dirty tracking | Three executor | renderer-local data never seen by `text_update` |
-| final GPU command submission | Three WebGPU/WebGL backend | outside the renderer-neutral plan |
+| Concern                                                 | Owner                              | Reason                                                         |
+| ------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------- |
+| semantic dependency and changed glyph records           | Rust retained engine               | only this layer knows what changed and why                     |
+| exact range, gap, fragmentation, and full-live decision | Rust render-plan compiler          | one deterministic decision before publication                  |
+| cost constants and backend limits                       | registered renderer capability set | renderer knowledge expressed as validated data, not a callback |
+| packing math                                            | policy program executed by Rust    | existing straight-line data transformation boundary            |
+| byte-range to Three update-range translation            | Three executor                     | backend object and scalar-width knowledge                      |
+| scene matrices and presentation-origin dirty tracking   | Three executor                     | renderer-local data never seen by `text_update`                |
+| final GPU command submission                            | Three WebGPU/WebGL backend         | outside the renderer-neutral plan                              |
 
 Adding bucket size or a fixed dirty-bucket count to the public policy now would overfit Flatland. The existing byte-cost
 fields can express the decision more generally. A new capability field is justified only if the benchmark matrix shows
@@ -269,11 +269,19 @@ three raster techniques. Backend-specific constants are acceptable; backend-spec
 - Partial WebGL fallback PBO texture upload has not been proven through Three r185.
 
 [^flatland-tracker]: The tracker stores first/last dirty slots in fixed typed arrays and scans the complete bucket table only at flush.
+
 [^flatland-batch]: The audited snapshot fixes the bucket size at 256 and thresholds at 5 for matrices and 3 for interleaved/custom streams.
+
 [^flatland-flush]: `flushDirtyRangesSystem` is scheduled after batch writes and reads `isDirty` before flushing.
+
 [^text-packing]: `coalesce_ranges` implements gap merging, fragmentation collapse, and a basis-point whole-live threshold in `no_std + alloc` Rust.
+
 [^text-ordered-plan]: Ordered-direct compilation derives changes from retained stable identity and content revision in physical order.
+
 [^text-stable-plan]: Stable-indirect compilation retains physical slots and a separate 64-entry chunked logical-order buffer.
+
 [^three-webgpu]: Three r185 WebGPU emits one `GPUQueue.writeBuffer` call for each declared update range.
+
 [^three-webgl-fallback]: Three r185 WebGL fallback emits one `bufferSubData` call for each declared attribute range.
+
 [^three-webgl]: Three r185 legacy WebGL merges overlapping or adjacent ranges in place before upload.

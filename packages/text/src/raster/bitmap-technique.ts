@@ -194,3 +194,49 @@ async function decodeBitmapData(font: RegisteredFont, raster: RegisteredRaster):
   }
   return { strikes, ...(coverage === undefined ? {} : { coverage: coverage.bits }) };
 }
+
+import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
+
+/**
+ * The authoritative physical shape of the Bitmap technique: binding field order matches
+ * the strike tables the binding compiler emits; buffer ids and lanes are the contract
+ * every policy program and shader realization derives from.
+ */
+export const bitmapSchema: TechniqueSchema<
+  {
+    readonly origin: {
+      readonly id: 1;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['inlineOrigin', 'blockOrigin'];
+    };
+    readonly size: { readonly id: 2; readonly scalar: 'f32'; readonly lanes: readonly ['width', 'height'] };
+    readonly uvOrigin: { readonly id: 3; readonly scalar: 'f32'; readonly lanes: readonly ['u', 'v'] };
+    readonly uvSize: { readonly id: 4; readonly scalar: 'f32'; readonly lanes: readonly ['uSpan', 'vSpan'] };
+    readonly color: {
+      readonly id: 5;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
+    };
+    readonly page: { readonly id: 6; readonly scalar: 'u32'; readonly lanes: readonly ['page'] };
+  },
+  {
+    readonly f32: readonly ['bearingX', 'bearingY', 'width', 'height', 'uvOriginX', 'uvOriginY', 'uvSizeX', 'uvSizeY'];
+    readonly u32: readonly ['page'];
+  }
+> = defineTechniqueSchema({
+  technique: 'pmndrs.bitmap',
+  scope: 'strike',
+  binding: {
+    f32: ['bearingX', 'bearingY', 'width', 'height', 'uvOriginX', 'uvOriginY', 'uvSizeX', 'uvSizeY'],
+    u32: ['page'],
+  },
+  buffers: {
+    origin: { id: 1, scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
+    size: { id: 2, scalar: 'f32', lanes: ['width', 'height'] },
+    uvOrigin: { id: 3, scalar: 'f32', lanes: ['u', 'v'] },
+    uvSize: { id: 4, scalar: 'f32', lanes: ['uSpan', 'vSpan'] },
+    color: { id: 5, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    page: { id: 6, scalar: 'u32', lanes: ['page'] },
+  },
+  resources: { atlas: { kind: 'texture-array', format: 'r8unorm' } },
+});

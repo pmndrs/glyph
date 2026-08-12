@@ -75,11 +75,23 @@ export {
   type ProgramContext,
 } from './core/render-policy.js';
 export {
+  definePolicyBuffers,
+  defineTechniqueSchema,
+  type PolicyBufferDeclaration,
+  type PolicyBufferDeclarations,
+  type PolicyScalarKind,
+  type TechniqueBindingDeclaration,
+  type TechniqueResourceDeclaration,
+  type TechniqueSchema,
+  type TechniqueSchemaDeclaration,
+} from './core/technique-schema.js';
+export {
   addF32,
   constantF32,
   constantU32,
   multiplyF32,
   policyProgram,
+  techniqueProgram,
   subtractF32,
   u32ToF32,
   type CompiledPolicyProgramBody,

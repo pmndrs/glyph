@@ -347,3 +347,85 @@ function checkedBytes(left: number, right: number): number {
   }
   return total;
 }
+
+import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
+
+/**
+ * The authoritative physical shape of the Slug technique.
+ */
+export const slugSchema: TechniqueSchema<
+  {
+    readonly rect: {
+      readonly id: 1;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['left', 'top', 'width', 'height'];
+    };
+    readonly planeRect: {
+      readonly id: 2;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['left', 'top', 'width', 'height'];
+    };
+    readonly bandTransform: {
+      readonly id: 3;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['scaleX', 'scaleY', 'offsetX', 'offsetY'];
+    };
+    readonly color: {
+      readonly id: 4;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
+    };
+    readonly inverseFontSize: {
+      readonly id: 5;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['inverseFontSize', 'unused1', 'unused2', 'unused3'];
+    };
+    readonly tableStarts: {
+      readonly id: 6;
+      readonly scalar: 'u32';
+      readonly lanes: readonly ['curveStart', 'headerStart', 'referenceStart', 'bandStart'];
+    };
+    readonly bandCounts: {
+      readonly id: 7;
+      readonly scalar: 'u32';
+      readonly lanes: readonly ['horizontalBands', 'verticalBands', 'unused2', 'unused3'];
+    };
+  },
+  {
+    readonly f32: readonly [
+      'bearingX',
+      'bearingY',
+      'width',
+      'height',
+      'bandScaleX',
+      'bandScaleY',
+      'bandOffsetX',
+      'bandOffsetY',
+    ];
+    readonly u32: readonly [
+      'curveStart',
+      'headerStart',
+      'referenceStart',
+      'bandStart',
+      'horizontalBands',
+      'verticalBands',
+    ];
+  }
+> = defineTechniqueSchema({
+  technique: 'pmndrs.slug',
+  scope: 'glyph',
+  binding: {
+    f32: ['bearingX', 'bearingY', 'width', 'height', 'bandScaleX', 'bandScaleY', 'bandOffsetX', 'bandOffsetY'],
+    u32: ['curveStart', 'headerStart', 'referenceStart', 'bandStart', 'horizontalBands', 'verticalBands'],
+  },
+  buffers: {
+    rect: { id: 1, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    planeRect: { id: 2, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    bandTransform: { id: 3, scalar: 'f32', lanes: ['scaleX', 'scaleY', 'offsetX', 'offsetY'] },
+    color: { id: 4, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    inverseFontSize: { id: 5, scalar: 'f32', lanes: ['inverseFontSize', 'unused1', 'unused2', 'unused3'] },
+    tableStarts: { id: 6, scalar: 'u32', lanes: ['curveStart', 'headerStart', 'referenceStart', 'bandStart'] },
+    bandCounts: { id: 7, scalar: 'u32', lanes: ['horizontalBands', 'verticalBands', 'unused2', 'unused3'] },
+  },
+  resources: { curves: { kind: 'texture' }, headers: { kind: 'texture' }, references: { kind: 'texture' } },
+});

@@ -203,3 +203,79 @@ function validateMsdfPageDirectory(value: JsonValue, pageIndex: number): void {
     throw new TypeError('MSDF V0 pages accept only the lossless rgba8unorm baseline');
   }
 }
+
+import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
+
+/**
+ * The authoritative physical shape of the MSDF technique.
+ */
+export const msdfSchema: TechniqueSchema<
+  {
+    readonly rect: {
+      readonly id: 1;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['left', 'top', 'width', 'height'];
+    };
+    readonly uvRect: {
+      readonly id: 2;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['u0', 'v0', 'uSpan', 'vSpan'];
+    };
+    readonly uvBounds: {
+      readonly id: 3;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['u0', 'v0', 'uMax', 'vMax'];
+    };
+    readonly color: {
+      readonly id: 4;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
+    };
+    readonly effectA: { readonly id: 5; readonly scalar: 'f32'; readonly lanes: readonly ['x', 'y', 'z', 'w'] };
+    readonly effectB: { readonly id: 6; readonly scalar: 'f32'; readonly lanes: readonly ['x', 'y', 'z', 'w'] };
+    readonly page: { readonly id: 7; readonly scalar: 'f32'; readonly lanes: readonly ['x', 'y', 'z', 'page'] };
+  },
+  {
+    readonly f32: readonly [
+      'bearingX',
+      'bearingY',
+      'width',
+      'height',
+      'uvOriginX',
+      'uvOriginY',
+      'uvSizeX',
+      'uvSizeY',
+      'uvMaxX',
+      'uvMaxY',
+    ];
+    readonly u32: readonly ['page'];
+  }
+> = defineTechniqueSchema({
+  technique: 'pmndrs.msdf',
+  scope: 'glyph',
+  binding: {
+    f32: [
+      'bearingX',
+      'bearingY',
+      'width',
+      'height',
+      'uvOriginX',
+      'uvOriginY',
+      'uvSizeX',
+      'uvSizeY',
+      'uvMaxX',
+      'uvMaxY',
+    ],
+    u32: ['page'],
+  },
+  buffers: {
+    rect: { id: 1, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    uvRect: { id: 2, scalar: 'f32', lanes: ['u0', 'v0', 'uSpan', 'vSpan'] },
+    uvBounds: { id: 3, scalar: 'f32', lanes: ['u0', 'v0', 'uMax', 'vMax'] },
+    color: { id: 4, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    effectA: { id: 5, scalar: 'f32', lanes: ['x', 'y', 'z', 'w'] },
+    effectB: { id: 6, scalar: 'f32', lanes: ['x', 'y', 'z', 'w'] },
+    page: { id: 7, scalar: 'f32', lanes: ['x', 'y', 'z', 'page'] },
+  },
+  resources: { atlas: { kind: 'texture-array', format: 'rgba8unorm' } },
+});

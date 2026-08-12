@@ -4,11 +4,13 @@ import {
   constantF32,
   constantU32,
   createProgram,
+  definePolicyBuffers,
+  defineTechniqueSchema,
   floatBuffers,
   multiplyF32,
-  policyProgram,
   RenderWireIdentityRegistry,
   subtractF32,
+  techniqueProgram,
   u32Buffers,
   u32ToF32,
   type PolicyAllocationMode,
@@ -16,12 +18,49 @@ import {
   type PolicyCapabilitySet,
   type PolicyProgram,
   type PolicyTransformMode,
+  type TechniqueSchema,
 } from '../core.js';
+import { bitmapSchema } from '../raster/bitmap-technique.js';
+import { msdfSchema } from '../raster/msdf.js';
+import { slugSchema } from '../raster/slug-technique.js';
 import { textShaperAbi } from '../core.js';
 
-export const TRANSFORM_BUFFER_ID = 15;
+/** Buffers the Three policy itself owns, shared by every program in it. */
+export const threeSystemBuffers: {
+  readonly stableGlyphId: { readonly id: 14; readonly scalar: 'u32'; readonly lanes: readonly ['stableGlyphId'] };
+  readonly transformIndex: { readonly id: 15; readonly scalar: 'u32'; readonly lanes: readonly ['transformIndex'] };
+} = definePolicyBuffers({
+  stableGlyphId: { id: 14, scalar: 'u32', lanes: ['stableGlyphId'] },
+  transformIndex: { id: 15, scalar: 'u32', lanes: ['transformIndex'] },
+});
 
-export const STABLE_GLYPH_BUFFER_ID = 14;
+export const TRANSFORM_BUFFER_ID: number = threeSystemBuffers.transformIndex.id;
+
+export const STABLE_GLYPH_BUFFER_ID: number = threeSystemBuffers.stableGlyphId.id;
+
+/**
+ * Decoration is a reserved technique of the Three policy rather than a raster
+ * technique: rows are resource-free and fill the gather lanes directly.
+ */
+export const decorationSchema: TechniqueSchema<
+  {
+    readonly rect: {
+      readonly id: 1;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['left', 'top', 'width', 'height'];
+    };
+    readonly packed: { readonly id: 2; readonly scalar: 'u32'; readonly lanes: readonly ['color', 'flags'] };
+  },
+  { readonly u32: readonly ['color', 'flags'] }
+> = defineTechniqueSchema({
+  technique: 'pmndrs.decoration',
+  scope: 'glyph',
+  binding: { u32: ['color', 'flags'] },
+  buffers: {
+    rect: { id: 1, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    packed: { id: 2, scalar: 'u32', lanes: ['color', 'flags'] },
+  },
+});
 
 export type ThreeTransformMode = PolicyTransformMode;
 
@@ -78,55 +117,26 @@ function threeCapabilitySet(): PolicyCapabilitySet {
   };
 }
 
-// Buffer ids are wire integers; these names map each technique's physical buffers
-// to what its shader reads from them.
-const BITMAP_ORIGIN = 1;
-const BITMAP_SIZE = 2;
-const BITMAP_UV_ORIGIN = 3;
-const BITMAP_UV_SIZE = 4;
-const BITMAP_COLOR = 5;
-const BITMAP_PAGE = 6;
-const MSDF_RECT = 1;
-const MSDF_UV_RECT = 2;
-const MSDF_UV_BOUNDS = 3;
-const MSDF_COLOR = 4;
-const MSDF_EFFECT_A = 5;
-const MSDF_EFFECT_B = 6;
-const MSDF_PAGE = 7;
-const SLUG_RECT = 1;
-const SLUG_PLANE_RECT = 2;
-const SLUG_BAND_TRANSFORM = 3;
-const SLUG_COLOR = 4;
-const SLUG_INVERSE_FONT_SIZE = 5;
-const SLUG_TABLE_STARTS = 6;
-const SLUG_BAND_COUNTS = 7;
-const DECORATION_RECT = 1;
-const DECORATION_PACKED = 2;
-
 function bitmapProgram(
   techniqueId: number,
   programId: number,
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
-  const p = policyProgram({
-    scope: 'strike',
-    bindingF32: ['bearingX', 'bearingY', 'width', 'height', 'uvOriginX', 'uvOriginY', 'uvSizeX', 'uvSizeY'],
-    bindingU32: ['page'],
-  });
+  const p = techniqueProgram(bitmapSchema);
   const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
   const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, page } = p.binding;
-  p.storeF32(BITMAP_ORIGIN, [
+  p.store(bitmapSchema.buffers.origin, [
     addF32(inlineOrigin, multiplyF32(bearingX, fontSize)),
     subtractF32(blockOrigin, multiplyF32(bearingY, fontSize)),
   ]);
-  p.storeF32(BITMAP_SIZE, [multiplyF32(width, fontSize), multiplyF32(height, fontSize)]);
-  p.storeF32(BITMAP_UV_ORIGIN, [uvOriginX, uvOriginY]);
-  p.storeF32(BITMAP_UV_SIZE, [uvSizeX, uvSizeY]);
-  p.storeF32(BITMAP_COLOR, [color.red, color.green, color.blue, color.alpha]);
-  if (transformMode === 'indexed') p.storeU32(TRANSFORM_BUFFER_ID, [transformIndex]);
-  p.storeU32(STABLE_GLYPH_BUFFER_ID, [stableGlyphId]);
-  p.storeU32(BITMAP_PAGE, [page]);
+  p.store(bitmapSchema.buffers.size, [multiplyF32(width, fontSize), multiplyF32(height, fontSize)]);
+  p.store(bitmapSchema.buffers.uvOrigin, [uvOriginX, uvOriginY]);
+  p.store(bitmapSchema.buffers.uvSize, [uvSizeX, uvSizeY]);
+  p.store(bitmapSchema.buffers.color, [color.red, color.green, color.blue, color.alpha]);
+  if (transformMode === 'indexed') p.store(threeSystemBuffers.transformIndex, [transformIndex]);
+  p.store(threeSystemBuffers.stableGlyphId, [stableGlyphId]);
+  p.store(bitmapSchema.buffers.page, [page]);
   return createProgram(
     techniqueId,
     programId,
@@ -145,39 +155,24 @@ function msdfProgram(
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
-  const p = policyProgram({
-    scope: 'glyph',
-    bindingF32: [
-      'bearingX',
-      'bearingY',
-      'width',
-      'height',
-      'uvOriginX',
-      'uvOriginY',
-      'uvSizeX',
-      'uvSizeY',
-      'uvMaxX',
-      'uvMaxY',
-    ],
-    bindingU32: ['page'],
-  });
+  const p = techniqueProgram(msdfSchema);
   const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
   const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } = p.binding;
   const zero = constantF32(0);
-  p.storeF32(MSDF_RECT, [
+  p.store(msdfSchema.buffers.rect, [
     addF32(inlineOrigin, multiplyF32(bearingX, fontSize)),
     subtractF32(blockOrigin, multiplyF32(bearingY, fontSize)),
     multiplyF32(width, fontSize),
     multiplyF32(height, fontSize),
   ]);
-  p.storeF32(MSDF_UV_RECT, [uvOriginX, uvOriginY, uvSizeX, uvSizeY]);
-  p.storeF32(MSDF_UV_BOUNDS, [uvOriginX, uvOriginY, uvMaxX, uvMaxY]);
-  p.storeF32(MSDF_COLOR, [color.red, color.green, color.blue, color.alpha]);
-  p.storeF32(MSDF_EFFECT_A, [zero, zero, zero, zero]);
-  p.storeF32(MSDF_EFFECT_B, [zero, zero, zero, zero]);
-  p.storeF32(MSDF_PAGE, [zero, zero, zero, u32ToF32(page)]);
-  if (transformMode === 'indexed') p.storeU32(TRANSFORM_BUFFER_ID, [transformIndex]);
-  p.storeU32(STABLE_GLYPH_BUFFER_ID, [stableGlyphId]);
+  p.store(msdfSchema.buffers.uvRect, [uvOriginX, uvOriginY, uvSizeX, uvSizeY]);
+  p.store(msdfSchema.buffers.uvBounds, [uvOriginX, uvOriginY, uvMaxX, uvMaxY]);
+  p.store(msdfSchema.buffers.color, [color.red, color.green, color.blue, color.alpha]);
+  p.store(msdfSchema.buffers.effectA, [zero, zero, zero, zero]);
+  p.store(msdfSchema.buffers.effectB, [zero, zero, zero, zero]);
+  p.store(msdfSchema.buffers.page, [zero, zero, zero, u32ToF32(page)]);
+  if (transformMode === 'indexed') p.store(threeSystemBuffers.transformIndex, [transformIndex]);
+  p.store(threeSystemBuffers.stableGlyphId, [stableGlyphId]);
   return createProgram(
     techniqueId,
     programId,
@@ -198,12 +193,7 @@ function slugProgram(
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
-  const p = policyProgram({
-    scope: 'glyph',
-    inverseFontSize: true,
-    bindingF32: ['bearingX', 'bearingY', 'width', 'height', 'bandScaleX', 'bandScaleY', 'bandOffsetX', 'bandOffsetY'],
-    bindingU32: ['curveStart', 'headerStart', 'referenceStart', 'bandStart', 'horizontalBands', 'verticalBands'],
-  });
+  const p = techniqueProgram(slugSchema, { inverseFontSize: true });
   const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
   const inverseFontSize = p.semantics.inverseFontSize;
   if (inverseFontSize === undefined) throw new TypeError('the Slug program declares inverseFontSize');
@@ -225,20 +215,20 @@ function slugProgram(
   } = p.binding;
   const zeroF32 = constantF32(0);
   const zeroU32 = constantU32(0);
-  p.storeF32(SLUG_RECT, [
+  p.store(slugSchema.buffers.rect, [
     addF32(inlineOrigin, multiplyF32(bearingX, fontSize)),
     subtractF32(blockOrigin, multiplyF32(bearingY, fontSize)),
     multiplyF32(width, fontSize),
     multiplyF32(height, fontSize),
   ]);
-  p.storeF32(SLUG_PLANE_RECT, [bearingX, bearingY, width, height]);
-  p.storeF32(SLUG_BAND_TRANSFORM, [bandScaleX, bandScaleY, bandOffsetX, bandOffsetY]);
-  p.storeF32(SLUG_COLOR, [color.red, color.green, color.blue, color.alpha]);
-  p.storeF32(SLUG_INVERSE_FONT_SIZE, [inverseFontSize, zeroF32, zeroF32, zeroF32]);
-  p.storeU32(SLUG_TABLE_STARTS, [curveStart, headerStart, referenceStart, bandStart]);
-  p.storeU32(SLUG_BAND_COUNTS, [horizontalBands, verticalBands, zeroU32, zeroU32]);
-  if (transformMode === 'indexed') p.storeU32(TRANSFORM_BUFFER_ID, [transformIndex]);
-  p.storeU32(STABLE_GLYPH_BUFFER_ID, [stableGlyphId]);
+  p.store(slugSchema.buffers.planeRect, [bearingX, bearingY, width, height]);
+  p.store(slugSchema.buffers.bandTransform, [bandScaleX, bandScaleY, bandOffsetX, bandOffsetY]);
+  p.store(slugSchema.buffers.color, [color.red, color.green, color.blue, color.alpha]);
+  p.store(slugSchema.buffers.inverseFontSize, [inverseFontSize, zeroF32, zeroF32, zeroF32]);
+  p.store(slugSchema.buffers.tableStarts, [curveStart, headerStart, referenceStart, bandStart]);
+  p.store(slugSchema.buffers.bandCounts, [horizontalBands, verticalBands, zeroU32, zeroU32]);
+  if (transformMode === 'indexed') p.store(threeSystemBuffers.transformIndex, [transformIndex]);
+  p.store(threeSystemBuffers.stableGlyphId, [stableGlyphId]);
   return createProgram(
     techniqueId,
     programId,
@@ -267,12 +257,12 @@ function decorationProgram(
   transformMode: ThreeTransformMode,
   allocationMode: ThreeAllocationMode,
 ): PolicyProgram {
-  const p = policyProgram({ scope: 'glyph', bindingU32: ['color', 'flags'] });
+  const p = techniqueProgram(decorationSchema);
   const { inlineOrigin, blockOrigin, fontSize, color, transformIndex, stableGlyphId } = p.semantics;
-  p.storeF32(DECORATION_RECT, [inlineOrigin, blockOrigin, fontSize, color.red]);
-  p.storeU32(DECORATION_PACKED, [p.binding.color, p.binding.flags]);
-  if (transformMode === 'indexed') p.storeU32(TRANSFORM_BUFFER_ID, [transformIndex]);
-  p.storeU32(STABLE_GLYPH_BUFFER_ID, [stableGlyphId]);
+  p.store(decorationSchema.buffers.rect, [inlineOrigin, blockOrigin, fontSize, color.red]);
+  p.store(decorationSchema.buffers.packed, [p.binding.color, p.binding.flags]);
+  if (transformMode === 'indexed') p.store(threeSystemBuffers.transformIndex, [transformIndex]);
+  p.store(threeSystemBuffers.stableGlyphId, [stableGlyphId]);
   return {
     ...createProgram(
       techniqueId,
