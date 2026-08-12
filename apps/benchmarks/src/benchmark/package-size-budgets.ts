@@ -26,10 +26,11 @@ export const packageSizeBudgets = {
   // Complete Rust shaping, layout, policy, and command-plan publication. Gzip and Brotli rose for the decoration
   // rendering feature (D-248): decorating-box cascade state, per-cluster run aggregation, resource-free plan rows,
   // and paint-order gather passes, at roughly +0.6 KB gzip and +1.1 KB Brotli against a raw total that stayed
-  // inside the golfed ceiling.
+  // inside the golfed ceiling. Raw rose ~50 bytes for the shaping-run topology guard in prepare_shape (reshape
+  // when a metric-only restyle changes run-merge boundaries); compressed sizes stayed inside their budgets.
   'text-shaper-wasm': {
-    rawBytes: 1_107_000,
-    minifiedBytes: 1_107_000,
+    rawBytes: 1_107_500,
+    minifiedBytes: 1_107_500,
     gzipBytes: 429_000,
     brotliBytes: 339_500,
   },

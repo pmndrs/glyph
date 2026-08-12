@@ -2,6 +2,18 @@
 
 ## 2026-08-11
 
+- **Shaping-run topology guard** — Fixed a session-poisoning engine defect the presentation soak exposed: a
+  metrics-only restyle (fontSize) rebuilds the pending shaping-run table, and because run merging compares layout
+  scalars including `font_size`, a span crossing value-equality with its neighbor changes the run topology without
+  any shaping invalidation. `prepare_shape` retained the stale merged shape against the rebuilt table, glyphless
+  run ownership rejected the mismatch as `invalidRequest`, and the session never recovered. The fix compares
+  committed and pending run boundaries in `prepare_shape` and reshapes on any mismatch. Proven by a red-green
+  integration regression (animated span fontSize passing through root equality), byte-exact replay of the four
+  captured production frames including the failing one, and a clean full presentation soak. Debugging missteps
+  recorded: `Option::ok_or` evaluates its error argument eagerly, which silently broke a poisoned-site tracker
+  until switched to `ok_or_else`, and the first regression attempt passed because a fontSize-only span at equality
+  collapses to one style segment — the span needs a paint difference to keep segments split while runs merge.
+
 - **Decoration rendering (D-248)** — Underline, overline, and line-through render end-to-end from baked font
   metrics: public span `decoration` styles, decorating-box cascade stamping, continuous merged lines across nested
   spans, CSS paint order via record placement, resource-free decoration draws through both planners, and one shared

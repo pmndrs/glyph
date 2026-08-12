@@ -1043,6 +1043,123 @@ test('Three coordinator shares shaping data across technique bindings and refere
   decorationTarget.dispose();
   decorationSession.dispose();
 
+  // Regression: a colored span whose fontSize animates through value-equality with
+  // its root keeps its style segment (the paint differs) while the shaping-run table
+  // merges across it (layout scalars match). When the next tick moves the size off
+  // equality the table splits again under metrics-only invalidation; the engine
+  // previously retained the merged shape against the rebuilt table and rejected
+  // every later frame with invalidRequest, poisoning the session.
+  const topologySession = coordinator.createSession({
+    requestCapacity: 8_192,
+    resultCapacity: 1024 * 1024,
+    textCapacity: 64,
+  });
+  const topologyStyles = (spanSize) => [
+    {
+      opcode: 'upsert',
+      paragraphId: 1,
+      styleId: 1,
+      cascadeOrder: 0,
+      start: 0,
+      end: 24,
+      root: true,
+      value: {
+        fontStackHandle: first.handle,
+        materialId: primaryMaterial.id,
+        fontSize: 16,
+        rasterPixelRatio: 1,
+        foregroundRgba: 0xffff_ffff,
+      },
+    },
+    {
+      opcode: 'upsert',
+      paragraphId: 1,
+      styleId: 2,
+      cascadeOrder: 1,
+      start: 8,
+      end: 16,
+      value: { fontSize: spanSize, foregroundRgba: 0xff44_22ff },
+    },
+  ];
+  const topologyFrame = (previous, spanSize, extra = {}) =>
+    compileTextEngineFrameUpdate({
+      sessionId: topologySession.handle,
+      policyHandle: coordinator.policyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: previous?.engineRevision ?? 0,
+      consumedPlanRevision: previous?.planRevision ?? 0,
+      acknowledgedPublicationGeneration: previous?.publicationGeneration ?? 0,
+      limits: {
+        maxParagraphs: 1,
+        maxClusters: 32,
+        maxLines: 8,
+        maxRegions: 1,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      styleMutations: topologyStyles(spanSize),
+      ...extra,
+    });
+  // Frame 1: the span size equals the root — shaping runs merge across the span.
+  const topologyFirst = topologySession.update(
+    topologyFrame(undefined, 16, {
+      paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
+      textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'alpha beta gamma epsilon' }],
+      constraints: [
+        {
+          paragraphId: 1,
+          flowThreadId: 1,
+          geometryRevision: 1,
+          width: 512,
+          height: 128,
+          viewportBlockStart: 0,
+          viewportBlockEnd: 128,
+          resumeBlockOffset: 0,
+          maxLines: 8,
+          regionStart: 0,
+          resumeCluster: 0,
+          regionCount: 1,
+          resumeRegion: 0,
+          widthMode: 'at-most',
+          heightMode: 'at-most',
+          wrap: 'word',
+          align: 'start',
+          overflow: 'visible',
+          blockAlign: 'start',
+        },
+      ],
+      regions: [
+        {
+          id: 1,
+          geometryRevision: 1,
+          shape: 'rectangle',
+          exclusionStart: 0,
+          exclusionCount: 0,
+          writingMode: 'horizontal-tb',
+          textOrientation: 'mixed',
+          inlineStart: 0,
+          blockStart: 0,
+          inlineEnd: 512,
+          blockEnd: 128,
+          clipInlineStart: 0,
+          clipBlockStart: 0,
+          clipInlineEnd: 512,
+          clipBlockEnd: 128,
+        },
+      ],
+    }),
+  );
+  // Frame 2: the span size moves off equality — the run table splits again and the
+  // retained shape must be rebuilt, not reused.
+  const topologySecond = topologySession.update(topologyFrame(topologyFirst, 17.5));
+  assert.equal(topologySecond.engineRevision, topologyFirst.engineRevision + 1);
+  // Frame 3: and the session must remain healthy afterwards.
+  const topologyThird = topologySession.update(topologyFrame(topologySecond, 18.25));
+  assert.equal(topologyThird.engineRevision, topologySecond.engineRevision + 1);
+  topologySession.dispose();
+
   target.dispose();
   session.dispose();
   first.release();
