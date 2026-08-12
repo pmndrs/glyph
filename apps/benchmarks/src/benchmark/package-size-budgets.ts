@@ -8,11 +8,13 @@ export const packageSizeBudgets = {
   // The renderer-neutral core subpath (D-249) must stay integration-free; the graph
   // assertion in measure-package-sizes.mts already rejects any three/tsl/react pull.
   // Grew with the technique-schema authority layer (D-251): declarations, validation,
-  // and the schema-typed store path. Re-based when tsdown bundling lands per the
-  // technique contract plan.
+  // and the schema-typed store path, then the review-closure pass (schema freezing,
+  // DSL session provenance, schemaPolicyBuffers/schemaFieldTable derivations) at
+  // ~+1.8 KB raw / +0.4 KB minified with compressed sizes inside their ceilings.
+  // Re-based when tsdown bundling lands per the technique contract plan.
   'core-subpath-js': {
-    rawBytes: 222_000,
-    minifiedBytes: 153_000,
+    rawBytes: 225_000,
+    minifiedBytes: 154_000,
     gzipBytes: 39_000,
     brotliBytes: 33_500,
   },
@@ -50,11 +52,12 @@ export const packageSizeBudgets = {
     gzipBytes: 429_000,
     brotliBytes: 339_500,
   },
-  // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250); the
-  // growth is comment- and name-dominated: minified, gzip, and Brotli stayed inside
-  // their existing ceilings.
+  // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250) and
+  // again for schema-derived executor lookups replacing literal id ranges; both
+  // growths are comment- and name-dominated: minified, gzip, and Brotli stayed
+  // inside their existing ceilings.
   'three-runtime-js': {
-    rawBytes: 362_000,
+    rawBytes: 365_000,
     minifiedBytes: 238_000,
     gzipBytes: 61_500,
     brotliBytes: 52_000,

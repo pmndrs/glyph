@@ -2,6 +2,19 @@
 
 ## 2026-08-11
 
+- **Technique-contract review closure (D-250/D-251)** — Closed all four adversarial-review findings on the
+  schema-authority stack. Policy-DSL values now carry session provenance: a value loaded from one program's input
+  table throws when stored through another builder instead of silently reading a shifted input. Technique schemas
+  deep-freeze at definition, making the documented immutability true at runtime. The remaining smear sites now
+  derive from schemas: `schemaPolicyBuffers` replaces hand-rolled width lists in the Three programs,
+  `schemaFieldTable` orders binding-table readers by the schema's declared names so a misspelled or missing reader
+  is a compile error, the executor resolves draw buffers by schema name instead of literal id ranges, and the
+  plan-program registry references the transform system buffer instead of restating `15`. Glyph-origin
+  augmentation became schema-declared opt-in metadata (`glyphOrigin`) rather than assuming Bitmap's buffer layout
+  for every technique. The structural gate now also rejects literal-width buffer builders, literal id ranges, and
+  restated system ids. Every policy and binding byte golden stayed pinned — the derivations reproduce the
+  hand-rolled bytes exactly, decided by the existing decoded-equivalence proof.
+
 - **Technique schema authority (D-251)** — Buffer ids, lanes, and binding fields are declared once per technique
   by colocated schemas; programs store through schema handles, the executor reads declared ids, and a repository
   gate forbids literal buffer identity anywhere else. Policy bytes proven byte-identical across the change. The

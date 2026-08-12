@@ -1,8 +1,8 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { LoadedFont } from '../loaded-font.js';
-import { bitmap, type BitmapData } from '../raster/bitmap-technique.js';
-import { msdf, type MsdfData } from '../raster/msdf.js';
-import { slug, type SlugData } from '../raster/slug-technique.js';
+import { bitmap, bitmapSchema, type BitmapData } from '../raster/bitmap-technique.js';
+import { msdf, msdfSchema, type MsdfData } from '../raster/msdf.js';
+import { slug, slugSchema, type SlugData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
 import { RenderWireIdentityRegistry, type TechniqueWireIds } from './render-policy.js';
 
@@ -21,6 +21,19 @@ export interface BindingResource {
 export interface FontBindingFieldTable {
   readonly rows: number;
   readonly fields: readonly ((row: number) => number)[];
+}
+
+/**
+ * Order a binding table by the schema's declared field names. The same name
+ * list drives the policy program's input table, so a missing, extra, or
+ * misspelled reader is a compile error instead of a silently shifted column.
+ */
+export function schemaFieldTable<const Names extends readonly string[]>(
+  names: Names,
+  rows: number,
+  readers: { readonly [Name in Names[number]]: (row: number) => number },
+): FontBindingFieldTable {
+  return { rows, fields: names.map((name: Names[number]) => readers[name]) };
 }
 
 export interface FontBindingDescriptor {
@@ -143,44 +156,36 @@ function compileBitmap(
     },
     glyphF32: emptyFontBindingTable(glyphCount),
     glyphU32: emptyFontBindingTable(glyphCount),
-    strikeF32: {
-      rows,
-      fields: [
-        (row) => {
-          const { view, record, strike } = strikeRecord(row);
-          return view.getInt16(record, true) / data.strikes[strike]!.planeUnitsPerEm;
-        },
-        (row) => {
-          const { view, record, strike } = strikeRecord(row);
-          return view.getInt16(record + 6, true) / data.strikes[strike]!.planeUnitsPerEm;
-        },
-        (row) => {
-          const { view, record, strike } = strikeRecord(row);
-          return (
-            (view.getInt16(record + 4, true) - view.getInt16(record, true)) / data.strikes[strike]!.planeUnitsPerEm
-          );
-        },
-        (row) => {
-          const { view, record, strike } = strikeRecord(row);
-          return (
-            (view.getInt16(record + 6, true) - view.getInt16(record + 2, true)) / data.strikes[strike]!.planeUnitsPerEm
-          );
-        },
-        (row) => atlas(row, 8, 'width'),
-        (row) => atlas(row, 10, 'height'),
-        (row) => span(row, 8, 12, 'width'),
-        (row) => span(row, 10, 14, 'height'),
-      ],
-    },
-    strikeU32: {
-      rows,
-      fields: [
-        (row) => {
-          const { view, record } = strikeRecord(row);
-          return view.getUint16(record + 16, true);
-        },
-      ],
-    },
+    strikeF32: schemaFieldTable(bitmapSchema.binding.f32, rows, {
+      bearingX: (row) => {
+        const { view, record, strike } = strikeRecord(row);
+        return view.getInt16(record, true) / data.strikes[strike]!.planeUnitsPerEm;
+      },
+      bearingY: (row) => {
+        const { view, record, strike } = strikeRecord(row);
+        return view.getInt16(record + 6, true) / data.strikes[strike]!.planeUnitsPerEm;
+      },
+      width: (row) => {
+        const { view, record, strike } = strikeRecord(row);
+        return (view.getInt16(record + 4, true) - view.getInt16(record, true)) / data.strikes[strike]!.planeUnitsPerEm;
+      },
+      height: (row) => {
+        const { view, record, strike } = strikeRecord(row);
+        return (
+          (view.getInt16(record + 6, true) - view.getInt16(record + 2, true)) / data.strikes[strike]!.planeUnitsPerEm
+        );
+      },
+      uvOriginX: (row) => atlas(row, 8, 'width'),
+      uvOriginY: (row) => atlas(row, 10, 'height'),
+      uvSizeX: (row) => span(row, 8, 12, 'width'),
+      uvSizeY: (row) => span(row, 10, 14, 'height'),
+    }),
+    strikeU32: schemaFieldTable(bitmapSchema.binding.u32, rows, {
+      page: (row) => {
+        const { view, record } = strikeRecord(row);
+        return view.getUint16(record + 16, true);
+      },
+    }),
     resourceF32: emptyFontBindingTable(resources.length),
     resourceU32: emptyFontBindingTable(resources.length),
   });
@@ -216,23 +221,21 @@ function compileMsdf(
     resourceIndex(row) {
       return pageAt(row) === ABSENT_PAGE ? MISSING_RESOURCE : indexFor(data.resource);
     },
-    glyphF32: {
-      rows: glyphCount,
-      fields: [
-        (row) => view.getInt16(rowRecord(row), true) / data.planeUnitsPerEm,
-        (row) => view.getInt16(rowRecord(row) + 6, true) / data.planeUnitsPerEm,
-        (row) => (view.getInt16(rowRecord(row) + 4, true) - view.getInt16(rowRecord(row), true)) / data.planeUnitsPerEm,
-        (row) =>
-          (view.getInt16(rowRecord(row) + 6, true) - view.getInt16(rowRecord(row) + 2, true)) / data.planeUnitsPerEm,
-        (row) => atlas(row, 8, 'width'),
-        (row) => atlas(row, 10, 'height'),
-        (row) => span(row, 8, 12, 'width'),
-        (row) => span(row, 10, 14, 'height'),
-        (row) => atlas(row, 12, 'width'),
-        (row) => atlas(row, 14, 'height'),
-      ],
-    },
-    glyphU32: { rows: glyphCount, fields: [(row) => pageAt(row)] },
+    glyphF32: schemaFieldTable(msdfSchema.binding.f32, glyphCount, {
+      bearingX: (row) => view.getInt16(rowRecord(row), true) / data.planeUnitsPerEm,
+      bearingY: (row) => view.getInt16(rowRecord(row) + 6, true) / data.planeUnitsPerEm,
+      width: (row) =>
+        (view.getInt16(rowRecord(row) + 4, true) - view.getInt16(rowRecord(row), true)) / data.planeUnitsPerEm,
+      height: (row) =>
+        (view.getInt16(rowRecord(row) + 6, true) - view.getInt16(rowRecord(row) + 2, true)) / data.planeUnitsPerEm,
+      uvOriginX: (row) => atlas(row, 8, 'width'),
+      uvOriginY: (row) => atlas(row, 10, 'height'),
+      uvSizeX: (row) => span(row, 8, 12, 'width'),
+      uvSizeY: (row) => span(row, 10, 14, 'height'),
+      uvMaxX: (row) => atlas(row, 12, 'width'),
+      uvMaxY: (row) => atlas(row, 14, 'height'),
+    }),
+    glyphU32: schemaFieldTable(msdfSchema.binding.u32, glyphCount, { page: (row) => pageAt(row) }),
     strikeF32: emptyFontBindingTable(glyphCount),
     strikeU32: emptyFontBindingTable(glyphCount),
     resourceF32: emptyFontBindingTable(resources.length),
@@ -271,30 +274,24 @@ function compileSlug(
       const page = pageAt(row);
       return page === ABSENT_PAGE ? MISSING_RESOURCE : indexFor(data.pages[page]!.resource);
     },
-    glyphF32: {
-      rows: glyphCount,
-      fields: [
-        (row) => normalized(row, 0),
-        (row) => normalized(row, 6),
-        (row) => width(row),
-        (row) => height(row),
-        (row) => bandScaleX(row),
-        (row) => bandScaleY(row),
-        (row) => -normalized(row, 0) * bandScaleX(row),
-        (row) => -normalized(row, 2) * bandScaleY(row),
-      ],
-    },
-    glyphU32: {
-      rows: glyphCount,
-      fields: [
-        (row) => view.getUint32(record(row) + 16, true),
-        (row) => view.getUint32(record(row) + 24, true),
-        (row) => view.getUint32(record(row) + 28, true),
-        (row) => view.getUint32(record(row) + 32, true),
-        (row) => horizontalBands(row),
-        (row) => verticalBands(row),
-      ],
-    },
+    glyphF32: schemaFieldTable(slugSchema.binding.f32, glyphCount, {
+      bearingX: (row) => normalized(row, 0),
+      bearingY: (row) => normalized(row, 6),
+      width: (row) => width(row),
+      height: (row) => height(row),
+      bandScaleX: (row) => bandScaleX(row),
+      bandScaleY: (row) => bandScaleY(row),
+      bandOffsetX: (row) => -normalized(row, 0) * bandScaleX(row),
+      bandOffsetY: (row) => -normalized(row, 2) * bandScaleY(row),
+    }),
+    glyphU32: schemaFieldTable(slugSchema.binding.u32, glyphCount, {
+      curveStart: (row) => view.getUint32(record(row) + 16, true),
+      headerStart: (row) => view.getUint32(record(row) + 24, true),
+      referenceStart: (row) => view.getUint32(record(row) + 28, true),
+      bandStart: (row) => view.getUint32(record(row) + 32, true),
+      horizontalBands: (row) => horizontalBands(row),
+      verticalBands: (row) => verticalBands(row),
+    }),
     strikeF32: emptyFontBindingTable(glyphCount),
     strikeU32: emptyFontBindingTable(glyphCount),
     resourceF32: emptyFontBindingTable(resources.length),

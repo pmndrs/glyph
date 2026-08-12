@@ -211,15 +211,22 @@ The contract is sound when these hold, each as a permanent gate:
 4. **The canvas technique exists**: a `runtime-sourced` technique rendering platform-rasterized glyphs, proving
    the data-origin axis end-to-end in the browser lane.
 5. **The schema is the only witness**: grep-level gate — no `_pmndrsText_<literal>`, no `byPolicyId.get(<literal>)`,
-   no parallel id consts outside technique declarations.
+   no parallel id consts outside technique declarations, no literal-width buffer builders outside core, no literal
+   id ranges mapped into buffer lookups, and no restated system-buffer ids.
 
 ## Migration stack
 
 Dependency-ordered layers, each green standalone:
 
-1. `core`: `defineTechniqueSchema` + schema-typed `store`/binding/lookup APIs (additive; D-250 goldens pinned).
-2. `raster/<t>`: bitmap, msdf, slug, decoration schemas declared; policy/binding/executor consume them; hardcoded
-   ids die; goldens re-pin over the equivalence proof.
+1. ✅ `core`: `defineTechniqueSchema` + schema-typed `store`/binding/lookup APIs. Landed with the D-250/D-251
+   stack, then hardened by the adversarial-review closure: schemas deep-freeze at definition, DSL values carry
+   session provenance (a value from one program throws when stored into another), and `schemaPolicyBuffers` /
+   `schemaFieldTable` derive wire buffer lists and binding-table order from the declaration.
+2. ✅ `raster/<t>`: bitmap, msdf, slug, decoration schemas declared and consumed by programs, binding compilers,
+   and the executor; hardcoded id ranges, positional field tables, and width lists are gone, and the byte goldens
+   stayed pinned — the derivations reproduce the hand-rolled bytes exactly. Schemas also carry opt-in
+   `glyphOrigin` metadata naming the buffer whose first two lanes hold the glyph origin; the executor augments
+   only techniques that declare it instead of assuming Bitmap's layout everywhere.
 3. `tsl`: shader interfaces derived from schemas; TSL graphs become explicit realizations.
 4. `glyph-example-raster` rebuilt on the construct; docs rewritten from it.
 5. `runtime-sourced` origin + canvas-texture technique with a browser proof.

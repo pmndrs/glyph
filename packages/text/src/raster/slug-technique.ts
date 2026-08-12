@@ -414,6 +414,7 @@ export const slugSchema: TechniqueSchema<
 > = defineTechniqueSchema({
   technique: 'pmndrs.slug',
   scope: 'glyph',
+  glyphOrigin: { buffer: 'rect' },
   binding: {
     f32: ['bearingX', 'bearingY', 'width', 'height', 'bandScaleX', 'bandScaleY', 'bandOffsetX', 'bandOffsetY'],
     u32: ['curveStart', 'headerStart', 'referenceStart', 'bandStart', 'horizontalBands', 'verticalBands'],

@@ -6,6 +6,9 @@
  * derive from the declaration; none of them restate it.
  */
 
+import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import type { PolicyBuffer } from './render-policy.js';
+
 export type PolicyScalarKind = 'f32' | 'u32';
 
 export interface PolicyBufferDeclaration {
@@ -30,8 +33,10 @@ export function definePolicyBuffers<const Buffers extends PolicyBufferDeclaratio
     if (buffer.lanes.length === 0 || buffer.lanes.length > 4) {
       throw new RangeError(`policy buffer "${name}" needs one to four named lanes`);
     }
+    Object.freeze(buffer.lanes);
+    Object.freeze(buffer);
   }
-  return buffers;
+  return Object.freeze(buffers);
 }
 
 export interface TechniqueBindingDeclaration {
@@ -55,6 +60,13 @@ export interface TechniqueSchemaDeclaration<
   readonly binding: Binding;
   readonly buffers: Buffers;
   readonly resources?: Readonly<Record<string, TechniqueResourceDeclaration>>;
+  /**
+   * Opt-in glyph-origin metadata: names the declared f32 buffer whose first two
+   * lanes carry the glyph's inline/block origin. Renderers that augment glyph
+   * origins (animation retargeting) consult this instead of assuming a layout;
+   * techniques without it are never augmented.
+   */
+  readonly glyphOrigin?: { readonly buffer: string };
 }
 
 export interface TechniqueSchema<
@@ -73,5 +85,35 @@ export function defineTechniqueSchema<
   if (new Set(names).size !== names.length) {
     throw new TypeError(`technique "${declaration.technique}" repeats a binding field name`);
   }
-  return declaration;
+  if (declaration.glyphOrigin !== undefined) {
+    const origin: PolicyBufferDeclaration | undefined = declaration.buffers[declaration.glyphOrigin.buffer];
+    if (origin === undefined) {
+      throw new TypeError(`technique "${declaration.technique}" points glyphOrigin at an undeclared buffer`);
+    }
+    if (origin.scalar !== 'f32' || origin.lanes.length < 2) {
+      throw new TypeError(`technique "${declaration.technique}" needs an f32 glyphOrigin buffer with two origin lanes`);
+    }
+    Object.freeze(declaration.glyphOrigin);
+  }
+  Object.freeze(declaration.binding.f32);
+  Object.freeze(declaration.binding.u32);
+  Object.freeze(declaration.binding);
+  if (declaration.resources !== undefined) {
+    for (const resource of Object.values(declaration.resources)) Object.freeze(resource);
+    Object.freeze(declaration.resources);
+  }
+  return Object.freeze(declaration);
+}
+
+/**
+ * Derive the wire buffer list a technique's programs publish, in declaration
+ * order — the schema is the only witness to ids, scalar kinds, and widths.
+ */
+export function schemaPolicyBuffers(schema: TechniqueSchema): PolicyBuffer[] {
+  const scalars = textShaperAbi.policy.scalarTypes;
+  return Object.values(schema.buffers).map((buffer) => ({
+    id: buffer.id,
+    scalar: buffer.scalar === 'f32' ? scalars.f32 : scalars.u32,
+    vectorWidth: buffer.lanes.length,
+  }));
 }

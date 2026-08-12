@@ -4,6 +4,9 @@ import * as THREE from 'three/webgpu';
 import { textShaperAbi } from '../core.js';
 import { decorationSchema, threeSystemBuffers } from './render-policy.js';
 import { bitmapSchema } from '../raster/bitmap-technique.js';
+import { msdfSchema } from '../raster/msdf.js';
+import { slugSchema } from '../raster/slug-technique.js';
+import type { PolicyBufferDeclaration, PolicyBufferDeclarations, TechniqueSchema } from '../core.js';
 import { TextEngineRenderPlanView, type RenderPlanTable, type TextEnginePublication } from '../core.js';
 import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
@@ -462,7 +465,11 @@ export class ThreeTextRenderPlanExecutor {
         const material = decoration
           ? this.#decorationMaterial(byPolicyId, transform, addressing)
           : this.#material(resource!, byPolicyId, materialId, transform, addressing);
-        const origins = decoration ? undefined : byPolicyId.get(bitmapSchema.buffers.origin.id);
+        const originDeclaration =
+          decoration || resource === undefined
+            ? undefined
+            : glyphOriginBuffer(this.#coordinator.resolveResource(resource.referenceId).technique);
+        const origins = originDeclaration === undefined ? undefined : byPolicyId.get(originDeclaration.id);
         const stableIds = decoration ? undefined : byPolicyId.get(threeSystemBuffers.stableGlyphId.id);
         if (origins !== undefined && stableIds !== undefined) {
           if (!(origins.array instanceof Float32Array) || !(stableIds.array instanceof Uint32Array)) {
@@ -626,11 +633,8 @@ export class ThreeTextRenderPlanExecutor {
       throw new Error('this Three plan target checkpoint realizes Bitmap draws only');
     }
     const strike = bitmapStrike(resolved);
-    const required = [1, 2, 3, 4, 5, 6].map((id) => {
-      const buffer = buffers.get(id);
-      if (buffer === undefined) throw new Error(`Bitmap draw is missing policy buffer ${id}`);
-      return buffer;
-    });
+    const part = schemaDrawBuffers(bitmapSchema, buffers, 'Bitmap');
+    const required = [part.origin, part.size, part.uvOrigin, part.uvSize, part.color, part.page];
     const key = `${resource.id}:${resource.generation}:${materialId}:snap=${String(this.#owner.pixelSnapping)}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
       .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
@@ -643,20 +647,14 @@ export class ThreeTextRenderPlanExecutor {
     const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
     const shader = bitmapShader(
       {
-        origin: TSL.storage(required[0]!.attribute, 'vec2', required[0]!.attribute.count)
+        origin: TSL.storage(part.origin.attribute, 'vec2', part.origin.attribute.count).setPBO(true).element(instance),
+        size: TSL.storage(part.size.attribute, 'vec2', part.size.attribute.count).setPBO(true).element(instance),
+        uvOrigin: TSL.storage(part.uvOrigin.attribute, 'vec2', part.uvOrigin.attribute.count)
           .setPBO(true)
           .element(instance),
-        size: TSL.storage(required[1]!.attribute, 'vec2', required[1]!.attribute.count).setPBO(true).element(instance),
-        uvOrigin: TSL.storage(required[2]!.attribute, 'vec2', required[2]!.attribute.count)
-          .setPBO(true)
-          .element(instance),
-        uvSize: TSL.storage(required[3]!.attribute, 'vec2', required[3]!.attribute.count)
-          .setPBO(true)
-          .element(instance),
-        color: TSL.storage(required[4]!.attribute, 'vec4', required[4]!.attribute.count).setPBO(true).element(instance),
-        pageIndex: TSL.storage(required[5]!.attribute, 'uint', required[5]!.attribute.count)
-          .setPBO(true)
-          .element(instance),
+        uvSize: TSL.storage(part.uvSize.attribute, 'vec2', part.uvSize.attribute.count).setPBO(true).element(instance),
+        color: TSL.storage(part.color.attribute, 'vec4', part.color.attribute.count).setPBO(true).element(instance),
+        pageIndex: TSL.storage(part.page.attribute, 'uint', part.page.attribute.count).setPBO(true).element(instance),
       },
       { page: texture },
       { pixelSnapping: this.#owner.pixelSnapping },
@@ -789,11 +787,8 @@ export class ThreeTextRenderPlanExecutor {
     addressing: RecordAddressing,
   ): THREE.NodeMaterial {
     const data = msdfData(this.#coordinator.resolveResource(resource.referenceId));
-    const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
-      const buffer = buffers.get(id);
-      if (buffer === undefined) throw new Error(`MSDF draw is missing policy buffer ${id}`);
-      return buffer;
-    });
+    const part = schemaDrawBuffers(msdfSchema, buffers, 'MSDF');
+    const required = [part.rect, part.uvRect, part.uvBounds, part.color, part.effectA, part.effectB, part.page];
     const key = `msdf:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
       .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
@@ -803,22 +798,24 @@ export class ThreeTextRenderPlanExecutor {
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
     );
     const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
-    const fields = required.map((buffer) =>
-      TSL.storage(buffer.attribute, 'vec4', buffer.attribute.count).setPBO(true).element(instance),
-    );
+    const field = (buffer: RetainedBuffer) =>
+      TSL.storage(buffer.attribute, 'vec4', buffer.attribute.count).setPBO(true).element(instance);
+    const rect = field(part.rect);
+    const uvRect = field(part.uvRect);
+    const page = field(part.page);
     const shader = msdfShader(
       {
-        origin: fields[0]!.xy,
-        size: fields[0]!.zw,
-        uvOrigin: fields[1]!.xy,
-        uvSize: fields[1]!.zw,
-        uvBounds: fields[2]!,
-        fillColor: fields[3]!,
-        outlineColor: fields[4]!,
-        shadowColor: fields[5]!,
-        shadowOffset: fields[6]!.xy,
-        outlineWidth: fields[6]!.z,
-        pageIndex: fields[6]!.w,
+        origin: rect.xy,
+        size: rect.zw,
+        uvOrigin: uvRect.xy,
+        uvSize: uvRect.zw,
+        uvBounds: field(part.uvBounds),
+        fillColor: field(part.color),
+        outlineColor: field(part.effectA),
+        shadowColor: field(part.effectB),
+        shadowOffset: page.xy,
+        outlineWidth: page.z,
+        pageIndex: page.w,
       },
       {
         atlas: this.#msdfAtlas(resource.referenceId, data),
@@ -900,11 +897,16 @@ export class ThreeTextRenderPlanExecutor {
     addressing: RecordAddressing,
   ): THREE.NodeMaterial {
     const page = slugPage(this.#coordinator.resolveResource(resource.referenceId));
-    const required = [1, 2, 3, 4, 5, 6, 7].map((id) => {
-      const buffer = buffers.get(id);
-      if (buffer === undefined) throw new Error(`Slug draw is missing policy buffer ${id}`);
-      return buffer;
-    });
+    const part = schemaDrawBuffers(slugSchema, buffers, 'Slug');
+    const required = [
+      part.rect,
+      part.planeRect,
+      part.bandTransform,
+      part.color,
+      part.inverseFontSize,
+      part.tableStarts,
+      part.bandCounts,
+    ];
     const key = `slug:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
       .join(
@@ -916,13 +918,14 @@ export class ThreeTextRenderPlanExecutor {
       ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
     );
     const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
-    const floatFields = required
-      .slice(0, 5)
-      .map((buffer) => TSL.storage(buffer.attribute, 'vec4', buffer.attribute.count).setPBO(true).element(instance));
-    const addresses = TSL.storage(required[5]!.attribute, 'uvec4', required[5]!.attribute.count)
+    const field = (buffer: RetainedBuffer) =>
+      TSL.storage(buffer.attribute, 'vec4', buffer.attribute.count).setPBO(true).element(instance);
+    const rect = field(part.rect);
+    const planeRect = field(part.planeRect);
+    const addresses = TSL.storage(part.tableStarts.attribute, 'uvec4', part.tableStarts.attribute.count)
       .setPBO(true)
       .element(instance);
-    const counts = TSL.storage(required[6]!.attribute, 'uvec4', required[6]!.attribute.count)
+    const counts = TSL.storage(part.bandCounts.attribute, 'uvec4', part.bandCounts.attribute.count)
       .setPBO(true)
       .element(instance);
     const indexedTransform =
@@ -938,13 +941,13 @@ export class ThreeTextRenderPlanExecutor {
     );
     const shader = slugShader(
       {
-        origin: floatFields[0]!.xy,
-        size: floatFields[0]!.zw,
-        emOrigin: floatFields[1]!.xy,
-        emSize: floatFields[1]!.zw,
-        bandTransform: floatFields[2]!,
-        color: floatFields[3]!,
-        inverseScale: floatFields[4]!.x,
+        origin: rect.xy,
+        size: rect.zw,
+        emOrigin: planeRect.xy,
+        emSize: planeRect.zw,
+        bandTransform: field(part.bandTransform),
+        color: field(part.color),
+        inverseScale: field(part.inverseFontSize).x,
         curveBaseTexel: addresses.x,
         horizontalHeaderBase: addresses.y,
         verticalHeaderBase: addresses.z,
@@ -1111,6 +1114,36 @@ export class ThreeTextRenderPlanExecutor {
     this.#draws = [];
     this.#drawKeys = [];
   }
+}
+
+/** The techniques this executor realizes, keyed by wire identity. */
+const techniqueSchemas: ReadonlyMap<string, TechniqueSchema> = new Map<string, TechniqueSchema>([
+  [bitmap.id, bitmapSchema],
+  [msdf.id, msdfSchema],
+  [slug.id, slugSchema],
+]);
+
+/** Glyph-origin augmentation is schema-declared: no declaration, no augmentation. */
+function glyphOriginBuffer(technique: string): PolicyBufferDeclaration | undefined {
+  const schema = techniqueSchemas.get(technique);
+  if (schema?.glyphOrigin === undefined) return undefined;
+  return schema.buffers[schema.glyphOrigin.buffer];
+}
+
+/** Resolve a draw's retained buffers by the schema's names instead of remembered ids. */
+function schemaDrawBuffers<Buffers extends PolicyBufferDeclarations>(
+  schema: TechniqueSchema<Buffers>,
+  buffers: ReadonlyMap<number, RetainedBuffer>,
+  label: string,
+): { readonly [Name in keyof Buffers]: RetainedBuffer } {
+  const resolved: Record<string, RetainedBuffer> = {};
+  for (const [name, declaration] of Object.entries(schema.buffers)) {
+    const buffer = buffers.get(declaration.id);
+    if (buffer === undefined) throw new Error(`${label} draw is missing its "${name}" policy buffer`);
+    resolved[name] = buffer;
+  }
+  // The keys are exactly schema.buffers' own keys, collected in the loop above.
+  return resolved as { readonly [Name in keyof Buffers]: RetainedBuffer };
 }
 
 function drawRealizationKey(

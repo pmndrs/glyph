@@ -13,6 +13,7 @@ import {
 import type { LoadedFont } from '../loaded-font.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
 import type { ThreeTextMaterial } from './material.js';
+import { threeSystemBuffers } from './render-policy.js';
 
 export interface ThreePlanProgramBuffer {
   readonly scalarType: number;
@@ -98,7 +99,7 @@ export interface ThreePolicyAbi {
   readonly batchFields: typeof textShaperAbi.policy.batchFields;
   readonly semanticF32Fields: typeof textShaperAbi.engine.semanticF32Fields;
   readonly semanticU32Fields: typeof textShaperAbi.engine.semanticU32Fields;
-  readonly transformBufferId: 15;
+  readonly transformBufferId: typeof threeSystemBuffers.transformIndex.id;
 }
 
 export const threePolicyAbi: ThreePolicyAbi = Object.freeze({
@@ -109,7 +110,7 @@ export const threePolicyAbi: ThreePolicyAbi = Object.freeze({
   batchFields: textShaperAbi.policy.batchFields,
   semanticF32Fields: textShaperAbi.engine.semanticF32Fields,
   semanticU32Fields: textShaperAbi.engine.semanticU32Fields,
-  transformBufferId: 15,
+  transformBufferId: threeSystemBuffers.transformIndex.id,
 });
 
 function compileProgram(

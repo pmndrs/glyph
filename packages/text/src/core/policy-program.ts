@@ -13,8 +13,8 @@ import type { PolicyBufferDeclaration, TechniqueSchema } from './technique-schem
 const MAX_REGISTERS = 32;
 
 type Node =
-  | { readonly kind: 'loadF32'; readonly input: number; readonly label: string }
-  | { readonly kind: 'loadU32'; readonly input: number; readonly label: string }
+  | { readonly kind: 'loadF32'; readonly input: number; readonly label: string; readonly session: object }
+  | { readonly kind: 'loadU32'; readonly input: number; readonly label: string; readonly session: object }
   | {
       readonly kind: 'binary';
       readonly op: 'addF32' | 'subtractF32' | 'multiplyF32';
@@ -56,6 +56,31 @@ function nodeOf(value: PolicyF32Value | PolicyU32Value): Node {
   const node = nodes.get(value);
   if (node === undefined) throw new TypeError('policy value does not belong to this authoring session');
   return node;
+}
+
+/**
+ * A loaded value's input index only means something inside the program that
+ * created it; storing it elsewhere would silently read a different field.
+ * Constants and constant-only expressions are session-free.
+ */
+function assertSession(node: Node, session: object): void {
+  switch (node.kind) {
+    case 'loadF32':
+    case 'loadU32':
+      if (node.session !== session) {
+        throw new TypeError(`policy value "${node.label}" belongs to a different authoring session`);
+      }
+      return;
+    case 'binary':
+      assertSession(node.left, session);
+      assertSession(node.right, session);
+      return;
+    case 'convertU32ToF32':
+      assertSession(node.source, session);
+      return;
+    default:
+      return;
+  }
 }
 
 export function addF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Value {
@@ -192,8 +217,9 @@ export function policyProgram<
   const f32InputCount = 7 + (options.inverseFontSize === true ? 1 : 0) + bindingF32Names.length;
   const u32InputCount = 2 + bindingU32Names.length;
 
+  const session = {};
   let nextF32 = 0;
-  const loadF32 = (label: string): PolicyF32Value => f32Value({ kind: 'loadF32', input: nextF32++, label });
+  const loadF32 = (label: string): PolicyF32Value => f32Value({ kind: 'loadF32', input: nextF32++, label, session });
   const semantics: PolicyProgramSemantics = {
     inlineOrigin: loadF32('inlineOrigin'),
     blockOrigin: loadF32('blockOrigin'),
@@ -205,13 +231,13 @@ export function policyProgram<
       alpha: loadF32('color.alpha'),
     },
     inverseFontSize: options.inverseFontSize === true ? loadF32('inverseFontSize') : undefined,
-    transformIndex: u32Value({ kind: 'loadU32', input: 0, label: 'transformIndex' }),
-    stableGlyphId: u32Value({ kind: 'loadU32', input: 1, label: 'stableGlyphId' }),
+    transformIndex: u32Value({ kind: 'loadU32', input: 0, label: 'transformIndex', session }),
+    stableGlyphId: u32Value({ kind: 'loadU32', input: 1, label: 'stableGlyphId', session }),
   };
   const binding: Record<string, PolicyF32Value | PolicyU32Value> = {};
   for (const name of bindingF32Names) binding[name] = loadF32(name);
   for (const [index, name] of bindingU32Names.entries()) {
-    binding[name] = u32Value({ kind: 'loadU32', input: 2 + index, label: name });
+    binding[name] = u32Value({ kind: 'loadU32', input: 2 + index, label: name, session });
   }
 
   const stores: StoreRecord[] = [];
@@ -228,17 +254,23 @@ export function policyProgram<
       }
       const opcode = buffer.scalar === 'f32' ? opcodes.storeF32 : opcodes.storeU32;
       for (const [lane, value] of lanes.entries()) {
-        stores.push({ opcode, buffer: buffer.id, lane, node: nodeOf(value) });
+        const node = nodeOf(value);
+        assertSession(node, session);
+        stores.push({ opcode, buffer: buffer.id, lane, node });
       }
     },
     storeF32(buffer, lanes) {
       for (const [lane, value] of lanes.entries()) {
-        stores.push({ opcode: opcodes.storeF32, buffer, lane, node: nodeOf(value) });
+        const node = nodeOf(value);
+        assertSession(node, session);
+        stores.push({ opcode: opcodes.storeF32, buffer, lane, node });
       }
     },
     storeU32(buffer, lanes) {
       for (const [lane, value] of lanes.entries()) {
-        stores.push({ opcode: opcodes.storeU32, buffer, lane, node: nodeOf(value) });
+        const node = nodeOf(value);
+        assertSession(node, session);
+        stores.push({ opcode: opcodes.storeU32, buffer, lane, node });
       }
     },
     compile() {

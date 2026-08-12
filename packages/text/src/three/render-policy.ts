@@ -6,12 +6,11 @@ import {
   createProgram,
   definePolicyBuffers,
   defineTechniqueSchema,
-  floatBuffers,
   multiplyF32,
   RenderWireIdentityRegistry,
+  schemaPolicyBuffers,
   subtractF32,
   techniqueProgram,
-  u32Buffers,
   u32ToF32,
   type PolicyAllocationMode,
   type PolicyBuffer,
@@ -141,9 +140,7 @@ function bitmapProgram(
     techniqueId,
     programId,
     p.compile(),
-    transformMode === 'indexed'
-      ? [...floatBuffers([2, 2, 2, 2, 4]), ...u32Buffers([1], 6), stableGlyphIdBuffer(), transformIndexBuffer()]
-      : [...floatBuffers([2, 2, 2, 2, 4]), ...u32Buffers([1], 6), stableGlyphIdBuffer()],
+    programBuffers(bitmapSchema, transformMode),
     transformMode,
     allocationMode,
   );
@@ -177,11 +174,7 @@ function msdfProgram(
     techniqueId,
     programId,
     p.compile(),
-    [
-      ...floatBuffers([4, 4, 4, 4, 4, 4, 4]),
-      stableGlyphIdBuffer(),
-      ...(transformMode === 'indexed' ? [transformIndexBuffer()] : []),
-    ],
+    programBuffers(msdfSchema, transformMode),
     transformMode,
     allocationMode,
   );
@@ -233,12 +226,7 @@ function slugProgram(
     techniqueId,
     programId,
     p.compile(),
-    [
-      ...floatBuffers([4, 4, 4, 4, 4]),
-      ...u32Buffers([4, 4], 6),
-      stableGlyphIdBuffer(),
-      ...(transformMode === 'indexed' ? [transformIndexBuffer()] : []),
-    ],
+    programBuffers(slugSchema, transformMode),
     transformMode,
     allocationMode,
   );
@@ -268,15 +256,22 @@ function decorationProgram(
       techniqueId,
       programId,
       p.compile(),
-      transformMode === 'indexed'
-        ? [...floatBuffers([4]), ...u32Buffers([2], 2), stableGlyphIdBuffer(), transformIndexBuffer()]
-        : [...floatBuffers([4]), ...u32Buffers([2], 2), stableGlyphIdBuffer()],
+      programBuffers(decorationSchema, transformMode),
       transformMode,
       allocationMode,
     ),
     primitiveKind: textShaperAbi.engine.primitiveKinds.decoration,
     resourceKindMask: 0,
   };
+}
+
+/** Every Three program publishes its schema's buffers, then the policy's own system buffers. */
+function programBuffers(schema: TechniqueSchema, transformMode: ThreeTransformMode): PolicyBuffer[] {
+  return [
+    ...schemaPolicyBuffers(schema),
+    stableGlyphIdBuffer(),
+    ...(transformMode === 'indexed' ? [transformIndexBuffer()] : []),
+  ];
 }
 
 function transformIndexBuffer(): PolicyBuffer {

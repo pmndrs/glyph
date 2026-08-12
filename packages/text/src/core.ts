@@ -45,6 +45,7 @@ export { TextEngineRenderPlanView, type RenderPlanTable } from './core/plan-view
 export { readTextEngineLayouts, readTextEngineMeasurements } from './core/layout-query-view.js';
 export {
   compileFontBinding,
+  schemaFieldTable,
   emptyFontBindingTable,
   loadedFontBindingBytes,
   fontBindingResources,
@@ -77,6 +78,7 @@ export {
 export {
   definePolicyBuffers,
   defineTechniqueSchema,
+  schemaPolicyBuffers,
   type PolicyBufferDeclaration,
   type PolicyBufferDeclarations,
   type PolicyScalarKind,

@@ -34,6 +34,19 @@ test('buffer ids appear only inside schema declarations', async () => {
       if (!DEFINITION_SITES.has(relative) && /BUFFER_ID\s*=\s*\d/.test(line)) {
         offenders.push(`${relative}:${index + 1} parallel id const: ${line.trim()}`);
       }
+      // Buffer id sequences and vector widths derive from a schema, never from a
+      // hand-rolled numeric list: no literal-width policy-buffer builders outside
+      // their core definition, no literal id arrays mapped into buffer lookups,
+      // and no restated system-buffer ids.
+      if (relative !== 'core/render-policy.ts' && /(?:floatBuffers|u32Buffers)\(\s*\[/.test(line)) {
+        offenders.push(`${relative}:${index + 1} literal buffer widths: ${line.trim()}`);
+      }
+      if (/\[\s*\d+\s*(?:,\s*\d+\s*){2,}\]\.map\(/.test(line)) {
+        offenders.push(`${relative}:${index + 1} literal buffer id range: ${line.trim()}`);
+      }
+      if (/transformBufferId:\s*\d/.test(line)) {
+        offenders.push(`${relative}:${index + 1} restated system buffer id: ${line.trim()}`);
+      }
     }
   }
   assert.deepEqual(offenders, [], 'buffer identity leaked outside schema declarations');

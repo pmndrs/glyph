@@ -253,6 +253,7 @@ export const msdfSchema: TechniqueSchema<
 > = defineTechniqueSchema({
   technique: 'pmndrs.msdf',
   scope: 'glyph',
+  glyphOrigin: { buffer: 'rect' },
   binding: {
     f32: [
       'bearingX',

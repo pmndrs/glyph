@@ -226,6 +226,7 @@ export const bitmapSchema: TechniqueSchema<
 > = defineTechniqueSchema({
   technique: 'pmndrs.bitmap',
   scope: 'strike',
+  glyphOrigin: { buffer: 'origin' },
   binding: {
     f32: ['bearingX', 'bearingY', 'width', 'height', 'uvOriginX', 'uvOriginY', 'uvSizeX', 'uvSizeY'],
     u32: ['page'],
