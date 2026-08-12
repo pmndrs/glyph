@@ -770,11 +770,6 @@ impl TextEngine {
                             .ok_or(EngineError::InvalidRequest)?;
                         let state = &mut paragraph.state;
                         let visible_extents = {
-                            let text = if state.text_prepared {
-                                &state.pending_text
-                            } else {
-                                &state.text
-                            };
                             let clusters = if state.clusters_prepared {
                                 &state.pending_clusters
                             } else {
@@ -798,7 +793,6 @@ impl TextEngine {
                             super::layout_query::flow_extents(
                                 flow_thread_id,
                                 flow,
-                                text,
                                 clusters,
                                 thread_typography(geometry, flow_thread_id),
                             )?
@@ -889,7 +883,6 @@ impl TextEngine {
                             Some(super::layout_query::flow_extents(
                                 flow_thread_id,
                                 &state.intrinsic_flow_layout_scratch,
-                                text,
                                 clusters,
                                 thread_typography(geometry, flow_thread_id),
                             )?)
@@ -909,7 +902,6 @@ impl TextEngine {
                             line_glyph_starts,
                             line_glyph_counts,
                             Some(positioned.semantic_line_inline_extents()),
-                            text,
                             clusters,
                             intrinsic_extents,
                             include_layout_inspection,

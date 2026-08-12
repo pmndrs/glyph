@@ -6,7 +6,7 @@ use crate::{FontGlyphExtents, FontMetrics, bidi::BidiAnalysis};
 
 use super::{
     EngineError,
-    cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
+    cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SPACE, ClusterArena},
     flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
@@ -477,7 +477,6 @@ impl PositionedGlyphArena {
             line,
             fragment,
             final_line,
-            text,
             clusters,
             cluster_start,
             cluster_end,
@@ -629,7 +628,7 @@ impl PositionedGlyphArena {
                 cursor += x_advance;
             }
             cursor = cluster_origin + clusters.advances[cluster];
-            if justify.per_space != 0.0 && cluster_is_space(text, clusters, cluster) {
+            if justify.per_space != 0.0 && clusters.flags[cluster] & CLUSTER_SPACE != 0 {
                 cursor += justify.per_space;
             }
             if justify.per_gap != 0.0 && cluster + 1 < justify.gap_end {
@@ -1381,23 +1380,18 @@ struct JustifiableSpan {
     trimmed_end: usize,
 }
 
-fn justifiable_span(
-    text: &[u16],
-    clusters: &ClusterArena,
-    start: usize,
-    mut end: usize,
-) -> JustifiableSpan {
-    while end > start && cluster_is_space(text, clusters, end - 1) {
+fn justifiable_span(clusters: &ClusterArena, start: usize, mut end: usize) -> JustifiableSpan {
+    while end > start && clusters.flags[end - 1] & CLUSTER_SPACE != 0 {
         end -= 1;
     }
     let mut spaces = 0_u32;
     let mut space_advance_sum = 0.0_f64;
-    for cluster in start..end {
-        if cluster_is_space(text, clusters, cluster) {
-            spaces = spaces.saturating_add(1);
-            space_advance_sum += clusters.advances[cluster];
-        }
-    }
+    // The D-245 flag-mask kernel scans sixteen cluster flags per step on
+    // simd128 builds; the visit order matches the scalar loop exactly.
+    super::line_kernels::for_each_flagged(&clusters.flags, start, end, CLUSTER_SPACE, |cluster| {
+        spaces = spaces.saturating_add(1);
+        space_advance_sum += clusters.advances[cluster];
+    });
     JustifiableSpan {
         spaces,
         space_advance_sum,
@@ -1410,7 +1404,6 @@ fn justification_adjustment(
     line: FlowLine,
     fragment: FlowFragment,
     final_line: bool,
-    text: &[u16],
     clusters: &ClusterArena,
     cluster_start: usize,
     cluster_end: usize,
@@ -1422,7 +1415,7 @@ fn justification_adjustment(
     if !justified {
         return JustifyDistribution::default();
     }
-    let span = justifiable_span(text, clusters, cluster_start, cluster_end);
+    let span = justifiable_span(clusters, cluster_start, cluster_end);
     if span.spaces == 0 {
         return JustifyDistribution::default();
     }
@@ -1478,7 +1471,6 @@ pub(crate) fn positioned_fragment_advance(
     line: FlowLine,
     fragment: FlowFragment,
     final_line: bool,
-    text: &[u16],
     clusters: &ClusterArena,
     indent: f64,
     controls: JustifyControls,
@@ -1491,7 +1483,6 @@ pub(crate) fn positioned_fragment_advance(
         line,
         fragment,
         final_line,
-        text,
         clusters,
         cluster_start,
         cluster_end,
@@ -1510,15 +1501,6 @@ fn justification_space_advance(available: f64, space_count: u32) -> f64 {
     } else {
         available / f64::from(space_count)
     }
-}
-
-fn cluster_is_space(text: &[u16], clusters: &ClusterArena, cluster: usize) -> bool {
-    clusters
-        .starts
-        .get(cluster)
-        .and_then(|offset| usize::try_from(*offset).ok())
-        .and_then(|offset| text.get(offset))
-        == Some(&0x20)
 }
 
 fn finite_f32(value: f64) -> Result<f32, EngineError> {
@@ -1607,11 +1589,14 @@ mod tests {
     fn justify_fixture() -> (Vec<u16>, ClusterArena, FlowLine, FlowFragment) {
         // "ab cd f" — seven 1.0-advance clusters with spaces at 2 and 5.
         let text: Vec<u16> = "ab cd f".encode_utf16().collect();
+        let mut flags = vec![0_u8; 7];
+        flags[2] = CLUSTER_SPACE;
+        flags[5] = CLUSTER_SPACE;
         let clusters = ClusterArena {
             starts: (0..7).collect(),
             ends: (1..=7).collect(),
             advances: vec![1.0; 7],
-            flags: vec![0; 7],
+            flags,
             style_indexes: vec![0; 7],
             source_runs: vec![0; 7],
             font_handles: vec![1; 7],
@@ -1648,7 +1633,7 @@ mod tests {
 
     #[test]
     fn word_space_caps_spill_into_bounded_letter_expansion() {
-        let (text, clusters, line, fragment) = justify_fixture();
+        let (_text, clusters, line, fragment) = justify_fixture();
         // Deficit 10 over 2 spaces (natural sum 2.0): a 3x cap allows 4.0 of
         // word-space growth; 6.0 spills into six inter-cluster gaps bounded to
         // 0.75 each; the final 1.5 stays unfilled.
@@ -1659,7 +1644,7 @@ mod tests {
             last_line_justify: false,
         };
         let distribution =
-            justification_adjustment(line, fragment, false, &text, &clusters, 0, 7, 0.0, controls);
+            justification_adjustment(line, fragment, false, &clusters, 0, 7, 0.0, controls);
         assert_eq!(distribution.spaces, 2);
         assert_eq!(distribution.per_space, 2.0);
         assert_eq!(distribution.gaps, 6);
@@ -1667,32 +1652,30 @@ mod tests {
 
         // Unbounded controls reproduce the pre-tier distribution exactly.
         let unbounded = JustifyControls::default();
-        let plain = justification_adjustment(
-            line, fragment, false, &text, &clusters, 0, 7, 0.0, unbounded,
-        );
+        let plain =
+            justification_adjustment(line, fragment, false, &clusters, 0, 7, 0.0, unbounded);
         assert_eq!(plain.per_space, 5.0);
         assert_eq!(plain.per_gap, 0.0);
     }
 
     #[test]
     fn last_line_policy_justifies_final_and_hard_broken_lines() {
-        let (text, clusters, line, fragment) = justify_fixture();
+        let (_text, clusters, line, fragment) = justify_fixture();
         let auto = JustifyControls::default();
-        let final_auto =
-            justification_adjustment(line, fragment, true, &text, &clusters, 0, 7, 0.0, auto);
+        let final_auto = justification_adjustment(line, fragment, true, &clusters, 0, 7, 0.0, auto);
         assert_eq!(final_auto.per_space, 0.0);
         let policy = JustifyControls {
             last_line_justify: true,
             ..JustifyControls::default()
         };
         let final_justified =
-            justification_adjustment(line, fragment, true, &text, &clusters, 0, 7, 0.0, policy);
+            justification_adjustment(line, fragment, true, &clusters, 0, 7, 0.0, policy);
         assert_eq!(final_justified.per_space, 5.0);
     }
 
     #[test]
     fn word_spaces_shrink_only_to_the_declared_minimum() {
-        let (text, clusters, line, mut fragment) = justify_fixture();
+        let (_text, clusters, line, mut fragment) = justify_fixture();
         // Overfull by 1.0: a 0.75 minimum permits 0.25 shrink per space (0.5
         // total), so shrink clamps at -0.25 and the line stays 0.5 overfull.
         fragment.slot_end = 6.0;
@@ -1703,7 +1686,7 @@ mod tests {
             last_line_justify: false,
         };
         let shrunk =
-            justification_adjustment(line, fragment, false, &text, &clusters, 0, 7, 0.0, controls);
+            justification_adjustment(line, fragment, false, &clusters, 0, 7, 0.0, controls);
         assert_eq!(shrunk.per_space, -0.25);
         assert_eq!(shrunk.per_gap, 0.0);
         // Without a declared minimum an overfull line never shrinks.
@@ -1711,7 +1694,6 @@ mod tests {
             line,
             fragment,
             false,
-            &text,
             &clusters,
             0,
             7,

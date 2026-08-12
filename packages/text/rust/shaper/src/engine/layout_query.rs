@@ -39,7 +39,6 @@ pub(crate) fn append_measurement(
     semantic_line_glyph_starts: &[u32],
     semantic_line_glyph_counts: &[u32],
     semantic_line_inline_extents: Option<&[f64]>,
-    text: &[u16],
     clusters: &ClusterArena,
     intrinsic_extents: Option<LayoutExtents>,
     include_glyphs: bool,
@@ -110,7 +109,6 @@ pub(crate) fn append_measurement(
                 flow,
                 line,
                 index,
-                text,
                 clusters,
                 constraint_typography(constraint),
             )?
@@ -218,7 +216,6 @@ pub(crate) fn append_measurement(
 pub(crate) fn flow_extents(
     flow_thread_id: u32,
     flow: &FlowLayoutArena,
-    text: &[u16],
     clusters: &ClusterArena,
     typography: ThreadTypography,
 ) -> Result<LayoutExtents, EngineError> {
@@ -234,9 +231,9 @@ pub(crate) fn flow_extents(
         let Some(last) = fragments.last() else {
             continue;
         };
-        extents.width = extents.width.max(line_inline_extent(
-            flow, line, index, text, clusters, typography,
-        )?);
+        extents.width = extents
+            .width
+            .max(line_inline_extent(flow, line, index, clusters, typography)?);
         extents.height = extents.height.max(line.block_start + line.height);
         extents.consumed_clusters = extents
             .consumed_clusters
@@ -249,7 +246,6 @@ fn line_inline_extent(
     flow: &FlowLayoutArena,
     line: FlowLine,
     index: usize,
-    text: &[u16],
     clusters: &ClusterArena,
     typography: ThreadTypography,
 ) -> Result<f64, EngineError> {
@@ -278,7 +274,6 @@ fn line_inline_extent(
                     line,
                     fragment,
                     final_line,
-                    text,
                     clusters,
                     indent,
                     typography.justify,
@@ -389,7 +384,6 @@ mod tests {
             &[0],
             &[2],
             None,
-            &[],
             &ClusterArena::default(),
             None,
             false,
@@ -449,7 +443,6 @@ mod tests {
             &[0],
             &[2],
             Some(&[7.0]),
-            &[],
             &ClusterArena::default(),
             None,
             false,
@@ -485,7 +478,6 @@ mod tests {
             &[0],
             &[2],
             Some(&[7.0]),
-            &[],
             &ClusterArena::default(),
             None,
             true,
@@ -546,7 +538,6 @@ mod tests {
             &[0],
             &[0],
             Some(&[7.0]),
-            &[],
             &ClusterArena::default(),
             Some(LayoutExtents {
                 width: 9.0,
@@ -610,7 +601,6 @@ mod tests {
             &[0],
             &[0],
             Some(&[140.64]),
-            &[],
             &ClusterArena::default(),
             None,
             false,

@@ -22,6 +22,7 @@ pub(crate) mod kernel_lab;
 pub(crate) mod layout_query;
 #[cfg_attr(not(test), allow(dead_code))]
 mod line_composition;
+pub(crate) mod line_kernels;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 mod state;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

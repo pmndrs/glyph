@@ -83,10 +83,9 @@ pub fn analyze_into(
     let mut start = 0usize;
     while start < output.levels.len() {
         let level = output.levels[start];
-        let mut end = start + 1;
-        while end < output.levels.len() && output.levels[end] == level {
-            end += 1;
-        }
+        // Level runs end at the next transition; the D-245 transition-mask
+        // kernel scans sixteen levels per step on simd128 builds.
+        let end = crate::engine::line_kernels::next_transition(&output.levels, start);
         output.runs.push(BidiRun {
             text_start: u32::try_from(start).map_err(|_| BidiError::ResultTooLarge)?,
             text_end: u32::try_from(end).map_err(|_| BidiError::ResultTooLarge)?,
