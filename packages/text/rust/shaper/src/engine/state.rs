@@ -1914,8 +1914,20 @@ impl ParagraphState {
         // Metric-only styles must refresh the retained run values consumed by cluster aggregation, but the underlying
         // HarfRust result remains valid. Keeping those two invalidations distinct avoids reshaping on size, tracking,
         // word-spacing, line-height, or baseline changes while still rebuilding advances from the new run styles.
-        if !self.shaping_runs_prepared
-            || (!self.text_prepared && !self.style_invalidation.shaping && !self.bidi_prepared)
+        //
+        // Retention is only sound while the rebuilt run table matches the committed one. The
+        // shaping-run merge compares layout scalars, so a metric value crossing equality with
+        // its neighbor changes run topology without shaping invalidation — for example a span
+        // whose animated font size passes through the root's size while its paint keeps the
+        // style segment alive. Retaining the old shape against the new table desyncs cluster
+        // ownership and poisons the session, so a topology change falls through to a reshape.
+        if !self.shaping_runs_prepared {
+            return Ok(());
+        }
+        if !self.text_prepared
+            && !self.style_invalidation.shaping
+            && !self.bidi_prepared
+            && same_run_boundaries(self.shaping_runs.runs(), self.pending_shaping_runs.runs())
         {
             return Ok(());
         }
@@ -2961,6 +2973,16 @@ fn unicode_error(error: UnicodeError) -> EngineError {
         UnicodeError::InvalidUtf16 => EngineError::InvalidRequest,
         UnicodeError::ResultTooLarge => EngineError::ResultTooLarge,
     }
+}
+
+/// Whether two run tables agree on run count and text ranges. Within a metrics-only
+/// invalidation every shaping-affecting property is already known equal, so boundaries
+/// are the only axis on which the rebuilt table can drift from the committed one.
+fn same_run_boundaries(committed: &[ShapingRun], pending: &[ShapingRun]) -> bool {
+    committed.len() == pending.len()
+        && committed.iter().zip(pending).all(|(committed, pending)| {
+            committed.text_start == pending.text_start && committed.text_end == pending.text_end
+        })
 }
 
 fn same_shaping_properties(left: ShapingRun, right: ShapingRun) -> bool {
