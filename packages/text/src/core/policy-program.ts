@@ -20,10 +20,11 @@ type Node =
       readonly op: 'addF32' | 'subtractF32' | 'multiplyF32';
       readonly left: Node;
       readonly right: Node;
+      readonly session: object | undefined;
     }
-  | { readonly kind: 'constantF32'; readonly value: number }
-  | { readonly kind: 'constantU32'; readonly value: number }
-  | { readonly kind: 'convertU32ToF32'; readonly source: Node };
+  | { readonly kind: 'constantF32'; readonly value: number; readonly session: undefined }
+  | { readonly kind: 'constantU32'; readonly value: number; readonly session: undefined }
+  | { readonly kind: 'convertU32ToF32'; readonly source: Node; readonly session: object | undefined };
 
 declare const f32Brand: unique symbol;
 declare const u32Brand: unique symbol;
@@ -61,54 +62,74 @@ function nodeOf(value: PolicyF32Value | PolicyU32Value): Node {
 /**
  * A loaded value's input index only means something inside the program that
  * created it; storing it elsewhere would silently read a different field.
- * Constants and constant-only expressions are session-free.
+ * Provenance is stamped at construction and combined in O(1) per node, so
+ * shared expression DAGs never require a graph walk: constants stay
+ * session-free, and mixing two sessions fails at the combinator itself.
  */
+function combinedSession(left: Node, right: Node): object | undefined {
+  if (left.session !== undefined && right.session !== undefined && left.session !== right.session) {
+    throw new TypeError('policy values from different authoring sessions cannot combine');
+  }
+  return left.session ?? right.session;
+}
+
 function assertSession(node: Node, session: object): void {
-  switch (node.kind) {
-    case 'loadF32':
-    case 'loadU32':
-      if (node.session !== session) {
-        throw new TypeError(`policy value "${node.label}" belongs to a different authoring session`);
-      }
-      return;
-    case 'binary':
-      assertSession(node.left, session);
-      assertSession(node.right, session);
-      return;
-    case 'convertU32ToF32':
-      assertSession(node.source, session);
-      return;
-    default:
-      return;
+  if (node.session !== undefined && node.session !== session) {
+    throw new TypeError('policy value belongs to a different authoring session');
   }
 }
 
 export function addF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Value {
-  return f32Value({ kind: 'binary', op: 'addF32', left: nodeOf(left), right: nodeOf(right) });
+  const leftNode = nodeOf(left);
+  const rightNode = nodeOf(right);
+  return f32Value({
+    kind: 'binary',
+    op: 'addF32',
+    left: leftNode,
+    right: rightNode,
+    session: combinedSession(leftNode, rightNode),
+  });
 }
 
 export function subtractF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Value {
-  return f32Value({ kind: 'binary', op: 'subtractF32', left: nodeOf(left), right: nodeOf(right) });
+  const leftNode = nodeOf(left);
+  const rightNode = nodeOf(right);
+  return f32Value({
+    kind: 'binary',
+    op: 'subtractF32',
+    left: leftNode,
+    right: rightNode,
+    session: combinedSession(leftNode, rightNode),
+  });
 }
 
 export function multiplyF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Value {
-  return f32Value({ kind: 'binary', op: 'multiplyF32', left: nodeOf(left), right: nodeOf(right) });
+  const leftNode = nodeOf(left);
+  const rightNode = nodeOf(right);
+  return f32Value({
+    kind: 'binary',
+    op: 'multiplyF32',
+    left: leftNode,
+    right: rightNode,
+    session: combinedSession(leftNode, rightNode),
+  });
 }
 
 export function u32ToF32(source: PolicyU32Value): PolicyF32Value {
-  return f32Value({ kind: 'convertU32ToF32', source: nodeOf(source) });
+  const sourceNode = nodeOf(source);
+  return f32Value({ kind: 'convertU32ToF32', source: sourceNode, session: sourceNode.session });
 }
 
 export function constantF32(value: number): PolicyF32Value {
   if (!Number.isFinite(value)) throw new RangeError('policy f32 constants must be finite');
-  return f32Value({ kind: 'constantF32', value });
+  return f32Value({ kind: 'constantF32', value, session: undefined });
 }
 
 export function constantU32(value: number): PolicyU32Value {
   if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
     throw new RangeError('policy u32 constants must be u32');
   }
-  return u32Value({ kind: 'constantU32', value });
+  return u32Value({ kind: 'constantU32', value, session: undefined });
 }
 
 /** The glyph color channels — the resolved paint; the engine has no background. */

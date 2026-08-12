@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:8d3b87160366fa22812299c3f4abe5b84460ce62ed96a7a634bc844e5809dd10'
+source_digest: 'sha256:ddd5648ef8e5115688ed0fdb4b6ba5bdcc9febe280d02e668b4ca2d9acdb1485'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -100,10 +100,12 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 | Subpath                     | Purpose                                                                                                                          |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/text`              | Font/raster contracts, loading, fallback stacks, formatting helpers, paragraph inputs, layout-query values, and portable bakers. |
+| `@pmndrs/text/core`         | Renderer-neutral engine host, frame wire, plan/layout-query views, technique schemas, policy-program DSL, and binding compiler.  |
+| `@pmndrs/text/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                 |
 | `@pmndrs/text/three`        | Three `FontLoader`, `Text`, `TextGroup`, material factories, and policy registration.                                            |
-| `@pmndrs/text/three/bitmap` | Bitmap technique, policy program, and canonical TSL shader.                                                                      |
-| `@pmndrs/text/three/msdf`   | MSDF technique, policy program, and canonical TSL shader.                                                                        |
-| `@pmndrs/text/three/slug`   | Slug technique, policy program, and canonical TSL shader.                                                                        |
+| `@pmndrs/text/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                      |
+| `@pmndrs/text/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                        |
+| `@pmndrs/text/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                        |
 | `@pmndrs/text/react`        | React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                              |
 | `@pmndrs/text/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `text` CLI.                                      |
 | `@pmndrs/text/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                        |

@@ -44,6 +44,42 @@ test('every first-party schema is frozen', () => {
   }
 });
 
+test('rejected declarations leave caller-owned input untouched', () => {
+  const input = {
+    technique: 'test.rejected',
+    scope: 'glyph',
+    binding: { f32: ['duplicate'], u32: ['duplicate'] },
+    buffers: { origin: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
+  };
+  assert.throws(() => defineTechniqueSchema(input), TypeError);
+  assert.equal(Object.isFrozen(input.buffers), false);
+  assert.equal(Object.isFrozen(input.buffers.origin), false);
+  assert.equal(Object.isFrozen(input.buffers.origin.lanes), false);
+});
+
+test('schemas own their data: caller accessors cannot change validated widths', () => {
+  let reads = 0;
+  const accessorInput = {
+    technique: 'test.accessor',
+    scope: 'glyph',
+    binding: { f32: ['a'] },
+    buffers: {
+      sneaky: {
+        id: 1,
+        scalar: 'f32',
+        get lanes() {
+          reads += 1;
+          return reads > 1 ? ['x', 'y', 'z'] : ['x'];
+        },
+      },
+    },
+  };
+  const schema = defineTechniqueSchema(accessorInput);
+  assert.deepEqual([...schema.buffers.sneaky.lanes], ['x']);
+  assert.equal(schemaPolicyBuffers(schema)[0].vectorWidth, 1);
+  assert.equal(schemaPolicyBuffers(schema)[0].vectorWidth, 1);
+});
+
 test('glyphOrigin metadata must name a declared f32 buffer with two origin lanes', () => {
   const valid = defineTechniqueSchema({ ...declaration(), glyphOrigin: { buffer: 'origin' } });
   assert.deepEqual(valid.glyphOrigin, { buffer: 'origin' });

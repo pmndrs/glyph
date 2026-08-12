@@ -24,6 +24,22 @@ test('derived values carry their session across combinators', () => {
   assert.throws(() => second.store(BUFFER, [derived, second.semantics.blockOrigin]), /session/);
 });
 
+test('combinators reject cross-session operands at construction', () => {
+  const first = policyProgram(OPTIONS);
+  const second = policyProgram(OPTIONS);
+  assert.throws(() => multiplyF32(first.semantics.fontSize, second.semantics.fontSize), /session/);
+});
+
+test('deep shared expression DAGs stay cheap to store', () => {
+  const program = policyProgram(OPTIONS);
+  let node = addF32(program.semantics.inlineOrigin, program.binding.bearingX);
+  for (let depth = 0; depth < 24; depth += 1) node = addF32(node, node);
+  const start = performance.now();
+  program.store(BUFFER, [node, program.semantics.blockOrigin]);
+  const elapsed = performance.now() - start;
+  assert.ok(elapsed < 50, `store took ${elapsed}ms over a shared DAG`);
+});
+
 test('constants are session-free and same-session programs still compile', () => {
   const program = policyProgram(OPTIONS);
   const scale = constantF32(0.5);

@@ -8,15 +8,16 @@ export const packageSizeBudgets = {
   // The renderer-neutral core subpath (D-249) must stay integration-free; the graph
   // assertion in measure-package-sizes.mts already rejects any three/tsl/react pull.
   // Grew with the technique-schema authority layer (D-251): declarations, validation,
-  // and the schema-typed store path, then the review-closure pass (schema freezing,
-  // DSL session provenance, schemaPolicyBuffers/schemaFieldTable derivations) at
-  // ~+1.8 KB raw / +0.4 KB minified with compressed sizes inside their ceilings.
-  // Re-based when tsdown bundling lands per the technique contract plan.
+  // and the schema-typed store path. The review-closure pass added +3,525 raw /
+  // +1,686 minified / +351 Brotli of real validation, provenance, and derivation
+  // code (schema normalization and freezing, DSL session provenance,
+  // schemaPolicyBuffers/schemaFieldTable). Re-based when tsdown bundling lands per
+  // the technique contract plan.
   'core-subpath-js': {
-    rawBytes: 225_000,
-    minifiedBytes: 154_000,
-    gzipBytes: 39_000,
-    brotliBytes: 33_500,
+    rawBytes: 226_000,
+    minifiedBytes: 155_000,
+    gzipBytes: 39_400,
+    brotliBytes: 33_900,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -52,15 +53,16 @@ export const packageSizeBudgets = {
     gzipBytes: 429_000,
     brotliBytes: 339_500,
   },
-  // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250) and
-  // again for schema-derived executor lookups replacing literal id ranges; both
-  // growths are comment- and name-dominated: minified, gzip, and Brotli stayed
-  // inside their existing ceilings.
+  // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250),
+  // then the review-closure pass added +3,535 raw / +1,711 minified / +439 Brotli
+  // of schema-derived executor lookups, program buffer derivation, and the
+  // glyph-origin schema map replacing literal id ranges. Real code, not comments;
+  // the compressed ceilings hold with tight headroom by design.
   'three-runtime-js': {
-    rawBytes: 365_000,
-    minifiedBytes: 238_000,
-    gzipBytes: 61_500,
-    brotliBytes: 52_000,
+    rawBytes: 366_000,
+    minifiedBytes: 239_000,
+    gzipBytes: 61_800,
+    brotliBytes: 52_200,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
