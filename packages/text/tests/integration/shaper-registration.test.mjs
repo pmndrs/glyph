@@ -545,6 +545,7 @@ function engineStyleUpdateBytes(
     view.setUint8(constraintOffset + constraint.align, abi.engine.inlineAlignments.start);
     view.setUint8(constraintOffset + constraint.overflow, abi.engine.overflowModes.clip);
     view.setUint8(constraintOffset + constraint.blockAlign, abi.engine.blockAlignments.start);
+    view.setUint8(constraintOffset + constraint.lastLine, abi.engine.lastLinePolicies.auto);
 
     view.setUint32(regionOffset + region.id, 1, true);
     view.setUint32(regionOffset + region.geometryRevision, 1, true);

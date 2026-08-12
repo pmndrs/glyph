@@ -241,3 +241,85 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   const inlineObjectView = new DataView(bytes.buffer, bytes.byteOffset + inlineObjectOffset, inlineObject.size);
   assert.equal(inlineObjectView.getUint32(inlineObject.paragraphId, true), 3);
 });
+
+test('production frame compiler encodes typography controls and their defaults', async () => {
+  const abi = JSON.parse(await readFile(abiUrl, 'utf8'));
+  const constraint = (typography) => ({
+    paragraphId: 1,
+    flowThreadId: 1,
+    geometryRevision: 1,
+    width: 320,
+    height: 180,
+    viewportBlockStart: 0,
+    viewportBlockEnd: 180,
+    resumeBlockOffset: 0,
+    maxLines: 8,
+    regionStart: 0,
+    resumeCluster: 0,
+    regionCount: 1,
+    resumeRegion: 0,
+    widthMode: 'exact',
+    heightMode: 'exact',
+    wrap: 'word',
+    align: 'justify',
+    overflow: 'visible',
+    blockAlign: 'start',
+    ...typography,
+  });
+  const compile = (typography) =>
+    compileTextEngineFrameUpdate({
+      sessionId: 1,
+      policyHandle: 2,
+      capabilitySet: 1,
+      expectedEngineRevision: 0,
+      consumedPlanRevision: 0,
+      acknowledgedPublicationGeneration: 0,
+      limits: {
+        maxParagraphs: 1,
+        maxClusters: 8,
+        maxLines: 8,
+        maxRegions: 1,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 1,
+        maxOutputBytes: 65_536,
+      },
+      constraints: [constraint(typography)],
+    });
+
+  const layout = abi.layouts.engineConstraint;
+  const request = abi.layouts.engineUpdateRequest;
+  const record = (bytes) => {
+    const header = new DataView(bytes.buffer, bytes.byteOffset, request.size);
+    const offset = header.getUint32(request.constraintsOffset, true);
+    return new DataView(bytes.buffer, bytes.byteOffset + offset, layout.size);
+  };
+
+  const full = record(
+    compile({
+      firstLineIndent: 24,
+      spaceBefore: 8,
+      spaceAfter: 4,
+      justify: { minWordSpaceRatio: 0.75, maxWordSpaceRatio: 2.5, letterSpaceExpansion: 0.5 },
+      lastLine: 'justify',
+    }),
+  );
+  assert.equal(full.getFloat32(layout.firstLineIndent, true), 24);
+  assert.equal(full.getFloat32(layout.spaceBefore, true), 8);
+  assert.equal(full.getFloat32(layout.spaceAfter, true), 4);
+  assert.equal(full.getFloat32(layout.justifyMinWordSpaceRatio, true), 0.75);
+  assert.equal(full.getFloat32(layout.justifyMaxWordSpaceRatio, true), 2.5);
+  assert.equal(full.getFloat32(layout.justifyLetterSpaceExpansion, true), 0.5);
+  assert.equal(full.getUint8(layout.lastLine), abi.engine.lastLinePolicies.justify);
+
+  const defaults = record(compile({}));
+  assert.equal(defaults.getFloat32(layout.firstLineIndent, true), 0);
+  assert.equal(defaults.getFloat32(layout.spaceBefore, true), 0);
+  assert.equal(defaults.getFloat32(layout.spaceAfter, true), 0);
+  assert.equal(defaults.getFloat32(layout.justifyMinWordSpaceRatio, true), 0);
+  assert.equal(defaults.getFloat32(layout.justifyMaxWordSpaceRatio, true), 0);
+  assert.equal(defaults.getFloat32(layout.justifyLetterSpaceExpansion, true), 0);
+  assert.equal(defaults.getUint8(layout.lastLine), abi.engine.lastLinePolicies.auto);
+
+  assert.throws(() => compile({ firstLineIndent: Number.NaN }), /firstLineIndent/);
+});

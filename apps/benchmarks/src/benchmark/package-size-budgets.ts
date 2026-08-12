@@ -14,10 +14,10 @@ export const packageSizeBudgets = {
   // schemaPolicyBuffers/schemaFieldTable). Re-based when tsdown bundling lands per
   // the technique contract plan.
   'core-subpath-js': {
-    rawBytes: 226_000,
-    minifiedBytes: 155_000,
-    gzipBytes: 39_400,
-    brotliBytes: 33_900,
+    rawBytes: 227_000,
+    minifiedBytes: 155_500,
+    gzipBytes: 39_700,
+    brotliBytes: 34_200,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -45,13 +45,15 @@ export const packageSizeBudgets = {
   },
   // Complete Rust shaping, layout, policy, and command-plan publication. Gzip and Brotli rose for the decoration
   // rendering feature (D-248): decorating-box cascade state, per-cluster run aggregation, resource-free plan rows,
-  // and paint-order gather passes, at roughly +0.6 KB gzip and +1.1 KB Brotli against a raw total that stayed
-  // inside the golfed ceiling.
+  // and paint-order gather passes. The 11.14 typography tier re-priced the ceilings once for all of its layers:
+  // constraint decode/validation, paragraph spacing, first-line indent, bounded justification, and the graduated
+  // D-245 kernels total roughly +1.3 KB raw, with the margins sized to cover the Linux CI toolchain's slightly
+  // larger gzip output alongside the recorded macOS host.
   'text-shaper-wasm': {
-    rawBytes: 1_107_000,
-    minifiedBytes: 1_107_000,
-    gzipBytes: 429_000,
-    brotliBytes: 339_500,
+    rawBytes: 1_112_000,
+    minifiedBytes: 1_112_000,
+    gzipBytes: 430_500,
+    brotliBytes: 341_000,
   },
   // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250),
   // then the review-closure pass added +3,535 raw / +1,711 minified / +439 Brotli
@@ -59,10 +61,10 @@ export const packageSizeBudgets = {
   // glyph-origin schema map replacing literal id ranges. Real code, not comments;
   // the compressed ceilings hold with tight headroom by design.
   'three-runtime-js': {
-    rawBytes: 366_000,
-    minifiedBytes: 239_000,
-    gzipBytes: 61_800,
-    brotliBytes: 52_200,
+    rawBytes: 368_000,
+    minifiedBytes: 240_500,
+    gzipBytes: 62_300,
+    brotliBytes: 52_500,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,

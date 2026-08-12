@@ -92,6 +92,25 @@ export interface TextEngineConstraint {
   readonly align: 'start' | 'center' | 'end' | 'justify';
   readonly overflow: 'visible' | 'clip' | 'ellipsis';
   readonly blockAlign: 'start' | 'center' | 'end';
+  /** Extra inline offset for the paragraph's first line, in layout units. */
+  readonly firstLineIndent?: number;
+  /** Block-axis space inserted before the paragraph's first line. */
+  readonly spaceBefore?: number;
+  /** Block-axis space added after the paragraph's final line. */
+  readonly spaceAfter?: number;
+  /**
+   * Justification bounds on each word space as multiples of its natural
+   * advance. Leave unset for the unclamped distribution; when set, minimum is
+   * in (0, 1] and maximum is at least 1. Deficit beyond the maximum spills
+   * into letter-space expansion, capped per inter-cluster gap.
+   */
+  readonly justify?: {
+    readonly minWordSpaceRatio?: number;
+    readonly maxWordSpaceRatio?: number;
+    readonly letterSpaceExpansion?: number;
+  };
+  /** Whether the final and hard-broken lines also justify. Defaults to 'auto'. */
+  readonly lastLine?: 'auto' | 'justify';
 }
 
 export interface TextEngineFlowVertex {
@@ -473,6 +492,17 @@ function writeConstraints(view: DataView, tableOffset: number, constraints: read
     view.setUint8(offset + layout.align, engine.inlineAlignments[value.align]);
     view.setUint8(offset + layout.overflow, engine.overflowModes[value.overflow]);
     view.setUint8(offset + layout.blockAlign, engine.blockAlignments[value.blockAlign]);
+    for (const [field, number] of [
+      ['firstLineIndent', value.firstLineIndent ?? 0],
+      ['spaceBefore', value.spaceBefore ?? 0],
+      ['spaceAfter', value.spaceAfter ?? 0],
+      ['justifyMinWordSpaceRatio', value.justify?.minWordSpaceRatio ?? 0],
+      ['justifyMaxWordSpaceRatio', value.justify?.maxWordSpaceRatio ?? 0],
+      ['justifyLetterSpaceExpansion', value.justify?.letterSpaceExpansion ?? 0],
+    ] as const) {
+      view.setFloat32(offset + layout[field], finite(number, field), true);
+    }
+    view.setUint8(offset + layout.lastLine, engine.lastLinePolicies[value.lastLine ?? 'auto']);
   }
 }
 

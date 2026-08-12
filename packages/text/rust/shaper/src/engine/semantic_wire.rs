@@ -18,10 +18,11 @@ use crate::{
         DECORATION_DASHED, DECORATION_DOTTED, DECORATION_DOUBLE, DECORATION_FLAGS_MASK,
         DECORATION_NONE, DECORATION_SOLID, DECORATION_WAVY, EXCLUSION_WRAP_BOTH,
         EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST,
-        ORIENTATION_MIXED, ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP,
-        OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT,
-        SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION,
-        STYLE_FIELD_DIRECTION, STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
+        LAST_LINE_AUTO, LAST_LINE_JUSTIFY, ORIENTATION_MIXED, ORIENTATION_SIDEWAYS,
+        ORIENTATION_UPRIGHT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
+        PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT, SHAPE_POLYGON, SHAPE_RECTANGLE,
+        STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION,
+        STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK,
         STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING,
         STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK, STYLE_FIELD_MATERIAL,
         STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING, STYLE_FLAG_ROOT,
@@ -128,6 +129,13 @@ pub(crate) struct FlowConstraint {
     pub align: u8,
     pub overflow: u8,
     pub block_align: u8,
+    pub first_line_indent: f32,
+    pub space_before: f32,
+    pub space_after: f32,
+    pub justify_min_word_space_ratio: f32,
+    pub justify_max_word_space_ratio: f32,
+    pub justify_letter_space_expansion: f32,
+    pub last_line: u8,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -296,6 +304,25 @@ impl GeometryBatch<'_> {
             align: record[abi::ENGINE_CONSTRAINT_ALIGN],
             overflow: record[abi::ENGINE_CONSTRAINT_OVERFLOW],
             block_align: record[abi::ENGINE_CONSTRAINT_BLOCK_ALIGN],
+            first_line_indent: read_f32(record, abi::ENGINE_CONSTRAINT_FIRST_LINE_INDENT).ok()?,
+            space_before: read_f32(record, abi::ENGINE_CONSTRAINT_SPACE_BEFORE).ok()?,
+            space_after: read_f32(record, abi::ENGINE_CONSTRAINT_SPACE_AFTER).ok()?,
+            justify_min_word_space_ratio: read_f32(
+                record,
+                abi::ENGINE_CONSTRAINT_JUSTIFY_MIN_WORD_SPACE_RATIO,
+            )
+            .ok()?,
+            justify_max_word_space_ratio: read_f32(
+                record,
+                abi::ENGINE_CONSTRAINT_JUSTIFY_MAX_WORD_SPACE_RATIO,
+            )
+            .ok()?,
+            justify_letter_space_expansion: read_f32(
+                record,
+                abi::ENGINE_CONSTRAINT_JUSTIFY_LETTER_SPACE_EXPANSION,
+            )
+            .ok()?,
+            last_line: record[abi::ENGINE_CONSTRAINT_LAST_LINE],
         })
     }
 
@@ -1408,6 +1435,34 @@ fn validate_constraints(
         {
             return Err(STATUS_INVALID_REQUEST);
         }
+        // Typography controls: indent and paragraph spacing are nonnegative finite.
+        // Each justification ratio bounds the word-space multiplier independently,
+        // with zero meaning unbounded on that side (the pre-tier behavior): a set
+        // minimum shrinks spaces at most to min > 0 of natural, so it lives in
+        // (0, 1]; a set maximum caps expansion, so it is at least 1. Expansion is
+        // a nonnegative finite letter-space budget; last-line is a closed enum.
+        let first_line_indent = finite(record, abi::ENGINE_CONSTRAINT_FIRST_LINE_INDENT)?;
+        let space_before = finite(record, abi::ENGINE_CONSTRAINT_SPACE_BEFORE)?;
+        let space_after = finite(record, abi::ENGINE_CONSTRAINT_SPACE_AFTER)?;
+        let minimum_ratio = finite(record, abi::ENGINE_CONSTRAINT_JUSTIFY_MIN_WORD_SPACE_RATIO)?;
+        let maximum_ratio = finite(record, abi::ENGINE_CONSTRAINT_JUSTIFY_MAX_WORD_SPACE_RATIO)?;
+        let expansion = finite(
+            record,
+            abi::ENGINE_CONSTRAINT_JUSTIFY_LETTER_SPACE_EXPANSION,
+        )?;
+        if first_line_indent < 0.0
+            || space_before < 0.0
+            || space_after < 0.0
+            || !(minimum_ratio == 0.0 || (minimum_ratio > 0.0 && minimum_ratio <= 1.0))
+            || !(maximum_ratio == 0.0 || maximum_ratio >= 1.0)
+            || expansion < 0.0
+            || !matches!(
+                byte(record, abi::ENGINE_CONSTRAINT_LAST_LINE)?,
+                LAST_LINE_AUTO | LAST_LINE_JUSTIFY
+            )
+        {
+            return Err(STATUS_INVALID_REQUEST);
+        }
         let region_start = read_u32(record, abi::ENGINE_CONSTRAINT_REGION_START)?;
         let selected_count = u32::from(read_u16(record, abi::ENGINE_CONSTRAINT_REGION_COUNT)?);
         let resume_region = u32::from(read_u16(record, abi::ENGINE_CONSTRAINT_RESUME_REGION)?);
@@ -2311,6 +2366,70 @@ mod tests {
     }
 
     #[test]
+    fn bounds_typography_controls_and_rejects_open_last_line_values() {
+        let mut typography = valid_geometry_bytes();
+        write_f32(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_FIRST_LINE_INDENT,
+            12.0,
+        );
+        write_f32(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_SPACE_BEFORE,
+            8.0,
+        );
+        write_f32(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_SPACE_AFTER,
+            4.0,
+        );
+        write_f32(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_JUSTIFY_MIN_WORD_SPACE_RATIO,
+            0.75,
+        );
+        write_f32(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_JUSTIFY_MAX_WORD_SPACE_RATIO,
+            2.5,
+        );
+        write_f32(
+            &mut typography,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_JUSTIFY_LETTER_SPACE_EXPANSION,
+            0.5,
+        );
+        typography[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_LAST_LINE] = LAST_LINE_JUSTIFY;
+        let constraint = parse_valid_geometry(&typography)
+            .unwrap()
+            .constraint(0)
+            .unwrap();
+        assert_eq!(constraint.first_line_indent, 12.0);
+        assert_eq!(constraint.justify_min_word_space_ratio, 0.75);
+        assert_eq!(constraint.last_line, LAST_LINE_JUSTIFY);
+
+        for (offset, value) in [
+            (abi::ENGINE_CONSTRAINT_FIRST_LINE_INDENT, -1.0),
+            (abi::ENGINE_CONSTRAINT_SPACE_BEFORE, -0.5),
+            (abi::ENGINE_CONSTRAINT_SPACE_AFTER, f32::NAN),
+            (abi::ENGINE_CONSTRAINT_JUSTIFY_MIN_WORD_SPACE_RATIO, 1.5),
+            (abi::ENGINE_CONSTRAINT_JUSTIFY_MIN_WORD_SPACE_RATIO, -0.25),
+            (abi::ENGINE_CONSTRAINT_JUSTIFY_MAX_WORD_SPACE_RATIO, 0.5),
+            (abi::ENGINE_CONSTRAINT_JUSTIFY_LETTER_SPACE_EXPANSION, -0.1),
+        ] {
+            let mut invalid = valid_geometry_bytes();
+            write_f32(&mut invalid, CONSTRAINT_OFFSET + offset, value);
+            assert!(parse_valid_geometry(&invalid).is_err(), "offset {offset}");
+        }
+
+        let mut open_last_line = valid_geometry_bytes();
+        open_last_line[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_LAST_LINE] = 3;
+        assert!(parse_valid_geometry(&open_last_line).is_err());
+        let mut zero_last_line = valid_geometry_bytes();
+        zero_last_line[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_LAST_LINE] = 0;
+        assert!(parse_valid_geometry(&zero_last_line).is_err());
+    }
+
+    #[test]
     fn rejects_invalid_geometry_relationships_and_payload_aliasing() {
         let mut wrong_region = valid_geometry_bytes();
         write_u32(
@@ -2469,6 +2588,7 @@ mod tests {
         bytes[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_ALIGN] = ALIGN_START;
         bytes[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_OVERFLOW] = OVERFLOW_CLIP;
         bytes[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_BLOCK_ALIGN] = BLOCK_ALIGN_START;
+        bytes[CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_LAST_LINE] = LAST_LINE_AUTO;
 
         write_u32(&mut bytes, REGION_OFFSET + abi::ENGINE_REGION_ID, 1);
         write_u32(

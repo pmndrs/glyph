@@ -730,9 +730,9 @@ mod tests {
         cluster_state::CLUSTER_SAFE_BEFORE,
         flow_geometry::{RetainedExclusion, RetainedRegion},
         frame::{
-            ALIGN_START, AXIS_EXACT, BLOCK_ALIGN_START, EXCLUSION_WRAP_BOTH, ORIENTATION_MIXED,
-            OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, SHAPE_RECTANGLE, WRAP_CHARACTER,
-            WRAP_NONE,
+            ALIGN_START, AXIS_EXACT, BLOCK_ALIGN_START, EXCLUSION_WRAP_BOTH, LAST_LINE_AUTO,
+            ORIENTATION_MIXED, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, SHAPE_RECTANGLE,
+            WRAP_CHARACTER, WRAP_NONE,
         },
         semantic_wire::{FlowConstraint, FlowExclusion, FlowRegion},
         style_state::ResolvedStyle,
@@ -1360,6 +1360,13 @@ mod tests {
             align: ALIGN_START,
             overflow: OVERFLOW_VISIBLE,
             block_align: BLOCK_ALIGN_START,
+            first_line_indent: 0.0,
+            space_before: 0.0,
+            space_after: 0.0,
+            justify_min_word_space_ratio: 0.0,
+            justify_max_word_space_ratio: 0.0,
+            justify_letter_space_expansion: 0.0,
+            last_line: LAST_LINE_AUTO,
         }
     }
 

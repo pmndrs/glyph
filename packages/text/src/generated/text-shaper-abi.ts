@@ -60,6 +60,10 @@ export const textShaperAbi = {
     "internalBufferBindings": {
       "order": 65535
     },
+    "lastLinePolicies": {
+      "auto": 1,
+      "justify": 2
+    },
     "measurementFlags": {
       "overflowed": 1
     },
@@ -230,11 +234,16 @@ export const textShaperAbi = {
       "align": 47,
       "alignment": 4,
       "blockAlign": 49,
+      "firstLineIndent": 56,
       "flags": 50,
       "flowThreadId": 0,
       "geometryRevision": 4,
       "height": 12,
       "heightMode": 45,
+      "justifyLetterSpaceExpansion": 76,
+      "justifyMaxWordSpaceRatio": 72,
+      "justifyMinWordSpaceRatio": 68,
+      "lastLine": 80,
       "maxLines": 28,
       "overflow": 48,
       "paragraphId": 52,
@@ -243,7 +252,9 @@ export const textShaperAbi = {
       "resumeBlockOffset": 24,
       "resumeCluster": 36,
       "resumeRegion": 42,
-      "size": 56,
+      "size": 84,
+      "spaceAfter": 64,
+      "spaceBefore": 60,
       "viewportBlockEnd": 20,
       "viewportBlockStart": 16,
       "width": 8,

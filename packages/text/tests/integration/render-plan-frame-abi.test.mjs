@@ -43,7 +43,10 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
       abi.layouts.engineExclusion.size,
       abi.layouts.engineInlineObject.size,
     ],
-    [24, 92, 56, 8, 60, 48, 60],
+    // Constraint records grew 56 -> 84 for the typography tier: first-line indent,
+    // paragraph space before/after, word-space ratio bounds, letter-space
+    // expansion, and the last-line policy byte.
+    [24, 92, 84, 8, 60, 48, 60],
   );
   assert.equal(abi.layouts.engineInlineObject.alignment, 4);
   assert.equal(abi.layouts.engineInlineObject.baselineAlignment, 52);
@@ -346,6 +349,7 @@ function geometryRequestBytes(abi, expectedEngineRevision, consumedPlanRevision,
   view.setUint8(constraintOffset + constraint.align, abi.engine.inlineAlignments.start);
   view.setUint8(constraintOffset + constraint.overflow, abi.engine.overflowModes.clip);
   view.setUint8(constraintOffset + constraint.blockAlign, abi.engine.blockAlignments.start);
+  view.setUint8(constraintOffset + constraint.lastLine, abi.engine.lastLinePolicies.auto);
 
   view.setUint32(regionOffset + region.id, 1, true);
   view.setUint32(regionOffset + region.geometryRevision, 1, true);

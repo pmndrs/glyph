@@ -551,6 +551,13 @@ mod tests {
             align: 1,
             overflow: 1,
             block_align: 1,
+            first_line_indent: 0.0,
+            space_before: 0.0,
+            space_after: 0.0,
+            justify_min_word_space_ratio: 0.0,
+            justify_max_word_space_ratio: 0.0,
+            justify_letter_space_expansion: 0.0,
+            last_line: 1,
         }
     }
 
