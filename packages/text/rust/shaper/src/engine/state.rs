@@ -795,7 +795,13 @@ impl TextEngine {
                                 .first()
                                 .ok_or(EngineError::InvalidRequest)?
                                 .flow_thread_id;
-                            super::layout_query::flow_extents(flow_thread_id, flow, text, clusters)?
+                            super::layout_query::flow_extents(
+                                flow_thread_id,
+                                flow,
+                                text,
+                                clusters,
+                                thread_first_line_indent(geometry, flow_thread_id),
+                            )?
                         };
                         let active_flow = if state.flow_layout_prepared {
                             &state.pending_flow_layout
@@ -885,6 +891,7 @@ impl TextEngine {
                                 &state.intrinsic_flow_layout_scratch,
                                 text,
                                 clusters,
+                                thread_first_line_indent(geometry, flow_thread_id),
                             )?)
                         } else {
                             None
@@ -2732,6 +2739,7 @@ impl ParagraphState {
             &self.positioned
         };
         let mut next_content_revision = 1;
+        let geometry = &self.intrinsic_geometry_scratch;
         self.intrinsic_positioned_scratch.build(
             previous,
             &self.intrinsic_flow_layout_scratch,
@@ -2744,6 +2752,7 @@ impl ParagraphState {
             bidi,
             &mut self.intrinsic_identity_scratch,
             &mut next_content_revision,
+            |thread| thread_first_line_indent(geometry, thread),
             |handle| shaper.font_metrics(handle),
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
         )
@@ -2809,6 +2818,11 @@ impl ParagraphState {
         } else {
             &self.boundary_shape
         };
+        let geometry = if self.geometry_prepared {
+            &self.pending_geometry
+        } else {
+            &self.geometry
+        };
         self.pending_positioned.build(
             &self.positioned,
             flow,
@@ -2821,6 +2835,7 @@ impl ParagraphState {
             bidi,
             &mut self.glyph_identity_index,
             next_content_revision,
+            |thread| thread_first_line_indent(geometry, thread),
             |handle| shaper.font_metrics(handle),
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
         )?;
@@ -3437,6 +3452,16 @@ fn plan_error(error: RenderPlanCompilerError) -> EngineError {
     } else {
         EngineError::InvalidRequest
     }
+}
+
+/// The paragraph first-line indent for one flow thread; absent threads carry
+/// no indent so retained lines from removed constraints position unchanged.
+fn thread_first_line_indent(geometry: &FlowGeometryArena, flow_thread_id: u32) -> f64 {
+    geometry
+        .constraints
+        .iter()
+        .find(|constraint| constraint.flow_thread_id == flow_thread_id)
+        .map_or(0.0, |constraint| f64::from(constraint.first_line_indent))
 }
 
 fn gather_error(error: GatherError) -> EngineError {

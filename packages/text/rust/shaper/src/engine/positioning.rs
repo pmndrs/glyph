@@ -142,6 +142,7 @@ impl PositionedGlyphArena {
         bidi: &BidiAnalysis,
         identity_index: &mut IdentityIndex,
         next_content_revision: &mut u32,
+        indent_for: impl Fn(u32) -> f64 + Copy,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
@@ -194,6 +195,7 @@ impl PositionedGlyphArena {
                 .iter()
                 .map(|fragment| fragment.slot_start)
                 .fold(f64::INFINITY, f64::min);
+            let thread_indent = indent_for(line.flow_thread_id);
             let mut inline_end = f64::NEG_INFINITY;
             for fragment in fragments.iter().copied() {
                 let fragment_advance = self.position_fragment(
@@ -208,6 +210,11 @@ impl PositionedGlyphArena {
                     styles,
                     bidi,
                     visually_ltr,
+                    if fragment.line.cluster_start == 0 {
+                        thread_indent
+                    } else {
+                        0.0
+                    },
                     metrics_for,
                     extents_for,
                 )?;
@@ -415,6 +422,7 @@ impl PositionedGlyphArena {
         styles: &[StyleSegment],
         bidi: &BidiAnalysis,
         visually_ltr: bool,
+        indent: f64,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<f64, EngineError> {
@@ -460,7 +468,8 @@ impl PositionedGlyphArena {
             );
         }
 
-        let available = (fragment.slot_end - fragment.slot_start - fragment.line.advance).max(0.0);
+        let available =
+            (fragment.slot_end - fragment.slot_start - indent - fragment.line.advance).max(0.0);
         let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
         let (justify_spaces, per_space) = justification_adjustment(
             line,
@@ -470,13 +479,22 @@ impl PositionedGlyphArena {
             clusters,
             cluster_start,
             cluster_end,
+            indent,
         );
         let offset = if per_space == 0.0 {
             alignment_offset(line.align, paragraph_level, available)
         } else {
             0.0
         };
-        let mut cursor = fragment.slot_start + offset;
+        // The indent reserves inline space on the paragraph-direction start
+        // side: the LTR pen shifts right; the RTL pen keeps its origin and the
+        // reduced `available` moves the right edge inward instead.
+        let indent_shift = if paragraph_level & 1 == 0 {
+            indent
+        } else {
+            0.0
+        };
+        let mut cursor = fragment.slot_start + indent_shift + offset;
         let baseline = line.block_start + line.baseline;
         let mut decorated_run: Option<DecoratedRun> = None;
         let visual_count = if visually_ltr {
@@ -655,7 +673,7 @@ impl PositionedGlyphArena {
                 extents_for,
             )?;
         }
-        Ok(fragment.line.advance + per_space * f64::from(justify_spaces))
+        Ok(indent + fragment.line.advance + per_space * f64::from(justify_spaces))
     }
 
     fn flush_decorated_run(
@@ -1330,22 +1348,27 @@ fn justification_adjustment(
     clusters: &ClusterArena,
     cluster_start: usize,
     cluster_end: usize,
+    indent: f64,
 ) -> (u32, f64) {
     let spaces = if line.align == ALIGN_JUSTIFY && !fragment.line.hard_break && !final_line {
         count_justification_spaces(text, clusters, cluster_start, cluster_end)
     } else {
         0
     };
-    let available = (fragment.slot_end - fragment.slot_start - fragment.line.advance).max(0.0);
+    let available =
+        (fragment.slot_end - fragment.slot_start - indent - fragment.line.advance).max(0.0);
     (spaces, justification_space_advance(available, spaces))
 }
 
+/// The inline extent one fragment occupies: its (possibly justified) advance
+/// plus the paragraph first-line indent when the fragment starts the thread.
 pub(crate) fn positioned_fragment_advance(
     line: FlowLine,
     fragment: FlowFragment,
     final_line: bool,
     text: &[u16],
     clusters: &ClusterArena,
+    indent: f64,
 ) -> Result<f64, EngineError> {
     let cluster_start =
         usize::try_from(fragment.line.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
@@ -1359,8 +1382,9 @@ pub(crate) fn positioned_fragment_advance(
         clusters,
         cluster_start,
         cluster_end,
+        indent,
     );
-    Ok(fragment.line.advance + per_space * f64::from(spaces))
+    Ok(indent + fragment.line.advance + per_space * f64::from(spaces))
 }
 
 fn justification_space_advance(available: f64, space_count: u32) -> f64 {
@@ -1593,6 +1617,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| 0.0,
                 metrics,
                 extents,
             )
@@ -1730,6 +1755,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| 0.0,
                 metrics,
                 extents,
             )
@@ -1777,6 +1803,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| 0.0,
                 metrics,
                 extents,
             )
@@ -1969,6 +1996,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| 0.0,
                 metrics,
                 extents,
             )
@@ -2110,6 +2138,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| 0.0,
                 metrics,
                 extents,
             )
@@ -2144,6 +2173,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| 0.0,
                 metrics,
                 extents,
             )
@@ -2167,6 +2197,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
+                |_| 0.0,
                 metrics,
                 extents,
             )

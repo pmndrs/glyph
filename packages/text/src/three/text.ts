@@ -1045,6 +1045,7 @@ function engineStyleValue(
     ...(style.fontSize === undefined ? {} : { fontSize: style.fontSize }),
     ...(style.lineHeight === undefined ? {} : { lineHeight: style.lineHeight }),
     ...(style.letterSpacing === undefined ? {} : { letterSpacing: style.letterSpacing }),
+    ...(style.wordSpacing === undefined ? {} : { wordSpacing: style.wordSpacing }),
     ...(style.language === undefined ? {} : { language: style.language }),
     ...(style.direction === undefined ? {} : { direction: style.direction }),
     ...(style.features === undefined
@@ -1113,6 +1114,11 @@ function compileEngineGeometry(
       align: contentBox?.align ?? 'start',
       overflow: contentBox?.overflow ?? 'visible',
       blockAlign: 'start',
+      ...(contentBox?.firstLineIndent === undefined ? {} : { firstLineIndent: contentBox.firstLineIndent }),
+      ...(contentBox?.spaceBefore === undefined ? {} : { spaceBefore: contentBox.spaceBefore }),
+      ...(contentBox?.spaceAfter === undefined ? {} : { spaceAfter: contentBox.spaceAfter }),
+      ...(contentBox?.justify === undefined ? {} : { justify: contentBox.justify }),
+      ...(contentBox?.lastLine === undefined ? {} : { lastLine: contentBox.lastLine }),
     },
     region: {
       id: paragraph.id,

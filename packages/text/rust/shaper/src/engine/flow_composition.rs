@@ -141,6 +141,11 @@ impl FlowLayoutArena {
                 let mut block = f64::from(region.record.block_start);
                 if region_index == first_region {
                     block += f64::from(constraint.resume_block_offset);
+                    // Paragraph space-before applies once, where the thread truly
+                    // starts; a resumed thread or a region break swallows it.
+                    if constraint.resume_cluster == 0 && constraint.resume_region == 0 {
+                        block += f64::from(constraint.space_before);
+                    }
                 }
                 let block_end = f64::from(region.record.block_end);
                 while !cursor.is_complete(clusters.starts.len())
@@ -178,6 +183,7 @@ impl FlowLayoutArena {
                         estimate,
                         constraint.wrap,
                         constraint.align,
+                        f64::from(constraint.first_line_indent),
                         max_slots_per_band,
                         metrics_for,
                         first_font_for_stack,
@@ -303,6 +309,7 @@ impl FlowLayoutArena {
                 },
                 wrapping_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 old_line.align,
+                indent_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 max_slots_per_band,
                 metrics_for,
                 first_font_for_stack,
@@ -365,6 +372,7 @@ impl FlowLayoutArena {
         initial_extents: LineExtents,
         wrap: u8,
         align: u8,
+        first_line_indent: f64,
         max_slots: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
@@ -394,7 +402,20 @@ impl FlowLayoutArena {
             let mut measured = LineExtents::default();
             let mut composed = false;
             for slot in available.iter().copied() {
-                let Some(line) = layout_next_line(clusters, cursor, slot.end - slot.start, wrap)?
+                // The paragraph's first line composes against an indented width;
+                // positioning shifts the pen by the same amount on the
+                // paragraph-direction side.
+                let indent = if cursor.cluster() == 0 {
+                    first_line_indent
+                } else {
+                    0.0
+                };
+                let Some(line) = layout_next_line(
+                    clusters,
+                    cursor,
+                    (slot.end - slot.start - indent).max(0.0),
+                    wrap,
+                )?
                 else {
                     break;
                 };
@@ -557,6 +578,18 @@ fn wrapping_for_flow_thread(
         .iter()
         .find(|constraint| constraint.flow_thread_id == flow_thread_id)
         .map(|constraint| constraint.wrap)
+        .ok_or(EngineError::InvalidRequest)
+}
+
+fn indent_for_flow_thread(
+    geometry: &FlowGeometryArena,
+    flow_thread_id: u32,
+) -> Result<f64, EngineError> {
+    geometry
+        .constraints
+        .iter()
+        .find(|constraint| constraint.flow_thread_id == flow_thread_id)
+        .map(|constraint| f64::from(constraint.first_line_indent))
         .ok_or(EngineError::InvalidRequest)
 }
 
@@ -811,6 +844,111 @@ mod tests {
         assert_eq!(layout.fragments[0].line.cluster_end, 2);
         assert_eq!(layout.fragments[1].slot_start, 6.0);
         assert_eq!(layout.fragments[1].line.cluster_end, 4);
+    }
+
+    #[test]
+    fn space_before_shifts_the_first_line_and_never_repeats_on_resume() {
+        let clusters = uniform_clusters(4, 1.0);
+        let styles = [uniform_style(4)];
+        let mut spaced = constraint();
+        spaced.space_before = 7.0;
+        let geometry = plain_geometry(spaced);
+        let layout = composed(&geometry, &clusters, &styles);
+        assert_eq!(layout.lines[0].block_start, 7.0);
+
+        let mut resumed = spaced;
+        resumed.resume_cluster = 2;
+        let resumed_layout = composed(&plain_geometry(resumed), &clusters, &styles);
+        assert_eq!(resumed_layout.lines[0].block_start, 0.0);
+    }
+
+    #[test]
+    fn first_line_indent_narrows_only_the_paragraph_first_line() {
+        let clusters = uniform_clusters(10, 1.0);
+        let styles = [uniform_style(10)];
+        let mut indented = constraint();
+        indented.first_line_indent = 4.0;
+        indented.wrap = WRAP_CHARACTER;
+        // The slot is 10 wide (region minus no exclusions): the first line takes
+        // 10 - 4 = 6 clusters, the second line the remaining 4.
+        let geometry = plain_geometry(indented);
+        let layout = composed(&geometry, &clusters, &styles);
+        assert_eq!(layout.lines.len(), 2);
+        assert_eq!(layout.fragments[0].line.cluster_end, 6);
+        assert_eq!(layout.fragments[1].line.cluster_end, 10);
+    }
+
+    fn uniform_clusters(count: usize, advance: f64) -> ClusterArena {
+        ClusterArena {
+            starts: (0..count as u32).collect(),
+            ends: (1..=count as u32).collect(),
+            advances: vec![advance; count],
+            flags: vec![CLUSTER_SAFE_BEFORE; count],
+            style_indexes: vec![0; count],
+            source_runs: vec![0; count],
+            font_handles: vec![1; count],
+            index_at: (0..=count as u32).collect(),
+            ..ClusterArena::default()
+        }
+    }
+
+    fn uniform_style(text_end: u32) -> StyleSegment {
+        StyleSegment {
+            text_start: 0,
+            text_end,
+            style: ResolvedStyle::test_typography(10.0, 0.0, 0.0),
+        }
+    }
+
+    fn plain_geometry(constraint: FlowConstraint) -> FlowGeometryArena {
+        let mut record = region();
+        record.exclusion_count = 0;
+        record.inline_end = 10.0;
+        record.block_end = 100.0;
+        record.clip_inline_end = 10.0;
+        record.clip_block_end = 100.0;
+        FlowGeometryArena {
+            constraints: vec![constraint],
+            regions: vec![RetainedRegion {
+                record,
+                vertex_start: 0,
+            }],
+            exclusions: vec![],
+            vertices: vec![],
+        }
+    }
+
+    fn composed(
+        geometry: &FlowGeometryArena,
+        clusters: &ClusterArena,
+        styles: &[StyleSegment],
+    ) -> FlowLayoutArena {
+        let mut layout = FlowLayoutArena::default();
+        let mut slots = InlineSlotArena::default();
+        layout
+            .build(
+                geometry,
+                clusters,
+                styles,
+                &mut slots,
+                8,
+                4,
+                |_| {
+                    Some(FontMetrics {
+                        units_per_em: 1_000,
+                        ascender: 800,
+                        descender: -200,
+                        line_gap: 0,
+                        underline_position: -100,
+                        underline_thickness: 50,
+                        strikeout_position: 300,
+                        strikeout_size: 50,
+                    })
+                },
+                |_| Some(1),
+            )
+            .unwrap();
+        layout
     }
 
     #[test]

@@ -104,7 +104,14 @@ pub(crate) fn append_measurement(
         let advance = if let Some(extents) = semantic_line_inline_extents {
             extents[index]
         } else {
-            line_inline_extent(flow, line, index, text, clusters)?
+            line_inline_extent(
+                flow,
+                line,
+                index,
+                text,
+                clusters,
+                f64::from(constraint.first_line_indent),
+            )?
         };
         content_width = content_width.max(advance);
         content_height = content_height.max(line.block_start + line.height);
@@ -157,6 +164,11 @@ pub(crate) fn append_measurement(
         }
     }
 
+    // A composed paragraph carries its trailing space-after in every block
+    // measurement, so consumers stack paragraphs from the reported extents.
+    if line_count > 0 {
+        content_height += f64::from(constraint.space_after);
+    }
     let intrinsic = intrinsic_extents.unwrap_or(LayoutExtents {
         width: content_width,
         height: content_height,
@@ -206,6 +218,7 @@ pub(crate) fn flow_extents(
     flow: &FlowLayoutArena,
     text: &[u16],
     clusters: &ClusterArena,
+    first_line_indent: f64,
 ) -> Result<LayoutExtents, EngineError> {
     let mut extents = LayoutExtents::default();
     for (index, line) in flow.lines.iter().copied().enumerate() {
@@ -219,9 +232,14 @@ pub(crate) fn flow_extents(
         let Some(last) = fragments.last() else {
             continue;
         };
-        extents.width = extents
-            .width
-            .max(line_inline_extent(flow, line, index, text, clusters)?);
+        extents.width = extents.width.max(line_inline_extent(
+            flow,
+            line,
+            index,
+            text,
+            clusters,
+            first_line_indent,
+        )?);
         extents.height = extents.height.max(line.block_start + line.height);
         extents.consumed_clusters = extents
             .consumed_clusters
@@ -236,6 +254,7 @@ fn line_inline_extent(
     index: usize,
     text: &[u16],
     clusters: &ClusterArena,
+    first_line_indent: f64,
 ) -> Result<f64, EngineError> {
     let fragments = line_fragments(flow, line)?;
     if fragments.is_empty() {
@@ -251,9 +270,14 @@ fn line_inline_extent(
         .fold(f64::INFINITY, f64::min);
     let mut inline_end = f64::NEG_INFINITY;
     for fragment in fragments.iter().copied() {
+        let indent = if fragment.line.cluster_start == 0 {
+            first_line_indent
+        } else {
+            0.0
+        };
         inline_end = inline_end.max(
             fragment.slot_start
-                + positioned_fragment_advance(line, fragment, final_line, text, clusters)?,
+                + positioned_fragment_advance(line, fragment, final_line, text, clusters, indent)?,
         );
     }
     Ok((inline_end - inline_start).max(0.0))
@@ -310,6 +334,68 @@ mod tests {
         line_composition::ComposedLine,
         semantic_wire::FlowConstraint,
     };
+
+    #[test]
+    fn measurement_carries_space_after_and_first_line_indent() {
+        let mut spaced = constraint(AXIS_AT_MOST, 40.0, AXIS_AT_MOST, 30.0);
+        spaced.space_after = 6.0;
+        spaced.first_line_indent = 4.0;
+        let geometry = FlowGeometryArena {
+            constraints: vec![spaced],
+            ..FlowGeometryArena::default()
+        };
+        let flow = FlowLayoutArena {
+            lines: vec![FlowLine {
+                flow_thread_id: 11,
+                region_id: 3,
+                transform_index: 1,
+                clip_id: 0,
+                fragment_start: 0,
+                fragment_count: 1,
+                align: 1,
+                block_start: 0.0,
+                baseline: 4.0,
+                height: 5.0,
+            }],
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 0,
+                    cluster_end: 2,
+                    text_start: 0,
+                    text_end: 2,
+                    advance: 7.0,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 20.0,
+                boundary_index: NO_BOUNDARY,
+            }],
+            ..FlowLayoutArena::default()
+        };
+        let mut records = vec![];
+        append_measurement(
+            &mut records,
+            7,
+            2,
+            2,
+            &geometry,
+            &flow,
+            &[layout_glyph(3), layout_glyph(0)],
+            &[0],
+            &[2],
+            None,
+            &[],
+            &ClusterArena::default(),
+            None,
+            false,
+        )
+        .unwrap();
+        // The first line occupies indent + advance inline, and the paragraph's
+        // block extent carries the trailing space-after.
+        assert_eq!(records[1].inline_extent, 11.0);
+        assert_eq!(records[0].inline_extent, 11.0);
+        assert_eq!(records[0].block_extent, 11.0);
+    }
 
     #[test]
     fn measurement_is_demand_shaped_from_retained_lines_without_glyph_arrays() {

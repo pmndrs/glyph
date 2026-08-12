@@ -2,6 +2,18 @@
 
 ## 2026-08-12
 
+- **Paragraph spacing and first-line indent (11.14, layer 2)** — The typography controls begin steering layout:
+  `spaceBefore` shifts a thread's first band exactly once where the paragraph truly starts (resumed threads and
+  region breaks swallow it, matching fragmentation convention), `spaceAfter` rides every block measurement so
+  consumers stack paragraphs from reported extents, and `firstLineIndent` narrows the paragraph's first composed
+  line and shifts the pen on the paragraph-direction side — LTR pens move right, RTL pens keep their origin while
+  the reduced available width pulls the right edge inward, so alignment and justification compose over the reduced
+  slot unchanged. Measurements mirror both: first-line inline extents include the indent, and the intrinsic pass
+  reuses the same constraint-carried values. The public `Text` gains `wordSpacing` style and the contentBox
+  typography fields. Proven red-green at three levels: flow-composition unit tests (band shift, resume immunity,
+  break narrowing), a measurement unit test (indent in inline extent, space-after in block extent), and a Three
+  integration segment pinning exact pen shift, baseline shift, and content extents through the real Wasm engine.
+
 - **Typography-tier wire contract (11.14, layer 1)** — Constraint records grew 56 → 84 bytes for the professional
   typography controls: first-line indent, paragraph space before/after, word-space ratio bounds (each side
   independently optional, zero meaning unbounded), letter-space expansion budget, and a closed last-line policy

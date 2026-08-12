@@ -184,6 +184,27 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   scene.updateMatrixWorld();
   assert.equal(label.bound, true, 'text retained by a disposed group can bind elsewhere');
 
+  // Typography tier: first-line indent shifts the pen and the measured width;
+  // paragraph spacing shifts the first baseline and carries in the block extent.
+  const plainShort = new Text({ font, text: 'Whisper' });
+  const indented = new Text({ font, text: 'Whisper', contentBox: { firstLineIndent: 30 } });
+  const spaced = new Text({ font, text: 'Whisper', contentBox: { spaceBefore: 8, spaceAfter: 6 } });
+  for (const paragraph of [plainShort, indented, spaced]) scene.add(paragraph);
+  scene.updateMatrixWorld();
+  const plainMeasure = plainShort.measureLayout();
+  const indentedMeasure = indented.measureLayout();
+  const spacedMeasure = spaced.measureLayout();
+  assert.equal(plainMeasure.lineCount, 1);
+  assert.equal(indentedMeasure.lineCount, 1);
+  assert.equal(indentedMeasure.contentWidth, plainMeasure.contentWidth + 30);
+  assert.equal(indented.inspectLayout().x[0], plainShort.inspectLayout().x[0] + 30);
+  assert.equal(spacedMeasure.firstBaseline, plainMeasure.firstBaseline + 8);
+  assert.equal(spacedMeasure.contentHeight, plainMeasure.contentHeight + 8 + 6);
+  for (const paragraph of [plainShort, indented, spaced]) {
+    paragraph.removeFromParent();
+    paragraph.dispose();
+  }
+
   label.removeFromParent();
   label.dispose();
   font.dispose();
