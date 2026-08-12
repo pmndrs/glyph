@@ -11,7 +11,9 @@ use super::{
     flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
     flow_geometry::FlowGeometryArena,
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
-    positioning::{SemanticGlyph, positioned_fragment_advance},
+    positioning::{
+        SemanticGlyph, ThreadTypography, constraint_typography, positioned_fragment_advance,
+    },
     semantic_view::{
         SEMANTIC_GLYPH, SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SemanticRecord,
     },
@@ -110,7 +112,7 @@ pub(crate) fn append_measurement(
                 index,
                 text,
                 clusters,
-                f64::from(constraint.first_line_indent),
+                constraint_typography(constraint),
             )?
         };
         content_width = content_width.max(advance);
@@ -218,7 +220,7 @@ pub(crate) fn flow_extents(
     flow: &FlowLayoutArena,
     text: &[u16],
     clusters: &ClusterArena,
-    first_line_indent: f64,
+    typography: ThreadTypography,
 ) -> Result<LayoutExtents, EngineError> {
     let mut extents = LayoutExtents::default();
     for (index, line) in flow.lines.iter().copied().enumerate() {
@@ -233,12 +235,7 @@ pub(crate) fn flow_extents(
             continue;
         };
         extents.width = extents.width.max(line_inline_extent(
-            flow,
-            line,
-            index,
-            text,
-            clusters,
-            first_line_indent,
+            flow, line, index, text, clusters, typography,
         )?);
         extents.height = extents.height.max(line.block_start + line.height);
         extents.consumed_clusters = extents
@@ -254,7 +251,7 @@ fn line_inline_extent(
     index: usize,
     text: &[u16],
     clusters: &ClusterArena,
-    first_line_indent: f64,
+    typography: ThreadTypography,
 ) -> Result<f64, EngineError> {
     let fragments = line_fragments(flow, line)?;
     if fragments.is_empty() {
@@ -271,13 +268,21 @@ fn line_inline_extent(
     let mut inline_end = f64::NEG_INFINITY;
     for fragment in fragments.iter().copied() {
         let indent = if fragment.line.cluster_start == 0 {
-            first_line_indent
+            typography.first_line_indent
         } else {
             0.0
         };
         inline_end = inline_end.max(
             fragment.slot_start
-                + positioned_fragment_advance(line, fragment, final_line, text, clusters, indent)?,
+                + positioned_fragment_advance(
+                    line,
+                    fragment,
+                    final_line,
+                    text,
+                    clusters,
+                    indent,
+                    typography.justify,
+                )?,
         );
     }
     Ok((inline_end - inline_start).max(0.0))

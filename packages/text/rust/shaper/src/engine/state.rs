@@ -800,7 +800,7 @@ impl TextEngine {
                                 flow,
                                 text,
                                 clusters,
-                                thread_first_line_indent(geometry, flow_thread_id),
+                                thread_typography(geometry, flow_thread_id),
                             )?
                         };
                         let active_flow = if state.flow_layout_prepared {
@@ -891,7 +891,7 @@ impl TextEngine {
                                 &state.intrinsic_flow_layout_scratch,
                                 text,
                                 clusters,
-                                thread_first_line_indent(geometry, flow_thread_id),
+                                thread_typography(geometry, flow_thread_id),
                             )?)
                         } else {
                             None
@@ -2752,7 +2752,7 @@ impl ParagraphState {
             bidi,
             &mut self.intrinsic_identity_scratch,
             &mut next_content_revision,
-            |thread| thread_first_line_indent(geometry, thread),
+            |thread| thread_typography(geometry, thread),
             |handle| shaper.font_metrics(handle),
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
         )
@@ -2835,7 +2835,7 @@ impl ParagraphState {
             bidi,
             &mut self.glyph_identity_index,
             next_content_revision,
-            |thread| thread_first_line_indent(geometry, thread),
+            |thread| thread_typography(geometry, thread),
             |handle| shaper.font_metrics(handle),
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
         )?;
@@ -3454,14 +3454,17 @@ fn plan_error(error: RenderPlanCompilerError) -> EngineError {
     }
 }
 
-/// The paragraph first-line indent for one flow thread; absent threads carry
-/// no indent so retained lines from removed constraints position unchanged.
-fn thread_first_line_indent(geometry: &FlowGeometryArena, flow_thread_id: u32) -> f64 {
+/// The typography for one flow thread; absent threads carry defaults so
+/// retained lines from removed constraints position unchanged.
+fn thread_typography(
+    geometry: &FlowGeometryArena,
+    flow_thread_id: u32,
+) -> super::positioning::ThreadTypography {
     geometry
         .constraints
         .iter()
         .find(|constraint| constraint.flow_thread_id == flow_thread_id)
-        .map_or(0.0, |constraint| f64::from(constraint.first_line_indent))
+        .map_or_else(Default::default, super::positioning::constraint_typography)
 }
 
 fn gather_error(error: GatherError) -> EngineError {

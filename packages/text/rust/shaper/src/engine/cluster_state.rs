@@ -13,6 +13,8 @@ pub(crate) const CLUSTER_SAFE_BEFORE: u8 = 1 << 0;
 pub(crate) const CLUSTER_REQUIRED_BREAK: u8 = 1 << 1;
 pub(crate) const CLUSTER_HARD_BREAK: u8 = 1 << 2;
 pub(crate) const CLUSTER_ALLOWED_BREAK: u8 = 1 << 3;
+/// The cluster starts with U+0020 — a justifiable, shrinkable word space.
+pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
 
 const GLYPH_UNSAFE_TO_BREAK: u16 = 1;
 const NO_SOURCE_RUN: u32 = u32::MAX;
@@ -101,11 +103,8 @@ impl ClusterArena {
                 return Err(EngineError::InvalidRequest);
             }
             let hard_break = is_hard_break(text, start)?;
-            let word_spacing = if text.get(start as usize) == Some(&0x20) {
-                style.style.word_spacing
-            } else {
-                0.0
-            };
+            let space = text.get(start as usize) == Some(&0x20);
+            let word_spacing = if space { style.style.word_spacing } else { 0.0 };
             self.starts.push(start);
             self.ends.push(end);
             self.advances.push(if hard_break {
@@ -113,8 +112,11 @@ impl ClusterArena {
             } else {
                 f64::from(style.style.letter_spacing + word_spacing)
             });
-            self.flags
-                .push(if hard_break { CLUSTER_HARD_BREAK } else { 0 });
+            self.flags.push(match (hard_break, space) {
+                (true, _) => CLUSTER_HARD_BREAK,
+                (false, true) => CLUSTER_SPACE,
+                (false, false) => 0,
+            });
             self.style_indexes
                 .push(u32::try_from(style_index).map_err(|_| EngineError::ResultTooLarge)?);
             self.source_runs.push(NO_SOURCE_RUN);
@@ -216,17 +218,18 @@ impl ClusterArena {
                 return Ok(None);
             }
             let hard_break = is_hard_break(text, start)?;
-            let word_spacing = if text.get(start as usize) == Some(&0x20) {
-                style.style.word_spacing
-            } else {
-                0.0
-            };
+            let space = text.get(start as usize) == Some(&0x20);
+            let word_spacing = if space { style.style.word_spacing } else { 0.0 };
             self.advances[cluster] = if hard_break {
                 0.0
             } else {
                 f64::from(style.style.letter_spacing + word_spacing)
             };
-            self.flags[cluster] = if hard_break { CLUSTER_HARD_BREAK } else { 0 };
+            self.flags[cluster] = match (hard_break, space) {
+                (true, _) => CLUSTER_HARD_BREAK,
+                (false, true) => CLUSTER_SPACE,
+                (false, false) => 0,
+            };
             self.source_runs[cluster] = NO_SOURCE_RUN;
             self.binding_handles[cluster] = 0;
             self.font_handles[cluster] = 0;
@@ -853,7 +856,7 @@ mod tests {
         assert_eq!(clusters.flags[0], CLUSTER_SAFE_BEFORE);
         assert_eq!(
             clusters.flags[1],
-            CLUSTER_SAFE_BEFORE | CLUSTER_ALLOWED_BREAK
+            CLUSTER_SAFE_BEFORE | CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE
         );
         assert_eq!(clusters.flags[2], CLUSTER_SAFE_BEFORE);
         assert_eq!(
@@ -896,7 +899,7 @@ mod tests {
                 clusters.index_at.capacity(),
             )
         );
-        assert_eq!(clusters.flags[1], CLUSTER_SAFE_BEFORE);
+        assert_eq!(clusters.flags[1], CLUSTER_SAFE_BEFORE | CLUSTER_SPACE);
         assert_eq!(clusters.flags[2], 0);
     }
 

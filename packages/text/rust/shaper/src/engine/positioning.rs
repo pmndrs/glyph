@@ -142,7 +142,7 @@ impl PositionedGlyphArena {
         bidi: &BidiAnalysis,
         identity_index: &mut IdentityIndex,
         next_content_revision: &mut u32,
-        indent_for: impl Fn(u32) -> f64 + Copy,
+        typography_for: impl Fn(u32) -> ThreadTypography + Copy,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
@@ -195,7 +195,7 @@ impl PositionedGlyphArena {
                 .iter()
                 .map(|fragment| fragment.slot_start)
                 .fold(f64::INFINITY, f64::min);
-            let thread_indent = indent_for(line.flow_thread_id);
+            let typography = typography_for(line.flow_thread_id);
             let mut inline_end = f64::NEG_INFINITY;
             for fragment in fragments.iter().copied() {
                 let fragment_advance = self.position_fragment(
@@ -211,10 +211,11 @@ impl PositionedGlyphArena {
                     bidi,
                     visually_ltr,
                     if fragment.line.cluster_start == 0 {
-                        thread_indent
+                        typography.first_line_indent
                     } else {
                         0.0
                     },
+                    typography.justify,
                     metrics_for,
                     extents_for,
                 )?;
@@ -423,6 +424,7 @@ impl PositionedGlyphArena {
         bidi: &BidiAnalysis,
         visually_ltr: bool,
         indent: f64,
+        controls: JustifyControls,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<f64, EngineError> {
@@ -471,7 +473,7 @@ impl PositionedGlyphArena {
         let available =
             (fragment.slot_end - fragment.slot_start - indent - fragment.line.advance).max(0.0);
         let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
-        let (justify_spaces, per_space) = justification_adjustment(
+        let justify = justification_adjustment(
             line,
             fragment,
             final_line,
@@ -480,8 +482,9 @@ impl PositionedGlyphArena {
             cluster_start,
             cluster_end,
             indent,
+            controls,
         );
-        let offset = if per_space == 0.0 {
+        let offset = if justify.per_space == 0.0 && justify.per_gap == 0.0 {
             alignment_offset(line.align, paragraph_level, available)
         } else {
             0.0
@@ -626,8 +629,11 @@ impl PositionedGlyphArena {
                 cursor += x_advance;
             }
             cursor = cluster_origin + clusters.advances[cluster];
-            if per_space != 0.0 && cluster_is_space(text, clusters, cluster) {
-                cursor += per_space;
+            if justify.per_space != 0.0 && cluster_is_space(text, clusters, cluster) {
+                cursor += justify.per_space;
+            }
+            if justify.per_gap != 0.0 && cluster + 1 < justify.gap_end {
+                cursor += justify.per_gap;
             }
             if style.decoration_flags == 0 {
                 if decorated_run.is_some() {
@@ -673,7 +679,10 @@ impl PositionedGlyphArena {
                 extents_for,
             )?;
         }
-        Ok(indent + fragment.line.advance + per_space * f64::from(justify_spaces))
+        Ok(indent
+            + fragment.line.advance
+            + justify.per_space * f64::from(justify.spaces)
+            + justify.per_gap * f64::from(justify.gaps))
     }
 
     fn flush_decorated_run(
@@ -1322,21 +1331,78 @@ fn alignment_offset(align: u8, paragraph_level: u8, available: f64) -> f64 {
     }
 }
 
-fn count_justification_spaces(
+/// One flow thread's typography, resolved from its constraint record.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct ThreadTypography {
+    pub first_line_indent: f64,
+    pub justify: JustifyControls,
+}
+
+/// Per-thread justification controls carried by the constraint record. Zero
+/// ratio fields mean unbounded on that side; the default reproduces the
+/// pre-tier equal-space distribution exactly.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct JustifyControls {
+    pub minimum_word_space_ratio: f32,
+    pub maximum_word_space_ratio: f32,
+    pub letter_space_expansion: f32,
+    pub last_line_justify: bool,
+}
+
+/// Resolve one constraint's typography for positioning and measurement.
+pub(crate) fn constraint_typography(
+    constraint: &super::semantic_wire::FlowConstraint,
+) -> ThreadTypography {
+    ThreadTypography {
+        first_line_indent: f64::from(constraint.first_line_indent),
+        justify: JustifyControls {
+            minimum_word_space_ratio: constraint.justify_min_word_space_ratio,
+            maximum_word_space_ratio: constraint.justify_max_word_space_ratio,
+            letter_space_expansion: constraint.justify_letter_space_expansion,
+            last_line_justify: constraint.last_line == super::frame::LAST_LINE_JUSTIFY,
+        },
+    }
+}
+
+/// One line's resolved justification: uniform word-space delta, bounded
+/// letter-gap delta, and the trimmed cluster bound the gaps apply within.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct JustifyDistribution {
+    pub spaces: u32,
+    pub per_space: f64,
+    pub gaps: u32,
+    pub per_gap: f64,
+    pub gap_end: usize,
+}
+
+struct JustifiableSpan {
+    spaces: u32,
+    space_advance_sum: f64,
+    trimmed_end: usize,
+}
+
+fn justifiable_span(
     text: &[u16],
     clusters: &ClusterArena,
     start: usize,
     mut end: usize,
-) -> u32 {
+) -> JustifiableSpan {
     while end > start && cluster_is_space(text, clusters, end - 1) {
         end -= 1;
     }
-    clusters.starts[start..end]
-        .iter()
-        .filter(|&&offset| text.get(offset as usize) == Some(&0x20))
-        .count()
-        .try_into()
-        .unwrap_or(u32::MAX)
+    let mut spaces = 0_u32;
+    let mut space_advance_sum = 0.0_f64;
+    for cluster in start..end {
+        if cluster_is_space(text, clusters, cluster) {
+            spaces = spaces.saturating_add(1);
+            space_advance_sum += clusters.advances[cluster];
+        }
+    }
+    JustifiableSpan {
+        spaces,
+        space_advance_sum,
+        trimmed_end: end,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1349,15 +1415,61 @@ fn justification_adjustment(
     cluster_start: usize,
     cluster_end: usize,
     indent: f64,
-) -> (u32, f64) {
-    let spaces = if line.align == ALIGN_JUSTIFY && !fragment.line.hard_break && !final_line {
-        count_justification_spaces(text, clusters, cluster_start, cluster_end)
+    controls: JustifyControls,
+) -> JustifyDistribution {
+    let justified = line.align == ALIGN_JUSTIFY
+        && (controls.last_line_justify || (!fragment.line.hard_break && !final_line));
+    if !justified {
+        return JustifyDistribution::default();
+    }
+    let span = justifiable_span(text, clusters, cluster_start, cluster_end);
+    if span.spaces == 0 {
+        return JustifyDistribution::default();
+    }
+    let deficit = fragment.slot_end - fragment.slot_start - indent - fragment.line.advance;
+    if deficit >= 0.0 {
+        // Expansion: word spaces grow uniformly up to the declared cap, then the
+        // remainder spills into inter-cluster gaps bounded per gap; any residue
+        // stays unfilled and the line reads as under-full.
+        let space_growth = if controls.maximum_word_space_ratio > 0.0 {
+            deficit.min(f64::from(controls.maximum_word_space_ratio - 1.0) * span.space_advance_sum)
+        } else {
+            deficit
+        };
+        let gaps = u32::try_from(
+            span.trimmed_end
+                .saturating_sub(cluster_start)
+                .saturating_sub(1),
+        )
+        .unwrap_or(u32::MAX);
+        let remainder = deficit - space_growth;
+        let per_gap = if controls.letter_space_expansion > 0.0 && gaps > 0 && remainder > 0.0 {
+            (remainder / f64::from(gaps)).min(f64::from(controls.letter_space_expansion))
+        } else {
+            0.0
+        };
+        JustifyDistribution {
+            spaces: span.spaces,
+            per_space: justification_space_advance(space_growth, span.spaces),
+            gaps,
+            per_gap,
+            gap_end: span.trimmed_end,
+        }
+    } else if controls.minimum_word_space_ratio > 0.0 {
+        // Compression: an overfull line shrinks its word spaces uniformly, never
+        // below the declared minimum of their natural advance sum.
+        let shrink = deficit
+            .max(-f64::from(1.0 - controls.minimum_word_space_ratio) * span.space_advance_sum);
+        JustifyDistribution {
+            spaces: span.spaces,
+            per_space: justification_space_advance(shrink, span.spaces),
+            gaps: 0,
+            per_gap: 0.0,
+            gap_end: span.trimmed_end,
+        }
     } else {
-        0
-    };
-    let available =
-        (fragment.slot_end - fragment.slot_start - indent - fragment.line.advance).max(0.0);
-    (spaces, justification_space_advance(available, spaces))
+        JustifyDistribution::default()
+    }
 }
 
 /// The inline extent one fragment occupies: its (possibly justified) advance
@@ -1369,12 +1481,13 @@ pub(crate) fn positioned_fragment_advance(
     text: &[u16],
     clusters: &ClusterArena,
     indent: f64,
+    controls: JustifyControls,
 ) -> Result<f64, EngineError> {
     let cluster_start =
         usize::try_from(fragment.line.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
     let cluster_end =
         usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
-    let (spaces, per_space) = justification_adjustment(
+    let distribution = justification_adjustment(
         line,
         fragment,
         final_line,
@@ -1383,8 +1496,12 @@ pub(crate) fn positioned_fragment_advance(
         cluster_start,
         cluster_end,
         indent,
+        controls,
     );
-    Ok(indent + fragment.line.advance + per_space * f64::from(spaces))
+    Ok(indent
+        + fragment.line.advance
+        + distribution.per_space * f64::from(distribution.spaces)
+        + distribution.per_gap * f64::from(distribution.gaps))
 }
 
 fn justification_space_advance(available: f64, space_count: u32) -> f64 {
@@ -1485,6 +1602,123 @@ mod tests {
     fn justification_expands_only_lines_with_expandable_spaces() {
         assert_eq!(justification_space_advance(22.0, 2), 11.0);
         assert_eq!(justification_space_advance(22.0, 0), 0.0);
+    }
+
+    fn justify_fixture() -> (Vec<u16>, ClusterArena, FlowLine, FlowFragment) {
+        // "ab cd f" — seven 1.0-advance clusters with spaces at 2 and 5.
+        let text: Vec<u16> = "ab cd f".encode_utf16().collect();
+        let clusters = ClusterArena {
+            starts: (0..7).collect(),
+            ends: (1..=7).collect(),
+            advances: vec![1.0; 7],
+            flags: vec![0; 7],
+            style_indexes: vec![0; 7],
+            source_runs: vec![0; 7],
+            font_handles: vec![1; 7],
+            index_at: (0..=7).collect(),
+            ..ClusterArena::default()
+        };
+        let line = FlowLine {
+            flow_thread_id: 1,
+            region_id: 1,
+            transform_index: 1,
+            clip_id: 0,
+            fragment_start: 0,
+            fragment_count: 1,
+            align: ALIGN_JUSTIFY,
+            block_start: 0.0,
+            baseline: 4.0,
+            height: 5.0,
+        };
+        let fragment = FlowFragment {
+            line: ComposedLine {
+                cluster_start: 0,
+                cluster_end: 7,
+                text_start: 0,
+                text_end: 7,
+                advance: 7.0,
+                hard_break: false,
+            },
+            slot_start: 0.0,
+            slot_end: 17.0,
+            boundary_index: NO_BOUNDARY,
+        };
+        (text, clusters, line, fragment)
+    }
+
+    #[test]
+    fn word_space_caps_spill_into_bounded_letter_expansion() {
+        let (text, clusters, line, fragment) = justify_fixture();
+        // Deficit 10 over 2 spaces (natural sum 2.0): a 3x cap allows 4.0 of
+        // word-space growth; 6.0 spills into six inter-cluster gaps bounded to
+        // 0.75 each; the final 1.5 stays unfilled.
+        let controls = JustifyControls {
+            minimum_word_space_ratio: 0.0,
+            maximum_word_space_ratio: 3.0,
+            letter_space_expansion: 0.75,
+            last_line_justify: false,
+        };
+        let distribution =
+            justification_adjustment(line, fragment, false, &text, &clusters, 0, 7, 0.0, controls);
+        assert_eq!(distribution.spaces, 2);
+        assert_eq!(distribution.per_space, 2.0);
+        assert_eq!(distribution.gaps, 6);
+        assert_eq!(distribution.per_gap, 0.75);
+
+        // Unbounded controls reproduce the pre-tier distribution exactly.
+        let unbounded = JustifyControls::default();
+        let plain = justification_adjustment(
+            line, fragment, false, &text, &clusters, 0, 7, 0.0, unbounded,
+        );
+        assert_eq!(plain.per_space, 5.0);
+        assert_eq!(plain.per_gap, 0.0);
+    }
+
+    #[test]
+    fn last_line_policy_justifies_final_and_hard_broken_lines() {
+        let (text, clusters, line, fragment) = justify_fixture();
+        let auto = JustifyControls::default();
+        let final_auto =
+            justification_adjustment(line, fragment, true, &text, &clusters, 0, 7, 0.0, auto);
+        assert_eq!(final_auto.per_space, 0.0);
+        let policy = JustifyControls {
+            last_line_justify: true,
+            ..JustifyControls::default()
+        };
+        let final_justified =
+            justification_adjustment(line, fragment, true, &text, &clusters, 0, 7, 0.0, policy);
+        assert_eq!(final_justified.per_space, 5.0);
+    }
+
+    #[test]
+    fn word_spaces_shrink_only_to_the_declared_minimum() {
+        let (text, clusters, line, mut fragment) = justify_fixture();
+        // Overfull by 1.0: a 0.75 minimum permits 0.25 shrink per space (0.5
+        // total), so shrink clamps at -0.25 and the line stays 0.5 overfull.
+        fragment.slot_end = 6.0;
+        let controls = JustifyControls {
+            minimum_word_space_ratio: 0.75,
+            maximum_word_space_ratio: 0.0,
+            letter_space_expansion: 0.0,
+            last_line_justify: false,
+        };
+        let shrunk =
+            justification_adjustment(line, fragment, false, &text, &clusters, 0, 7, 0.0, controls);
+        assert_eq!(shrunk.per_space, -0.25);
+        assert_eq!(shrunk.per_gap, 0.0);
+        // Without a declared minimum an overfull line never shrinks.
+        let rigid = justification_adjustment(
+            line,
+            fragment,
+            false,
+            &text,
+            &clusters,
+            0,
+            7,
+            0.0,
+            JustifyControls::default(),
+        );
+        assert_eq!(rigid.per_space, 0.0);
     }
 
     /// CSS decorating box: a nested font-size change inside one declared decoration
@@ -1617,7 +1851,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
-                |_| 0.0,
+                |_| ThreadTypography::default(),
                 metrics,
                 extents,
             )
@@ -1755,7 +1989,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
-                |_| 0.0,
+                |_| ThreadTypography::default(),
                 metrics,
                 extents,
             )
@@ -1803,7 +2037,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
-                |_| 0.0,
+                |_| ThreadTypography::default(),
                 metrics,
                 extents,
             )
@@ -1996,7 +2230,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
-                |_| 0.0,
+                |_| ThreadTypography::default(),
                 metrics,
                 extents,
             )
@@ -2138,7 +2372,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
-                |_| 0.0,
+                |_| ThreadTypography::default(),
                 metrics,
                 extents,
             )
@@ -2173,7 +2407,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
-                |_| 0.0,
+                |_| ThreadTypography::default(),
                 metrics,
                 extents,
             )
@@ -2197,7 +2431,7 @@ mod tests {
                 &bidi,
                 &mut index,
                 &mut next_revision,
-                |_| 0.0,
+                |_| ThreadTypography::default(),
                 metrics,
                 extents,
             )

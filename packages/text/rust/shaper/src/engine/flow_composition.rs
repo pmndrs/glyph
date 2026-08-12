@@ -6,8 +6,9 @@ use super::{
     EngineError,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
     flow_geometry::{FlowGeometryArena, InlineSlotArena},
-    frame::{OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB},
+    frame::{ALIGN_JUSTIFY, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB},
     line_composition::{ComposedLine, LineCursor, layout_next_line},
+    semantic_wire::FlowConstraint,
     style_state::StyleSegment,
 };
 
@@ -184,6 +185,7 @@ impl FlowLayoutArena {
                         constraint.wrap,
                         constraint.align,
                         f64::from(constraint.first_line_indent),
+                        constraint_word_space_shrink(&constraint),
                         max_slots_per_band,
                         metrics_for,
                         first_font_for_stack,
@@ -310,6 +312,7 @@ impl FlowLayoutArena {
                 wrapping_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 old_line.align,
                 indent_for_flow_thread(geometry, old_line.flow_thread_id)?,
+                shrink_for_flow_thread(geometry, old_line.flow_thread_id)?,
                 max_slots_per_band,
                 metrics_for,
                 first_font_for_stack,
@@ -373,6 +376,7 @@ impl FlowLayoutArena {
         wrap: u8,
         align: u8,
         first_line_indent: f64,
+        word_space_shrink: f64,
         max_slots: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
@@ -415,6 +419,7 @@ impl FlowLayoutArena {
                     cursor,
                     (slot.end - slot.start - indent).max(0.0),
                     wrap,
+                    word_space_shrink,
                 )?
                 else {
                     break;
@@ -590,6 +595,28 @@ fn indent_for_flow_thread(
         .iter()
         .find(|constraint| constraint.flow_thread_id == flow_thread_id)
         .map(|constraint| f64::from(constraint.first_line_indent))
+        .ok_or(EngineError::InvalidRequest)
+}
+
+/// The breaker's shrink fraction: only a justified thread with a declared
+/// minimum word-space ratio may compress spaces to admit one more word.
+fn constraint_word_space_shrink(constraint: &FlowConstraint) -> f64 {
+    if constraint.align == ALIGN_JUSTIFY && constraint.justify_min_word_space_ratio > 0.0 {
+        1.0 - f64::from(constraint.justify_min_word_space_ratio)
+    } else {
+        0.0
+    }
+}
+
+fn shrink_for_flow_thread(
+    geometry: &FlowGeometryArena,
+    flow_thread_id: u32,
+) -> Result<f64, EngineError> {
+    geometry
+        .constraints
+        .iter()
+        .find(|constraint| constraint.flow_thread_id == flow_thread_id)
+        .map(constraint_word_space_shrink)
         .ok_or(EngineError::InvalidRequest)
 }
 

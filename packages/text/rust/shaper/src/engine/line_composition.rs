@@ -2,7 +2,7 @@ use super::{
     EngineError,
     cluster_state::{
         CLUSTER_ALLOWED_BREAK, CLUSTER_HARD_BREAK, CLUSTER_REQUIRED_BREAK, CLUSTER_SAFE_BEFORE,
-        ClusterArena,
+        CLUSTER_SPACE, ClusterArena,
     },
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
 };
@@ -45,9 +45,11 @@ pub(crate) fn layout_next_line(
     cursor: &mut LineCursor,
     max_width: f64,
     wrap: u8,
+    word_space_shrink: f64,
 ) -> Result<Option<ComposedLine>, EngineError> {
     if max_width.is_nan()
         || max_width < 0.0
+        || !(0.0..1.0).contains(&word_space_shrink)
         || !matches!(wrap, WRAP_NONE | WRAP_WORD | WRAP_CHARACTER)
     {
         return Err(EngineError::InvalidRequest);
@@ -76,6 +78,7 @@ pub(crate) fn layout_next_line(
 
     let line_start = cursor.cluster;
     let mut advance = 0.0;
+    let mut shrinkable = 0.0;
     let mut last_allowed = None;
     let mut last_allowed_advance = 0.0;
     let mut last_safe = None;
@@ -91,9 +94,17 @@ pub(crate) fn layout_next_line(
         }
         let required_break = flags & CLUSTER_REQUIRED_BREAK != 0;
         let next_advance = advance + clusters.advances[index];
+        // Declared word-space shrink lends back a fraction of every consumed
+        // space, admitting the word that would otherwise just overflow; the
+        // justification pass compresses those spaces to the same bound.
+        let next_shrinkable = if flags & CLUSTER_SPACE != 0 {
+            shrinkable + clusters.advances[index] * word_space_shrink
+        } else {
+            shrinkable
+        };
         if wrap != WRAP_NONE
             && max_width.is_finite()
-            && next_advance > max_width
+            && next_advance - next_shrinkable > max_width
             && index > line_start
         {
             if let Some(end) = last_allowed.filter(|end| *end > line_start) {
@@ -114,6 +125,7 @@ pub(crate) fn layout_next_line(
             break;
         }
         advance = next_advance;
+        shrinkable = next_shrinkable;
         if required_break {
             selected_end = index + 1;
             selected_advance = advance;
@@ -181,6 +193,30 @@ mod tests {
     }
 
     #[test]
+    fn declared_word_space_shrink_admits_the_word_that_would_just_overflow() {
+        // Ten 1.0-advance clusters with one shrinkable space after "aaaa": at
+        // width 9.5 the rigid line breaks after the space, while a 0.5 shrink
+        // fraction lends 0.5 back and the whole run fits on one line.
+        let mut flags = [0_u8; 10];
+        flags[4] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        let clusters = make_clusters(&[1.0; 10], &flags);
+        let mut rigid = LineCursor::default();
+        assert_eq!(
+            layout_next_line(&clusters, &mut rigid, 9.5, WRAP_WORD, 0.0)
+                .unwrap()
+                .unwrap()
+                .cluster_end,
+            5
+        );
+        let mut elastic = LineCursor::default();
+        let line = layout_next_line(&clusters, &mut elastic, 9.5, WRAP_WORD, 0.5)
+            .unwrap()
+            .unwrap();
+        assert_eq!(line.cluster_end, 10);
+        assert_eq!(line.advance, 10.0);
+    }
+
+    #[test]
     fn composes_word_character_and_unwrapped_lines_without_allocating() {
         let clusters = make_clusters(
             &[4.0, 4.0, 4.0, 4.0],
@@ -193,7 +229,7 @@ mod tests {
         );
         let mut cursor = LineCursor::default();
         assert_eq!(
-            layout_next_line(&clusters, &mut cursor, 10.0, WRAP_WORD).unwrap(),
+            layout_next_line(&clusters, &mut cursor, 10.0, WRAP_WORD, 0.0).unwrap(),
             Some(ComposedLine {
                 cluster_start: 0,
                 cluster_end: 2,
@@ -204,20 +240,20 @@ mod tests {
             })
         );
         assert_eq!(
-            layout_next_line(&clusters, &mut cursor, 10.0, WRAP_WORD)
+            layout_next_line(&clusters, &mut cursor, 10.0, WRAP_WORD, 0.0)
                 .unwrap()
                 .unwrap()
                 .cluster_end,
             4
         );
         assert_eq!(
-            layout_next_line(&clusters, &mut cursor, 10.0, WRAP_WORD).unwrap(),
+            layout_next_line(&clusters, &mut cursor, 10.0, WRAP_WORD, 0.0).unwrap(),
             None
         );
 
         let mut character = LineCursor::default();
         assert_eq!(
-            layout_next_line(&clusters, &mut character, 5.0, WRAP_CHARACTER)
+            layout_next_line(&clusters, &mut character, 5.0, WRAP_CHARACTER, 0.0)
                 .unwrap()
                 .unwrap()
                 .cluster_end,
@@ -225,7 +261,7 @@ mod tests {
         );
         let mut unwrapped = LineCursor::default();
         assert_eq!(
-            layout_next_line(&clusters, &mut unwrapped, 1.0, WRAP_NONE)
+            layout_next_line(&clusters, &mut unwrapped, 1.0, WRAP_NONE, 0.0)
                 .unwrap()
                 .unwrap()
                 .advance,
@@ -237,14 +273,14 @@ mod tests {
             &[CLUSTER_SAFE_BEFORE, 0, CLUSTER_SAFE_BEFORE],
         );
         let mut unsafe_cursor = LineCursor::default();
-        let line = layout_next_line(&unsafe_boundary, &mut unsafe_cursor, 5.0, WRAP_WORD)
+        let line = layout_next_line(&unsafe_boundary, &mut unsafe_cursor, 5.0, WRAP_WORD, 0.0)
             .unwrap()
             .unwrap();
         assert_eq!((line.cluster_end, line.advance), (2, 8.0));
 
         let oversized = make_clusters(&[7.0, 3.0], &[CLUSTER_SAFE_BEFORE, CLUSTER_SAFE_BEFORE]);
         let mut oversized_cursor = LineCursor::default();
-        let line = layout_next_line(&oversized, &mut oversized_cursor, 5.0, WRAP_WORD)
+        let line = layout_next_line(&oversized, &mut oversized_cursor, 5.0, WRAP_WORD, 0.0)
             .unwrap()
             .unwrap();
         assert_eq!((line.cluster_end, line.advance), (1, 7.0));
@@ -260,7 +296,7 @@ mod tests {
             ],
         );
         let mut cursor = LineCursor::default();
-        let first = layout_next_line(&clusters, &mut cursor, f64::INFINITY, WRAP_WORD)
+        let first = layout_next_line(&clusters, &mut cursor, f64::INFINITY, WRAP_WORD, 0.0)
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -268,13 +304,13 @@ mod tests {
             (0, 1, 3.0)
         );
         assert!(first.hard_break);
-        let trailing = layout_next_line(&clusters, &mut cursor, 0.0, WRAP_WORD)
+        let trailing = layout_next_line(&clusters, &mut cursor, 0.0, WRAP_WORD, 0.0)
             .unwrap()
             .unwrap();
         assert_eq!((trailing.cluster_start, trailing.cluster_end), (2, 2));
         assert_eq!((trailing.text_start, trailing.text_end), (2, 2));
         assert_eq!(
-            layout_next_line(&clusters, &mut cursor, 0.0, WRAP_WORD).unwrap(),
+            layout_next_line(&clusters, &mut cursor, 0.0, WRAP_WORD, 0.0).unwrap(),
             None
         );
     }

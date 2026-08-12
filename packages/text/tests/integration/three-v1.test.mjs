@@ -205,6 +205,41 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     paragraph.dispose();
   }
 
+  // Justification controls: an unbounded justified last line fills the exact
+  // box; capping word growth at its natural width and bounding letter gaps
+  // leaves the line short by design.
+  const justifyBox = (justify, lastLine) => ({
+    width: { mode: 'exact', size: 300 },
+    align: 'justify',
+    ...(justify === undefined ? {} : { justify }),
+    lastLine,
+  });
+  const natural = new Text({ font, text: 'pack my box', contentBox: justifyBox(undefined, 'auto') });
+  const filled = new Text({ font, text: 'pack my box', contentBox: justifyBox(undefined, 'justify') });
+  const capped = new Text({
+    font,
+    text: 'pack my box',
+    contentBox: justifyBox({ maxWordSpaceRatio: 1, letterSpaceExpansion: 0.5 }, 'justify'),
+  });
+  for (const paragraph of [natural, filled, capped]) scene.add(paragraph);
+  scene.updateMatrixWorld();
+  const naturalMeasure = natural.measureLayout();
+  const filledMeasure = filled.measureLayout();
+  const cappedMeasure = capped.measureLayout();
+  assert.equal(naturalMeasure.lineCount, 1);
+  assert.ok(naturalMeasure.contentWidth < 300, 'auto last line keeps its natural advance');
+  assert.equal(filledMeasure.contentWidth, 300, 'justified last line fills the exact box');
+  const cappedGaps = cappedMeasure.glyphCount - 1;
+  assert.equal(
+    cappedMeasure.contentWidth,
+    naturalMeasure.contentWidth + cappedGaps * 0.5,
+    'capped word spaces spill into bounded letter gaps',
+  );
+  for (const paragraph of [natural, filled, capped]) {
+    paragraph.removeFromParent();
+    paragraph.dispose();
+  }
+
   label.removeFromParent();
   label.dispose();
   font.dispose();
