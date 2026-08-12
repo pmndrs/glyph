@@ -13,7 +13,8 @@ export type ComparisonWorkloadId =
   | 'dynamic-layout'
   | 'paragraph-stress'
   | 'paint-effects'
-  | 'rich-text';
+  | 'rich-text'
+  | 'editorial';
 
 export type IconGridView = 'alternate' | 'origin';
 

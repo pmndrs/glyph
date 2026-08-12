@@ -1,4 +1,5 @@
 import { dynamicLayoutWorkload } from '../dynamic-layout/scene';
+import { editorialWorkload } from '../editorial/scene';
 import { iconGridWorkload } from '../icon-grid/scene';
 import { offAxis3dWorkload } from '../off-axis-3d/scene';
 import { paintEffectsWorkload } from '../paint-effects/scene';
@@ -22,6 +23,7 @@ export const COMPARISON_WORKLOADS = {
   'paragraph-stress': paragraphStressWorkload,
   'paint-effects': paintEffectsWorkload,
   'rich-text': richTextWorkload,
+  editorial: editorialWorkload,
 } satisfies Record<ComparisonWorkloadId, ComparisonWorkloadDefinition>;
 
 export const COMPARISON_WORKLOAD_IDS = Object.freeze(

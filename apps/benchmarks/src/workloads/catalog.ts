@@ -2,6 +2,7 @@ import { advancedShapingDefinition } from './advanced-shaping/definition';
 import { benchmarkIpsumDefinition } from './benchmark-ipsum/definition';
 import type { ComparisonWorkloadId } from './comparison/contracts';
 import { dynamicLayoutDefinition } from './dynamic-layout/definition';
+import { editorialDefinition } from './editorial/definition';
 import { iconGridDefinition } from './icon-grid/definition';
 import { offAxis3dDefinition } from './off-axis-3d/definition';
 import { paintEffectsDefinition } from './paint-effects/definition';
@@ -41,6 +42,7 @@ export const BENCHMARK_WORKLOADS = {
   'paragraph-stress': paragraphStressDefinition,
   'paint-effects': paintEffectsDefinition,
   'rich-text': richTextDefinition,
+  editorial: editorialDefinition,
 } as const satisfies Record<BenchmarkWorkloadId, BenchmarkWorkloadDefinition>;
 
 export const BENCHMARK_WORKLOAD_IDS = Object.freeze(Object.keys(BENCHMARK_WORKLOADS) as readonly BenchmarkWorkloadId[]);

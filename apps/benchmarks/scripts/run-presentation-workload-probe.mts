@@ -21,6 +21,7 @@ if (address === null || address === undefined || typeof address === 'string') {
 }
 
 const workloads = [
+  { id: 'editorial', label: 'Editorial', fontSize: 24, layoutWidthRatio: 0.82, amount: 50, camera: 'orthographic' },
   { id: 'text-ladder', label: 'Text ladder', fontSize: 24, layoutWidthRatio: 0.82, amount: 50, camera: 'orthographic' },
   {
     id: 'zoom-text',
