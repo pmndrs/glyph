@@ -228,12 +228,52 @@ pub(crate) fn layout_next_line_integer(
     let mut last_safe_advance = 0_i64;
     let mut selected_end = count;
     let mut selected_advance = 0_i64;
+    // Chunk-64 fast path (D-245, word wrap only): a chunk whose summary fits in
+    // full is consumed with three loads instead of sixty-four iterations. The last
+    // break candidate inside a skipped chunk is deferred — resolved only if a break
+    // is actually needed and no later scalar candidate superseded it, which the
+    // monotonic scan guarantees by clearing the pending entry on any later scalar
+    // candidate. Exactness holds because integer chunk sums equal the per-cluster
+    // sums.
+    let chunk_summaries = wrap == WRAP_WORD
+        && clusters.chunk_flags_or.len() == count.div_ceil(super::cluster_state::LAYOUT_CHUNK);
+    let mut pending_allowed: Option<(usize, i64)> = None;
+    let mut pending_safe: Option<(usize, i64)> = None;
 
-    for index in line_start..count {
+    let mut index = line_start;
+    while index < count {
+        if chunk_summaries
+            && index % super::cluster_state::LAYOUT_CHUNK == 0
+            && index + super::cluster_state::LAYOUT_CHUNK <= count
+        {
+            let chunk = index / super::cluster_state::LAYOUT_CHUNK;
+            let flags_or = clusters.chunk_flags_or[chunk];
+            if flags_or & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) == 0 {
+                let next_advance = advance + clusters.chunk_advance_sums[chunk];
+                let next_shrinkable_q16 =
+                    shrinkable_q16 + clusters.chunk_space_sums[chunk] * word_space_shrink_q16;
+                let fits = max_width_units.is_none_or(|units| {
+                    (next_advance << 16) - next_shrinkable_q16 <= units << 16
+                });
+                if fits {
+                    if flags_or & CLUSTER_ALLOWED_BREAK != 0 {
+                        pending_allowed = Some((chunk, advance));
+                    }
+                    if flags_or & CLUSTER_SAFE_BEFORE != 0 {
+                        pending_safe = Some((chunk, advance));
+                    }
+                    advance = next_advance;
+                    shrinkable_q16 = next_shrinkable_q16;
+                    index += super::cluster_state::LAYOUT_CHUNK;
+                    continue;
+                }
+            }
+        }
         let flags = clusters.flags[index];
         if index > line_start && flags & CLUSTER_SAFE_BEFORE != 0 {
             last_safe = Some(index);
             last_safe_advance = advance;
+            pending_safe = None;
         }
         let required_break = flags & CLUSTER_REQUIRED_BREAK != 0;
         let cluster_advance = i64::from(clusters.advances_f26[index]);
@@ -248,9 +288,23 @@ pub(crate) fn layout_next_line_integer(
                 .is_some_and(|units| (next_advance << 16) - next_shrinkable_q16 > units << 16)
             && index > line_start
         {
-            if let Some(end) = last_allowed.filter(|end| *end > line_start) {
+            // A pending chunk candidate is always later than any recorded scalar
+            // candidate, so it resolves first.
+            if let Some((end, break_advance)) =
+                pending_allowed.and_then(|(chunk, entry)| {
+                    resolve_last_flagged(clusters, chunk, entry, CLUSTER_ALLOWED_BREAK, line_start)
+                })
+            {
+                selected_end = end;
+                selected_advance = break_advance;
+            } else if let Some(end) = last_allowed.filter(|end| *end > line_start) {
                 selected_end = end;
                 selected_advance = last_allowed_advance;
+            } else if let Some((end, break_advance)) = pending_safe.and_then(|(chunk, entry)| {
+                resolve_last_flagged(clusters, chunk, entry, CLUSTER_SAFE_BEFORE, line_start)
+            }) {
+                selected_end = end;
+                selected_advance = break_advance;
             } else if let Some(end) = last_safe.filter(|end| *end > line_start) {
                 selected_end = end;
                 selected_advance = last_safe_advance;
@@ -261,6 +315,7 @@ pub(crate) fn layout_next_line_integer(
                     selected_advance = advance;
                     break;
                 }
+                index += 1;
                 continue;
             }
             break;
@@ -283,10 +338,14 @@ pub(crate) fn layout_next_line_integer(
         if allowed {
             last_allowed = Some(index + 1);
             last_allowed_advance = advance;
+            pending_allowed = None;
         }
-        if index + 1 == count {
-            selected_advance = advance;
-        }
+        index += 1;
+    }
+    // A line that runs off the end of the text — including through a final chunk
+    // skip, which never executes the per-cluster tail — selects the full advance.
+    if index >= count && selected_end == count {
+        selected_advance = advance;
     }
 
     if selected_end <= line_start {
@@ -313,6 +372,39 @@ pub(crate) fn layout_next_line_integer(
     }))
 }
 
+/// Resolves the deferred break candidate inside a fully consumed chunk: the LAST
+/// cluster carrying `flag`, with the exact prefix advance the scalar loop would have
+/// recorded there. Allowed breaks break after their cluster; safe breaks break
+/// before theirs, so their prefix excludes the flagged cluster.
+fn resolve_last_flagged(
+    clusters: &ClusterArena,
+    chunk: usize,
+    entry_advance: i64,
+    flag: u8,
+    line_start: usize,
+) -> Option<(usize, i64)> {
+    let start = chunk * super::cluster_state::LAYOUT_CHUNK;
+    let end = start + super::cluster_state::LAYOUT_CHUNK;
+    let position = (start..end)
+        .rev()
+        .find(|&index| clusters.flags[index] & flag != 0 && (flag != CLUSTER_SAFE_BEFORE || index > line_start))?;
+    let mut advance = entry_advance;
+    let prefix_end = if flag == CLUSTER_SAFE_BEFORE {
+        position
+    } else {
+        position + 1
+    };
+    for index in start..prefix_end {
+        advance += i64::from(clusters.advances_f26[index]);
+    }
+    let break_at = if flag == CLUSTER_SAFE_BEFORE {
+        position
+    } else {
+        position + 1
+    };
+    Some((break_at, advance))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,21 +412,19 @@ mod tests {
 
     fn make_clusters(advances: &[f64], flags: &[u8]) -> ClusterArena {
         let count = advances.len();
-        ClusterArena {
+        let mut clusters = ClusterArena {
             starts: (0..count as u32).collect(),
             ends: (1..=count as u32).collect(),
             advances: advances.to_vec(),
-            advances_f26: advances
-                .iter()
-                .map(|advance| super::super::layout_units::layout_units_from_scaled(*advance))
-                .collect(),
             flags: flags.to_vec(),
             style_indexes: vec![0; count],
             source_runs: vec![0; count],
             font_handles: vec![1; count],
             index_at: (0..=count as u32).collect(),
             ..ClusterArena::default()
-        }
+        };
+        clusters.refresh_layout_units().unwrap();
+        clusters
     }
 
     /// Clusters whose f64 advances are exactly the dyadic values their F26.6
@@ -345,6 +435,7 @@ mod tests {
         for (advance, units) in clusters.advances.iter_mut().zip(&clusters.advances_f26) {
             *advance = scaled_from_layout_units(i64::from(*units));
         }
+        clusters.refresh_layout_units().unwrap();
         clusters
     }
 
@@ -412,6 +503,58 @@ mod tests {
             }
         }
         // Unconstrained width agrees as well.
+        assert_eq!(
+            fit_all_integer(&clusters, None, WRAP_WORD, 0),
+            fit_all(&clusters, f64::INFINITY, WRAP_WORD, 0.0),
+        );
+    }
+
+    #[test]
+    fn chunked_fit_matches_the_scalar_fit_across_multi_chunk_lines() {
+        use super::super::cluster_state::LAYOUT_CHUNK;
+        use super::super::layout_units::layout_units_from_scaled;
+        // ~1,500 clusters so wide lines span many chunks, with words straddling
+        // chunk boundaries, shrinkable spaces, and one hard break mid-corpus. The
+        // chunked integer fit must select byte-identical lines to the f64 reference
+        // at every width, including widths that land the break inside a skipped
+        // chunk (deferred resolution) and directly on chunk boundaries.
+        let mut advances = alloc::vec::Vec::new();
+        let mut flags = alloc::vec::Vec::new();
+        let mut word = 0_u32;
+        while advances.len() < 24 * LAYOUT_CHUNK {
+            for letter in 0..2 + (word % 6) {
+                advances.push(4.0 + f64::from((word * 11 + letter * 7) % 13) * 0.417);
+                flags.push(0);
+            }
+            advances.push(2.75);
+            flags.push(CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE);
+            if word == 400 {
+                advances.push(0.0);
+                flags.push(CLUSTER_HARD_BREAK | CLUSTER_REQUIRED_BREAK);
+            }
+            word += 1;
+        }
+        let clusters = make_quantized_clusters(&advances, &flags);
+        assert!(
+            clusters.chunk_flags_or.len() >= 24,
+            "the corpus must span many chunks"
+        );
+        for width in [
+            33.0_f64, 129.31, 260.07, 517.5, 1041.13, 2087.0, 4200.9, 8500.0,
+        ] {
+            let width_units = i64::from(layout_units_from_scaled(width));
+            for (shrink_q16, shrink) in [(0_i64, 0.0_f64), (13_107, 13_107.0 / 65_536.0)] {
+                let scalar = fit_all(
+                    &clusters,
+                    scaled_from_layout_units(width_units),
+                    WRAP_WORD,
+                    shrink,
+                );
+                let integer = fit_all_integer(&clusters, Some(width_units), WRAP_WORD, shrink_q16);
+                assert_eq!(integer, scalar, "width {width} shrink {shrink}");
+            }
+        }
+        // Unconstrained: one line consumes every chunk.
         assert_eq!(
             fit_all_integer(&clusters, None, WRAP_WORD, 0),
             fit_all(&clusters, f64::INFINITY, WRAP_WORD, 0.0),

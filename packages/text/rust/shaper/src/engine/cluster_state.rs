@@ -18,6 +18,8 @@ pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
 
 const GLYPH_UNSAFE_TO_BREAK: u16 = 1;
 const NO_SOURCE_RUN: u32 = u32::MAX;
+/// Cluster count per chunk summary (D-245).
+pub(crate) const LAYOUT_CHUNK: usize = 64;
 
 #[derive(Default)]
 pub(crate) struct ClusterArena {
@@ -28,6 +30,11 @@ pub(crate) struct ClusterArena {
     /// refreshed at the end of every build. Slice 2a keeps the f64 stream
     /// authoritative; the integer fit consumes this stream and must match.
     pub advances_f26: Vec<i32>,
+    /// Chunk-64 summaries over `advances_f26`/`flags`, refreshed with them: total
+    /// advance, shrinkable-space advance, and OR-folded flags per chunk.
+    pub chunk_advance_sums: Vec<i64>,
+    pub chunk_space_sums: Vec<i64>,
+    pub chunk_flags_or: Vec<u8>,
     pub flags: Vec<u8>,
     pub style_indexes: Vec<u32>,
     pub source_runs: Vec<u32>,
@@ -372,6 +379,38 @@ impl ClusterArena {
                 .iter()
                 .map(|advance| super::layout_units::layout_units_from_scaled(*advance)),
         );
+        // Chunk-64 summaries (D-245): per 64-cluster chunk, the total advance, the
+        // advance carried by shrinkable spaces, and the OR of every cluster flag.
+        // The fit skips whole fitting chunks through these sums — exact, because
+        // integer addition is associative — and resolves the last break position
+        // inside a chunk only when a break is actually needed. The tail chunk is
+        // summarized too; consumers gate on full-chunk availability themselves.
+        let chunk_count = self.advances_f26.len().div_ceil(LAYOUT_CHUNK);
+        self.chunk_advance_sums.clear();
+        self.chunk_space_sums.clear();
+        self.chunk_flags_or.clear();
+        reserve(&mut self.chunk_advance_sums, chunk_count)?;
+        reserve(&mut self.chunk_space_sums, chunk_count)?;
+        reserve(&mut self.chunk_flags_or, chunk_count)?;
+        for (advances, flags) in self
+            .advances_f26
+            .chunks(LAYOUT_CHUNK)
+            .zip(self.flags.chunks(LAYOUT_CHUNK))
+        {
+            let mut advance_sum = 0_i64;
+            let mut space_sum = 0_i64;
+            let mut flags_or = 0_u8;
+            for (advance, flag) in advances.iter().zip(flags) {
+                let advance = i64::from(*advance);
+                advance_sum += advance;
+                // Branchless select keeps this loop a straight vectorizable stream.
+                space_sum += advance & -i64::from((*flag & CLUSTER_SPACE) >> 4);
+                flags_or |= *flag;
+            }
+            self.chunk_advance_sums.push(advance_sum);
+            self.chunk_space_sums.push(space_sum);
+            self.chunk_flags_or.push(flags_or);
+        }
         Ok(())
     }
 
@@ -520,6 +559,9 @@ impl ClusterArena {
         self.ends.clear();
         self.advances.clear();
         self.advances_f26.clear();
+        self.chunk_advance_sums.clear();
+        self.chunk_space_sums.clear();
+        self.chunk_flags_or.clear();
         self.flags.clear();
         self.style_indexes.clear();
         self.source_runs.clear();
