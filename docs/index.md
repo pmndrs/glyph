@@ -25,6 +25,7 @@ okf_version: '0.2'
 - [Shaping data contract V0](planning/shaping-data-contract.md) — retained SFNT profile, Wasm ABI, validation, and conformance.
 - [Raster data contract V0](planning/raster-data-contract.md) — bitmap, MSDF, and Slug records and resources.
 - [glTF extension drafts](planning/extensions/index.md) — `PMNDRS_font` and raster companion schemas.
+- [sync measure plan](planning/sync-measure-plan.md) — paragraph-scoped synchronous measurement implementation plan (11.17).
 - [uikit integration](planning/uikit-integration.md) — framework-neutral measurement/layout boundary and adoption path.
 
 ## Verification and evidence

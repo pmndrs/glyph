@@ -532,12 +532,13 @@ function engineStyleUpdateBytes(
     view.setFloat32(styleRecordOffset + styleRecord.rasterPixelRatio, 1, true);
   }
   if (geometry) {
+    const box = geometry === true ? {} : geometry;
     view.setUint32(constraintOffset + constraint.paragraphId, 1, true);
     view.setUint32(constraintOffset + constraint.flowThreadId, 1, true);
-    view.setFloat32(constraintOffset + constraint.width, 100, true);
-    view.setFloat32(constraintOffset + constraint.height, 100, true);
-    view.setFloat32(constraintOffset + constraint.viewportBlockEnd, 100, true);
-    view.setUint32(constraintOffset + constraint.maxLines, 1, true);
+    view.setFloat32(constraintOffset + constraint.width, box.width ?? 100, true);
+    view.setFloat32(constraintOffset + constraint.height, box.height ?? 100, true);
+    view.setFloat32(constraintOffset + constraint.viewportBlockEnd, box.height ?? 100, true);
+    view.setUint32(constraintOffset + constraint.maxLines, box.maxLines ?? 1, true);
     view.setUint16(constraintOffset + constraint.regionCount, 1, true);
     view.setUint8(constraintOffset + constraint.widthMode, abi.engine.axisModes.exact);
     view.setUint8(constraintOffset + constraint.heightMode, abi.engine.axisModes.exact);
@@ -569,3 +570,128 @@ function utf16Units(value) {
 function align(value, alignment) {
   return Math.ceil(value / alignment) * alignment;
 }
+
+/**
+ * Roadmap 11.17 layer 1: the paragraph-scoped synchronous measure entry runs
+ * preparation and measurement for one paragraph, writes the semantic table into
+ * the inactive result slot without publishing, and leaves committed state
+ * untouched — no revision advance, no publication-generation bump, and no
+ * checkpoint hazard for the next real frame.
+ */
+test('measure_paragraph answers synchronously without publishing or burning revisions', async () => {
+  const [interArtifact, shaperWasm, abi] = await Promise.all([
+    readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+    readFile(shaperWasmUrl),
+    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+  ]);
+  const inter = await validateFontArtifact(interArtifact);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  assert.equal(typeof fn.measureParagraph, 'function', 'the ABI declares the synchronous measure entry');
+  registerValidatedFont({ abi, fn, memory }, 101, inter);
+  registerSimpleBinding({ abi, fn, memory }, 1001, 101, inter, 71, 1);
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(0xe9, 3, 0, 0));
+  assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
+  fn.deallocate(stack.pointer, stack.length);
+  const policyBytes = twoTechniquePolicyBytes(abi);
+  const policy = copyToWasm(memory, fn.allocate, policyBytes);
+  assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
+  fn.deallocate(policy.pointer, policy.length);
+  assert.equal(fn.createSession(29, 4096, 128 * 1024, 0), abi.status.ok);
+
+  const resultLayout = abi.layouts.engineResult;
+  const record = abi.layouts.engineSemanticView;
+  const run = (bytes, entry, paragraphId) => {
+    const pointer = fn.requestPointer(29);
+    new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+    const resultPointer =
+      entry === 'measure' ? fn.measureParagraph(29, pointer, bytes.byteLength, paragraphId) : fn.textUpdate(29, pointer, bytes.byteLength);
+    const view = new DataView(memory.buffer, resultPointer, resultLayout.size);
+    return {
+      pointer: resultPointer,
+      status: view.getUint32(resultLayout.status, true),
+      engineRevision: view.getUint32(resultLayout.engineRevision, true),
+      publicationGeneration: view.getUint32(resultLayout.publicationGeneration, true),
+      semanticViewsOffset: view.getUint32(resultLayout.semanticViewsOffset, true),
+      semanticViewCount: view.getUint32(resultLayout.semanticViewCount, true),
+    };
+  };
+  const measurementFor = (result, paragraphId) => {
+    for (let index = 0; index < result.semanticViewCount; index += 1) {
+      const offset = result.pointer + result.semanticViewsOffset + index * record.size;
+      const view = new DataView(memory.buffer, offset, record.size);
+      if (
+        view.getUint8(record.kind) === abi.engine.semanticRecordKinds.paragraphMeasurement &&
+        view.getUint32(record.id, true) === paragraphId
+      ) {
+        return {
+          lineCount: view.getUint32(record.itemCount, true),
+          inlineExtent: view.getFloat32(record.inlineExtent, true),
+        };
+      }
+    }
+    return undefined;
+  };
+
+  const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
+  const seeded = run(
+    engineStyleUpdateBytes(abi, {
+      sessionId: 29,
+      policyHandle: 23,
+      fontStackHandle: 17,
+      text,
+      maxClusters: 64,
+      geometry: { width: 300, height: 200, maxLines: 16 },
+    }),
+    'update',
+  );
+  assert.equal(seeded.status, abi.status.ok);
+
+  // The narrow measure reflects the queried constraint, not the committed one.
+  const measureRequest = engineStyleUpdateBytes(abi, {
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    expectedEngineRevision: seeded.engineRevision,
+    consumedPlanRevision: seeded.engineRevision,
+    acknowledgedPublicationGeneration: seeded.publicationGeneration,
+    maxClusters: 64,
+    geometry: { width: 90, height: 400, maxLines: 32 },
+  });
+  new DataView(measureRequest.buffer).setUint32(
+    abi.layouts.engineUpdateRequest.semanticViewMask,
+    abi.engine.semanticViewMasks.measurement,
+    true,
+  );
+  const measured = run(measureRequest, 'measure', 1);
+  assert.equal(measured.status, abi.status.ok);
+  const narrow = measurementFor(measured, 1);
+  assert.ok(narrow, 'the query returns a measurement record for the queried paragraph');
+  assert.ok(narrow.lineCount >= 2, 'the narrow measure wraps');
+  assert.ok(narrow.inlineExtent <= 90 + 1e-3, 'the measure reflects the queried width');
+  assert.equal(measured.publicationGeneration, seeded.publicationGeneration, 'no publication flip');
+  assert.equal(measured.engineRevision, seeded.engineRevision, 'no revision burn');
+
+  // Committed state is intact: an ordinary follow-up frame continues from the
+  // pre-measure revisions.
+  const followUp = run(
+    engineStyleUpdateBytes(abi, {
+      sessionId: 29,
+      policyHandle: 23,
+      fontStackHandle: 17,
+      expectedEngineRevision: seeded.engineRevision,
+      consumedPlanRevision: seeded.engineRevision,
+      acknowledgedPublicationGeneration: seeded.publicationGeneration,
+      maxClusters: 64,
+      geometry: { width: 260, height: 200, maxLines: 16 },
+    }),
+    'update',
+  );
+  assert.equal(followUp.status, abi.status.ok);
+  assert.equal(followUp.engineRevision, seeded.engineRevision + 1);
+  assert.equal(fn.disposeSession(29), abi.status.ok);
+});
