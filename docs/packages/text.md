@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:5f1cd53feaa0f684fe69723b072ad6a1f5b9fc2eabcb92ec3476eeeb446d7af5'
+source_digest: 'sha256:ad6aaba4e5f57eef86cdbd35ccfdd2dab826dd91f93c802d981990d58f413b08'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -258,6 +258,13 @@ inactive result slot without publishing: no A/B flip, no publication-generation 
 renderer-fence acknowledgment. The host must copy the records out before its next update call (host lease). The query
 terminates leave-committed, so the following ordinary frame proceeds from pre-measure revisions with no checkpoint
 hazard.
+
+The prepared pending state is retained as one speculative session transaction. Sequential queries extend it while the
+committed revision, lifecycle input, and the queried paragraph's text/style input fingerprints still match — a
+geometry-only follow-up query re-runs just geometry, flow, and positioning over the retained semantic prefix, and
+identities extend linearly from the transaction's high-water marks instead of rolling back between queries. Any
+fingerprint mismatch rebuilds cold with results identical to a fresh preparation, and an ordinary frame drops the
+transaction leave-committed at entry, so committed state never observes a query.
 
 The semantic values preserve information useful to callers:
 

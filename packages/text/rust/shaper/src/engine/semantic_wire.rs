@@ -486,6 +486,17 @@ impl<'a> ParagraphMutationBatch<'a> {
         }
     }
 
+    /// Identity of the speculative lifecycle input: 0 when no mutations ride the
+    /// request, otherwise a hash over the fixed-size mutation records.
+    pub(crate) fn fingerprint(self) -> u64 {
+        if self.records.is_empty() {
+            return 0;
+        }
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        mix_bytes(&mut hash, self.records);
+        hash
+    }
+
     pub(crate) fn len(self) -> usize {
         self.records.len() / abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize
     }
@@ -579,6 +590,27 @@ impl<'a> TextMutationBatch<'a> {
                 cursor,
             )?,
         })
+    }
+
+    /// Identity of the speculative text input: 0 when no mutations ride the request,
+    /// otherwise a content hash over each mutation's target range and insert payload
+    /// (request-buffer offsets do not participate, so equal edits fingerprint equally
+    /// regardless of request layout).
+    pub(crate) fn fingerprint(self) -> u64 {
+        if self.records.is_empty() {
+            return 0;
+        }
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for index in 0..self.len() {
+            let Some(mutation) = self.get(index) else {
+                continue;
+            };
+            mix_bytes(&mut hash, &mutation.paragraph_id.to_le_bytes());
+            mix_bytes(&mut hash, &mutation.text_start.to_le_bytes());
+            mix_bytes(&mut hash, &mutation.delete_count.to_le_bytes());
+            mix_bytes(&mut hash, mutation.insert_utf16_le);
+        }
+        hash
     }
 
     pub(crate) fn validate_disjoint_geometry(self, geometry: GeometryBatch<'_>) -> Result<(), u32> {
@@ -720,6 +752,25 @@ impl<'a> StyleMutationBatch<'a> {
                 cursor,
             )?,
         })
+    }
+
+    /// Identity of the speculative style input: 0 when no mutations ride the request,
+    /// otherwise a hash over the mutation records plus each upsert's language and
+    /// feature payloads. Record bytes include request-buffer payload offsets, so this
+    /// is layout-sensitive: equal content at different offsets rebuilds conservatively.
+    pub(crate) fn fingerprint(self) -> u64 {
+        if self.records.is_empty() {
+            return 0;
+        }
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        mix_bytes(&mut hash, self.records);
+        for index in 0..self.len() {
+            if let Some(StyleMutation::Upsert(value)) = self.get(index) {
+                mix_bytes(&mut hash, value.language);
+                mix_bytes(&mut hash, value.features);
+            }
+        }
+        hash
     }
 
     pub(crate) fn feature(value: StyleValue<'_>, index: usize) -> Option<FeatureRecord> {

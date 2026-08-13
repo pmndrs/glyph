@@ -674,7 +674,6 @@ pub unsafe extern "C" fn pmndrs_text_engine_measure_paragraph(
                 .and_then(|transport| transport.stage_query(session_id, revision, semantic_views)),
             Err(error) => Err(engine_status(error)),
         };
-        let _ = state.engine.finish_measure(measured);
         match staged {
             Ok(pointer) => u32::try_from(pointer).unwrap_or(0),
             Err(status) => publish_failure(state, session_id, revision, status, 0, 0),

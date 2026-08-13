@@ -685,6 +685,38 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   assert.equal(measured.publicationGeneration, seeded.publicationGeneration, 'no publication flip');
   assert.equal(measured.engineRevision, seeded.engineRevision, 'no revision burn');
 
+  // Sequential queries extend one retained speculative transaction: a repeated
+  // identical query answers identically, and a new width relayouts correctly from
+  // the retained prefix without touching publication or revision state.
+  const repeated = run(measureRequest.slice(), 'measure', 1);
+  assert.equal(repeated.status, abi.status.ok);
+  assert.deepEqual(measurementFor(repeated, 1), narrow, 'a repeated query answers identically');
+  const widerRequest = engineStyleUpdateBytes(abi, {
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    expectedEngineRevision: seeded.engineRevision,
+    consumedPlanRevision: seeded.engineRevision,
+    acknowledgedPublicationGeneration: seeded.publicationGeneration,
+    maxClusters: 64,
+    styles: false,
+    geometry: { width: 150, height: 400, maxLines: 32 },
+  });
+  new DataView(widerRequest.buffer).setUint32(
+    abi.layouts.engineUpdateRequest.semanticViewMask,
+    abi.engine.semanticViewMasks.measurement,
+    true,
+  );
+  const wider = run(widerRequest, 'measure', 1);
+  assert.equal(wider.status, abi.status.ok);
+  const relaxed = measurementFor(wider, 1);
+  assert.ok(relaxed, 'the extended transaction re-answers for the new constraint');
+  assert.ok(relaxed.inlineExtent <= 150 + 1e-3, 'the new measure reflects the new width');
+  assert.ok(relaxed.inlineExtent > narrow.inlineExtent, 'the wider constraint relaxes the wrap');
+  assert.ok(relaxed.lineCount < narrow.lineCount, 'the wider constraint uses fewer lines');
+  assert.equal(wider.publicationGeneration, seeded.publicationGeneration, 'still no publication flip');
+  assert.equal(wider.engineRevision, seeded.engineRevision, 'still no revision burn');
+
   // Committed state is intact: an ordinary follow-up frame continues from the
   // pre-measure revisions.
   const followUp = run(

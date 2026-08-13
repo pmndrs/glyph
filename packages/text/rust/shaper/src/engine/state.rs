@@ -104,11 +104,27 @@ struct BoundaryCandidate {
     ellipsis_advance: f64,
 }
 
+/// One retained speculative measure transaction. It extends across sequential
+/// paragraph queries while the committed revision and lifecycle input still match,
+/// reserving identities linearly from its high-water marks; any ordinary frame drops
+/// it leave-committed before preparing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SpeculativeTransaction {
+    revision: SessionRevision,
+    /// Increments whenever a queried paragraph's semantic prefix (text/style) or the
+    /// lifecycle input rebuilds cold; geometry-only extension keeps the generation.
+    generation: u32,
+    lifecycle_fingerprint: u64,
+    next_glyph_id: u32,
+    next_content_revision: u32,
+}
+
 #[derive(Default)]
 struct EngineSession {
     revision: SessionRevision,
     acknowledged_publication_generation: u32,
     policy_binding: Option<PolicyBinding>,
+    speculative: Option<SpeculativeTransaction>,
     plan: RenderPlanCompiler,
     semantic_records: Vec<super::semantic_view::SemanticRecord>,
     next_glyph_id: u32,
@@ -206,6 +222,8 @@ struct ParagraphState {
     clusters_prepared: bool,
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
+    speculative_text_fingerprint: u64,
+    speculative_style_fingerprint: u64,
     geometry_prepared: bool,
     flow_layout_prepared: bool,
     positioned_prepared: bool,
@@ -541,12 +559,31 @@ impl TextEngine {
 
     /// Answers a paragraph-scoped measurement synchronously: validation and speculative
     /// preparation run for the queried paragraph only, no revision advances, no renderer
-    /// fence is acknowledged, and no gather or plan compilation happens. The caller
-    /// stages the semantic records and must end the query leave-committed through
-    /// [`TextEngine::finish_measure`].
+    /// fence is acknowledged, and no gather or plan compilation happens. The prepared
+    /// pending state is retained as one speculative transaction that sequential queries
+    /// extend while the committed revision and per-paragraph input fingerprints still
+    /// match; an ordinary frame drops it leave-committed at entry.
     pub(crate) fn measure_paragraph_with_shaper(
         &mut self,
         shaper: &mut ShaperRegistry,
+        request: UpdateRequest<'_>,
+        paragraph_id: u32,
+    ) -> Result<MeasuredParagraph, EngineError> {
+        self.measure_paragraph_inner(Some(shaper), request, paragraph_id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn measure_paragraph(
+        &mut self,
+        request: UpdateRequest<'_>,
+        paragraph_id: u32,
+    ) -> Result<MeasuredParagraph, EngineError> {
+        self.measure_paragraph_inner(None, request, paragraph_id)
+    }
+
+    fn measure_paragraph_inner(
+        &mut self,
+        mut shaper: Option<&mut ShaperRegistry>,
         request: UpdateRequest<'_>,
         paragraph_id: u32,
     ) -> Result<MeasuredParagraph, EngineError> {
@@ -595,8 +632,30 @@ impl TextEngine {
                 _ => return Err(EngineError::InvalidRequest),
             }
         }
-        let mut next_glyph_id = session.next_glyph_id.max(1);
-        let mut next_content_revision = session.next_content_revision.max(1);
+        let lifecycle_fingerprint = request.paragraph_mutations.fingerprint();
+        let text_fingerprint = request.text_mutations.fingerprint();
+        let style_fingerprint = request.style_mutations.fingerprint();
+        let prior_generation = session
+            .speculative
+            .map_or(0, |transaction| transaction.generation);
+        let transaction = session.speculative.filter(|transaction| {
+            transaction.revision == session.revision
+                && transaction.lifecycle_fingerprint == lifecycle_fingerprint
+        });
+        if session.speculative.is_some() && transaction.is_none() {
+            session.abort_pending();
+        }
+        let (mut next_glyph_id, mut next_content_revision) = match transaction {
+            Some(transaction) => (transaction.next_glyph_id, transaction.next_content_revision),
+            None => (
+                session.next_glyph_id.max(1),
+                session.next_content_revision.max(1),
+            ),
+        };
+        let mut generation = match transaction {
+            Some(transaction) => transaction.generation,
+            None => prior_generation.wrapping_add(1),
+        };
         let implicit_paragraph =
             if request.paragraph_mutations.len() == 0 && session.paragraphs.is_empty() {
                 request_semantic_paragraph_id(request)?
@@ -605,11 +664,13 @@ impl TextEngine {
             };
         let preparation = (|| {
             session.semantic_records.clear();
-            session.prepare_lifecycle(
-                request.paragraph_mutations,
-                implicit_paragraph,
-                request.limits.max_paragraphs,
-            )?;
+            if transaction.is_none() {
+                session.prepare_lifecycle(
+                    request.paragraph_mutations,
+                    implicit_paragraph,
+                    request.limits.max_paragraphs,
+                )?;
+            }
             let (mut text_cursor, mut style_cursor) = (0, 0);
             let (mut constraint_cursor, mut inline_object_cursor) = (0, 0);
             let text = request
@@ -638,17 +699,50 @@ impl TextEngine {
             let paragraph = session
                 .paragraph_mut(paragraph_id)
                 .ok_or(EngineError::InvalidRequest)?;
-            paragraph.positioned_changed = paragraph.state.prepare(
-                Some(&mut *shaper),
-                font_stacks,
-                font_bindings,
-                text,
-                styles,
-                geometry,
-                request.limits,
-                &mut next_glyph_id,
-                &mut next_content_revision,
-            )?;
+            let prefix_retained = transaction.is_some()
+                && paragraph.state.speculative_text_fingerprint == text_fingerprint
+                && paragraph.state.speculative_style_fingerprint == style_fingerprint;
+            if prefix_retained {
+                let state = &mut paragraph.state;
+                let geometry_fingerprint = if geometry.is_empty() {
+                    0
+                } else {
+                    geometry.fingerprint()
+                };
+                let applied_geometry_fingerprint = if state.geometry_prepared {
+                    state.pending_geometry_fingerprint
+                } else if geometry_fingerprint == 0 {
+                    0
+                } else {
+                    state.geometry_fingerprint
+                };
+                if geometry_fingerprint != applied_geometry_fingerprint {
+                    paragraph.positioned_changed = state.prepare_geometry_and_layout(
+                        shaper.as_deref_mut(),
+                        font_stacks,
+                        font_bindings,
+                        geometry,
+                        request.limits,
+                        &mut next_glyph_id,
+                        &mut next_content_revision,
+                    )?;
+                }
+            } else {
+                generation = prior_generation.wrapping_add(1);
+                paragraph.positioned_changed = paragraph.state.prepare(
+                    shaper.as_deref_mut(),
+                    font_stacks,
+                    font_bindings,
+                    text,
+                    styles,
+                    geometry,
+                    request.limits,
+                    &mut next_glyph_id,
+                    &mut next_content_revision,
+                )?;
+                paragraph.state.speculative_text_fingerprint = text_fingerprint;
+                paragraph.state.speculative_style_fingerprint = style_fingerprint;
+            }
             if request.semantic_view_mask
                 & (super::frame::SEMANTIC_VIEW_MEASUREMENT
                     | super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION)
@@ -665,7 +759,7 @@ impl TextEngine {
                         .ok_or(EngineError::InvalidRequest)?
                         .state,
                     paragraph_id,
-                    Some(&*shaper),
+                    shaper.as_deref(),
                     font_stacks,
                     font_bindings,
                     request.limits,
@@ -680,6 +774,13 @@ impl TextEngine {
             session.abort_pending();
             return Err(error);
         }
+        session.speculative = Some(SpeculativeTransaction {
+            revision: session.revision,
+            generation,
+            lifecycle_fingerprint,
+            next_glyph_id,
+            next_content_revision,
+        });
         Ok(MeasuredParagraph {
             session_id: request.session_id,
             revision: session.revision,
@@ -729,6 +830,12 @@ impl TextEngine {
             || request.acknowledged_publication_generation >= publication_generation
         {
             return Err(EngineError::RevisionConflict);
+        }
+        // An ordinary frame proceeds from committed state: any retained speculative
+        // measure transaction drops leave-committed before preparation. (Candidate
+        // adoption in the committing frame replaces this wholesale drop later.)
+        if session.speculative.is_some() {
+            session.abort_pending();
         }
         let next = SessionRevision {
             engine: session
@@ -1002,21 +1109,6 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         Ok(&session.semantic_records)
-    }
-
-    /// Ends a measure query leave-committed: speculative pending state is dropped while
-    /// committed arenas, revisions, fences, and identity counters stay exactly as they
-    /// were before the query.
-    pub(crate) fn finish_measure(&mut self, measured: MeasuredParagraph) -> Result<(), EngineError> {
-        let session = self
-            .sessions
-            .get_mut(&measured.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        if session.revision != measured.revision {
-            return Err(EngineError::RevisionConflict);
-        }
-        session.abort_pending();
-        Ok(())
     }
 
     pub(crate) fn abort_update(&mut self, prepared: PreparedUpdate) -> Result<(), EngineError> {
@@ -1530,6 +1622,7 @@ impl EngineSession {
     }
 
     fn abort_pending(&mut self) {
+        self.speculative = None;
         self.plan.abort();
         self.semantic_records.clear();
         for paragraph in &mut self.paragraphs {
@@ -1658,6 +1751,8 @@ impl ParagraphState {
         self.clusters_prepared = false;
         self.geometry_fingerprint = 0;
         self.pending_geometry_fingerprint = 0;
+        self.speculative_text_fingerprint = 0;
+        self.speculative_style_fingerprint = 0;
         self.geometry_prepared = false;
         self.flow_layout_prepared = false;
         self.positioned_prepared = false;
@@ -1689,6 +1784,31 @@ impl ParagraphState {
             self.prepare_shape(shaper, font_stacks, font_bindings)?;
             self.prepare_clusters(shaper, next_glyph_id)?;
         }
+        self.prepare_geometry_and_layout(
+            shaper,
+            font_stacks,
+            font_bindings,
+            geometry,
+            limits,
+            next_glyph_id,
+            next_content_revision,
+        )
+    }
+
+    /// The geometry-and-layout tail of [`ParagraphState::prepare`]: applied alone by a
+    /// retained measure query whose semantic prefix (text/style/shaping) fingerprints
+    /// still match the speculative transaction.
+    #[allow(clippy::too_many_arguments)]
+    fn prepare_geometry_and_layout(
+        &mut self,
+        shaper: Option<&mut ShaperRegistry>,
+        font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
+        geometry: super::semantic_wire::GeometryBatch<'_>,
+        limits: super::frame::UpdateLimits,
+        next_glyph_id: &mut u32,
+        next_content_revision: &mut u32,
+    ) -> Result<bool, EngineError> {
         self.prepare_geometry(geometry)?;
         let flow_changed =
             self.clusters_prepared || self.geometry_prepared || self.style_invalidation.metrics;
@@ -1722,6 +1842,8 @@ impl ParagraphState {
         self.abort_geometry();
         self.abort_flow_layout();
         self.abort_positioned();
+        self.speculative_text_fingerprint = 0;
+        self.speculative_style_fingerprint = 0;
     }
 
     fn commit_all(&mut self) {
@@ -1735,6 +1857,8 @@ impl ParagraphState {
         self.commit_geometry();
         self.commit_flow_layout();
         self.commit_positioned();
+        self.speculative_text_fingerprint = 0;
+        self.speculative_style_fingerprint = 0;
     }
 
     fn initialize(&mut self) -> Result<(), EngineError> {
@@ -4024,6 +4148,122 @@ mod tests {
         );
         let retry = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         engine.commit_update(retry).unwrap();
+    }
+
+    #[test]
+    fn sequential_measure_queries_extend_one_retained_speculative_transaction() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        engine.reserve_session_text(4, 8).unwrap();
+
+        let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63, 0x64])]);
+        let mut initial = update(0, 0, 0);
+        initial.text_mutations =
+            parse_text_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        // A speculative append prepares pending state that outlives the query while
+        // committed text stays untouched (leave-committed retention).
+        let edit_bytes = text_mutation_bytes(&[(4, 0, &[0x58, 0x59])]);
+        let mut query = update(1, 1, 1);
+        query.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine.measure_paragraph(query, 1).unwrap();
+        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        let session = engine.sessions.get(&4).unwrap();
+        let state = session.first_paragraph_state().unwrap();
+        assert!(state.text_prepared);
+        assert_eq!(state.pending_text, [0x61, 0x62, 0x63, 0x64, 0x58, 0x59]);
+        let transaction = session.speculative.unwrap();
+        assert_eq!(transaction.revision, session.revision);
+
+        // The same speculative input extends the transaction instead of rebuilding it.
+        let mut repeat = update(1, 1, 1);
+        repeat.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine.measure_paragraph(repeat, 1).unwrap();
+        let session = engine.sessions.get(&4).unwrap();
+        assert_eq!(
+            session.speculative.unwrap().generation,
+            transaction.generation
+        );
+
+        // A different speculative input rebuilds the paragraph prefix cold, and the
+        // rebuilt transaction is retained in its place.
+        let changed_bytes = text_mutation_bytes(&[(4, 0, &[0x5a])]);
+        let mut changed = update(1, 1, 1);
+        changed.text_mutations =
+            parse_text_mutations(&changed_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine.measure_paragraph(changed, 1).unwrap();
+        let session = engine.sessions.get(&4).unwrap();
+        assert!(session.speculative.unwrap().generation > transaction.generation);
+        assert_eq!(
+            session.first_paragraph_state().unwrap().pending_text,
+            [0x61, 0x62, 0x63, 0x64, 0x5a]
+        );
+        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+
+        // An ordinary frame drops the transaction leave-committed at entry and
+        // proceeds exactly as if no query had happened.
+        let follow = engine.prepare_update(update(1, 1, 1), 2).unwrap();
+        assert!(engine.sessions.get(&4).unwrap().speculative.is_none());
+        let committed = engine.commit_update(follow).unwrap();
+        assert_eq!(committed.revision, SessionRevision { engine: 2, plan: 2 });
+        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+    }
+
+    #[test]
+    fn a_speculative_candidate_paragraph_survives_queries_and_yields_to_the_frame() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        engine.reserve_session_text(4, 8).unwrap();
+        let prepared = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        // Measure a paragraph the session has never committed: the query owns the
+        // candidate speculatively.
+        let lifecycle_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 7, 1)]);
+        let mut query = update(1, 1, 1);
+        query.limits.max_paragraphs = 2;
+        query.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        engine.measure_paragraph(query, 7).unwrap();
+        let session = engine.sessions.get(&4).unwrap();
+        assert!(session.paragraph(7).is_some());
+        assert!(session.speculative.is_some());
+
+        // A repeated identical lifecycle extends the transaction without recreating
+        // the candidate.
+        let mut repeat = update(1, 1, 1);
+        repeat.limits.max_paragraphs = 2;
+        repeat.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        engine.measure_paragraph(repeat, 7).unwrap();
+        let generation = engine
+            .sessions
+            .get(&4)
+            .unwrap()
+            .speculative
+            .unwrap()
+            .generation;
+        assert_eq!(generation, 1);
+
+        // An ordinary frame reclaims the candidate: committed state never saw it.
+        let follow = engine.prepare_update(update(1, 1, 1), 2).unwrap();
+        let session = engine.sessions.get(&4).unwrap();
+        assert!(session.speculative.is_none());
+        assert!(session.paragraph(7).is_none());
+        engine.commit_update(follow).unwrap();
+        assert!(engine.sessions.get(&4).unwrap().paragraph(7).is_none());
     }
 
     #[test]
