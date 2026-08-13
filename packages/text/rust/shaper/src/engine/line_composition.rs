@@ -5,7 +5,7 @@ use super::{
         CLUSTER_SPACE, ClusterArena,
     },
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
-    layout_units::{apply_ratio_q16, scaled_from_layout_units},
+    layout_units::{scaled_from_layout_units},
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -217,7 +217,11 @@ pub(crate) fn layout_next_line_integer(
 
     let line_start = cursor.cluster;
     let mut advance = 0_i64;
-    let mut shrinkable = 0_i64;
+    // The shrink budget accumulates in Q16-scaled layout units WITHOUT per-space
+    // truncation, so the overflow comparison is exact integer arithmetic: a review
+    // counterexample showed per-space `>> 16` truncation selecting earlier breaks
+    // than the f64 semantics whenever space advances carry odd units.
+    let mut shrinkable_q16 = 0_i64;
     let mut last_allowed = None;
     let mut last_allowed_advance = 0_i64;
     let mut last_safe = None;
@@ -234,13 +238,14 @@ pub(crate) fn layout_next_line_integer(
         let required_break = flags & CLUSTER_REQUIRED_BREAK != 0;
         let cluster_advance = i64::from(clusters.advances_f26[index]);
         let next_advance = advance + cluster_advance;
-        let next_shrinkable = if flags & CLUSTER_SPACE != 0 {
-            shrinkable + apply_ratio_q16(cluster_advance, word_space_shrink_q16)
+        let next_shrinkable_q16 = if flags & CLUSTER_SPACE != 0 {
+            shrinkable_q16 + cluster_advance * word_space_shrink_q16
         } else {
-            shrinkable
+            shrinkable_q16
         };
         if wrap != WRAP_NONE
-            && max_width_units.is_some_and(|units| next_advance - next_shrinkable > units)
+            && max_width_units
+                .is_some_and(|units| (next_advance << 16) - next_shrinkable_q16 > units << 16)
             && index > line_start
         {
             if let Some(end) = last_allowed.filter(|end| *end > line_start) {
@@ -261,7 +266,7 @@ pub(crate) fn layout_next_line_integer(
             break;
         }
         advance = next_advance;
-        shrinkable = next_shrinkable;
+        shrinkable_q16 = next_shrinkable_q16;
         if required_break {
             selected_end = index + 1;
             selected_advance = advance;
@@ -411,6 +416,54 @@ mod tests {
             fit_all_integer(&clusters, None, WRAP_WORD, 0),
             fit_all(&clusters, f64::INFINITY, WRAP_WORD, 0.0),
         );
+    }
+
+    #[test]
+    fn integer_shrink_matches_f64_shrink_for_odd_units_and_non_dyadic_ratios() {
+        use super::super::layout_units::{layout_units_from_scaled, ratio_q16};
+        // The Sol review's counterexample: one-unit spaces at width 64 units with a
+        // 0.5 shrink. Per-space truncation broke here; exact Q16 accumulation must
+        // agree with the f64 fit evaluated at the dequantized ratio.
+        let mut flags = [0_u8; 3];
+        flags[0] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        flags[1] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        let clusters = make_quantized_clusters(&[1.0 / 64.0, 1.0 / 64.0, 63.0 / 64.0], &flags);
+        let scalar = fit_all(&clusters, 1.0, WRAP_WORD, 0.5);
+        let integer = fit_all_integer(&clusters, Some(64), WRAP_WORD, 32_768);
+        assert_eq!(integer, scalar);
+        assert_eq!(integer[0].cluster_end, 3, "shrink admits the third cluster");
+
+        // Non-dyadic declared ratios quantize once at the boundary; both fits then
+        // consume the same dequantized fraction and must agree across a sweep of
+        // odd-unit space advances and fractional widths.
+        for declared in [0.3_f64, 0.37, 0.61] {
+            let ratio = ratio_q16(declared);
+            let dequantized = ratio as f64 / 65_536.0;
+            let mut advances = alloc::vec::Vec::new();
+            let mut sweep_flags = alloc::vec::Vec::new();
+            for word in 0..24 {
+                for letter in 0..3 + (word % 4) {
+                    advances.push(5.0 + f64::from((word * 5 + letter) % 9) * 0.359);
+                    sweep_flags.push(0);
+                }
+                advances.push(2.484_375 + f64::from(word % 3) / 64.0);
+                sweep_flags.push(CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE);
+            }
+            let clusters = make_quantized_clusters(&advances, &sweep_flags);
+            let mut width = 17.0_f64;
+            while width < 130.0 {
+                let width_units = i64::from(layout_units_from_scaled(width));
+                let scalar = fit_all(
+                    &clusters,
+                    scaled_from_layout_units(width_units),
+                    WRAP_WORD,
+                    dequantized,
+                );
+                let integer = fit_all_integer(&clusters, Some(width_units), WRAP_WORD, ratio);
+                assert_eq!(integer, scalar, "ratio {declared} width {width}");
+                width += 0.173;
+            }
+        }
     }
 
     #[test]

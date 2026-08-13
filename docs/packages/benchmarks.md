@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:ed6b748466ea97aa9683dc9d9cb76643f7089f7dd6cbd8b4d4a535fc55475aa0'
+source_digest: 'sha256:6f106f1077c20e974878b18df11feae0def3c1e0aecfb18028b09c04dc817603'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest

@@ -27,15 +27,10 @@ pub(crate) fn scaled_from_layout_units(units: i64) -> f64 {
 }
 
 /// Q16 fixed-point ratio for fractions declared in `[0, 1)`, under the same
-/// round-half-up contract.
+/// round-half-up contract. The result clamps to 65,535 so a fraction arbitrarily
+/// close to one never quantizes out of the consumer's `[0, 65536)` domain.
 pub(crate) fn ratio_q16(value: f64) -> i64 {
-    i64::from(saturating_floor(value * 65_536.0 + 0.5))
-}
-
-/// Applies a Q16 ratio to a layout-unit quantity, truncating toward zero: the
-/// shrink budget never exceeds the exact product.
-pub(crate) fn apply_ratio_q16(units: i64, ratio: i64) -> i64 {
-    (units * ratio) >> 16
+    i64::from(saturating_floor(value * 65_536.0 + 0.5)).min(65_535)
 }
 
 /// `floor` for finite f64 without `std` float intrinsics: truncate toward zero and
@@ -98,15 +93,18 @@ mod tests {
     }
 
     #[test]
-    fn q16_ratios_apply_without_overshooting_the_exact_product() {
-        let ratio = ratio_q16(0.5);
-        assert_eq!(ratio, 32_768);
-        assert_eq!(apply_ratio_q16(128, ratio), 64);
-        for &(fraction, units) in &[(0.25_f64, 1000_i64), (0.33, 977), (0.999, 64_000)] {
-            let applied = apply_ratio_q16(units, ratio_q16(fraction));
-            let exact = units as f64 * fraction;
-            assert!(applied as f64 <= exact + 0.5, "{fraction} x {units}");
-            assert!((applied as f64 - exact).abs() < 2.0, "{fraction} x {units}");
+    fn q16_ratios_quantize_half_up_and_never_leave_the_consumer_domain() {
+        assert_eq!(ratio_q16(0.5), 32_768);
+        assert_eq!(ratio_q16(0.0), 0);
+        // A fraction arbitrarily close to one clamps inside [0, 65536) instead of
+        // quantizing out of the fit's accepted domain.
+        assert_eq!(ratio_q16(0.999_999_9), 65_535);
+        assert_eq!(ratio_q16(1.0 - f64::EPSILON), 65_535);
+        for &fraction in &[0.25_f64, 0.33, 0.999] {
+            let ratio = ratio_q16(fraction);
+            assert!((0..65_536).contains(&ratio), "{fraction}");
+            let round_trip = ratio as f64 / 65_536.0;
+            assert!((round_trip - fraction).abs() <= 1.0 / 65_536.0, "{fraction}");
         }
     }
 }

@@ -1233,6 +1233,7 @@ mod tests {
         assert_lane!(starts);
         assert_lane!(ends);
         assert_lane!(advances);
+        assert_lane!(advances_f26);
         assert_lane!(flags);
         assert_lane!(style_indexes);
         assert_lane!(source_runs);

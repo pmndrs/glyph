@@ -47,7 +47,10 @@ and measurement all inherited serial f64 arithmetic. This plan moves the scaling
 **F26.6 layout units** (`i32`, 1/64 of a layout unit — the FreeType convention): every inline and block
 advance, cursor, slot boundary, and extent inside flow fitting, justification, and positioning. One scale per
 `(font_size, units_per_em)` pair converts font units to layout units at cluster build under a single documented
-rounding contract (round-half-to-even); that contract *is* the layout definition. `f32` appears exactly once,
+rounding contract — round-half-up, computed as `floor(value * 64 + 1/2)` — and that contract *is* the layout
+definition. Tolerance statement: any value derived from a quantized quantity may differ from its pre-contract f64
+equivalent by strictly less than one layout unit (1/64 px) per quantization; sums remain exact in f64 while total
+magnitude stays below 2^53 layout units, a bound the engine's paragraph limits must keep enforced. `f32` appears exactly once,
 at the semantic/measurement/plan emission boundary ("final scaling output"). Ranges: ±2^25 layout units
 (±33.5 million px) bounds any paragraph; per-chunk sums fit `i32`, whole-thread sums accumulate in `i64`.
 
