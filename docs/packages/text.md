@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:ad6aaba4e5f57eef86cdbd35ccfdd2dab826dd91f93c802d981990d58f413b08'
+source_digest: 'sha256:bb2a8a86cb697447faa8ccc412e0c5067aca2aa6fb32d00995cdaaf941fd680b'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -263,8 +263,14 @@ The prepared pending state is retained as one speculative session transaction. S
 committed revision, lifecycle input, and the queried paragraph's text/style input fingerprints still match — a
 geometry-only follow-up query re-runs just geometry, flow, and positioning over the retained semantic prefix, and
 identities extend linearly from the transaction's high-water marks instead of rolling back between queries. Any
-fingerprint mismatch rebuilds cold with results identical to a fresh preparation, and an ordinary frame drops the
-transaction leave-committed at entry, so committed state never observes a query.
+fingerprint mismatch rebuilds cold with results identical to a fresh preparation.
+
+The committing frame adopts the transaction instead of discarding it: when the frame's lifecycle input matches, its
+identity counters continue from the transaction's reserved high-water marks, and each paragraph whose text/style/geometry
+inputs fingerprint-match its speculative pending state skips preparation entirely — the stable glyph identities a query
+reported stay valid in the committed frame. A paragraph whose prefix matches but whose geometry changed re-runs only the
+geometry/flow/positioning tail; anything else prepares cold. A frame whose inputs do not match the transaction drops it
+leave-committed at entry, so committed state never observes an unadopted query.
 
 The semantic values preserve information useful to callers:
 

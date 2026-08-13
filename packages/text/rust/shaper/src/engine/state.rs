@@ -632,9 +632,7 @@ impl TextEngine {
                 _ => return Err(EngineError::InvalidRequest),
             }
         }
-        let lifecycle_fingerprint = request.paragraph_mutations.fingerprint();
-        let text_fingerprint = request.text_mutations.fingerprint();
-        let style_fingerprint = request.style_mutations.fingerprint();
+        let lifecycle_fingerprint = speculative_lifecycle_fingerprint(request)?;
         let prior_generation = session
             .speculative
             .map_or(0, |transaction| transaction.generation);
@@ -699,25 +697,14 @@ impl TextEngine {
             let paragraph = session
                 .paragraph_mut(paragraph_id)
                 .ok_or(EngineError::InvalidRequest)?;
-            let prefix_retained = transaction.is_some()
-                && paragraph.state.speculative_text_fingerprint == text_fingerprint
-                && paragraph.state.speculative_style_fingerprint == style_fingerprint;
+            let (prefix_retained, geometry_retained) = if transaction.is_some() {
+                paragraph.state.speculative_match(text, styles, geometry)
+            } else {
+                (false, false)
+            };
             if prefix_retained {
-                let state = &mut paragraph.state;
-                let geometry_fingerprint = if geometry.is_empty() {
-                    0
-                } else {
-                    geometry.fingerprint()
-                };
-                let applied_geometry_fingerprint = if state.geometry_prepared {
-                    state.pending_geometry_fingerprint
-                } else if geometry_fingerprint == 0 {
-                    0
-                } else {
-                    state.geometry_fingerprint
-                };
-                if geometry_fingerprint != applied_geometry_fingerprint {
-                    paragraph.positioned_changed = state.prepare_geometry_and_layout(
+                if !geometry_retained {
+                    paragraph.positioned_changed = paragraph.state.prepare_geometry_and_layout(
                         shaper.as_deref_mut(),
                         font_stacks,
                         font_bindings,
@@ -740,8 +727,8 @@ impl TextEngine {
                     &mut next_glyph_id,
                     &mut next_content_revision,
                 )?;
-                paragraph.state.speculative_text_fingerprint = text_fingerprint;
-                paragraph.state.speculative_style_fingerprint = style_fingerprint;
+                paragraph.state.speculative_text_fingerprint = text.fingerprint();
+                paragraph.state.speculative_style_fingerprint = styles.fingerprint();
             }
             if request.semantic_view_mask
                 & (super::frame::SEMANTIC_VIEW_MEASUREMENT
@@ -831,12 +818,26 @@ impl TextEngine {
         {
             return Err(EngineError::RevisionConflict);
         }
-        // An ordinary frame proceeds from committed state: any retained speculative
-        // measure transaction drops leave-committed before preparation. (Candidate
-        // adoption in the committing frame replaces this wholesale drop later.)
-        if session.speculative.is_some() {
-            session.abort_pending();
-        }
+        // Candidate adoption: a retained speculative transaction whose committed
+        // revision and lifecycle input match this frame hands its pending state and
+        // reserved identities to the commit; per-paragraph adoption is
+        // fingerprint-gated inside the preparation loop. Any other transaction drops
+        // leave-committed, so the frame proceeds exactly from committed state.
+        let adopted = match session.speculative {
+            Some(transaction)
+                if transaction.revision == session.revision
+                    && transaction.lifecycle_fingerprint
+                        == speculative_lifecycle_fingerprint(request)? =>
+            {
+                Some(transaction)
+            }
+            Some(_) => {
+                session.abort_pending();
+                None
+            }
+            None => None,
+        };
+        session.speculative = None;
         let next = SessionRevision {
             engine: session
                 .revision
@@ -865,8 +866,16 @@ impl TextEngine {
         // A completed renderer fence is external monotonic state. It remains accepted even if
         // plan preparation or publication later aborts.
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
-        let mut next_glyph_id = session.next_glyph_id.max(1);
-        let mut next_content_revision = session.next_content_revision.max(1);
+        let (mut next_glyph_id, mut next_content_revision) = match adopted {
+            Some(transaction) => (
+                transaction.next_glyph_id.max(1),
+                transaction.next_content_revision.max(1),
+            ),
+            None => (
+                session.next_glyph_id.max(1),
+                session.next_content_revision.max(1),
+            ),
+        };
         let implicit_paragraph =
             if request.paragraph_mutations.len() == 0 && session.paragraphs.is_empty() {
                 request_semantic_paragraph_id(request)?
@@ -876,11 +885,13 @@ impl TextEngine {
         let mut gather_output_matches_next = false;
         let preparation = (|| {
             session.semantic_records.clear();
-            session.prepare_lifecycle(
-                request.paragraph_mutations,
-                implicit_paragraph,
-                request.limits.max_paragraphs,
-            )?;
+            if adopted.is_none() {
+                session.prepare_lifecycle(
+                    request.paragraph_mutations,
+                    implicit_paragraph,
+                    request.limits.max_paragraphs,
+                )?;
+            }
             let (mut text_cursor, mut style_cursor) = (0, 0);
             let (mut constraint_cursor, mut inline_object_cursor) = (0, 0);
             for order_index in 0..session.active_order().len() {
@@ -904,17 +915,36 @@ impl TextEngine {
                 let paragraph = session
                     .paragraph_mut(paragraph_id)
                     .ok_or(EngineError::InvalidRequest)?;
-                paragraph.positioned_changed = paragraph.state.prepare(
-                    shaper.as_deref_mut(),
-                    font_stacks,
-                    font_bindings,
-                    text,
-                    styles,
-                    geometry,
-                    request.limits,
-                    &mut next_glyph_id,
-                    &mut next_content_revision,
-                )?;
+                let (prefix_adopted, geometry_adopted) = if adopted.is_some() {
+                    paragraph.state.speculative_match(text, styles, geometry)
+                } else {
+                    (false, false)
+                };
+                paragraph.positioned_changed = if geometry_adopted {
+                    paragraph.state.speculative_positioned_changed()
+                } else if prefix_adopted {
+                    paragraph.state.prepare_geometry_and_layout(
+                        shaper.as_deref_mut(),
+                        font_stacks,
+                        font_bindings,
+                        geometry,
+                        request.limits,
+                        &mut next_glyph_id,
+                        &mut next_content_revision,
+                    )?
+                } else {
+                    paragraph.state.prepare(
+                        shaper.as_deref_mut(),
+                        font_stacks,
+                        font_bindings,
+                        text,
+                        styles,
+                        geometry,
+                        request.limits,
+                        &mut next_glyph_id,
+                        &mut next_content_revision,
+                    )?
+                };
             }
             if text_cursor != request.text_mutations.len()
                 || style_cursor != request.style_mutations.len()
@@ -1793,6 +1823,46 @@ impl ParagraphState {
             next_glyph_id,
             next_content_revision,
         )
+    }
+
+    /// Compares this paragraph's retained speculative prefix against incoming inputs.
+    /// The first value reports a text/style fingerprint match; the second additionally
+    /// reports that the applied geometry (pending when prepared, committed otherwise)
+    /// matches the incoming constraints, so no preparation at all is required.
+    fn speculative_match(
+        &self,
+        text: super::semantic_wire::TextMutationBatch<'_>,
+        styles: super::semantic_wire::StyleMutationBatch<'_>,
+        geometry: super::semantic_wire::GeometryBatch<'_>,
+    ) -> (bool, bool) {
+        let prefix = self.speculative_text_fingerprint == text.fingerprint()
+            && self.speculative_style_fingerprint == styles.fingerprint();
+        if !prefix {
+            return (false, false);
+        }
+        let geometry_fingerprint = if geometry.is_empty() {
+            0
+        } else {
+            geometry.fingerprint()
+        };
+        let applied_geometry_fingerprint = if self.geometry_prepared {
+            self.pending_geometry_fingerprint
+        } else if geometry_fingerprint == 0 {
+            0
+        } else {
+            self.geometry_fingerprint
+        };
+        (true, geometry_fingerprint == applied_geometry_fingerprint)
+    }
+
+    /// The `positioned_changed` answer for a fully adopted speculative paragraph:
+    /// exactly the formula [`ParagraphState::prepare`] would have reported for the
+    /// pending state this paragraph already carries.
+    fn speculative_positioned_changed(&self) -> bool {
+        self.clusters_prepared
+            || self.geometry_prepared
+            || self.style_invalidation.metrics
+            || self.style_invalidation.positioning
     }
 
     /// The geometry-and-layout tail of [`ParagraphState::prepare`]: applied alone by a
@@ -3713,6 +3783,20 @@ fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineErro
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())
+}
+
+/// Identity of a request's speculative lifecycle input: the paragraph-mutation
+/// fingerprint folded with the semantic implicit-paragraph id, so a query and a frame
+/// that would create or address the same paragraph structure fingerprint equally
+/// regardless of whether the session's paragraphs already exist.
+fn speculative_lifecycle_fingerprint(request: UpdateRequest<'_>) -> Result<u64, EngineError> {
+    let mut hash = request.paragraph_mutations.fingerprint();
+    if request.paragraph_mutations.len() == 0
+        && let Some(paragraph_id) = request_semantic_paragraph_id(request)?
+    {
+        hash ^= 0x9e37_79b9_7f4a_7c15 ^ u64::from(paragraph_id);
+    }
+    Ok(hash)
 }
 
 fn request_semantic_paragraph_id(request: UpdateRequest<'_>) -> Result<Option<u32>, EngineError> {

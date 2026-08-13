@@ -737,3 +737,121 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   assert.equal(followUp.engineRevision, seeded.engineRevision + 1);
   assert.equal(fn.disposeSession(29), abi.status.ok);
 });
+
+/**
+ * Roadmap 11.17 layer 3: the committing frame compares its per-paragraph inputs
+ * against the retained speculative transaction and, on a fingerprint hit, adopts the
+ * transaction's pending state together with its reserved glyph identities — the
+ * stable ids a query reported stay valid in the committed frame instead of being
+ * rolled back and re-allocated.
+ */
+test('the committing frame adopts the speculative transaction and its reserved glyph identities', async () => {
+  const [interArtifact, shaperWasm, abi] = await Promise.all([
+    readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+    readFile(shaperWasmUrl),
+    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+  ]);
+  const inter = await validateFontArtifact(interArtifact);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  registerValidatedFont({ abi, fn, memory }, 101, inter);
+  registerSimpleBinding({ abi, fn, memory }, 1001, 101, inter, 71, 1);
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(0xe9, 3, 0, 0));
+  assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
+  fn.deallocate(stack.pointer, stack.length);
+  const policyBytes = twoTechniquePolicyBytes(abi);
+  const policy = copyToWasm(memory, fn.allocate, policyBytes);
+  assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
+  fn.deallocate(policy.pointer, policy.length);
+  assert.equal(fn.createSession(29, 4096, 256 * 1024, 0), abi.status.ok);
+
+  const resultLayout = abi.layouts.engineResult;
+  const record = abi.layouts.engineSemanticView;
+  const run = (bytes, entry, paragraphId) => {
+    new DataView(bytes.buffer).setUint32(
+      abi.layouts.engineUpdateRequest.semanticViewMask,
+      abi.engine.semanticViewMasks.all,
+      true,
+    );
+    const pointer = fn.requestPointer(29);
+    new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+    const resultPointer =
+      entry === 'measure' ? fn.measureParagraph(29, pointer, bytes.byteLength, paragraphId) : fn.textUpdate(29, pointer, bytes.byteLength);
+    const view = new DataView(memory.buffer, resultPointer, resultLayout.size);
+    const result = {
+      status: view.getUint32(resultLayout.status, true),
+      engineRevision: view.getUint32(resultLayout.engineRevision, true),
+      publicationGeneration: view.getUint32(resultLayout.publicationGeneration, true),
+      glyphIds: [],
+    };
+    const semanticViewsOffset = view.getUint32(resultLayout.semanticViewsOffset, true);
+    const semanticViewCount = view.getUint32(resultLayout.semanticViewCount, true);
+    for (let index = 0; index < semanticViewCount; index += 1) {
+      const entryView = new DataView(memory.buffer, resultPointer + semanticViewsOffset + index * record.size, record.size);
+      if (entryView.getUint8(record.kind) === abi.engine.semanticKinds.glyph) {
+        result.glyphIds.push(entryView.getUint32(record.id, true));
+      }
+    }
+    result.glyphIds.sort((left, right) => left - right);
+    return result;
+  };
+
+  const base = Array.from('alpha beta', (character) => character.charCodeAt(0));
+  const geometry = { width: 300, height: 200, maxLines: 16 };
+  const seeded = run(
+    engineStyleUpdateBytes(abi, {
+      sessionId: 29,
+      policyHandle: 23,
+      fontStackHandle: 17,
+      text: base,
+      maxClusters: 64,
+      geometry,
+    }),
+    'update',
+  );
+  assert.equal(seeded.status, abi.status.ok);
+  assert.ok(seeded.glyphIds.length > 0, 'the seeded frame reports committed glyphs');
+
+  const appended = (suffix) => ({
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    expectedEngineRevision: seeded.engineRevision,
+    consumedPlanRevision: seeded.engineRevision,
+    acknowledgedPublicationGeneration: seeded.publicationGeneration,
+    text: Array.from(suffix, (character) => character.charCodeAt(0)),
+    textStart: base.length,
+    textEnd: base.length + suffix.length,
+    maxClusters: 64,
+    geometry,
+  });
+  const newIds = (result) => result.glyphIds.filter((id) => !seeded.glyphIds.includes(id));
+
+  const first = run(engineStyleUpdateBytes(abi, appended(' gamma')), 'measure', 1);
+  assert.equal(first.status, abi.status.ok);
+  const firstNew = newIds(first);
+  assert.ok(firstNew.length > 0, 'the first query reserves identities for its speculative glyphs');
+
+  const second = run(engineStyleUpdateBytes(abi, appended(' delta')), 'measure', 1);
+  assert.equal(second.status, abi.status.ok);
+  const secondNew = newIds(second);
+  assert.ok(secondNew.length > 0, 'the second query reserves identities for its speculative glyphs');
+  assert.ok(
+    Math.min(...secondNew) > Math.max(...firstNew),
+    'identity reservation is linear across queries: the rebuilt speculation never reuses reported ids',
+  );
+
+  const committed = run(engineStyleUpdateBytes(abi, appended(' delta')), 'update');
+  assert.equal(committed.status, abi.status.ok);
+  assert.equal(committed.engineRevision, seeded.engineRevision + 1);
+  assert.deepEqual(
+    newIds(committed),
+    secondNew,
+    'the committing frame adopts the exact glyph identities the query reported',
+  );
+  assert.equal(fn.disposeSession(29), abi.status.ok);
+});
