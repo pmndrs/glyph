@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:9fb456e88e71e9d2fc67e1e21b67af6de4a810ebfa4296e3f1841195f3c2a69e'
+source_digest: 'sha256:51d8871836613c1e70959b357a465faac2791a1e530e61d17fe315ebf84465b5'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -477,6 +477,15 @@ size, 3.29× on width, and 2.94× on suffix edit; even the slowest technique for
 and 2.76× faster. This proves the migration comparison on this machine; it does not close the stricter p95-under-4-ms
 objective. Local-edit p95 remains about 6 ms and high-variance, while width p95 ranges from 4.29 to 4.75 ms across
 techniques.
+
+The paragraph-scoped synchronous measure (11.17) closes that objective for the explicit measure shape. At the same
+22,000-glyph corpus and cadence, the new `measure-query` lane answers the identical alternating widths as the
+`column-resize` lane through `pmndrs_text_engine_measure_paragraph`: 1.815 ms median / 1.930 ms p95 / 3.0% RSD with
+zero patches and zero publication bytes, beside the full update's 2.996 ms median / 4.483 ms p95 / 21.7% RSD in the
+same run — the first width-change lane under the 4 ms p95 objective, recorded in the
+[measure-query record](../../apps/benchmarks/fixtures/results/rust-layout-bitmap-measure-a42c976-darwin-arm64.json).
+The variance collapse follows from what the query skips: no gather, no plan compile, no publication packing, and no
+revision burn, so the following ordinary frame adopts the speculative layout instead of paying a checkpoint rebuild.
 
 The preceding unchanged 22,000-glyph localized-edit lane measured the complete production `text_update` plus Bitmap render
 plan at 2.607 ms median / 6.184 ms p95 after 40 warmups over 101 updates. The fast ASCII-letter path reuses Unicode and
