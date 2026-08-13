@@ -425,9 +425,7 @@ function parseArguments(arguments_) {
         'suffix-edit',
         'localized-edit',
         'localized-splice',
-      ].includes(
-        value,
-      )
+      ].includes(value)
     ) {
       throw new RangeError(`unknown benchmark case: ${value}`);
     }

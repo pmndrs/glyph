@@ -366,7 +366,7 @@ export class ThreeTextRenderPlanExecutor {
   #applyPatches(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
     const layout = textShaperAbi.layouts.enginePatch;
     const opcodes = textShaperAbi.engine.patchOpcodes;
-    
+
     for (let index = 0; index < table.count; index += 1) {
       const record = plan.record(table, index);
       const opcode = plan.u16(record + layout.opcode);
@@ -417,25 +417,30 @@ export class ThreeTextRenderPlanExecutor {
     const primitiveLayout = textShaperAbi.layouts.enginePrimitive;
     const bufferLayout = textShaperAbi.layouts.engineBuffer;
     const resourceLayout = textShaperAbi.layouts.engineResource;
+
     const next: THREE.Mesh[] = [];
     const nextKeys: string[] = [];
     const nextOriginSegments: OriginSegment[] = [];
     const previous = new Map<string, THREE.Mesh[]>();
+
     for (let index = 0; index < this.#draws.length; index += 1) {
       const key = this.#drawKeys[index]!;
       const matches = previous.get(key) ?? [];
       matches.push(this.#draws[index]!);
       previous.set(key, matches);
     }
+
     const reused = new Set<THREE.Mesh>();
     const transformIndices = this.#collectTransformIndices(plan, draws);
     this.#ensureTransformCapacity(transformIndices);
+
     try {
       for (let index = 0; index < draws.count; index += 1) {
         const draw = plan.record(draws, index);
         if (plan.u32(draw + drawLayout.primitiveCount) !== 1) {
           throw new Error('first-party Three plan target requires one primitive span per draw');
         }
+
         const primitiveIndex = plan.u32(draw + drawLayout.primitiveStart);
         const primitive = plan.record(primitives, primitiveIndex);
         const primitiveKind = plan.u16(primitive + primitiveLayout.kind);
@@ -445,6 +450,7 @@ export class ThreeTextRenderPlanExecutor {
         ) {
           throw new Error('first-party Three plan target does not yet realize this primitive kind');
         }
+
         const drawBufferStart = plan.u32(draw + drawLayout.bufferStart);
         const drawBufferCount = plan.u32(draw + drawLayout.bufferCount);
         const byPolicyId = new Map<number, RetainedBuffer>();
@@ -453,6 +459,7 @@ export class ThreeTextRenderPlanExecutor {
           const buffer = this.#buffer(plan.u32(record + bufferLayout.id), plan.u32(record + bufferLayout.generation));
           byPolicyId.set(buffer.policyBufferId, buffer);
         }
+
         const decoration = primitiveKind === textShaperAbi.engine.primitiveKinds.decoration;
         const resource = decoration
           ? undefined
@@ -462,6 +469,7 @@ export class ThreeTextRenderPlanExecutor {
         if (!decoration && resource === undefined) {
           throw new Error('draw references an unknown retained resource');
         }
+
         const materialId = plan.u32(draw + drawLayout.materialId);
         const transformId = plan.u32(draw + drawLayout.transformId);
         const recordIndex = plan.u32(primitive + primitiveLayout.recordIndex);
@@ -499,6 +507,7 @@ export class ThreeTextRenderPlanExecutor {
           transform,
           this.#transformGeneration,
         );
+
         const reusable = previous.get(key)?.shift();
         if (reusable !== undefined) {
           if (!(reusable.geometry instanceof THREE.InstancedBufferGeometry)) {
@@ -516,11 +525,13 @@ export class ThreeTextRenderPlanExecutor {
           nextKeys.push(key);
           continue;
         }
+
         const geometry = unitQuad();
         geometry.instanceCount = recordCount;
         for (const buffer of byPolicyId.values()) {
           geometry.setAttribute(`_pmndrsText_${buffer.policyBufferId}`, buffer.attribute);
         }
+
         if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsTextTransforms', this.#transformAttribute);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.pmndrsTextRunStart = recordIndex;

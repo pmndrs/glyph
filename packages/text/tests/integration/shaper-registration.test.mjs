@@ -472,8 +472,8 @@ function engineStyleUpdateBytes(
   view.setUint32(request.policyHandle, policyHandle, true);
   view.setUint32(request.capabilitySet, 1, true);
   view.setUint32(request.maxParagraphs, 1, true);
-  const box = geometry === true ? {} : geometry || {};
-  const limits = { maxClusters, maxLines: box.maxLines ?? 1 };
+  const requestBox = geometry === true ? {} : geometry || {};
+  const limits = { maxClusters, maxLines: requestBox.maxLines ?? 1 };
   for (const field of [
     'maxClusters',
     'maxLines',
@@ -617,7 +617,9 @@ test('measure_paragraph answers synchronously without publishing or burning revi
     const pointer = fn.requestPointer(29);
     new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
     const resultPointer =
-      entry === 'measure' ? fn.measureParagraph(29, pointer, bytes.byteLength, paragraphId) : fn.textUpdate(29, pointer, bytes.byteLength);
+      entry === 'measure'
+        ? fn.measureParagraph(29, pointer, bytes.byteLength, paragraphId)
+        : fn.textUpdate(29, pointer, bytes.byteLength);
     const view = new DataView(memory.buffer, resultPointer, resultLayout.size);
     return {
       pointer: resultPointer,
@@ -780,7 +782,9 @@ test('the committing frame adopts the speculative transaction and its reserved g
     const pointer = fn.requestPointer(29);
     new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
     const resultPointer =
-      entry === 'measure' ? fn.measureParagraph(29, pointer, bytes.byteLength, paragraphId) : fn.textUpdate(29, pointer, bytes.byteLength);
+      entry === 'measure'
+        ? fn.measureParagraph(29, pointer, bytes.byteLength, paragraphId)
+        : fn.textUpdate(29, pointer, bytes.byteLength);
     const view = new DataView(memory.buffer, resultPointer, resultLayout.size);
     const result = {
       status: view.getUint32(resultLayout.status, true),
@@ -791,7 +795,11 @@ test('the committing frame adopts the speculative transaction and its reserved g
     const semanticViewsOffset = view.getUint32(resultLayout.semanticViewsOffset, true);
     const semanticViewCount = view.getUint32(resultLayout.semanticViewCount, true);
     for (let index = 0; index < semanticViewCount; index += 1) {
-      const entryView = new DataView(memory.buffer, resultPointer + semanticViewsOffset + index * record.size, record.size);
+      const entryView = new DataView(
+        memory.buffer,
+        resultPointer + semanticViewsOffset + index * record.size,
+        record.size,
+      );
       if (entryView.getUint8(record.kind) === abi.engine.semanticKinds.glyph) {
         result.glyphIds.push(entryView.getUint32(record.id, true));
       }

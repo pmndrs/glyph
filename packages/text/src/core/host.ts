@@ -270,8 +270,7 @@ export class TextEngineSession {
     new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
     const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
     const memoryBuffer = this.#exports.memory.buffer;
-    if (resultPointer === 0)
-      throw new TextEngineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
+    if (resultPointer === 0) throw new TextEngineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
     const layout = textShaperAbi.layouts.engineResult;
     if (resultPointer + layout.size > memoryBuffer.byteLength) {
       throw new RangeError('text engine returned an out-of-bounds result header');
