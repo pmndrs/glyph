@@ -627,6 +627,61 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
     })
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_text_engine_measure_paragraph(
+    session_id: u32,
+    request_offset: u32,
+    request_len: u32,
+    paragraph_id: u32,
+) -> u32 {
+    with_state(|state| {
+        let revision = match state.engine.session_revision(session_id) {
+            Ok(revision) => revision,
+            Err(_) => return 0,
+        };
+        let request = {
+            let Some(transport) = state.frames.get(&session_id) else {
+                return 0;
+            };
+            let bytes = match transport.request_at(request_offset as usize, request_len) {
+                Ok(bytes) => bytes,
+                Err(status) => {
+                    return publish_failure(state, session_id, revision, status, request_len, 0);
+                }
+            };
+            match parse_update_request(bytes, session_id) {
+                Ok(request) => request,
+                Err(status) => {
+                    return publish_failure(state, session_id, revision, status, 0, 0);
+                }
+            }
+        };
+        let measured = match state.engine.measure_paragraph_with_shaper(
+            &mut state.registry,
+            request,
+            paragraph_id,
+        ) {
+            Ok(measured) => measured,
+            Err(error) => {
+                return publish_failure(state, session_id, revision, engine_status(error), 0, 0);
+            }
+        };
+        let staged = match state.engine.measured_semantic_views(measured) {
+            Ok(semantic_views) => state
+                .frames
+                .get_mut(&session_id)
+                .ok_or(STATUS_SESSION_MISSING)
+                .and_then(|transport| transport.stage_query(session_id, revision, semantic_views)),
+            Err(error) => Err(engine_status(error)),
+        };
+        let _ = state.engine.finish_measure(measured);
+        match staged {
+            Ok(pointer) => u32::try_from(pointer).unwrap_or(0),
+            Err(status) => publish_failure(state, session_id, revision, status, 0, 0),
+        }
+    })
+}
+
 #[derive(Default)]
 struct WasmState {
     registry: ShaperRegistry,

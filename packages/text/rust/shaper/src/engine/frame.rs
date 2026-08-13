@@ -159,6 +159,16 @@ impl PreparedUpdate {
     }
 }
 
+/// Witness of a paragraph-scoped speculative measurement: semantic records for the
+/// queried paragraph are ready to stage while committed session state, revisions, and
+/// identity counters remain untouched. The engine must end it leave-committed through
+/// `finish_measure`; it cannot be committed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct MeasuredParagraph {
+    pub(super) session_id: u32,
+    pub(super) revision: SessionRevision,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct CommittedUpdate {
     pub session_id: u32,

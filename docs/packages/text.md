@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:548c350531af85103452443ae7ed00c933b740097cce190be691293de362601c'
+source_digest: 'sha256:5f1cd53feaa0f684fe69723b072ad6a1f5b9fc2eabcb92ec3476eeeb446d7af5'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -250,6 +250,14 @@ Ordinary rendering requests no layout readback. `Text.measureLayout()` explicitl
 counts; `Text.inspectLayout()` additionally copies line and glyph arrays. Query results are cached by committed revision.
 If a query observes pending changes, it synchronizes the containing Rust session once and the following render traversal
 reuses that publication.
+
+The engine additionally exports `pmndrs_text_engine_measure_paragraph`, a paragraph-scoped synchronous query beside
+`pmndrs_text_engine_update`. It reuses the update request layout with the queried paragraph as an ABI argument, runs
+validation and speculative preparation for that paragraph only, and writes the header plus semantic table into the
+inactive result slot without publishing: no A/B flip, no publication-generation bump, no revision advance, and no
+renderer-fence acknowledgment. The host must copy the records out before its next update call (host lease). The query
+terminates leave-committed, so the following ordinary frame proceeds from pre-measure revisions with no checkpoint
+hazard.
 
 The semantic values preserve information useful to callers:
 

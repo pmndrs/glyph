@@ -121,6 +121,40 @@ pub(crate) fn plan_layout(plan: RenderPlanView<'_>) -> Result<EncodedPlanLayout,
     publication_layout(plan, &[])
 }
 
+/// Encodes a query result carrying only the header space and the semantic table. A
+/// query publishes no render plan, so every plan table stays empty and the plan
+/// validator never runs.
+pub(crate) fn encode_query(
+    semantic_views: &[SemanticRecord],
+    output: &mut [u8],
+) -> Result<EncodedPlanLayout, u32> {
+    let mut cursor = ENGINE_RESULT_HEADER_SIZE;
+    let semantic_span = add_table(
+        &mut cursor,
+        semantic_views.len(),
+        SEMANTIC_RECORD_SIZE,
+        SEMANTIC_RECORD_ALIGNMENT,
+    )?;
+    let layout = EncodedPlanLayout {
+        byte_length: cursor,
+        semantic_views: semantic_span,
+        ..EncodedPlanLayout::default()
+    };
+    let byte_length = usize::try_from(layout.byte_length).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+    let bytes = output
+        .get_mut(..byte_length)
+        .ok_or(STATUS_RESULT_TOO_LARGE)?;
+    bytes.fill(0);
+    write_records(
+        bytes,
+        layout.semantic_views,
+        SEMANTIC_RECORD_SIZE,
+        semantic_views,
+        write_semantic,
+    );
+    Ok(layout)
+}
+
 pub(crate) fn publication_layout(
     plan: RenderPlanView<'_>,
     semantic_views: &[SemanticRecord],

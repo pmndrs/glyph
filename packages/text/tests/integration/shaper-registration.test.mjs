@@ -440,6 +440,7 @@ function engineStyleUpdateBytes(
     deleteCount = 0,
     maxClusters = 2,
     removeRoot = false,
+    styles = true,
     geometry = false,
   },
 ) {
@@ -471,6 +472,8 @@ function engineStyleUpdateBytes(
   view.setUint32(request.policyHandle, policyHandle, true);
   view.setUint32(request.capabilitySet, 1, true);
   view.setUint32(request.maxParagraphs, 1, true);
+  const box = geometry === true ? {} : geometry || {};
+  const limits = { maxClusters, maxLines: box.maxLines ?? 1 };
   for (const field of [
     'maxClusters',
     'maxLines',
@@ -479,15 +482,15 @@ function engineStyleUpdateBytes(
     'maxInlineObjects',
     'maxSlotsPerBand',
   ]) {
-    view.setUint32(request[field], field === 'maxClusters' ? maxClusters : 1, true);
+    view.setUint32(request[field], limits[field] ?? 1, true);
   }
   view.setUint32(request.maxOutputBytes, 64 * 1024, true);
   view.setUint32(request.paragraphMutationsOffset, paragraphRecordOffset, true);
   view.setUint32(request.paragraphMutationCount, 1, true);
   view.setUint32(request.textMutationsOffset, textRecordOffset, true);
   view.setUint32(request.textMutationCount, text.length === 0 ? 0 : 1, true);
-  view.setUint32(request.styleMutationsOffset, styleRecordOffset, true);
-  view.setUint32(request.styleMutationCount, 1, true);
+  view.setUint32(request.styleMutationsOffset, styles ? styleRecordOffset : 0, true);
+  view.setUint32(request.styleMutationCount, styles ? 1 : 0, true);
   if (geometry) {
     view.setUint32(request.constraintsOffset, constraintOffset, true);
     view.setUint32(request.constraintCount, 1, true);
@@ -509,13 +512,15 @@ function engineStyleUpdateBytes(
     for (const [index, unit] of text.entries()) view.setUint16(textPayloadOffset + index * 2, unit, true);
   }
 
-  view.setUint8(
-    styleRecordOffset + styleRecord.opcode,
-    removeRoot ? abi.engine.styleMutationOpcodes.remove : abi.engine.styleMutationOpcodes.upsert,
-  );
-  view.setUint32(styleRecordOffset + styleRecord.paragraphId, 1, true);
-  view.setUint32(styleRecordOffset + styleRecord.styleId, 1, true);
-  if (!removeRoot) {
+  if (styles) {
+    view.setUint8(
+      styleRecordOffset + styleRecord.opcode,
+      removeRoot ? abi.engine.styleMutationOpcodes.remove : abi.engine.styleMutationOpcodes.upsert,
+    );
+    view.setUint32(styleRecordOffset + styleRecord.paragraphId, 1, true);
+    view.setUint32(styleRecordOffset + styleRecord.styleId, 1, true);
+  }
+  if (styles && !removeRoot) {
     view.setUint8(styleRecordOffset + styleRecord.flags, abi.engine.styleFlags.root);
     view.setUint32(
       styleRecordOffset + styleRecord.fieldMask,
@@ -554,8 +559,11 @@ function engineStyleUpdateBytes(
     view.setUint8(regionOffset + region.shape, abi.engine.flowShapeKinds.rectangle);
     view.setUint8(regionOffset + region.writingMode, abi.engine.writingModes.horizontalTb);
     view.setUint8(regionOffset + region.textOrientation, abi.engine.textOrientations.mixed);
-    for (const field of ['inlineEnd', 'blockEnd', 'clipInlineEnd', 'clipBlockEnd']) {
-      view.setFloat32(regionOffset + region[field], 100, true);
+    for (const field of ['inlineEnd', 'clipInlineEnd']) {
+      view.setFloat32(regionOffset + region[field], box.width ?? 100, true);
+    }
+    for (const field of ['blockEnd', 'clipBlockEnd']) {
+      view.setFloat32(regionOffset + region[field], box.height ?? 100, true);
     }
   }
   return bytes;
@@ -625,7 +633,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
       const offset = result.pointer + result.semanticViewsOffset + index * record.size;
       const view = new DataView(memory.buffer, offset, record.size);
       if (
-        view.getUint8(record.kind) === abi.engine.semanticRecordKinds.paragraphMeasurement &&
+        view.getUint8(record.kind) === abi.engine.semanticKinds.paragraphMeasurement &&
         view.getUint32(record.id, true) === paragraphId
       ) {
         return {
@@ -660,6 +668,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
     consumedPlanRevision: seeded.engineRevision,
     acknowledgedPublicationGeneration: seeded.publicationGeneration,
     maxClusters: 64,
+    styles: false,
     geometry: { width: 90, height: 400, maxLines: 32 },
   });
   new DataView(measureRequest.buffer).setUint32(
@@ -687,6 +696,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
       consumedPlanRevision: seeded.engineRevision,
       acknowledgedPublicationGeneration: seeded.publicationGeneration,
       maxClusters: 64,
+      styles: false,
       geometry: { width: 260, height: 200, maxLines: 16 },
     }),
     'update',
