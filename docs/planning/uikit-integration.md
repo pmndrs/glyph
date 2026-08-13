@@ -128,6 +128,24 @@ The API does not expose `minWidth` or `minHeight` as uikit concepts. uikit can d
 
 The exact normalization belongs to the uikit adapter because its current minimum-size behavior and point-scale rounding are uikit policies, not font-system invariants.
 
+## Measurement feedback discipline
+
+One rule is a hard requirement, not an adapter preference: **round a measured width up to the host's point scale before feeding it back as the next constraint.** Never hand a raw `contentWidth` back as an `exactly` width.
+
+Measurements return f32-rounded extents. At knife-edge widths, re-laying-out at exactly the measured number can break one more line than the measurement saw, which measures narrower, which un-breaks — and a reactive layout engine that re-measures every frame turns that into high-frequency break/unbreak flapping with matching CPU churn. This is mechanical and reproducible: sweeping 811 fractional widths through an unrounded measure→constrain loop flips the line count at 39 of them; rounding the fed-back width up to whole units flips zero. The repository's own uikit conformance fixture applies `roundUpToPointScale` to every measure result for exactly this reason.
+
+The stable pattern for a Yoga measure callback:
+
+```ts
+const measured = paragraph.measure(constraints);
+return {
+  width: Math.ceil(measured.width * pointScale) / pointScale,
+  height: Math.ceil(measured.height * pointScale) / pointScale,
+};
+```
+
+Rounding up (never to-nearest) guarantees the committed box is at least as wide as the measured content, so the final layout reproduces the measured breaks. Two adjacent notes for integrators: sessions on builds before the metric-topology fix (PR #66) could enter a permanent failed-update storm when an animated font size crossed value-equality with its surroundings — upgrade past that fix before profiling; and roadmap item 11.17 (paragraph-scoped synchronous measurement without a full frame transaction) is the planned cost reduction for exactly this repeated-measure integration shape.
+
 ## Mapping into current uikit
 
 The first adapter can preserve uikit's existing signal shape:
