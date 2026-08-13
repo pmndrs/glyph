@@ -719,6 +719,34 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   assert.equal(wider.publicationGeneration, seeded.publicationGeneration, 'still no publication flip');
   assert.equal(wider.engineRevision, seeded.engineRevision, 'still no revision burn');
 
+  // Reverting to the committed constraint must revert the speculative layout
+  // tail: the answer comes from committed flow, not the narrow query's leftovers.
+  const committedWidthRequest = engineStyleUpdateBytes(abi, {
+    sessionId: 29,
+    policyHandle: 23,
+    fontStackHandle: 17,
+    expectedEngineRevision: seeded.engineRevision,
+    consumedPlanRevision: seeded.engineRevision,
+    acknowledgedPublicationGeneration: seeded.publicationGeneration,
+    maxClusters: 64,
+    styles: false,
+    geometry: { width: 300, height: 200, maxLines: 16 },
+  });
+  new DataView(committedWidthRequest.buffer).setUint32(
+    abi.layouts.engineUpdateRequest.semanticViewMask,
+    abi.engine.semanticViewMasks.measurement,
+    true,
+  );
+  const reverted = run(committedWidthRequest, 'measure', 1);
+  assert.equal(reverted.status, abi.status.ok);
+  const committedMeasure = measurementFor(reverted, 1);
+  assert.ok(committedMeasure, 'the reverted query answers');
+  assert.equal(committedMeasure.lineCount, 1, 'the committed width lays out one line again');
+  assert.ok(
+    committedMeasure.inlineExtent > relaxed.inlineExtent,
+    'the committed-width answer reflects committed flow, not the retained narrow tail',
+  );
+
   // Committed state is intact: an ordinary follow-up frame continues from the
   // pre-measure revisions.
   const followUp = run(

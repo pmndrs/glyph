@@ -595,12 +595,16 @@ impl<'a> TextMutationBatch<'a> {
     /// Identity of the speculative text input: 0 when no mutations ride the request,
     /// otherwise a content hash over each mutation's target range and insert payload
     /// (request-buffer offsets do not participate, so equal edits fingerprint equally
-    /// regardless of request layout).
+    /// regardless of request layout). The mutation count and every insertion length
+    /// are mixed as explicit delimiters: concatenated FNV streams alias otherwise —
+    /// one replace whose payload bytes spell a second mutation's fields hashes
+    /// identically to that two-mutation batch.
     pub(crate) fn fingerprint(self) -> u64 {
         if self.records.is_empty() {
             return 0;
         }
         let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        mix_bytes(&mut hash, &(self.len() as u64).to_le_bytes());
         for index in 0..self.len() {
             let Some(mutation) = self.get(index) else {
                 continue;
@@ -608,6 +612,7 @@ impl<'a> TextMutationBatch<'a> {
             mix_bytes(&mut hash, &mutation.paragraph_id.to_le_bytes());
             mix_bytes(&mut hash, &mutation.text_start.to_le_bytes());
             mix_bytes(&mut hash, &mutation.delete_count.to_le_bytes());
+            mix_bytes(&mut hash, &(mutation.insert_utf16_le.len() as u64).to_le_bytes());
             mix_bytes(&mut hash, mutation.insert_utf16_le);
         }
         hash

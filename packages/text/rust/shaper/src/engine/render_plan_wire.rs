@@ -121,13 +121,10 @@ pub(crate) fn plan_layout(plan: RenderPlanView<'_>) -> Result<EncodedPlanLayout,
     publication_layout(plan, &[])
 }
 
-/// Encodes a query result carrying only the header space and the semantic table. A
-/// query publishes no render plan, so every plan table stays empty and the plan
-/// validator never runs.
-pub(crate) fn encode_query(
-    semantic_views: &[SemanticRecord],
-    output: &mut [u8],
-) -> Result<EncodedPlanLayout, u32> {
+/// The layout of a query result: header space plus the semantic table alone. A query
+/// publishes no render plan, so every plan table stays empty and the plan validator
+/// never runs.
+pub(crate) fn query_layout(semantic_views: &[SemanticRecord]) -> Result<EncodedPlanLayout, u32> {
     let mut cursor = ENGINE_RESULT_HEADER_SIZE;
     let semantic_span = add_table(
         &mut cursor,
@@ -135,11 +132,19 @@ pub(crate) fn encode_query(
         SEMANTIC_RECORD_SIZE,
         SEMANTIC_RECORD_ALIGNMENT,
     )?;
-    let layout = EncodedPlanLayout {
+    Ok(EncodedPlanLayout {
         byte_length: cursor,
         semantic_views: semantic_span,
         ..EncodedPlanLayout::default()
-    };
+    })
+}
+
+/// Encodes a query result under [`query_layout`].
+pub(crate) fn encode_query(
+    semantic_views: &[SemanticRecord],
+    output: &mut [u8],
+) -> Result<EncodedPlanLayout, u32> {
+    let layout = query_layout(semantic_views)?;
     let byte_length = usize::try_from(layout.byte_length).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
     let bytes = output
         .get_mut(..byte_length)

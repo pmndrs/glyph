@@ -7,7 +7,8 @@ use crate::{
     STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT, STATUS_SESSION_MISSING, ShaperRegistry,
     engine::{
         EngineError, TextEngine, font_binding_wire::parse_font_binding, frame::SessionRevision,
-        frame_wire::parse_update_request, render_plan_wire::publication_layout,
+        frame_wire::parse_update_request,
+        render_plan_wire::{publication_layout, query_layout},
         transport::FrameTransport, wire::parse_policy,
     },
 };
@@ -667,16 +668,32 @@ pub unsafe extern "C" fn pmndrs_text_engine_measure_paragraph(
             }
         };
         let staged = match state.engine.measured_semantic_views(measured) {
-            Ok(semantic_views) => state
-                .frames
-                .get_mut(&session_id)
-                .ok_or(STATUS_SESSION_MISSING)
-                .and_then(|transport| transport.stage_query(session_id, revision, semantic_views)),
-            Err(error) => Err(engine_status(error)),
+            Ok(semantic_views) => match query_layout(semantic_views) {
+                Ok(layout) if layout.byte_length > request.limits.max_output_bytes => {
+                    Err((STATUS_RESULT_TOO_LARGE, layout.byte_length))
+                }
+                Ok(layout) => state
+                    .frames
+                    .get_mut(&session_id)
+                    .ok_or(STATUS_SESSION_MISSING)
+                    .and_then(|transport| {
+                        transport.ensure_publish_capacity(layout.byte_length)?;
+                        transport.stage_query(session_id, revision, semantic_views)
+                    })
+                    .map_err(|status| (status, layout.byte_length)),
+                Err(status) => Err((status, 0)),
+            },
+            Err(error) => Err((engine_status(error), 0)),
         };
         match staged {
             Ok(pointer) => u32::try_from(pointer).unwrap_or(0),
-            Err(status) => publish_failure(state, session_id, revision, status, 0, 0),
+            Err((status, required_result_capacity)) => {
+                // A query the caller only observes as failed must not leave an
+                // adoptable transaction behind; the reported watermark lets the
+                // host reserve and retry exactly like an update.
+                let _ = state.engine.abort_measure(measured);
+                publish_failure(state, session_id, revision, status, 0, required_result_capacity)
+            }
         }
     })
 }

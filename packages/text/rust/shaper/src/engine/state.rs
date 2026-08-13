@@ -632,7 +632,7 @@ impl TextEngine {
                 _ => return Err(EngineError::InvalidRequest),
             }
         }
-        let lifecycle_fingerprint = speculative_lifecycle_fingerprint(request)?;
+        let lifecycle_fingerprint = speculative_lifecycle_fingerprint(session, request)?;
         let prior_generation = session
             .speculative
             .map_or(0, |transaction| transaction.generation);
@@ -827,7 +827,7 @@ impl TextEngine {
             Some(transaction)
                 if transaction.revision == session.revision
                     && transaction.lifecycle_fingerprint
-                        == speculative_lifecycle_fingerprint(request)? =>
+                        == speculative_lifecycle_fingerprint(session, request)? =>
             {
                 Some(transaction)
             }
@@ -1125,6 +1125,21 @@ impl TextEngine {
             return Err(EngineError::RevisionConflict);
         }
         Ok(&session.semantic_records)
+    }
+
+    /// Drops a measure query's speculative transaction leave-committed. Used when
+    /// staging the query result fails terminally: a query the caller only observed
+    /// as failed must not leave an adoptable transaction behind.
+    pub(crate) fn abort_measure(&mut self, measured: MeasuredParagraph) -> Result<(), EngineError> {
+        let session = self
+            .sessions
+            .get_mut(&measured.session_id)
+            .ok_or(EngineError::SessionMissing)?;
+        if session.revision != measured.revision {
+            return Err(EngineError::RevisionConflict);
+        }
+        session.abort_pending();
+        Ok(())
     }
 
     pub(crate) fn measured_semantic_views(
@@ -1883,6 +1898,14 @@ impl ParagraphState {
         let flow_changed =
             self.clusters_prepared || self.geometry_prepared || self.style_invalidation.metrics;
         let positioned_changed = flow_changed || self.style_invalidation.positioning;
+        // Reverting to committed geometry must also revert the speculative layout
+        // tail: without this, a query at the committed constraint after a query at a
+        // different one reads (and a matching frame would commit) flow and
+        // positioning prepared for the earlier speculative geometry.
+        if !flow_changed && (self.flow_layout_prepared || self.positioned_prepared) {
+            self.abort_flow_layout();
+            self.abort_positioned();
+        }
         if let Some(shaper) = shaper {
             if flow_changed {
                 self.prepare_flow_layout(
@@ -3785,14 +3808,59 @@ fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineErro
     Ok(())
 }
 
-/// Identity of a request's speculative lifecycle input: the paragraph-mutation
-/// fingerprint folded with the semantic implicit-paragraph id, so a query and a frame
-/// that would create or address the same paragraph structure fingerprint equally
-/// regardless of whether the session's paragraphs already exist.
-fn speculative_lifecycle_fingerprint(request: UpdateRequest<'_>) -> Result<u64, EngineError> {
-    let mut hash = request.paragraph_mutations.fingerprint();
+/// Identity of a request's structure-changing lifecycle input relative to committed
+/// session state. Upserts that restate an existing paragraph at its committed order
+/// are lifecycle-neutral and do not participate — queries routed at different
+/// existing paragraphs therefore share one transaction, which is what makes the
+/// multi-paragraph retained story reachable. Creations, removals, reorders, and the
+/// implicit creation of a missing semantic paragraph all fold; a request with no
+/// structure-changing content fingerprints to the neutral 0 sentinel. Committed
+/// structure cannot change without a revision advance, and the transaction already
+/// requires revision equality, so neutrality is stable for the transaction's life.
+fn speculative_lifecycle_fingerprint(
+    session: &EngineSession,
+    request: UpdateRequest<'_>,
+) -> Result<u64, EngineError> {
+    let mut hash = 0_u64;
+    let mut mixed = false;
+    for index in 0..request.paragraph_mutations.len() {
+        let mutation = request
+            .paragraph_mutations
+            .get(index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let (opcode, paragraph_id, order) = match mutation {
+            super::semantic_wire::ParagraphMutation::Upsert {
+                paragraph_id,
+                order,
+            } => {
+                if session
+                    .paragraph(paragraph_id)
+                    .is_some_and(|paragraph| !paragraph.created && paragraph.order == order)
+                {
+                    continue;
+                }
+                (1_u64, paragraph_id, order)
+            }
+            super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => {
+                (2_u64, paragraph_id, 0)
+            }
+        };
+        if !mixed {
+            hash = 0xcbf2_9ce4_8422_2325;
+            mixed = true;
+        }
+        for value in [opcode, u64::from(paragraph_id), u64::from(order)] {
+            for byte in value.to_le_bytes() {
+                hash ^= u64::from(byte);
+                hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+    }
     if request.paragraph_mutations.len() == 0
         && let Some(paragraph_id) = request_semantic_paragraph_id(request)?
+        && !session
+            .paragraph(paragraph_id)
+            .is_some_and(|paragraph| !paragraph.created)
     {
         hash ^= 0x9e37_79b9_7f4a_7c15 ^ u64::from(paragraph_id);
     }
@@ -4298,6 +4366,95 @@ mod tests {
         let committed = engine.commit_update(follow).unwrap();
         assert_eq!(committed.revision, SessionRevision { engine: 2, plan: 2 });
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+    }
+
+    #[test]
+    fn text_fingerprints_delimit_mutation_boundaries() {
+        // The Sol review's aliasing construction: one six-unit replacement whose
+        // twelve payload bytes spell the little-endian fields of a second mutation
+        // must not fingerprint like the two-mutation batch it imitates.
+        let paragraph = 1_u32;
+        let mut payload = [0_u16; 6];
+        payload[0] = paragraph as u16;
+        let aliased_bytes = text_mutation_bytes(&[(0, 6, &payload)]);
+        let aliased =
+            parse_text_mutations(&aliased_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let pair_bytes = text_mutation_bytes(&[(0, 6, &[]), (0, 0, &[])]);
+        let pair = parse_text_mutations(&pair_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        assert_ne!(aliased.fingerprint(), pair.fingerprint());
+        assert_ne!(aliased.fingerprint(), 0);
+        assert_ne!(pair.fingerprint(), 0);
+    }
+
+    #[test]
+    fn one_transaction_retains_queries_for_different_existing_paragraphs() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        engine.reserve_session_text(4, 8).unwrap();
+
+        // Commit two paragraphs.
+        let lifecycle_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 2),
+        ]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        // Measure paragraph 1 with a lifecycle-neutral upsert (its committed order),
+        // speculating a text edit onto it.
+        let edit_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62])]);
+        let first_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 1, 1)]);
+        let mut first = update(1, 1, 1);
+        first.limits.max_paragraphs = 2;
+        first.paragraph_mutations =
+            parse_paragraph_mutations(&first_lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        first.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine.measure_paragraph(first, 1).unwrap();
+        let session = engine.sessions.get(&4).unwrap();
+        assert!(session.paragraph(1).unwrap().state.text_prepared);
+        let generation = session.speculative.unwrap().generation;
+
+        // Measuring paragraph 2 extends the SAME transaction: a lifecycle-neutral
+        // upsert of a different existing paragraph must not abort paragraph 1's
+        // retained speculative state.
+        let second_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 2, 2)]);
+        let second_edit = text_mutation_bytes(&[(0, 0, &[0x63])]);
+        let mut second = update(1, 1, 1);
+        second.limits.max_paragraphs = 2;
+        second.paragraph_mutations =
+            parse_paragraph_mutations(&second_lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        // Route the second edit at paragraph 2.
+        let mut second_edit_bytes = second_edit.clone();
+        {
+            use crate::wire::write_u32;
+            let record = &mut second_edit_bytes[ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize..];
+            write_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID, 2);
+        }
+        second.text_mutations =
+            parse_text_mutations(&second_edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine.measure_paragraph(second, 2).unwrap();
+        let session = engine.sessions.get(&4).unwrap();
+        let _ = generation;
+        assert!(
+            session.speculative.is_some(),
+            "a query for a second existing paragraph extends the transaction"
+        );
+        assert!(
+            session.paragraph(1).unwrap().state.text_prepared,
+            "the first paragraph's speculative state survives the second query"
+        );
+        assert!(session.paragraph(2).unwrap().state.text_prepared);
     }
 
     #[test]

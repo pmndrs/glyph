@@ -264,28 +264,41 @@ export class TextEngineSession {
     if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
       this.reserve(requestLength, this.#resultCapacity);
     }
-    const requestPointer = this.#exports.requestPointer(this.#handle);
-    if (requestPointer === 0)
-      throw new TextEngineStatusError('resolve text request arena', textShaperAbi.status.sessionMissing);
-    new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
-    const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
-    const memoryBuffer = this.#exports.memory.buffer;
-    if (resultPointer === 0) throw new TextEngineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
-    const layout = textShaperAbi.layouts.engineResult;
-    if (resultPointer + layout.size > memoryBuffer.byteLength) {
-      throw new RangeError('text engine returned an out-of-bounds result header');
+    let retriedResultGrowth = false;
+    for (;;) {
+      const requestPointer = this.#exports.requestPointer(this.#handle);
+      if (requestPointer === 0)
+        throw new TextEngineStatusError('resolve text request arena', textShaperAbi.status.sessionMissing);
+      new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
+      const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
+      const memoryBuffer = this.#exports.memory.buffer;
+      if (resultPointer === 0) throw new TextEngineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
+      const layout = textShaperAbi.layouts.engineResult;
+      if (resultPointer + layout.size > memoryBuffer.byteLength) {
+        throw new RangeError('text engine returned an out-of-bounds result header');
+      }
+      const header = new DataView(memoryBuffer, resultPointer, layout.size);
+      const status = header.getUint32(layout.status, true);
+      const requiredResultCapacity = header.getUint32(layout.requiredResultCapacity, true);
+      if (
+        status === textShaperAbi.status.resultTooLarge &&
+        !retriedResultGrowth &&
+        requiredResultCapacity > this.#resultCapacity
+      ) {
+        retriedResultGrowth = true;
+        this.reserve(requestLength, requiredResultCapacity);
+        continue;
+      }
+      if (status !== textShaperAbi.status.ok) {
+        throw new TextEngineStatusError(
+          'measure paragraph',
+          status,
+          header.getUint32(layout.requiredRequestCapacity, true),
+          requiredResultCapacity,
+        );
+      }
+      return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
     }
-    const header = new DataView(memoryBuffer, resultPointer, layout.size);
-    const status = header.getUint32(layout.status, true);
-    if (status !== textShaperAbi.status.ok) {
-      throw new TextEngineStatusError(
-        'measure paragraph',
-        status,
-        header.getUint32(layout.requiredRequestCapacity, true),
-        header.getUint32(layout.requiredResultCapacity, true),
-      );
-    }
-    return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
   }
 
   #decodeResult(
