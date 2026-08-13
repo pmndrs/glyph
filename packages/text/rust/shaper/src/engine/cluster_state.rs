@@ -138,9 +138,9 @@ impl ClusterArena {
             self.unsafe_before.push(0);
         }
         self.build_index(text.len())?;
-        self.refresh_layout_units()?;
         self.aggregate_shape(runs, shape, metrics_for)?;
         self.apply_break_flags(unicode)?;
+        self.refresh_layout_units()?;
         Ok(())
     }
 
@@ -364,7 +364,7 @@ impl ClusterArena {
     /// Re-derives the F26.6 advance stream from the f64 advances. Both public build
     /// paths end here, so the streams can never disagree outside the rounding
     /// contract.
-    fn refresh_layout_units(&mut self) -> Result<(), EngineError> {
+    pub(crate) fn refresh_layout_units(&mut self) -> Result<(), EngineError> {
         self.advances_f26.clear();
         reserve(&mut self.advances_f26, self.advances.len())?;
         self.advances_f26.extend(
@@ -867,6 +867,10 @@ mod tests {
         assert_eq!(clusters.starts, [0, 1, 2, 3]);
         assert_eq!(clusters.ends, [1, 2, 3, 4]);
         assert_eq!(clusters.advances, [9.0, 7.0, 9.0, 0.0]);
+        // The F26.6 stream must quantize the COMPLETE advances — including the
+        // shape aggregation that runs after the initial spacing fill — or the
+        // integer fit sees spacing-only widths and stops wrapping.
+        assert_eq!(clusters.advances_f26, [9 * 64, 7 * 64, 9 * 64, 0]);
         assert_eq!(clusters.style_indexes, [0; 4]);
         assert_eq!(clusters.source_runs, [0, 0, 0, NO_SOURCE_RUN]);
         assert_eq!(clusters.font_handles, [9, 9, 9, 0]);

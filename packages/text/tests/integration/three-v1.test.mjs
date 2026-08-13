@@ -886,7 +886,12 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
   assert.equal(inspection.clusters.at(-1), 3, 'the ellipsis is anchored at the truncation boundary');
   assert.deepEqual([...inspection.glyphIds], [61, 2613, 2598, 6597]);
   assert.deepEqual([...inspection.clusters], [2, 1, 0, 3]);
-  assert.deepEqual([...inspection.x], [0.23199999332427979, 10.807999610900879, 18.375999450683594, 23.91200065612793]);
+  // Re-pinned under the F26.6 layout-unit contract (integer-units slice 2b): the
+  // RTL line's alignment offset derives from the quantized line advance, shifting
+  // every glyph by one uniform sub-unit amount (+0.0134 px < 1/64). Deterministic
+  // exactness holds under the new contract; the full-corpus re-derivation is the
+  // plan's slice 5.
+  assert.deepEqual([...inspection.x], [0.24537500739097595, 10.821374893188477, 18.389375686645508, 23.92537498474121]);
 
   label.dispose();
   font.dispose();

@@ -7,7 +7,7 @@ use super::{
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
     flow_geometry::{FlowGeometryArena, InlineSlotArena},
     frame::{ALIGN_JUSTIFY, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB},
-    line_composition::{ComposedLine, LineCursor, layout_next_line},
+    line_composition::{ComposedLine, LineCursor, layout_next_line_integer},
     semantic_wire::FlowConstraint,
     style_state::StyleSegment,
 };
@@ -381,6 +381,7 @@ impl FlowLayoutArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
     ) -> Result<Option<f64>, EngineError> {
+        let word_space_shrink_q16 = super::layout_units::ratio_q16(word_space_shrink);
         let saved_cursor = *cursor;
         let fragment_start = self.fragments.len();
         let mut extents = initial_extents;
@@ -414,12 +415,17 @@ impl FlowLayoutArena {
                 } else {
                     0.0
                 };
-                let Some(line) = layout_next_line(
+                // Slice 2b of the integer-layout-units plan: the available width
+                // quantizes to F26.6 once at this boundary and the integer fit is
+                // authoritative; the f64 twin remains only as the parity reference.
+                let Some(line) = layout_next_line_integer(
                     clusters,
                     cursor,
-                    (slot.end - slot.start - indent).max(0.0),
+                    Some(i64::from(super::layout_units::layout_units_from_scaled(
+                        (slot.end - slot.start - indent).max(0.0),
+                    ))),
                     wrap,
-                    word_space_shrink,
+                    word_space_shrink_q16,
                 )?
                 else {
                     break;
@@ -801,7 +807,7 @@ mod tests {
 
     #[test]
     fn one_update_flows_fragments_around_a_hole_and_retries_for_tall_text() {
-        let clusters = ClusterArena {
+        let clusters = quantized(ClusterArena {
             starts: vec![0, 1, 2, 3],
             ends: vec![1, 2, 3, 4],
             advances: vec![2.0; 4],
@@ -811,7 +817,7 @@ mod tests {
             font_handles: vec![1; 4],
             index_at: vec![0, 1, 2, 3, 4],
             ..ClusterArena::default()
-        };
+        });
         let styles = [
             StyleSegment {
                 text_start: 0,
@@ -906,7 +912,7 @@ mod tests {
     }
 
     fn uniform_clusters(count: usize, advance: f64) -> ClusterArena {
-        ClusterArena {
+        quantized(ClusterArena {
             starts: (0..count as u32).collect(),
             ends: (1..=count as u32).collect(),
             advances: vec![advance; count],
@@ -916,7 +922,15 @@ mod tests {
             font_handles: vec![1; count],
             index_at: (0..=count as u32).collect(),
             ..ClusterArena::default()
-        }
+        })
+    }
+
+    /// Mirrors the production build-path invariant for literal test arenas: every
+    /// consumer of the integer fit sees an F26.6 stream coherent with the f64
+    /// advances under the rounding contract.
+    fn quantized(mut clusters: ClusterArena) -> ClusterArena {
+        clusters.refresh_layout_units().unwrap();
+        clusters
     }
 
     fn uniform_style(text_end: u32) -> StyleSegment {
@@ -980,7 +994,7 @@ mod tests {
 
     #[test]
     fn overflowing_text_continues_through_ordered_regions_without_balancing() {
-        let clusters = ClusterArena {
+        let clusters = quantized(ClusterArena {
             starts: vec![0, 1, 2, 3],
             ends: vec![1, 2, 3, 4],
             advances: vec![3.0; 4],
@@ -990,7 +1004,7 @@ mod tests {
             font_handles: vec![1; 4],
             index_at: vec![0, 1, 2, 3, 4],
             ..ClusterArena::default()
-        };
+        });
         let styles = [StyleSegment {
             text_start: 0,
             text_end: 4,
@@ -1061,7 +1075,7 @@ mod tests {
 
     #[test]
     fn only_clip_overflow_assigns_a_clip_id_to_lines() {
-        let clusters = ClusterArena {
+        let clusters = quantized(ClusterArena {
             starts: vec![0, 1, 2],
             ends: vec![1, 2, 3],
             advances: vec![2.0; 3],
@@ -1071,7 +1085,7 @@ mod tests {
             font_handles: vec![1; 3],
             index_at: vec![0, 1, 2, 3],
             ..ClusterArena::default()
-        };
+        });
         let styles = [StyleSegment {
             text_start: 0,
             text_end: 3,
@@ -1126,7 +1140,7 @@ mod tests {
 
     #[test]
     fn localized_edit_recomposes_one_line_and_reuses_converged_prefix_and_suffix() {
-        let make_clusters = |advances: Vec<f64>| ClusterArena {
+        let make_clusters = |advances: Vec<f64>| quantized(ClusterArena {
             starts: vec![0, 1, 2, 3, 4, 5],
             ends: vec![1, 2, 3, 4, 5, 6],
             advances,
@@ -1137,7 +1151,7 @@ mod tests {
             stable_ids: vec![1, 2, 3, 4, 5, 6],
             index_at: vec![0, 1, 2, 3, 4, 5, 6],
             ..ClusterArena::default()
-        };
+        });
         let previous_clusters = make_clusters(vec![2.0; 6]);
         let changed_clusters = make_clusters(vec![2.0, 2.0, 1.0, 2.0, 2.0, 2.0]);
         let styles = [StyleSegment {
@@ -1210,7 +1224,7 @@ mod tests {
 
     #[test]
     fn localized_edit_recomposes_multiple_lines_until_cursor_state_converges() {
-        let make_clusters = |advances: Vec<f64>| ClusterArena {
+        let make_clusters = |advances: Vec<f64>| quantized(ClusterArena {
             starts: (0..9).collect(),
             ends: (1..10).collect(),
             advances,
@@ -1221,7 +1235,7 @@ mod tests {
             stable_ids: (1..10).collect(),
             index_at: (0..10).collect(),
             ..ClusterArena::default()
-        };
+        });
         let previous_clusters = make_clusters(vec![2.0; 9]);
         let changed_clusters = make_clusters(vec![2.0, 2.0, 2.0, 3.0, 3.0, 1.0, 1.0, 2.0, 2.0]);
         let styles = [StyleSegment {
@@ -1308,7 +1322,7 @@ mod tests {
 
     #[test]
     fn localized_edit_clears_partial_layout_when_line_state_does_not_converge() {
-        let make_clusters = |advances: Vec<f64>| ClusterArena {
+        let make_clusters = |advances: Vec<f64>| quantized(ClusterArena {
             starts: vec![0, 1, 2, 3, 4, 5],
             ends: vec![1, 2, 3, 4, 5, 6],
             advances,
@@ -1319,7 +1333,7 @@ mod tests {
             stable_ids: vec![1, 2, 3, 4, 5, 6],
             index_at: vec![0, 1, 2, 3, 4, 5, 6],
             ..ClusterArena::default()
-        };
+        });
         let previous_clusters = make_clusters(vec![2.0; 6]);
         let changed_clusters = make_clusters(vec![2.0, 2.0, 3.0, 2.0, 2.0, 2.0]);
         let styles = [StyleSegment {
@@ -1389,13 +1403,13 @@ mod tests {
 
     #[test]
     fn ellipsis_truncation_reuses_the_final_slot_and_removes_only_required_clusters() {
-        let clusters = ClusterArena {
+        let clusters = quantized(ClusterArena {
             starts: vec![0, 1, 2, 3],
             ends: vec![1, 2, 3, 4],
             advances: vec![3.0; 4],
             flags: vec![CLUSTER_SAFE_BEFORE; 4],
             ..ClusterArena::default()
-        };
+        });
         let mut layout = FlowLayoutArena {
             lines: vec![FlowLine {
                 flow_thread_id: 7,
@@ -1445,7 +1459,7 @@ mod tests {
 
     #[test]
     fn complete_no_wrap_line_still_requests_ellipsis_when_its_slot_overflows() {
-        let clusters = ClusterArena {
+        let clusters = quantized(ClusterArena {
             starts: vec![0, 1, 2],
             ends: vec![1, 2, 3],
             advances: vec![3.0; 3],
@@ -1455,7 +1469,7 @@ mod tests {
             font_handles: vec![1; 3],
             index_at: vec![0, 1, 2, 3],
             ..ClusterArena::default()
-        };
+        });
         let styles = [StyleSegment {
             text_start: 0,
             text_end: 3,
