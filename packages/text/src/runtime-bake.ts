@@ -9,6 +9,8 @@ import {
   type RuntimeBakeRequestV0,
   type RuntimeBakeResultV0,
 } from './internal/runtime-bake-protocol.js';
+
+export { workerRasterKinds } from './internal/runtime-bake-protocol.js';
 import { SerialWorkerHost } from './internal/serial-worker-host.js';
 import { isBakeProgressMessageV0, type BakeProgressMessageV0 } from './internal/bake-progress-protocol.js';
 

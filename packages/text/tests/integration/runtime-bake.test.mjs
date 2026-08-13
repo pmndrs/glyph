@@ -348,6 +348,81 @@ test('one TextRuntime source load sends its normalized ranges and complete raste
   assert.equal(msdfFont.font, slugFont.font);
 });
 
+test('external techniques bake through their own declared baker, never the Worker plan', async (t) => {
+  // Self-contained routing proof: a minimal external technique whose declared
+  // baker throws a sentinel. Reaching the sentinel proves the host-side route;
+  // the strict stub proves the Worker plan never saw the external kind.
+  const { source } = await fixturePromise;
+  const outputRoot = await mkdtemp(join(tmpdir(), 'pmndrs-text-external-route-'));
+  t.after(() => rm(outputRoot, { recursive: true, force: true }));
+  const stubOutput = join(outputRoot, 'Inter-Regular.font.glb');
+  await bakeFont({
+    input: new URL('Inter-Regular.ttf', fixtureDirectory),
+    output: stubOutput,
+    font: { fontFaceIndex: 0 },
+    rasters: [
+      {
+        baker: bitmapBaker,
+        packaging: { artifact: 'embedded', pages: 'embedded' },
+        options: { strikes: [32] },
+      },
+    ],
+  });
+  const artifact = await readFile(stubOutput);
+  const { defineRasterTechnique } = await import('@pmndrs/text');
+  const { workerRasterKinds } = await import('@pmndrs/text/runtime-bake');
+  const external = defineRasterTechnique({
+    id: 'test.external-route',
+    kind: 'testExternal',
+    extension: 'TEST_external_route',
+    version: 0,
+    runtimeBaker: () =>
+      Promise.resolve({
+        kind: 'testExternal',
+        bake() {
+          throw new Error('external-route-sentinel');
+        },
+      }),
+    descriptor() {
+      return {};
+    },
+    async decode() {
+      return {};
+    },
+    dispose() {},
+  });
+  const requests = [];
+  const runtime = await createTextRuntime({
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  t.after(() => runtime.dispose());
+  const runtimeBake = async (request) => {
+    for (const raster of request.rasters ?? []) {
+      if (!workerRasterKinds.includes(raster.kind)) {
+        throw new Error(`runtime font baker does not support raster kind ${raster.kind}`);
+      }
+    }
+    requests.push(request);
+    return new Uint8Array(artifact.slice(0));
+  };
+  await assert.rejects(
+    runtime.loadFont({
+      input: {
+        source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
+        runtimeBake,
+      },
+      rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: external }],
+    }),
+    /external-route-sentinel/,
+    'the external technique must reach its own declared baker',
+  );
+  assert.equal(requests.length, 1);
+  assert.deepEqual(
+    requests[0].rasters.map(({ kind }) => kind),
+    ['bitmap'],
+    'the Worker plan carries only kinds the Worker declares',
+  );
+});
 test('the Worker retries a failed Wasm fetch and retains the recovered core', async (t) => {
   const { source } = await fixturePromise;
   const originals = {

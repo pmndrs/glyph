@@ -7,6 +7,16 @@ export interface RuntimeBakeUnicodeRangeV0 {
   readonly end: number;
 }
 
+/**
+ * The raster kinds the runtime bake Worker embeds bakers for. This set is the
+ * single routing authority: the host puts only these kinds into a Worker font
+ * bake, and every other technique bakes host-side through the baker its own
+ * declaration names (`technique.runtimeBaker`). The Worker's kind switch is
+ * the realization of this set; its rejection of anything else guards protocol
+ * violations, not routing.
+ */
+export const workerRasterKinds: readonly string[] = Object.freeze(['bitmap', 'msdf', 'slug']);
+
 export interface RuntimeBakeRasterV0 {
   readonly kind: string;
   readonly extension: string;

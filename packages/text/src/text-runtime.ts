@@ -10,7 +10,11 @@ import {
 } from './loader.js';
 import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
 import { normalizeUnicodeRanges } from './internal/font-selection.js';
-import type { RuntimeBakeRasterV0, RuntimeBakeUnicodeRangeV0 } from './internal/runtime-bake-protocol.js';
+import {
+  workerRasterKinds,
+  type RuntimeBakeRasterV0,
+  type RuntimeBakeUnicodeRangeV0,
+} from './internal/runtime-bake-protocol.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
 import type {
   AnyRasterTechnique,
@@ -212,7 +216,12 @@ class TextRuntimeImpl implements TextRuntime {
     if ('baked' in input)
       return this.#defaultLoader.load({ baked: input.baked }, signal === undefined ? {} : { signal });
     const unicodeRanges = input.unicodeRanges === undefined ? undefined : normalizeUnicodeRanges(input.unicodeRanges);
-    const rasters = await Promise.all(rasterRequests.map(runtimeBakeRaster));
+    // Only Worker-embedded kinds ride the Worker font-bake plan. Every other
+    // technique is left out of the plan on purpose: its raster misses in the
+    // baked artifact and bakes host-side through the technique's own declared
+    // runtime baker.
+    const workerRequests = rasterRequests.filter((request) => workerRasterKinds.includes(request.technique.kind));
+    const rasters = await Promise.all(workerRequests.map(runtimeBakeRaster));
     const planKey = canonicalJson({
       rasters,
       unicodeRanges: unicodeRanges ?? null,
