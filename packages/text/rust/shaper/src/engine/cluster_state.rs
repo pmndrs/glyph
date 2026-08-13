@@ -24,6 +24,10 @@ pub(crate) struct ClusterArena {
     pub starts: Vec<u32>,
     pub ends: Vec<u32>,
     pub advances: Vec<f64>,
+    /// F26.6 quantization of `advances` under the layout-unit rounding contract,
+    /// refreshed at the end of every build. Slice 2a keeps the f64 stream
+    /// authoritative; the integer fit consumes this stream and must match.
+    pub advances_f26: Vec<i32>,
     pub flags: Vec<u8>,
     pub style_indexes: Vec<u32>,
     pub source_runs: Vec<u32>,
@@ -53,6 +57,7 @@ impl ClusterArena {
         reserve(&mut self.starts, capacity)?;
         reserve(&mut self.ends, capacity)?;
         reserve(&mut self.advances, capacity)?;
+        reserve(&mut self.advances_f26, capacity)?;
         reserve(&mut self.flags, capacity)?;
         reserve(&mut self.style_indexes, capacity)?;
         reserve(&mut self.source_runs, capacity)?;
@@ -133,6 +138,7 @@ impl ClusterArena {
             self.unsafe_before.push(0);
         }
         self.build_index(text.len())?;
+        self.refresh_layout_units()?;
         self.aggregate_shape(runs, shape, metrics_for)?;
         self.apply_break_flags(unicode)?;
         Ok(())
@@ -351,7 +357,22 @@ impl ClusterArena {
                 }
             }
         }
+        self.refresh_layout_units()?;
         Ok(Some((cluster_start, cluster_end)))
+    }
+
+    /// Re-derives the F26.6 advance stream from the f64 advances. Both public build
+    /// paths end here, so the streams can never disagree outside the rounding
+    /// contract.
+    fn refresh_layout_units(&mut self) -> Result<(), EngineError> {
+        self.advances_f26.clear();
+        reserve(&mut self.advances_f26, self.advances.len())?;
+        self.advances_f26.extend(
+            self.advances
+                .iter()
+                .map(|advance| super::layout_units::layout_units_from_scaled(*advance)),
+        );
+        Ok(())
     }
 
     fn copy_from(&mut self, source: &Self) -> Result<(), EngineError> {
@@ -498,6 +519,7 @@ impl ClusterArena {
         self.starts.clear();
         self.ends.clear();
         self.advances.clear();
+        self.advances_f26.clear();
         self.flags.clear();
         self.style_indexes.clear();
         self.source_runs.clear();
