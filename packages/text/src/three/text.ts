@@ -579,8 +579,70 @@ class ThreeTextBatchBinding {
   }
   measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary | undefined {
     if (!this.#paragraphs.has(text)) return undefined;
+    if (this.#measureThroughParagraphQuery(text)) return this.#measurements.get(text);
     this.synchronize(textShaperAbi.engine.semanticViewMasks.measurement);
     return this.#measurements.get(text);
+  }
+
+  /**
+   * Routes an explicit layout query through the paragraph-scoped synchronous engine
+   * measure when the only pending work is a geometry change on the queried text: no
+   * publication flip, no revision burn, no checkpoint hazard, and the next ordinary
+   * frame adopts the speculative layout together with its reserved identities.
+   * Anything else answers `false` and falls back to the committing synchronize path.
+   */
+  #measureThroughParagraphQuery(text: Text<AnyRasterTechnique>): boolean {
+    if (this.#disposed || this.#lastPublication !== undefined || this.#materialInvalidated) return false;
+    if (this.#removed.length !== 0) return false;
+    const paragraph = this.#paragraphs.get(text);
+    if (paragraph === undefined || paragraph.created) return false;
+    const changes = text.semanticChanges();
+    if ((changes & ~GEOMETRY_CHANGE) !== 0) return false;
+    if (changes === 0 && this.#measurements.has(text)) return true;
+    // Every other paragraph must be quiescent so the frame this query speculates
+    // ahead of is exactly the frame synchronize will later commit and adopt.
+    const ordered = [...this.#paragraphs.entries()].sort(
+      ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
+    );
+    for (const [order, [entry, entryParagraph]] of ordered.entries()) {
+      if (entryParagraph.order !== order || entryParagraph.created) return false;
+      if (entry !== text && (entry.semanticChanges() !== 0 || entry.needsApply())) return false;
+    }
+    this.#coordinator.assertFrameUpdateAllowed();
+    let totalTextLength = 0;
+    let maximumParagraphTextLength = 0;
+    for (const entry of this.#paragraphs.keys()) {
+      totalTextLength += entry.text.length;
+      maximumParagraphTextLength = Math.max(maximumParagraphTextLength, entry.text.length);
+    }
+    const properties = text.coreProperties();
+    const content = properties.text as string;
+    const geometry = compileEngineGeometry(paragraph, properties.contentBox, 0, content.length);
+    const result = this.#session.measureParagraph(
+      compileTextEngineFrameUpdate({
+        sessionId: this.#session.handle,
+        policyHandle: this.#coordinator.policyHandle,
+        capabilitySet: 1,
+        expectedEngineRevision: this.#engineRevision,
+        consumedPlanRevision: this.#planRevision,
+        acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
+        compositingIndependent: this.#group?.compositing === 'independent',
+        semanticViewMask: textShaperAbi.engine.semanticViewMasks.measurement,
+        limits: engineLimits(
+          this.#paragraphs.size,
+          totalTextLength,
+          maximumParagraphTextLength,
+          Math.max(geometry.regions.length, this.#paragraphs.size),
+          MAX_TEXT_ENGINE_OUTPUT_BYTES,
+        ),
+        paragraphMutations: [{ opcode: 'upsert', paragraphId: paragraph.id, order: paragraph.order }],
+        constraints: [geometry.constraint],
+        regions: geometry.regions,
+      }),
+      paragraph.id,
+    );
+    this.#retainSemanticViews(result, textShaperAbi.engine.semanticViewMasks.measurement);
+    return true;
   }
   layoutInspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection | undefined {
     if (!this.#paragraphs.has(text)) return undefined;

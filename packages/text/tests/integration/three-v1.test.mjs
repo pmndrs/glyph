@@ -690,7 +690,10 @@ async function createInstrumentedRuntime(registry) {
   const abi = JSON.parse(await readFile(new URL('../../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8'));
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
+  let measureCrossings = 0;
   let latestRequest;
+  let latestUpdateFlags = 0;
+  let latestUpdateGeneration = 0;
   WebAssembly.instantiate = async (source, imports) => {
     const instance = await originalInstantiate(source, imports);
     const exports = { ...instance.exports };
@@ -700,8 +703,21 @@ async function createInstrumentedRuntime(registry) {
       crossings += 1;
       const [, pointer, length] = arguments_;
       latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
-      return update(...arguments_);
+      const resultPointer = update(...arguments_);
+      if (resultPointer !== 0) {
+        const header = new DataView(exports.memory.buffer, resultPointer, abi.layouts.engineResult.size);
+        latestUpdateFlags = header.getUint32(abi.layouts.engineResult.flags, true);
+        latestUpdateGeneration = header.getUint32(abi.layouts.engineResult.publicationGeneration, true);
+      }
+      return resultPointer;
     };
+    const measure = exports[abi.functions.measureParagraph];
+    if (typeof measure === 'function') {
+      exports[abi.functions.measureParagraph] = (...arguments_) => {
+        measureCrossings += 1;
+        return measure(...arguments_);
+      };
+    }
     return { exports };
   };
   try {
@@ -711,8 +727,18 @@ async function createInstrumentedRuntime(registry) {
       get crossings() {
         return crossings;
       },
+      get measureCrossings() {
+        return measureCrossings;
+      },
+      get latestUpdateFlags() {
+        return latestUpdateFlags;
+      },
+      get latestUpdateGeneration() {
+        return latestUpdateGeneration;
+      },
       reset() {
         crossings = 0;
+        measureCrossings = 0;
       },
       latestTextMutations() {
         assert.ok(latestRequest, 'a text update request must have been captured');
@@ -940,6 +966,63 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
   for (const label of labels) label.dispose();
   font.dispose();
   runtime.dispose();
+});
+
+/**
+ * Roadmap 11.17 layer 4: measureLayout under a geometry-only change routes to the
+ * paragraph-scoped synchronous engine query — no full session updates, no
+ * publication flips, no revision burn — and the following ordinary frame adopts the
+ * speculative work without a checkpoint rebuild.
+ */
+test('repeated measureLayout under changing constraints stays on the paragraph query path', async () => {
+  const abi = JSON.parse(await readFile(new URL('../../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8'));
+  const registry = new FontRegistry();
+  const instrumented = await createInstrumentedRuntime(registry);
+  const font = await instrumented.runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const label = new Text({
+    font,
+    text: 'alpha beta gamma delta',
+    contentBox: { width: { mode: 'exact', size: 300 } },
+  });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+  assert.equal(label.error, undefined);
+  const committedGeneration = instrumented.latestUpdateGeneration;
+  instrumented.reset();
+
+  const widths = [90, 150, 90, 240];
+  for (const width of widths) {
+    label.set({ contentBox: { width: { mode: 'exact', size: width } } });
+    const measurement = label.measureLayout();
+    assert.ok(measurement, `width ${width} measures synchronously`);
+    assert.ok(
+      measurement.contentWidth <= width + 1e-3,
+      `content width ${measurement.contentWidth} respects the queried width ${width}`,
+    );
+    assert.ok(measurement.lineCount >= 1, 'the measure reports laid-out lines');
+  }
+  assert.equal(instrumented.crossings, 0, 'measurement never drives a full engine update');
+  assert.equal(instrumented.measureCrossings, widths.length, 'each constraint change measures through one query');
+  assert.equal(
+    instrumented.latestUpdateGeneration,
+    committedGeneration,
+    'queries never flip the publication generation',
+  );
+
+  scene.updateMatrixWorld(true);
+  assert.equal(label.error, undefined);
+  assert.equal(instrumented.crossings, 1, 'one ordinary frame commits the final constraint');
+  assert.equal(
+    instrumented.latestUpdateFlags & abi.engine.resultFlags.checkpoint,
+    0,
+    'the committing frame proceeds from pre-measure revisions without a checkpoint rebuild',
+  );
+  assert.equal(label.measureLayout()?.contentWidth <= 240 + 1e-3, true);
+  label.dispose();
 });
 
 function dataUrl(bytes) {

@@ -366,26 +366,32 @@ export class ThreeTextRenderPlanExecutor {
   #applyPatches(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
     const layout = textShaperAbi.layouts.enginePatch;
     const opcodes = textShaperAbi.engine.patchOpcodes;
+    
     for (let index = 0; index < table.count; index += 1) {
       const record = plan.record(table, index);
       const opcode = plan.u16(record + layout.opcode);
       const buffer = this.#buffer(plan.u32(record + layout.bufferId), plan.u32(record + layout.bufferGeneration));
       const destinationOffset = plan.u32(record + layout.destinationOffset);
       const byteLength = plan.u32(record + layout.byteLength);
+
       if (opcode === opcodes.allocateOrResize || opcode === opcodes.retire) continue;
+
       const destination = new Uint8Array(buffer.array.buffer, buffer.array.byteOffset, buffer.array.byteLength);
       if (destinationOffset + byteLength > destination.byteLength)
         throw new RangeError('buffer patch exceeds allocation');
+
       if (opcode === opcodes.write) {
         destination.set(plan.bytes(plan.u32(record + layout.payloadOffset), byteLength), destinationOffset);
       } else if (opcode === opcodes.fill) {
         const fill = plan.u32(record + layout.fillValue);
         const view = new DataView(destination.buffer, destination.byteOffset + destinationOffset, byteLength);
         if (byteLength % 4 !== 0) throw new RangeError('fill patch is not u32 aligned');
+
         for (let offset = 0; offset < byteLength; offset += 4) view.setUint32(offset, fill, true);
       } else if (opcode === opcodes.copy) {
         const source = this.#buffers.get(plan.u32(record + layout.sourceBufferId));
         if (source === undefined) throw new Error('copy patch references an unknown source buffer');
+
         const sourceOffset = plan.u32(record + layout.sourceOffset);
         const sourceBytes = new Uint8Array(source.array.buffer, source.array.byteOffset, source.array.byteLength);
         if (source.array.buffer === buffer.array.buffer && source.array.byteOffset === buffer.array.byteOffset) {

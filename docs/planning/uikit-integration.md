@@ -144,7 +144,26 @@ return {
 };
 ```
 
-Rounding up (never to-nearest) guarantees the committed box is at least as wide as the measured content, so the final layout reproduces the measured breaks. Two adjacent notes for integrators: sessions on builds before the metric-topology fix (PR #66) could enter a permanent failed-update storm when an animated font size crossed value-equality with its surroundings — upgrade past that fix before profiling; and roadmap item 11.17 (paragraph-scoped synchronous measurement without a full frame transaction) is the planned cost reduction for exactly this repeated-measure integration shape.
+Rounding up (never to-nearest) guarantees the committed box is at least as wide as the measured content, so the final layout reproduces the measured breaks. One adjacent note for integrators: sessions on builds before the metric-topology fix (PR #66) could enter a permanent failed-update storm when an animated font size crossed value-equality with its surroundings — upgrade past that fix before profiling.
+
+## The paragraph-scoped measure fast path (11.17)
+
+Repeated measurement is no longer a full frame transaction. When the only pending change on a `Text` is geometry (a
+`contentBox` update — exactly the Yoga measure-callback shape), `measureLayout()` routes to the engine's
+paragraph-scoped synchronous query: validation and speculative preparation run for that paragraph alone, the answer is
+copied from the inactive result slot, and no publication flip, revision advance, or renderer-fence acknowledgment
+happens. The engine retains the speculative work as one transaction — sequential measures at different constraints
+re-run only geometry, flow, and positioning over the retained shaping — and the next ordinary frame that commits the
+same inputs adopts that exact work, including the reserved stable glyph identities, without a checkpoint rebuild.
+
+Integration consequences:
+
+- Measure-then-commit per frame costs one geometry/flow/positioning pass plus one adopted (near-free) frame, not two
+  full session updates, and the frame after a measure no longer pays a checkpoint.
+- The fast path engages when only the measured `Text`'s geometry changed; pending text/style edits or other dirty
+  paragraphs fall back to the committing path, which stays correct.
+- The round-up rule above still applies unchanged: the fast path removes the cost of the measure loop, not the
+  knife-edge break flapping that unrounded feedback causes.
 
 ## Mapping into current uikit
 

@@ -242,30 +242,83 @@ export class TextEngineSession {
       if (status !== textShaperAbi.status.ok) {
         throw new TextEngineStatusError('publish text update', status, requiredRequestCapacity, requiredResultCapacity);
       }
-      const byteLength = header.getUint32(layout.byteLength, true);
-      if (byteLength < layout.size || resultPointer + byteLength > memoryBuffer.byteLength) {
-        throw new RangeError('text engine returned an out-of-bounds publication');
-      }
-      this.#requestCapacity = header.getUint32(layout.requestCapacity, true);
-      this.#resultCapacity = header.getUint32(layout.resultCapacity, true);
-      return {
-        bytes: new Uint8Array(memoryBuffer, resultPointer, byteLength),
-        memoryBuffer,
-        memoryGrew: memoryBuffer !== initialMemoryBuffer,
-        engineRevision: header.getUint32(layout.engineRevision, true),
-        planRevision: header.getUint32(layout.planRevision, true),
-        requiredBaseRevision: header.getUint32(layout.requiredBaseRevision, true),
-        publicationGeneration: header.getUint32(layout.publicationGeneration, true),
-        outputSlot: header.getUint32(layout.outputSlot, true),
-        flags: header.getUint32(layout.flags, true),
-        policyHandle: header.getUint32(layout.policyHandle, true),
-        capabilitySet: header.getUint32(layout.capabilitySet, true),
-        semanticViewCount: header.getUint32(layout.semanticViewCount, true),
-        primitiveCount: header.getUint32(layout.primitiveCount, true),
-        patchCount: header.getUint32(layout.patchCount, true),
-        drawCount: header.getUint32(layout.drawCount, true),
-      };
+      return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
     }
+  }
+
+  /**
+   * Answers one paragraph-scoped synchronous measurement without publishing. The
+   * result rides the inactive output slot under a host lease: its bytes stay readable
+   * only until the next call into the same Wasm module. Engine revisions, the
+   * publication generation, and the renderer fence are untouched, so the following
+   * ordinary frame proceeds from pre-measure state.
+   */
+  measureParagraph(request: Uint8Array, paragraphId: number): TextEnginePublication {
+    this.#assertActive();
+    if (!(request instanceof Uint8Array) || request.byteLength === 0) {
+      throw new TypeError('paragraph measure request must be a nonempty Uint8Array');
+    }
+    uint32Handle(paragraphId, 'paragraph id');
+    const requestLength = uint32(request.byteLength, 'paragraph measure byte length');
+    const initialMemoryBuffer = this.#exports.memory.buffer;
+    if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
+      this.reserve(requestLength, this.#resultCapacity);
+    }
+    const requestPointer = this.#exports.requestPointer(this.#handle);
+    if (requestPointer === 0)
+      throw new TextEngineStatusError('resolve text request arena', textShaperAbi.status.sessionMissing);
+    new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
+    const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
+    const memoryBuffer = this.#exports.memory.buffer;
+    if (resultPointer === 0)
+      throw new TextEngineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
+    const layout = textShaperAbi.layouts.engineResult;
+    if (resultPointer + layout.size > memoryBuffer.byteLength) {
+      throw new RangeError('text engine returned an out-of-bounds result header');
+    }
+    const header = new DataView(memoryBuffer, resultPointer, layout.size);
+    const status = header.getUint32(layout.status, true);
+    if (status !== textShaperAbi.status.ok) {
+      throw new TextEngineStatusError(
+        'measure paragraph',
+        status,
+        header.getUint32(layout.requiredRequestCapacity, true),
+        header.getUint32(layout.requiredResultCapacity, true),
+      );
+    }
+    return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
+  }
+
+  #decodeResult(
+    header: DataView,
+    resultPointer: number,
+    memoryBuffer: ArrayBuffer,
+    initialMemoryBuffer: ArrayBuffer,
+  ): TextEnginePublication {
+    const layout = textShaperAbi.layouts.engineResult;
+    const byteLength = header.getUint32(layout.byteLength, true);
+    if (byteLength < layout.size || resultPointer + byteLength > memoryBuffer.byteLength) {
+      throw new RangeError('text engine returned an out-of-bounds publication');
+    }
+    this.#requestCapacity = header.getUint32(layout.requestCapacity, true);
+    this.#resultCapacity = header.getUint32(layout.resultCapacity, true);
+    return {
+      bytes: new Uint8Array(memoryBuffer, resultPointer, byteLength),
+      memoryBuffer,
+      memoryGrew: memoryBuffer !== initialMemoryBuffer,
+      engineRevision: header.getUint32(layout.engineRevision, true),
+      planRevision: header.getUint32(layout.planRevision, true),
+      requiredBaseRevision: header.getUint32(layout.requiredBaseRevision, true),
+      publicationGeneration: header.getUint32(layout.publicationGeneration, true),
+      outputSlot: header.getUint32(layout.outputSlot, true),
+      flags: header.getUint32(layout.flags, true),
+      policyHandle: header.getUint32(layout.policyHandle, true),
+      capabilitySet: header.getUint32(layout.capabilitySet, true),
+      semanticViewCount: header.getUint32(layout.semanticViewCount, true),
+      primitiveCount: header.getUint32(layout.primitiveCount, true),
+      patchCount: header.getUint32(layout.patchCount, true),
+      drawCount: header.getUint32(layout.drawCount, true),
+    };
   }
 
   dispose(): void {
