@@ -14,7 +14,8 @@ mod wire;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::vec::Vec;
+use core::cell::Cell;
 use harfrust::{
     BufferClusterLevel, BufferFlags, Direction, Feature, FontRef, GlyphExtents, Language,
     ShapeOptions, ShapePlan, ShaperData, Tag, UnicodeBuffer,
@@ -43,7 +44,14 @@ const DEFAULT_SHAPE_BUFFER_CAPACITY: usize = 32_768;
 const DEFAULT_SHAPE_FEATURE_CAPACITY: usize = 128;
 
 pub struct ShaperRegistry {
-    fonts: BTreeMap<u32, RegisteredFont>,
+    /// Registered fonts in ascending handle order as dense parallel arrays. The
+    /// positioning and measurement loops resolve the same handle for long consecutive
+    /// runs, so lookups short-circuit through `last_font` and otherwise binary-search
+    /// the contiguous handle array; registration and disposal are cold paths that keep
+    /// the order sorted.
+    font_handles: Vec<u32>,
+    fonts: Vec<RegisteredFont>,
+    last_font: Cell<usize>,
     shape_buffer: Option<UnicodeBuffer>,
     context_codepoints: Vec<u32>,
     shape_features: Vec<Feature>,
@@ -52,7 +60,9 @@ pub struct ShaperRegistry {
 impl Default for ShaperRegistry {
     fn default() -> Self {
         Self {
-            fonts: BTreeMap::new(),
+            font_handles: Vec::new(),
+            fonts: Vec::new(),
+            last_font: Cell::new(usize::MAX),
             shape_buffer: Some(UnicodeBuffer::new()),
             context_codepoints: Vec::new(),
             shape_features: Vec::new(),
@@ -206,37 +216,56 @@ impl ShaperRegistry {
             },
             _ => return STATUS_INVALID_FONT,
         };
-        if let Some(existing) = self.fonts.get(&handle) {
-            return if existing.sfnt == sfnt
-                && existing.extents == extents
-                && existing.availability == availability
-            {
-                STATUS_OK
-            } else {
-                STATUS_HANDLE_CONFLICT
-            };
+        match self.font_handles.binary_search(&handle) {
+            Ok(index) => {
+                let existing = &self.fonts[index];
+                return if existing.sfnt == sfnt
+                    && existing.extents == extents
+                    && existing.availability == availability
+                {
+                    STATUS_OK
+                } else {
+                    STATUS_HANDLE_CONFLICT
+                };
+            }
+            Err(index) => {
+                let data = ShaperData::new(&font);
+                self.font_handles.insert(index, handle);
+                self.fonts.insert(
+                    index,
+                    RegisteredFont {
+                        sfnt: sfnt.to_vec(),
+                        extents: extents.to_vec(),
+                        availability: availability.to_vec(),
+                        metrics,
+                        data,
+                        plans: Vec::new(),
+                    },
+                );
+            }
         }
-        let data = ShaperData::new(&font);
-        self.fonts.insert(
-            handle,
-            RegisteredFont {
-                sfnt: sfnt.to_vec(),
-                extents: extents.to_vec(),
-                availability: availability.to_vec(),
-                metrics,
-                data,
-                plans: Vec::new(),
-            },
-        );
         STATUS_OK
     }
 
+    /// Resolves a handle to its dense index. The memo makes the common consecutive
+    /// same-font resolution one compare; a stale memo is harmless because the hit is
+    /// accepted only when the handle stored at that index still matches.
+    fn font_index(&self, handle: u32) -> Option<usize> {
+        let last = self.last_font.get();
+        if self.font_handles.get(last) == Some(&handle) {
+            return Some(last);
+        }
+        let index = self.font_handles.binary_search(&handle).ok()?;
+        self.last_font.set(index);
+        Some(index)
+    }
+
     pub(crate) fn font_metrics(&self, handle: u32) -> Option<FontMetrics> {
-        self.fonts.get(&handle).map(|font| font.metrics)
+        self.font_index(handle).map(|index| self.fonts[index].metrics)
     }
 
     pub(crate) fn font_glyph_extents(&self, handle: u32, glyph: u32) -> Option<FontGlyphExtents> {
-        let font = self.fonts.get(&handle)?;
+        let font = &self.fonts[self.font_index(handle)?];
         FlatExtents {
             records: &font.extents,
             availability: &font.availability,
@@ -245,10 +274,13 @@ impl ShaperRegistry {
     }
 
     pub fn dispose_font(&mut self, handle: u32) -> u32 {
-        if self.fonts.remove(&handle).is_some() {
-            STATUS_OK
-        } else {
-            STATUS_FONT_MISSING
+        match self.font_handles.binary_search(&handle) {
+            Ok(index) => {
+                self.font_handles.remove(index);
+                self.fonts.remove(index);
+                STATUS_OK
+            }
+            Err(_) => STATUS_FONT_MISSING,
         }
     }
 
@@ -277,10 +309,8 @@ impl ShaperRegistry {
         range: ShapeRangeRef,
         consume: impl FnOnce(&harfrust::GlyphBuffer) -> Result<T, u32>,
     ) -> Result<T, u32> {
-        let font = self
-            .fonts
-            .get_mut(&font_handle)
-            .ok_or(STATUS_FONT_MISSING)?;
+        let index = self.font_index(font_handle).ok_or(STATUS_FONT_MISSING)?;
+        let font = &mut self.fonts[index];
         let shaped = shape_segment(
             font,
             text,
@@ -300,18 +330,17 @@ impl ShaperRegistry {
     }
 
     pub fn contains_font(&self, handle: u32) -> bool {
-        self.fonts.contains_key(&handle)
+        self.font_index(handle).is_some()
     }
 
     pub fn glyph_count(&self, handle: u32) -> Option<u32> {
-        self.fonts
-            .get(&handle)
-            .and_then(|font| u32::try_from(font.extents.len() / 8).ok())
+        let font = &self.fonts[self.font_index(handle)?];
+        u32::try_from(font.extents.len() / 8).ok()
     }
 
     pub fn retained_font_bytes(&self) -> u32 {
         self.fonts
-            .values()
+            .iter()
             .map(|font| font.sfnt.len() + font.extents.len() + font.availability.len())
             .try_fold(0_u32, |total, bytes| {
                 total.checked_add(bytes.try_into().unwrap_or(u32::MAX))
@@ -321,7 +350,7 @@ impl ShaperRegistry {
 
     pub fn plan_count(&self) -> u32 {
         self.fonts
-            .values()
+            .iter()
             .map(|font| u32::try_from(font.plans.len()).unwrap_or(u32::MAX))
             .fold(0_u32, u32::saturating_add)
     }
@@ -749,6 +778,40 @@ mod tests {
         assert_eq!(metrics.underline_thickness, 140);
         assert_eq!(metrics.strikeout_position, 671);
         assert_eq!(metrics.strikeout_size, 140);
+    }
+
+    #[test]
+    fn dense_font_lookups_stay_exact_across_disposal_and_reuse() {
+        const INTER: &[u8] = include_bytes!(
+            "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
+        );
+        let glyph_count = 2937usize;
+        let extents_a = alloc::vec![0u8; glyph_count * 8];
+        let extents_b = alloc::vec![0u8; glyph_count * 8];
+        let availability = alloc::vec![0u8; glyph_count.div_ceil(8)];
+        let mut registry = ShaperRegistry::default();
+        assert_eq!(registry.register_font(9, INTER, &extents_a, &availability, 0, 0), STATUS_OK);
+        assert_eq!(registry.register_font(3, INTER, &extents_b, &availability, 0, 0), STATUS_OK);
+        // Alternating queries exercise the memo's miss path; the same handle twice
+        // exercises its hit path.
+        assert!(registry.font_metrics(9).is_some());
+        assert!(registry.font_metrics(9).is_some());
+        assert!(registry.font_metrics(3).is_some());
+        assert!(registry.contains_font(9));
+        // Disposal shifts the dense arrays under a warm memo; the handle re-check
+        // must reject the stale index and every surviving lookup stays exact.
+        assert_eq!(registry.dispose_font(3), STATUS_OK);
+        assert!(registry.font_metrics(3).is_none());
+        assert!(registry.font_metrics(9).is_some());
+        assert_eq!(registry.glyph_count(9), Some(glyph_count as u32));
+        // Re-registering a lower handle shifts index assignments again.
+        assert_eq!(registry.register_font(2, INTER, &extents_b, &availability, 0, 0), STATUS_OK);
+        assert!(registry.font_metrics(2).is_some());
+        assert!(registry.font_metrics(9).is_some());
+        assert_eq!(registry.font_count(), 2);
+        assert_eq!(registry.dispose_font(9), STATUS_OK);
+        assert_eq!(registry.dispose_font(9), STATUS_FONT_MISSING);
+        assert_eq!(registry.font_count(), 1);
     }
 
     #[test]
