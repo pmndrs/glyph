@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:b0e92ac70d3171cc1640994d641825b591ab94d233381c681f98b05cc0211796'
+source_digest: 'sha256:d9ed12b2d4fa8e710cab0e0cce14b59ef09223bd7c5331db214cd966c335175e'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -551,6 +551,43 @@ mutations run twice with identical status sequences, include accepted and reject
 input leaves a fresh valid transaction usable. This supplements the Rust parser unit cases at the compiled ABI rather
 than restoring any deleted `shapeBatch`, `reshapeRanges`, or TypeScript paragraph state machine. The package gate now
 contains 165 Node integration tests plus three deterministic fuzz-smoke tests.
+
+The integer layout-units migration (D-254) moved cluster advances, line fitting, justification, and positioning onto
+F26.6 integers with one rounding contract (`layout_units.rs`: round-half-up as `floor(value * 64 + 1/2)`), landed as
+stacked slices with an interleaved same-run A/B for each — sides alternated in identical order within one process
+session, because this host drifts several percent between sessions. Step deltas, medians at the 22,000-glyph corpus:
+
+| Slice                                  | Lane deltas (median, rounds consistent)                            |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| Registry flattening (slice 1)          | lane-neutral; shaper −9,433 raw bytes                              |
+| F26.6 fit + chunk-64 kernels (slice 2) | ~2% measure lane, scales with line length; byte-exact break parity |
+| Retained adjacency stream (slice 3)    | column-resize 2.996 → 2.781 ms (−7.2%), measure-query 1.930 → 1.824 ms (−5.5%), both 3/3; suffix +1.3% / splice +2.1% (re-shape scatter, accepted); cold neutral |
+| Metric-only scale refresh (slice 3)    | font-size 6.715 → 5.898 ms (−12.2%, 3/3) — 9.2% below the pre-stream baseline; other lanes neutral |
+| Integer justification (slice 4)        | lane-neutral 2/2 (the direct lanes do not justify); totals now exact |
+
+The stream replaces the glyph permutation with six adjacency-order payload columns scattered at build, so positioning
+walks sequential memory and geometry-only updates reuse the stream untouched; a metrics-only restyle re-derives just the
+advance lanes from that stream in one sequential pass, bit-identical to a cold build by a lane-for-lane oracle.
+Justification distributes euclideanly in layout units — per-site quotient plus a remainder spread one unit over leading
+sites — so the fragment advance and the applied cursor adjustments agree exactly, and the compression capacity
+quantizes through the same `ratio_q16` expression the fit used to admit the line. The
+[integer-units checkpoint record](../../apps/benchmarks/fixtures/results/rust-layout-bitmap-integer-units-c2e895e-darwin-arm64.json)
+pins the slice-4 artifact end-state (measure-query 1.890/2.054 ms median/p95 on a visibly hot host session; the
+interleaved deltas above are the comparative evidence).
+
+Corpus re-derivation statement: the packaged fixtures held byte-identical through every slice except the deliberate
+quantized-boundary re-pins recorded with their commits — one RTL ellipsis extent at the slice-2b flip (+0.0134 px), the
+paragraph bidi and CJK contracts (30 and 25 numeric leaves, maxima 0.070 px and 0.101 px, the latter a long Korean
+line's accumulated per-site sub-unit quantization), and the advanced-shaping and rich-text composed hashes, whose
+roughly twenty-five structural pins each — glyph and draw counts, line counts, both first-line break positions — held
+exactly while origins settled on 1/64 boundaries. Integer justification required no re-pin: both contract corpora and
+the sixteen-scenario conformance suite reproduce byte-identically because their justified cases divide evenly. Native
+and Wasm agree bit-for-bit on the contract corpora by construction of the shared rounding contract, and the linux CI
+host reproduces both composed scenario hashes recorded on this darwin host.
+
+Still open after the migration: the measure-query 0.6–0.9 ms stretch target (measured 1.83 ms — the residual floor is
+the fit walk plus the Wasm entry, not the removed gather) and the committing-resize p95-under-4-ms objective
+(4.49–4.71 p95 at this corpus; the break-sensitive tail documented above).
 
 ## Merge gates still open
 

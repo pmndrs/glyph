@@ -891,3 +891,124 @@ test('the committing frame adopts the speculative transaction and its reserved g
   );
   assert.equal(fn.disposeSession(29), abi.status.ok);
 });
+
+/**
+ * Integer layout-units slice 5: the packaged artifact's measured f32 extents
+ * are pinned EXACTLY at several widths. Every stage between text and extent
+ * runs on the F26.6 rounding contract (`layout_units.rs`), whose integer
+ * arithmetic and IEEE f64 scaling are deterministic across native and Wasm
+ * builds and across hosts; the linux CI runner reproducing these exact
+ * values is the cross-build half of the bit-exactness evidence, alongside
+ * the composed conformance hashes it already reproduces. A change in any
+ * pinned value is a layout-contract change and must be re-derived
+ * deliberately, never absorbed.
+ */
+test('measured f32 extents reproduce exactly at every pinned width', async () => {
+  const [interArtifact, shaperWasm, abi] = await Promise.all([
+    readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+    readFile(shaperWasmUrl),
+    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+  ]);
+  const inter = await validateFontArtifact(interArtifact);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  registerValidatedFont({ abi, fn, memory }, 101, inter);
+  registerSimpleBinding({ abi, fn, memory }, 1001, 101, inter, 71, 1);
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(0xe9, 3, 0, 0));
+  assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
+  fn.deallocate(stack.pointer, stack.length);
+  const policyBytes = twoTechniquePolicyBytes(abi);
+  const policy = copyToWasm(memory, fn.allocate, policyBytes);
+  assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
+  fn.deallocate(policy.pointer, policy.length);
+  assert.equal(fn.createSession(31, 4096, 128 * 1024, 0), abi.status.ok);
+
+  const resultLayout = abi.layouts.engineResult;
+  const record = abi.layouts.engineSemanticView;
+  const run = (bytes, entry, paragraphId) => {
+    const pointer = fn.requestPointer(31);
+    new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+    const resultPointer =
+      entry === 'measure'
+        ? fn.measureParagraph(31, pointer, bytes.byteLength, paragraphId)
+        : fn.textUpdate(31, pointer, bytes.byteLength);
+    const view = new DataView(memory.buffer, resultPointer, resultLayout.size);
+    return {
+      pointer: resultPointer,
+      status: view.getUint32(resultLayout.status, true),
+      engineRevision: view.getUint32(resultLayout.engineRevision, true),
+      publicationGeneration: view.getUint32(resultLayout.publicationGeneration, true),
+      semanticViewsOffset: view.getUint32(resultLayout.semanticViewsOffset, true),
+      semanticViewCount: view.getUint32(resultLayout.semanticViewCount, true),
+    };
+  };
+  const measurementFor = (result, paragraphId) => {
+    for (let index = 0; index < result.semanticViewCount; index += 1) {
+      const offset = result.pointer + result.semanticViewsOffset + index * record.size;
+      const view = new DataView(memory.buffer, offset, record.size);
+      if (
+        view.getUint8(record.kind) === abi.engine.semanticKinds.paragraphMeasurement &&
+        view.getUint32(record.id, true) === paragraphId
+      ) {
+        return {
+          lineCount: view.getUint32(record.itemCount, true),
+          inlineExtent: view.getFloat32(record.inlineExtent, true),
+        };
+      }
+    }
+    return undefined;
+  };
+
+  const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
+  const seeded = run(
+    engineStyleUpdateBytes(abi, {
+      sessionId: 31,
+      policyHandle: 23,
+      fontStackHandle: 17,
+      text,
+      maxClusters: 64,
+      geometry: { width: 300, height: 200, maxLines: 16 },
+    }),
+    'update',
+  );
+  assert.equal(seeded.status, abi.status.ok);
+
+  // Every pinned extent sits on a 1/64 boundary — the F26.6 signature of the
+  // authoritative integer fit, exact in f32.
+  const pinned = [
+    [300, 1, 181.375],
+    [220, 1, 181.375],
+    [150, 2, 143.84375],
+    [96, 3, 83.53125],
+    [73, 4, 60.3125],
+  ];
+  for (const [width, lineCount, inlineExtent] of pinned) {
+    const measureRequest = engineStyleUpdateBytes(abi, {
+      sessionId: 31,
+      policyHandle: 23,
+      fontStackHandle: 17,
+      expectedEngineRevision: seeded.engineRevision,
+      consumedPlanRevision: seeded.engineRevision,
+      acknowledgedPublicationGeneration: seeded.publicationGeneration,
+      maxClusters: 64,
+      styles: false,
+      geometry: { width, height: 200, maxLines: 16 },
+    });
+    new DataView(measureRequest.buffer).setUint32(
+      abi.layouts.engineUpdateRequest.semanticViewMask,
+      abi.engine.semanticViewMasks.measurement,
+      true,
+    );
+    const measured = run(measureRequest, 'measure', 1);
+    assert.equal(measured.status, abi.status.ok, `measure at width ${width}`);
+    const measurement = measurementFor(measured, 1);
+    assert.ok(measurement, `measurement view at width ${width}`);
+    assert.equal(measurement.lineCount, lineCount, `line count at width ${width}`);
+    assert.equal(measurement.inlineExtent, inlineExtent, `exact f32 extent at width ${width}`);
+  }
+  assert.equal(fn.disposeSession(31), abi.status.ok);
+});
