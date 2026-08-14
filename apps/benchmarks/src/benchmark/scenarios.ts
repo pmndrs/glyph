@@ -1,6 +1,9 @@
 import type { BenchmarkScenario } from './contracts';
 import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
-const ADVANCED_SHAPING_HASH = '75ecd481';
+// Re-pinned once when the integer F26.6 line fit became authoritative: the
+// timeline's sub-pixel origins settle on quantized boundaries while every
+// authored count (709 glyphs, 625 rendered, 68 frames, 17,362 bytes) held.
+const ADVANCED_SHAPING_HASH = '5ff5deb7';
 const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
 function deterministicValidation(hashes: readonly string[]): string {
@@ -345,7 +348,10 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
       metrics.warmLifecyclePublicationCount !== frameCount - ADVANCED_SHAPING_CASES.length ||
       metrics.warmReadyWaitCount !== 0
     ) {
-      throw new Error('Advanced shaping did not preserve its complete authored frame matrix');
+      throw new Error(
+        'Advanced shaping did not preserve its complete authored frame matrix: ' +
+          `hash=${value.hash} outputBytes=${value.outputBytes} metrics=${JSON.stringify(metrics)}`,
+      );
     }
   }
   return `${values.length}/${values.length} exact advanced-shaping timelines · ${frameCount} frames/sample`;
@@ -360,7 +366,10 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
  * shaper's font selection; and the `.notdef` pin proves the fallback span is what resolved the Devanagari at all.
  */
 const RICH_TEXT_SPAN_EVIDENCE = {
-  hash: 'd51b40e5',
+  // The hash alone re-pinned when the integer F26.6 fit became authoritative:
+  // every structural pin below — selection, line counts, and both first-line
+  // break positions — held while the composed origins quantized.
+  hash: 'b5a9ef20',
   glyphCount: 175,
   renderedGlyphCount: 149,
   drawCount: 7,
