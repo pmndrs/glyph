@@ -499,6 +499,24 @@ impl PositionedGlyphArena {
         let mut cursor = fragment.slot_start + indent_shift + offset;
         let baseline = line.block_start + line.baseline;
         let mut decorated_run: Option<DecoratedRun> = None;
+        // One equal-length admission per fragment binds every shape column to
+        // the same length, so the glyph gather below needs a single bound
+        // check per glyph instead of an Option chain per column.
+        let shape_len = shape.glyph_ids.len();
+        if shape.clusters.len() != shape_len
+            || shape.x_advances.len() != shape_len
+            || shape.x_offsets.len() != shape_len
+            || shape.y_offsets.len() != shape_len
+            || shape.glyph_flags.len() != shape_len
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        let shape_glyph_ids = &shape.glyph_ids[..shape_len];
+        let shape_clusters = &shape.clusters[..shape_len];
+        let shape_x_advances = &shape.x_advances[..shape_len];
+        let shape_x_offsets = &shape.x_offsets[..shape_len];
+        let shape_y_offsets = &shape.y_offsets[..shape_len];
+        let shape_glyph_flags = &shape.glyph_flags[..shape_len];
         let visual_count = if visually_ltr {
             retained_cluster_end.saturating_sub(cluster_start)
         } else {
@@ -535,61 +553,36 @@ impl PositionedGlyphArena {
                 .map_err(|_| EngineError::InvalidRequest)?;
             let glyph_count = usize::try_from(clusters.glyph_counts[cluster])
                 .map_err(|_| EngineError::InvalidRequest)?;
-            for ordinal in 0..glyph_count {
-                let adjacency = glyph_start + ordinal;
-                let shaped = usize::try_from(
-                    *clusters
-                        .glyph_indices
-                        .get(adjacency)
-                        .ok_or(EngineError::InvalidRequest)?,
-                )
-                .map_err(|_| EngineError::InvalidRequest)?;
-                let glyph_id = u32::from(
-                    *shape
-                        .glyph_ids
-                        .get(shaped)
-                        .ok_or(EngineError::InvalidRequest)?,
-                );
-                let x_advance = f64::from(
-                    shape
-                        .x_advances
-                        .get(shaped)
-                        .copied()
-                        .ok_or(EngineError::InvalidRequest)?,
-                )
-                .abs()
-                    * scale;
-                let x_offset = f64::from(
-                    shape
-                        .x_offsets
-                        .get(shaped)
-                        .copied()
-                        .ok_or(EngineError::InvalidRequest)?,
-                ) * scale;
-                let y_offset = f64::from(
-                    shape
-                        .y_offsets
-                        .get(shaped)
-                        .copied()
-                        .ok_or(EngineError::InvalidRequest)?,
-                ) * scale;
-                let stable_id = *clusters
-                    .glyph_stable_ids
-                    .get(adjacency)
-                    .ok_or(EngineError::InvalidRequest)?;
-                let flags = *shape
-                    .glyph_flags
-                    .get(shaped)
-                    .ok_or(EngineError::InvalidRequest)?;
+            let adjacency_end = glyph_start
+                .checked_add(glyph_count)
+                .ok_or(EngineError::InvalidRequest)?;
+            // The cluster's adjacency range is admitted once; the zipped walk
+            // then reads both adjacency columns without further checks.
+            let glyph_indices = clusters
+                .glyph_indices
+                .get(glyph_start..adjacency_end)
+                .ok_or(EngineError::InvalidRequest)?;
+            let glyph_stable_ids = clusters
+                .glyph_stable_ids
+                .get(glyph_start..adjacency_end)
+                .ok_or(EngineError::InvalidRequest)?;
+            for (&shaped_index, &stable_id) in glyph_indices.iter().zip(glyph_stable_ids) {
+                let shaped =
+                    usize::try_from(shaped_index).map_err(|_| EngineError::InvalidRequest)?;
+                if shaped >= shape_len {
+                    return Err(EngineError::InvalidRequest);
+                }
+                let glyph_id = u32::from(shape_glyph_ids[shaped]);
+                let x_advance = f64::from(shape_x_advances[shaped]).abs() * scale;
+                let x_offset = f64::from(shape_x_offsets[shaped]) * scale;
+                let y_offset = f64::from(shape_y_offsets[shaped]) * scale;
+                let flags = shape_glyph_flags[shaped];
                 let origin_inline = cursor + x_offset;
                 let origin_block = baseline - y_offset - f64::from(style.baseline_shift);
                 self.semantic_glyphs.push(SemanticGlyph {
                     stable_id,
                     font_handle,
-                    cluster: *shape
-                        .clusters
-                        .get(shaped)
-                        .ok_or(EngineError::InvalidRequest)?,
+                    cluster: shape_clusters[shaped],
                     glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
                     flags,
                     font_size: style.font_size,
