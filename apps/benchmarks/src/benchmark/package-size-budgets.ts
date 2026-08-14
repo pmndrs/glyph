@@ -13,9 +13,14 @@ export const packageSizeBudgets = {
   // code (schema normalization and freezing, DSL session provenance,
   // schemaPolicyBuffers/schemaFieldTable). Re-based when tsdown bundling lands per
   // the technique contract plan.
+  // The external-raster routing around the Worker font-bake plan added +1,786 raw /
+  // +919 minified of core routing code; the generated evidence was not refolded at
+  // the time, so the growth first surfaced in the CI gate's fresh build (228,199 raw
+  // / 155,956 minified, byte-identical across linux-x64 and darwin). Gzip and Brotli
+  // still fit under their prior ceilings.
   'core-subpath-js': {
-    rawBytes: 227_000,
-    minifiedBytes: 155_500,
+    rawBytes: 229_000,
+    minifiedBytes: 156_500,
     gzipBytes: 39_700,
     brotliBytes: 34_200,
   },
