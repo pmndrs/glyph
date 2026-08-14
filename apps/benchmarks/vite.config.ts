@@ -35,5 +35,8 @@ export default defineConfig({
   ],
   build: { target: 'es2022' },
   preview: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
-  server: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
+  // A fixed strict port: forwarded --port flags do not survive the nested pnpm
+  // dev chain, and a silently drifted port serves stale confusion instead of
+  // failing loudly.
+  server: { headers: CROSS_ORIGIN_ISOLATION_HEADERS, port: 5273, strictPort: true },
 });
