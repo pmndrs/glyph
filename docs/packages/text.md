@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:117d89d13257087fbe43aa9acc49c164362a8afff659929a31b38ee1f75e4008'
+source_digest: 'sha256:c8bc12804df125026f3c938700b5abcafef1352104974be367ac52607093f566'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
