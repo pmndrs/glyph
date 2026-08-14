@@ -74,8 +74,9 @@ export const packageSizeBudgets = {
   // the compressed ceilings hold with tight headroom by design.
   // Column flow (contentBox columns over ordered regions) added ~+1.7 KB raw of
   // geometry derivation and validation in the Three adapter.
-  // The 11.17 frame adoption and measureLayout host fast path added +7,096 raw /
-  // +3,604 minified in the Three adapter.
+  // The external-raster routing rode into the Three bundle too (+1,786 raw /
+  // +914 minified), then the 11.17 frame adoption and measureLayout host fast
+  // path added +5,310 raw / +2,690 minified in the Three adapter.
   'three-runtime-js': {
     rawBytes: 377_000,
     minifiedBytes: 245_500,
