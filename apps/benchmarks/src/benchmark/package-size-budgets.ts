@@ -68,9 +68,12 @@ export const packageSizeBudgets = {
   // the compressed ceilings hold with tight headroom by design.
   // Column flow (contentBox columns over ordered regions) added ~+1.7 KB raw of
   // geometry derivation and validation in the Three adapter.
+  // The external-raster routing rode into the Three bundle too: +1,786 raw /
+  // +914 minified (370,521 raw / 241,995 minified measured by the CI gate).
+  // Gzip and Brotli still fit under their prior ceilings.
   'three-runtime-js': {
-    rawBytes: 370_000,
-    minifiedBytes: 241_500,
+    rawBytes: 371_500,
+    minifiedBytes: 242_500,
     gzipBytes: 62_500,
     brotliBytes: 52_800,
   },
