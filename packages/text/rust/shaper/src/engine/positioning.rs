@@ -11,7 +11,7 @@ use super::{
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
     identity_index::{IdentityIndex, IdentityIndexError},
     policy_gather::LayoutGlyph,
-    shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun},
+    shaping_state::{BoundaryShape, BoundaryShapeArena, ShapingRun},
     style_state::{ResolvedStyle, StyleSegment},
 };
 
@@ -136,7 +136,6 @@ impl PositionedGlyphArena {
         text: &[u16],
         clusters: &ClusterArena,
         runs: &[ShapingRun],
-        shape: &ShapeArena,
         boundary_shape: &BoundaryShapeArena,
         styles: &[StyleSegment],
         bidi: &BidiAnalysis,
@@ -147,7 +146,7 @@ impl PositionedGlyphArena {
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
         self.clear();
-        self.reserve(shape.glyph_ids.len())?;
+        self.reserve(clusters.glyph_ids.len())?;
         reserve(&mut self.line_glyph_starts, flow.lines.len())?;
         reserve(&mut self.line_glyph_counts, flow.lines.len())?;
         reserve(&mut self.semantic_line_glyph_starts, flow.lines.len())?;
@@ -205,7 +204,6 @@ impl PositionedGlyphArena {
                     text,
                     clusters,
                     runs,
-                    shape,
                     boundary_shape,
                     styles,
                     bidi,
@@ -418,7 +416,6 @@ impl PositionedGlyphArena {
         text: &[u16],
         clusters: &ClusterArena,
         runs: &[ShapingRun],
-        shape: &ShapeArena,
         boundary_shape: &BoundaryShapeArena,
         styles: &[StyleSegment],
         bidi: &BidiAnalysis,
@@ -499,24 +496,26 @@ impl PositionedGlyphArena {
         let mut cursor = fragment.slot_start + indent_shift + offset;
         let baseline = line.block_start + line.baseline;
         let mut decorated_run: Option<DecoratedRun> = None;
-        // One equal-length admission per fragment binds every shape column to
-        // the same length, so the glyph gather below needs a single bound
-        // check per glyph instead of an Option chain per column.
-        let shape_len = shape.glyph_ids.len();
-        if shape.clusters.len() != shape_len
-            || shape.x_advances.len() != shape_len
-            || shape.x_offsets.len() != shape_len
-            || shape.y_offsets.len() != shape_len
-            || shape.glyph_flags.len() != shape_len
+        // The adjacency-order glyph stream is one equal-length column family;
+        // a single admission per fragment lets every cluster's range walk the
+        // columns sequentially with direct indexing — no shape-order gather.
+        let stream_len = clusters.glyph_ids.len();
+        if clusters.glyph_clusters.len() != stream_len
+            || clusters.glyph_x_advances.len() != stream_len
+            || clusters.glyph_x_offsets.len() != stream_len
+            || clusters.glyph_y_offsets.len() != stream_len
+            || clusters.glyph_shape_flags.len() != stream_len
+            || clusters.glyph_stable_ids.len() != stream_len
         {
             return Err(EngineError::InvalidRequest);
         }
-        let shape_glyph_ids = &shape.glyph_ids[..shape_len];
-        let shape_clusters = &shape.clusters[..shape_len];
-        let shape_x_advances = &shape.x_advances[..shape_len];
-        let shape_x_offsets = &shape.x_offsets[..shape_len];
-        let shape_y_offsets = &shape.y_offsets[..shape_len];
-        let shape_glyph_flags = &shape.glyph_flags[..shape_len];
+        let stream_ids = &clusters.glyph_ids[..stream_len];
+        let stream_clusters = &clusters.glyph_clusters[..stream_len];
+        let stream_x_advances = &clusters.glyph_x_advances[..stream_len];
+        let stream_x_offsets = &clusters.glyph_x_offsets[..stream_len];
+        let stream_y_offsets = &clusters.glyph_y_offsets[..stream_len];
+        let stream_shape_flags = &clusters.glyph_shape_flags[..stream_len];
+        let stream_stable_ids = &clusters.glyph_stable_ids[..stream_len];
         let visual_count = if visually_ltr {
             retained_cluster_end.saturating_sub(cluster_start)
         } else {
@@ -556,33 +555,24 @@ impl PositionedGlyphArena {
             let adjacency_end = glyph_start
                 .checked_add(glyph_count)
                 .ok_or(EngineError::InvalidRequest)?;
-            // The cluster's adjacency range is admitted once; the zipped walk
-            // then reads both adjacency columns without further checks.
-            let glyph_indices = clusters
-                .glyph_indices
-                .get(glyph_start..adjacency_end)
-                .ok_or(EngineError::InvalidRequest)?;
-            let glyph_stable_ids = clusters
-                .glyph_stable_ids
-                .get(glyph_start..adjacency_end)
-                .ok_or(EngineError::InvalidRequest)?;
-            for (&shaped_index, &stable_id) in glyph_indices.iter().zip(glyph_stable_ids) {
-                let shaped =
-                    usize::try_from(shaped_index).map_err(|_| EngineError::InvalidRequest)?;
-                if shaped >= shape_len {
-                    return Err(EngineError::InvalidRequest);
-                }
-                let glyph_id = u32::from(shape_glyph_ids[shaped]);
-                let x_advance = f64::from(shape_x_advances[shaped]).abs() * scale;
-                let x_offset = f64::from(shape_x_offsets[shaped]) * scale;
-                let y_offset = f64::from(shape_y_offsets[shaped]) * scale;
-                let flags = shape_glyph_flags[shaped];
+            // The cluster's adjacency range is admitted once; the walk below
+            // reads the stream columns sequentially without further checks.
+            if adjacency_end > stream_len {
+                return Err(EngineError::InvalidRequest);
+            }
+            for adjacency in glyph_start..adjacency_end {
+                let stable_id = stream_stable_ids[adjacency];
+                let glyph_id = u32::from(stream_ids[adjacency]);
+                let x_advance = f64::from(stream_x_advances[adjacency]).abs() * scale;
+                let x_offset = f64::from(stream_x_offsets[adjacency]) * scale;
+                let y_offset = f64::from(stream_y_offsets[adjacency]) * scale;
+                let flags = stream_shape_flags[adjacency];
                 let origin_inline = cursor + x_offset;
                 let origin_block = baseline - y_offset - f64::from(style.baseline_shift);
                 self.semantic_glyphs.push(SemanticGlyph {
                     stable_id,
                     font_handle,
-                    cluster: shape_clusters[shaped],
+                    cluster: stream_clusters[adjacency],
                     glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
                     flags,
                     font_size: style.font_size,
@@ -1534,6 +1524,7 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::shaping_state::ShapeArena;
     use super::*;
     use crate::engine::{
         cluster_state::CLUSTER_SAFE_BEFORE, flow_composition::NO_BOUNDARY,
@@ -1744,20 +1735,15 @@ mod tests {
             stable_ids: vec![10, 20, 30],
             glyph_starts: vec![0, 1, 2],
             glyph_counts: vec![1, 1, 0],
-            glyph_indices: vec![0, 1],
+            glyph_ids: vec![1, 2],
+            glyph_clusters: vec![0, 1],
+            glyph_x_advances: vec![500, 500],
+            glyph_x_offsets: vec![0, 0],
+            glyph_y_offsets: vec![0, 0],
+            glyph_shape_flags: vec![0, 0],
             glyph_stable_ids: vec![100, 200],
             index_at: vec![0, 1, 2, 3],
             ..ClusterArena::default()
-        };
-        let shape = ShapeArena {
-            runs: vec![],
-            glyph_ids: vec![1, 2],
-            clusters: vec![0, 1],
-            x_advances: vec![500, 500],
-            y_advances: vec![0, 0],
-            x_offsets: vec![0, 0],
-            y_offsets: vec![0, 0],
-            glyph_flags: vec![0, 0],
         };
         let bidi = BidiAnalysis {
             levels: vec![0, 0, BIDI_B],
@@ -1825,7 +1811,6 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
-                &shape,
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
@@ -1883,20 +1868,15 @@ mod tests {
             stable_ids: vec![10, 20, 30],
             glyph_starts: vec![0, 1, 2],
             glyph_counts: vec![1, 1, 0],
-            glyph_indices: vec![0, 1],
+            glyph_ids: vec![1, 2],
+            glyph_clusters: vec![0, 1],
+            glyph_x_advances: vec![500, 500],
+            glyph_x_offsets: vec![0, 0],
+            glyph_y_offsets: vec![0, 0],
+            glyph_shape_flags: vec![0, 0],
             glyph_stable_ids: vec![100, 200],
             index_at: vec![0, 1, 2, 3],
             ..ClusterArena::default()
-        };
-        let shape = ShapeArena {
-            runs: vec![],
-            glyph_ids: vec![1, 2],
-            clusters: vec![0, 1],
-            x_advances: vec![500, 500],
-            y_advances: vec![0, 0],
-            x_offsets: vec![0, 0],
-            y_offsets: vec![0, 0],
-            glyph_flags: vec![0, 0],
         };
         let bidi = BidiAnalysis {
             levels: vec![0, 0, BIDI_B],
@@ -1964,7 +1944,6 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
-                &shape,
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
@@ -2012,7 +1991,6 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
-                &shape,
                 &BoundaryShapeArena::default(),
                 &plain_styles,
                 &bidi,
@@ -2067,20 +2045,15 @@ mod tests {
             stable_ids: vec![10, 20, 30, 40],
             glyph_starts: vec![0, 1, 2, 3],
             glyph_counts: vec![1, 1, 1, 1],
-            glyph_indices: vec![0, 1, 2, 3],
+            glyph_ids: vec![1, 2, 3, 4],
+            glyph_clusters: vec![0, 1, 2, 3],
+            glyph_x_advances: vec![500, 500, 500, 500],
+            glyph_x_offsets: vec![0, 0, 0, 0],
+            glyph_y_offsets: vec![0, 0, 0, 0],
+            glyph_shape_flags: vec![0, 0, 0, 0],
             glyph_stable_ids: vec![100, 200, 300, 400],
             index_at: vec![0, 1, 2, 3, 4],
             ..ClusterArena::default()
-        };
-        let shape = ShapeArena {
-            runs: vec![],
-            glyph_ids: vec![1, 2, 3, 4],
-            clusters: vec![0, 1, 2, 3],
-            x_advances: vec![500, 500, 500, 500],
-            y_advances: vec![0, 0, 0, 0],
-            x_offsets: vec![0, 0, 0, 0],
-            y_offsets: vec![0, 0, 0, 0],
-            glyph_flags: vec![0, 0, 0, 0],
         };
         let bidi = BidiAnalysis {
             levels: vec![0, 0, 0, 0],
@@ -2206,7 +2179,6 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
-                &shape,
                 &boundary,
                 &styles,
                 &bidi,
@@ -2268,20 +2240,15 @@ mod tests {
             stable_ids: vec![10, 20, 30],
             glyph_starts: vec![0, 1, 2],
             glyph_counts: vec![1, 1, 0],
-            glyph_indices: vec![0, 1],
+            glyph_ids: vec![1, 2],
+            glyph_clusters: vec![0, 1],
+            glyph_x_advances: vec![500, 500],
+            glyph_x_offsets: vec![0, 0],
+            glyph_y_offsets: vec![0, 0],
+            glyph_shape_flags: vec![0, 0],
             glyph_stable_ids: vec![100, 200],
             index_at: vec![0, 1, 2, 3],
             ..ClusterArena::default()
-        };
-        let shape = ShapeArena {
-            runs: vec![],
-            glyph_ids: vec![1, 2],
-            clusters: vec![0, 1],
-            x_advances: vec![500, 500],
-            y_advances: vec![0, 0],
-            x_offsets: vec![0, 0],
-            y_offsets: vec![0, 0],
-            glyph_flags: vec![0, 0],
         };
         let bidi = BidiAnalysis {
             levels: vec![0, 0, BIDI_B],
@@ -2349,7 +2316,6 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
-                &shape,
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
@@ -2384,7 +2350,6 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
-                &shape,
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,
@@ -2408,7 +2373,6 @@ mod tests {
                 &text,
                 &clusters,
                 &runs,
-                &shape,
                 &BoundaryShapeArena::default(),
                 &styles,
                 &bidi,

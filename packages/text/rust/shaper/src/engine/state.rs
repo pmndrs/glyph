@@ -3123,11 +3123,6 @@ impl ParagraphState {
         } else {
             self.shaping_runs.runs()
         };
-        let shape = if self.shape_prepared {
-            &self.pending_shape
-        } else {
-            &self.shape
-        };
         let styles = if self.styles_prepared {
             self.pending_resolved_styles.segments()
         } else {
@@ -3151,7 +3146,6 @@ impl ParagraphState {
             text,
             clusters,
             runs,
-            shape,
             &BoundaryShapeArena::default(),
             styles,
             bidi,
@@ -3198,11 +3192,6 @@ impl ParagraphState {
         } else {
             self.shaping_runs.runs()
         };
-        let shape = if self.shape_prepared {
-            &self.pending_shape
-        } else {
-            &self.shape
-        };
         let styles = if self.styles_prepared {
             self.pending_resolved_styles.segments()
         } else {
@@ -3234,7 +3223,6 @@ impl ParagraphState {
             text,
             clusters,
             runs,
-            shape,
             boundary_shape,
             styles,
             bidi,
