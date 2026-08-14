@@ -522,11 +522,14 @@ impl PositionedGlyphArena {
                 .style;
             let font_handle = clusters.font_handles[cluster];
             let binding_handle = clusters.binding_handles[cluster];
-            let metrics = metrics_for(font_handle).ok_or(EngineError::InvalidRequest)?;
-            if font_handle == 0 || metrics.units_per_em == 0 {
+            // The owning font's units-per-em rides the cluster arena (it can only
+            // change on re-shape), so the hot loop derives its scale from the
+            // CURRENT style without a per-cluster registry resolution.
+            let units_per_em = clusters.units_per_em[cluster];
+            if font_handle == 0 || units_per_em == 0.0 {
                 return Err(EngineError::InvalidRequest);
             }
-            let scale = f64::from(style.font_size) / f64::from(metrics.units_per_em);
+            let scale = f64::from(style.font_size) / units_per_em;
             let cluster_origin = cursor;
             let glyph_start = usize::try_from(clusters.glyph_starts[cluster])
                 .map_err(|_| EngineError::InvalidRequest)?;
@@ -1596,6 +1599,7 @@ mod tests {
             starts: (0..7).collect(),
             ends: (1..=7).collect(),
             advances: vec![1.0; 7],
+            units_per_em: vec![1_000.0; 7],
             flags,
             style_indexes: vec![0; 7],
             source_runs: vec![0; 7],
@@ -1738,6 +1742,7 @@ mod tests {
             starts: vec![0, 1, 2],
             ends: vec![1, 2, 3],
             advances: vec![6.0, 4.2, 0.0],
+            units_per_em: vec![1_000.0; 3],
             flags: vec![CLUSTER_SAFE_BEFORE, CLUSTER_SAFE_BEFORE, CLUSTER_HARD_BREAK],
             style_indexes: vec![0, 1, 0],
             source_runs: vec![0, 0, u32::MAX],
@@ -1876,6 +1881,7 @@ mod tests {
             starts: vec![0, 1, 2],
             ends: vec![1, 2, 3],
             advances: vec![6.0, 6.0, 0.0],
+            units_per_em: vec![1_000.0; 3],
             flags: vec![CLUSTER_SAFE_BEFORE, CLUSTER_SAFE_BEFORE, CLUSTER_HARD_BREAK],
             style_indexes: vec![0, 0, 0],
             source_runs: vec![0, 0, u32::MAX],
@@ -2054,6 +2060,7 @@ mod tests {
             starts: vec![0, 1, 2, 3],
             ends: vec![1, 2, 3, 4],
             advances: vec![6.0, 6.0, 6.0, 6.0],
+            units_per_em: vec![1_000.0; 4],
             flags: vec![
                 CLUSTER_SAFE_BEFORE,
                 CLUSTER_SAFE_BEFORE,
@@ -2259,6 +2266,7 @@ mod tests {
             starts: vec![0, 1, 2],
             ends: vec![1, 2, 3],
             advances: vec![6.0, 6.0, 0.0],
+            units_per_em: vec![1_000.0; 3],
             flags: vec![CLUSTER_SAFE_BEFORE, CLUSTER_SAFE_BEFORE, CLUSTER_HARD_BREAK],
             style_indexes: vec![0, 0, 0],
             source_runs: vec![0, 0, u32::MAX],

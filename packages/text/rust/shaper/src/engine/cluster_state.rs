@@ -35,6 +35,11 @@ pub(crate) struct ClusterArena {
     pub chunk_advance_sums: Vec<i64>,
     pub chunk_space_sums: Vec<i64>,
     pub chunk_flags_or: Vec<u8>,
+    /// Per-cluster `units_per_em` of the owning shaped font (0 while unshaped),
+    /// resolved once at cluster build. Positioning derives its scale from the
+    /// CURRENT style's font size and this column, so font-size-only style changes
+    /// stay correct while the per-cluster registry lookup disappears.
+    pub units_per_em: Vec<f64>,
     pub flags: Vec<u8>,
     pub style_indexes: Vec<u32>,
     pub source_runs: Vec<u32>,
@@ -65,6 +70,7 @@ impl ClusterArena {
         reserve(&mut self.ends, capacity)?;
         reserve(&mut self.advances, capacity)?;
         reserve(&mut self.advances_f26, capacity)?;
+        reserve(&mut self.units_per_em, capacity)?;
         reserve(&mut self.flags, capacity)?;
         reserve(&mut self.style_indexes, capacity)?;
         reserve(&mut self.source_runs, capacity)?;
@@ -129,6 +135,7 @@ impl ClusterArena {
                 (false, true) => CLUSTER_SPACE,
                 (false, false) => 0,
             });
+            self.units_per_em.push(0.0);
             self.style_indexes
                 .push(u32::try_from(style_index).map_err(|_| EngineError::ResultTooLarge)?);
             self.source_runs.push(NO_SOURCE_RUN);
@@ -243,6 +250,7 @@ impl ClusterArena {
                 (false, true) => CLUSTER_SPACE,
                 (false, false) => 0,
             };
+            self.units_per_em[cluster] = 0.0;
             self.source_runs[cluster] = NO_SOURCE_RUN;
             self.binding_handles[cluster] = 0;
             self.font_handles[cluster] = 0;
@@ -280,6 +288,7 @@ impl ClusterArena {
                 self.unsafe_before[cluster] |=
                     u8::from(shape.glyph_flags[glyph] & GLYPH_UNSAFE_TO_BREAK != 0);
                 self.advances[cluster] += f64::from(shape.x_advances[glyph].unsigned_abs()) * scale;
+                self.units_per_em[cluster] = f64::from(metrics.units_per_em);
             }
         }
         for shaped_run in shape.runs.iter().filter(|run| run.source_run == source_run) {
@@ -428,6 +437,7 @@ impl ClusterArena {
         copy_lane!(starts);
         copy_lane!(ends);
         copy_lane!(advances);
+        copy_lane!(units_per_em);
         copy_lane!(flags);
         copy_lane!(style_indexes);
         copy_lane!(source_runs);
@@ -562,6 +572,7 @@ impl ClusterArena {
         self.chunk_advance_sums.clear();
         self.chunk_space_sums.clear();
         self.chunk_flags_or.clear();
+        self.units_per_em.clear();
         self.flags.clear();
         self.style_indexes.clear();
         self.source_runs.clear();
@@ -646,6 +657,7 @@ impl ClusterArena {
                         .ok_or(EngineError::InvalidRequest)?
                         .unsigned_abs(),
                 ) * scale;
+                self.units_per_em[cluster_index] = f64::from(metrics.units_per_em);
             }
         }
         for shaped_run in &shape.runs {
@@ -1276,6 +1288,7 @@ mod tests {
         assert_lane!(ends);
         assert_lane!(advances);
         assert_lane!(advances_f26);
+        assert_lane!(units_per_em);
         assert_lane!(flags);
         assert_lane!(style_indexes);
         assert_lane!(source_runs);
