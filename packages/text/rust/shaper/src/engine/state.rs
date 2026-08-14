@@ -1422,8 +1422,12 @@ fn append_paragraph_measurement(
     // lanes must not be read against the speculative flow. The measurement
     // falls back to append_measurement's own line-level derivation, which is
     // the same line arithmetic positioning caches.
+    // The positioned arena describes the measured flow in every pairing except
+    // one: a re-prepared flow whose positioning tail was deliberately skipped.
+    // A pending positioning over a committed flow (a positioning-only restyle)
+    // is a VALID pairing — positioning re-ran over exactly that flow.
     let positioned_matches_flow = inspect_full_clipped_layout
-        || state.positioned_prepared == state.flow_layout_prepared;
+        || !(state.flow_layout_prepared && !state.positioned_prepared);
     let (line_glyph_starts, line_glyph_counts) = if positioned_matches_flow {
         positioned.semantic_line_glyph_spans()
     } else {
@@ -1434,7 +1438,22 @@ fn append_paragraph_measurement(
     } else {
         &state.boundary_shape
     };
-    let visible_glyphs = super::layout_query::visible_glyph_counts(flow, clusters, boundary_shape)?;
+    // Glyph totals: the positioned arena's lanes when they describe this flow,
+    // the flow-level derivation otherwise — the integration suite asserts the
+    // two agree, so a measurement-only query reports positioned-identical
+    // counts without the positioning tail.
+    let visible_glyphs = if positioned_matches_flow {
+        (
+            positioned.semantic_glyphs().len(),
+            positioned
+                .semantic_glyphs()
+                .iter()
+                .filter(|glyph| glyph.glyph_id == 0)
+                .count(),
+        )
+    } else {
+        super::layout_query::visible_glyph_counts(flow, clusters, boundary_shape)?
+    };
     super::layout_query::append_measurement(
         records,
         paragraph_id,
@@ -1998,6 +2017,11 @@ impl ParagraphState {
             // over the retained flow instead.
             if positioned_changed && position {
                 self.prepare_positioned(shaper, next_content_revision)?;
+            } else if flow_changed && !position && self.positioned_prepared {
+                // A stale pending positioning from an EARLIER query in the same
+                // transaction must drop when the flow re-runs without it —
+                // otherwise its per-line lanes describe the superseded flow.
+                self.abort_positioned();
             }
         }
         Ok(positioned_changed)
@@ -2405,8 +2429,17 @@ impl ParagraphState {
         // Metric-only styles must refresh the retained run values consumed by cluster aggregation, but the underlying
         // HarfRust result remains valid. Keeping those two invalidations distinct avoids reshaping on size, tracking,
         // word-spacing, line-height, or baseline changes while still rebuilding advances from the new run styles.
+        // One exception: a metric change can MERGE adjacent runs whose layout styles became identical, and the
+        // retained shaped runs then index a run list that no longer exists — the shape must re-run whenever the
+        // rebuilt run list breaks positional topology with the committed one.
         if !self.shaping_runs_prepared
-            || (!self.text_prepared && !self.style_invalidation.shaping && !self.bidi_prepared)
+            || (!self.text_prepared
+                && !self.style_invalidation.shaping
+                && !self.bidi_prepared
+                && shaping_run_topology_stable(
+                    self.shaping_runs.runs(),
+                    self.pending_shaping_runs.runs(),
+                ))
         {
             return Ok(());
         }

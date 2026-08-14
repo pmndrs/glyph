@@ -993,6 +993,33 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
     controlCommit.semanticBytes,
     'the adopted commit publishes the exact semantic table a never-measured commit publishes',
   );
+
+  // The presentation-surface regression: an inspection query positions the
+  // speculative flow, and a following measurement-only query at a NEW width
+  // re-runs flow without positioning — the stale pending positioning must
+  // drop rather than mismatch the superseded flow.
+  const inspected = measuring.run(
+    request(
+      220,
+      { engineRevision: measuredCommit.engineRevision, publicationGeneration: measuredCommit.publicationGeneration },
+      false,
+    ),
+    'measure',
+    all,
+    1,
+  );
+  assert.equal(inspected.status, abi.status.ok, 'inspection query after commit');
+  const remeasured = measuring.run(
+    request(
+      150,
+      { engineRevision: measuredCommit.engineRevision, publicationGeneration: measuredCommit.publicationGeneration },
+      false,
+    ),
+    'measure',
+    measurement,
+    1,
+  );
+  assert.equal(remeasured.status, abi.status.ok, 'measurement-only re-query over a positioned transaction');
 });
 
 /**

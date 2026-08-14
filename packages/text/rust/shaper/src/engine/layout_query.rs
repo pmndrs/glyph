@@ -59,9 +59,12 @@ pub(crate) fn visible_glyph_counts(
             let retained_end = boundary.map_or(cluster_end, |boundary| {
                 usize::try_from(boundary.cluster_start).unwrap_or(usize::MAX)
             });
-            if retained_end > cluster_end || cluster_start > retained_end {
+            if retained_end > cluster_end {
                 return Err(EngineError::InvalidRequest);
             }
+            // A boundary cutting at or before the fragment start leaves an
+            // empty retained range — positioning walks the same empty range
+            // without erroring, and the count mirrors that.
             for cluster in cluster_start..retained_end {
                 // Positioning skips hard-break clusters before its glyph walk;
                 // the count mirrors that exactly.

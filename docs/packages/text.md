@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:c18829ef1cfc259ae31e67c4713f57241fd6ae79acf12d39472baee4dda2749b'
+source_digest: 'sha256:117d89d13257087fbe43aa9acc49c164362a8afff659929a31b38ee1f75e4008'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -585,9 +585,27 @@ the sixteen-scenario conformance suite reproduce byte-identically because their 
 and Wasm agree bit-for-bit on the contract corpora by construction of the shared rounding contract, and the linux CI
 host reproduces both composed scenario hashes recorded on this darwin host.
 
-Still open after the migration: the measure-query 0.6–0.9 ms stretch target (measured 1.83 ms — the residual floor is
-the fit walk plus the Wasm entry, not the removed gather) and the committing-resize p95-under-4-ms objective
-(4.49–4.71 p95 at this corpus; the break-sensitive tail documented above).
+The review fold that closed the migration replaced the fit's Q16 shrink budget with an exactly-applied f64 ratio —
+one IEEE multiply and one round-half-up per comparison, shared verbatim by justification's growth and compression
+caps and by the f64 parity twin — after a review counterexample showed the Q16 ratio's 2^-17 relative error
+exceeding the one-unit tolerance above ~2^16-unit space sums and its `<<16` comparison overflowing i64 inside the
+admitted magnitude range. The same fold bounded justification application to the counted span in visual encounter
+order (trailing logical spaces and uncounted gaps no longer absorb adjustments, so the applied cursor sum equals
+the reported fragment advance in both directions), required positional run-topology stability before the
+metric-only scale refresh (a metrics restyle can merge adjacent runs and dangle retained run indices), and
+collapsed the build's payload scatter to bulk copies when shaped runs tile the glyph array in cluster order.
+
+The measure-query stretch target is met: a measurement-only query now skips the per-glyph positioning tail —
+measurement derives at line level from flow and clusters, glyph totals from the adjacency stream and boundary
+records, and the committing frame runs exactly the missing tail once, proven byte-identical to a never-measured
+control by an integration test. The lane moved from 1.82–1.90 ms to 0.458 ms median / 0.607 ms p95 (−75%,
+three interleaved rounds), inside the plan's 0.6–0.9 ms objective; the earlier attribution of the residual floor
+to the fit walk was wrong — the floor was the positioning tail. The identity-order scatter reclaimed the
+retained-stream cost on the edit lanes (suffix and splice both −1.6%, three rounds); font-size pays +1.2% for the
+correctness admissions and remains ~11% below the pre-stream baseline. Still open: the committing-resize
+p95-under-4-ms objective. The tail is structural, not noise — 4.42–4.49 p95 against a 2.8 ms median on both sides
+of every round — and belongs to break-sensitive full recomposition; the productized interactive width path is the
+measure query above, and the raw full-update tail remains the documented open gate.
 
 ## Merge gates still open
 
