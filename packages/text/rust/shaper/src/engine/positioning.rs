@@ -480,7 +480,7 @@ impl PositionedGlyphArena {
             indent,
             controls,
         );
-        let offset = if justify.per_space == 0.0 && justify.per_gap == 0.0 {
+        let offset = if justify.is_zero() {
             alignment_offset(line.align, paragraph_level, available)
         } else {
             0.0
@@ -496,6 +496,8 @@ impl PositionedGlyphArena {
         let mut cursor = fragment.slot_start + indent_shift + offset;
         let baseline = line.block_start + line.baseline;
         let mut decorated_run: Option<DecoratedRun> = None;
+        let mut space_ordinal = 0_i64;
+        let mut gap_ordinal = 0_i64;
         // The adjacency-order glyph stream is one equal-length column family;
         // a single admission per fragment lets every cluster's range walk the
         // columns sequentially with direct indexing — no shape-order gather.
@@ -614,11 +616,24 @@ impl PositionedGlyphArena {
                 cursor += x_advance;
             }
             cursor = cluster_origin + clusters.advances[cluster];
-            if justify.per_space != 0.0 && clusters.flags[cluster] & CLUSTER_SPACE != 0 {
-                cursor += justify.per_space;
+            if clusters.flags[cluster] & CLUSTER_SPACE != 0
+                && (justify.per_space_units != 0 || justify.extra_space_units != 0)
+            {
+                // Adjustments apply in encounter order; the leading spaces carry
+                // the euclidean remainder one unit at a time, and each unit
+                // count converts through the dyadic 1/64 exactly.
+                let units =
+                    justify.per_space_units + i64::from(space_ordinal < justify.extra_space_units);
+                cursor += super::layout_units::scaled_from_layout_units(units);
+                space_ordinal += 1;
             }
-            if justify.per_gap != 0.0 && cluster + 1 < justify.gap_end {
-                cursor += justify.per_gap;
+            if (justify.per_gap_units != 0 || justify.extra_gap_units != 0)
+                && cluster + 1 < justify.gap_end
+            {
+                let units =
+                    justify.per_gap_units + i64::from(gap_ordinal < justify.extra_gap_units);
+                cursor += super::layout_units::scaled_from_layout_units(units);
+                gap_ordinal += 1;
             }
             if style.decoration_flags == 0 {
                 if decorated_run.is_some() {
@@ -666,8 +681,7 @@ impl PositionedGlyphArena {
         }
         Ok(indent
             + fragment.line.advance
-            + justify.per_space * f64::from(justify.spaces)
-            + justify.per_gap * f64::from(justify.gaps))
+            + super::layout_units::scaled_from_layout_units(justify.total_units()))
     }
 
     fn flush_decorated_run(
@@ -1349,20 +1363,53 @@ pub(crate) fn constraint_typography(
     }
 }
 
-/// One line's resolved justification: uniform word-space delta, bounded
-/// letter-gap delta, and the trimmed cluster bound the gaps apply within.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// One line's resolved justification in F26.6 layout units (integer-units plan,
+/// slice 4): a uniform per-space delta with a euclidean remainder spread one unit
+/// at a time over the leading spaces, the bounded letter-gap equivalent, and the
+/// trimmed cluster bound the gaps apply within. The euclidean split makes the
+/// distributed total exact — `per * count + extra` reproduces the admitted growth
+/// or shrink to the unit — so measurement and positioning agree bit-for-bit.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct JustifyDistribution {
     pub spaces: u32,
-    pub per_space: f64,
+    pub per_space_units: i64,
+    pub extra_space_units: i64,
     pub gaps: u32,
-    pub per_gap: f64,
+    pub per_gap_units: i64,
+    pub extra_gap_units: i64,
     pub gap_end: usize,
+}
+
+impl JustifyDistribution {
+    pub(crate) fn is_zero(&self) -> bool {
+        self.per_space_units == 0
+            && self.extra_space_units == 0
+            && self.per_gap_units == 0
+            && self.extra_gap_units == 0
+    }
+
+    /// The exact total the distribution adds to the line, in layout units.
+    pub(crate) fn total_units(&self) -> i64 {
+        self.per_space_units * i64::from(self.spaces)
+            + self.extra_space_units
+            + self.per_gap_units * i64::from(self.gaps)
+            + self.extra_gap_units
+    }
+}
+
+/// Splits an exact unit total over `count` sites: every site takes the euclidean
+/// quotient and the first `remainder` sites take one more unit, in either sign.
+fn distribute_units(total: i64, count: u32) -> (i64, i64) {
+    if count == 0 {
+        return (0, 0);
+    }
+    let divisor = i64::from(count);
+    (total.div_euclid(divisor), total.rem_euclid(divisor))
 }
 
 struct JustifiableSpan {
     spaces: u32,
-    space_advance_sum: f64,
+    space_advance_units: i64,
     trimmed_end: usize,
 }
 
@@ -1371,16 +1418,17 @@ fn justifiable_span(clusters: &ClusterArena, start: usize, mut end: usize) -> Ju
         end -= 1;
     }
     let mut spaces = 0_u32;
-    let mut space_advance_sum = 0.0_f64;
+    let mut space_advance_units = 0_i64;
     // The D-245 flag-mask kernel scans sixteen cluster flags per step on
-    // simd128 builds; the visit order matches the scalar loop exactly.
+    // simd128 builds; the visit order matches the scalar loop exactly, and the
+    // integer sum matches the fit's chunk-summarized space totals.
     super::line_kernels::for_each_flagged(&clusters.flags, start, end, CLUSTER_SPACE, |cluster| {
         spaces = spaces.saturating_add(1);
-        space_advance_sum += clusters.advances[cluster];
+        space_advance_units += i64::from(clusters.advances_f26[cluster]);
     });
     JustifiableSpan {
         spaces,
-        space_advance_sum,
+        space_advance_units,
         trimmed_end: end,
     }
 }
@@ -1405,15 +1453,23 @@ fn justification_adjustment(
     if span.spaces == 0 {
         return JustifyDistribution::default();
     }
-    let deficit = fragment.slot_end - fragment.slot_start - indent - fragment.line.advance;
-    if deficit >= 0.0 {
-        // Expansion: word spaces grow uniformly up to the declared cap, then the
-        // remainder spills into inter-cluster gaps bounded per gap; any residue
-        // stays unfilled and the line reads as under-full.
+    // ONE quantization site per fragment: the signed deficit rounds half-up into
+    // layout units, and every bound below is exact integer arithmetic from here.
+    let deficit_units = i64::from(super::layout_units::layout_units_from_scaled(
+        fragment.slot_end - fragment.slot_start - indent - fragment.line.advance,
+    ));
+    if deficit_units >= 0 {
+        // Expansion: word spaces grow up to the declared cap — the excess ratio
+        // applied by Q16 mul/shift like the fit applies its shrink budget — then
+        // the remainder spills into inter-cluster gaps bounded per gap; any
+        // residue stays unfilled and the line reads as under-full.
         let space_growth = if controls.maximum_word_space_ratio > 0.0 {
-            deficit.min(f64::from(controls.maximum_word_space_ratio - 1.0) * span.space_advance_sum)
+            deficit_units.min(super::layout_units::apply_q16(
+                span.space_advance_units,
+                super::layout_units::excess_q16(f64::from(controls.maximum_word_space_ratio) - 1.0),
+            ))
         } else {
-            deficit
+            deficit_units
         };
         let gaps = u32::try_from(
             span.trimmed_end
@@ -1421,29 +1477,47 @@ fn justification_adjustment(
                 .saturating_sub(1),
         )
         .unwrap_or(u32::MAX);
-        let remainder = deficit - space_growth;
-        let per_gap = if controls.letter_space_expansion > 0.0 && gaps > 0 && remainder > 0.0 {
-            (remainder / f64::from(gaps)).min(f64::from(controls.letter_space_expansion))
+        let remainder = deficit_units - space_growth;
+        let gap_growth = if controls.letter_space_expansion > 0.0 && gaps > 0 && remainder > 0 {
+            remainder.min(
+                i64::from(super::layout_units::layout_units_from_scaled(f64::from(
+                    controls.letter_space_expansion,
+                )))
+                .saturating_mul(i64::from(gaps)),
+            )
         } else {
-            0.0
+            0
         };
+        let (per_space_units, extra_space_units) = distribute_units(space_growth, span.spaces);
+        let (per_gap_units, extra_gap_units) = distribute_units(gap_growth, gaps);
         JustifyDistribution {
             spaces: span.spaces,
-            per_space: justification_space_advance(space_growth, span.spaces),
+            per_space_units,
+            extra_space_units,
             gaps,
-            per_gap,
+            per_gap_units,
+            extra_gap_units,
             gap_end: span.trimmed_end,
         }
     } else if controls.minimum_word_space_ratio > 0.0 {
-        // Compression: an overfull line shrinks its word spaces uniformly, never
-        // below the declared minimum of their natural advance sum.
-        let shrink = deficit
-            .max(-f64::from(1.0 - controls.minimum_word_space_ratio) * span.space_advance_sum);
+        // Compression: an overfull line shrinks its word spaces, never below the
+        // declared minimum of their natural advance sum. The capacity quantizes
+        // through the SAME ratio_q16 expression the integer fit used to admit
+        // the line, so positioning can always shrink what the fit promised to
+        // within the rounding contract's half unit.
+        let capacity = super::layout_units::apply_q16(
+            span.space_advance_units,
+            super::layout_units::ratio_q16(1.0 - f64::from(controls.minimum_word_space_ratio)),
+        );
+        let shrink = (-deficit_units).min(capacity);
+        let (per_space_units, extra_space_units) = distribute_units(-shrink, span.spaces);
         JustifyDistribution {
             spaces: span.spaces,
-            per_space: justification_space_advance(shrink, span.spaces),
+            per_space_units,
+            extra_space_units,
             gaps: 0,
-            per_gap: 0.0,
+            per_gap_units: 0,
+            extra_gap_units: 0,
             gap_end: span.trimmed_end,
         }
     } else {
@@ -1475,18 +1549,11 @@ pub(crate) fn positioned_fragment_advance(
         indent,
         controls,
     );
+    // The distributed total is exact in layout units and dyadic in f64, so this
+    // advance agrees bit-for-bit with the adjustments positioning applies.
     Ok(indent
         + fragment.line.advance
-        + distribution.per_space * f64::from(distribution.spaces)
-        + distribution.per_gap * f64::from(distribution.gaps))
-}
-
-fn justification_space_advance(available: f64, space_count: u32) -> f64 {
-    if space_count == 0 {
-        0.0
-    } else {
-        available / f64::from(space_count)
-    }
+        + super::layout_units::scaled_from_layout_units(distribution.total_units()))
 }
 
 fn finite_f32(value: f64) -> Result<f32, EngineError> {
@@ -1568,9 +1635,33 @@ mod tests {
     }
 
     #[test]
-    fn justification_expands_only_lines_with_expandable_spaces() {
-        assert_eq!(justification_space_advance(22.0, 2), 11.0);
-        assert_eq!(justification_space_advance(22.0, 0), 0.0);
+    fn justification_distributes_exact_unit_totals_in_either_sign() {
+        assert_eq!(distribute_units(1_408, 2), (704, 0));
+        assert_eq!(distribute_units(22, 0), (0, 0));
+        // Remainders spread one unit at a time and the totals stay exact.
+        assert_eq!(distribute_units(641, 4), (160, 1));
+        assert_eq!(160 * 4 + 1, 641);
+        assert_eq!(distribute_units(-5, 2), (-3, 1));
+        assert_eq!(-3 * 2 + 1, -5);
+    }
+
+    #[test]
+    fn justification_totals_fill_the_deficit_exactly_including_remainders() {
+        let (_text, clusters, line, mut fragment) = justify_fixture();
+        // Deficit 10.015625px = 641 units over 2 spaces: euclidean split gives
+        // 320 units + one extra leading unit, and the fragment advance fills
+        // the slot exactly.
+        fragment.slot_end = 17.015_625;
+        let controls = JustifyControls::default();
+        let distribution =
+            justification_adjustment(line, fragment, false, &clusters, 0, 7, 0.0, controls);
+        assert_eq!(distribution.spaces, 2);
+        assert_eq!(distribution.per_space_units, 320);
+        assert_eq!(distribution.extra_space_units, 1);
+        assert_eq!(distribution.total_units(), 641);
+        let advance =
+            positioned_fragment_advance(line, fragment, false, &clusters, 0.0, controls).unwrap();
+        assert_eq!(advance, 17.015_625);
     }
 
     fn justify_fixture() -> (Vec<u16>, ClusterArena, FlowLine, FlowFragment) {
@@ -1583,6 +1674,7 @@ mod tests {
             starts: (0..7).collect(),
             ends: (1..=7).collect(),
             advances: vec![1.0; 7],
+            advances_f26: vec![64; 7],
             units_per_em: vec![1_000.0; 7],
             flags,
             style_indexes: vec![0; 7],
@@ -1634,16 +1726,18 @@ mod tests {
         let distribution =
             justification_adjustment(line, fragment, false, &clusters, 0, 7, 0.0, controls);
         assert_eq!(distribution.spaces, 2);
-        assert_eq!(distribution.per_space, 2.0);
+        assert_eq!(distribution.per_space_units, 128);
+        assert_eq!(distribution.extra_space_units, 0);
         assert_eq!(distribution.gaps, 6);
-        assert_eq!(distribution.per_gap, 0.75);
+        assert_eq!(distribution.per_gap_units, 48);
+        assert_eq!(distribution.extra_gap_units, 0);
 
         // Unbounded controls reproduce the pre-tier distribution exactly.
         let unbounded = JustifyControls::default();
         let plain =
             justification_adjustment(line, fragment, false, &clusters, 0, 7, 0.0, unbounded);
-        assert_eq!(plain.per_space, 5.0);
-        assert_eq!(plain.per_gap, 0.0);
+        assert_eq!(plain.per_space_units, 320);
+        assert_eq!(plain.per_gap_units, 0);
     }
 
     #[test]
@@ -1651,14 +1745,14 @@ mod tests {
         let (_text, clusters, line, fragment) = justify_fixture();
         let auto = JustifyControls::default();
         let final_auto = justification_adjustment(line, fragment, true, &clusters, 0, 7, 0.0, auto);
-        assert_eq!(final_auto.per_space, 0.0);
+        assert_eq!(final_auto.per_space_units, 0);
         let policy = JustifyControls {
             last_line_justify: true,
             ..JustifyControls::default()
         };
         let final_justified =
             justification_adjustment(line, fragment, true, &clusters, 0, 7, 0.0, policy);
-        assert_eq!(final_justified.per_space, 5.0);
+        assert_eq!(final_justified.per_space_units, 320);
     }
 
     #[test]
@@ -1675,8 +1769,9 @@ mod tests {
         };
         let shrunk =
             justification_adjustment(line, fragment, false, &clusters, 0, 7, 0.0, controls);
-        assert_eq!(shrunk.per_space, -0.25);
-        assert_eq!(shrunk.per_gap, 0.0);
+        assert_eq!(shrunk.per_space_units, -16);
+        assert_eq!(shrunk.extra_space_units, 0);
+        assert_eq!(shrunk.per_gap_units, 0);
         // Without a declared minimum an overfull line never shrinks.
         let rigid = justification_adjustment(
             line,
@@ -1688,7 +1783,7 @@ mod tests {
             0.0,
             JustifyControls::default(),
         );
-        assert_eq!(rigid.per_space, 0.0);
+        assert_eq!(rigid.per_space_units, 0);
     }
 
     /// CSS decorating box: a nested font-size change inside one declared decoration

@@ -59,13 +59,14 @@ export const packageSizeBudgets = {
   // The 11.17 measure tier grew the engine by +9,413 raw / +5,028 gzip / +4,014
   // Brotli: speculative measure transactions, candidate adoption, and the
   // paragraph query path. The integer-units slices then shrank the tip by a net
-  // -4,228 raw; the ceilings stay priced at the 11.17 peak plus the cross-host
-  // compression margin above.
+  // -4,228 raw before the retained adjacency stream (+2,209), the metric-only
+  // scale refresh (+1,753), and integer justification (+1,071: euclidean unit
+  // distribution and the Q16 growth caps) priced their layers back in.
   'text-shaper-wasm': {
-    rawBytes: 1_116_500,
-    minifiedBytes: 1_116_500,
-    gzipBytes: 434_200,
-    brotliBytes: 343_600,
+    rawBytes: 1_117_500,
+    minifiedBytes: 1_117_500,
+    gzipBytes: 434_800,
+    brotliBytes: 344_100,
   },
   // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250),
   // then the review-closure pass added +3,535 raw / +1,711 minified / +439 Brotli

@@ -33,6 +33,21 @@ pub(crate) fn ratio_q16(value: f64) -> i64 {
     i64::from(saturating_floor(value * 65_536.0 + 0.5)).min(65_535)
 }
 
+/// Q16 fixed-point scale for non-negative factors that may exceed one (word-space
+/// growth excess), under the same round-half-up contract. Saturates at the i32
+/// range like every conversion here, far beyond any ratio the frame admits.
+pub(crate) fn excess_q16(value: f64) -> i64 {
+    i64::from(saturating_floor(value * 65_536.0 + 0.5)).max(0)
+}
+
+/// Applies a Q16 factor to a non-negative layout-unit quantity with one
+/// round-half-up at the product, mirroring how the integer fit consumes its
+/// Q16-scaled shrink budget. Saturating arithmetic keeps the conversion total;
+/// saturation is unreachable inside the plan's 2^53-unit magnitude precondition.
+pub(crate) fn apply_q16(units: i64, factor_q16: i64) -> i64 {
+    units.saturating_mul(factor_q16).saturating_add(1 << 15) >> 16
+}
+
 /// `floor` for finite f64 without `std` float intrinsics: truncate toward zero and
 /// correct negatives with a fractional remainder. NaN saturates to 0 and infinities
 /// to the i32 range, keeping the contract total.
@@ -90,6 +105,21 @@ mod tests {
                 "inverse within one unit at step {step}: {round_trip} vs {value}"
             );
         }
+    }
+
+    #[test]
+    fn q16_excess_and_application_round_half_up_at_the_product() {
+        // Excess factors above one survive (a 3x word-space cap is excess 2.0).
+        assert_eq!(excess_q16(2.0), 131_072);
+        assert_eq!(excess_q16(0.5), 32_768);
+        assert_eq!(excess_q16(0.0), 0);
+        // 641 units x 0.5 = 320.5 rounds half-up to 321.
+        assert_eq!(apply_q16(641, 32_768), 321);
+        // Just below half rounds down.
+        assert_eq!(apply_q16(641, 32_767), 320);
+        assert_eq!(apply_q16(0, 65_536), 0);
+        // Saturation keeps the application total instead of wrapping.
+        assert_eq!(apply_q16(i64::MAX, 65_536), i64::MAX >> 16);
     }
 
     #[test]
