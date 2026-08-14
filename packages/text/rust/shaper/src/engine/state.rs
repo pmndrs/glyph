@@ -2698,6 +2698,19 @@ impl ParagraphState {
             self.clusters_prepared = true;
             return Ok(());
         }
+        // A metrics-only restyle retains the shape, so the cluster arena needs
+        // only its advance lanes re-derived from the retained adjacency stream
+        // — no topology walk, no scatter, and the stable glyph identities
+        // carry over. Admission failure falls back to the full build.
+        if !self.shape_prepared
+            && self
+                .pending_clusters
+                .refresh_scales_from_stream(&self.clusters, styles)?
+                .is_some()
+        {
+            self.clusters_prepared = true;
+            return Ok(());
+        }
         let shape = if self.shape_prepared {
             &self.pending_shape
         } else {

@@ -482,6 +482,78 @@ impl ClusterArena {
         Ok(())
     }
 
+    /// Metric-only restyle over a retained shape: copies the previous arena and
+    /// re-derives the advance lanes from the adjacency stream under the CURRENT
+    /// styles — no topology walk, no scatter, no registry resolution, and the
+    /// stable glyph identities carry over verbatim. The aggregation replays the
+    /// full build exactly: same accumulation order (adjacency order preserves
+    /// per-cluster shaping order), same expressions, so the result is
+    /// bit-identical to a cold build under the new styles. Returns `Ok(None)`
+    /// when the previous arena cannot prove the styles still align, and the
+    /// caller falls back to the full build.
+    pub(crate) fn refresh_scales_from_stream(
+        &mut self,
+        previous: &Self,
+        styles: &[StyleSegment],
+    ) -> Result<Option<()>, EngineError> {
+        self.copy_from(previous)?;
+        let stream_len = self.glyph_ids.len();
+        if self.glyph_x_advances.len() != stream_len {
+            self.clear();
+            return Ok(None);
+        }
+        for cluster in 0..self.starts.len() {
+            let style_index = usize::try_from(self.style_indexes[cluster])
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let Some(segment) = styles.get(style_index) else {
+                self.clear();
+                return Ok(None);
+            };
+            if segment.text_start > self.starts[cluster] || segment.text_end < self.ends[cluster] {
+                self.clear();
+                return Ok(None);
+            }
+            let flags = self.flags[cluster];
+            let word_spacing = if flags & CLUSTER_SPACE != 0 {
+                segment.style.word_spacing
+            } else {
+                0.0
+            };
+            let mut advance = if flags & CLUSTER_HARD_BREAK != 0 {
+                0.0
+            } else {
+                f64::from(segment.style.letter_spacing + word_spacing)
+            };
+            let glyph_start = usize::try_from(self.glyph_starts[cluster])
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let glyph_end = glyph_start
+                .checked_add(
+                    usize::try_from(self.glyph_counts[cluster])
+                        .map_err(|_| EngineError::InvalidRequest)?,
+                )
+                .ok_or(EngineError::InvalidRequest)?;
+            if glyph_end > stream_len {
+                self.clear();
+                return Ok(None);
+            }
+            if glyph_end > glyph_start {
+                let units_per_em = self.units_per_em[cluster];
+                if units_per_em == 0.0 {
+                    self.clear();
+                    return Ok(None);
+                }
+                let scale = f64::from(segment.style.font_size) / units_per_em;
+                for adjacency in glyph_start..glyph_end {
+                    advance +=
+                        f64::from(self.glyph_x_advances[adjacency].unsigned_abs()) * scale;
+                }
+            }
+            self.advances[cluster] = advance;
+        }
+        self.refresh_layout_units()?;
+        Ok(Some(()))
+    }
+
     pub(crate) fn assign_stable_glyph_ids_in_range(
         &mut self,
         previous: &Self,
@@ -1368,5 +1440,139 @@ mod tests {
         assert_lane!(shaped);
         assert_lane!(unsafe_before);
         assert_eq!(retained_next_id, cold_next_id);
+    }
+
+    #[test]
+    fn metrics_refresh_from_the_stream_matches_the_cold_build_oracle() {
+        let text: Vec<u16> = "a b\n".encode_utf16().collect();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        let segment = |style| {
+            [StyleSegment {
+                text_start: 0,
+                text_end: 4,
+                style,
+            }]
+        };
+        let run = |style| {
+            [ShapingRun {
+                text_start: 0,
+                text_end: 3,
+                script: u32::from_be_bytes(*b"Latn"),
+                direction: 4,
+                bidi_level: 0,
+                style,
+            }]
+        };
+        let shape = ShapeArena {
+            runs: vec![ShapedRun {
+                source_run: 0,
+                binding_handle: 19,
+                font_handle: 9,
+                text_start: 0,
+                text_end: 3,
+                glyph_start: 0,
+                glyph_count: 3,
+            }],
+            glyph_ids: vec![3, 2, 1],
+            clusters: vec![2, 1, 0],
+            x_advances: vec![500, 250, 500],
+            y_advances: vec![0; 3],
+            x_offsets: vec![0; 3],
+            y_offsets: vec![0; 3],
+            glyph_flags: vec![0; 3],
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let old_style = ResolvedStyle::test_typography(16.0, 1.0, 2.0);
+        let new_style = ResolvedStyle::test_typography(18.0, 2.5, 3.0);
+        let build = |style| {
+            let mut arena = ClusterArena::default();
+            arena
+                .build(
+                    ClusterBuildInput {
+                        text: &text,
+                        text_unit_ids: &[1, 2, 3, 4],
+                        unicode: &unicode,
+                        styles: &segment(style),
+                        runs: &run(style),
+                        shape: &shape,
+                    },
+                    metrics,
+                )
+                .unwrap();
+            let mut next_id = 1;
+            arena
+                .assign_stable_glyph_ids(
+                    &ClusterArena::default(),
+                    &mut IdentityIndex::default(),
+                    &mut next_id,
+                )
+                .unwrap();
+            arena
+        };
+        let previous = build(old_style);
+        let cold = build(new_style);
+        let mut refreshed = ClusterArena::default();
+        refreshed
+            .refresh_scales_from_stream(&previous, &segment(new_style))
+            .unwrap()
+            .unwrap();
+        macro_rules! assert_lane {
+            ($field:ident) => {
+                assert_eq!(refreshed.$field, cold.$field, stringify!($field));
+            };
+        }
+        assert_lane!(starts);
+        assert_lane!(ends);
+        assert_lane!(advances);
+        assert_lane!(advances_f26);
+        assert_lane!(chunk_advance_sums);
+        assert_lane!(chunk_space_sums);
+        assert_lane!(chunk_flags_or);
+        assert_lane!(units_per_em);
+        assert_lane!(flags);
+        assert_lane!(style_indexes);
+        assert_lane!(source_runs);
+        assert_lane!(binding_handles);
+        assert_lane!(font_handles);
+        assert_lane!(stable_ids);
+        assert_lane!(glyph_starts);
+        assert_lane!(glyph_counts);
+        assert_lane!(glyph_ids);
+        assert_lane!(glyph_clusters);
+        assert_lane!(glyph_x_advances);
+        assert_lane!(glyph_x_offsets);
+        assert_lane!(glyph_y_offsets);
+        assert_lane!(glyph_shape_flags);
+        assert_lane!(glyph_stable_ids);
+        assert_lane!(index_at);
+        assert_lane!(shaped);
+        assert_lane!(unsafe_before);
+        // The refresh must refuse styles that no longer cover the clusters.
+        let mut misaligned = ClusterArena::default();
+        assert!(
+            misaligned
+                .refresh_scales_from_stream(
+                    &previous,
+                    &[StyleSegment {
+                        text_start: 0,
+                        text_end: 2,
+                        style: new_style,
+                    }],
+                )
+                .unwrap()
+                .is_none()
+        );
     }
 }
