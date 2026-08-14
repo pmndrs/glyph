@@ -702,6 +702,11 @@ impl TextEngine {
             } else {
                 (false, false)
             };
+            // Measurement answers at line level from flow and clusters; only a
+            // layout-inspection query needs the per-glyph positioning tail.
+            let position = request.semantic_view_mask
+                & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION
+                != 0;
             if prefix_retained {
                 if !geometry_retained {
                     paragraph.positioned_changed = paragraph.state.prepare_geometry_and_layout(
@@ -710,9 +715,21 @@ impl TextEngine {
                         font_bindings,
                         geometry,
                         request.limits,
+                        position,
                         &mut next_glyph_id,
                         &mut next_content_revision,
                     )?;
+                } else if position
+                    && paragraph.state.flow_layout_prepared
+                    && !paragraph.state.positioned_prepared
+                {
+                    // An inspection query re-using a measurement-only transaction
+                    // runs just the missing positioning tail.
+                    if let Some(shaper) = shaper.as_deref_mut() {
+                        paragraph
+                            .state
+                            .prepare_positioned(shaper, &mut next_content_revision)?;
+                    }
                 }
             } else {
                 generation = prior_generation.wrapping_add(1);
@@ -724,6 +741,7 @@ impl TextEngine {
                     styles,
                     geometry,
                     request.limits,
+                    position,
                     &mut next_glyph_id,
                     &mut next_content_revision,
                 )?;
@@ -921,6 +939,17 @@ impl TextEngine {
                     (false, false)
                 };
                 paragraph.positioned_changed = if geometry_adopted {
+                    // Adopting a measurement-only transaction: the flow tail is
+                    // retained but positioning was deliberately skipped, so the
+                    // committing frame runs exactly that missing tail once.
+                    if paragraph.state.flow_layout_prepared
+                        && !paragraph.state.positioned_prepared
+                        && let Some(shaper) = shaper.as_deref_mut()
+                    {
+                        paragraph
+                            .state
+                            .prepare_positioned(shaper, &mut next_content_revision)?;
+                    }
                     paragraph.state.speculative_positioned_changed()
                 } else if prefix_adopted {
                     paragraph.state.prepare_geometry_and_layout(
@@ -929,6 +958,7 @@ impl TextEngine {
                         font_bindings,
                         geometry,
                         request.limits,
+                        true,
                         &mut next_glyph_id,
                         &mut next_content_revision,
                     )?
@@ -941,6 +971,7 @@ impl TextEngine {
                         styles,
                         geometry,
                         request.limits,
+                        true,
                         &mut next_glyph_id,
                         &mut next_content_revision,
                     )?
@@ -1242,6 +1273,25 @@ fn session_has_decorations(session: &EngineSession) -> bool {
 /// when prepared and committed state otherwise, so the same emission serves the full
 /// update path and the paragraph-scoped measure query.
 #[allow(clippy::too_many_arguments)]
+/// Whether a rebuilt shaping-run list keeps the previous list's positional
+/// topology: same count and, per index, the same text span and shaping
+/// identity. Style VALUES may differ — that is what a metrics-only refresh
+/// re-derives — but a merged, split, or re-spanned run list invalidates the
+/// retained cluster arena's run indices.
+fn shaping_run_topology_stable(
+    previous: &[super::shaping_state::ShapingRun],
+    next: &[super::shaping_state::ShapingRun],
+) -> bool {
+    previous.len() == next.len()
+        && previous.iter().zip(next).all(|(before, after)| {
+            before.text_start == after.text_start
+                && before.text_end == after.text_end
+                && before.script == after.script
+                && before.direction == after.direction
+                && before.bidi_level == after.bidi_level
+        })
+}
+
 fn append_paragraph_measurement(
     records: &mut Vec<super::semantic_view::SemanticRecord>,
     state: &mut ParagraphState,
@@ -1367,21 +1417,43 @@ fn append_paragraph_measurement(
     } else {
         None
     };
-    let (line_glyph_starts, line_glyph_counts) = positioned.semantic_line_glyph_spans();
+    // A measurement-only query deliberately skips the positioning tail, so the
+    // positioned arena still describes the COMMITTED flow; its cached per-line
+    // lanes must not be read against the speculative flow. The measurement
+    // falls back to append_measurement's own line-level derivation, which is
+    // the same line arithmetic positioning caches.
+    let positioned_matches_flow = inspect_full_clipped_layout
+        || state.positioned_prepared == state.flow_layout_prepared;
+    let (line_glyph_starts, line_glyph_counts) = if positioned_matches_flow {
+        positioned.semantic_line_glyph_spans()
+    } else {
+        (&[][..], &[][..])
+    };
+    let boundary_shape = if state.flow_layout_prepared {
+        &state.pending_boundary_shape
+    } else {
+        &state.boundary_shape
+    };
+    let visible_glyphs = super::layout_query::visible_glyph_counts(flow, clusters, boundary_shape)?;
     super::layout_query::append_measurement(
         records,
         paragraph_id,
         text.len(),
         clusters.starts.len(),
+        visible_glyphs,
         geometry,
         flow,
-        positioned.semantic_glyphs(),
+        if positioned_matches_flow {
+            positioned.semantic_glyphs()
+        } else {
+            &[]
+        },
         line_glyph_starts,
         line_glyph_counts,
-        Some(positioned.semantic_line_inline_extents()),
+        positioned_matches_flow.then(|| positioned.semantic_line_inline_extents()),
         clusters,
         intrinsic_extents,
-        include_layout_inspection,
+        include_layout_inspection && positioned_matches_flow,
     )
 }
 
@@ -1813,6 +1885,7 @@ impl ParagraphState {
         style_mutations: super::semantic_wire::StyleMutationBatch<'_>,
         geometry: super::semantic_wire::GeometryBatch<'_>,
         limits: super::frame::UpdateLimits,
+        position: bool,
         next_glyph_id: &mut u32,
         next_content_revision: &mut u32,
     ) -> Result<bool, EngineError> {
@@ -1835,6 +1908,7 @@ impl ParagraphState {
             font_bindings,
             geometry,
             limits,
+            position,
             next_glyph_id,
             next_content_revision,
         )
@@ -1891,6 +1965,7 @@ impl ParagraphState {
         font_bindings: &[RegisteredFontBinding],
         geometry: super::semantic_wire::GeometryBatch<'_>,
         limits: super::frame::UpdateLimits,
+        position: bool,
         next_glyph_id: &mut u32,
         next_content_revision: &mut u32,
     ) -> Result<bool, EngineError> {
@@ -1917,7 +1992,11 @@ impl ParagraphState {
                     next_glyph_id,
                 )?;
             }
-            if positioned_changed {
+            // Paragraph measurement derives at line level from flow and clusters,
+            // so a measurement-only query skips the per-glyph positioning tail
+            // entirely; the committing frame (or an inspection query) runs it
+            // over the retained flow instead.
+            if positioned_changed && position {
                 self.prepare_positioned(shaper, next_content_revision)?;
             }
         }
@@ -2701,8 +2780,15 @@ impl ParagraphState {
         // A metrics-only restyle retains the shape, so the cluster arena needs
         // only its advance lanes re-derived from the retained adjacency stream
         // — no topology walk, no scatter, and the stable glyph identities
-        // carry over. Admission failure falls back to the full build.
+        // carry over. The retained arena indexes shaped runs by position, and a
+        // metrics-only restyle can still MERGE adjacent runs whose layout
+        // styles became identical, so the refresh additionally requires the
+        // rebuilt run list to keep the previous topology. Any admission
+        // failure falls back to the full build.
+        let run_topology_stable = !self.shaping_runs_prepared
+            || shaping_run_topology_stable(self.shaping_runs.runs(), runs);
         if !self.shape_prepared
+            && run_topology_stable
             && self
                 .pending_clusters
                 .refresh_scales_from_stream(&self.clusters, styles)?

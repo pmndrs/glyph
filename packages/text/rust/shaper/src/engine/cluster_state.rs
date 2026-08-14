@@ -799,37 +799,58 @@ impl ClusterArena {
         if usize::try_from(glyph_start).ok() != Some(shape.glyph_ids.len()) {
             return Err(EngineError::InvalidRequest);
         }
-        for shaped_run in &shape.runs {
-            let start =
-                usize::try_from(shaped_run.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
-            let end = start
-                .checked_add(
-                    usize::try_from(shaped_run.glyph_count)
-                        .map_err(|_| EngineError::InvalidRequest)?,
-                )
-                .ok_or(EngineError::InvalidRequest)?;
-            for glyph in start..end {
-                let cluster = *shape
-                    .clusters
-                    .get(glyph)
+        if scatter_is_identity(shape) {
+            // The common simple-script shape leaves glyphs already in cluster
+            // order — the scatter permutation is the identity — so the payload
+            // columns fill by bulk copy and the counts recover from the prefix
+            // sums the starts pass just produced.
+            self.glyph_ids.copy_from_slice(&shape.glyph_ids);
+            self.glyph_clusters.copy_from_slice(&shape.clusters);
+            self.glyph_x_advances.copy_from_slice(&shape.x_advances);
+            self.glyph_x_offsets.copy_from_slice(&shape.x_offsets);
+            self.glyph_y_offsets.copy_from_slice(&shape.y_offsets);
+            self.glyph_shape_flags.copy_from_slice(&shape.glyph_flags);
+            for index in 0..self.glyph_starts.len() {
+                let next = self
+                    .glyph_starts
+                    .get(index + 1)
+                    .copied()
+                    .unwrap_or(glyph_start);
+                self.glyph_counts[index] = next - self.glyph_starts[index];
+            }
+        } else {
+            for shaped_run in &shape.runs {
+                let start = usize::try_from(shaped_run.glyph_start)
+                    .map_err(|_| EngineError::InvalidRequest)?;
+                let end = start
+                    .checked_add(
+                        usize::try_from(shaped_run.glyph_count)
+                            .map_err(|_| EngineError::InvalidRequest)?,
+                    )
                     .ok_or(EngineError::InvalidRequest)?;
-                let cluster_index = self.cluster_at(cluster)?;
-                let ordinal = self.glyph_counts[cluster_index];
-                let destination = self.glyph_starts[cluster_index]
-                    .checked_add(ordinal)
-                    .and_then(|value| usize::try_from(value).ok())
-                    .ok_or(EngineError::ResultTooLarge)?;
-                if destination >= self.glyph_ids.len() {
-                    return Err(EngineError::InvalidRequest);
+                for glyph in start..end {
+                    let cluster = *shape
+                        .clusters
+                        .get(glyph)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    let cluster_index = self.cluster_at(cluster)?;
+                    let ordinal = self.glyph_counts[cluster_index];
+                    let destination = self.glyph_starts[cluster_index]
+                        .checked_add(ordinal)
+                        .and_then(|value| usize::try_from(value).ok())
+                        .ok_or(EngineError::ResultTooLarge)?;
+                    if destination >= self.glyph_ids.len() {
+                        return Err(EngineError::InvalidRequest);
+                    }
+                    self.glyph_ids[destination] = shape.glyph_ids[glyph];
+                    self.glyph_clusters[destination] = shape.clusters[glyph];
+                    self.glyph_x_advances[destination] = shape.x_advances[glyph];
+                    self.glyph_x_offsets[destination] = shape.x_offsets[glyph];
+                    self.glyph_y_offsets[destination] = shape.y_offsets[glyph];
+                    self.glyph_shape_flags[destination] = shape.glyph_flags[glyph];
+                    self.glyph_counts[cluster_index] =
+                        ordinal.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
                 }
-                self.glyph_ids[destination] = shape.glyph_ids[glyph];
-                self.glyph_clusters[destination] = shape.clusters[glyph];
-                self.glyph_x_advances[destination] = shape.x_advances[glyph];
-                self.glyph_x_offsets[destination] = shape.x_offsets[glyph];
-                self.glyph_y_offsets[destination] = shape.y_offsets[glyph];
-                self.glyph_shape_flags[destination] = shape.glyph_flags[glyph];
-                self.glyph_counts[cluster_index] =
-                    ordinal.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
             }
         }
         for index in 0..self.starts.len() {
@@ -964,6 +985,23 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())
+}
+
+/// True exactly when the build scatter's destination equals every glyph's own
+/// index: the shaped runs tile the glyph array in array order and the source
+/// cluster ids never decrease across it, so per-cluster ordinals assign
+/// sequentially. Simple-script LTR shaping satisfies this; any reordering
+/// (RTL, Indic) falls back to the per-glyph scatter.
+fn scatter_is_identity(shape: &ShapeArena) -> bool {
+    let mut cursor = 0_u64;
+    for run in &shape.runs {
+        if u64::from(run.glyph_start) != cursor {
+            return false;
+        }
+        cursor += u64::from(run.glyph_count);
+    }
+    cursor == shape.glyph_ids.len() as u64
+        && shape.clusters.windows(2).all(|pair| pair[0] <= pair[1])
 }
 
 fn identity_index_error(error: IdentityIndexError) -> EngineError {
@@ -1440,6 +1478,35 @@ mod tests {
         assert_lane!(shaped);
         assert_lane!(unsafe_before);
         assert_eq!(retained_next_id, cold_next_id);
+    }
+
+    #[test]
+    fn identity_scatter_admits_only_ordered_tiling_runs() {
+        let shape = |glyph_start, clusters: Vec<u32>| ShapeArena {
+            runs: vec![ShapedRun {
+                source_run: 0,
+                binding_handle: 19,
+                font_handle: 9,
+                text_start: 0,
+                text_end: 3,
+                glyph_start,
+                glyph_count: u32::try_from(clusters.len()).unwrap(),
+            }],
+            glyph_ids: vec![1; clusters.len()],
+            clusters,
+            x_advances: vec![500; 3],
+            y_advances: vec![0; 3],
+            x_offsets: vec![0; 3],
+            y_offsets: vec![0; 3],
+            glyph_flags: vec![0; 3],
+        };
+        assert!(scatter_is_identity(&shape(0, vec![0, 1, 2])));
+        assert!(scatter_is_identity(&shape(0, vec![0, 0, 2])));
+        // Reordered clusters or a run that does not tile from zero fall back.
+        assert!(!scatter_is_identity(&shape(0, vec![2, 1, 0])));
+        assert!(!scatter_is_identity(&shape(1, vec![0, 1, 2])));
+        // The empty shape is trivially identity.
+        assert!(scatter_is_identity(&ShapeArena::default()));
     }
 
     #[test]

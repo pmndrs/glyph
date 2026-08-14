@@ -381,7 +381,6 @@ impl FlowLayoutArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
     ) -> Result<Option<f64>, EngineError> {
-        let word_space_shrink_q16 = super::layout_units::ratio_q16(word_space_shrink);
         let saved_cursor = *cursor;
         let fragment_start = self.fragments.len();
         let mut extents = initial_extents;
@@ -425,7 +424,7 @@ impl FlowLayoutArena {
                         (slot.end - slot.start - indent).max(0.0),
                     ))),
                     wrap,
-                    word_space_shrink_q16,
+                    word_space_shrink,
                 )?
                 else {
                     break;

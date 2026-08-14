@@ -26,26 +26,41 @@ pub(crate) fn scaled_from_layout_units(units: i64) -> f64 {
     units as f64 / LAYOUT_UNITS_PER_PIXEL
 }
 
-/// Q16 fixed-point ratio for fractions declared in `[0, 1)`, under the same
-/// round-half-up contract. The result clamps to 65,535 so a fraction arbitrarily
-/// close to one never quantizes out of the consumer's `[0, 65536)` domain.
-pub(crate) fn ratio_q16(value: f64) -> i64 {
-    i64::from(saturating_floor(value * 65_536.0 + 0.5)).min(65_535)
+/// Applies a declared non-negative ratio to a non-negative layout-unit
+/// quantity exactly: within the plan's 2^53-unit magnitude precondition the
+/// `i64 -> f64` conversion is exact, the single IEEE multiply carries relative
+/// error 2^-53 — far below one unit at any admitted magnitude — and one
+/// round-half-up lands the contract's single quantization. This replaced the
+/// Q16 mul/shift family after review: the Q16 ratio's 2^-17 relative error
+/// scales past the one-unit tolerance once a span's space sum exceeds ~2^16
+/// units, and the fit's `<<16` comparisons overflowed i64 inside the admitted
+/// magnitude range. IEEE f64 multiplication is bit-identical across native and
+/// Wasm builds, so the shared-contract argument is unchanged.
+pub(crate) fn apply_ratio(units: i64, ratio: f64) -> i64 {
+    saturating_floor_units(units as f64 * ratio + 0.5)
 }
 
-/// Q16 fixed-point scale for non-negative factors that may exceed one (word-space
-/// growth excess), under the same round-half-up contract. Saturates at the i32
-/// range like every conversion here, far beyond any ratio the frame admits.
-pub(crate) fn excess_q16(value: f64) -> i64 {
-    i64::from(saturating_floor(value * 65_536.0 + 0.5)).max(0)
-}
-
-/// Applies a Q16 factor to a non-negative layout-unit quantity with one
-/// round-half-up at the product, mirroring how the integer fit consumes its
-/// Q16-scaled shrink budget. Saturating arithmetic keeps the conversion total;
-/// saturation is unreachable inside the plan's 2^53-unit magnitude precondition.
-pub(crate) fn apply_q16(units: i64, factor_q16: i64) -> i64 {
-    units.saturating_mul(factor_q16).saturating_add(1 << 15) >> 16
+/// `saturating_floor` widened to the layout-unit accumulator domain: i64 with
+/// non-finite inputs kept total. Products of admitted magnitudes stay far
+/// inside the exact f64 integer range, so saturation is a totality guard, not
+/// a rounding path.
+fn saturating_floor_units(value: f64) -> i64 {
+    if value.is_nan() {
+        return 0;
+    }
+    const LIMIT: f64 = 9_007_199_254_740_992.0; // 2^53
+    if value >= LIMIT {
+        return LIMIT as i64;
+    }
+    if value <= -LIMIT {
+        return -(LIMIT as i64);
+    }
+    let truncated = value as i64;
+    if value < truncated as f64 {
+        truncated - 1
+    } else {
+        truncated
+    }
 }
 
 /// `floor` for finite f64 without `std` float intrinsics: truncate toward zero and
@@ -108,33 +123,22 @@ mod tests {
     }
 
     #[test]
-    fn q16_excess_and_application_round_half_up_at_the_product() {
+    fn ratio_application_rounds_half_up_once_and_stays_within_one_unit() {
         // Excess factors above one survive (a 3x word-space cap is excess 2.0).
-        assert_eq!(excess_q16(2.0), 131_072);
-        assert_eq!(excess_q16(0.5), 32_768);
-        assert_eq!(excess_q16(0.0), 0);
+        assert_eq!(apply_ratio(128, 2.0), 256);
         // 641 units x 0.5 = 320.5 rounds half-up to 321.
-        assert_eq!(apply_q16(641, 32_768), 321);
-        // Just below half rounds down.
-        assert_eq!(apply_q16(641, 32_767), 320);
-        assert_eq!(apply_q16(0, 65_536), 0);
-        // Saturation keeps the application total instead of wrapping.
-        assert_eq!(apply_q16(i64::MAX, 65_536), i64::MAX >> 16);
-    }
-
-    #[test]
-    fn q16_ratios_quantize_half_up_and_never_leave_the_consumer_domain() {
-        assert_eq!(ratio_q16(0.5), 32_768);
-        assert_eq!(ratio_q16(0.0), 0);
-        // A fraction arbitrarily close to one clamps inside [0, 65536) instead of
-        // quantizing out of the fit's accepted domain.
-        assert_eq!(ratio_q16(0.999_999_9), 65_535);
-        assert_eq!(ratio_q16(1.0 - f64::EPSILON), 65_535);
-        for &fraction in &[0.25_f64, 0.33, 0.999] {
-            let ratio = ratio_q16(fraction);
-            assert!((0..65_536).contains(&ratio), "{fraction}");
-            let round_trip = ratio as f64 / 65_536.0;
-            assert!((round_trip - fraction).abs() <= 1.0 / 65_536.0, "{fraction}");
-        }
+        assert_eq!(apply_ratio(641, 0.5), 321);
+        assert_eq!(apply_ratio(0, 1.0), 0);
+        assert_eq!(apply_ratio(128, 0.0), 0);
+        // The review counterexample that retired the Q16 family: a 1,000,000-unit
+        // space sum under the f32 minimum ratio 0.6666666865348816 must shrink by
+        // the exactly-applied fraction, not a Q16 approximation 5 units short.
+        let ratio = 1.0 - f64::from(0.666_666_686_534_881_6_f32);
+        let capacity = apply_ratio(1_000_000, ratio);
+        assert_eq!(capacity, 333_333);
+        assert!((capacity as f64 - 1_000_000.0 * ratio).abs() < 1.0);
+        // Totality: non-finite and out-of-range inputs saturate instead of wrapping.
+        assert_eq!(apply_ratio(i64::MAX, 2.0), 9_007_199_254_740_992);
+        assert_eq!(apply_ratio(1, f64::NAN), 0);
     }
 }

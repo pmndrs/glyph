@@ -893,6 +893,109 @@ test('the committing frame adopts the speculative transaction and its reserved g
 });
 
 /**
+ * Measurement-only queries skip the per-glyph positioning tail (the
+ * measurement derives at line level from flow and clusters), and the
+ * committing frame runs exactly the missing tail when it adopts such a
+ * transaction. The proof is end-state equality: a session that measured
+ * several widths before committing must publish a semantic table
+ * byte-identical to a control session that committed the same frame
+ * without ever measuring.
+ */
+test('measurement-only queries leave the committing frame byte-identical to a never-measured control', async () => {
+  const [interArtifact, shaperWasm, abi] = await Promise.all([
+    readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+    readFile(shaperWasmUrl),
+    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+  ]);
+  const inter = await validateFontArtifact(interArtifact);
+  const createEngine = async () => {
+    const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
+    const memory = instance.exports[abi.memory];
+    const fn = Object.fromEntries(
+      Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+    );
+    assert.equal(fn.initialize(), abi.status.ok);
+    registerValidatedFont({ abi, fn, memory }, 101, inter);
+    registerSimpleBinding({ abi, fn, memory }, 1001, 101, inter, 71, 1);
+    const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(0xe9, 3, 0, 0));
+    assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
+    fn.deallocate(stack.pointer, stack.length);
+    const policyBytes = twoTechniquePolicyBytes(abi);
+    const policy = copyToWasm(memory, fn.allocate, policyBytes);
+    assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
+    fn.deallocate(policy.pointer, policy.length);
+    assert.equal(fn.createSession(37, 4096, 256 * 1024, 0), abi.status.ok);
+    const resultLayout = abi.layouts.engineResult;
+    const run = (bytes, entry, mask, paragraphId) => {
+      new DataView(bytes.buffer).setUint32(abi.layouts.engineUpdateRequest.semanticViewMask, mask, true);
+      const pointer = fn.requestPointer(37);
+      new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+      const resultPointer =
+        entry === 'measure'
+          ? fn.measureParagraph(37, pointer, bytes.byteLength, paragraphId)
+          : fn.textUpdate(37, pointer, bytes.byteLength);
+      const view = new DataView(memory.buffer, resultPointer, resultLayout.size);
+      const semanticViewsOffset = view.getUint32(resultLayout.semanticViewsOffset, true);
+      const semanticViewCount = view.getUint32(resultLayout.semanticViewCount, true);
+      return {
+        status: view.getUint32(resultLayout.status, true),
+        engineRevision: view.getUint32(resultLayout.engineRevision, true),
+        publicationGeneration: view.getUint32(resultLayout.publicationGeneration, true),
+        semanticBytes: new Uint8Array(
+          memory.buffer,
+          resultPointer + semanticViewsOffset,
+          semanticViewCount * abi.layouts.engineSemanticView.size,
+        ).slice(),
+      };
+    };
+    return { fn, run };
+  };
+
+  const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
+  const request = (geometryWidth, seeded, withText) =>
+    engineStyleUpdateBytes(abi, {
+      sessionId: 37,
+      policyHandle: 23,
+      fontStackHandle: 17,
+      ...(seeded === undefined
+        ? {}
+        : {
+            expectedEngineRevision: seeded.engineRevision,
+            consumedPlanRevision: seeded.engineRevision,
+            acknowledgedPublicationGeneration: seeded.publicationGeneration,
+          }),
+      ...(withText ? { text } : { styles: false }),
+      maxClusters: 64,
+      geometry: { width: geometryWidth, height: 200, maxLines: 16 },
+    });
+  const all = abi.engine.semanticViewMasks.all;
+  const measurement = abi.engine.semanticViewMasks.measurement;
+
+  const measuring = await createEngine();
+  const measuredSeed = measuring.run(request(300, undefined, true), 'update', all);
+  assert.equal(measuredSeed.status, abi.status.ok);
+  for (const width of [150, 96, 96]) {
+    const query = measuring.run(request(width, measuredSeed, false), 'measure', measurement, 1);
+    assert.equal(query.status, abi.status.ok, `measure at width ${width}`);
+  }
+  const measuredCommit = measuring.run(request(96, measuredSeed, false), 'update', all);
+  assert.equal(measuredCommit.status, abi.status.ok);
+
+  const control = await createEngine();
+  const controlSeed = control.run(request(300, undefined, true), 'update', all);
+  assert.equal(controlSeed.status, abi.status.ok);
+  const controlCommit = control.run(request(96, controlSeed, false), 'update', all);
+  assert.equal(controlCommit.status, abi.status.ok);
+
+  assert.equal(measuredCommit.engineRevision, controlCommit.engineRevision);
+  assert.deepEqual(
+    measuredCommit.semanticBytes,
+    controlCommit.semanticBytes,
+    'the adopted commit publishes the exact semantic table a never-measured commit publishes',
+  );
+});
+
+/**
  * Integer layout-units slice 5: the packaged artifact's measured f32 extents
  * are pinned EXACTLY at several widths. Every stage between text and extent
  * runs on the F26.6 rounding contract (`layout_units.rs`), whose integer

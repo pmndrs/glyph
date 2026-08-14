@@ -7,8 +7,8 @@ use alloc::vec::Vec;
 
 use super::{
     EngineError,
-    cluster_state::ClusterArena,
-    flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
+    cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
+    flow_composition::{FlowFragment, FlowLayoutArena, FlowLine, NO_BOUNDARY},
     flow_geometry::FlowGeometryArena,
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
     positioning::{
@@ -17,9 +17,80 @@ use super::{
     semantic_view::{
         SEMANTIC_GLYPH, SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SemanticRecord,
     },
+    shaping_state::BoundaryShapeArena,
 };
 
 pub(crate) const MEASUREMENT_FLAG_OVERFLOWED: u16 = 1;
+
+/// The visible glyph totals of a composed flow, derived at line level from the
+/// cluster arena's adjacency stream and the boundary records — the same set
+/// positioning emits, so a measurement-only query (which skips the positioning
+/// tail) reports identical counts to a positioned frame.
+pub(crate) fn visible_glyph_counts(
+    flow: &FlowLayoutArena,
+    clusters: &ClusterArena,
+    boundary_shape: &BoundaryShapeArena,
+) -> Result<(usize, usize), EngineError> {
+    fn range_counts(ids: &[u16], start: u32, count: u32) -> Result<(usize, usize), EngineError> {
+        let start = usize::try_from(start).map_err(|_| EngineError::InvalidRequest)?;
+        let end = start
+            .checked_add(usize::try_from(count).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        let range = ids.get(start..end).ok_or(EngineError::InvalidRequest)?;
+        Ok((range.len(), range.iter().filter(|id| **id == 0).count()))
+    }
+    let mut total = 0_usize;
+    let mut missing = 0_usize;
+    for line in flow.lines.iter().copied() {
+        for fragment in line_fragments(flow, line)?.iter().copied() {
+            let cluster_start = usize::try_from(fragment.line.cluster_start)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let cluster_end = usize::try_from(fragment.line.cluster_end)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let boundary = if fragment.boundary_index == NO_BOUNDARY {
+                None
+            } else {
+                Some(
+                    boundary_shape
+                        .record(fragment.boundary_index)
+                        .ok_or(EngineError::InvalidRequest)?,
+                )
+            };
+            let retained_end = boundary.map_or(cluster_end, |boundary| {
+                usize::try_from(boundary.cluster_start).unwrap_or(usize::MAX)
+            });
+            if retained_end > cluster_end || cluster_start > retained_end {
+                return Err(EngineError::InvalidRequest);
+            }
+            for cluster in cluster_start..retained_end {
+                // Positioning skips hard-break clusters before its glyph walk;
+                // the count mirrors that exactly.
+                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                    continue;
+                }
+                let (count, zeros) = range_counts(
+                    &clusters.glyph_ids,
+                    clusters.glyph_starts[cluster],
+                    clusters.glyph_counts[cluster],
+                )?;
+                total = total.checked_add(count).ok_or(EngineError::ResultTooLarge)?;
+                missing += zeros;
+            }
+            if let Some(boundary) = boundary {
+                for (start, count) in [
+                    (boundary.source_glyph_start, boundary.source_glyph_count),
+                    (boundary.ellipsis_glyph_start, boundary.ellipsis_glyph_count),
+                ] {
+                    let (span, zeros) =
+                        range_counts(&boundary_shape.shape.glyph_ids, start, count)?;
+                    total = total.checked_add(span).ok_or(EngineError::ResultTooLarge)?;
+                    missing += zeros;
+                }
+            }
+        }
+    }
+    Ok((total, missing))
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct LayoutExtents {
@@ -33,6 +104,7 @@ pub(crate) fn append_measurement(
     paragraph_id: u32,
     text_length: usize,
     cluster_count: usize,
+    visible_glyphs: (usize, usize),
     geometry: &FlowGeometryArena,
     flow: &FlowLayoutArena,
     positioned_glyphs: &[SemanticGlyph],
@@ -186,10 +258,10 @@ pub(crate) fn append_measurement(
             constraint.height,
             full_content_height,
         )?;
-    let missing_glyph_count = positioned_glyphs
-        .iter()
-        .filter(|glyph| glyph.glyph_id == 0)
-        .count();
+    // Glyph totals come from the flow-level derivation, not the positioned
+    // arena, so a measurement-only query (which skips the positioning tail)
+    // reports the same counts a positioned frame reports.
+    let (visible_glyph_count, missing_glyph_count) = visible_glyphs;
     target[summary_index] = SemanticRecord {
         id: paragraph_id,
         kind: SEMANTIC_PARAGRAPH_MEASUREMENT,
@@ -198,8 +270,7 @@ pub(crate) fn append_measurement(
         } else {
             0
         },
-        parent_id: u32::try_from(positioned_glyphs.len())
-            .map_err(|_| EngineError::ResultTooLarge)?,
+        parent_id: u32::try_from(visible_glyph_count).map_err(|_| EngineError::ResultTooLarge)?,
         text_start: u32::try_from(missing_glyph_count).map_err(|_| EngineError::ResultTooLarge)?,
         text_end: u32::try_from(text_length).map_err(|_| EngineError::ResultTooLarge)?,
         item_start: line_start,
@@ -378,6 +449,7 @@ mod tests {
             7,
             2,
             2,
+            (2, 1),
             &geometry,
             &flow,
             &[layout_glyph(3), layout_glyph(0)],
@@ -437,6 +509,7 @@ mod tests {
             7,
             2,
             2,
+            (2, 1),
             &geometry,
             &flow,
             &positioned,
@@ -472,6 +545,7 @@ mod tests {
             7,
             2,
             2,
+            (2, 1),
             &geometry,
             &flow,
             &positioned,
@@ -532,6 +606,7 @@ mod tests {
             7,
             2,
             2,
+            (0, 0),
             &geometry,
             &flow,
             &[],
@@ -595,6 +670,7 @@ mod tests {
             7,
             1,
             1,
+            (0, 0),
             &geometry,
             &flow,
             &[],

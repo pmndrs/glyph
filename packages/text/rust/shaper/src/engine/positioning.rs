@@ -616,19 +616,28 @@ impl PositionedGlyphArena {
                 cursor += x_advance;
             }
             cursor = cluster_origin + clusters.advances[cluster];
+            // Adjustments are span-bounded and count-limited in visual encounter
+            // order: exactly the `spaces` counted word spaces and `gaps` gaps
+            // inside the trimmed span receive units — trailing logical spaces
+            // (outside `gap_end`) and any visual cluster beyond the counted set
+            // never absorb uncounted adjustments, in either direction, so the
+            // applied cursor sum equals the measured distribution total. Each
+            // unit count converts through the dyadic 1/64 exactly, and the
+            // leading encounters carry the euclidean remainder one unit at a
+            // time.
             if clusters.flags[cluster] & CLUSTER_SPACE != 0
+                && cluster < justify.gap_end
+                && space_ordinal < i64::from(justify.spaces)
                 && (justify.per_space_units != 0 || justify.extra_space_units != 0)
             {
-                // Adjustments apply in encounter order; the leading spaces carry
-                // the euclidean remainder one unit at a time, and each unit
-                // count converts through the dyadic 1/64 exactly.
                 let units =
                     justify.per_space_units + i64::from(space_ordinal < justify.extra_space_units);
                 cursor += super::layout_units::scaled_from_layout_units(units);
                 space_ordinal += 1;
             }
-            if (justify.per_gap_units != 0 || justify.extra_gap_units != 0)
-                && cluster + 1 < justify.gap_end
+            if cluster < justify.gap_end
+                && gap_ordinal < i64::from(justify.gaps)
+                && (justify.per_gap_units != 0 || justify.extra_gap_units != 0)
             {
                 let units =
                     justify.per_gap_units + i64::from(gap_ordinal < justify.extra_gap_units);
@@ -1464,9 +1473,9 @@ fn justification_adjustment(
         // the remainder spills into inter-cluster gaps bounded per gap; any
         // residue stays unfilled and the line reads as under-full.
         let space_growth = if controls.maximum_word_space_ratio > 0.0 {
-            deficit_units.min(super::layout_units::apply_q16(
+            deficit_units.min(super::layout_units::apply_ratio(
                 span.space_advance_units,
-                super::layout_units::excess_q16(f64::from(controls.maximum_word_space_ratio) - 1.0),
+                f64::from(controls.maximum_word_space_ratio) - 1.0,
             ))
         } else {
             deficit_units
@@ -1501,13 +1510,13 @@ fn justification_adjustment(
         }
     } else if controls.minimum_word_space_ratio > 0.0 {
         // Compression: an overfull line shrinks its word spaces, never below the
-        // declared minimum of their natural advance sum. The capacity quantizes
-        // through the SAME ratio_q16 expression the integer fit used to admit
-        // the line, so positioning can always shrink what the fit promised to
+        // declared minimum of their natural advance sum. The capacity applies
+        // the SAME exact-ratio expression the integer fit used to admit the
+        // line, so positioning can always shrink what the fit promised to
         // within the rounding contract's half unit.
-        let capacity = super::layout_units::apply_q16(
+        let capacity = super::layout_units::apply_ratio(
             span.space_advance_units,
-            super::layout_units::ratio_q16(1.0 - f64::from(controls.minimum_word_space_ratio)),
+            1.0 - f64::from(controls.minimum_word_space_ratio),
         );
         let shrink = (-deficit_units).min(capacity);
         let (per_space_units, extra_space_units) = distribute_units(-shrink, span.spaces);
