@@ -4,7 +4,7 @@ import type {
   RasterBakeRequest,
   RasterResourceSource,
   Sha256Hex,
-} from '@pmndrs/text';
+} from '@pmndrs/glyph';
 
 import {
   GLYPH_EXAMPLE_EXTENSION,
@@ -56,7 +56,7 @@ export async function bakeGlyphExampleArtifact(
     recordStride: 4,
   };
   const document = {
-    asset: { generator: '@pmndrs/text-glyph-example-raster', version: '2.0' },
+    asset: { generator: '@pmndrs/glyph-example-raster', version: '2.0' },
     buffers: [{ byteLength: binary.byteLength }],
     bufferViews: [
       { buffer: 0, byteOffset: 0, byteLength: GLTF_WITNESS.byteLength, target: 34962 },

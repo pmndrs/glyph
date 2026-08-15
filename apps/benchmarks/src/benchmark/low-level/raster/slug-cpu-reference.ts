@@ -1,5 +1,5 @@
-import type { ParagraphLayout } from '@pmndrs/text';
-import { SLUG_GLYPH_RECORD_STRIDE, type SlugData, type SlugPageData } from '@pmndrs/text/raster/slug';
+import type { ParagraphLayout } from '@pmndrs/glyph';
+import { SLUG_GLYPH_RECORD_STRIDE, type SlugData, type SlugPageData } from '@pmndrs/glyph/raster/slug';
 
 const ABSENT_PAGE = 0xffff;
 const MAX_SAFE_BAND_CURVES = 512;

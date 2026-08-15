@@ -180,7 +180,7 @@ Extracted:
 
 ### OpenType color and SVG glyph presentations
 
-In this source-oriented section, “presentation” means font-authored glyph artwork and tables. The `pmndrs/text` public API calls its selectable drawing implementations raster modules.
+In this source-oriented section, “presentation” means font-authored glyph artwork and tables. The `pmndrs/glyph` public API calls its selectable drawing implementations raster modules.
 
 Sources:
 
@@ -464,7 +464,7 @@ Classification:
 - Experimental analytic vector-fill and antialiasing technique.
 - Relevant to general vector editors, generative art, print-scale output, deeply magnified paths, overlapping strokes, and hairlines.
 - Not a font shaper, paragraph engine, font container, or general font-loading API. Its demo uses `opentype.js` to obtain glyph outlines and metrics, but the core algorithm is generic 2D path rendering.
-- Research reference, not a planned `pmndrs/text` raster backend.
+- Research reference, not a planned `pmndrs/glyph` raster backend.
 
 Extracted from the official project:
 
@@ -495,7 +495,7 @@ Limits on use:
 
 Project inference, not a Windfoil claim:
 
-- Do not implement Windfoil in `pmndrs/text` under the current product scope. It solves high-quality general vector filling, not a missing shaping, paragraph, or ordinary text-rendering capability.
+- Do not implement Windfoil in `pmndrs/glyph` under the current product scope. It solves high-quality general vector filling, not a missing shaping, paragraph, or ordinary text-rendering capability.
 - The shared shaping, paragraph, glyph-ID, and `PMNDRS_font` container layers should remain independent of Windfoil, Slug, MSDF, and bitmap rendering.
 - Reconsider only if the product expands into deeply zoomable, overlap-heavy vector graphics or a real workload proves that Slug's coverage, CPU union work, or band memory is a material blocker.
 - Any future implementation must be a separate, explicitly imported vector package and prove perspective/XR behavior, WebGL/WebGPU deployment, quality, and end-to-end performance first.
@@ -611,7 +611,7 @@ Abstract: A browser benchmark lab for JavaScript and WebAssembly physics engines
 
 Extracted:
 
-- `pmndrs/text` needs a benchmark product, not only scripts and prose reports: an interactive browser lab plus a headless runner over the same scenario definitions.
+- `pmndrs/glyph` needs a benchmark product, not only scripts and prose reports: an interactive browser lab plus a headless runner over the same scenario definitions.
 - Renderer, shaper, delivery-path, and GPU-backend variants should implement stable target adapters rather than duplicate benchmark scenarios.
 - Scenarios must declare required capabilities and show unsupported combinations explicitly; silently omitting a weak or unsupported case would make comparisons misleading.
 - Live timing should separate pipeline phases such as shaping, paragraph layout, upload, rendering, and total frame cost.
@@ -658,7 +658,7 @@ Extracted:
 
 - `<Text>hello</Text>` with direct props is already familiar to React Three Fiber users.
 - Font loading may suspend while the rendered object retains normal R3F transform and scene semantics.
-- A pmndrs text component should avoid a parallel CSS/layout wrapper when the core object can own the behavior.
+- A pmndrs Glyph component should avoid a parallel CSS/layout wrapper when the core object can own the behavior.
 
 ### pmndrs uikit React/vanilla split
 
@@ -673,8 +673,8 @@ Abstract: uikit makes the framework-neutral Three.js implementation the core pro
 
 Extracted:
 
-- `@pmndrs/text` should own all loading, shaping, layout, raster selection, and Three.js behavior.
-- `@pmndrs/text/react` should be a subpath with peer dependencies that only reconciles props, children, refs, Suspense, and disposal.
+- `@pmndrs/glyph` should own all loading, shaping, layout, raster selection, and Three.js behavior.
+- `@pmndrs/glyph/react` should be a subpath with peer dependencies that only reconciles props, children, refs, Suspense, and disposal.
 - React and vanilla Three.js users should receive the same features and data contracts.
 
 ### pmndrs uikit text layout implementation
@@ -698,7 +698,7 @@ Extracted:
 - The adoption seam should preserve uikit's `CustomLayouting → FlexNode/Yoga → resolved content-box signals` flow rather than introduce an unrelated imperative lifecycle.
 - Core needs a synchronous allocation-light measurement operation separate from final positioned layout so repeated host measurements do not create glyph arrays.
 - uikit should own signal adaptation, point-scale rounding, padding/border removal, centered-coordinate conversion, transforms, clipping, and render-group integration.
-- `pmndrs/text` must not expose Yoga, Preact Signals, or uikit-specific types merely to support this consumer.
+- `pmndrs/glyph` must not expose Yoga, Preact Signals, or uikit-specific types merely to support this consumer.
 - Current character-entry caret and selection code cannot represent ligatures, combining marks, reordered glyphs, or cluster boundaries; a later migration step must use cluster-aware queries rather than adapting glyph IDs back into character entries.
 - See the [uikit integration explanation](docs/planning/uikit-integration.md) for the resulting incremental migration.
 

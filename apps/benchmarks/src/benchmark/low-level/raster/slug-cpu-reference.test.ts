@@ -1,5 +1,5 @@
-import { defineRasterResourceId, type ParagraphLayout } from '@pmndrs/text';
-import { SLUG_GLYPH_RECORD_STRIDE, type SlugData, type SlugPageData } from '@pmndrs/text/raster/slug';
+import { defineRasterResourceId, type ParagraphLayout } from '@pmndrs/glyph';
+import { SLUG_GLYPH_RECORD_STRIDE, type SlugData, type SlugPageData } from '@pmndrs/glyph/raster/slug';
 import { describe, expect, it } from 'vitest';
 
 import { renderFlatSlugCpuReference } from './slug-cpu-reference';

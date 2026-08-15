@@ -12,7 +12,7 @@
       "fontFixture": "inter",
       "file": "inter-bitmap-16.font.glb",
       "bytes": 927248,
-      "sha256": "5ac462ed7c9fc1ffbc0add824fecb6cf06f52cdb6a1d4bba39d99c5dc8491916",
+      "sha256": "987312b799b3dfc8e5cbf941a9bbec2dd006b808dee61555605cdad234cd6e33",
       "raster": {
         "decodedGpuBytes": 695296,
         "pages": [
@@ -30,7 +30,7 @@
       "fontFixture": "amiri",
       "file": "amiri-bitmap-16.font.glb",
       "bytes": 1987932,
-      "sha256": "9600a07ece3a28933f5b15c3ec447e7b2f96a99949bcb9f91445d6d5fe00ab81",
+      "sha256": "18c0d965272553610e9dcadc629d680916ea1cbe7d73d4f2b22a9588940b4362",
       "raster": {
         "decodedGpuBytes": 1673216,
         "pages": [
@@ -55,7 +55,7 @@
       "fontFixture": "noto-sans-devanagari",
       "file": "noto-sans-devanagari-bitmap-16.font.glb",
       "bytes": 312328,
-      "sha256": "ae4b4f2319c68b34adb683b5c6f593b456ca12fcefd22cbe93367512b2d8ee66",
+      "sha256": "af3e35705f22dbe060038d8bf2d93d1f3619a03268239caf1d8dc7905e84c297",
       "raster": {
         "decodedGpuBytes": 233472,
         "pages": [
@@ -73,7 +73,7 @@
       "fontFixture": "dot-gothic-16",
       "file": "dot-gothic-16-bitmap-16.font.glb",
       "bytes": 3294468,
-      "sha256": "29fe7d9308e985365b9199772e71326e66fcf7a5459024b20d519bc843e9ce1a",
+      "sha256": "6b1385b4f6bebef7a957b97114ddf60522b21b162124ea3433527b32763f8efd",
       "raster": {
         "decodedGpuBytes": 2808832,
         "pages": [
@@ -105,7 +105,7 @@
       "fontFixture": "font-awesome-free-6.7.2",
       "file": "font-awesome-free-6.7.2-bitmap-16.font.glb",
       "bytes": 596660,
-      "sha256": "5e583744b91a7fffd686065cb06b1a6740d94747c6f4de26b8569c0c9e5e7254",
+      "sha256": "1fd837e41fd5c6529623b1a66fe8c214aed132b7c7441ccd04a62d782daf9bef",
       "raster": {
         "decodedGpuBytes": 530432,
         "pages": [
@@ -123,7 +123,7 @@
       "fontFixture": "noto-sans-cjk-showcase",
       "file": "noto-sans-cjk-showcase-bitmap-16.font.glb",
       "bytes": 66076,
-      "sha256": "da1ccddc2e89fdbb5181a9cc8dabf52595107933f5d67819e5295b1e524ef105",
+      "sha256": "150f4c7fb4fe356020783db117161f07621db71d23811a3927b4ea77b6c46f17",
       "raster": {
         "decodedGpuBytes": 55440,
         "pages": [
@@ -141,7 +141,7 @@
       "fontFixture": "source-serif-4",
       "file": "source-serif-4-bitmap-16.font.glb",
       "bytes": 468864,
-      "sha256": "c710c21a0ed515f7e1f893c7644193da07fc02ebe6695addfffafcf8fb26abd9",
+      "sha256": "7ee6d96a0123a8d37445ed8a3fcbb503722d91d50497022c8384afb28bfd91f5",
       "raster": {
         "decodedGpuBytes": 302080,
         "pages": [
@@ -159,7 +159,7 @@
       "fontFixture": "dancing-script",
       "file": "dancing-script-bitmap-16.font.glb",
       "bytes": 291640,
-      "sha256": "4a9eeb91bfe1de8385cf6f610df60113e57df01b7c202ddbddc351a1222bc272",
+      "sha256": "3205a8cfc799cb7e58a375b7ecfffcb467b9c1a360ab77d92fc77022114607aa",
       "raster": {
         "decodedGpuBytes": 226304,
         "pages": [

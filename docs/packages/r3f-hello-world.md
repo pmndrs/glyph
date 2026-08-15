@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
-title: '@pmndrs/text-r3f-hello-world'
+title: '@pmndrs/glyph-r3f-hello-world'
 description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Slug, and nested font spans.
 resource: ../../apps/r3f-hello-world
-workspace_package: '@pmndrs/text-r3f-hello-world'
+workspace_package: '@pmndrs/glyph-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:dc0e2489cc5bc8cbdc121865edfe3cdc373c5e80afc25c25945d756ef14708f3'
+source_digest: 'sha256:dad6990c49088968f5e968295d72cba53aee902f7eb47ff38016923caf30b6fc'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -16,13 +16,13 @@ sources:
     title: Public R3F technique and nested font-span example
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-11T03:15:33Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
-# Package reference: `@pmndrs/text-r3f-hello-world`
+# Package reference: `@pmndrs/glyph-r3f-hello-world`
 
 This private Vite application is the minimal product-shaped React Three Fiber example. One full-page canvas renders
-`Hello world` through the public `@pmndrs/text/react` `Text` component. The globe is a nested `Text` span bound directly
+`Hello world` through the public `@pmndrs/glyph/react` `Text` component. The globe is a nested `Text` span bound directly
 to the matching subsetted Font Awesome raster rather than an automatically resolved font-stack fallback. Public
 `useFont.preload()` calls start both multi-raster asset requests before the scene suspends on the same cache entries.
 One `App` component owns the loaded fonts, technique state, three React `Activity` branches, and its in-canvas Slug
@@ -41,7 +41,7 @@ The checked-in assets are deliberately bounded at source before baking:
 - Font Awesome contains six globe and earth PUA scalars, including the displayed `U+F0AC` glyph.
 
 Each GLB embeds Bitmap, MSDF, and Slug raster resources for its subset. The package manifest invokes only the published
-CLI through `pnpm exec text bake`: direct input/output arguments select all three rasters, `--unicodes` delegates
+CLI through `pnpm exec glyph bake`: direct input/output arguments select all three rasters, `--unicodes` delegates
 shaping-font subsetting to the package-owned baker Wasm, and `--check` rebakes into temporary storage before requiring
 byte-identical output.
 The example loads each GLB once with one typed raster tuple and receives exact Bitmap, MSDF, and Slug `LoadedFont` values;
@@ -52,10 +52,10 @@ graph.
 ## Commands
 
 ```sh
-mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world dev
-mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world bake
-mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world bake:check
-mise exec -- pnpm --filter @pmndrs/text-r3f-hello-world check
+mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world dev
+mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world bake
+mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world bake:check
+mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world check
 ```
 
 `bake:inter` and `bake:icons` own the two output GLBs, and the root `bake` command composes them. The corresponding

@@ -2,8 +2,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { bakeFont } from '@pmndrs/text/bake';
-import { bitmapBaker } from '@pmndrs/text/bakers/bitmap';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 
 import { paragraphCjkCoverageText } from '../src/benchmark/paragraph-contract-corpus.ts';
 
@@ -13,7 +13,7 @@ const check = args.includes('--check');
 if (args.some((argument) => argument !== '--check') || args.length > 1) {
   throw new Error('usage: generate-paragraph-conformance-font.mts [--check]');
 }
-const temporaryDirectory = check ? await mkdtemp(join(tmpdir(), 'pmndrs-text-cjk-contract-')) : undefined;
+const temporaryDirectory = check ? await mkdtemp(join(tmpdir(), 'pmndrs-glyph-cjk-contract-')) : undefined;
 const generated = temporaryDirectory === undefined ? output : join(temporaryDirectory, 'font.glb');
 try {
   await bakeFont({

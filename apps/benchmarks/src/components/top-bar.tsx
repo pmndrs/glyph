@@ -62,7 +62,7 @@ export function TopBar({
           </svg>
         </button>
         <div className="hidden min-w-0 sm:block">
-          <div className="text-sm font-semibold leading-none">pmndrs/text</div>
+          <div className="text-sm font-semibold leading-none">pmndrs/glyph</div>
           <div className="mt-1 font-mono text-[9px] text-dim">TEXT PERFORMANCE LAB</div>
         </div>
         <div className="flex rounded-md border border-border bg-background p-0.5 sm:ml-3">

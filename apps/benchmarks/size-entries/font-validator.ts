@@ -1,1 +1,1 @@
-export { validateFontArtifact } from '../../../packages/text/dist/font-baker/validator.js';
+export { validateFontArtifact } from '../../../packages/glyph/dist/font-baker/validator.js';

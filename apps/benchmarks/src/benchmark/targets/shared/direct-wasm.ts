@@ -5,7 +5,7 @@
  * after an operator chooses an ABI-level benchmark. Product demos use public loader surfaces.
  */
 export interface DirectWasmDependencies {
-  readonly createFontBaker: typeof import('../../../../../../packages/text/src/font-baker/index').createFontBaker;
+  readonly createFontBaker: typeof import('../../../../../../packages/glyph/src/font-baker/index').createFontBaker;
   readonly bakerWasmUrl: string;
   readonly shaperWasmUrl: string;
 }
@@ -14,9 +14,9 @@ export type DirectFontBaker = Awaited<ReturnType<DirectWasmDependencies['createF
 
 export async function loadDirectWasmDependencies(): Promise<DirectWasmDependencies> {
   const [bakerModule, bakerWasmModule, shaperWasmModule] = await Promise.all([
-    import('../../../../../../packages/text/src/font-baker/index'),
-    import('@pmndrs/text/font-baker.wasm?url'),
-    import('@pmndrs/text/text-shaper.wasm?url'),
+    import('../../../../../../packages/glyph/src/font-baker/index'),
+    import('@pmndrs/glyph/font-baker.wasm?url'),
+    import('@pmndrs/glyph/text-shaper.wasm?url'),
   ]);
   return {
     createFontBaker: bakerModule.createFontBaker,
