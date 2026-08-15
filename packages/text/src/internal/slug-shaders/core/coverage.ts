@@ -26,7 +26,7 @@ export function calcCoverage(
   const evenOddCoverage = 1 - std.abs(1 - std.fract(rawCoverage * 0.5) * 2);
   const filledCoverage = std.select(std.saturate(rawCoverage), evenOddCoverage, evenOdd);
   const boostedCoverage = std.select(filledCoverage, std.sqrt(filledCoverage), weightBoost);
-  const darken = stemDarken * std.max(d.f32(0), 1 - pixelsPerEm / 24);
+  const darken = stemDarken * std.max(d.f32(0), 1 - d.f32(pixelsPerEm) / 24);
 
   return std.min(boostedCoverage + darken * boostedCoverage * (1 - boostedCoverage), 1);
 }

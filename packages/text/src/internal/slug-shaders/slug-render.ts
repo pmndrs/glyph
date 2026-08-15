@@ -4,64 +4,55 @@
  * This module only wires TSL nodes into the host-agnostic core: the fragment scale,
  * the thickening factor, and the final weighted blend are all portable core calls.
  */
-import type { Node } from 'three/webgpu';
-import { float } from 'three/tsl';
-import { d } from 'typegpu';
-import * as t3 from '@typegpu/three';
-import { coreValue } from './core-boundary.js';
+import tgpu, { d, type TgpuSlot } from 'typegpu';
 import { slugPixelsPerEm, slugThickenFactor } from './core/band.js';
 import { calcCoverage } from './core/coverage.js';
 import { evaluateBand, type SlugShaderGlyph } from './slug-band.js';
-import type { SlugShaderPage } from './slug-texture.js';
 
 export { MAX_SAFE_SLUG_BAND_CURVES } from './core/band.js';
 export type { SlugShaderPage } from './slug-texture.js';
-export type { SlugShaderGlyph } from './slug-band.js';
+export { SlugShaderGlyph } from './slug-band.js';
 
 export interface SlugRenderOptions {
-  readonly evenOdd: Node<'bool'>;
-  readonly weightBoost: Node<'bool'>;
-  readonly stemDarken?: Node<'float'>;
-  readonly thicken?: Node<'float'>;
+  readonly evenOdd: boolean;
+  readonly weightBoost: boolean;
+  readonly stemDarken?: /* f32 */ number;
+  readonly thicken?: /* f32 */ number;
 }
 
-/** Evaluate analytic Slug fill coverage for one fragment. */
-export function slugRender(
-  page: SlugShaderPage,
-  glyph: SlugShaderGlyph,
-  renderCoordinate: Node<'vec2'>,
-  options: SlugRenderOptions,
-): Node<'float'> {
+export const slugRenderOptionsSlot: TgpuSlot<SlugRenderOptions> = tgpu.slot<SlugRenderOptions>({
+  evenOdd: false,
+  weightBoost: false,
+});
+
+/**
+ * Evaluate analytic Slug fill coverage for one fragment.
+ * @note Uses `pageSlot`
+ */
+export function slugRender(glyph: SlugShaderGlyph, renderCoordinate: d.v2f): /* f32 */ number {
+  'use gpu';
+
   // The screen-space scale and the thickening it feeds are loop-invariant, and every
   // core boundary already materializes into its own variable, so neither is re-emitted
   // per candidate curve.
-  const pixelsPerEm: Node<'vec3'> = coreValue('vec3', 'slugFragmentScale', () => {
-    'use gpu';
-    return slugPixelsPerEm(t3.fromTSL(renderCoordinate, d.vec2f).$);
-  });
+  const pixelsPerEm = slugPixelsPerEm(renderCoordinate);
   // Absent thickening and stem darkening are exactly their identity values, so the
   // core keeps one shader signature instead of an optional parameter per effect.
-  const thicken: Node<'float'> = options.thicken ?? float(0);
-  const stemDarken: Node<'float'> = options.stemDarken ?? float(0);
-  const thickenFactor: Node<'float'> = coreValue('float', 'slugCoverageThicken', () => {
-    'use gpu';
-    return slugThickenFactor(t3.fromTSL(thicken, d.f32).$, t3.fromTSL(pixelsPerEm.z, d.f32).$);
-  });
+  const thicken /* f32 */ = d.f32(slugRenderOptionsSlot.$.thicken ?? 0);
+  const stemDarken /* f32 */ = d.f32(slugRenderOptionsSlot.$.stemDarken ?? 0);
+  const thickenFactor /* f32 */ = slugThickenFactor(thicken, pixelsPerEm.z);
 
-  const horizontal = evaluateBand(page, glyph, renderCoordinate, 'horizontal', pixelsPerEm.x, thickenFactor);
-  const vertical = evaluateBand(page, glyph, renderCoordinate, 'vertical', pixelsPerEm.y, thickenFactor);
+  const horizontal = evaluateBand('horizontal')(glyph, renderCoordinate, pixelsPerEm.x, thickenFactor);
+  const vertical = evaluateBand('vertical')(glyph, renderCoordinate, pixelsPerEm.y, thickenFactor);
 
-  return coreValue('float', 'slugFillCoverage', () => {
-    'use gpu';
-    return calcCoverage(
-      t3.fromTSL(horizontal.coverage, d.f32).$,
-      t3.fromTSL(horizontal.weight, d.f32).$,
-      t3.fromTSL(vertical.coverage, d.f32).$,
-      t3.fromTSL(vertical.weight, d.f32).$,
-      t3.fromTSL(options.evenOdd, d.bool).$,
-      t3.fromTSL(options.weightBoost, d.bool).$,
-      t3.fromTSL(stemDarken, d.f32).$,
-      t3.fromTSL(pixelsPerEm.z, d.f32).$,
-    );
-  });
+  return calcCoverage(
+    horizontal.coverage,
+    horizontal.weight,
+    vertical.coverage,
+    vertical.weight,
+    slugRenderOptionsSlot.$.evenOdd,
+    slugRenderOptionsSlot.$.weightBoost,
+    stemDarken,
+    pixelsPerEm.z,
+  );
 }

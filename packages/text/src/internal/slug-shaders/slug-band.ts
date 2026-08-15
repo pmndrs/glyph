@@ -5,11 +5,7 @@
  * bound to Three.js control flow and to this page's texture layout. Each candidate
  * curve's coverage, weight, and terminator come from one portable core call.
  */
-import type { Node } from 'three/webgpu';
-import { If, float, int, lessThan, max, uint } from 'three/tsl';
-import { d } from 'typegpu';
-import * as t3 from '@typegpu/three';
-import { coreValue } from './core-boundary.js';
+import tgpu, { d, std } from 'typegpu';
 import {
   slugBandCurveCount,
   slugBandIndex,
@@ -17,23 +13,34 @@ import {
   slugHorizontalCurveContribution,
   slugVerticalCurveContribution,
 } from './core/band.js';
-import { loadCurve, loadHeader, loadReference, type SlugShaderCurve, type SlugShaderPage } from './slug-texture.js';
-import { intLessThan, uintAdd, whileLoop } from './tsl-compat.js';
+import { loadCurve, loadHeader, loadReference, type SlugShaderCurve } from './slug-texture.js';
 
-export interface SlugShaderGlyph {
-  readonly curveBaseTexel: Node<'uint'>;
-  readonly horizontalHeaderBase: Node<'uint'>;
-  readonly verticalHeaderBase: Node<'uint'>;
-  readonly referenceBase: Node<'uint'>;
-  readonly horizontalBandCount: Node<'uint'>;
-  readonly verticalBandCount: Node<'uint'>;
-  readonly bandTransform: Node<'vec4'>;
-}
+export const SlugShaderGlyph: d.WgslStruct<{
+  curveBaseTexel: d.U32;
+  horizontalHeaderBase: d.U32;
+  verticalHeaderBase: d.U32;
+  referenceBase: d.U32;
+  horizontalBandCount: d.U32;
+  verticalBandCount: d.U32;
+  bandTransform: d.Vec4f;
+}> = d.struct({
+  curveBaseTexel: d.u32,
+  horizontalHeaderBase: d.u32,
+  verticalHeaderBase: d.u32,
+  referenceBase: d.u32,
+  horizontalBandCount: d.u32,
+  verticalBandCount: d.u32,
+  bandTransform: d.vec4f,
+});
 
-interface SlugBandEvaluation {
-  readonly coverage: Node<'float'>;
-  readonly weight: Node<'float'>;
-}
+export type SlugShaderGlyph = d.InferGPU<typeof SlugShaderGlyph>;
+
+export const SlugBandEvaluation: d.WgslStruct<{ coverage: d.F32; weight: d.F32 }> = d.struct({
+  coverage: d.f32,
+  weight: d.f32,
+});
+
+type SlugBandEvaluation = d.InferGPU<typeof SlugBandEvaluation>;
 
 /** Signed coverage delta, antialiasing weight, and sorted-reference terminator of one curve. */
 type SlugCurveContribution = (
@@ -45,116 +52,73 @@ type SlugCurveContribution = (
   thickenFactor: number,
 ) => d.v3f;
 
+const contributeSlot = tgpu.slot<SlugCurveContribution>();
+
+/**
+ * @note Uses `contributeSlot`
+ */
 function curveContribution(
-  contribute: SlugCurveContribution,
-  name: string,
   curve: SlugShaderCurve,
-  renderCoordinate: Node<'vec2'>,
-  pixelsPerEm: Node<'float'>,
-  thickenFactor: Node<'float'>,
-): Node<'vec3'> {
-  return coreValue('vec3', name, () => {
-    'use gpu';
-    return contribute(
-      t3.fromTSL(curve.p0, d.vec2f).$,
-      t3.fromTSL(curve.p1, d.vec2f).$,
-      t3.fromTSL(curve.p2, d.vec2f).$,
-      t3.fromTSL(renderCoordinate, d.vec2f).$,
-      t3.fromTSL(pixelsPerEm, d.f32).$,
-      t3.fromTSL(thickenFactor, d.f32).$,
-    );
-  });
+  renderCoordinate: d.v2f,
+  pixelsPerEm: /* f32 */ number,
+  thickenFactor: /* f32 */ number,
+): d.v3f {
+  'use gpu';
+  return contributeSlot.$(curve.p0, curve.p1, curve.p2, renderCoordinate, pixelsPerEm, thickenFactor);
 }
 
-function evaluateBandCurve(
-  index: Node<'int'>,
-  curveCount: Node<'int'>,
-  page: SlugShaderPage,
-  glyph: SlugShaderGlyph,
-  renderCoordinate: Node<'vec2'>,
-  axis: 'horizontal' | 'vertical',
-  pixelsPerEm: Node<'float'>,
-  thickenFactor: Node<'float'>,
-  localReferenceOffset: Node<'uint'>,
-  coverage: Node<'float'>,
-  weight: Node<'float'>,
-): void {
-  const referenceIndex: Node<'uint'> = uintAdd(uintAdd(glyph.referenceBase, localReferenceOffset), uint(index));
-  const curveReference: Node<'uint'> = loadReference(page, referenceIndex);
-  const curve = loadCurve(page, uintAdd(glyph.curveBaseTexel, curveReference));
-  const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
-  const contribution: Node<'vec3'> = curveContribution(
-    axis === 'horizontal' ? slugHorizontalCurveContribution : slugVerticalCurveContribution,
-    `${namePrefix}Contribution`,
-    curve,
-    renderCoordinate,
-    pixelsPerEm,
-    thickenFactor,
-  );
+const getCurveContribution = tgpu.comptime((axis: 'vertical' | 'horizontal') =>
+  tgpu
+    .fn(curveContribution)
+    .with(contributeSlot, axis === 'horizontal' ? slugHorizontalCurveContribution : slugVerticalCurveContribution),
+);
 
-  // The references of a band are sorted by descending ray-axis maximum, so the
-  // first curve that cannot reach this fragment ends the band.
-  If(lessThan(contribution.z, -0.5), () => {
-    index.assign(curveCount);
-  }).Else(() => {
-    coverage.addAssign(contribution.x);
-    weight.assign(max(weight, contribution.y));
-    index.addAssign(1);
-  });
-}
+const axisSlot = tgpu.slot<'vertical' | 'horizontal'>();
 
-export function evaluateBand(
-  page: SlugShaderPage,
+/**
+ * @note Uses `pageSlot`
+ */
+function genericEvaluateBand(
   glyph: SlugShaderGlyph,
-  renderCoordinate: Node<'vec2'>,
-  axis: 'horizontal' | 'vertical',
-  pixelsPerEm: Node<'float'>,
-  thickenFactor: Node<'float'>,
+  renderCoordinate: d.v2f,
+  pixelsPerEm: /* f32 */ number,
+  thickenFactor: /* f32 */ number,
 ): SlugBandEvaluation {
-  const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
-  const coordinate: Node<'float'> = axis === 'horizontal' ? renderCoordinate.y : renderCoordinate.x;
-  const transformScale: Node<'float'> = axis === 'horizontal' ? glyph.bandTransform.y : glyph.bandTransform.x;
-  const transformOffset: Node<'float'> = axis === 'horizontal' ? glyph.bandTransform.w : glyph.bandTransform.z;
-  const declaredBandCount: Node<'uint'> = axis === 'horizontal' ? glyph.horizontalBandCount : glyph.verticalBandCount;
-  const headerBase: Node<'uint'> = axis === 'horizontal' ? glyph.horizontalHeaderBase : glyph.verticalHeaderBase;
-  const bandIndex: Node<'uint'> = coreValue('uint', `${namePrefix}BandIndex`, () => {
-    'use gpu';
-    return slugBandIndex(
-      t3.fromTSL(coordinate, d.f32).$,
-      t3.fromTSL(transformScale, d.f32).$,
-      t3.fromTSL(transformOffset, d.f32).$,
-      t3.fromTSL(declaredBandCount, d.u32).$,
-    );
-  });
-  const header: Node<'uint'> = loadHeader(page, uintAdd(headerBase, bandIndex), axis);
-  const localReferenceOffset: Node<'uint'> = coreValue('uint', `${namePrefix}ReferenceOffset`, () => {
-    'use gpu';
-    return slugBandReferenceOffset(t3.fromTSL(header, d.u32).$);
-  });
-  const curveCount: Node<'int'> = int(
-    coreValue('uint', `${namePrefix}CurveCount`, () => {
-      'use gpu';
-      return slugBandCurveCount(t3.fromTSL(header, d.u32).$);
-    }),
-  );
-  const coverage: Node<'float'> = float(0).toVar(axis === 'horizontal' ? 'slugXCoverage' : 'slugYCoverage');
-  const weight: Node<'float'> = float(0).toVar(axis === 'horizontal' ? 'slugXWeight' : 'slugYWeight');
-  const curveIndex: Node<'int'> = int(0).toVar(`${namePrefix}CurveIndex`);
-  whileLoop(intLessThan(curveIndex, curveCount), () =>
-    evaluateBandCurve(
-      curveIndex,
-      curveCount,
-      page,
-      glyph,
-      renderCoordinate,
-      axis,
-      pixelsPerEm,
-      thickenFactor,
-      localReferenceOffset,
-      coverage,
-      weight,
-    ),
-  );
+  'use gpu';
+  const coordinate: /* f32 */ number = axisSlot.$ === 'horizontal' ? renderCoordinate.y : renderCoordinate.x;
+  const transformScale: /* f32 */ number = axisSlot.$ === 'horizontal' ? glyph.bandTransform.y : glyph.bandTransform.x;
+  const transformOffset: /* f32 */ number = axisSlot.$ === 'horizontal' ? glyph.bandTransform.w : glyph.bandTransform.z;
+  const declaredBandCount /* u32 */ = axisSlot.$ === 'horizontal' ? glyph.horizontalBandCount : glyph.verticalBandCount;
+  const headerBase /* u32 */ = axisSlot.$ === 'horizontal' ? glyph.horizontalHeaderBase : glyph.verticalHeaderBase;
+  const bandIndex /* u32 */ = slugBandIndex(coordinate, transformScale, transformOffset, declaredBandCount);
+  const header /* u32 */ = loadHeader(headerBase + bandIndex);
+  const localReferenceOffset /* u32 */ = slugBandReferenceOffset(header);
+  const curveCount = slugBandCurveCount(header);
 
-  return { coverage, weight };
+  let coverage /* f32 */ = d.f32(0);
+  let weight /* f32 */ = d.f32(0);
+  let curveIndex /* u32 */ = d.u32(0);
+
+  while (curveIndex < curveCount) {
+    const referenceIndex = /* u32 */ d.u32(glyph.referenceBase + localReferenceOffset + curveIndex);
+    const curveReference = /* u32 */ loadReference(referenceIndex);
+    const curve = loadCurve(glyph.curveBaseTexel + curveReference);
+    const contribution = getCurveContribution(axisSlot.$)(curve, renderCoordinate, pixelsPerEm, thickenFactor);
+
+    // The references of a band are sorted by descending ray-axis maximum, so the
+    // first curve that cannot reach this fragment ends the band.
+    if (contribution.z < -0.5) {
+      curveIndex = curveCount;
+    } else {
+      coverage += contribution.x;
+      weight = std.max(weight, contribution.y);
+      curveIndex++;
+    }
+  }
+
+  return SlugBandEvaluation({ coverage, weight });
 }
+
+export const evaluateBand: (axis: 'vertical' | 'horizontal') => typeof genericEvaluateBand = tgpu.comptime(
+  (axis: 'vertical' | 'horizontal'): typeof genericEvaluateBand => tgpu.fn(genericEvaluateBand).with(axisSlot, axis),
+);

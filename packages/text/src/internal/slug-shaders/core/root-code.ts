@@ -16,5 +16,5 @@ export function calcRootCode(y1: number, y2: number, y3: number): number {
   const s3 = std.select(d.u32(0), d.u32(1), y3 < 0);
   const shift = s1 | (s2 << 1) | (s3 << 2);
 
-  return (d.u32(0x2e74) >> shift) & d.u32(0x0101);
+  return (d.u32(0x2e74) >>> shift) & d.u32(0x0101);
 }

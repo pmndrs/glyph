@@ -5,62 +5,64 @@
  * Only the addressing that exists because these resources are 2D textures lives
  * here; the header and reference bit layout belongs to the host-agnostic core.
  */
-import type { DataTexture, Node } from 'three/webgpu';
-import { int, ivec2, textureLoad, uint, vec2 } from 'three/tsl';
-import { d } from 'typegpu';
-import * as t3 from '@typegpu/three';
-import { coreValue } from './core-boundary.js';
+import tgpu, { d, std, type TgpuSlot } from 'typegpu';
 import { slugReferenceFromPair } from './core/band.js';
-import { intDiv, intMod, loadUvec4, uintAdd, uintShiftRight } from './tsl-compat.js';
 
 export interface SlugShaderPage {
-  readonly curveTexture: DataTexture;
+  readonly loadCurve: (coords: d.v2i) => d.v4f;
   readonly curveWidth: number;
-  readonly headerTexture: DataTexture;
+  readonly loadHeader: (coords: d.v2i) => d.v4u;
   readonly headerWidth: number;
-  readonly referenceTexture: DataTexture;
+  readonly loadReference: (coords: d.v2i) => d.v4u;
   readonly referenceWidth: number;
 }
 
-export interface SlugShaderCurve {
-  readonly p0: Node<'vec2'>;
-  readonly p1: Node<'vec2'>;
-  readonly p2: Node<'vec2'>;
+export const SlugShaderCurve: d.WgslStruct<{ p0: d.Vec2f; p1: d.Vec2f; p2: d.Vec2f }> = d.struct({
+  p0: d.vec2f,
+  p1: d.vec2f,
+  p2: d.vec2f,
+});
+export type SlugShaderCurve = d.InferGPU<typeof SlugShaderCurve>;
+
+function gridCoordinate(index: /* u32 */ number, width: /* u32 */ number): d.v2i {
+  'use gpu';
+  const integerIndex = d.i32(index);
+  const integerWidth = d.i32(width);
+
+  return d.vec2i(integerIndex % integerWidth, std.intdiv(integerIndex, integerWidth));
 }
 
-function gridCoordinate(index: Node<'uint'>, width: number): Node<'ivec2'> {
-  const integerIndex: Node<'int'> = int(index);
-  const integerWidth: Node<'int'> = int(width);
-  return ivec2(intMod(integerIndex, integerWidth), intDiv(integerIndex, integerWidth));
+export const pageSlot: TgpuSlot<SlugShaderPage> = tgpu.slot<SlugShaderPage>();
+
+/**
+ * @note Uses `pageSlot`
+ */
+export function loadHeader(index: /* u32 */ number): /* u32 */ number {
+  'use gpu';
+  const texel = pageSlot.$.loadHeader(gridCoordinate(index, pageSlot.$.headerWidth));
+  return d.u32(texel.x);
 }
 
-export function loadHeader(
-  page: SlugShaderPage,
-  index: Node<'uint'>,
-  axis: 'horizontal' | 'vertical',
-  namePrefix: string = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical',
-): Node<'uint'> {
-  const texel: Node<'vec4'> = textureLoad(page.headerTexture, gridCoordinate(index, page.headerWidth));
-  return uint(texel.x).toVar(`${namePrefix}Header`);
+/**
+ * @note Uses `pageSlot`
+ */
+export function loadReference(index: /* u32 */ number): /* u32 */ number {
+  'use gpu';
+  const pair = pageSlot.$.loadReference(gridCoordinate(index >>> d.u32(1), pageSlot.$.referenceWidth)).x;
+  return slugReferenceFromPair(pair, index);
 }
 
-export function loadReference(page: SlugShaderPage, index: Node<'uint'>): Node<'uint'> {
-  const pair = loadUvec4(page.referenceTexture, gridCoordinate(uintShiftRight(index, uint(1)), page.referenceWidth)).x;
-  return t3.toTSL(() => {
-    'use gpu';
-    return slugReferenceFromPair(t3.fromTSL(pair, d.u32).$, t3.fromTSL(index, d.u32).$);
-  }) as Node<'uint'>;
-}
+/**
+ * @note Uses `pageSlot`
+ */
+export function loadCurve(texelIndex: /* u32 */ number): SlugShaderCurve {
+  'use gpu';
+  const first = pageSlot.$.loadCurve(gridCoordinate(texelIndex, pageSlot.$.curveWidth));
+  const second = pageSlot.$.loadCurve(gridCoordinate(texelIndex + 1, pageSlot.$.curveWidth));
 
-export function loadCurve(page: SlugShaderPage, texelIndex: Node<'uint'>): SlugShaderCurve {
-  const first: Node<'vec4'> = textureLoad(page.curveTexture, gridCoordinate(texelIndex, page.curveWidth));
-  const second: Node<'vec4'> = textureLoad(
-    page.curveTexture,
-    gridCoordinate(uintAdd(texelIndex, uint(1)), page.curveWidth),
-  );
-  return {
-    p0: vec2(first.x, first.y),
-    p1: vec2(first.z, first.w),
-    p2: vec2(second.x, second.y),
-  };
+  return SlugShaderCurve({
+    p0: d.vec2f(first.x, first.y),
+    p1: d.vec2f(first.z, first.w),
+    p2: d.vec2f(second.x, second.y),
+  });
 }

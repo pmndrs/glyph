@@ -23,6 +23,7 @@ export {
   MAX_SAFE_SLUG_BAND_CURVES,
   slugRender,
   type SlugRenderOptions,
-  type SlugShaderGlyph,
+  SlugShaderGlyph,
   type SlugShaderPage,
 } from './slug-render.js';
+export { pageSlot } from './slug-texture.js';

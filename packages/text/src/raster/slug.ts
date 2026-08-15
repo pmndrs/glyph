@@ -7,7 +7,8 @@ import {
 } from 'ktx-parse';
 import * as THREE from 'three/webgpu';
 import type { Node, UniformNode } from 'three/webgpu';
-import { Fn, add, attribute, bool, mul, positionLocal, sub, uniform, varyingProperty, vec2, vec3 } from 'three/tsl';
+import { Fn, add, attribute, mul, positionLocal, sub, uniform, varyingProperty, vec2, vec3 } from 'three/tsl';
+import * as t3 from '@typegpu/three';
 
 import type { RegisteredFont } from '../font.js';
 import type { Sha256Hex } from '../identity.js';
@@ -28,7 +29,13 @@ import {
   SLUG_PLANE_UNITS_PER_EM,
   slugDescriptor,
 } from '../internal/slug-contract.js';
-import { slugDilate, slugRender, type SlugShaderPage } from '../internal/slug-shaders/index.js';
+import {
+  slugDilate,
+  slugRender,
+  pageSlot,
+  type SlugShaderPage,
+  SlugShaderGlyph,
+} from '../internal/slug-shaders/index.js';
 import type { ParagraphLayout } from '../layout.js';
 import type { GlyphPaint, ResolvedPaint } from '../paint.js';
 import {
@@ -40,6 +47,7 @@ import {
   type RasterResourceSource,
   type RegisteredRaster,
 } from '../raster.js';
+import tgpu, { d, std } from 'typegpu';
 
 export {
   SLUG_DEFAULT_BAND_COUNT,
@@ -97,10 +105,16 @@ export interface SlugPageResource extends SlugShaderPage {
   readonly gpuBytes: number;
 }
 
+export interface TSLSlugPageResource extends SlugPageResource {
+  curveTexture: THREE.DataTexture;
+  headerTexture: THREE.DataTexture;
+  referenceTexture: THREE.DataTexture;
+}
+
 export interface SlugResource {
   readonly planeUnitsPerEm: number;
   readonly records: Uint8Array;
-  readonly pages: readonly SlugPageResource[];
+  readonly pages: readonly TSLSlugPageResource[];
   readonly gpuBytes: number;
 }
 
@@ -208,7 +222,7 @@ async function decodeSlugResource(
     throw new TypeError('Slug raster must contain 1..=65535 pages');
   }
 
-  const pages: SlugPageResource[] = [];
+  const pages: TSLSlugPageResource[] = [];
   try {
     let gpuBytes = 0;
     for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
@@ -234,7 +248,7 @@ async function decodeSlugPage(
   value: JsonValue,
   pageIndex: number,
   signal?: AbortSignal,
-): Promise<SlugPageResource> {
+): Promise<TSLSlugPageResource> {
   const path = `Slug page ${pageIndex}`;
   const page = jsonObject(value, path);
   const curve = jsonObject(page.curve, `${path} curve`);
@@ -315,6 +329,15 @@ async function decodeSlugPage(
     THREE.RedIntegerFormat,
     THREE.UnsignedIntType,
   );
+
+  // const comptimeLog = tgpu.comptime((msg: string) => {
+  //   console.log(msg);
+  // });
+
+  const curveTextureAccess = t3.fromTSL(curveTexture, d.texture2d(d.f32));
+  const headerTextureAccess = t3.fromTSL(headerTexture, d.texture2d(d.u32));
+  const referenceTextureAccess = t3.fromTSL(referenceTexture, d.texture2d(d.u32));
+
   return {
     curveWidth,
     curveHeight,
@@ -327,6 +350,18 @@ async function decodeSlugPage(
     referenceWidth: packedReferences.width,
     referenceHeight: packedReferences.height,
     referenceTexture,
+    loadCurve: (coords: d.v2i) => {
+      'use gpu';
+      return std.textureLoad(curveTextureAccess.$, coords, 0);
+    },
+    loadHeader: (coords: d.v2i) => {
+      'use gpu';
+      return std.textureLoad(headerTextureAccess.$, coords, 0);
+    },
+    loadReference: (coords: d.v2i) => {
+      'use gpu';
+      return std.textureLoad(referenceTextureAccess.$, coords, 0);
+    },
     gpuBytes: checkedGpuBytes(
       checkedProduct(curveWidth, curveHeight, `${path} curve dimensions`) * 8,
       headerCapacity * 4 + packedReferences.data.byteLength,
@@ -898,6 +933,7 @@ function populateSlugRun(
     run.materialState.viewport.value.copy(drawingBufferSize);
     updateMvpUniforms(run.materialState, fillMesh, camera);
   };
+
   return run;
 }
 
@@ -951,7 +987,7 @@ function assertSlugRunPaint(glyphIndices: ArrayLike<number>, paint: GlyphPaint):
   }
 }
 
-function slugMaterialState(page: SlugPageResource): SlugMaterialState {
+function slugMaterialState(page: TSLSlugPageResource): SlugMaterialState {
   const existing = materialStateByCurveTexture.get(page.curveTexture);
   if (existing !== undefined) return existing;
   const material = new THREE.MeshBasicNodeMaterial({
@@ -961,16 +997,16 @@ function slugMaterialState(page: SlugPageResource): SlugMaterialState {
     side: THREE.FrontSide,
     transparent: true,
   });
-  const viewport: UniformNode<'vec2', THREE.Vector2> = uniform(new THREE.Vector2(1, 1));
-  const mvpRow0: UniformNode<'vec4', THREE.Vector4> = uniform(new THREE.Vector4(1, 0, 0, 0));
-  const mvpRow1: UniformNode<'vec4', THREE.Vector4> = uniform(new THREE.Vector4(0, 1, 0, 0));
-  const mvpRow3: UniformNode<'vec4', THREE.Vector4> = uniform(new THREE.Vector4(0, 0, 0, 1));
-  const renderCoordinate = varyingProperty('vec2', 'slugRenderCoordinate');
-  const origin: Node<'vec2'> = attribute<'vec2'>('slugOrigin', 'vec2');
-  const size: Node<'vec2'> = attribute<'vec2'>('slugSize', 'vec2');
-  const emOrigin: Node<'vec2'> = attribute<'vec2'>('slugEmOrigin', 'vec2');
-  const emSize: Node<'vec2'> = attribute<'vec2'>('slugEmSize', 'vec2');
-  const inverseScale: Node<'float'> = attribute<'float'>('slugInverseScale', 'float');
+  const viewportUniform = t3.uniform(new THREE.Vector2(1, 1), d.vec2f);
+  const mvpRow0Uniform = t3.uniform(new THREE.Vector4(1, 0, 0, 0), d.vec4f);
+  const mvpRow1Uniform = t3.uniform(new THREE.Vector4(0, 1, 0, 0), d.vec4f);
+  const mvpRow3Uniform = t3.uniform(new THREE.Vector4(0, 0, 0, 1), d.vec4f);
+  const renderCoordinate = t3.fromTSL(varyingProperty('vec2', 'slugRenderCoordinate'), d.vec2f);
+  const originAttribute = t3.attribute('slugOrigin', d.vec2f);
+  const sizeAttribute = t3.attribute('slugSize', d.vec2f);
+  const emOriginAttribute = t3.attribute('slugEmOrigin', d.vec2f);
+  const emSizeAttribute = t3.attribute('slugEmSize', d.vec2f);
+  const inverseScaleAttribute = t3.attribute('slugInverseScale', d.f32);
   const bandTransform: Node<'vec4'> = attribute<'vec4'>('slugBandTransform', 'vec4');
   const curveBaseTexel: Node<'uint'> = attribute<'uint'>('slugCurveBase', 'uint');
   const horizontalHeaderBase: Node<'uint'> = attribute<'uint'>('slugHorizontalHeaderBase', 'uint');
@@ -981,6 +1017,16 @@ function slugMaterialState(page: SlugPageResource): SlugMaterialState {
   const color: Node<'vec4'> = attribute<'vec4'>('slugColor', 'vec4');
 
   material.positionNode = Fn(() => {
+    const origin = originAttribute.node;
+    const size = sizeAttribute.node;
+    const emSize = emSizeAttribute.node;
+    const emOrigin = emOriginAttribute.node;
+    const inverseScale = inverseScaleAttribute.node;
+    const mvpRow0 = mvpRow0Uniform.node;
+    const mvpRow1 = mvpRow1Uniform.node;
+    const mvpRow3 = mvpRow3Uniform.node;
+    const viewport = viewportUniform.node;
+
     const localPosition = vec2(
       add(origin.x, mul(positionLocal.x, size.x)),
       add(origin.y, mul(positionLocal.y, size.y)),
@@ -1000,29 +1046,41 @@ function slugMaterialState(page: SlugPageResource): SlugMaterialState {
       mvpRow3,
       viewport,
     );
-    renderCoordinate.assign(dilated.textureCoordinate);
+    renderCoordinate.node.assign(dilated.textureCoordinate);
     return vec3(dilated.position.x, dilated.position.y, 0);
   })();
   material.colorNode = color.rgb;
-  material.opacityNode = Fn(() => {
-    const coverage = slugRender(
-      page,
-      {
-        curveBaseTexel,
-        horizontalHeaderBase,
-        verticalHeaderBase,
-        referenceBase,
-        horizontalBandCount,
-        verticalBandCount,
-        bandTransform,
-      },
-      renderCoordinate,
-      { evenOdd: bool(false), weightBoost: bool(false) },
-    );
-    return mul(color.a, coverage);
-  })();
 
-  const state = { material, viewport, mvpRow0, mvpRow1, mvpRow3 };
+  const specializedSlugRender = tgpu.fn(slugRender).with(pageSlot, page);
+
+  material.opacityNode = t3.toTSL(() => {
+    'use gpu';
+
+    const coord = renderCoordinate.$;
+
+    const coverage = specializedSlugRender(
+      SlugShaderGlyph({
+        curveBaseTexel: t3.fromTSL(curveBaseTexel, d.u32).$,
+        horizontalHeaderBase: t3.fromTSL(horizontalHeaderBase, d.u32).$,
+        verticalHeaderBase: t3.fromTSL(verticalHeaderBase, d.u32).$,
+        referenceBase: t3.fromTSL(referenceBase, d.u32).$,
+        horizontalBandCount: t3.fromTSL(horizontalBandCount, d.u32).$,
+        verticalBandCount: t3.fromTSL(verticalBandCount, d.u32).$,
+        bandTransform: t3.fromTSL(bandTransform, d.vec4f).$,
+      }),
+      coord,
+    );
+
+    return t3.fromTSL(color.a, d.f32).$ * coverage;
+  });
+
+  const state = {
+    material,
+    viewport: viewportUniform.node,
+    mvpRow0: mvpRow0Uniform.node,
+    mvpRow1: mvpRow1Uniform.node,
+    mvpRow3: mvpRow3Uniform.node,
+  };
   materialStateByCurveTexture.set(page.curveTexture, state);
   return state;
 }
@@ -1058,7 +1116,7 @@ function disposeSlugResource(resource: SlugResource): void {
   for (const page of resource.pages) disposeSlugPage(page);
 }
 
-function disposeSlugPage(page: SlugPageResource): void {
+function disposeSlugPage(page: TSLSlugPageResource): void {
   const state = materialStateByCurveTexture.get(page.curveTexture);
   state?.material.dispose();
   materialStateByCurveTexture.delete(page.curveTexture);

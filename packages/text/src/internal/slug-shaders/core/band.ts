@@ -34,7 +34,7 @@ export function slugPixelsPerEm(renderCoordinate: d.v2f): d.v3f {
 export function slugThickenFactor(thicken: number, pixelsPerEm: number): number {
   'use gpu';
 
-  return 1 + thicken * std.max(d.f32(0), 1 - pixelsPerEm / 24);
+  return 1 + thicken * std.max(d.f32(0), 1 - d.f32(pixelsPerEm) / 24);
 }
 
 /** Clamp a glyph-em coordinate into its axis band grid through the glyph's band transform. */
@@ -48,7 +48,7 @@ export function slugBandIndex(coordinate: number, scale: number, offset: number,
 export function slugBandCurveCount(header: number): number {
   'use gpu';
 
-  return std.min(header >> HEADER_COUNT_SHIFT, d.u32(MAX_SAFE_SLUG_BAND_CURVES));
+  return std.min(header >>> HEADER_COUNT_SHIFT, d.u32(MAX_SAFE_SLUG_BAND_CURVES));
 }
 
 /** Glyph-local reference offset of a V0 `(count << 16) | offset` band header. */
@@ -62,7 +62,7 @@ export function slugBandReferenceOffset(header: number): number {
 export function slugReferenceFromPair(pair: number, referenceIndex: number): number {
   'use gpu';
 
-  return (pair >> ((referenceIndex & d.u32(1)) * 16)) & d.u32(HEADER_REFERENCE_MASK);
+  return (pair >>> ((referenceIndex & d.u32(1)) * 16)) & d.u32(HEADER_REFERENCE_MASK);
 }
 
 /**

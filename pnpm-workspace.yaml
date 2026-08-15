@@ -2,6 +2,13 @@ packages:
   - apps/*
   - packages/*
 
+minimumReleaseAgeExclude:
+  - '@typegpu/gl@0.12.0'
+  - '@typegpu/three@0.12.0'
+  - tinyest-for-wgsl@0.4.0
+  - typegpu@0.12.0
+  - unplugin-typegpu@0.12.1
+
 onlyBuiltDependencies: []
 
 patchedDependencies:
