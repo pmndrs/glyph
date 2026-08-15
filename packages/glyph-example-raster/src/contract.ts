@@ -1,7 +1,7 @@
-import type { JsonValue } from '@pmndrs/text';
+import type { JsonValue } from '@pmndrs/glyph';
 
 export const GLYPH_EXAMPLE_KIND = 'glyphExample' as const;
-export const GLYPH_EXAMPLE_EXTENSION = 'PMNDRS_text_glyph_example' as const;
+export const GLYPH_EXAMPLE_EXTENSION = 'PMNDRS_glyph_example' as const;
 export const GLYPH_EXAMPLE_FORMAT_VERSION = 0 as const;
 export const GLYPH_EXAMPLE_GENERATOR_VERSION = '0.0.0' as const;
 

@@ -2,10 +2,10 @@ import { createRoot, flushSync, type RootStore } from '@react-three/fiber/webgpu
 import React, { createRef, StrictMode } from 'react';
 import * as THREE from 'three/webgpu';
 
-import type { LoadedFont, ParagraphLayout } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/three/bitmap';
-import { Text, useFont } from '@pmndrs/text/react';
-import type { LoadedFontRequest, ParagraphContentBox, Text as CoreText } from '@pmndrs/text/three';
+import type { LoadedFont, ParagraphLayout } from '@pmndrs/glyph';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { Text, useFont } from '@pmndrs/glyph/react';
+import type { LoadedFontRequest, ParagraphContentBox, Text as CoreText } from '@pmndrs/glyph/three';
 
 import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json' with { type: 'json' };
 import bitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
@@ -353,10 +353,10 @@ function countUniquePaints(object: BitmapTextObject): number {
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     // Bitmap policy buffer 5 is the command buffer's packed RGBA instance lane.
-    const colors = child.geometry.getAttribute('_pmndrsText_5');
+    const colors = child.geometry.getAttribute('_pmndrsGlyph_5');
     if (colors === undefined) return;
     // One physical batch backs every run of a paragraph, so a draw reads its own window of the shared paint buffer.
-    const start = (child.userData.pmndrsTextRunStart as number | undefined) ?? 0;
+    const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
     const instanceCount =
       child.geometry instanceof THREE.InstancedBufferGeometry ? child.geometry.instanceCount : colors.count;
     if (start + instanceCount > colors.count) {

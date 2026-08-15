@@ -40,7 +40,7 @@ async function waitForTechnique(
     let draws = 0;
     let records = 0;
     worldLayer?.traverse((object) => {
-      if (object.userData.pmndrsTextRunStart === undefined || !('geometry' in object)) return;
+      if (object.userData.pmndrsGlyphRunStart === undefined || !('geometry' in object)) return;
       const geometry = object.geometry;
       if (typeof geometry !== 'object' || geometry === null || !('instanceCount' in geometry)) return;
       const instanceCount = geometry.instanceCount;

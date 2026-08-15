@@ -12,19 +12,19 @@ tags:
   - transactions
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T14:25:40Z'
+  at: '2026-08-15T15:53:27Z'
 sources:
   - id: rust-engine-state
-    resource: ../../packages/text/rust/shaper/src/engine/state.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/state.rs
     title: Retained Rust paragraph and session transaction state
   - id: rust-transport
-    resource: ../../packages/text/rust/shaper/src/engine/transport.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/transport.rs
     title: Wasm request and A/B publication transport
   - id: wasm-entry
-    resource: ../../packages/text/rust/shaper/src/wasm.rs
+    resource: ../../packages/glyph/rust/shaper/src/wasm.rs
     title: Wasm frame entry point and publication transaction
   - id: three-text
-    resource: ../../packages/text/src/three/text.ts
+    resource: ../../packages/glyph/src/three/text.ts
     title: Three Text measurement and synchronization path
   - id: rust-layout-engine
     resource: rust-layout-engine.md

@@ -5,4 +5,4 @@ export {
   itemizeScripts,
   scriptForCodePoint,
   scriptsForCodePoint,
-} from '../../../packages/text/dist/internal/unicode.js';
+} from '../../../packages/glyph/dist/internal/unicode.js';

@@ -6,7 +6,7 @@ target/
 *.tsbuildinfo
 coverage/
 apps/benchmarks/.cache/
-packages/text/.cache/
+packages/glyph/.cache/
 
 # Adversarial review cache
 .cache/claude-review/

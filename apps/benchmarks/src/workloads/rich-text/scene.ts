@@ -1,5 +1,5 @@
-import { span, txt, type AnyRasterTechnique, type LoadedFont, type TextLiteral } from '@pmndrs/text';
-import { Text } from '@pmndrs/text/three';
+import { span, txt, type AnyRasterTechnique, type LoadedFont, type TextLiteral } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/three';
 
 import type { RasterTechnique } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';

@@ -19,13 +19,13 @@ sources:
     resource: gpucat-integration.md
     title: External gpucat integration fitness plan
   - id: current-raster
-    resource: ../../packages/text/src/raster.ts
+    resource: ../../packages/glyph/src/raster.ts
     title: Current combined raster module
   - id: current-bake
-    resource: ../../packages/text/src/bake.ts
+    resource: ../../packages/glyph/src/bake.ts
     title: Current portable raster baker contract
   - id: current-mtsdf
-    resource: ../../packages/text/src/raster/msdf.ts
+    resource: ../../packages/glyph/src/raster/msdf.ts
     title: Current MTSDF decoder and Three.js target
   - id: external-proof
     resource: ../../packages/glyph-example-raster/src/raster.ts
@@ -41,11 +41,11 @@ sources:
     title: TypeGPU to TSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:49:05Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 > Historical design record. The Rust render-plan cutover superseded the TypeScript glyph binding, storage, and packing
-> interfaces described below. Use [the current package reference](../packages/text.md),
+> interfaces described below. Use [the current package reference](../packages/glyph.md),
 > [core API](core-api.md), and [Three API](three-api.md) for the blessed surface.
 
 # Raster technique and engine resource API

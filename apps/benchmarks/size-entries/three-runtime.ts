@@ -1,4 +1,4 @@
-export * from '@pmndrs/text/three';
-export { bitmap } from '@pmndrs/text/three/bitmap';
-export { msdf } from '@pmndrs/text/three/msdf';
-export { slug } from '@pmndrs/text/three/slug';
+export * from '@pmndrs/glyph/three';
+export { bitmap } from '@pmndrs/glyph/three/bitmap';
+export { msdf } from '@pmndrs/glyph/three/msdf';
+export { slug } from '@pmndrs/glyph/three/slug';

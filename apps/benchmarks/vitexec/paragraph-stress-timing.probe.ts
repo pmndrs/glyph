@@ -33,7 +33,7 @@ console.log(
   'paragraph-stress-timing-ready',
   JSON.stringify({
     draws: integerAttribute(viewport, 'data-draw-count'),
-    engineUpdates: measures.filter(({ name }) => name === '@pmndrs/text engine.update').length,
+    engineUpdates: measures.filter(({ name }) => name === '@pmndrs/glyph engine.update').length,
     finalReflows: integerAttribute(viewport, 'data-reflow-count'),
     glyphs: integerAttribute(viewport, 'data-glyph-count'),
     measuredReflows: targetReflows - initialReflows,
