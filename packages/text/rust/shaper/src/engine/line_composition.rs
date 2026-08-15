@@ -41,6 +41,11 @@ pub(crate) struct ComposedLine {
     pub hard_break: bool,
 }
 
+/// The f64 parity reference for [`layout_next_line_integer`]. The integer fit
+/// is authoritative (D-254); this twin exists only so the parity property
+/// tests can assert the sub-unit tolerance against an independent
+/// formulation, and it is compiled out of the shipped module.
+#[cfg(test)]
 pub(crate) fn layout_next_line(
     clusters: &ClusterArena,
     cursor: &mut LineCursor,
