@@ -133,7 +133,7 @@ jobs:
             exit 1
           fi
           "$chromium_executable" --version
-          printf 'PMNDRS_TEXT_CHROMIUM_EXECUTABLE_PATH=%s\n' "$chromium_executable" >> "$GITHUB_ENV"
+          printf 'PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH=%s\n' "$chromium_executable" >> "$GITHUB_ENV"
 
       - name: Run runtime test suite
         working-directory: apps/benchmarks
@@ -145,10 +145,10 @@ jobs:
         with:
           name: wasm-failure-evidence
           path: |
-            packages/text/dist/font_baker.wasm
-            packages/text/dist/bitmap_baker.wasm
-            packages/text/dist/mtsdf_baker.wasm
-            packages/text/dist/slug_baker.wasm
-            packages/text/dist/text_shaper.wasm
+            packages/glyph/dist/font_baker.wasm
+            packages/glyph/dist/bitmap_baker.wasm
+            packages/glyph/dist/mtsdf_baker.wasm
+            packages/glyph/dist/slug_baker.wasm
+            packages/glyph/dist/text_shaper.wasm
           if-no-files-found: error
           retention-days: 7

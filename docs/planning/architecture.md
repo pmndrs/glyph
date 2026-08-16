@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-07T04:31:24Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Proposed architecture
@@ -74,9 +74,9 @@ The runtime baker is a shared library/module, not an auxiliary process or adjace
 
 ## Module format
 
-The complete JavaScript surface is ESM-only. `@pmndrs/text` and every public subpath publish ESM exports without a CommonJS build or `require` condition. Static ESM imports define tree-shakable boundaries; `import()` is the only lazy-loading mechanism for the runtime baker, generators, optional raster engines, and transcoders. The browser fallback uses a module Worker. Node-only imports remain reachable only from the bake host and CLI subpath, never from the browser-safe core graph.
+The complete JavaScript surface is ESM-only. `@pmndrs/glyph` and every public subpath publish ESM exports without a CommonJS build or `require` condition. Static ESM imports define tree-shakable boundaries; `import()` is the only lazy-loading mechanism for the runtime baker, generators, optional raster engines, and transcoders. The browser fallback uses a module Worker. Node-only imports remain reachable only from the bake host and CLI subpath, never from the browser-safe core graph.
 
-The Node CLI discovers baker entry points from the published `pmndrs.text` package.json map and matching ESM subpath exports. Package semver governs the manifest contract. It resolves only the first-party package, a package imported by a statically discovered raster definition, or a package named explicitly on the CLI; it never scans the dependency filesystem. No npm/pnpm/Yarn tree query or global plugin registry participates in correctness.
+The Node CLI discovers baker entry points from the published `pmndrs.glyph` package.json map and matching ESM subpath exports. Package semver governs the manifest contract. It resolves only the first-party package, a package imported by a statically discovered raster definition, or a package named explicitly on the CLI; it never scans the dependency filesystem. No npm/pnpm/Yarn tree query or global plugin registry participates in correctness.
 
 ### Portable Wasm ABI
 
@@ -118,7 +118,7 @@ Offline baking and runtime fallback produce the same core and raster contracts, 
 ```mermaid
 flowchart TD
   Definition["defineFont(source, raster)"] --> Discovery["Node static discovery"]
-  Discovery --> NodeHost["@pmndrs/text/bake<br/>Node host"]
+  Discovery --> NodeHost["@pmndrs/glyph/bake<br/>Node host"]
   Source["source font bytes"] --> NodeHost
   NodeHost --> CoreBake["shared font bake core"]
   NodeHost -. "dynamic import selected package" .-> RasterBake["raster baker"]
@@ -248,15 +248,15 @@ The React integration owns no shaping, line-breaking, baking, raster decoding, s
 
 ```mermaid
 flowchart LR
-  React["@pmndrs/text/react"] --> Three["@pmndrs/text/three"] --> Core["@pmndrs/text"]
-  TypeGPU["@pmndrs/text/typegpu"] --> Core
-  Gpucat["@pmndrs/text-gpucat"] --> Core
+  React["@pmndrs/glyph/react"] --> Three["@pmndrs/glyph/three"] --> Core["@pmndrs/glyph"]
+  TypeGPU["@pmndrs/glyph/typegpu"] --> Core
+  Gpucat["@pmndrs/glyph-gpucat"] --> Core
   Core --> Registry["asset validator / registry"]
   Core --> Shaper["shaper bridge"]
   Core --> Paragraph["paragraph engine"]
   Core --> Interfaces["portable raster techniques"]
-  Bake["@pmndrs/text/bake"] --> Node["Node host"] --> Shared["font bake core"]
-  Runtime["@pmndrs/text/runtime-bake"] --> Worker["Worker host"] --> Shared
+  Bake["@pmndrs/glyph/bake"] --> Node["Node host"] --> Shared["font bake core"]
+  Runtime["@pmndrs/glyph/runtime-bake"] --> Worker["Worker host"] --> Shared
   Node -. "dynamic" .-> Generator["selected raster baker package"]
   Worker -. "dynamic" .-> Generator
   Bitmap["raster/bitmap"] --> Interfaces
@@ -347,7 +347,7 @@ Retained layout systems own box resolution and provide content constraints; they
 sequenceDiagram
   participant U as Host text leaf
   participant Y as Host layout engine
-  participant P as pmndrs/text Paragraph
+  participant P as pmndrs/glyph Paragraph
   participant W as HarfRust Wasm
   participant R as Raster module
 

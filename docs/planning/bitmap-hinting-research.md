@@ -9,17 +9,17 @@ sources:
     resource: raster-data-contract.md
     title: Raster data contract V0
   - id: bitmap-baker
-    resource: ../../packages/text/rust/bitmap-baker/src/rasterize.rs
+    resource: ../../packages/glyph/rust/bitmap-baker/src/rasterize.rs
     title: Bitmap baker rasterization implementation
   - id: bitmap-runtime
-    resource: ../../packages/text/src/raster/bitmap-technique.ts
+    resource: ../../packages/glyph/src/raster/bitmap-technique.ts
     title: Bitmap runtime renderer
   - id: benchmark-evidence
     resource: ../../apps/benchmarks/src/benchmark/targets/product/bitmap-text.ts
     title: Bitmap public-Text product target
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-04T12:55:07Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Grayscale bitmap hinting and phase packing research

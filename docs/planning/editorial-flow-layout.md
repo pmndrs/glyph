@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Responsive editorial flow and mixed-raster composition
@@ -45,13 +45,13 @@ Pretext demonstrates that useful editorial wrapping does not require a browser l
 
 The 3D Object Textwrap demonstration is therefore important prior art for the interaction, not a complete text-rendering architecture to copy. The caller projects an obstacle into screen-space exclusion intervals and gives the line breaker the remaining space. Pretext intentionally stops short of exact custom-renderer glyph positions for complex scripts and mixed-direction text; its browser measurements are designed primarily for line-breaking compatibility.
 
-Dynamic obstacle wrapping alone is not a differentiator: Pretext already demonstrates it. The pmndrs/text opportunity is to combine that interaction with exact HarfRust glyph identity and positioning, Unicode paragraph policy, deterministic conformance, and one GPU-ready output that can feed bitmap, MTSDF, and Slug without a second shaping system.
+Dynamic obstacle wrapping alone is not a differentiator: Pretext already demonstrates it. The pmndrs/glyph opportunity is to combine that interaction with exact HarfRust glyph identity and positioning, Unicode paragraph policy, deterministic conformance, and one GPU-ready output that can feed bitmap, MTSDF, and Slug without a second shaping system.
 
 ### Two different meanings of dynamic
 
 Performance claims must distinguish geometry changes from content changes:
 
-| Change                                                | Pretext                                                                                                                                                | pmndrs/text direction                                                                                                                                                                                |
+| Change                                                | Pretext                                                                                                                                                | pmndrs/glyph direction                                                                                                                                                                               |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Same text, new width or obstacle                      | Reuses prepared segment widths; line walking is allocation-light arithmetic and should be treated as a strong baseline.                                | Reuses broad shaping and cluster measurements; replans slots and reshapes only affected unsafe boundaries.                                                                                           |
 | Edited or typewriter text                             | A changed string requires another `prepare` analysis/measurement result, although shared internal measurement caches may still help repeated segments. | Reanalyzes and shapes changed content; the intended advantage is incremental paragraph state with exact clusters and direct reuse by the GPU renderer, not an assumption that HarfRust work is free. |
@@ -133,9 +133,9 @@ What is outside Pretext's stated scope—and therefore worth demonstrating—is 
 
 ## Performance position
 
-Do not claim that pmndrs/text is categorically faster than Pretext before measuring it. Pretext's prepared simple-Latin line breaker is deliberately small arithmetic over cached Canvas widths and may be faster for that narrow task.
+Do not claim that pmndrs/glyph is categorically faster than Pretext before measuring it. Pretext's prepared simple-Latin line breaker is deliberately small arithmetic over cached Canvas widths and may be faster for that narrow task.
 
-The plausible pmndrs/text advantage is total-system work for exact custom rendering: one universal shape/layout result can replace a Canvas measurement pass followed by renderer-specific shaping or glyph reconstruction. That advantage is strongest for complex scripts, repeated responsive updates, and scenes that already need exact GPU instance data. It is a hypothesis until the same font, text, viewport, DPR, exclusions, and update sequence are measured.
+The plausible pmndrs/glyph advantage is total-system work for exact custom rendering: one universal shape/layout result can replace a Canvas measurement pass followed by renderer-specific shaping or glyph reconstruction. That advantage is strongest for complex scripts, repeated responsive updates, and scenes that already need exact GPU instance data. It is a hypothesis until the same font, text, viewport, DPR, exclusions, and update sequence are measured.
 
 The comparison must report phases rather than one opaque duration:
 

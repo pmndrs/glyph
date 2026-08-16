@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-canary-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish canary to npm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install canonical toolchain
+        uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14 # v4.2.3
+        with:
+          version: 2026.7.13
+          cache: false
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and test package
+        run: pnpm --filter @pmndrs/glyph check
+
+      - name: Set canary version
+        id: version
+        working-directory: packages/glyph
+        shell: bash
+        run: |
+          base_version="$(node -p "require('./package.json').version.split('-')[0]")"
+          release_date="$(date -u +%Y%m%d)"
+          canary_version="${base_version}-canary-${GITHUB_SHA::8}-${release_date}"
+          npm version "${canary_version}" --no-git-tag-version
+          echo "version=${canary_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish canary
+        working-directory: packages/glyph
+        run: npm publish --tag canary --access public
+
+      - name: Add release summary
+        run: echo "Published @pmndrs/glyph@${{ steps.version.outputs.version }} with the canary tag." >> "${GITHUB_STEP_SUMMARY}"

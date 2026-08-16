@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5'
-  at: '2026-07-25T01:24:00Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # glTF vendor-prefix request and extension submission set
@@ -63,7 +63,7 @@ Poimandres would like to request registration of the `PMNDRS` vendor prefix.
 - **Project:** Poimandres (pmndrs)
 - **Website:** https://pmnd.rs/
 - **GitHub organization:** https://github.com/pmndrs
-- **Contact:** https://github.com/pmndrs/text/issues
+- **Contact:** https://github.com/pmndrs/glyph/issues
 
 The prefix will be used for experimental glTF 2.0 extensions developed by the Poimandres community. The first extension family represents baked fonts for real-time graphics: one raster-independent shaping resource plus independently loadable bitmap, distance-field, and analytic-vector glyph rasters.
 
@@ -77,7 +77,7 @@ This request contains the project, URL, contact, and intended namespace use requ
 ## Maintainer checklist
 
 - Confirm the registry name should be `Poimandres` and the requested prefix remains `PMNDRS`.
-- Confirm `https://github.com/pmndrs/text/issues` is the public contact.
+- Confirm `https://github.com/pmndrs/glyph/issues` is the public contact.
 - Recheck that `PMNDRS` is absent from `extensions/Prefixes.md` immediately before filing.
 - File from an account authorized to represent Poimandres.
 - Do not submit the extension pull request until the golden assets, schema tests, and first implementation exist.

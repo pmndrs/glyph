@@ -2,7 +2,7 @@
 okf_version: '0.2'
 ---
 
-# pmndrs/text knowledge bundle
+# pmndrs/glyph knowledge bundle
 
 ## Start here
 

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
-import { FontRegistry } from '@pmndrs/text';
+import { FontRegistry } from '@pmndrs/glyph';
 
 const args = process.argv.slice(2);
 if (args.length !== 0) throw new Error('usage: check-paragraph-contract-fixtures.mts');

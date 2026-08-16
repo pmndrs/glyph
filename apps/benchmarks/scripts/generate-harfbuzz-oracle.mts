@@ -44,7 +44,7 @@ function codePointClusterToUtf16(text: string, cluster: number): number {
   return [...text].slice(0, cluster).join('').length;
 }
 
-const executable = option('--hb-shape') ?? process.env.PMNDRS_TEXT_HB_SHAPE ?? 'hb-shape';
+const executable = option('--hb-shape') ?? process.env.PMNDRS_GLYPH_HB_SHAPE ?? 'hb-shape';
 const fontPath = resolve(option('--font') ?? 'fixtures/fonts/inter-v4.1/Inter-Regular.ttf');
 const casesPath = resolve(option('--cases') ?? 'fixtures/shaping/inter-regular/cases.json');
 const outputPath = option('--output');
