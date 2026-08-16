@@ -467,10 +467,8 @@ impl PositionedGlyphArena {
             );
         }
 
-        let available =
-            (fragment.slot_end - fragment.slot_start - indent - fragment.line.advance).max(0.0);
         let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
-        let justify = justification_adjustment(
+        let (justify, pen_origin) = fragment_pen(
             line,
             fragment,
             final_line,
@@ -479,21 +477,9 @@ impl PositionedGlyphArena {
             cluster_end,
             indent,
             controls,
+            paragraph_level,
         );
-        let offset = if justify.is_zero() {
-            alignment_offset(line.align, paragraph_level, available)
-        } else {
-            0.0
-        };
-        // The indent reserves inline space on the paragraph-direction start
-        // side: the LTR pen shifts right; the RTL pen keeps its origin and the
-        // reduced `available` moves the right edge inward instead.
-        let indent_shift = if paragraph_level & 1 == 0 {
-            indent
-        } else {
-            0.0
-        };
-        let mut cursor = fragment.slot_start + indent_shift + offset;
+        let mut cursor = pen_origin;
         let baseline = line.block_start + line.baseline;
         let mut decorated_run: Option<DecoratedRun> = None;
         let mut space_ordinal = 0_i64;
@@ -1320,6 +1306,46 @@ fn reorder_l2(indices: &mut [u32], levels: &mut [u8], start: usize) {
     }
 }
 
+/// The per-fragment pen derivation: the justify distribution and the pen's
+/// starting origin (slot start plus indent shift plus alignment offset). This
+/// is the ONE definition of that arithmetic — `position_fragment` walks glyphs
+/// from it, and the resize equivalence proof compares it, so the proof can
+/// never drift from what positioning actually computes. The indent reserves
+/// inline space on the paragraph-direction start side: the LTR pen shifts
+/// right; the RTL pen keeps its origin and the reduced available width moves
+/// the right edge inward instead.
+fn fragment_pen(
+    line: FlowLine,
+    fragment: FlowFragment,
+    final_line: bool,
+    clusters: &ClusterArena,
+    cluster_start: usize,
+    cluster_end: usize,
+    indent: f64,
+    controls: JustifyControls,
+    paragraph_level: u8,
+) -> (JustifyDistribution, f64) {
+    let available =
+        (fragment.slot_end - fragment.slot_start - indent - fragment.line.advance).max(0.0);
+    let justify = justification_adjustment(
+        line,
+        fragment,
+        final_line,
+        clusters,
+        cluster_start,
+        cluster_end,
+        indent,
+        controls,
+    );
+    let offset = if justify.is_zero() {
+        alignment_offset(line.align, paragraph_level, available)
+    } else {
+        0.0
+    };
+    let indent_shift = if paragraph_level & 1 == 0 { indent } else { 0.0 };
+    (justify, fragment.slot_start + indent_shift + offset)
+}
+
 /// Whether a freshly composed flow would position EXACTLY as the committed
 /// flow — the geometry-only resize short-circuit (the resize analogue of the
 /// D-253 measure adoption). Positioning is a deterministic function of each
@@ -1379,29 +1405,17 @@ pub(crate) fn flow_positioning_equivalent(
                 } else {
                     0.0
                 };
-                let level = paragraph_level_at(bidi, fragment.line.text_start);
-                let cluster_start = usize::try_from(fragment.line.cluster_start).unwrap_or(0);
-                let cluster_end = usize::try_from(fragment.line.cluster_end).unwrap_or(0);
-                let distribution = justification_adjustment(
+                let (distribution, origin) = fragment_pen(
                     *line,
                     *fragment,
                     final_line,
                     clusters,
-                    cluster_start,
-                    cluster_end,
+                    usize::try_from(fragment.line.cluster_start).unwrap_or(0),
+                    usize::try_from(fragment.line.cluster_end).unwrap_or(0),
                     indent,
                     typography.justify,
+                    paragraph_level_at(bidi, fragment.line.text_start),
                 );
-                let available =
-                    (fragment.slot_end - fragment.slot_start - indent - fragment.line.advance)
-                        .max(0.0);
-                let offset = if distribution.is_zero() {
-                    alignment_offset(line.align, level, available)
-                } else {
-                    0.0
-                };
-                let indent_shift = if level & 1 == 0 { indent } else { 0.0 };
-                let origin = fragment.slot_start + indent_shift + offset;
                 (distribution, origin.to_bits(), indent.to_bits())
             };
             let next = inputs(fragment, pending_typography(line.flow_thread_id));
