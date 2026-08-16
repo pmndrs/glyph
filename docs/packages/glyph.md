@@ -633,6 +633,14 @@ integration sequence drives adopt → relayout → adopt across the equivalence 
 lane median and p95 are order statistics over the published classes and move little; what changed is that a
 third of resize frames now cost a third of a millisecond.
 
+Two follow-ups from the closing audit are tracked in [the integer layout-units plan](../planning/integer-layout-units.md)
+as slice 6 so they cannot silently lapse: the integer pen (layout decisions resolve in F26.6 while the
+intra-line cursor still accumulates the f64 advance lane — one deliberate seam, deterministic but dual-lane,
+whose closure deletes the f64 advances column and re-pins the visual corpus), and the explicit-state-machine
+consolidation of the engine's prepared/pending flag lattice, which produced one live regression and one
+review finding during the migration and belongs to the first maintainability-review pass together with a
+direct dual-derivation assertion for the glyph-count lanes.
+
 ## Merge gates still open
 
 Before the foundation stack is publishable:

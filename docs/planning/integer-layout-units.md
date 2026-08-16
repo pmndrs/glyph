@@ -93,3 +93,29 @@ documented rounding tolerance against the f64 path in dual-run tests, and bit-ex
   is re-evaluated for the committing frame, not just the query.
 - Targets to verify, not promises: measure-query from ~1.8 ms toward 0.6–0.9 ms at 22k glyphs after slices
   1+3; committing resize frame p95 under 4 ms after slices 1–3.
+
+## Slice 6 (deferred, tracked): the integer pen
+
+The migration's remaining number-system seam, deferred deliberately at D-254 closure: layout DECISIONS
+(breaks, justification, measurement) resolve entirely in F26.6 integers, but the intra-line pen still
+accumulates f64 — per-glyph scaled advances at full precision, resynced at each cluster boundary against
+the f64 `advances` lane that `advances_f26` is derived from. Decisions read the integer lane; positions
+read the float lane. IEEE f64 keeps this deterministic across native and Wasm (the pinned-extent harness
+proves it), and justify adjustments stay exact because n/64 is dyadic, so this is a conceptual and memory
+seam, not a correctness defect.
+
+Scope when picked up: cursor in F26.6; per-glyph advances quantized at the adjacency stream; origins
+emitted as units; the f64 `advances` lane DELETED outright (8 bytes per cluster and the dual-lane resync
+with it); alignment centering (`available * 0.5`) gains its own quantization site under the same
+round-half-up contract. Costs: per-glyph quantization moves origins sub-unit, so the full conformance,
+contract, and composed-hash re-pin cascade applies — schedule it as its own re-pin slice with the corpus
+re-derivation statement discipline slices 2b and 4 established. Gains: one lane, one domain, positions
+bit-derivable from integers end to end.
+
+A sibling follow-up recorded here so neither is lost: the engine state machine's prepared/pending boolean
+lattice (ten stages plus speculative and intrinsic pairings) is implicit state that produced one live
+regression and one review finding during slices 3–5; the maintainability pass should model it as an
+explicit enum making invalid flow/positioning pairings unrepresentable, per the engineering standard's
+explicit-state rule. Run it through the repository maintainability-review skill as the first post-merge
+cleanup slice, together with a direct dual-derivation assertion that positioned-lane and flow-derived
+glyph counts agree (today proven only transitively through the commit-parity test).
