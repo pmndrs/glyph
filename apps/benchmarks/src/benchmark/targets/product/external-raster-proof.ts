@@ -1,9 +1,9 @@
-import { FontRegistry, type LoadedFont } from '@pmndrs/text';
-import { Text, TextGroup } from '@pmndrs/text/three';
-import { glyphExample } from '@pmndrs/text-glyph-example-raster';
-// The Three program registers itself on import: nothing in @pmndrs/text knows this package exists, so the proof must
+import { FontRegistry, type LoadedFont } from '@pmndrs/glyph';
+import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { glyphExample } from '@pmndrs/glyph-example-raster';
+// The Three program registers itself on import: nothing in @pmndrs/glyph knows this package exists, so the proof must
 // pull in the third-party program exactly as an application would.
-import '@pmndrs/text-glyph-example-raster/three';
+import '@pmndrs/glyph-example-raster/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
@@ -119,7 +119,7 @@ async function createResources(
     });
     target.texture.colorSpace = THREE.NoColorSpace;
     target.texture.generateMipmaps = false;
-    // The whole point of this target: a package outside @pmndrs/text supplies both halves of the boundary — a portable
+    // The whole point of this target: a package outside @pmndrs/glyph supplies both halves of the boundary — a portable
     // technique loaded through the public loader, and a Three program resolved from the public program registry.
     font = await loadSourceFont({
       source: sourceUrlForFixture('inter'),

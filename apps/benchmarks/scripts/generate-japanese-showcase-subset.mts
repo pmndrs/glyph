@@ -22,7 +22,7 @@ const caseDefinition = ADVANCED_SHAPING_CASES.find(({ id }) => id === 'cjk-line-
 if (caseDefinition === undefined) throw new Error('CJK advanced-shaping case is missing');
 
 const corpus = [...caseDefinition.revealUnits, ...caseDefinition.showcaseRevealUnits].join('');
-const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-text-cjk-showcase-'));
+const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-cjk-showcase-'));
 const generatedFont = resolve(temporaryDirectory, outputFontName);
 
 try {

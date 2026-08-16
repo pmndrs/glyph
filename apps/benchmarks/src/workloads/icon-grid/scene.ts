@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/text/three';
+import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import fontAwesomeIcons from '../../../fixtures/fonts/font-awesome-free-6.7.2/icons.json' with { type: 'json' };

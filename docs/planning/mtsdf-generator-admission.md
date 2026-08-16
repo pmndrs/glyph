@@ -21,7 +21,7 @@ sources:
     title: oxitext-sdf 0.2.0 documentation
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-04T12:55:07Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # MTSDF generator admission
@@ -41,7 +41,7 @@ Milestone 8 needs deterministic linear RGBA8 MTSDF bytes from maintained font ou
 
 The audited crates.io archive for `klyff_msdf` 0.1.3 has SHA-256 `ba670d53fac1c079f354bef3af3b18e6b29165a63c8ac14f871c6e725c1de235`. The audit used the exact published archive, not a moving repository branch.
 
-The independent oracle is Chlumsky `msdfgen` 1.13.0 at tag `v1.13`, commit `1874bcf7d9624ccc85b4bc9a85d78116f690f35b`; its source archive has SHA-256 `93cd1ad8918c1a78c5c96e82d4f4c77f0eb86c2e7e8579a0967e54196c4b7167`. `@pmndrs/text` provisions only the dependency-free core and standalone shape-description tool under its ignored package cache. Font, FreeType, PNG, SVG, Skia, OpenMP, vcpkg, installation, and shared-library features stay disabled. This native executable is test infrastructure, never a package file, runtime dependency, browser artifact, or platform release.
+The independent oracle is Chlumsky `msdfgen` 1.13.0 at tag `v1.13`, commit `1874bcf7d9624ccc85b4bc9a85d78116f690f35b`; its source archive has SHA-256 `93cd1ad8918c1a78c5c96e82d4f4c77f0eb86c2e7e8579a0967e54196c4b7167`. `@pmndrs/glyph` provisions only the dependency-free core and standalone shape-description tool under its ignored package cache. Font, FreeType, PNG, SVG, Skia, OpenMP, vcpkg, installation, and shared-library features stay disabled. This native executable is test infrastructure, never a package file, runtime dependency, browser artifact, or platform release.
 
 The non-shipping admission harness now links the repository-owned core with default features disabled. Its compiled dependency tree contains neither Skrifa, `ttf-parser`, nor WGPU, and optimized `wasm32-unknown-unknown` imports no host or WASI function. A deterministic 40×40 synthetic MTSDF fixture has FNV-1a identity `bfc76761`. At Rust 1.97.1 and Binaryen 129, the owned core plus admission export measures 67,526 raw bytes, 60,563 optimized bytes (59.1 KiB), 26,493 gzip bytes (25.9 KiB), and 22,518 Brotli bytes (22.0 KiB).
 
@@ -74,4 +74,4 @@ The accepted admission evidence was produced by rebuilding and optimizing the Wa
 
 Dependency and generator admission are closed. Milestone 8 can recommend MSDF only after the fixed baker, payload, runtime shader, visual corpus, transforms, effects, and performance gates also close.
 
-The scalar production boundary is integrated. `pnpm scripts run text:mtsdf-generator-profile` refuses to publish timing when any of the seven independent candidate SHA-256 identities changes, then separates Wasm compilation, host initialization, first-corpus, and warm-corpus samples. The retained final SIMD decision additionally replayed a Fontations-emitted complete Inter request corpus through scalar, auto-vectorized, and explicit-four-lane Wasm modules. All three yielded 2,915 generated glyphs, 22 rejected non-rendering slots, checksum `a5a6aa6e`, and composite SHA-256 `f6381c2f…eef6`. Scalar remained fastest for the bounded seven-case corpus: 46.462 milliseconds in Node and 47.6 milliseconds in Chromium, versus 47.079/48.1 milliseconds for explicit SIMD. Scalar therefore remains the single production kernel; the rejected experiment variants and their closed runner are historical decision evidence rather than maintained alternate distributions.
+The scalar production boundary is integrated. `pnpm scripts run glyph:mtsdf-generator-profile` refuses to publish timing when any of the seven independent candidate SHA-256 identities changes, then separates Wasm compilation, host initialization, first-corpus, and warm-corpus samples. The retained final SIMD decision additionally replayed a Fontations-emitted complete Inter request corpus through scalar, auto-vectorized, and explicit-four-lane Wasm modules. All three yielded 2,915 generated glyphs, 22 rejected non-rendering slots, checksum `a5a6aa6e`, and composite SHA-256 `f6381c2f…eef6`. Scalar remained fastest for the bounded seven-case corpus: 46.462 milliseconds in Node and 47.6 milliseconds in Chromium, versus 47.079/48.1 milliseconds for explicit SIMD. Scalar therefore remains the single production kernel; the rejected experiment variants and their closed runner are historical decision evidence rather than maintained alternate distributions.

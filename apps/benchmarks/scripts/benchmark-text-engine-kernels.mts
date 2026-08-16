@@ -1,18 +1,18 @@
 /* @workflow {
-  "name": "text:kernel-lab-browser",
+  "name": "glyph:kernel-lab-browser",
   "summary": "Runs the scalar, auto-vectorized, and explicit SIMD retained-engine kernel packet in project Chromium.",
-  "requirements": "Built @pmndrs/text and package-local kernel-lab artifacts. Accepts --json.",
+  "requirements": "Built @pmndrs/glyph and package-local kernel-lab artifacts. Accepts --json.",
   "writes": "stdout only, or the JSON report path passed to --json"
 } */
 import { readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { Browser } from 'playwright';
 
-import { captureKernelWorkloads } from '../../../packages/text/scripts/support/engine-kernel-fixture.mts';
+import { captureKernelWorkloads } from '../../../packages/glyph/scripts/support/engine-kernel-fixture.mts';
 import { launchProjectChromium } from './support/project-chromium.mts';
 
-const artifactRoot = new URL('../../../packages/text/rust/shaper/target/kernel-lab/', import.meta.url);
-const runnerUrl = new URL('../../../packages/text/scripts/support/engine-kernel-runner.mjs', import.meta.url);
+const artifactRoot = new URL('../../../packages/glyph/rust/shaper/target/kernel-lab/', import.meta.url);
+const runnerUrl = new URL('../../../packages/glyph/scripts/support/engine-kernel-runner.mjs', import.meta.url);
 const variants = ['scalar', 'auto', 'explicit'] as const;
 const warmup = 40;
 const samples = 101;
@@ -23,7 +23,7 @@ let server: Server | undefined;
 try {
   server = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' });
-    response.end('<!doctype html><meta charset="utf-8"><title>pmndrs text kernel lab</title>');
+    response.end('<!doctype html><meta charset="utf-8"><title>pmndrs glyph kernel lab</title>');
   });
   await new Promise<void>((resolve, reject) => {
     server!.once('error', reject);
@@ -117,7 +117,7 @@ try {
     simdArtifactExecuted: true,
   }));
   const report = {
-    generatedBy: 'text:kernel-lab-browser',
+    generatedBy: 'glyph:kernel-lab-browser',
     environment,
     warmup,
     samples,

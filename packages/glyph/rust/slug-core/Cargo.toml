@@ -1,0 +1,22 @@
+[package]
+name = "pmndrs-glyph-slug-core"
+description = "Repository-owned no_std Slug curve and band generator for pmndrs/glyph"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/glyph"
+publish = false
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+core_maths = "0.1.1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

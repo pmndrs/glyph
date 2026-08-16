@@ -13,33 +13,33 @@ sources:
     resource: rust-layout-engine.md
     title: Rust text engine and render-plan ABI
   - id: current-runtime
-    resource: ../../packages/text/src/text-runtime.ts
+    resource: ../../packages/glyph/src/text-runtime.ts
     title: Current text runtime
   - id: current-font-selection
-    resource: ../../packages/text/src/loaded-font.ts
+    resource: ../../packages/glyph/src/loaded-font.ts
     title: Loaded-font ownership and fallback
   - id: current-properties
-    resource: ../../packages/text/src/text-properties.ts
+    resource: ../../packages/glyph/src/text-properties.ts
     title: Current paragraph properties
   - id: current-layout-query
-    resource: ../../packages/text/src/layout.ts
+    resource: ../../packages/glyph/src/layout.ts
     title: Current layout-query values
   - id: current-three-api
-    resource: ../../packages/text/src/three.ts
+    resource: ../../packages/glyph/src/three.ts
     title: Current Three.js exports
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T18:30:00Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Core text API
 
-`@pmndrs/text` owns portable font loading, raster-technique selection, font fallback, paragraph input types, and layout
+`@pmndrs/glyph` owns portable font loading, raster-technique selection, font fallback, paragraph input types, and layout
 query result types. Rust owns shaping, bidi, line composition, positioning, instance packing, and the renderer-directed
 command buffer. A renderer integration owns synchronization and GPU realization.
 
-Applications using Three.js normally import scene objects from `@pmndrs/text/three` or React components from
-`@pmndrs/text/react`; they do not drive the Rust engine directly.
+Applications using Three.js normally import scene objects from `@pmndrs/glyph/three` or React components from
+`@pmndrs/glyph/react`; they do not drive the Rust engine directly.
 
 ## Runtime and font loading
 
@@ -229,7 +229,7 @@ The following experimental V0 surfaces are not part of the current API:
 - `TextRuntime.createParagraphBatch`, `runtime.update`, and `runtime.updateAsync`;
 - `analyzeBidi`, `shapeBatch`, and `reshapeRanges` exports;
 - the text-preparation Worker protocol;
-- `@pmndrs/text/typegpu` and its duplicate batch executor.
+- `@pmndrs/glyph/typegpu` and its duplicate batch executor.
 
 TypeGPU will be rebuilt against the Rust render plan rather than retaining the removed TypeScript batch model. Use the
-[Three.js API](three-api.md) for the maintained renderer and `@pmndrs/text/react` for React.
+[Three.js API](three-api.md) for the maintained renderer and `@pmndrs/glyph/react` for React.
