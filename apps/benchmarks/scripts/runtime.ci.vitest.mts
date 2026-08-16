@@ -5,8 +5,8 @@ import { run, runNodeScript } from './support/command-cli.mts';
 const timeout = 20 * 60 * 1_000;
 
 describe.sequential('runtime repository gates', () => {
-  gate('core package', () => pnpm(['--filter', '@pmndrs/text', 'check']));
-  gate('glyph example package', () => pnpm(['--filter', '@pmndrs/text-glyph-example-raster', 'check']));
+  gate('core package', () => pnpm(['--filter', '@pmndrs/glyph', 'check']));
+  gate('glyph example package', () => pnpm(['--filter', '@pmndrs/glyph-example-raster', 'check']));
   gate('benchmark application types', () => runPnpm(['exec', 'tsc', '-p', 'tsconfig.json', '--noEmit']));
   gate('benchmark scripts types', () => runPnpm(['exec', 'tsc', '-p', 'tsconfig.scripts.json', '--noEmit']));
   gate('package-size contract', () => runNodeScript('scripts/measure-package-sizes.mts', ['--check']));
@@ -41,7 +41,7 @@ describe.sequential('runtime repository gates', () => {
   );
   gate('packed consumer', () => runNodeScript('scripts/run-packed-consumer.mts'));
   gate('benchmark build', () => runNodeScript('scripts/build.mts'));
-  gate('React Three Fiber example', () => pnpm(['--filter', '@pmndrs/text-r3f-hello-world', 'check']));
+  gate('React Three Fiber example', () => pnpm(['--filter', '@pmndrs/glyph-r3f-hello-world', 'check']));
   gate('Japanese showcase fixture', () => pnpm(['scripts', 'run', 'fixture:japanese-showcase:check']));
 });
 

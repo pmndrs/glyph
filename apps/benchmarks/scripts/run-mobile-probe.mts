@@ -60,7 +60,7 @@ try {
   if (liveCanvasCount !== 1) {
     throw new Error(`Mobile live surface mounted ${String(liveCanvasCount)} canvases instead of one`);
   }
-  await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile-scene.png' });
+  await page.screenshot({ path: '/tmp/pmndrs-glyph-benchmarks-mobile-scene.png' });
   step = 'phone technique switcher';
   const phoneTechniqueSwitcher = page.locator('[data-testid="technique-switcher"]:visible');
   await phoneTechniqueSwitcher.waitFor();
@@ -83,9 +83,9 @@ try {
     throw new Error(`Phone controls panel exceeds its navigation-safe viewport: ${String(controlsHeight)}`);
   }
   await assertResponsiveSurface(page, '390 px controls');
-  await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile-controls.png' });
+  await page.screenshot({ path: '/tmp/pmndrs-glyph-benchmarks-mobile-controls.png' });
   await page.getByRole('button', { name: 'Close controls', exact: true }).last().click();
-  await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile.png' });
+  await page.screenshot({ path: '/tmp/pmndrs-glyph-benchmarks-mobile.png' });
 
   step = 'tablet flow';
   await page.setViewportSize({ width: 1024, height: 768 });

@@ -1,1 +1,1 @@
-export * from '@pmndrs/text/core';
+export * from '@pmndrs/glyph/core';

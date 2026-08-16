@@ -13,13 +13,13 @@ sources:
     resource: rust-layout-engine.md
     title: Rust text engine and render-plan ABI
   - id: current-loader
-    resource: ../../packages/text/src/three/font-loader.ts
+    resource: ../../packages/glyph/src/three/font-loader.ts
     title: Current Three.js font loader
   - id: current-text
-    resource: ../../packages/text/src/three/text.ts
+    resource: ../../packages/glyph/src/three/text.ts
     title: Current Three.js Text lifecycle
   - id: current-material
-    resource: ../../packages/text/src/three/material.ts
+    resource: ../../packages/glyph/src/three/material.ts
     title: Current Three.js material factory
   - id: three-object3d
     resource: https://threejs.org/docs/pages/Object3D.html
@@ -29,20 +29,20 @@ sources:
     title: Three.js Loader
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T18:30:00Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Three.js text API
 
-`@pmndrs/text/three` is the maintained renderer integration. `Text` and `TextGroup` are Three.js `Object3D` subclasses;
+`@pmndrs/glyph/three` is the maintained renderer integration. `Text` and `TextGroup` are Three.js `Object3D` subclasses;
 scene traversal collects desired mutations, calls the Rust engine, consumes its render-plan command buffer, uploads dirty
 ranges, and updates draw proxies.
 
 ```ts
-import { FontLoader, Text, TextGroup, defineTextMaterial } from '@pmndrs/text/three';
-import { bitmap } from '@pmndrs/text/three/bitmap';
-import { msdf } from '@pmndrs/text/three/msdf';
-import { slug } from '@pmndrs/text/three/slug';
+import { FontLoader, Text, TextGroup, defineTextMaterial } from '@pmndrs/glyph/three';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+import { slug } from '@pmndrs/glyph/three/slug';
 ```
 
 Import only the technique modules an application uses. Each module registers the matching Three policy program and
@@ -255,7 +255,7 @@ are moved into another group.
 
 ## React Three Fiber
 
-`@pmndrs/text/react` exports `<Text>`, `<TextGroup>`, and `useFont`. Components preserve the Three ownership and batching
+`@pmndrs/glyph/react` exports `<Text>`, `<TextGroup>`, and `useFont`. Components preserve the Three ownership and batching
 semantics above. Nested R3F `<Text>` values flatten into formatted spans; an outer text requires a font, while nested spans
 may override it. The maintained renderer target is `@react-three/fiber/webgpu`, which inherits Three's WebGL fallback.
 

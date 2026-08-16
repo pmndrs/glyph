@@ -1,5 +1,5 @@
-import type { AnyRasterTechnique, LoadedFont, ParagraphLayoutSummary } from '@pmndrs/text';
-import { TextGroup, type Text } from '@pmndrs/text/three';
+import type { AnyRasterTechnique, LoadedFont, ParagraphLayoutSummary } from '@pmndrs/glyph';
+import { TextGroup, type Text } from '@pmndrs/glyph/three';
 import type * as THREE from 'three/webgpu';
 
 /**

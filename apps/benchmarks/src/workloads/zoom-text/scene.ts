@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/text/three';
+import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';

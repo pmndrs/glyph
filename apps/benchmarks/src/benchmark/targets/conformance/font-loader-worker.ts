@@ -1,4 +1,4 @@
-import { FontLoader, FontRegistry } from '@pmndrs/text';
+import { FontLoader, FontRegistry } from '@pmndrs/glyph';
 
 import canonicalFontUrl from '../../../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url';
 import canonicalFontManifest from '../../../../fixtures/fonts/inter-v4.1/manifest.json' with { type: 'json' };
@@ -18,7 +18,7 @@ export function createFontLoaderWorkerConformanceTarget(): BenchmarkTarget {
     status: () => 'ready',
     load: async () => {
       if (workerParityReady) return;
-      const { bakeFontInWorker } = await import('@pmndrs/text/runtime-bake');
+      const { bakeFontInWorker } = await import('@pmndrs/glyph/runtime-bake');
       const response = await fetch(canonicalFontUrl);
       if (!response.ok) throw new Error(`Unable to load canonical font fixture (${response.status})`);
       const source = new Uint8Array(await response.arrayBuffer());

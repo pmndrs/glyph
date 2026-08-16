@@ -7,8 +7,8 @@ import type {
   RegisteredFont,
   RegisteredRaster,
   Sha256Hex,
-} from '@pmndrs/text';
-import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/text';
+} from '@pmndrs/glyph';
+import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
 
 import { isGlyphExampleHeader, type GlyphExampleExtensionV0 } from './artifact.js';
 import {

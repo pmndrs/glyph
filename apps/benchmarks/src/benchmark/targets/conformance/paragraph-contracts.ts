@@ -1,6 +1,6 @@
-import type { LoadedFont, ParagraphContentBox, ParagraphLayoutInspection, ParagraphStyle } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/three/bitmap';
-import { FontLoader, Text, TextGroup, type TextUpdate } from '@pmndrs/text/three';
+import type { LoadedFont, ParagraphContentBox, ParagraphLayoutInspection, ParagraphStyle } from '@pmndrs/glyph';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { FontLoader, Text, TextGroup, type TextUpdate } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import amiriFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';

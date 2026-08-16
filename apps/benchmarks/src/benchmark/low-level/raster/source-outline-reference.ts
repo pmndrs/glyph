@@ -1,4 +1,4 @@
-import type { ParagraphLayout } from '@pmndrs/text';
+import type { ParagraphLayout } from '@pmndrs/glyph';
 
 import amiriSourceUrl from '../../../../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf?url';
 import dancingScriptSourceUrl from '../../../../fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf?url';

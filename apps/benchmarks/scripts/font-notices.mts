@@ -17,5 +17,5 @@ export async function fontNotices(): Promise<string> {
       return `${font}\n${'='.repeat(font.length)}\n\n${license.trim()}\n`;
     }),
   );
-  return `pmndrs/text benchmark font notices\n\n${sections.join('\n')}`;
+  return `pmndrs/glyph benchmark font notices\n\n${sections.join('\n')}`;
 }

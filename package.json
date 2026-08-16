@@ -1,12 +1,12 @@
 {
-  "name": "pmndrs-text-workspace",
+  "name": "pmndrs-glyph-workspace",
   "private": true,
   "license": "MIT",
   "author": "Justin Walsh (https://github.com/thejustinwalsh)",
   "type": "module",
   "scripts": {
-    "bake": "pnpm --filter @pmndrs/text... build && node packages/text/bin/text.js bake",
-    "dev": "pnpm --filter @pmndrs/text-benchmarks dev",
+    "bake": "pnpm --filter @pmndrs/glyph... build && node packages/glyph/bin/glyph.js bake",
+    "dev": "pnpm --filter @pmndrs/glyph-benchmarks dev",
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
     "test": "pnpm --filter './packages/*' --if-present test && pnpm --filter './apps/*' --if-present test",
     "check": "tsc -p .claude/tsconfig.json && node --test .claude/hooks/sync-agent-config.test.ts && pnpm --filter './packages/*' check && pnpm --workspace-concurrency=1 --filter './apps/*' check && oxfmt --check .claude/hooks .claude/settings.json .claude/tsconfig.json package.json docs/log.md && ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb docs --workspace-root .",
