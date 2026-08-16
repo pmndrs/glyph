@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/text/three';
+import { Text } from '@pmndrs/glyph/three';
 
 import type { RasterTechnique } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';

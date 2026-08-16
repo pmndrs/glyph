@@ -3,4 +3,4 @@ export {
   createMsdfBakerFromInstance,
   msdfBakerAbi,
   msdfBakerFromCore,
-} from '@pmndrs/text/bakers/msdf';
+} from '@pmndrs/glyph/bakers/msdf';

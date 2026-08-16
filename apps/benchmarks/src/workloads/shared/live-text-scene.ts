@@ -1,4 +1,4 @@
-import type { FontFeature } from '@pmndrs/text';
+import type { FontFeature } from '@pmndrs/glyph';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 

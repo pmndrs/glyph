@@ -15,16 +15,16 @@ sources:
     resource: https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/three-flatland/src/ecs/systems/flushDirtyRangesSystem.ts
     title: three-flatland end-of-frame dirty-range flush
   - id: text-packing
-    resource: ../../packages/text/rust/shaper/src/engine/plan_packing.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/plan_packing.rs
     title: Rust render-plan range coalescing and upload cost model
   - id: text-ordered-plan
-    resource: ../../packages/text/rust/shaper/src/engine/ordered_plan.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/ordered_plan.rs
     title: Rust ordered-direct changed-range planning
   - id: text-stable-plan
-    resource: ../../packages/text/rust/shaper/src/engine/stable_plan.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/stable_plan.rs
     title: Rust stable-indirect physical and order-buffer planning
   - id: text-three-target
-    resource: ../../packages/text/src/three/engine-plan-target.ts
+    resource: ../../packages/glyph/src/three/engine-plan-target.ts
     title: Three render-plan executor and update-range forwarding
   - id: three-webgpu
     resource: https://github.com/mrdoob/three.js/blob/r185/src/renderers/webgpu/utils/WebGPUAttributeUtils.js
@@ -37,7 +37,7 @@ sources:
     title: Three r185 legacy WebGL attribute uploads
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T14:10:06Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Adaptive dirty-range uploads for retained text plans

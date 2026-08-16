@@ -17,7 +17,7 @@ describe.sequential('static repository gates', () => {
       'docs/log.md',
     ]),
   );
-  gate('core formatting', () => pnpmAt('../../packages/text', ['exec', 'oxfmt', '--check', '.']));
+  gate('core formatting', () => pnpmAt('../../packages/glyph', ['exec', 'oxfmt', '--check', '.']));
   gate('glyph example formatting', () =>
     pnpmAt('../../packages/glyph-example-raster', [
       'exec',
@@ -32,13 +32,13 @@ describe.sequential('static repository gates', () => {
   );
   gate('benchmark formatting', () => runPnpm(['exec', 'oxfmt', '--check', '.']));
   gate('React Three Fiber example formatting', () => pnpmAt('../r3f-hello-world', ['exec', 'oxfmt', '--check', '.']));
-  gate('core lint', () => pnpm(['--filter', '@pmndrs/text', 'exec', 'oxlint', '--deny-warnings', '.']));
+  gate('core lint', () => pnpm(['--filter', '@pmndrs/glyph', 'exec', 'oxlint', '--deny-warnings', '.']));
   gate('glyph example lint', () =>
-    pnpm(['--filter', '@pmndrs/text-glyph-example-raster', 'exec', 'oxlint', '--deny-warnings', '.']),
+    pnpm(['--filter', '@pmndrs/glyph-example-raster', 'exec', 'oxlint', '--deny-warnings', '.']),
   );
   gate('benchmark lint', () => runPnpm(['exec', 'oxlint', '--deny-warnings', '.']));
   gate('React Three Fiber example lint', () =>
-    pnpm(['--filter', '@pmndrs/text-r3f-hello-world', 'exec', 'oxlint', '--deny-warnings', '.']),
+    pnpm(['--filter', '@pmndrs/glyph-r3f-hello-world', 'exec', 'oxlint', '--deny-warnings', '.']),
   );
   gate('repository tooling types', () => pnpm(['exec', 'tsc', '-p', '.claude/tsconfig.json']));
   gate('repository tooling synchronization', () =>

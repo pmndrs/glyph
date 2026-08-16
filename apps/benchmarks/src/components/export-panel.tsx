@@ -34,7 +34,7 @@ export function ExportPanel({
     const anchor = document.createElement('a');
     const objectUrl = URL.createObjectURL(new Blob([value], { type: 'application/json' }));
     anchor.href = objectUrl;
-    anchor.download = 'pmndrs-text-benchmark.json';
+    anchor.download = 'pmndrs-glyph-benchmark.json';
     anchor.click();
     queueMicrotask(() => URL.revokeObjectURL(objectUrl));
   }

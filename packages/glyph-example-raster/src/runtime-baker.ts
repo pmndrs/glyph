@@ -1,4 +1,4 @@
-import type { RasterKey, RuntimeRasterBakerModule } from '@pmndrs/text';
+import type { RasterKey, RuntimeRasterBakerModule } from '@pmndrs/glyph';
 
 import { bakeGlyphExampleArtifact } from './artifact.js';
 import { GLYPH_EXAMPLE_KIND, glyphExampleDescriptor, type GlyphExampleOptions } from './contract.js';
