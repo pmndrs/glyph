@@ -532,7 +532,7 @@ export class ThreeTextRenderPlanExecutor {
           geometry.setAttribute(`_pmndrsGlyph_${buffer.policyBufferId}`, buffer.attribute);
         }
 
-        if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsTextTransforms', this.#transformAttribute);
+        if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', this.#transformAttribute);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.pmndrsGlyphRunStart = recordIndex;
         mesh.userData.pmndrsGlyphTransformId = transformId;
