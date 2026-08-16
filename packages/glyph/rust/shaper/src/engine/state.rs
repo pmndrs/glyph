@@ -2010,6 +2010,37 @@ impl ParagraphState {
                     limits.max_slots_per_band,
                     next_glyph_id,
                 )?;
+                // Geometry-only resize equivalence: a third of alternating-width
+                // resizes compose the exact lines the committed flow already
+                // holds and would position bit-identically — the fit is cheap
+                // and chunk-skipped, so proving input-equality here retires the
+                // positioning, gather, diff, and publication tail for those
+                // frames entirely (the resize analogue of the D-253 measure
+                // adoption). The pending geometry still commits: it is real
+                // session state, and the equivalence proof is exactly the
+                // statement that the retained flow and positioning answer it.
+                if !self.clusters_prepared
+                    && !self.text_prepared
+                    && !self.styles_prepared
+                    && !self.unicode_prepared
+                    && !self.bidi_prepared
+                    && !self.shape_prepared
+                    && !self.shaping_runs_prepared
+                    && !self.style_invalidation.metrics
+                    && !self.style_invalidation.positioning
+                    && super::positioning::flow_positioning_equivalent(
+                        &self.pending_flow_layout,
+                        &self.flow_layout,
+                        &self.clusters,
+                        &self.bidi,
+                        |thread| thread_typography(&self.pending_geometry, thread),
+                        |thread| thread_typography(&self.geometry, thread),
+                    )?
+                {
+                    self.abort_flow_layout();
+                    self.abort_positioned();
+                    return Ok(false);
+                }
             }
             // Paragraph measurement derives at line level from flow and clusters,
             // so a measurement-only query skips the per-glyph positioning tail

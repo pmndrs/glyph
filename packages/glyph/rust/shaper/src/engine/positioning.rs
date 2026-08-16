@@ -1320,6 +1320,103 @@ fn reorder_l2(indices: &mut [u32], levels: &mut [u8], start: usize) {
     }
 }
 
+/// Whether a freshly composed flow would position EXACTLY as the committed
+/// flow — the geometry-only resize short-circuit (the resize analogue of the
+/// D-253 measure adoption). Positioning is a deterministic function of each
+/// fragment's cluster range, pen origin, and justify distribution once text,
+/// styles, clusters, and bidi are unchanged (the caller's precondition), so
+/// bit-equality of those computed inputs proves output equality without
+/// running the positioning, gather, or publication tail. Boundary-bearing
+/// (ellipsis) flows fall through to the full path.
+pub(crate) fn flow_positioning_equivalent(
+    pending: &FlowLayoutArena,
+    committed: &FlowLayoutArena,
+    clusters: &ClusterArena,
+    bidi: &BidiAnalysis,
+    pending_typography: impl Fn(u32) -> ThreadTypography + Copy,
+    committed_typography: impl Fn(u32) -> ThreadTypography + Copy,
+) -> Result<bool, EngineError> {
+    if pending.lines.len() != committed.lines.len()
+        || !pending.ellipsis_threads().is_empty()
+        || !committed.ellipsis_threads().is_empty()
+    {
+        return Ok(false);
+    }
+    for (line_index, (line, previous)) in
+        pending.lines.iter().zip(committed.lines.iter()).enumerate()
+    {
+        if line.flow_thread_id != previous.flow_thread_id
+            || line.region_id != previous.region_id
+            || line.transform_index != previous.transform_index
+            || line.clip_id != previous.clip_id
+            || line.fragment_count != previous.fragment_count
+            || line.align != previous.align
+            || line.block_start.to_bits() != previous.block_start.to_bits()
+            || line.baseline.to_bits() != previous.baseline.to_bits()
+            || line.height.to_bits() != previous.height.to_bits()
+        {
+            return Ok(false);
+        }
+        let final_line = pending
+            .lines
+            .get(line_index + 1)
+            .is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
+        let fragments = line_fragments(pending, *line)?;
+        let previous_fragments = line_fragments(committed, *previous)?;
+        if fragments.len() != previous_fragments.len() {
+            return Ok(false);
+        }
+        for (fragment, previous_fragment) in fragments.iter().zip(previous_fragments.iter()) {
+            if fragment.line != previous_fragment.line
+                || fragment.boundary_index != super::flow_composition::NO_BOUNDARY
+                || previous_fragment.boundary_index != super::flow_composition::NO_BOUNDARY
+            {
+                return Ok(false);
+            }
+            let inputs = |fragment: &FlowFragment, typography: ThreadTypography| {
+                let indent = if fragment.line.cluster_start == 0 {
+                    typography.first_line_indent
+                } else {
+                    0.0
+                };
+                let level = paragraph_level_at(bidi, fragment.line.text_start);
+                let cluster_start = usize::try_from(fragment.line.cluster_start).unwrap_or(0);
+                let cluster_end = usize::try_from(fragment.line.cluster_end).unwrap_or(0);
+                let distribution = justification_adjustment(
+                    *line,
+                    *fragment,
+                    final_line,
+                    clusters,
+                    cluster_start,
+                    cluster_end,
+                    indent,
+                    typography.justify,
+                );
+                let available =
+                    (fragment.slot_end - fragment.slot_start - indent - fragment.line.advance)
+                        .max(0.0);
+                let offset = if distribution.is_zero() {
+                    alignment_offset(line.align, level, available)
+                } else {
+                    0.0
+                };
+                let indent_shift = if level & 1 == 0 { indent } else { 0.0 };
+                let origin = fragment.slot_start + indent_shift + offset;
+                (distribution, origin.to_bits(), indent.to_bits())
+            };
+            let next = inputs(fragment, pending_typography(line.flow_thread_id));
+            let prior = inputs(
+                previous_fragment,
+                committed_typography(previous.flow_thread_id),
+            );
+            if next != prior {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
+}
+
 fn paragraph_level_at(bidi: &BidiAnalysis, offset: u32) -> u8 {
     bidi.paragraph_starts
         .iter()
@@ -1641,6 +1738,59 @@ mod tests {
         bidi.levels[1] = 0;
         run.style.bidi_override = true;
         assert!(!is_trivially_ltr(&bidi, &[run]));
+    }
+
+    #[test]
+    fn resize_equivalence_admits_only_position_identical_flows() {
+        let (_text, clusters, line, fragment) = justify_fixture();
+        let bidi = BidiAnalysis::default();
+        let typography = |_: u32| ThreadTypography {
+            first_line_indent: 0.0,
+            justify: JustifyControls::default(),
+        };
+        let arena = |align: u8, slot_end: f64| FlowLayoutArena {
+            lines: vec![FlowLine {
+                align,
+                ..line
+            }],
+            fragments: vec![FlowFragment {
+                slot_end,
+                ..fragment
+            }],
+            ellipsis_threads: alloc::vec::Vec::new(),
+            recomposed_lines: None,
+        };
+        let equivalent = |pending: &FlowLayoutArena, committed: &FlowLayoutArena| {
+            flow_positioning_equivalent(pending, committed, &clusters, &bidi, typography, typography)
+                .unwrap()
+        };
+        // A start-aligned line ignores the right edge: widening is a no-op.
+        assert!(equivalent(&arena(ALIGN_START, 17.0), &arena(ALIGN_START, 25.0)));
+        // End alignment derives the pen origin from the slot end: not a no-op.
+        assert!(!equivalent(&arena(ALIGN_END, 17.0), &arena(ALIGN_END, 25.0)));
+        assert!(!equivalent(&arena(ALIGN_CENTER, 17.0), &arena(ALIGN_CENTER, 25.0)));
+        // A final line under the auto last-line policy never justifies, so a
+        // width change is genuinely a positioning no-op there.
+        assert!(equivalent(&arena(ALIGN_JUSTIFY, 17.0), &arena(ALIGN_JUSTIFY, 25.0)));
+        // With the last line justified, the distribution tracks the slot span:
+        // not a no-op when the span differs, a no-op when it matches exactly.
+        let justified = |_: u32| ThreadTypography {
+            first_line_indent: 0.0,
+            justify: JustifyControls {
+                last_line_justify: true,
+                ..JustifyControls::default()
+            },
+        };
+        let justified_equivalent = |pending: &FlowLayoutArena, committed: &FlowLayoutArena| {
+            flow_positioning_equivalent(pending, committed, &clusters, &bidi, justified, justified)
+                .unwrap()
+        };
+        assert!(!justified_equivalent(&arena(ALIGN_JUSTIFY, 17.0), &arena(ALIGN_JUSTIFY, 25.0)));
+        assert!(justified_equivalent(&arena(ALIGN_JUSTIFY, 17.0), &arena(ALIGN_JUSTIFY, 17.0)));
+        // A boundary-bearing fragment always takes the full path.
+        let mut with_boundary = arena(ALIGN_START, 17.0);
+        with_boundary.fragments[0].boundary_index = 0;
+        assert!(!equivalent(&with_boundary, &arena(ALIGN_START, 17.0)));
     }
 
     #[test]

@@ -1023,6 +1023,119 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
 });
 
 /**
+ * The geometry-only resize short-circuit: a width change that composes the
+ * exact committed lines adopts committed positioning and publishes nothing,
+ * and a width change that moves breaks still relayouts fully afterward —
+ * the committed state must answer both correctly in sequence.
+ */
+test('resize equivalence adopts committed positioning and still relayouts on break changes', async () => {
+  const [interArtifact, shaperWasm, abi] = await Promise.all([
+    readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+    readFile(shaperWasmUrl),
+    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+  ]);
+  const inter = await validateFontArtifact(interArtifact);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  registerValidatedFont({ abi, fn, memory }, 101, inter);
+  registerSimpleBinding({ abi, fn, memory }, 1001, 101, inter, 71, 1);
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(0xe9, 3, 0, 0));
+  assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
+  fn.deallocate(stack.pointer, stack.length);
+  const policyBytes = twoTechniquePolicyBytes(abi);
+  const policy = copyToWasm(memory, fn.allocate, policyBytes);
+  assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
+  fn.deallocate(policy.pointer, policy.length);
+  assert.equal(fn.createSession(41, 4096, 128 * 1024, 0), abi.status.ok);
+
+  const resultLayout = abi.layouts.engineResult;
+  const record = abi.layouts.engineSemanticView;
+  const run = (bytes, entry, paragraphId) => {
+    new DataView(bytes.buffer).setUint32(
+      abi.layouts.engineUpdateRequest.semanticViewMask,
+      abi.engine.semanticViewMasks.measurement,
+      true,
+    );
+    const pointer = fn.requestPointer(41);
+    new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+    const resultPointer =
+      entry === 'measure'
+        ? fn.measureParagraph(41, pointer, bytes.byteLength, paragraphId)
+        : fn.textUpdate(41, pointer, bytes.byteLength);
+    const view = new DataView(memory.buffer, resultPointer, resultLayout.size);
+    const semanticViewsOffset = view.getUint32(resultLayout.semanticViewsOffset, true);
+    const semanticViewCount = view.getUint32(resultLayout.semanticViewCount, true);
+    let measurement;
+    for (let index = 0; index < semanticViewCount; index += 1) {
+      const entryView = new DataView(
+        memory.buffer,
+        resultPointer + semanticViewsOffset + index * record.size,
+        record.size,
+      );
+      if (entryView.getUint8(record.kind) === abi.engine.semanticKinds.paragraphMeasurement) {
+        measurement = {
+          lineCount: entryView.getUint32(record.itemCount, true),
+          inlineExtent: entryView.getFloat32(record.inlineExtent, true),
+        };
+      }
+    }
+    return {
+      status: view.getUint32(resultLayout.status, true),
+      engineRevision: view.getUint32(resultLayout.engineRevision, true),
+      publicationGeneration: view.getUint32(resultLayout.publicationGeneration, true),
+      measurement,
+    };
+  };
+
+  const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
+  const update = (width, seeded, withText) =>
+    run(
+      engineStyleUpdateBytes(abi, {
+        sessionId: 41,
+        policyHandle: 23,
+        fontStackHandle: 17,
+        ...(seeded === undefined
+          ? {}
+          : {
+              expectedEngineRevision: seeded.engineRevision,
+              consumedPlanRevision: seeded.engineRevision,
+              acknowledgedPublicationGeneration: seeded.publicationGeneration,
+            }),
+        ...(withText ? { text } : { styles: false }),
+        maxClusters: 64,
+        geometry: { width, height: 200, maxLines: 16 },
+      }),
+      'update',
+    );
+
+  const seeded = update(300, undefined, true);
+  assert.equal(seeded.status, abi.status.ok);
+  assert.equal(seeded.measurement?.lineCount, 1);
+  // 300 -> 220 keeps the single line: the equivalence path answers with
+  // committed positioning and the same pinned extent.
+  const widened = update(220, seeded, false);
+  assert.equal(widened.status, abi.status.ok);
+  assert.equal(widened.measurement?.lineCount, 1);
+  assert.equal(widened.measurement?.inlineExtent, 181.375);
+  // 220 -> 96 moves breaks: the full path must relayout from the retained
+  // committed state the short-circuit preserved.
+  const narrowed = update(96, widened, false);
+  assert.equal(narrowed.status, abi.status.ok);
+  assert.equal(narrowed.measurement?.lineCount, 3);
+  assert.equal(narrowed.measurement?.inlineExtent, 83.53125);
+  // And back out again across the equivalence boundary.
+  const restored = update(300, narrowed, false);
+  assert.equal(restored.status, abi.status.ok);
+  assert.equal(restored.measurement?.lineCount, 1);
+  assert.equal(restored.measurement?.inlineExtent, 181.375);
+  assert.equal(fn.disposeSession(41), abi.status.ok);
+});
+
+/**
  * Integer layout-units slice 5: the packaged artifact's measured f32 extents
  * are pinned EXACTLY at several widths. Every stage between text and extent
  * runs on the F26.6 rounding contract (`layout_units.rs`), whose integer

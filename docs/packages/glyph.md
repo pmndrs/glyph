@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:c61bc993411259fb492f5f0aae4a185f75f4e405b72f1bdad8907a6bf4007600'
+source_digest: 'sha256:b2ce428b49cc5968354f91308e22b989d2482b31fe8896c17ae22511b57e38b6'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -620,6 +620,18 @@ for the first class is a break-sequence equivalence short-circuit: the integer f
 when the composed lines equal the committed lines under unchanged text and styles, the positioning, gather, and
 publication tail can adopt committed state and publish nothing — the same adoption shape D-253 established for
 measure transactions.
+
+That short-circuit is landed. `flow_positioning_equivalent` proves, per fragment, bit-equality of the cluster
+range, the computed pen origin (slot start plus indent shift plus alignment offset), and the justify distribution
+against the committed flow — exactly the inputs positioning consumes — and the geometry-only update path then
+aborts the pending flow, retains committed positioning, and commits the new constraint, which the equivalence
+proof is precisely the license for. End alignment, centering, justified spans with changed slot spans, and
+boundary-bearing flows fail the proof and take the full path; a unit matrix pins each discrimination and an
+integration sequence drives adopt → relayout → adopt across the equivalence boundary. Measured at the same
+101-rep widening sweep: the zero-publication class (34 of 101 frames) drops from ~3.2 ms to 0.357 ms median
+(−89%), the published classes are unchanged, and every other lane is neutral over two interleaved rounds. The
+lane median and p95 are order statistics over the published classes and move little; what changed is that a
+third of resize frames now cost a third of a millisecond.
 
 ## Merge gates still open
 
