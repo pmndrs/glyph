@@ -107,7 +107,7 @@ describe('milestone-one fixture contracts', () => {
     const rustRecords = [bitmap, mtsdf, slug];
 
     expect(baseline).toMatchObject({
-      generatedBy: 'text:layout-benchmark',
+      generatedBy: 'glyph:layout-benchmark',
       reports: [
         { name: 'cold', glyphs: 25_515, medianMs: 58.32441699999981 },
         { name: 'font-size', glyphs: 25_515, medianMs: 12.087332999999944 },
@@ -129,7 +129,7 @@ describe('milestone-one fixture contracts', () => {
     for (const record of rustRecords) {
       expect(record).toMatchObject({
         schemaVersion: 0,
-        generatedBy: 'text:rust-layout-benchmark',
+        generatedBy: 'glyph:rust-layout-benchmark',
         allocation: 'ordered',
         glyphTarget: 22_000,
         warmup: 8,

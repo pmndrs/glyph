@@ -13,16 +13,16 @@ sources:
     resource: raster-technique-api.md
     title: Raster technique and engine resource API
   - id: current-layout
-    resource: ../../packages/text/src/layout.ts
+    resource: ../../packages/glyph/src/layout.ts
     title: Current paragraph layout contract
   - id: current-paint
-    resource: ../../packages/text/src/paint.ts
+    resource: ../../packages/glyph/src/paint.ts
     title: Current glyph paint contract
   - id: current-raster
-    resource: ../../packages/text/src/raster.ts
+    resource: ../../packages/glyph/src/raster.ts
     title: Current raster transaction contract
   - id: current-text
-    resource: ../../packages/text/src/three/text.ts
+    resource: ../../packages/glyph/src/three/text.ts
     title: Current Three.js text lifecycle
   - id: extraction-plan
     resource: engine-integration-boundary.md
@@ -35,11 +35,11 @@ sources:
     title: TypeGPU raster programs and text engine
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T03:25:58Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 > Historical design record. The Rust command buffer superseded the target preparation and TypeScript storage contract
-> described below. Use [the current package reference](../packages/text.md) and
+> described below. Use [the current package reference](../packages/glyph.md) and
 > [Rust layout-engine design](rust-layout-engine.md) for the blessed integration boundary.
 
 # Engine integration contract
