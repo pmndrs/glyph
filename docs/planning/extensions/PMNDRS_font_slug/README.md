@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-26T20:08:45Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -28,7 +28,7 @@ generated:
 
 ## Contributors
 
-- Poimandres text maintainers, Poimandres, [pmndrs/text](https://github.com/pmndrs/text)
+- Poimandres text maintainers, Poimandres, [pmndrs/glyph](https://github.com/pmndrs/glyph)
 
 ## Status
 
@@ -63,4 +63,4 @@ The extension adds a `PMNDRS_font_slug` object to the root glTF `extensions` obj
 ## Known Implementations
 
 - [Three Flatland Slug](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug) — implementation prior art for curves, band construction, packing, shaders, paging, and GLB delivery; not yet this exact extension.
-- [`pmndrs/text`](https://github.com/pmndrs/text) — reference implementation planned against this contract.
+- [`pmndrs/glyph`](https://github.com/pmndrs/glyph) — reference implementation planned against this contract.

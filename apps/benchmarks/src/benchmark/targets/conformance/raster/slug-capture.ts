@@ -1,6 +1,6 @@
-import { FontRegistry, type LoadedFont, type ParagraphLayout } from '@pmndrs/text';
-import { slug } from '@pmndrs/text/three/slug';
-import { FontLoader, Text, type TextSpan } from '@pmndrs/text/three';
+import { FontRegistry, type LoadedFont, type ParagraphLayout } from '@pmndrs/glyph';
+import { slug } from '@pmndrs/glyph/three/slug';
+import { FontLoader, Text, type TextSpan } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { TargetRunOutput } from '../../../contracts';

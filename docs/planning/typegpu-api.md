@@ -38,7 +38,7 @@ sources:
     title: TypeGPU and TSL interoperability
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:31:24Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # TypeGPU raster programs and text engine
@@ -46,11 +46,11 @@ generated:
 This is an engine-integration subpath, not part of the renderer-neutral core entry:
 
 ```ts
-import { createTextRuntime, type ParagraphBatchTarget } from '@pmndrs/text';
-import { createTypeGpuTextEngine } from '@pmndrs/text/typegpu';
+import { createTextRuntime, type ParagraphBatchTarget } from '@pmndrs/glyph';
+import { createTypeGpuTextEngine } from '@pmndrs/glyph/typegpu';
 ```
 
-`@pmndrs/text/typegpu` is maintained and shipped by this package. Its dependency direction is still enforced: it consumes
+`@pmndrs/glyph/typegpu` is maintained and shipped by this package. Its dependency direction is still enforced: it consumes
 renderer-neutral core and technique contracts, core never imports TypeGPU, and the subpath receives no package-private
 shaping or batching state.
 
@@ -71,8 +71,8 @@ loop.
 
 ```ts
 import tgpu from 'typegpu';
-import { createTypeGpuTextEngine, createTypeGpuSlugProgram } from '@pmndrs/text/typegpu';
-import { slug } from '@pmndrs/text/raster/slug';
+import { createTypeGpuTextEngine, createTypeGpuSlugProgram } from '@pmndrs/glyph/typegpu';
+import { slug } from '@pmndrs/glyph/raster/slug';
 
 const root = tgpu.initFromDevice({ device });
 const program = createTypeGpuSlugProgram(root);
@@ -313,15 +313,23 @@ interface TypeGpuParagraphState {
   readonly visible: boolean;
 }
 
-interface TypeGpuParagraphBatchTarget<Technique extends AnyRasterTechnique, Variant, Draw, Revision>
-  extends ParagraphBatchTarget<Technique, Variant, Revision> {
+interface TypeGpuParagraphBatchTarget<
+  Technique extends AnyRasterTechnique,
+  Variant,
+  Draw,
+  Revision,
+> extends ParagraphBatchTarget<Technique, Variant, Revision> {
   readonly root: TgpuRoot;
   setParagraphState(paragraph: ParagraphId, state: TypeGpuParagraphState | undefined): void;
   encode(pass: GPURenderPassEncoder, revision: Revision, frame: TypeGpuFrame): void;
 }
 
-interface TypeGpuRasterProgram<Technique extends AnyRasterTechnique, Variant, Draw, Revision>
-  extends AnyTypeGpuRasterProgram<Technique> {
+interface TypeGpuRasterProgram<
+  Technique extends AnyRasterTechnique,
+  Variant,
+  Draw,
+  Revision,
+> extends AnyTypeGpuRasterProgram<Technique> {
   createTarget(options: {
     readonly root: TgpuRoot;
     readonly technique: Technique;

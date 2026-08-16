@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-29T11:22:07Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -25,7 +25,7 @@ generated:
 
 ## Contributors
 
-- Poimandres text maintainers, Poimandres, [pmndrs/text](https://github.com/pmndrs/text)
+- Poimandres text maintainers, Poimandres, [pmndrs/glyph](https://github.com/pmndrs/glyph)
 
 ## Status
 
@@ -59,4 +59,4 @@ The extension adds a `PMNDRS_font_distance_field` object to the root glTF `exten
 
 ## Known Implementations
 
-- [`pmndrs/text`](https://github.com/pmndrs/text) — reference implementation planned against this contract.
+- [`pmndrs/glyph`](https://github.com/pmndrs/glyph) — reference implementation planned against this contract.

@@ -1,7 +1,7 @@
-import { FontRegistry, type ParagraphLayoutSummary, type RegisteredFont } from '@pmndrs/text';
-import { TextGroup } from '@pmndrs/text/three';
+import { FontRegistry, type ParagraphLayoutSummary, type RegisteredFont } from '@pmndrs/glyph';
+import { TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
-import { selectBitmapStrikePpem } from '@pmndrs/text/three/bitmap';
+import { selectBitmapStrikePpem } from '@pmndrs/glyph/three/bitmap';
 
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../../../benchmark/font-fixtures';
 import type { RuntimeLiveStats } from '../../../benchmark/runtime-world';
@@ -184,7 +184,7 @@ export interface ComparisonWorkloadPersistentSceneOptions {
   readonly workload: ComparisonWorkloadId;
   readonly onError: (error: unknown) => void;
   readonly onStats: (stats: ComparisonWorkloadStats) => void;
-  readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener;
+  readonly onBakeProgress?: import('@pmndrs/glyph').BakeProgressListener;
   readonly id?: string;
 }
 
@@ -1457,7 +1457,7 @@ async function loadTechniqueFont(
   fontFixture: BenchmarkFontFixture,
   delivery: FontDelivery,
   signal?: AbortSignal,
-  onBakeProgress?: import('@pmndrs/text').BakeProgressListener,
+  onBakeProgress?: import('@pmndrs/glyph').BakeProgressListener,
   slugBakedArtifact?: BakedSlugArtifactSource,
   registry?: FontRegistry,
 ): Promise<LoadedTechniqueFont> {

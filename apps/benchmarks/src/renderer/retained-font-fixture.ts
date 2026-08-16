@@ -1,4 +1,4 @@
-import { FontRegistry, type RegisteredFont } from '@pmndrs/text';
+import { FontRegistry, type RegisteredFont } from '@pmndrs/glyph';
 
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
 

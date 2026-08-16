@@ -35,12 +35,12 @@ sources:
     resource: '../packages/benchmarks.md'
     title: 'Benchmark and presentation evidence'
   - id: 'text-package-evidence'
-    resource: '../packages/text.md'
+    resource: '../packages/glyph.md'
     title: 'Text and raster package evidence'
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Renderer capability matrix
@@ -149,6 +149,6 @@ Switching raster must never reshape text or change line breaks. Merged v0 select
 - Use **Slug** for large or deeply zoomed fill text and intricate monochrome outlines. The 36-cell dual-backend/DPR
   raster-role matrix covers large size, 1,024-ppem magnification, complex scripts, clipping, affine transforms, and
   projection zoom against source outlines. Slug V0 deliberately rejects outline, shadow, and color-layer paint.
-- Keep the choice explicit. `pmndrs/text` may expose recommendations and capabilities, but it does not silently switch engines.
+- Keep the choice explicit. `pmndrs/glyph` may expose recommendations and capabilities, but it does not silently switch engines.
 
 [^slug-outline-research]: The rejected exact-distance design, retained measurements, and replacement gate are recorded separately from the capability table.
