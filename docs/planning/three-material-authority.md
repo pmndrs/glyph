@@ -16,17 +16,17 @@ sources:
     resource: raster-technique-api.md
     title: Raster technique and engine resource API
   - id: ordered-plan
-    resource: ../../packages/text/rust/shaper/src/engine/ordered_plan.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/ordered_plan.rs
     title: Rust retained ordered-plan compiler
   - id: render-plan
-    resource: ../../packages/text/rust/shaper/src/engine/render_plan.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/render_plan.rs
     title: Rust render-plan records
   - id: plan-executor
-    resource: ../../packages/text/src/three/engine-plan-target.ts
+    resource: ../../packages/glyph/src/three/engine-plan-target.ts
     title: Three command-buffer executor and material realization
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-08T00:00:00Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Three material authority for text draws

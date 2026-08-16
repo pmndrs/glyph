@@ -1,4 +1,9 @@
-import type { ParagraphAxisConstraint, ParagraphContentBox, ParagraphLayout, ParagraphMeasurement } from '@pmndrs/text';
+import type {
+  ParagraphAxisConstraint,
+  ParagraphContentBox,
+  ParagraphLayout,
+  ParagraphMeasurement,
+} from '@pmndrs/glyph';
 
 export const YogaMeasureMode = Object.freeze({ Undefined: 0, Exactly: 1, AtMost: 2 });
 

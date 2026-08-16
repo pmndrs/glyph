@@ -13,13 +13,13 @@ tags:
   - abi
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T02:15:49Z'
+  at: '2026-08-15T15:53:27Z'
 sources:
   - id: layout-benchmark
-    resource: ../../packages/text/scripts/benchmark-paragraph-layout.mts
-    title: Paragraph layout benchmark, workflow text:layout-benchmark
+    resource: ../../packages/glyph/scripts/benchmark-paragraph-layout.mts
+    title: Paragraph layout benchmark, workflow glyph:layout-benchmark
   - id: shaper-crate
-    resource: ../../packages/text/rust/shaper/src/lib.rs
+    resource: ../../packages/glyph/rust/shaper/src/lib.rs
     title: HarfRust Wasm shaper crate
   - id: vertical-writing
     resource: vertical-writing.md
@@ -211,7 +211,7 @@ That evidence changes several claims in the earlier draft:
 - Returning only instance data would discard the information native consumers, editing surfaces, selection,
   accessibility, decorations, and alternative renderers need.
 
-On the current branch, the pinned `text:layout-benchmark -- --glyphs 22000` workload renders 25,515 glyphs and measured:
+On the current branch, the pinned `glyph:layout-benchmark -- --glyphs 22000` workload renders 25,515 glyphs and measured:
 
 | Invalidation |   Median |      p95 | Relative to 8.33 ms |
 | ------------ | -------: | -------: | ------------------: |
@@ -1528,7 +1528,7 @@ not an ellipsis-only attribution.
 ## Hard gates for every implementation stage
 
 - never regenerate a golden or official Unicode fixture to accept a behavior change;
-- `mise exec -- pnpm --filter @pmndrs/text check` passes Rust and TypeScript tests, lint, format, types, official Unicode
+- `mise exec -- pnpm --filter @pmndrs/glyph check` passes Rust and TypeScript tests, lint, format, types, official Unicode
   vectors, browser consumers, and packaging; the current closure checkpoint contains 158 Rust library tests and 165
   Node integration tests plus three deterministic fuzz-smoke tests, but executable manifests—not frozen counts—remain
   authoritative as coverage grows;
@@ -1536,7 +1536,7 @@ not an ellipsis-only attribution.
   111 Vitest cases and 16 isolated headless Chromium targets, with the manifest authoritative rather than these counts;
 - the mixed-direction Amiri golden and packed-consumer contract remain exact until an explicitly versioned render-plan
   contract replaces the latter;
-- `text:rust-layout-benchmark -- --glyphs 22000` measures the packaged release Wasm's complete `text_update` and render
+- `glyph:rust-layout-benchmark -- --glyphs 22000` measures the packaged release Wasm's complete `text_update` and render
   plan for every current technique. Historical TypeScript tables remain labeled evidence; deleted code is not rebuilt as
   a second implementation merely to manufacture a live baseline;
 - Unicode segmentation and line breaking pass the repository's unchanged official vectors;

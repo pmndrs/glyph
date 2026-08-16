@@ -42,7 +42,7 @@ sources:
     title: TypeGPU functions and WGSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # MTSDF generation research
@@ -84,7 +84,7 @@ UIKit does not currently contain its own distance-field kernel. Its `TTFLoader` 
 
 ## Repository-owned core boundary
 
-The production generator is a private Rust core under `packages/text/rust`; public packaging remains owned by the MSDF baker. The core owns only:
+The production generator is a private Rust core under `packages/glyph/rust`; public packaging remains owned by the MSDF baker. The core owns only:
 
 - validated contours and typed line/quadratic/cubic edges;
 - deterministic edge coloring and overlap/winding policy;

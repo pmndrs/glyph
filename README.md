@@ -1,14 +1,14 @@
-# @pmndrs/text
+# @pmndrs/glyph
 
 Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
 
-`@pmndrs/text` shapes and lays out text in Rust/Wasm, then publishes a retained render plan for the active renderer. The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
+`@pmndrs/glyph` shapes and lays out text in Rust/Wasm, then publishes a retained render plan for the active renderer. The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
 
 ## Render text with React Three Fiber
 
 ```tsx
-import { Text, TextGroup, useFont } from '@pmndrs/text/react';
-import { msdf } from '@pmndrs/text/three/msdf';
+import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
+import { msdf } from '@pmndrs/glyph/three/msdf';
 
 const fontRequest = {
   input: { baked: '/fonts/Inter.font.glb' },
@@ -44,8 +44,8 @@ function Labels() {
 ## Render text with Three.js
 
 ```ts
-import { FontLoader, Text, TextGroup, span, txt } from '@pmndrs/text/three';
-import { msdf } from '@pmndrs/text/three/msdf';
+import { FontLoader, Text, TextGroup, span, txt } from '@pmndrs/glyph/three';
+import { msdf } from '@pmndrs/glyph/three/msdf';
 
 const loader = new FontLoader();
 const inter = await loader.loadAsync({
@@ -87,8 +87,8 @@ For targeted changes, `insertText`, `deleteText`, and `replaceText` queue narrow
 A FontStack created with `createFontStack` allows you to use additional fonts to lookup missing glyphs if your primary font doesn't contain that glyph. This can be helpful for rendering emoji or icons as well as using additional fonts for other languages or character sets.
 
 ```ts
-import { createFontStack } from '@pmndrs/text';
-import { slug } from '@pmndrs/text/three/slug';
+import { createFontStack } from '@pmndrs/glyph';
+import { slug } from '@pmndrs/glyph/three/slug';
 
 const emoji = await loader.loadAsync({
   input: { baked: '/fonts/Emoji.font.glb' },
@@ -102,16 +102,12 @@ scene.add(new Text({ font: prose, text: 'Status 🌍' }));
 One baked GLB may contain several raster techniques, or you may bake each technique into it's own GLB font asset. Load them together when the application needs each typed font:
 
 ```ts
-import { bitmap } from '@pmndrs/text/three/bitmap';
-import { slug } from '@pmndrs/text/three/slug';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { slug } from '@pmndrs/glyph/three/slug';
 
 const [interBitmap, interMsdf, interSlug] = await loader.loadAsync({
   input: { baked: '/fonts/Inter.font.glb' },
-  rasters: [
-    { technique: bitmap, options: { strikes: [32] } },
-    { technique: msdf },
-    { technique: slug }
-  ],
+  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
 });
 ```
 
@@ -132,7 +128,7 @@ const denseLabels = new TextGroup({
 Custom materials are renderer-owned factories. Rust carries their numeric `materialId` through planning, while Three creates the actual material only when a draw needs it. Different materials may still share instance buffers.
 
 ```ts
-import { defineTextMaterial } from '@pmndrs/text/three';
+import { defineTextMaterial } from '@pmndrs/glyph/three';
 
 const material = defineTextMaterial((context) => {
   const value = context.createDefaultMaterial();
@@ -147,10 +143,10 @@ Call `dispose()` when a `Text`, `TextGroup`, loaded font, or loader will not be 
 
 ## Bake fonts
 
-The `text` CLI bakes the canonical font GLB consumed by the loader. Bake one known font directly:
+The `glyph` CLI bakes the canonical font GLB consumed by the loader. Bake one known font directly:
 
 ```sh
-pnpm exec text bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --msdf --slug
+pnpm exec glyph bake --input Inter-Regular.ttf --output Inter.font.glb --bitmap 32 --msdf --slug
 ```
 
 Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporarily and require byte-identical output.
@@ -158,16 +154,16 @@ Add `--unicodes U+0020-007E` to bake a subset, or `--check` to rebuild temporari
 Or let the CLI discover every `defineFont()` declaration in a project and write each artifact beside its source asset:
 
 ```sh
-pnpm exec text bake --project-root . --entry src/text.ts --asset-root public
+pnpm exec glyph bake --project-root . --entry src/text.ts --asset-root public
 ```
 
-Discovery scans the declared entries, resolves each font's raster requirements from its declaration, and mirrors asset-relative outputs under `--output-root` when the artifacts belong somewhere other than the asset root. `text bake --help` lists every option. Runtime baking uses the same baker Wasm in a Worker and is opt-in; it is dynamically imported and split into its own chunk so it never reaches the default bundle.
+Discovery scans the declared entries, resolves each font's raster requirements from its declaration, and mirrors asset-relative outputs under `--output-root` when the artifacts belong somewhere other than the asset root. `glyph bake --help` lists every option. Runtime baking uses the same baker Wasm in a Worker and is opt-in; it is dynamically imported and split into its own chunk so it never reaches the default bundle.
 
 Inspect authored `post` or CFF glyph names to find icon code points or produce a bake-ready Unicode set:
 
 ```sh
-pnpm exec text glyphs fa-solid-900.ttf --name globe --json
-pnpm exec text glyphs fa-solid-900.ttf --name globe --name earth-americas --unicode-set
+pnpm exec glyph glyphs fa-solid-900.ttf --name globe --json
+pnpm exec glyph glyphs fa-solid-900.ttf --name globe --name earth-americas --unicode-set
 ```
 
 Fonts without authored glyph names still report exact glyph IDs.
@@ -181,7 +177,7 @@ Every Three primitive above is built on a renderer-neutral core with four moves:
 Load a font and own the engine lifecycle once:
 
 ```ts
-import { createTextRuntime } from '@pmndrs/text';
+import { createTextRuntime } from '@pmndrs/glyph';
 import { textRuntimeShaper } from '…/text-runtime';
 import { TextEngineHost } from '…/internal/text-engine-host';
 import { firstPartyThreeRenderPolicyBytes } from '…/internal/render-policy-wire';
@@ -267,7 +263,7 @@ function frame(edits) {
 }
 ```
 
-Record layouts come from the versioned ABI (`@pmndrs/text/shaper-abi.json`); the next section describes what policies and plans mean, and `dispose()` on the host releases every registered policy, font stack, and session.
+Record layouts come from the versioned ABI (`@pmndrs/glyph/shaper-abi.json`); the next section describes what policies and plans mean, and `dispose()` on the host releases every registered policy, font stack, and session.
 
 ## Render policy and render plan
 
@@ -311,7 +307,7 @@ A renderer integration has five responsibilities:
 4. Realize materials and submit draw packets without re-shaping, re-sorting, or reconstructing layout.
 5. Acknowledge completed publication generations before the planner reuses retired storage.
 
-Three is the maintained reference executor. Importing `@pmndrs/text/three/bitmap`, `/msdf`, or `/slug` registers that technique's policy program and TSL material implementation. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
+Three is the maintained reference executor. Importing `@pmndrs/glyph/three/bitmap`, `/msdf`, or `/slug` registers that technique's policy program and TSL material implementation. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
 
 The portable policy and render-plan wire contract is implemented and documented, but a renderer-neutral host is not yet exposed as a stable package subpath. A new engine integration should currently follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference. TypeGPU support will be built against this contract in an upcoming release.
 
@@ -323,4 +319,4 @@ pnpm install
 pnpm dev
 ```
 
-`@pmndrs/text` is ESM-only and MIT licensed.
+`@pmndrs/glyph` is ESM-only and MIT licensed.

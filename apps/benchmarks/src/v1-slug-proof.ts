@@ -1,6 +1,6 @@
-import type { LoadedFont } from '@pmndrs/text';
-import { slug } from '@pmndrs/text/three/slug';
-import { FontLoader, Text } from '@pmndrs/text/three';
+import type { LoadedFont } from '@pmndrs/glyph';
+import { slug } from '@pmndrs/glyph/three/slug';
+import { FontLoader, Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import interCompressedFontUrl from '../fixtures/rendering/inter-slug.font.glb.gz?url';
 import showcaseManifest from '../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
@@ -60,7 +60,7 @@ async function render(): Promise<TargetV1SlugResult> {
     await renderer.renderAsync(scene, camera);
     const firstDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
     if (firstDraw === undefined) throw new Error('target-v1 Slug created no draw');
-    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsText_geometry');
+    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyph_geometry');
     text.text = 'Target v1 Plug';
     await renderer.renderAsync(scene, camera);
     const retainedDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
@@ -74,7 +74,7 @@ async function render(): Promise<TargetV1SlugResult> {
       glyphCount: text.measureLayout()?.glyphCount ?? 0,
       litPixels,
       retainedDraw: retainedDraw === firstDraw,
-      retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsText_geometry') === firstStorage,
+      retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsGlyph_geometry') === firstStorage,
       gpuBytes: text.gpuBytes,
     };
   } finally {

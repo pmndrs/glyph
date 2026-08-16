@@ -840,7 +840,7 @@ function PayloadInspector({
           />
           <PayloadRow label={shaper.label} status="loaded" value={formatBytes(shaper.gzipBytes)} />
           <p className="text-[9px] leading-relaxed text-dim">
-            Includes the pmndrs/text core, selected raster runtime, and shaper. External Three.js and React peers are
+            Includes the pmndrs/glyph core, selected raster runtime, and shaper. External Three.js and React peers are
             not included; font assets are listed below.
           </p>
         </InspectorDisclosure>

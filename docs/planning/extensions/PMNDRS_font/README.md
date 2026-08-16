@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5'
-  at: '2026-07-26T02:40:00Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -31,7 +31,7 @@ generated:
 
 ## Contributors
 
-- Poimandres text maintainers, Poimandres, [pmndrs/text](https://github.com/pmndrs/text)
+- Poimandres text maintainers, Poimandres, [pmndrs/glyph](https://github.com/pmndrs/glyph)
 
 ## Status
 
@@ -113,7 +113,7 @@ Required tables are `head`, `maxp`, `cmap`, `hhea`, `hmtx`, and `OS/2`. `GDEF`, 
 
 `fontFunctions` preserves the optional glyph-extents query used by HarfRust fallback positioning after outlines are removed. `glyphExtentsBufferView` contains one dense 8-byte `(xMin, yMin, xMax, yMax)` i16 record per glyph. `glyphExtentsAvailabilityBufferView` contains exactly one bit per glyph, rounded up to a byte; a clear bit makes the adapter return no extents and requires a zeroed record. HarfRust 0.12.0 exposes no contour-point callback, so Anchor Format 2 point records are not serialized.
 
-The exact whitelist, metric policy, checksums, and validation rules are normative in the [V0 shaping contract](../../shaping-data-contract.md) while this extension is incubated in `pmndrs/text`.
+The exact whitelist, metric policy, checksums, and validation rules are normative in the [V0 shaping contract](../../shaping-data-contract.md) while this extension is incubated in `pmndrs/glyph`.
 
 `shaping.hash` is lowercase SHA-256 over the domain-separated, length-prefixed SFNT, glyph-extents, and extents-availability bytes defined by the shaping contract. Companion raster artifacts MUST repeat this hash.
 
@@ -143,6 +143,6 @@ The extension adds a `PMNDRS_font` object to the root glTF `extensions` object. 
 
 ## Known Implementations
 
-- [`pmndrs/text`](https://github.com/pmndrs/text) — reference implementation in development.
+- [`pmndrs/glyph`](https://github.com/pmndrs/glyph) — reference implementation in development.
 
 Three Flatland Slug is prior art for baked GLB font delivery but does not implement this extension.

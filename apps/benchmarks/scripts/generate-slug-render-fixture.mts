@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-import { bakeFont } from '@pmndrs/text/bake';
-import { slugBaker } from '@pmndrs/text/bakers/slug';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { slugBaker } from '@pmndrs/glyph/bakers/slug';
 
 const outputDirectory = resolve('fixtures/rendering');
 const showcaseManifestOutput = resolve(outputDirectory, 'showcase-slug-fixtures-v0.json');
 const check = process.argv.includes('--check');
 const requestedFixture = process.argv.find((argument) => argument.startsWith('--fixture='))?.slice('--fixture='.length);
-const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-text-slug-fixture-'));
+const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-slug-fixture-'));
 
 const fixtures = [
   {
