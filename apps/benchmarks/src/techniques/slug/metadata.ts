@@ -1,4 +1,4 @@
-import { type SlugData } from '@pmndrs/text/raster/slug';
+import { type SlugData } from '@pmndrs/glyph/raster/slug';
 
 /**
  * Renderer-neutral Slug page allocation. Every byte figure counts decoded resource bytes the technique retains, not

@@ -6,8 +6,8 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
-import { bakeFont } from '@pmndrs/text/bake';
-import { createSlugBaker, slugBakerFromCore } from '@pmndrs/text/bakers/slug';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { createSlugBaker, slugBakerFromCore } from '@pmndrs/glyph/bakers/slug';
 
 const experimentName =
   process.argv.find((argument) => argument.startsWith('--experiment='))?.slice('--experiment='.length) ?? 'fixed32';
@@ -53,7 +53,7 @@ const outputDirectory = resolve('fixtures/autoresearch', experimentId);
 const manifestOutput = resolve(outputDirectory, 'artifacts-v0.json');
 const check = process.argv.includes('--check');
 const requestedFixture = process.argv.find((argument) => argument.startsWith('--fixture='))?.slice('--fixture='.length);
-const temporaryDirectory = await mkdtemp(join(tmpdir(), `pmndrs-text-slug-${experiment.fileLabel}-`));
+const temporaryDirectory = await mkdtemp(join(tmpdir(), `pmndrs-glyph-slug-${experiment.fileLabel}-`));
 const cargoTarget = resolve(temporaryDirectory, 'cargo-target');
 
 interface ExperimentArtifact {
@@ -136,7 +136,7 @@ try {
     'cargo',
     'build',
     '--manifest-path',
-    'packages/text/rust/slug-baker/Cargo.toml',
+    'packages/glyph/rust/slug-baker/Cargo.toml',
     '--target',
     'wasm32-unknown-unknown',
     '--release',
@@ -147,7 +147,7 @@ try {
     '--target-dir',
     cargoTarget,
   ]);
-  const wasm = await readFile(resolve(cargoTarget, 'wasm32-unknown-unknown/release/pmndrs_text_slug_baker.wasm'));
+  const wasm = await readFile(resolve(cargoTarget, 'wasm32-unknown-unknown/release/pmndrs_glyph_slug_baker.wasm'));
   const baker = slugBakerFromCore(await createSlugBaker(wasm));
   const artifacts: ExperimentArtifact[] =
     requestedFixture === undefined

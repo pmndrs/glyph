@@ -3,14 +3,14 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { bitmapBaker } from '@pmndrs/text/bakers/bitmap';
-import { bakeFont } from '@pmndrs/text/bake';
+import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
+import { bakeFont } from '@pmndrs/glyph/bake';
 
 const outputDirectory = resolve('fixtures/rendering');
 await mkdir(outputDirectory, { recursive: true });
 const check = process.argv.includes('--check');
 const requestedFixture = process.argv.find((argument) => argument.startsWith('--fixture='))?.slice('--fixture='.length);
-const temporaryDirectory = check ? await mkdtemp(join(tmpdir(), 'pmndrs-text-showcase-')) : undefined;
+const temporaryDirectory = check ? await mkdtemp(join(tmpdir(), 'pmndrs-glyph-showcase-')) : undefined;
 
 const fixtures = [
   {

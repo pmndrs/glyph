@@ -11,14 +11,14 @@ sources:
     resource: https://github.com/EricLengyel/Slug/tree/be3c13eb7d63f9e8aa5c583e42d92c374cb91d98
     title: Official public Slug reference shaders
   - id: rejected-runtime
-    resource: https://github.com/pmndrs/text/commit/6f18b8fc5b9167e0143c41624f615e71dd51aecc
+    resource: https://github.com/pmndrs/glyph/commit/6f18b8fc5b9167e0143c41624f615e71dd51aecc
     title: Rejected dynamic analytic outline implementation
   - id: decision-register
     resource: decision-register.md
     title: Repository decision register
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-29T13:24:14Z'
+  at: '2026-08-15T15:53:27Z'
 status: draft
 ---
 

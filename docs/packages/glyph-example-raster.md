@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
-title: '@pmndrs/text-glyph-example-raster'
+title: '@pmndrs/glyph-example-raster'
 description: Proves the published raster and baker extension boundary with a private diagnostic technique.
 resource: ../../packages/glyph-example-raster
-workspace_package: '@pmndrs/text-glyph-example-raster'
+workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:d3fc6c1fc5a3ff728ebf9ac8bb9112c4b0e1e9fc4f9304376ded7ecef41a1764'
+source_digest: 'sha256:043a08a8cfdf41c283576d82c993f95dad743ebf8c2256ff5744128cf4aca95e'
 tags: [package, raster, extension-proof, threejs, tsl]
 sources:
   - id: manifest
@@ -28,15 +28,15 @@ sources:
     title: Dual-backend product rendering probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-10T02:32:26Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
-# Package reference: `@pmndrs/text-glyph-example-raster`
+# Package reference: `@pmndrs/glyph-example-raster`
 
 Status: ✅ Milestone 10.4 external extension proof
 
 This private workspace package is a consumer proof, not a fourth recommended production raster. It imports only published
-`@pmndrs/text` entry points and its own pinned Three.js dependency. It owns the literal `glyphExample` kind, companion
+`@pmndrs/glyph` entry points and its own pinned Three.js dependency. It owns the literal `glyphExample` kind, companion
 extension and descriptor, deterministic baker, standalone-valid GLB framing, embedded or authenticated external RGBA glyph
 records, decoder validation, runtime baker, declarative Rust packing policy, TSL material, paragraph/local-run render-order
 inheritance, abort behavior, and disposal. Rust owns retained instance storage, dirty-range publication, and overflow handling.
@@ -51,8 +51,8 @@ resolvers; the embedded lane proves recursive `BufferView` rebasing through the 
 The package now supplies both halves of the Rust render-plan boundary separately. `glyphExample` is a portable
 `defineRasterTechnique` that owns identity, decoding, one shared resource, and disposal while importing no renderer or
 instance-packing contract.
-`@pmndrs/text-glyph-example-raster/three` registers a static policy program through public
-`registerThreeRasterPlanProgram`, so nothing in `@pmndrs/text` names this package. The policy describes the exact Rust
+`@pmndrs/glyph-example-raster/three` registers a static policy program through public
+`registerThreeRasterPlanProgram`, so nothing in `@pmndrs/glyph` names this package. The policy describes the exact Rust
 inputs, buffers, scalar operations, and storage/draw keys. A cold compiler lowers validated glyph colors and inset data
 into one font binding; a renderer factory consumes the resulting buffers to construct the TSL material. The package no
 longer owns a `ParagraphBatchTarget`, target revision, slack planner, dirty-range upload loop, or mesh transaction.
@@ -89,7 +89,7 @@ assertion meaningful. `TextGroup.renderOrder` still sets the text-local base eve
 target checks both contracts separately.
 
 The remaining friction is documented rather than hidden. Static discovery maps an imported factory export name to
-`package.json#pmndrs.text[exportName]` and requires the default baker's kind to equal that export name. A standalone companion
+`package.json#pmndrs.glyph[exportName]` and requires the default baker's kind to equal that export name. A standalone companion
 also needs ordinary valid glTF content in addition to its extension data because external/runtime attachment runs the pinned
 Khronos validator. This package owns a one-point witness mesh and its GLB encoder without a private import. A future generic
 companion-artifact helper could remove that boilerplate, but its absence does not force a fork or block the extension contract.

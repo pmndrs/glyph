@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Shaping and layout conformance plan
@@ -67,7 +67,7 @@ font face index
 HarfRust version and commit
 HarfBuzz version and commit
 Unicode version
-pmndrs/text compiler version
+pmndrs/glyph compiler version
 PMNDRS_font format version
 variation coordinates
 shaping input options

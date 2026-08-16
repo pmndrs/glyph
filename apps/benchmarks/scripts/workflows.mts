@@ -20,7 +20,7 @@ interface IndexedWorkflow extends Workflow {
 }
 
 const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url));
-const roots = ['apps/benchmarks/scripts', 'apps/benchmarks/vitexec', 'packages/text/scripts'];
+const roots = ['apps/benchmarks/scripts', 'apps/benchmarks/vitexec', 'packages/glyph/scripts'];
 const workflowPattern = /\/\* @workflow\s+(\{[\s\S]*?\})\s+\*\//g;
 
 const workflows = await indexWorkflows();
