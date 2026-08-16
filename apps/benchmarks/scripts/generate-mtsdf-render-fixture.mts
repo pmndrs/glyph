@@ -4,8 +4,8 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { bakeFont } from '@pmndrs/text/bake';
-import { msdfBaker } from '@pmndrs/text/bakers/msdf';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
 
 import { exactBaseTextureArrayBytes } from '../src/benchmark/texture-memory.ts';
 
@@ -13,7 +13,7 @@ const outputDirectory = resolve('fixtures/rendering');
 const showcaseManifestOutput = resolve(outputDirectory, 'showcase-mtsdf-fixtures-v0.json');
 const check = process.argv.includes('--check');
 const requestedFixture = process.argv.find((argument) => argument.startsWith('--fixture='))?.slice('--fixture='.length);
-const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-text-mtsdf-fixture-'));
+const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-mtsdf-fixture-'));
 
 const fixtures = [
   {

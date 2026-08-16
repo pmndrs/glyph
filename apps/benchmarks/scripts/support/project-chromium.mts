@@ -1,6 +1,6 @@
 import { chromium, type Browser, type LaunchOptions } from 'playwright';
 
-export const chromiumExecutablePathEnvironmentVariable = 'PMNDRS_TEXT_CHROMIUM_EXECUTABLE_PATH';
+export const chromiumExecutablePathEnvironmentVariable = 'PMNDRS_GLYPH_CHROMIUM_EXECUTABLE_PATH';
 
 type ProjectChromiumLaunchOptions = Omit<LaunchOptions, 'executablePath'>;
 

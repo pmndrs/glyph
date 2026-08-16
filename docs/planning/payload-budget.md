@@ -166,7 +166,7 @@ Assumptions:
 | Font Awesome legacy subset, 350 glyphs |         7,000 B |               ~1 MiB (modeled 1024²) |                 ~4–8 MiB |
 | Lucide, 1,594 SVG icons                |         ~31 KiB |               ~4 MiB (modeled 2048²) |  ~16 MiB (modeled 2048²) |
 
-The distance-field ranges span a 1024² to 2048×1024 page for the font fixtures. Icon shapes are often near-square and consume more atlas area per entry than proportional text glyphs, so glyph count alone is not a reliable predictor.
+The distance-field ranges span a 1024² to 2048×1024 page for the font fixtures. Icon shapes are often near-square and consume more atlas area per entry than proportional glyph glyphs, so glyph count alone is not a reliable predictor.
 
 Bitmap strikes scale independently. A `[16, 24, 32]` R8 set is not “one 32 px atlas times three”: smaller strikes pack into smaller pages. The baker must report every strike and page separately. RGBA color emoji must likewise be reported separately from grayscale glyph strikes.
 

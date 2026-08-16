@@ -1,12 +1,12 @@
 {
-  "name": "@pmndrs/text-r3f-hello-world",
+  "name": "@pmndrs/glyph-r3f-hello-world",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "bake": "pnpm bake:inter && pnpm bake:icons",
-    "bake:inter": "pnpm exec text bake --input ../benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf --output ./assets/inter-latin.font.glb --unicodes U+0020-007E --bitmap 32 --msdf --slug",
-    "bake:icons": "pnpm exec text bake --input ../benchmarks/fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf --output ./assets/font-awesome-world.font.glb --unicodes U+E47B,U+F0AC,U+F57C,U+F57D,U+F57E,U+F7A2 --bitmap 32 --msdf --slug",
+    "bake:inter": "pnpm exec glyph bake --input ../benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf --output ./assets/inter-latin.font.glb --unicodes U+0020-007E --bitmap 32 --msdf --slug",
+    "bake:icons": "pnpm exec glyph bake --input ../benchmarks/fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf --output ./assets/font-awesome-world.font.glb --unicodes U+E47B,U+F0AC,U+F57C,U+F57D,U+F57E,U+F7A2 --bitmap 32 --msdf --slug",
     "bake:check": "pnpm bake:check:inter && pnpm bake:check:icons",
     "bake:check:inter": "pnpm bake:inter --check",
     "bake:check:icons": "pnpm bake:icons --check",
@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@pmndrs/text": "workspace:*",
+    "@pmndrs/glyph": "workspace:*",
     "@react-three/fiber": "10.0.0-alpha.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",

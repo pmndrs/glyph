@@ -1,7 +1,7 @@
 ---
 type: Roadmap
 title: Canonical implementation roadmap
-description: Defines the only active implementation sequence, dependencies, effort estimates, deliverables, and exit gates for pmndrs/text.
+description: Defines the only active implementation sequence, dependencies, effort estimates, deliverables, and exit gates for pmndrs/glyph.
 tags: [roadmap, implementation, milestones]
 sources:
   - id: 'citation-1'
@@ -28,7 +28,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-09T14:25:40Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Canonical implementation roadmap
@@ -100,7 +100,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | ID    | Status | Work                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Size | Depends on  |
 | ----- | :----: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--: | ----------- |
 | 0.1   |   ✅   | Accept public core/React APIs, typed raster capabilities, URL resolution, and ESM-only exports.                                                                                                                                                                                                                                                                                                                                                                      |  S   | —           |
-| 0.2   |   ✅   | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures.                                                                                                                                                                                                                                                                                                                                         |  S   | 0.1         |
+| 0.2   |   ✅   | Make the initial `@pmndrs/glyph` contract shim preserve font/raster literals and pass positive/negative composition fixtures.                                                                                                                                                                                                                                                                                                                                        |  S   | 0.1         |
 | 0.3   |   ✅   | Accept identity, GLB, Worker, and version contracts.                                                                                                                                                                                                                                                                                                                                                                                                                 |  S   | 0.2         |
 | 1.1   |   ✅   | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target.                                                                                                                                                                                                                                                                                                                                                                  |  M   | 0.3         |
 | 1.2   |   ✅   | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry.                                                                                                                                                                                                                                                                                                                                                           |  M   | 1.1         |
@@ -121,7 +121,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 6.0   |   ✅   | Establish the current-repository TSL compiler, shader, and live WebGPU/WebGL2 baseline without broad type erasure.                                                                                                                                                                                                                                                                                                                                                   |  S   | 3.3, 5.4    |
 | 6.1   |   ✅   | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2.                                                                                                                                                                                                                                                                                                                                                                |  M   | 6.0         |
 | 6.2   |   ✅   | Implement the Three.js `Text` object over the bitmap proof.                                                                                                                                                                                                                                                                                                                                                                                                          |  M   | 6.1         |
-| 6.3   |   ✅   | Implement `@pmndrs/text/react` as a thin reconciliation layer.                                                                                                                                                                                                                                                                                                                                                                                                       |  M   | 6.2         |
+| 6.3   |   ✅   | Implement `@pmndrs/glyph/react` as a thin reconciliation layer.                                                                                                                                                                                                                                                                                                                                                                                                      |  M   | 6.2         |
 | 6.4   |   ✅   | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode.                                                                                                                                                                                                                                                                                                                                                               |  M   | 6.1–6.3     |
 | 7.1   |   ✅   | Harden lifecycle, invalid input, limits, and package graphs.                                                                                                                                                                                                                                                                                                                                                                                                         |  M   | 1–6         |
 | 7.2   |   ✅   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                                                                                                                                                                                                                                                                                                          |  M   | 7.1         |
@@ -272,7 +272,7 @@ Exit only when the Figma-backed lab is usable, synthetic and portable-baker targ
 - [x] TypeScript, TSX, JavaScript, and JSX are admitted source forms; a plain-JavaScript project fixture proves alias and immutable-constant behavior without application execution.
 - [x] One exact-version adapter owns every unstable TypeScript import and snapshot/symbol-handle operation; package tests fail on version drift or imports outside that boundary.
 
-Item 2.1 is closed. Its analyzer remains internal until item 2.4 exposes the complete `@pmndrs/text/bake` Node API and CLI; item 2.3 is the active dependency after 2.2 closed.
+Item 2.1 is closed. Its analyzer remains internal until item 2.4 exposes the complete `@pmndrs/glyph/bake` Node API and CLI; item 2.3 is the active dependency after 2.2 closed.
 
 ### 2.2 closure checklist
 
@@ -304,11 +304,11 @@ Item 2.3 is closed. Exact goldens bind split, combined-embedded, combined-extern
 
 ### 2.4 closure checklist
 
-- [x] `@pmndrs/text/bake` exports the filesystem-oriented `bakeFont` and discovery-oriented `bakeProject` Node APIs without adding Node built-ins to browser-safe entry points.
+- [x] `@pmndrs/glyph/bake` exports the filesystem-oriented `bakeFont` and discovery-oriented `bakeProject` Node APIs without adding Node built-ins to browser-safe entry points.
 - [x] The generic `bakeFont` tuple preserves each selected raster package's exact option and packaging types; compile-only fixtures reject an empty bitmap strike tuple and unsupported packaging.
 - [x] `bakeProject` consumes the canonical TypeScript discovery report, groups and deduplicates one source deterministically, and dynamically imports only each already-verified ESM baker entry.
-- [x] The thin native-ESM `text bake` command covers conventional project defaults, repeatable entry/asset-root options, mirrored output roots, human output, JSON output, command-specific help, malformed arguments, and diagnostic exit status.
-- [x] `text glyphs` exposes Unicode mappings and retained `post`/CFF names through pinned `hb-info`, filters exact names, and emits either JSON or a compressed set accepted by `text bake --unicodes`; synthetic `gidN` labels are never promoted to semantic names.
+- [x] The thin native-ESM `glyph bake` command covers conventional project defaults, repeatable entry/asset-root options, mirrored output roots, human output, JSON output, command-specific help, malformed arguments, and diagnostic exit status.
+- [x] `glyph glyphs` exposes Unicode mappings and retained `post`/CFF names through pinned `hb-info`, filters exact names, and emits either JSON or a compressed set accepted by `glyph bake --unicodes`; synthetic `gidN` labels are never promoted to semantic names.
 - [x] Exact Inter embedded/external goldens, mixed embedded/external raster composition, and repeated project runs prove authoritative byte and output-report determinism.
 - [x] Writes use same-directory exclusive temporary files, file synchronization, atomic rename, cancellation cleanup, source/output overlap checks, unique targets, and single-filename artifact IDs.
 - [x] The completed report records phase and total timing, before/after RSS, explicitly labeled process-lifetime peak RSS, output paths/roles/bytes/hashes, container bytes, and raw/gzip/Brotli transport bytes.
@@ -326,7 +326,7 @@ Deliver:
 - deterministic reduced shaping SFNT, dense extents, and one-bit-per-glyph extents availability;
 - package-owned bitmap descriptor, baker, statically declared unhinted grayscale strikes, and 20-byte dense glyph records;
 - core-owned `PMNDRS_font` writer/validator and bitmap-package-owned `PMNDRS_font_bitmap` writer/validator;
-- `@pmndrs/text/bake` Node API and thin CLI;
+- `@pmndrs/glyph/bake` Node API and thin CLI;
 - bake timing, peak memory, and byte report.
 - generated canonical GLB/bitmap goldens and malformed-input fixtures from the same bake core used by the Worker host; GPU readback goldens become executable with the Milestone 6 renderer.
 
@@ -351,9 +351,9 @@ Item 3.1 is closed. Item 3.2 is active and replaces the injected fallback seam's
 
 ### 3.2 closure checklist
 
-- [x] A baked miss dynamically imports `@pmndrs/text/runtime-bake`; the initial browser graph contains only the import boundary and cannot construct a Worker or reach the bake wrapper/Wasm.
+- [x] A baked miss dynamically imports `@pmndrs/glyph/runtime-bake`; the initial browser graph contains only the import boundary and cannot construct a Worker or reach the bake wrapper/Wasm.
 - [x] The standard host creates a named module Worker lazily, queues concurrent requests behind one active bake, reuses that instance within the burst, copies only the source transfer buffer needed to preserve loader provenance, and transfers the returned artifact buffer.
-- [x] The Worker imports the exact portable `@pmndrs/text/bake` wrapper, lazily instantiates the same optimized `font_baker.wasm`, accepts only the versioned face descriptor, and serializes structured failures.
+- [x] The Worker imports the exact portable `@pmndrs/glyph/bake` wrapper, lazily instantiates the same optimized `font_baker.wasm`, accepts only the versioned face descriptor, and serializes structured failures.
 - [x] The loader routes standard fallback output through the same provenance and hostile-input validator used for baked hits before registration.
 - [x] Canonical Inter integration tests exercise the public host, default loader path, transfer lists, Worker entry, and exact portable-core artifact bytes; package tests prove the runtime host/Worker/Wasm remain outside the static entry graph.
 - [x] Independent size lanes report the runtime host, Worker JavaScript, and portable Wasm separately instead of folding lazy code or Wasm into the initial core.
@@ -550,7 +550,7 @@ Deliver:
 - optional bitmap raster module;
 - KTX2 lossless R8 path, flat record validation, bulk GPU upload, and instance batching;
 - framework-neutral Three.js `Text` object owning the paragraph/raster lifecycle;
-- `@pmndrs/text/react` wrapper with Suspense font loading, direct props, nested inline `<Text>`, and ref forwarding;
+- `@pmndrs/glyph/react` wrapper with Suspense font loading, direct props, nested inline `<Text>`, and ref forwarding;
 - the harness's first real rendering target and scenario on WebGPU and WebGL2, including clipping and resize;
 - first-draw, frame-time, GPU-memory, and quality reports.
 
@@ -603,7 +603,7 @@ Milestone 7 authorizes implementation of the remaining v0 rasters; it does not a
 
 Deliver:
 
-- optional `@pmndrs/text/raster/msdf` module and configurable MTSDF generator with a 64/8 compatibility default;
+- optional `@pmndrs/glyph/raster/msdf` module and configurable MTSDF generator with a 64/8 compatibility default;
 - canonical 20-byte glyph records and linear RGBA8 KTX2 lossless baseline;
 - independently packaged and embedded raster parity;
 - WebGPU and WebGL2 shaders, mip behavior, effects limits, and resize/transform scenes;
@@ -640,7 +640,7 @@ The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) record
 
 ### 8.3 runtime-and-validation checklist
 
-- [x] Ship optional `@pmndrs/text/raster/msdf` and `@pmndrs/text/bakers/msdf/validate` entries without importing baker Wasm from the renderer.
+- [x] Ship optional `@pmndrs/glyph/raster/msdf` and `@pmndrs/glyph/bakers/msdf/validate` entries without importing baker Wasm from the renderer.
 - [x] Validate schema, Khronos core structure, reciprocal identity, fixed MTSDF constants, exact dense records, page bounds, embedded/external authentication, single-level linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and padded base-array residency before publication.
 - [x] Share pure KTX2 and dense-record rules across bitmap/MTSDF renderers and standalone validators while keeping Khronos/Ajv outside renderer graphs.
 - [x] Use one instanced resource/batch family for fill, opacity, bounded outline, and translated hard shadow; reject effects beyond the encoded distance range.

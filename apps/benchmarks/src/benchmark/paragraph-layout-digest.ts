@@ -1,4 +1,4 @@
-import type { ParagraphLayout } from '@pmndrs/text';
+import type { ParagraphLayout } from '@pmndrs/glyph';
 
 type PortableParagraphLayout = Pick<
   ParagraphLayout,

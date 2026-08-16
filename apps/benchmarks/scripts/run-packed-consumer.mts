@@ -27,7 +27,7 @@ let server: ViteDevServer | undefined;
 let browser: Browser | undefined;
 try {
   await Promise.all([
-    packPackage('packages/text'),
+    packPackage('packages/glyph'),
     copyFile(
       join(appDirectory, 'fixtures/fonts/inter-v4.1/Inter-Regular.ttf'),
       join(consumerDirectory, 'Inter-Regular.ttf'),
@@ -36,7 +36,7 @@ try {
   await Promise.all([
     writeFile(
       join(consumerDirectory, 'package.json'),
-      `${JSON.stringify({ private: true, type: 'module', dependencies: { '@pmndrs/text': 'file:archives/pmndrs-text-0.0.0.tgz' } }, undefined, 2)}\n`,
+      `${JSON.stringify({ private: true, type: 'module', dependencies: { '@pmndrs/glyph': 'file:archives/pmndrs-glyph-0.0.0.tgz' } }, undefined, 2)}\n`,
     ),
     writeFile(
       join(consumerDirectory, 'index.html'),
@@ -44,7 +44,7 @@ try {
     ),
     writeFile(
       join(consumerDirectory, 'entry.js'),
-      `import { bakeFontInWorker } from '@pmndrs/text/runtime-bake'
+      `import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake'
 try {
   const source = new Uint8Array(await (await fetch('/Inter-Regular.ttf')).arrayBuffer())
   const artifact = await bakeFontInWorker({ source, sourceUrl: location.href })
