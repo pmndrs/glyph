@@ -2674,15 +2674,15 @@
       "layouts": {
         "natural": {
           "measurement": {
-            "width": 555.21875,
+            "width": 582.109375,
             "height": 46.336,
-            "contentWidth": 555.21875,
+            "contentWidth": 582.109375,
             "contentHeight": 46.336,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 37.119998931884766,
             "overflowed": false
           },
-          "hash": "7b857cbb",
+          "hash": "42a7a021",
           "glyphFontSlots": [
             0,
             0,
@@ -2888,20 +2888,20 @@
             37.119998931884766
           ],
           "lineAdvances": [
-            555.21875
+            582.109375
           ]
         },
         "wide": {
           "measurement": {
             "width": 480,
             "height": 92.672,
-            "contentWidth": 459.21875,
+            "contentWidth": 393.203125,
             "contentHeight": 92.672,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 83.45600128173828,
             "overflowed": false
           },
-          "hash": "997f051e",
+          "hash": "e2e8fd70",
           "glyphFontSlots": [
             0,
             0,
@@ -3112,21 +3112,21 @@
             83.45600128173828
           ],
           "lineAdvances": [
-            459.21875,
-            96
+            393.203125,
+            188.90625
           ]
         },
         "narrow": {
           "measurement": {
             "width": 260,
             "height": 139.00799999999998,
-            "contentWidth": 243.4375,
+            "contentWidth": 247.78125,
             "contentHeight": 139.00799999999998,
             "firstBaseline": 37.119998931884766,
             "lastBaseline": 129.79200744628906,
             "overflowed": false
           },
-          "hash": "fd23debe",
+          "hash": "fdb5ac8b",
           "glyphFontSlots": [
             0,
             0,
@@ -3342,8 +3342,8 @@
             129.79200744628906
           ],
           "lineAdvances": [
-            243.4375,
-            215.78125,
+            238.328125,
+            247.78125,
             96
           ]
         }
