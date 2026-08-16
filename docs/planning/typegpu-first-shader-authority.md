@@ -34,20 +34,20 @@ sources:
     resource: https://docs.swmansion.com/TypeGPU/why-typegpu/
     title: Official TypeGPU architecture and WebGPU scope
   - id: bitmap-v0
-    resource: ../../packages/text/src/raster/bitmap-technique.ts
+    resource: ../../packages/glyph/src/raster/bitmap-technique.ts
     title: Merged v0 Bitmap TSL implementation
   - id: slug-v0
-    resource: ../../packages/text/src/raster/slug-technique.ts
+    resource: ../../packages/glyph/src/raster/slug-technique.ts
     title: Merged v0 Slug TSL implementation
   - id: slug-texture-v0
-    resource: ../../packages/text/src/tsl/slug-shaders/slug-texture.ts
+    resource: ../../packages/glyph/src/tsl/slug-shaders/slug-texture.ts
     title: Merged v0 Slug texture access
   - id: gpucat
     resource: https://github.com/isaac-mason/gpucat/tree/11cf91b5172cc5143f68ff6ebf01c5e815de4e94
     title: gpucat at the reviewed revision
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:31:24Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # TypeGPU-first shader authority
@@ -94,7 +94,7 @@ import {
   type ParagraphBatchTarget,
   type PreparedGlyphBatch,
   type PreparedGlyphRun,
-} from '@pmndrs/text';
+} from '@pmndrs/glyph';
 ```
 
 The core prepares renderer-neutral revisions. A TypeGPU, Three, or gpucat integration consumes those same public values.
@@ -116,23 +116,23 @@ expect(core).not.toImport('gpucat');
 The reusable TypeGPU package does not need to be a complete scene engine. Its primary product can be typed raster programs:
 
 ```txt
-@pmndrs/text
+@pmndrs/glyph
   core loading, shaping, layout, batches, storage, runs, target protocol
 
-@pmndrs/text/raster/{bitmap,mtsdf,slug}
+@pmndrs/glyph/raster/{bitmap,mtsdf,slug}
   baker + portable decoder + resource selection + canonical storage schema
 
-@pmndrs/text/typegpu
+@pmndrs/glyph/typegpu
   TypeGPU vertex/fragment functions + resource ABI + program factories
   optional direct pass encoder; no scene graph, canvas, RAF, or adapter request
 
-@pmndrs/text/three
+@pmndrs/glyph/three
   Three objects, loader, target, ordering, materials, native TSL programs
 
-@pmndrs/text/three/typegpu                 // experiment
+@pmndrs/glyph/three/typegpu                 // experiment
   @typegpu/three bridge into Three-owned NodeMaterials; WebGPU-only today
 
-@pmndrs/text-gpucat                        // external fitness package
+@pmndrs/glyph-gpucat                        // external fitness package
   gpucat objects, target, resource wrappers, draws, and shader adaptation
 ```
 
@@ -220,7 +220,7 @@ or that a structured vertex/fragment ABI returns usable TSL nodes.
 
 The reviewed implementation confirms WGSL injection, no WebGL2 route, and no demonstrated way to carry the required
 sampleable Three resources. Therefore the native TSL program remains the flagship implementation. Retiring it is permitted only after the bridge
-passes the complete Bitmap, MTSDF, and Slug proof on every backend promised by `@pmndrs/text/three`. If TypeGPU remains
+passes the complete Bitmap, MTSDF, and Slug proof on every backend promised by `@pmndrs/glyph/three`. If TypeGPU remains
 WebGPU-only, it is an optional package rather than a silent implementation detail of the default Three integration.
 
 ## Bridge to gpucat
@@ -404,8 +404,8 @@ WebGPU building blocks and confirms a WebGPU-only Three bridge; it does not yet 
 Implement Gate 0 before building a TypeGPU engine. Until then:
 
 - native TSL remains the flagship Three implementation;
-- `@pmndrs/text/typegpu` is the package-owned WebGPU shader/program subpath with an optional direct encoder;
-- `@pmndrs/text/three/typegpu` is an isolated package-owned experiment;
+- `@pmndrs/glyph/typegpu` is the package-owned WebGPU shader/program subpath with an optional direct encoder;
+- `@pmndrs/glyph/three/typegpu` is an isolated package-owned experiment;
 - gpucat remains an external public-API fitness test;
 - no TypeGPU, Three, or gpucat type enters core.
 

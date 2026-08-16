@@ -1,0 +1,26 @@
+[package]
+name = "pmndrs-glyph-mtsdf-core"
+description = "Repository-owned no_std MTSDF generation core for pmndrs/glyph"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/glyph"
+publish = false
+
+[features]
+default = ["std"]
+std = []
+simd128-experiment = []
+profiling = []
+adjacent-texel-tile-experiment = []
+adjacent-texel-simd-experiment = ["adjacent-texel-tile-experiment"]
+
+[dependencies]
+core_maths = "0.1.1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

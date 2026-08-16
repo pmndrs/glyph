@@ -16,7 +16,7 @@ sources:
     title: Runtime and bake API V0
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-26T19:51:43Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # ADR 0001: Package and runtime boundaries
@@ -31,7 +31,7 @@ The product must load and render portable font assets in browsers without forcin
 
 ## Decision
 
-`@pmndrs/text` is the Three.js-first product core. It publishes native ESM only; optional React, baker, runtime-bake, and raster capabilities live behind explicit subpaths or dynamic imports. The baked-first loader infers canonical sibling artifacts and invokes one module Worker only for fallback. React reconciles the same framework-neutral `Text` object through the repository-pinned R3F WebGPU entry. Raster identities derive from canonical package descriptors rather than caller labels.
+`@pmndrs/glyph` is the Three.js-first product core. It publishes native ESM only; optional React, baker, runtime-bake, and raster capabilities live behind explicit subpaths or dynamic imports. The baked-first loader infers canonical sibling artifacts and invokes one module Worker only for fallback. React reconciles the same framework-neutral `Text` object through the repository-pinned R3F WebGPU entry. Raster identities derive from canonical package descriptors rather than caller labels.
 
 ## Alternatives considered
 

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 
-import type { BakeProgress } from '@pmndrs/text';
+import type { BakeProgress } from '@pmndrs/glyph';
 
 import type { GraphicsBackend } from '../../benchmark/url-state';
 
@@ -22,7 +22,7 @@ export function useBakeProgress(label: string): {
     const key = `${progress.stage}:${progress.phase}:${String(bucket)}`;
     if (key === lastConsoleKey.current) return;
     lastConsoleKey.current = key;
-    console.info(`[pmndrs/text] ${label} ${progress.stage} bake: ${progress.phase} ${String(percentage)}%`);
+    console.info(`[pmndrs/glyph] ${label} ${progress.stage} bake: ${progress.phase} ${String(percentage)}%`);
   };
   const finish = (): void => setActive(false);
   return { value, active, publish, finish };

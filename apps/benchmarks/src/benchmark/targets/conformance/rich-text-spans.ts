@@ -1,6 +1,6 @@
-import type { LoadedFont, LoadedFontRequest, ParagraphLayout } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/three/bitmap';
-import { FontLoader, Text, TextGroup } from '@pmndrs/text/three';
+import type { LoadedFont, LoadedFontRequest, ParagraphLayout } from '@pmndrs/glyph';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import interBitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
@@ -357,13 +357,13 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
   let lineThroughCount = 0;
   text.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || !(child.geometry instanceof THREE.InstancedBufferGeometry)) return;
-    if (child.userData.pmndrsTextPrimitiveKind === 'decoration') {
-      const rect = child.geometry.getAttribute('_pmndrsText_1');
-      const packed = child.geometry.getAttribute('_pmndrsText_2');
+    if (child.userData.pmndrsGlyphPrimitiveKind === 'decoration') {
+      const rect = child.geometry.getAttribute('_pmndrsGlyph_1');
+      const packed = child.geometry.getAttribute('_pmndrsGlyph_2');
       if (!(rect?.array instanceof Float32Array) || !(packed?.array instanceof Uint32Array)) {
         throw new Error('decoration draw is missing its rect lane 1 or packed color/flags lane 2');
       }
-      const start = (child.userData.pmndrsTextRunStart as number | undefined) ?? 0;
+      const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
       for (let instance = 0; instance < child.geometry.instanceCount; instance += 1) {
         const value = packed.array[(start + instance) * 2 + 1] ?? 0;
         if ((value >>> 8) & 0xff && ((value >>> 8) & 0xff) !== DECORATION_SOLID_STYLE) {
@@ -375,9 +375,9 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
       return;
     }
     drawCount += 1;
-    const attribute = child.geometry.getAttribute('_pmndrsText_5');
+    const attribute = child.geometry.getAttribute('_pmndrsGlyph_5');
     if (attribute === undefined) throw new Error('Bitmap draw is missing command-buffer color lane 5');
-    const start = (child.userData.pmndrsTextRunStart as number | undefined) ?? 0;
+    const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
     const count = child.geometry.instanceCount;
     renderedGlyphCount += count;
     for (let instance = 0; instance < count; instance += 1) {

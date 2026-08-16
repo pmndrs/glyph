@@ -54,13 +54,13 @@ sources:
     resource: https://www.npmjs.com/package/ajv/v/6.15.0
     title: Ajv 6.15.0
   - id: abi-source
-    resource: ../../packages/text/rust/font-baker/src/abi_contract.rs
+    resource: ../../packages/glyph/rust/font-baker/src/abi_contract.rs
     title: Generated ABI and version-contract source
   - id: shaper-abi-source
-    resource: ../../packages/text/rust/shaper/src/abi_contract.rs
+    resource: ../../packages/glyph/rust/shaper/src/abi_contract.rs
     title: Generated shaper ABI and version-contract source
   - id: bitmap-abi-source
-    resource: ../../packages/text/rust/bitmap-baker/src/abi_contract.rs
+    resource: ../../packages/glyph/rust/bitmap-baker/src/abi_contract.rs
     title: Generated bitmap baker ABI source
   - id: binaryen
     resource: https://www.npmjs.com/package/binaryen/v/129.0.0
@@ -73,7 +73,7 @@ sources:
     title: libfuzzer-sys 0.4.13
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-01T14:20:00Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # V0 toolchain and format version pins
