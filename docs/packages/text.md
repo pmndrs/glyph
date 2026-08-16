@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:e9d162d43f038590e06bc1c0304917e48ac6d0f0fe6ae45b054d7e54310098a3'
+source_digest: 'sha256:f69aa2fbfc63bf062166a489575119e9a56fc28fe7b341cfcca14109a431c149'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -606,6 +606,17 @@ correctness admissions and remains ~11% below the pre-stream baseline. Still ope
 p95-under-4-ms objective. The tail is structural, not noise — 4.42–4.49 p95 against a 2.8 ms median on both sides
 of every round — and belongs to break-sensitive full recomposition; the productized interactive width path is the
 measure query above, and the raw full-update tail remains the documented open gate.
+
+Per-sample attribution (the benchmark's `--samples` dump, 101 widening reps at 22k glyphs) later replaced that
+characterization with measured structure: the resize distribution has three classes, none of them noise. A third of
+the samples — widths whose +7 px quantized to an identical layout — published ZERO bytes yet still cost ~3.2 ms:
+the engine re-fits, re-positions, re-gathers, and re-diffs the full corpus to discover nothing changed. The bulk
+class (~60%) republishes the entire ~170 KB positioned output as one patch at ~3.5 ms, and the p95 class (~6%,
+present in every width quartile) writes the same bytes at ~5.4 ms of roughly doubled compute. The identified fix
+for the first class is a break-sequence equivalence short-circuit: the integer fit is cheap and chunk-skipped, so
+when the composed lines equal the committed lines under unchanged text and styles, the positioning, gather, and
+publication tail can adopt committed state and publish nothing — the same adoption shape D-253 established for
+measure transactions.
 
 ## Merge gates still open
 

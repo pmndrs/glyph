@@ -71,6 +71,7 @@ console.log(
 );
 
 const reports = [];
+const rawSampleRows = [];
 const cases = [
   'cold',
   'no-op',
@@ -105,6 +106,13 @@ if (options.jsonPath !== undefined) {
     )}\n`,
   );
   console.log(`wrote ${options.jsonPath}`);
+}
+if (options.samplesPath !== undefined) {
+  await writeFile(
+    options.samplesPath,
+    `${JSON.stringify({ schemaVersion: 0, warmup: options.warmup, cases: rawSampleRows }, undefined, 2)}\n`,
+  );
+  console.log(`wrote ${options.samplesPath}`);
 }
 
 function measureCold() {
@@ -339,6 +347,20 @@ function summarize(name, glyphs, samples, plans) {
   if (glyphs < Math.floor(options.glyphs * 0.95)) {
     throw new Error(`benchmark planned only ${glyphs} glyph records for a ${options.glyphs}-glyph fixture target`);
   }
+  if (options.samplesPath !== undefined) {
+    // Raw per-sample attribution rows in measurement order: tail analysis
+    // needs individual samples correlated with their plan output, which the
+    // sorted summary below deliberately discards.
+    rawSampleRows.push({
+      case: name,
+      samples: samples.map((durationMs, index) => ({
+        index,
+        durationMs,
+        patchCount: plans[index]?.patchCount ?? 0,
+        writeBytes: plans[index]?.writeBytes ?? 0,
+      })),
+    });
+  }
   const sorted = samples.toSorted((left, right) => left - right);
   const patchCounts = plans.map((plan) => plan.patchCount).toSorted((left, right) => left - right);
   const writeBytes = plans.map((plan) => plan.writeBytes).toSorted((left, right) => left - right);
@@ -405,6 +427,7 @@ function parseArguments(arguments_) {
     repetitions: read('--reps', 31),
     warmup: read('--warmup', 8),
     jsonPath: readString('--json'),
+    samplesPath: readString('--samples'),
   };
 
   function readString(name, fallback) {
