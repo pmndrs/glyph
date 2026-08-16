@@ -1,8 +1,8 @@
-import { type LoadedFont } from '@pmndrs/text';
-import { Text, TextGroup, useFont } from '@pmndrs/text/react';
-import { bitmap } from '@pmndrs/text/three/bitmap';
-import { msdf } from '@pmndrs/text/three/msdf';
-import { slug } from '@pmndrs/text/three/slug';
+import { type LoadedFont } from '@pmndrs/glyph';
+import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+import { slug } from '@pmndrs/glyph/three/slug';
 import { useThree, type ThreeEvent } from '@react-three/fiber/webgpu';
 import { Activity, useState } from 'react';
 import { float, fwidth, smoothstep, uv, vec2 } from 'three/tsl';

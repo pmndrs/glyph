@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
-import type { ParagraphStyle } from '@pmndrs/text';
+import type { ParagraphStyle } from '@pmndrs/glyph';
 
 import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts';

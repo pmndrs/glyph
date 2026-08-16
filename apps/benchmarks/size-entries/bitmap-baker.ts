@@ -3,4 +3,4 @@ export {
   createBitmapBaker,
   createBitmapBakerFromInstance,
   bitmapBakerFromCore,
-} from '@pmndrs/text/bakers/bitmap';
+} from '@pmndrs/glyph/bakers/bitmap';

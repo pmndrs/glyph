@@ -3,4 +3,4 @@ export {
   createMtsdfGenerator,
   createMtsdfGeneratorFromInstance,
   mtsdfGeneratorAbi,
-} from '../../../packages/text/dist/internal/mtsdf-generator.js';
+} from '../../../packages/glyph/dist/internal/mtsdf-generator.js';

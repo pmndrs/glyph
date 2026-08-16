@@ -8,8 +8,8 @@ import {
   type RuntimeFontBake,
   type RuntimeFontBakeRequest,
   type RuntimeRasterBakerModule,
-} from '@pmndrs/text';
-import { FontLoader } from '@pmndrs/text/three';
+} from '@pmndrs/glyph';
+import { FontLoader } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { FontDelivery } from '../../benchmark/url-state';
@@ -63,7 +63,7 @@ export function measuredRuntimeFontBake(
   return async (request: RuntimeFontBakeRequest) => {
     metrics.sourceFontBytes = request.source.byteLength;
     const started = performance.now();
-    const { bakeFontInWorker } = await import('@pmndrs/text/runtime-bake');
+    const { bakeFontInWorker } = await import('@pmndrs/glyph/runtime-bake');
     const artifact = await bakeFontInWorker({
       ...request,
       ...(onProgress === undefined ? {} : { onProgress }),

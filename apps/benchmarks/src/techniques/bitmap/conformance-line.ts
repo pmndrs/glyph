@@ -1,6 +1,6 @@
-import type { LoadedFont, ParagraphLayout } from '@pmndrs/text';
-import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/text/three/bitmap';
-import { Text } from '@pmndrs/text/three';
+import type { LoadedFont, ParagraphLayout } from '@pmndrs/glyph';
+import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/glyph/three/bitmap';
+import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import { LIVE_TEXT_LINE_HEIGHT } from '../../workloads/shared/text-style';

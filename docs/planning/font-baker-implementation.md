@@ -2,7 +2,7 @@
 type: Implementation Evidence
 title: Portable font baker implementation evidence
 description: Records package-owned evidence for the portable Rust bake core, generated Wasm ABI, TypeScript wrapper, and validator.
-resource: ../../packages/text/rust/font-baker
+resource: ../../packages/glyph/rust/font-baker
 tags: [baking, rust, wasm, typescript, implementation]
 sources:
   - id: 'citation-1'
@@ -15,16 +15,16 @@ sources:
     resource: '../roadmap/roadmap.md'
     title: 'Canonical implementation roadmap'
   - id: 'citation-4'
-    resource: '../../packages/text/rust/font-baker'
-    title: '`packages/text/rust/font-baker`'
+    resource: '../../packages/glyph/rust/font-baker'
+    title: '`packages/glyph/rust/font-baker`'
   - id: 'citation-5-1'
-    resource: '../../packages/text/rust/font-baker/src/abi_contract.rs'
+    resource: '../../packages/glyph/rust/font-baker/src/abi_contract.rs'
     title: 'Compiler-derived ABI layouts'
   - id: 'citation-5-2'
-    resource: '../../packages/text/rust/font-baker/build.rs'
+    resource: '../../packages/glyph/rust/font-baker/build.rs'
     title: 'compile-time generator'
   - id: 'citation-6'
-    resource: '../../packages/text/src/font-baker/validator.ts'
+    resource: '../../packages/glyph/src/font-baker/validator.ts'
     title: 'Core font artifact validator'
   - id: 'fontations'
     resource: 'https://github.com/googlefonts/fontations'
@@ -32,18 +32,18 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-07-28T03:47:10Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Portable font baker implementation evidence
 
-This page records evidence owned by `packages/text/rust/font-baker`. It does not repeat program-wide milestone status: the [canonical roadmap](../roadmap/roadmap.md) owns that checklist, while the [bake API contract](api-shapes.md#shared-bake-core) and [shaping data contract](shaping-data-contract.md) own behavior.
+This page records evidence owned by `packages/glyph/rust/font-baker`. It does not repeat program-wide milestone status: the [canonical roadmap](../roadmap/roadmap.md) owns that checklist, while the [bake API contract](api-shapes.md#shared-bake-core) and [shaping data contract](shaping-data-contract.md) own behavior.
 
 Status key: ✅ complete for the declared slice · 🟡 in progress · ⬜ not started · ⛔ blocked
 
 | Area                     | Status | Current evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Next gate                                                                                                                           |
 | ------------------------ | :----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Package placement        |   ✅   | Rust/Wasm lives in `packages/text/rust/font-baker`; its TypeScript bridge, build support, and tests live in the matching `packages/text` ownership tree. `@pmndrs/text/bake` is the sole programmatic product surface and no second font-baker package is published.                                                                                                                                                                                                                                                                                                                                                                                                                                | Keep future baker artifacts inside `@pmndrs/text` or a baker-only source crate.                                                     |
+| Package placement        |   ✅   | Rust/Wasm lives in `packages/glyph/rust/font-baker`; its TypeScript bridge, build support, and tests live in the matching `packages/text` ownership tree. `@pmndrs/glyph/bake` is the sole programmatic product surface and no second font-baker package is published.                                                                                                                                                                                                                                                                                                                                                                                                                                | Keep future baker artifacts inside `@pmndrs/glyph` or a baker-only source crate.                                                     |
 | Portable Rust core       |   ✅   | Delegates SFNT/TTC and typed-table parsing to Fontations `read-fonts`, and metrics/bounds interpretation to `skrifa`; public fixtures cover container/table policy, face selection, deterministic reduction, dense extents, shaping identity, and exact Inter 4.1 output.[^fontations]                                                                                                                                                                                                                                                                                                                                                                                                              | Keep every new policy branch paired with a focused regression.                                                                      |
 | Source preparation       |   ✅   | Feature-gated Skera 0.5.1 prepares canonical Unicode subsets and Skrifa enumerates exact cmap/glyph-name facts through generated `prepare` and `inspect` ABI exports. CLI, Node, and runtime Worker hosts share one functional pipeline: one normalized preparation result feeds the shaping bake and every requested Bitmap, MSDF, and Slug bake before one canonical GLB is composed and validated. An actual Inter ASCII Worker integration proves its output byte-identical to Node, and a request-boundary regression proves all three raster plans cross once. The capability is confined to baker paths: runtime/shared crates remain `no_std`, while baker-only shared crates may reuse it. | Keep new producer paths on this shared pipeline and preserve byte-identical Node/Worker output.                                     |
 | Stable Wasm ABI          |   ✅   | Fixed-width `#[repr(C)]` types are the sole layout authority. Build-only Rust generation derives size, alignment, and offsets with `size_of`/`align_of`/`offset_of!`, publishes portable JSON, and emits an exact typed `as const` TypeScript module. CI rejects stale generated source; production Wasm embeds no contract and exports no ABI bootstrap.                                                                                                                                                                                                                                                                                                                                           | Keep compiler-derived JSON/TypeScript identity and absent-Wasm-contract checks mandatory as the ABI evolves.                        |
@@ -55,7 +55,7 @@ Status key: ✅ complete for the declared slice · 🟡 in progress · ⬜ not s
 | Real-font vertical slice |   ✅   | Mandatory Inter, Amiri, and Noto Sans CJK E2E tests authenticate each source, bake and validate the GLB, extract the reduced SFNT, and prove complete source/reduced HarfRust equality. The Noto lane also fixes the maximum 65,535-glyph boundary, `cmap` 12/14 mappings, conditional vertical-data retention, payload arithmetic, and exact HarfBuzz 13 equality.                                                                                                                                                                                                                                                                                                                                 | Preserve this evidence while raster and renderer packages consume the artifact.                                                     |
 | TypeScript verification  |   ✅   | Generated JSON/TypeScript identity, no embedded Wasm ABI exports, zero-import, structured-error handling, declaration generation, package build, and workspace type checks pass with the pinned workspace dependencies.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Keep these checks mandatory as public host surfaces evolve.                                                                         |
 
-The portable TypeScript package remains intentionally internal. The public `@pmndrs/text/bake` Node subpath wraps it without exposing the raw allocation protocol; the runtime path remains a dynamically imported Worker host over the same core.
+The portable TypeScript package remains intentionally internal. The public `@pmndrs/glyph/bake` Node subpath wraps it without exposing the raw allocation protocol; the runtime path remains a dynamically imported Worker host over the same core.
 
 Following the Rust/Wasm code-size guidance, the subsetting build measures `opt-level = "s"` and `"z"` rather than
 assuming either result, retains LTO and one codegen unit, strips symbols, and runs Binaryen `-Oz`. The measured winner is

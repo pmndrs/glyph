@@ -11,7 +11,7 @@ const ROOT_CLAUDE =
   'When the startup hook did not run—such as in Claude Desktop, after resuming a session, or after adding `.agents/skills`—run `node .claude/hooks/sync-agent-config.ts` to synchronize your Claude skills and scoped agent context.\n\n@AGENTS.md\n';
 
 async function fixture(): Promise<string> {
-  return realpath(await mkdtemp(join(tmpdir(), 'pmndrs-text-claude-sync-')));
+  return realpath(await mkdtemp(join(tmpdir(), 'pmndrs-glyph-claude-sync-')));
 }
 
 async function createSkill(root: string, name: string): Promise<string> {
