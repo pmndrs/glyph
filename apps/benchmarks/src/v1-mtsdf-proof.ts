@@ -1,6 +1,6 @@
-import type { LoadedFont } from '@pmndrs/text';
-import { msdf as mtsdf } from '@pmndrs/text/three/msdf';
-import { FontLoader, Text } from '@pmndrs/text/three';
+import type { LoadedFont } from '@pmndrs/glyph';
+import { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
+import { FontLoader, Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import interCompressedFontUrl from '../fixtures/rendering/inter-mtsdf.font.glb.gz?url';
 import showcaseManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
@@ -60,7 +60,7 @@ async function render(): Promise<TargetV1MtsdfResult> {
     await renderer.renderAsync(scene, camera);
     const firstDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
     if (firstDraw === undefined) throw new Error('target-v1 MTSDF created no draw');
-    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsText_geometry');
+    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyph_geometry');
     text.text = 'Target v1 MTSDE';
     await renderer.renderAsync(scene, camera);
     const retainedDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
@@ -74,7 +74,7 @@ async function render(): Promise<TargetV1MtsdfResult> {
       glyphCount: text.measureLayout()?.glyphCount ?? 0,
       litPixels,
       retainedDraw: retainedDraw === firstDraw,
-      retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsText_geometry') === firstStorage,
+      retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsGlyph_geometry') === firstStorage,
       gpuBytes: text.gpuBytes,
     };
   } finally {

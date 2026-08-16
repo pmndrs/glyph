@@ -1,7 +1,7 @@
 ---
 type: Engineering Standard
 title: Engineering house style
-description: Defines the durable Rust, TypeScript, React, boundary, testing, and maintenance conventions for pmndrs/text.
+description: Defines the durable Rust, TypeScript, React, boundary, testing, and maintenance conventions for pmndrs/glyph.
 documentation_type: reference
 tags: [engineering, rust, typescript, react, wasm, testing, maintainability]
 sources:
@@ -9,28 +9,28 @@ sources:
     resource: ../../.agents/skills/maintainability-review/SKILL.md
     title: Maintainability review workflow
   - id: font-baker-wasm
-    resource: ../../packages/text/rust/font-baker/src/wasm.rs
+    resource: ../../packages/glyph/rust/font-baker/src/wasm.rs
     title: Portable font-baker Wasm boundary
   - id: font-baker-typescript
-    resource: ../../packages/text/src/font-baker/index.ts
+    resource: ../../packages/glyph/src/font-baker/index.ts
     title: Portable font-baker TypeScript boundary
   - id: runtime-protocol
-    resource: ../../packages/text/src/internal/runtime-bake-protocol.ts
+    resource: ../../packages/glyph/src/internal/runtime-bake-protocol.ts
     title: Runtime bake protocol
   - id: paragraph
-    resource: ../../packages/text/src/three/text.ts
+    resource: ../../packages/glyph/src/three/text.ts
     title: Retained paragraph and Three.js synchronization boundary
   - id: benchmark-runner
     resource: ../../apps/benchmarks/src/benchmark/runner.ts
     title: Shared benchmark lifecycle
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-26T03:32:25Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Engineering house style
 
-This standard is the canonical code-quality policy for `pmndrs/text`. It supports code that humans and agents can understand locally, change without hidden coupling, and verify with independent evidence. Apply it to new work and evidence-backed cleanup; do not churn stable code or public APIs merely to make syntax uniform.
+This standard is the canonical code-quality policy for `pmndrs/glyph`. It supports code that humans and agents can understand locally, change without hidden coupling, and verify with independent evidence. Apply it to new work and evidence-backed cleanup; do not churn stable code or public APIs merely to make syntax uniform.
 
 ## Design for local reasoning
 

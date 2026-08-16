@@ -2,7 +2,7 @@
 type: Performance Experiment
 title: Wasm allocator experiment
 description: Defines the allocator candidates, workloads, measurements, and selection gate for the no_std font baker.
-resource: ../../packages/text/rust/font-baker/Cargo.toml
+resource: ../../packages/glyph/rust/font-baker/Cargo.toml
 tags: [baking, wasm, allocator, performance]
 sources:
   - id: 'citation-1'
@@ -26,7 +26,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-07-28T04:52:01Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Wasm allocator experiment

@@ -1,5 +1,5 @@
 {
-  "name": "@pmndrs/text-glyph-example-raster",
+  "name": "@pmndrs/glyph-example-raster",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -27,7 +27,7 @@
     "check": "pnpm test && tsc -p tsconfig.json --noEmit && oxlint --deny-warnings . && oxfmt --check package.json src tests tsconfig.json tsconfig.build.json"
   },
   "dependencies": {
-    "@pmndrs/text": "workspace:*",
+    "@pmndrs/glyph": "workspace:*",
     "three": "0.185.1"
   },
   "devDependencies": {
@@ -41,7 +41,7 @@
     "three": ">=0.185.1 <0.186"
   },
   "pmndrs": {
-    "text": {
+    "glyph": {
       "glyphExample": "./baker"
     }
   }

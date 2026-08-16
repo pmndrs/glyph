@@ -1,6 +1,6 @@
-import type { LoadedFont, ParagraphLayout } from '@pmndrs/text';
-import type { msdf as mtsdf } from '@pmndrs/text/three/msdf';
-import { Text } from '@pmndrs/text/three';
+import type { LoadedFont, ParagraphLayout } from '@pmndrs/glyph';
+import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
+import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import {

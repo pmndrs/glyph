@@ -10,10 +10,10 @@ generated:
   at: '2026-08-13T08:20:00Z'
 sources:
   - id: engine-state
-    resource: ../../packages/text/rust/shaper/src/engine/state.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/state.rs
     title: Retained Rust text engine
   - id: transport
-    resource: ../../packages/text/rust/shaper/src/engine/transport.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/transport.rs
     title: Frame transport arenas
   - id: uikit-integration
     resource: uikit-integration.md
@@ -41,7 +41,7 @@ counters roll back on abort.
 
 ## The entry contract (layer 1)
 
-`pmndrs_text_engine_measure_paragraph(session, request_offset, request_len, paragraph_id) → result pointer`
+`pmndrs_glyph_engine_measure_paragraph(session, request_offset, request_len, paragraph_id) → result pointer`
 
 - Reuses the update request layout unchanged; the queried paragraph rides as an ABI argument.
 - Runs validation and per-paragraph preparation for the queried paragraph only; skips revision bump, fence

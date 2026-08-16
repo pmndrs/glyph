@@ -32,7 +32,7 @@ sources:
     title: Target v1 raster technique boundary
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:31:24Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # External gpucat integration fitness plan
@@ -70,24 +70,24 @@ import {
   type ParagraphBatchTarget,
   type PreparedGlyphBatch,
   type PreparedGlyphRun,
-} from '@pmndrs/text';
+} from '@pmndrs/glyph';
 
 // gpucat-native retained objects and GPU realization
-import { GpucatText, GpucatTextGroup } from '@pmndrs/text-gpucat';
+import { GpucatText, GpucatTextGroup } from '@pmndrs/glyph-gpucat';
 ```
 
-`@pmndrs/text-gpucat` may live in another repository. It must compile using only documented package exports and a gpucat
-peer dependency. It must not import `@pmndrs/text/src/*`, workspace-relative source, or an engine-specific core subpath.
+`@pmndrs/glyph-gpucat` may live in another repository. It must compile using only documented package exports and a gpucat
+peer dependency. It must not import `@pmndrs/glyph/src/*`, workspace-relative source, or an engine-specific core subpath.
 
 The package-owned integrations remain public subpaths; gpucat is deliberately different because it is the external fitness
 test:
 
 ```txt
-@pmndrs/text           core, loading, shaping, layout, paragraph batches, target protocol
-@pmndrs/text/three     package-owned Three.js integration
-@pmndrs/text/react     package-owned React integration over /three through React Three Fiber
-@pmndrs/text/typegpu   package-owned TypeGPU programs and direct engine
-@pmndrs/text-gpucat    external gpucat objects, resources, programs, and target
+@pmndrs/glyph           core, loading, shaping, layout, paragraph batches, target protocol
+@pmndrs/glyph/three     package-owned Three.js integration
+@pmndrs/glyph/react     package-owned React integration over /three through React Three Fiber
+@pmndrs/glyph/typegpu   package-owned TypeGPU programs and direct engine
+@pmndrs/glyph-gpucat    external gpucat objects, resources, programs, and target
 ```
 
 The core-to-maintained-subpath dependency direction is enforced by package graph tests. The gpucat proof additionally
@@ -227,9 +227,9 @@ reshaping; variant topology changes only rebuild the ordered run plan.
 
 The final external fitness fixture must:
 
-- install packed public `@pmndrs/text` and technique packages, plus gpucat pinned to the reviewed commit or later accepted
+- install packed public `@pmndrs/glyph` and technique packages, plus gpucat pinned to the reviewed commit or later accepted
   release;
-- reject every private/deep `@pmndrs/text` import through a package-boundary test;
+- reject every private/deep `@pmndrs/glyph` import through a package-boundary test;
 - render one multiline paragraph, many labels, and an icon grid through Bitmap, MTSDF, and Slug;
 - prove font fallback, span variants, fixed-capacity overflow/recovery, dirty-range updates, transforms, visibility, and
   text-group ordering;
@@ -239,7 +239,7 @@ The final external fitness fixture must:
   leaked GPU resources;
 - prove the selected canonical shader-sharing path, or explicitly record a gpucat-native shader as the only failed fitness
   dimension;
-- require no change to `@pmndrs/text` core APIs while the fixture is implemented.
+- require no change to `@pmndrs/glyph` core APIs while the fixture is implemented.
 
 The core API fitness test passes only when that last condition is true in executable code. This review establishes that the
 required public surfaces exist in the design; it does not substitute for the application proof.

@@ -1,7 +1,7 @@
 ---
 type: Explanation
 title: uikit integration
-description: Explains how pmndrs/text can replace uikit's current text subsystem incrementally without coupling the core API to Yoga, signals, or uikit rendering internals.
+description: Explains how pmndrs/glyph can replace uikit's current text subsystem incrementally without coupling the core API to Yoga, signals, or uikit rendering internals.
 tags: [uikit, yoga, integration, paragraphs]
 sources:
   - id: 'citation-1'
@@ -28,12 +28,12 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5'
-  at: '2026-07-25T09:53:00Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # uikit integration
 
-This document is for maintainers integrating `pmndrs/text` into pmndrs/uikit. It explains the seam in uikit's current implementation, the minimum framework-neutral API the text package must provide, and an incremental migration that does not require uikit to replace layout, rendering, and editing at once.
+This document is for maintainers integrating `pmndrs/glyph` into pmndrs/uikit. It explains the seam in uikit's current implementation, the minimum framework-neutral API the Glyph package must provide, and an incremental migration that does not require uikit to replace layout, rendering, and editing at once.
 
 The authoritative public types remain in the [API contract](api-shapes.md). This page owns uikit-specific reasoning; uikit terminology and dependencies do not belong in the core package.
 
@@ -75,7 +75,7 @@ uikit should continue to own:
 - component readiness, invalidation, clipping, transforms, ordering, and scene lifecycle;
 - uikit-specific batching and root render integration.
 
-`pmndrs/text` should own:
+`pmndrs/glyph` should own:
 
 - registered font resources and shaping readiness;
 - shaping, clusters, line breaking, alignment, and paragraph caches;
@@ -89,7 +89,7 @@ The integration becomes a small uikit-owned adapter around a framework-neutral p
 ```mermaid
 flowchart LR
   Props["uikit text properties"] --> Adapter["uikit adapter signals"]
-  Ready["prepared font + shaper"] --> Paragraph["pmndrs/text Paragraph"]
+  Ready["prepared font + shaper"] --> Paragraph["pmndrs/glyph Paragraph"]
   Adapter --> Paragraph
   Paragraph --> Measure["measure constraints<br/>metrics only"]
   Measure --> Custom["uikit CustomLayouting"] --> Yoga
@@ -100,7 +100,7 @@ flowchart LR
   Batches --> uikitRoot["uikit render groups"]
 ```
 
-There is no `YogaAdapter` in `@pmndrs/text`, no Preact signal type in its API, and no uikit matrix or clipping type in a raster module. uikit translates its values at the boundary.
+There is no `YogaAdapter` in `@pmndrs/glyph`, no Preact signal type in its API, and no uikit matrix or clipping type in a raster module. uikit translates its values at the boundary.
 
 ## Minimum core API
 
@@ -261,4 +261,4 @@ The integration fixture must exercise the actual uikit seam rather than a generi
 - final bitmap, MSDF, and Slug batches from the same paragraph result;
 - cluster-aware caret, selection, and pointer tests before removing the old query path.
 
-The production adapter remains in uikit. The pmndrs/text repository owns a small uikit-shaped test fixture to prevent accidental API drift, but it does not add Yoga, Preact Signals, or uikit as runtime dependencies.
+The production adapter remains in uikit. The pmndrs/glyph repository owns a small uikit-shaped test fixture to prevent accidental API drift, but it does not add Yoga, Preact Signals, or uikit as runtime dependencies.

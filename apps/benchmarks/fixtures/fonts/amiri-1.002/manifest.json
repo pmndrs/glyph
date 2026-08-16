@@ -24,8 +24,8 @@
     "formatVersion": 0,
     "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d",
     "expectedCore": {
-      "artifactBytes": 179144,
-      "artifactSha256": "5757be19119c9b8bbb63e041f18dbf6c2744fce8ba39ed584bba16bcc6b6d0d6",
+      "artifactBytes": 179148,
+      "artifactSha256": "4554d467aa43fe8181dd6b5f8b2456e3bcd9a7b76bb4f2e2c0670ed69dc3fa32",
       "shapingHash": "2e29d8d1378084212287efa84db35066310164048a6b4495aff97512d46336d5",
       "shapingSfntBytes": 123444,
       "extentsBytes": 53680,

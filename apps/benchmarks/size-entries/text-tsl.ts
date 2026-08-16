@@ -1,1 +1,1 @@
-export * from '@pmndrs/text/tsl';
+export * from '@pmndrs/glyph/tsl';

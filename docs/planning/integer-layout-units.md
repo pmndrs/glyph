@@ -10,16 +10,16 @@ generated:
   at: '2026-08-13T00:00:00Z'
 sources:
   - id: line-kernels
-    resource: ../../packages/text/rust/shaper/src/engine/line_kernels.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/line_kernels.rs
     title: Production SIMD lanes (D-245)
   - id: line-composition
-    resource: ../../packages/text/rust/shaper/src/engine/line_composition.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/line_composition.rs
     title: Line fitting
   - id: positioning
-    resource: ../../packages/text/rust/shaper/src/engine/positioning.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/positioning.rs
     title: Glyph positioning
   - id: cluster-state
-    resource: ../../packages/text/rust/shaper/src/engine/cluster_state.rs
+    resource: ../../packages/glyph/rust/shaper/src/engine/cluster_state.rs
     title: Cluster arena
 ---
 

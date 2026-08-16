@@ -1,5 +1,5 @@
-import type { FontFeature, ParagraphLayoutInspection } from '@pmndrs/text';
-import type { TextGlyphOriginSnapshot, TextGlyphOriginUpdate } from '@pmndrs/text/three';
+import type { FontFeature, ParagraphLayoutInspection } from '@pmndrs/glyph';
+import type { TextGlyphOriginSnapshot, TextGlyphOriginUpdate } from '@pmndrs/glyph/three';
 
 /**
  * The part of a committed target-v1 `Text` this helper needs. Core owns glyph snapshots and topology-guarded

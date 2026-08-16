@@ -12,9 +12,9 @@ import {
   type RasterResourceResolverContext,
   type RegisteredFont,
   type Sha256Hex,
-} from '@pmndrs/text';
-import { bakeFont } from '@pmndrs/text/bake';
-import { Text, TextGroup } from '@pmndrs/text/three';
+} from '@pmndrs/glyph';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -100,7 +100,7 @@ describe('public external raster proof', () => {
     const registry = new FontRegistry();
     const runtime = await createTextRuntime({
       registry,
-      wasm: await readFile(new URL('../../text/dist/text_shaper.wasm', import.meta.url)),
+      wasm: await readFile(new URL('../../glyph/dist/text_shaper.wasm', import.meta.url)),
     });
     const font = await runtime.loadFont({
       input: { baked: dataUrl(await readFile(core.file)) },
@@ -118,19 +118,19 @@ describe('public external raster proof', () => {
     expect(draw).toBeDefined();
     expect(draw?.renderOrder).toBe(200);
     const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
-    expect(geometry.getAttribute('_pmndrsText_1')).toBeDefined();
-    expect(geometry.getAttribute('_pmndrsText_2')).toBeDefined();
-    expect(geometry.getAttribute('_pmndrsText_3')).toBeDefined();
-    expect(geometry.getAttribute('_pmndrsText_15')).toBeDefined();
+    expect(geometry.getAttribute('_pmndrsGlyph_1')).toBeDefined();
+    expect(geometry.getAttribute('_pmndrsGlyph_2')).toBeDefined();
+    expect(geometry.getAttribute('_pmndrsGlyph_3')).toBeDefined();
+    expect(geometry.getAttribute('_pmndrsGlyph_15')).toBeDefined();
     expect(geometry.instanceCount).toBeGreaterThan(0);
-    const sizes = geometry.getAttribute('_pmndrsText_2');
+    const sizes = geometry.getAttribute('_pmndrsGlyph_2');
     const expectedWidth = Math.max(48 * 0.05, 48 * 0.65 - font.data.inset * 48 * 2);
     const expectedHeight = Math.max(48 * 0.05, 48 - font.data.inset * 48 * 2);
     for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
       expect(sizes.getX(instance)).toBeCloseTo(expectedWidth, 5);
       expect(sizes.getY(instance)).toBeCloseTo(expectedHeight, 5);
     }
-    const colors = geometry.getAttribute('_pmndrsText_3');
+    const colors = geometry.getAttribute('_pmndrsGlyph_3');
     for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
       expect(font.data.colors.some((_, offset) => glyphColorMatches(font.data.colors, offset, colors, instance))).toBe(
         true,

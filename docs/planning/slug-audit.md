@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Three Flatland Slug audit
@@ -25,7 +25,7 @@ Status: research snapshot
 Audited revision: [`c596ac2313e33cace825fe197a6d730269019175`](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/slug)  
 Audit date: 2026-07-22
 
-This document identifies concrete prior art in `@three-flatland/slug` and assigns a reuse disposition for pmndrs/text. It is not a criticism of the existing package: the current code deliberately targets a smaller problem and is valuable evidence for the new architecture.
+This document identifies concrete prior art in `@three-flatland/slug` and assigns a reuse disposition for pmndrs/glyph. It is not a criticism of the existing package: the current code deliberately targets a smaller problem and is valuable evidence for the new architecture.
 
 ## Executive finding
 
@@ -229,7 +229,7 @@ Disposition:
 - distinguish “baked asset absent” from “baked asset corrupt/incompatible” in diagnostics and policy;
 - keep the everyday/direct/preload surface aligned with the eventual pmndrs loader conventions.
 
-The reusable structural pattern extends beyond `SlugFontLoader`: Three Flatland's browser-safe `@three-flatland/bake` root keeps Node discovery/writers behind `/node`, package-specific baker modules behind separate exports, and the standalone/unified CLIs call the same `Baker.run()` implementation. `pmndrs/text` should preserve that host separation while replacing the TypeScript font-domain core with one portable core shared by the Node host and runtime Worker.
+The reusable structural pattern extends beyond `SlugFontLoader`: Three Flatland's browser-safe `@three-flatland/bake` root keeps Node discovery/writers behind `/node`, package-specific baker modules behind separate exports, and the standalone/unified CLIs call the same `Baker.run()` implementation. `pmndrs/glyph` should preserve that host separation while replacing the TypeScript font-domain core with one portable core shared by the Node host and runtime Worker.
 
 ## Format observations
 

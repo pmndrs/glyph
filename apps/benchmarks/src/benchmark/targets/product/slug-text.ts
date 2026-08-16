@@ -1,6 +1,6 @@
-import type { LoadedFont } from '@pmndrs/text';
-import type { slug } from '@pmndrs/text/three/slug';
-import { Text } from '@pmndrs/text/three';
+import type { LoadedFont } from '@pmndrs/glyph';
+import type { slug } from '@pmndrs/glyph/three/slug';
+import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';

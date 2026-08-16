@@ -6,9 +6,9 @@ import {
   type ParagraphLayoutSummary,
   type ParagraphStyle,
   type RegisteredFont,
-} from '@pmndrs/text';
-import type { msdf as mtsdf } from '@pmndrs/text/three/msdf';
-import { Text } from '@pmndrs/text/three';
+} from '@pmndrs/glyph';
+import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
+import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
@@ -142,7 +142,7 @@ export interface MtsdfTextPersistentSceneOptions {
   readonly textAlign?: 'start' | 'center';
   readonly onError: (error: unknown) => void;
   readonly onStats: (stats: MtsdfTextLiveStats) => void;
-  readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener;
+  readonly onBakeProgress?: import('@pmndrs/glyph').BakeProgressListener;
   readonly id?: string;
 }
 
