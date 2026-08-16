@@ -31,12 +31,12 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T05:01:15Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 > Historical merged-v0 fixture. Names such as `RasterRuntime`, `RasterModule`, and the TypeScript paragraph target below
 > are retained only for migration archaeology; they are not current exports. Use
-> [the current package reference](../packages/text.md) for the single Rust render-plan path.
+> [the current package reference](../packages/glyph.md) for the single Rust render-plan path.
 
 # Merged v0 runtime and bake API fixture
 
@@ -54,11 +54,11 @@ This table reports contract evidence; it does not turn implementation or prose i
 
 | Contract surface           |   Status    | Current evidence                                                                                                                                                                       | Remaining gate                                                                     |
 | -------------------------- | :---------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Framework-neutral core API | ✅ accepted | `packages/text` compiles the non-generic text, font, paragraph, raster, and baker seams.                                                                                               | Runtime behavior remains milestone-gated.                                          |
+| Framework-neutral core API | ✅ accepted | `packages/glyph` compiles the non-generic text, font, paragraph, raster, and baker seams.                                                                                              | Runtime behavior remains milestone-gated.                                          |
 | React API                  | ✅ accepted | The thin wrapper, nested-span model, direct props, Suspense behavior, forwarded core ref, and distributive prop derivation are compile-checked against React 19 and React Three Fiber. | Runtime reconciliation belongs to 6.3.                                             |
 | Typed raster capabilities  | ✅ accepted | Positive and negative fixtures preserve external literal kinds, resources, batches, options, runtime bakers, and baker descriptors.                                                    | Concrete first-party packages remain later milestones.                             |
 | Canonical URL resolution   | ✅ accepted | String, `URL`, source/override, baked-only, and invalid combinations have type fixtures; normalization and fallback rules are specified below.                                         | Runtime behavior belongs to milestone 3.                                           |
-| ESM-only package contract  | ✅ accepted | The existing `@pmndrs/text` root export is ESM-only and has no `require` condition.                                                                                                    | 0.2 must add a package-contract fixture without publishing unimplemented subpaths. |
+| ESM-only package contract  | ✅ accepted | The existing `@pmndrs/glyph` root export is ESM-only and has no `require` condition.                                                                                                   | 0.2 must add a package-contract fixture without publishing unimplemented subpaths. |
 
 ## Benchmark consumer API discovery
 
@@ -102,13 +102,13 @@ wide grouped publication to the package.
 
 ```mermaid
 flowchart TD
-  Core["@pmndrs/text<br/>Three.js Text, loader, registry, shaper bridge, paragraph engine"]
-  React["@pmndrs/text/react<br/>thin React Three Fiber wrapper"] --> Core
-  Bake["@pmndrs/text/bake<br/>Node host and CLI"] --> BakeCore["shared portable bake core"]
-  Runtime["@pmndrs/text/runtime-bake<br/>dynamically loaded Worker host"] --> BakeCore
-  Bitmap["@pmndrs/text/raster/bitmap/v0"] --> Core
-  Msdf["@pmndrs/text/raster/msdf"] --> Core
-  Slug["@pmndrs/text/raster/slug/v0"] --> Core
+  Core["@pmndrs/glyph<br/>Three.js Text, loader, registry, shaper bridge, paragraph engine"]
+  React["@pmndrs/glyph/react<br/>thin React Three Fiber wrapper"] --> Core
+  Bake["@pmndrs/glyph/bake<br/>Node host and CLI"] --> BakeCore["shared portable bake core"]
+  Runtime["@pmndrs/glyph/runtime-bake<br/>dynamically loaded Worker host"] --> BakeCore
+  Bitmap["@pmndrs/glyph/raster/bitmap/v0"] --> Core
+  Msdf["@pmndrs/glyph/raster/msdf"] --> Core
+  Slug["@pmndrs/glyph/raster/slug/v0"] --> Core
 ```
 
 A baked core-font hit does not load the runtime baker or any unselected raster engine. The core package has no React dependency. The React subpath has `react`, `three`, and `@react-three/fiber` as peer dependencies and adds no shaping, layout, baking, or rendering behavior.
@@ -146,7 +146,7 @@ The initial export-map shape is:
 }
 ```
 
-The exact output filenames may follow the selected build tool, but the public subpaths and ESM-only conditions are contract fixtures. Node-only behavior remains isolated behind `@pmndrs/text/bake`; importing the core in a browser must not expose Node built-ins. The CLI may use an ESM `bin` entry without creating a second CommonJS API.
+The exact output filenames may follow the selected build tool, but the public subpaths and ESM-only conditions are contract fixtures. Node-only behavior remains isolated behind `@pmndrs/glyph/bake`; importing the core in a browser must not expose Node built-ins. The CLI may use an ESM `bin` entry without creating a second CommonJS API.
 
 ### Type-system contract
 
@@ -234,12 +234,12 @@ declare class Text extends Group {
 
 ## React subpath
 
-`@pmndrs/text/react` exposes a deliberately small declarative layer:
+`@pmndrs/glyph/react` exposes a deliberately small declarative layer:
 
 ```tsx
-import { Text, useFont } from '@pmndrs/text/react';
-import { defineFont } from '@pmndrs/text';
-import { msdf } from '@pmndrs/text/raster/msdf';
+import { Text, useFont } from '@pmndrs/glyph/react';
+import { defineFont } from '@pmndrs/glyph';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
 const Inter = '/fonts/Inter-Regular.ttf';
 const TitleFont = defineFont(Inter, msdf);
@@ -722,7 +722,7 @@ declare function bakeProject(options?: ProjectBakeOptions): Promise<ProjectBakeR
 `bakeProject` is the normal application command:
 
 ```ts
-import { bakeProject } from '@pmndrs/text/bake';
+import { bakeProject } from '@pmndrs/glyph/bake';
 
 const report = await bakeProject();
 ```
@@ -737,7 +737,7 @@ The programmatic Node API receives explicit `RasterBakePlan` module values. The 
 
 ```json
 {
-  "name": "@pmndrs/text",
+  "name": "@pmndrs/glyph",
   "exports": {
     "./package.json": "./package.json",
     "./bakers/bitmap": "./dist/bakers/bitmap.js",
@@ -745,7 +745,7 @@ The programmatic Node API receives explicit `RasterBakePlan` module values. The 
     "./bakers/slug": "./dist/bakers/slug.js"
   },
   "pmndrs": {
-    "text": {
+    "glyph": {
       "bitmap": "./bakers/bitmap",
       "msdf": "./bakers/msdf",
       "slug": "./bakers/slug"
@@ -754,11 +754,11 @@ The programmatic Node API receives explicit `RasterBakePlan` module values. The 
 }
 ```
 
-The CLI knows `@pmndrs/text` as its default first-party package, resolves `@pmndrs/text/package.json` through Node, validates the `pmndrs.text` baker map, converts a relative manifest value such as `./bakers/slug` to the public specifier `@pmndrs/text/bakers/slug`, and dynamically imports only that entry. Project discovery applies the same procedure to the exact package imported by a discovered raster factory. Values MUST begin with `./`, name an exported ESM subpath, and resolve within the same package. Duplicate kinds, malformed manifests, CommonJS entries, and package-name/path mismatches are errors. The package's own semantic version governs compatibility; the manifest does not carry a redundant version.
+The CLI knows `@pmndrs/glyph` as its default first-party package, resolves `@pmndrs/glyph/package.json` through Node, validates the `pmndrs.glyph` baker map, converts a relative manifest value such as `./bakers/slug` to the public specifier `@pmndrs/glyph/bakers/slug`, and dynamically imports only that entry. Project discovery applies the same procedure to the exact package imported by a discovered raster factory. Values MUST begin with `./`, name an exported ESM subpath, and resolve within the same package. Duplicate kinds, malformed manifests, CommonJS entries, and package-name/path mismatches are errors. The package's own semantic version governs compatibility; the manifest does not carry a redundant version.
 
-Naming a package with exactly one `pmndrs.text` entry selects that entry. A package with multiple entries requires an explicit `package#kind` selector. This keeps discovery deterministic without another manifest level.
+Naming a package with exactly one `pmndrs.glyph` entry selects that entry. A package with multiple entries requires an explicit `package#kind` selector. This keeps discovery deterministic without another manifest level.
 
-There is no dependency-tree or `node_modules` walk. npm's `npm query` can inspect package metadata but is a package-manager-specific subprocess rather than a portable runtime API. A third-party package is considered only when it is imported by a discovered raster definition or explicitly named to the CLI; the same exported-package-json and `pmndrs.text` rules then apply. npm always includes `package.json` in a published package, so the custom field survives packing; the explicit `./package.json` export keeps access compatible with package encapsulation.
+There is no dependency-tree or `node_modules` walk. npm's `npm query` can inspect package metadata but is a package-manager-specific subprocess rather than a portable runtime API. A third-party package is considered only when it is imported by a discovered raster definition or explicitly named to the CLI; the same exported-package-json and `pmndrs.glyph` rules then apply. npm always includes `package.json` in a published package, so the custom field survives packing; the explicit `./package.json` export keeps access compatible with package encapsulation.
 
 ### Static project discovery
 
@@ -770,7 +770,7 @@ const Inter = `${origin}/fonts/Inter-Regular.ttf`;
 const ProseFont = defineFont(Inter, bitmap({ strikes: [16, 32] }));
 ```
 
-The analyzer follows imports and `const` bindings, identifies the `defineFont` export by symbol rather than spelling, and statically evaluates the raster options as JSON. It resolves the selected raster package through `package.json#pmndrs.text` and lets that package canonicalize its descriptor. It does not execute application modules.
+The analyzer follows imports and `const` bindings, identifies the `defineFont` export by symbol rather than spelling, and statically evaluates the raster options as JSON. It resolves the selected raster package through `package.json#pmndrs.glyph` and lets that package canonicalize its descriptor. It does not execute application modules.
 
 For the example above, the origin is dynamic but the pathname suffix is stable. The analyzer strips an absolute or dynamic origin and attempts `/fonts/Inter-Regular.ttf` against configured local asset roots. It likewise supports literal and concatenated paths and `new URL(relativeLiteral, import.meta.url)`. A local source is accepted only when one existing file matches; every successful mapping is printed in the bake report. Missing and ambiguous mappings are diagnostics, never guesses.
 
@@ -1174,11 +1174,11 @@ secondary key. A Three raster batch must use a non-`Group` `Object3D` root so it
 The adapter rejects nested `Group` roots at the untrusted plugin boundary. This makes object attachment and layering
 statically visible to external adapters without importing Three.js into the renderer-neutral raster contract.
 
-The private `@pmndrs/text-glyph-example-raster` workspace package is the accepted external proof. Its `glyphExample` factory,
-literal kind, `PMNDRS_text_glyph_example` extension, descriptor, baker, standalone companion GLB, embedded/external record
+The private `@pmndrs/glyph-example-raster` workspace package is the accepted external proof. Its `glyphExample` factory,
+literal kind, `PMNDRS_glyph_example` extension, descriptor, baker, standalone companion GLB, embedded/external record
 payload, decoder, runtime generator, retained TSL adapter, overflow, abort, and disposal are package-owned. Its source imports
-only the root and public Node-bake entry points from `@pmndrs/text`, plus its own Three.js dependency. Static discovery maps
-the imported factory export name through `package.json#pmndrs.text[exportName]`; that key and the default baker's `kind` must
+only the root and public Node-bake entry points from `@pmndrs/glyph`, plus its own Three.js dependency. Static discovery maps
+the imported factory export name through `package.json#pmndrs.glyph[exportName]`; that key and the default baker's `kind` must
 equal the imported export name. Multiple descriptors may share an extension, but project bake embeds only the first and emits
 later companions externally.
 
@@ -1193,7 +1193,7 @@ hatch.
 Raster module values and package-created raster definitions are the only public selection mechanisms. The API does not accept `raster="msdf"`, maintain a built-in name registry, or automatically replace the caller's selected module. External packages implement the same interfaces and own their option types. The built-in MSDF module consumes one MTSDF resource and one batch: fill coverage uses the median of RGB, while outlines and other true-distance effects may use alpha. It never creates parallel MSDF and MTSDF batches.
 
 ```ts
-const deferredMsdf = lazyRaster(() => import('@pmndrs/text/raster/msdf').then((module) => module.msdf));
+const deferredMsdf = lazyRaster(() => import('@pmndrs/glyph/raster/msdf').then((module) => module.msdf));
 ```
 
 `decode` validates the raster binding, page directory, and flat records without requiring every external page to become resident. `prepare` examines only glyphs belonging to the supplied font slot, resolves the logical pages they reference, and deduplicates fetch/decode/transcode/upload work. Eager Latin-sized modules may complete it immediately; paged CJK and icon resources may load only the pages required by the positioned run. Core awaits every participating module's `prepare` call before staging a new draw generation.
@@ -1253,7 +1253,7 @@ interface RasterBakePlan<M extends AnyRasterBakerModule> {
 }
 ```
 
-The raster module does not statically import its baker. Its optional `runtimeBaker` function is the dynamic boundary and returns a package-owned browser host that MUST execute generation off the main thread. It may reuse `@pmndrs/text/runtime-bake` Worker utilities, but core never resolves a package specifier or transfers a module/function through `postMessage`. If an artifact is absent or its descriptor does not satisfy the configured raster definition, the loader emits one development warning and invokes that package's runtime baker automatically. For bitmap, a baked artifact missing any statically declared strike is therefore an incompatible miss, not a partial success. If the selected module has no runtime-baker capability—or the font was loaded baked-only and has no source bytes—loading rejects with a structured missing-raster error. `options` describes the raster itself and participates in its deterministic key; it is not a fallback policy switch. It is required in `RuntimeRasterBakeRequest` whenever the module's option type is not `never`.
+The raster module does not statically import its baker. Its optional `runtimeBaker` function is the dynamic boundary and returns a package-owned browser host that MUST execute generation off the main thread. It may reuse `@pmndrs/glyph/runtime-bake` Worker utilities, but core never resolves a package specifier or transfers a module/function through `postMessage`. If an artifact is absent or its descriptor does not satisfy the configured raster definition, the loader emits one development warning and invokes that package's runtime baker automatically. For bitmap, a baked artifact missing any statically declared strike is therefore an incompatible miss, not a partial success. If the selected module has no runtime-baker capability—or the font was loaded baked-only and has no source bytes—loading rejects with a structured missing-raster error. `options` describes the raster itself and participates in its deterministic key; it is not a fallback policy switch. It is required in `RuntimeRasterBakeRequest` whenever the module's option type is not `never`.
 
 Core resolves root/span paint into a palette and a per-glyph `paintIndices` array by mapping shaped clusters back to source spans. Paint never enters paragraph measurement. Core invokes required `stageBatch` once for each `(fontSlot, raster resource)` represented in the paragraph and supplies both the previous compatible batch, when present, and the complete next `GlyphPaint`. A module MUST emit only glyphs whose `glyphFontSlots` equal the supplied slot. It performs every fallible validation and allocation while staging without mutating the previous batch. Only after every participant stages successfully does core call the synchronous infallible commits and transfer target ownership; failure, cancellation, or stale completion aborts every stage and preserves the live generation. The target may be the previous batch for a retained update or a replacement batch for overflow or incompatible topology. Optional synchronous `validatePaint` remains an early public-input rejection seam, not a second mutation path. This makes span fonts and future fallback fonts compatible with one non-generic `ParagraphLayout`, including paragraphs whose slots select different raster modules; raster code never interprets another font's local glyph IDs. Bitmap V0 accepts fill and opacity but rejects outline and shadow; Milestone 8's MTSDF module owns those distance-based effects.
 

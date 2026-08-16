@@ -11,8 +11,8 @@ import { basename, join, resolve } from 'node:path';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { bakeFont } from '@pmndrs/text/bake';
-import { slugBaker } from '@pmndrs/text/bakers/slug';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { slugBaker } from '@pmndrs/glyph/bakers/slug';
 
 const executable = fileURLToPath(new URL('../node_modules/.bin/vitexec', import.meta.url));
 const cwd = fileURLToPath(new URL('..', import.meta.url));

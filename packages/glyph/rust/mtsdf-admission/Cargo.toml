@@ -1,0 +1,43 @@
+[package]
+name = "pmndrs-glyph-mtsdf-admission"
+description = "Non-shipping MTSDF generator admission harness for pmndrs/glyph"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/glyph"
+publish = false
+
+[features]
+oracle = []
+full-font-evidence = ["dep:pmndrs-glyph-mtsdf-fontations", "dep:skrifa"]
+fuzzing = []
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "emit-oracle-corpus"
+path = "src/bin/emit-oracle-corpus.rs"
+required-features = ["oracle"]
+
+[[bin]]
+name = "measure-mtsdf-font"
+path = "src/bin/measure-mtsdf-font.rs"
+required-features = ["full-font-evidence"]
+
+[[bin]]
+name = "emit-mtsdf-font-requests"
+path = "src/bin/emit-mtsdf-font-requests.rs"
+required-features = ["full-font-evidence"]
+
+[dependencies]
+pmndrs-glyph-mtsdf-core = { path = "../mtsdf-core", default-features = false }
+pmndrs-glyph-mtsdf-fontations = { path = "../mtsdf-fontations", optional = true }
+skrifa = { version = "=0.45.1", default-features = false, features = ["std"], optional = true }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

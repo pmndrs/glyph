@@ -17,8 +17,8 @@ The permanent TSL regression compiles the formerly pathological method chain, ui
 Run the pinned compiler through the package script or pnpm:
 
 ```sh
-pnpm --filter @pmndrs/text typecheck:slug-tsl
-pnpm --filter @pmndrs/text typecheck
+pnpm --filter @pmndrs/glyph typecheck:slug-tsl
+pnpm --filter @pmndrs/glyph typecheck
 ```
 
 ## Imports

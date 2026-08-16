@@ -7,9 +7,9 @@ import {
   type ParagraphContentBox,
   type ParagraphLayoutInspection,
   type ParagraphStyle,
-} from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/three/bitmap';
-import { Text, TextGroup, type TextUpdate } from '@pmndrs/text/three';
+} from '@pmndrs/glyph';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { Text, TextGroup, type TextUpdate } from '@pmndrs/glyph/three';
 
 import type { UikitParagraphSubject } from '../../src/benchmark/uikit-layout-fixture.ts';
 
@@ -33,7 +33,7 @@ export async function createParagraphContractRuntime() {
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../../../packages/text/dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../../../packages/glyph/dist/text_shaper.wasm', import.meta.url)),
   });
   return {
     async loadFont(url: URL, coverage?: string) {

@@ -1,6 +1,6 @@
-import { bitmap } from '@pmndrs/text/three/bitmap';
-import type { LoadedFont } from '@pmndrs/text';
-import { FontLoader, Text } from '@pmndrs/text/three';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import type { LoadedFont } from '@pmndrs/glyph';
+import { FontLoader, Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 declare global {
@@ -52,7 +52,7 @@ async function render(): Promise<TargetV1BitmapResult> {
     await renderer.renderAsync(scene, camera);
     const firstDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
     if (firstDraw === undefined) throw new Error('target-v1 Bitmap created no draw');
-    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsTextOrigins');
+    const firstStorage = firstDraw.geometry.getAttribute('_pmndrsGlyphOrigins');
     text.text = 'Target v1 Bitmop';
     await renderer.renderAsync(scene, camera);
     const retainedDraw = text.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
@@ -67,7 +67,7 @@ async function render(): Promise<TargetV1BitmapResult> {
       glyphCount: text.measureLayout()?.glyphCount ?? 0,
       litPixels,
       retainedDraw: retainedDraw === firstDraw,
-      retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsTextOrigins') === firstStorage,
+      retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsGlyphOrigins') === firstStorage,
       gpuBytes: text.gpuBytes,
     };
   } finally {

@@ -1,14 +1,14 @@
 ---
 type: How-to guide
 title: Build a raster and baker plugin
-description: Shows package authors how to add an external raster runtime, baker, artifact, optional runtime fallback, discovery metadata, and lifecycle tests through public pmndrs/text APIs.
+description: Shows package authors how to add an external raster runtime, baker, artifact, optional runtime fallback, discovery metadata, and lifecycle tests through public pmndrs/glyph APIs.
 tags: [raster, baker, plugins, transactions, threejs]
 sources:
   - id: 'public-raster-contract'
-    resource: '../../packages/text/src/raster.ts'
+    resource: '../../packages/glyph/src/raster.ts'
     title: 'Public raster runtime contract'
   - id: 'public-baker-contract'
-    resource: '../../packages/text/src/bake.ts'
+    resource: '../../packages/glyph/src/bake.ts'
     title: 'Public raster baker contract'
   - id: 'plugin-manifest'
     resource: '../../packages/glyph-example-raster/package.json'
@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Build a raster and baker plugin
@@ -47,7 +47,7 @@ generated:
 > the [raster technique and engine resource specification](raster-technique-api.md); this guide will be rewritten against
 > that split when implementation replaces the v0 module.
 
-Use this guide to create an ESM package that adds a raster technique to `pmndrs/text` without changing or importing its
+Use this guide to create an ESM package that adds a raster technique to `pmndrs/glyph` without changing or importing its
 internals. The finished package will own:
 
 - one literal raster kind, extension name, format version, options type, and canonical descriptor;
@@ -57,7 +57,7 @@ internals. The finished package will own:
 - retained-update, abort, overflow, and disposal tests.
 
 The exact interfaces remain authoritative in the [API reference](api-shapes.md#raster-module-boundary). The private
-[`@pmndrs/text-glyph-example-raster`](../../packages/glyph-example-raster) workspace package is a complete external proof using
+[`@pmndrs/glyph-example-raster`](../../packages/glyph-example-raster) workspace package is a complete external proof using
 only public package entry points.
 
 ## 1. Create separate runtime and baker entry points
@@ -81,18 +81,18 @@ baker or its generation dependencies.
     }
   },
   "pmndrs": {
-    "text": {
+    "glyph": {
       "exampleRaster": "./baker"
     }
   },
   "peerDependencies": {
-    "@pmndrs/text": "^1.0.0",
+    "@pmndrs/glyph": "^1.0.0",
     "three": ">=0.185.1 <0.186"
   }
 }
 ```
 
-The `pmndrs.text` key is the runtime factory export name. Its value is the package export containing the default baker.
+The `pmndrs.glyph` key is the runtime factory export name. Its value is the package export containing the default baker.
 Static project discovery can then connect `exampleRaster(...)` in a `defineFont(...)` call to this baker without executing
 application modules. Omit the `three` peer when the plugin targets a different adapter and does not publish a Three.js draw
 object.
@@ -102,7 +102,7 @@ object.
 Put the values shared by runtime and baker in a dependency-light contract module:
 
 ```ts
-import type { JsonValue } from '@pmndrs/text';
+import type { JsonValue } from '@pmndrs/glyph';
 
 export const EXAMPLE_KIND = 'exampleRaster' as const;
 export const EXAMPLE_EXTENSION = 'VENDOR_text_example_raster' as const;
@@ -137,7 +137,7 @@ Implement one artifact function accepting `RasterBakeRequest<Descriptor>` and re
 `RasterBakeArtifact<Kind>`. It owns the extension JSON, binary records, optional page artifacts, hashes, and payload report.
 
 ```ts
-import type { RasterBakeArtifact, RasterBakeRequest } from '@pmndrs/text';
+import type { RasterBakeArtifact, RasterBakeRequest } from '@pmndrs/glyph';
 
 export async function bakeExampleArtifact(
   request: RasterBakeRequest<ExampleDescriptor>,
@@ -176,7 +176,7 @@ can range-check and rebase them without understanding the plugin schema.
 Use `defineRasterBaker` to bind options, descriptor, identity, and generation while preserving their exact types:
 
 ```ts
-import { defineRasterBaker } from '@pmndrs/text';
+import { defineRasterBaker } from '@pmndrs/glyph';
 
 const exampleBaker = defineRasterBaker({
   kind: EXAMPLE_KIND,
@@ -197,7 +197,7 @@ factory export name used by static discovery.
 Use `defineRaster` for decoding, cold preparation, transactional batch staging, paint validation, and resource disposal:
 
 ```ts
-import { defineRaster, defineRasterBatchStage, type RasterObjectDrawBatch } from '@pmndrs/text';
+import { defineRaster, defineRasterBatchStage, type RasterObjectDrawBatch } from '@pmndrs/glyph';
 import type { Group } from 'three/webgpu';
 
 interface ExampleBatch extends RasterObjectDrawBatch<Group> {
@@ -266,7 +266,7 @@ The runtime module reaches its generator only through the literal dynamic import
 `RuntimeRasterBakerModule` from `runtime-baker.ts` and reuse the same artifact generator:
 
 ```ts
-import type { RuntimeRasterBakerModule } from '@pmndrs/text';
+import type { RuntimeRasterBakerModule } from '@pmndrs/glyph';
 
 const runtimeBaker: RuntimeRasterBakerModule<typeof EXAMPLE_KIND, ExampleOptions | undefined> = {
   kind: EXAMPLE_KIND,
@@ -299,8 +299,8 @@ unselected generators outside the browser runtime graph. If the plugin does not 
 For an explicit Node bake, pass the typed baker to the public host:
 
 ```ts
-import { rasterBake } from '@pmndrs/text';
-import { bakeFont } from '@pmndrs/text/bake';
+import { rasterBake } from '@pmndrs/glyph';
+import { bakeFont } from '@pmndrs/glyph/bake';
 import exampleBaker from '@example/text-raster/baker';
 
 await bakeFont({
@@ -319,7 +319,7 @@ await bakeFont({
 At runtime, use the package factory like a first-party raster:
 
 ```ts
-import { FontRegistry, Text } from '@pmndrs/text';
+import { FontRegistry, Text } from '@pmndrs/glyph';
 import { exampleRaster } from '@example/text-raster';
 
 const registry = new FontRegistry();
@@ -355,7 +355,7 @@ the new kind and extension name require no registration edit or switch.
 The workspace proof runs with:
 
 ```sh
-mise exec -- pnpm --filter @pmndrs/text-glyph-example-raster test
+mise exec -- pnpm --filter @pmndrs/glyph-example-raster test
 mise exec -- pnpm scripts run benchmark:external-raster
 ```
 

@@ -1,10 +1,10 @@
 {
-  "name": "@pmndrs/text-benchmarks",
+  "name": "@pmndrs/glyph-benchmarks",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @pmndrs/text build && vite",
+    "dev": "pnpm --filter @pmndrs/glyph build && vite",
     "build": "node ./scripts/build.mts",
     "test": "node ./scripts/test.mts",
     "check": "node ./scripts/check.mts"
@@ -12,8 +12,8 @@
   "dependencies": {
     "@base-ui/react": "1.6.0",
     "@fontsource-variable/geist": "5.3.0",
-    "@pmndrs/text": "workspace:*",
-    "@pmndrs/text-glyph-example-raster": "workspace:*",
+    "@pmndrs/glyph": "workspace:*",
+    "@pmndrs/glyph-example-raster": "workspace:*",
     "@react-three/fiber": "10.0.0-alpha.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

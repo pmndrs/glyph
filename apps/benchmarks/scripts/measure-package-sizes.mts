@@ -34,7 +34,7 @@ interface BundleResult {
 }
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const diagnosticModuleFragments = ['/packages/text/dist/internal/raster-baker-profile.js'];
+const diagnosticModuleFragments = ['/packages/glyph/dist/internal/raster-baker-profile.js'];
 const diagnosticCodeFragments = ['createProfiledDirectRasterBakerFromInstance', 'profiled MSDF baker'];
 
 function isTextPeerDependency(id: string): boolean {
@@ -78,7 +78,7 @@ async function bundle(
                   }
                 }
               }
-              if (!changed || !id.includes('/packages/text/')) return;
+              if (!changed || !id.includes('/packages/glyph/')) return;
               return transformed;
             },
           },
@@ -277,7 +277,7 @@ async function measureFontAsset(
 async function measureAdmittedMsdfGenerator(): Promise<MeasuredEntry> {
   const evidence = JSON.parse(
     await readFile(
-      new URL('../../../packages/text/rust/mtsdf-admission/evidence/simd-v0.json', import.meta.url),
+      new URL('../../../packages/glyph/rust/mtsdf-admission/evidence/simd-v0.json', import.meta.url),
       'utf8',
     ),
   ) as {
@@ -325,27 +325,27 @@ const coreJavaScript = await measureJavaScript(
   true,
   true,
   {
-    expectedDynamic: ['/packages/text/dist/runtime-bake.js'],
+    expectedDynamic: ['/packages/glyph/dist/runtime-bake.js'],
     excludedInitial: [
-      '/packages/text/dist/runtime-bake.js',
-      '/packages/text/dist/runtime-bake-worker.js',
-      '/packages/text/dist/react.js',
-      '/packages/text/dist/three.js',
-      '/packages/text/dist/raster/bitmap-technique.js',
-      '/packages/text/dist/raster/msdf.js',
-      '/packages/text/dist/raster/slug-technique.js',
-      '/packages/text/dist/bakers/msdf.js',
-      '/packages/text/dist/node/',
-      '/packages/text/dist/font-baker/index.js',
-      '/packages/text/dist/font-baker/validator.js',
-      '/packages/text/dist/font-baker/wasm-url.js',
+      '/packages/glyph/dist/runtime-bake.js',
+      '/packages/glyph/dist/runtime-bake-worker.js',
+      '/packages/glyph/dist/react.js',
+      '/packages/glyph/dist/three.js',
+      '/packages/glyph/dist/raster/bitmap-technique.js',
+      '/packages/glyph/dist/raster/msdf.js',
+      '/packages/glyph/dist/raster/slug-technique.js',
+      '/packages/glyph/dist/bakers/msdf.js',
+      '/packages/glyph/dist/node/',
+      '/packages/glyph/dist/font-baker/index.js',
+      '/packages/glyph/dist/font-baker/validator.js',
+      '/packages/glyph/dist/font-baker/wasm-url.js',
     ],
   },
 );
 const textShaperWasm = await measureWasm(
   'text-shaper-wasm',
   'Shaper Wasm',
-  new URL('../../../packages/text/dist/text_shaper.wasm', import.meta.url),
+  new URL('../../../packages/glyph/dist/text_shaper.wasm', import.meta.url),
 );
 const threeRuntime = await measureJavaScript(
   'three-runtime-js',
@@ -415,7 +415,7 @@ const entries: SizeEntry[] = [
   await measureJavaScript(
     'runtime-baker-worker-js',
     'Runtime bake Worker JS',
-    new URL('../../../packages/text/dist/runtime-bake-worker.js', import.meta.url),
+    new URL('../../../packages/glyph/dist/runtime-bake-worker.js', import.meta.url),
     false,
     true,
   ),
@@ -446,7 +446,7 @@ const entries: SizeEntry[] = [
   await measureWasm(
     'bitmap-baker-wasm',
     'Bitmap baker Wasm',
-    new URL('../../../packages/text/dist/bitmap_baker.wasm', import.meta.url),
+    new URL('../../../packages/glyph/dist/bitmap_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'bitmap-baker-js',
@@ -467,7 +467,7 @@ const entries: SizeEntry[] = [
   await measureWasm(
     'mtsdf-baker-wasm',
     'MTSDF baker Wasm',
-    new URL('../../../packages/text/dist/mtsdf_baker.wasm', import.meta.url),
+    new URL('../../../packages/glyph/dist/mtsdf_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'mtsdf-baker-js',
@@ -482,7 +482,7 @@ const entries: SizeEntry[] = [
   await measureWasm(
     'slug-baker-wasm',
     'Slug baker Wasm',
-    new URL('../../../packages/text/dist/slug_baker.wasm', import.meta.url),
+    new URL('../../../packages/glyph/dist/slug_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'slug-baker-js',
@@ -503,7 +503,7 @@ const entries: SizeEntry[] = [
   await measureWasm(
     'portable-baker-wasm',
     'Font baker Wasm',
-    new URL('../../../packages/text/dist/font_baker.wasm', import.meta.url),
+    new URL('../../../packages/glyph/dist/font_baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'unicode-analysis-js',

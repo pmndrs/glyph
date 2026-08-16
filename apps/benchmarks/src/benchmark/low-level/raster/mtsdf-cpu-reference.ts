@@ -1,9 +1,9 @@
-import type { ParagraphLayout } from '@pmndrs/text';
+import type { ParagraphLayout } from '@pmndrs/glyph';
 import {
   MSDF_GLYPH_RECORD_STRIDE as MTSDF_GLYPH_RECORD_STRIDE,
   type MsdfData as MtsdfData,
   type MsdfPageData as MtsdfPageData,
-} from '@pmndrs/text/raster/msdf';
+} from '@pmndrs/glyph/raster/msdf';
 
 const ABSENT_PAGE = 0xffff;
 
