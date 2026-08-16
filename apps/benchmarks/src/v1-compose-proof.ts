@@ -1,6 +1,6 @@
-import type { LoadedFont } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/three/bitmap';
-import { defineTextMaterial, FontLoader, Text } from '@pmndrs/text/three';
+import type { LoadedFont } from '@pmndrs/glyph';
+import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { defineTextMaterial, FontLoader, Text } from '@pmndrs/glyph/three';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 

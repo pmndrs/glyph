@@ -17,7 +17,7 @@ export async function runVitexec(arguments_: readonly string[]): Promise<void> {
 }
 
 export async function buildRuntimePackages(): Promise<void> {
-  await runPnpm(['--filter', '@pmndrs/text', 'build']);
+  await runPnpm(['--filter', '@pmndrs/glyph', 'build']);
 }
 
 export async function runPnpm(arguments_: readonly string[]): Promise<void> {

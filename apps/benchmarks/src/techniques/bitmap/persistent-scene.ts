@@ -6,9 +6,9 @@ import {
   type ParagraphLayoutSummary,
   type ParagraphStyle,
   type RegisteredFont,
-} from '@pmndrs/text';
-import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/text/three/bitmap';
-import { Text } from '@pmndrs/text/three';
+} from '@pmndrs/glyph';
+import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/glyph/three/bitmap';
+import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
@@ -171,7 +171,7 @@ export interface BitmapTextPersistentSceneOptions {
   readonly textAlign?: 'start' | 'center';
   readonly onError: (error: unknown) => void;
   readonly onStats: (stats: BitmapTextLiveStats) => void;
-  readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener;
+  readonly onBakeProgress?: import('@pmndrs/glyph').BakeProgressListener;
   readonly id?: string;
 }
 

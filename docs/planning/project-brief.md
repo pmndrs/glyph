@@ -5,7 +5,7 @@ description: Defines the product outcome, users, merged v0 baseline, target v1 b
 tags: [product, scope, roadmap]
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-15T15:53:27Z'
 ---
 
 # Project brief
@@ -31,7 +31,7 @@ integration design being implemented now; **v1** names the first public release 
 
 ## Product statement
 
-`pmndrs/text` will be a renderer-neutral, raster-independent text system for JavaScript and WebGPU. It will shape modern
+`pmndrs/glyph` will be a renderer-neutral, raster-independent text system for JavaScript and WebGPU. It will shape modern
 Unicode text once, lay it out within application-controlled regions, and expose batched glyph data through interchangeable
 Slug, MSDF, or bitmap techniques. Three.js, React Three Fiber, TypeGPU, and other engines consume that public core through
 separate integrations.
@@ -56,7 +56,7 @@ We need:
 ## Primary users
 
 - pmndrs renderer and framework maintainers;
-- uikit, with its existing layout system supplying content constraints and `pmndrs/text` supplying allocation-light paragraph measurement and positioned glyphs;
+- uikit, with its existing layout system supplying content constraints and `pmndrs/glyph` supplying allocation-light paragraph measurement and positioned glyphs;
 - Three.js and React Three Fiber applications;
 - applications with UI text, 3D labels, icons, bitmap styles, or mixed raster needs;
 - library authors who need shaping/layout without adopting one renderer.
@@ -81,7 +81,7 @@ We need:
 - source-discovered `defineFont` tokens with conservative local URL-path resolution;
 - one generated grayscale bitmap strike;
 - JavaScript greedy paragraph reflow for the fixture scope;
-- one framework-neutral Three.js `Text` object and thin `@pmndrs/text/react` wrapper;
+- one framework-neutral Three.js `Text` object and thin `@pmndrs/glyph/react` wrapper;
 - native ESM-only package and optional subpath graph;
 - inferred raster/baker capability types with compile-time contract fixtures;
 - WebGPU and WebGL2 first-frame proof;

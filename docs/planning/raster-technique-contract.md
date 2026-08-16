@@ -19,16 +19,16 @@ sources:
     resource: ../../packages/glyph-example-raster/src/raster.ts
     title: External raster technique example
   - id: core-policy-dsl
-    resource: ../../packages/text/src/core/policy-program.ts
+    resource: ../../packages/glyph/src/core/policy-program.ts
     title: Policy-program expression DSL
   - id: three-policy
-    resource: ../../packages/text/src/three/render-policy.ts
+    resource: ../../packages/glyph/src/three/render-policy.ts
     title: Three render policy programs
   - id: font-binding
-    resource: ../../packages/text/src/core/font-binding.ts
+    resource: ../../packages/glyph/src/core/font-binding.ts
     title: Font-binding compiler and per-technique tables
   - id: plan-executor
-    resource: ../../packages/text/src/three/engine-plan-target.ts
+    resource: ../../packages/glyph/src/three/engine-plan-target.ts
     title: Three command-buffer executor
 generated:
   by: anthropic-claude/fable-5
@@ -49,21 +49,21 @@ Where "Bitmap" lives today — six sites, four of which repeat schema knowledge 
 
 ```mermaid
 flowchart TB
-  subgraph raster ["@pmndrs/text/raster/bitmap"]
+  subgraph raster ["@pmndrs/glyph/raster/bitmap"]
     contract["technique object\ndescriptor · rasterKey · decode"]
   end
-  subgraph core ["@pmndrs/text/core"]
+  subgraph core ["@pmndrs/glyph/core"]
     binding["font-binding.ts\ncompileBitmap: field lambdas\n(order = implicit schema)"]
   end
-  subgraph tsl ["@pmndrs/text/tsl"]
+  subgraph tsl ["@pmndrs/glyph/tsl"]
     shader["bitmap-shader.ts\nreads uvOrigin, uvSize, color\n(names = implicit schema)"]
   end
-  subgraph three ["@pmndrs/text/three"]
+  subgraph three ["@pmndrs/glyph/three"]
     policy["render-policy.ts\nBITMAP_COLOR = 5\n(ids = declared here)"]
     exec["engine-plan-target.ts\nbyPolicyId.get(1)\n(ids = known again, by hand)"]
     material["material wiring\n_pmndrsText_5 → color node\n(ids = known a third time)"]
   end
-  subgraph bakers ["@pmndrs/text/bakers/bitmap"]
+  subgraph bakers ["@pmndrs/glyph/bakers/bitmap"]
     baker["baker + validator\n(artifact schema)"]
   end
   contract -.-> binding
@@ -86,12 +86,12 @@ entries — enforced by lint (D-249) and measured by per-subpath size entries.
 
 | subpath                   | owns                                                                   | must never know                           |
 | ------------------------- | ---------------------------------------------------------------------- | ----------------------------------------- |
-| `@pmndrs/text`            | fonts, text, styles, runtime                                           | GPUs, shaders, plans                      |
-| `@pmndrs/text/core`       | engine host, frame wire, plan view, policy authoring, binding compiler | any renderer, any shader language         |
-| `@pmndrs/text/raster/<t>` | **the technique declaration** (this plan's construct)                  | Three, TSL node graphs                    |
-| `@pmndrs/text/tsl`        | TSL realizations of declared shader interfaces                         | buffer ids, binding field order           |
-| `@pmndrs/text/three`      | scene lifecycle, plan execution, material realization                  | field meanings beyond the declared schema |
-| `@pmndrs/text/bakers/<t>` | artifact production and validation                                     | rendering                                 |
+| `@pmndrs/glyph`            | fonts, text, styles, runtime                                           | GPUs, shaders, plans                      |
+| `@pmndrs/glyph/core`       | engine host, frame wire, plan view, policy authoring, binding compiler | any renderer, any shader language         |
+| `@pmndrs/glyph/raster/<t>` | **the technique declaration** (this plan's construct)                  | Three, TSL node graphs                    |
+| `@pmndrs/glyph/tsl`        | TSL realizations of declared shader interfaces                         | buffer ids, binding field order           |
+| `@pmndrs/glyph/three`      | scene lifecycle, plan execution, material realization                  | field meanings beyond the declared schema |
+| `@pmndrs/glyph/bakers/<t>` | artifact production and validation                                     | rendering                                 |
 
 ## The construct: one technique, one declaration
 
@@ -101,7 +101,7 @@ the meeting point of what the technique's programs produce and what its shaders 
 (it validates shape and carries ids opaquely — correct today, unchanged). The construct:
 
 ```ts
-// @pmndrs/text/raster/bitmap — the ONLY place bitmap's shape is stated.
+// @pmndrs/glyph/raster/bitmap — the ONLY place bitmap's shape is stated.
 export const bitmapSchema = defineTechniqueSchema({
   technique: 'pmndrs.bitmap',
   scope: 'strike',
@@ -148,8 +148,8 @@ move D-250 made for registers, applied to the seams.
 ## Shader authority: who owns the data under TypeGPU
 
 With the schema owned by the technique, the shader-language question becomes small: **a shader library owns only
-the realization of a declared interface.** `@pmndrs/text/tsl` implements `BitmapShaderInterface` with TSL nodes;
-a future `@pmndrs/text/typegpu` implements the same interface with TypeGPU; both import the technique's schema and
+the realization of a declared interface.** `@pmndrs/glyph/tsl` implements `BitmapShaderInterface` with TSL nodes;
+a future `@pmndrs/glyph/typegpu` implements the same interface with TypeGPU; both import the technique's schema and
 neither owns any data. The data path (binding tables, storage buffers, patch application) is core + the renderer
 integration; the shader receives typed views it did not define. This is the answer typegpu-first-shader-authority
 needs and the reason the shader library moved out of `three/`: shader realizations are per-language, schemas are

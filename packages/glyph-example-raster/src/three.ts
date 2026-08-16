@@ -1,4 +1,4 @@
-import { registerThreeRasterPlanProgram, threePolicyAbi, type ThreePlanProgramBuffer } from '@pmndrs/text/three';
+import { registerThreeRasterPlanProgram, threePolicyAbi, type ThreePlanProgramBuffer } from '@pmndrs/glyph/three';
 import { add, min, mul, positionLocal, step, storage, sub, uv, vec3 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 

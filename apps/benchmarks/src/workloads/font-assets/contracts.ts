@@ -1,7 +1,7 @@
-import type { BakeProgressListener, FontRegistry, LoadedFont } from '@pmndrs/text';
-import type { bitmap as bitmapTechnique } from '@pmndrs/text/raster/bitmap';
-import type { msdf as mtsdfTechnique } from '@pmndrs/text/raster/msdf';
-import type { slug as slugTechnique } from '@pmndrs/text/raster/slug';
+import type { BakeProgressListener, FontRegistry, LoadedFont } from '@pmndrs/glyph';
+import type { bitmap as bitmapTechnique } from '@pmndrs/glyph/raster/bitmap';
+import type { msdf as mtsdfTechnique } from '@pmndrs/glyph/raster/msdf';
+import type { slug as slugTechnique } from '@pmndrs/glyph/raster/slug';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { FontDelivery, RasterTechnique } from '../../benchmark/url-state';

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 0,
-  "generatedBy": "text:rust-layout-benchmark",
+  "generatedBy": "glyph:rust-layout-benchmark",
   "wasmSha256": "f74f96a6214532271296c8165738d14f71c0642aca4af9050a0363aed2a4d576",
   "technique": "bitmap",
   "allocation": "ordered",

@@ -1,4 +1,4 @@
-import type { AnyRasterTechnique, LoadedFont } from '@pmndrs/text';
+import type { AnyRasterTechnique, LoadedFont } from '@pmndrs/glyph';
 import { describe, expect, it } from 'vitest';
 
 import {
