@@ -1,4 +1,4 @@
-import { bakeFontInWorker } from '@pmndrs/text/runtime-bake';
+import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
 import canonicalFontUrl from '../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url';
 import canonicalFontManifest from '../../fixtures/fonts/inter-v4.1/manifest.json' with { type: 'json' };
 

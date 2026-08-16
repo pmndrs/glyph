@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/text/three';
+import { Text } from '@pmndrs/glyph/three';
 import type * as THREE from 'three/webgpu';
 
 import type { RasterConformanceSpecimen } from '../../benchmark/font-fixtures';

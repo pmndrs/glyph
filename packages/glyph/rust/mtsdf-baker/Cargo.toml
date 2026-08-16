@@ -1,0 +1,69 @@
+[package]
+name = "pmndrs-glyph-mtsdf-baker"
+description = "Direct-memory Wasm boundary for the repository-owned pmndrs/glyph MTSDF core"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/glyph"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "generate-mtsdf-abi"
+path = "src/bin/generate-mtsdf-abi.rs"
+required-features = ["std"]
+
+[[bin]]
+name = "profile-mtsdf-baker"
+path = "src/bin/profile-mtsdf-baker.rs"
+required-features = ["profiling"]
+
+[features]
+default = ["std", "artifact-baker"]
+std = [
+  "dep:serde_json",
+  "serde_json/std",
+  "pmndrs-glyph-mtsdf-core/std",
+  "pmndrs-glyph-mtsdf-fontations?/std",
+  "pmndrs-glyph-raster-artifact?/std",
+  "serde?/std",
+  "skrifa?/std",
+]
+artifact-baker = [
+  "dep:pmndrs-glyph-mtsdf-fontations",
+  "dep:pmndrs-glyph-raster-artifact",
+  "dep:serde",
+  "dep:serde_json",
+  "dep:skrifa",
+  "dep:thiserror",
+]
+simd128-experiment = ["pmndrs-glyph-mtsdf-core/simd128-experiment"]
+adjacent-texel-tile-experiment = ["pmndrs-glyph-mtsdf-core/adjacent-texel-tile-experiment"]
+adjacent-texel-simd-experiment = ["pmndrs-glyph-mtsdf-core/adjacent-texel-simd-experiment"]
+allocation-evidence = []
+profiling = ["std", "artifact-baker", "pmndrs-glyph-mtsdf-core/profiling"]
+
+[dependencies]
+core_maths = "0.1.1"
+pmndrs-glyph-mtsdf-core = { path = "../mtsdf-core", default-features = false }
+pmndrs-glyph-mtsdf-fontations = { path = "../mtsdf-fontations", default-features = false, optional = true }
+pmndrs-glyph-raster-artifact = { path = "../raster-artifact", default-features = false, optional = true }
+serde = { version = "1.0.229", default-features = false, features = ["alloc", "derive"], optional = true }
+serde_json = { version = "1.0.145", default-features = false, features = ["alloc"], optional = true }
+skrifa = { version = "=0.45.1", default-features = false, features = ["libm"], optional = true }
+thiserror = { version = "2.0.19", default-features = false, optional = true }
+
+[build-dependencies]
+serde_json = "1.0.145"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+talc = "=5.0.4"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

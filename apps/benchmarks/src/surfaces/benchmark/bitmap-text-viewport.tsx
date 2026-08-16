@@ -14,7 +14,7 @@ import {
   BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH,
 } from '../../workloads/shared/text-style';
 import type { BenchmarkWorkloadId } from '../../workloads/catalog';
-import type { BakeProgress } from '@pmndrs/text';
+import type { BakeProgress } from '@pmndrs/glyph';
 
 import { BakeProgressOverlay, useBakeProgress } from './bake-progress-overlay';
 import type {

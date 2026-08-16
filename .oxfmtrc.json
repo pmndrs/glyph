@@ -11,10 +11,10 @@
     "apps/benchmarks/vitexec/admission.probe.ts",
     "docs/planning/extensions/**/*.json",
     "packages/font-baker/src/schemas/**",
-    "packages/text/dist/**",
-    "packages/text/rust/mtsdf-admission/evidence/**",
-    "packages/text/src/bakers/schemas/**",
-    "packages/text/src/font-baker/schemas/**",
+    "packages/glyph/dist/**",
+    "packages/glyph/rust/mtsdf-admission/evidence/**",
+    "packages/glyph/src/bakers/schemas/**",
+    "packages/glyph/src/font-baker/schemas/**",
     "packages/**/src/**/generated/**",
     "packages/**/tests/fixtures/**"
   ]

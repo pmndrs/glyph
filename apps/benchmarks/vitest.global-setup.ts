@@ -9,7 +9,7 @@ export default async function prepareBenchmarkUnitTests(): Promise<void> {
   await executeFile('cargo', [
     'build',
     '--manifest-path',
-    fileURLToPath(new URL('../../packages/text/rust/font-baker/Cargo.toml', import.meta.url)),
+    fileURLToPath(new URL('../../packages/glyph/rust/font-baker/Cargo.toml', import.meta.url)),
     '--bin',
     'inspect-font-fixture',
     '--features',
