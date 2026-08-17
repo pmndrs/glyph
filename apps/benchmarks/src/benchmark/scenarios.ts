@@ -3,7 +3,11 @@ import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
 // Re-pinned once when the integer F26.6 line fit became authoritative: the
 // timeline's sub-pixel origins settle on quantized boundaries while every
 // authored count (709 glyphs, 625 rendered, 68 frames, 17,362 bytes) held.
-const ADVANCED_SHAPING_HASH = '5ff5deb7';
+// Re-pinned when the line-terminating word space began to hang (D-257). Every
+// structural pin held exactly across the change -- 5 cases, 68 frames, 709 glyphs,
+// 625 rendered, 0 missing, 17,362 layout bytes, 63 draws -- so only the composed
+// position hash moved, which is the signature of a pure geometry shift.
+const ADVANCED_SHAPING_HASH = '6a33daf9';
 const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
 function deterministicValidation(hashes: readonly string[]): string {
@@ -368,8 +372,10 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
 const RICH_TEXT_SPAN_EVIDENCE = {
   // The hash alone re-pinned when the integer F26.6 fit became authoritative:
   // every structural pin below — selection, line counts, and both first-line
-  // break positions — held while the composed origins quantized.
-  hash: 'b5a9ef20',
+  // break positions — held while the composed origins quantized. Re-pinned again
+  // for the hanging terminating space (D-257), where only `lineThroughCount`
+  // moved among the structural pins, for the reason recorded beside it.
+  hash: 'afe3792b',
   glyphCount: 175,
   renderedGlyphCount: 149,
   drawCount: 7,
@@ -392,9 +398,14 @@ const RICH_TEXT_SPAN_EVIDENCE = {
   paragraphPaintGlyphs: 114,
   nestedGlyphCount: 9,
   // One instance per continuous decorating box per line (D-248): the emphasis span underlines as a single
-  // run, while line-through covers the tint span once and the accent span's two wrapped lines.
+  // run, while line-through covers the tint span once and the accent span once.
+  // Re-pinned from 3 when the line-terminating word space began to hang (D-257). Every
+  // pin declared above this one held exactly -- including `lineCount`, `accentPaintGlyphs`,
+  // and both first-break positions -- so the paragraph still wraps into the same three
+  // lines over the same glyphs. The recovered measure keeps the struck-through accent
+  // phrase off a line boundary, so it needs one decorating box instead of two.
   underlineCount: 1,
-  lineThroughCount: 3,
+  lineThroughCount: 2,
 } as const;
 
 /**

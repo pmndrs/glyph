@@ -28,9 +28,13 @@ describe('milestone-one fixture contracts', () => {
     expect(paragraph.constraints.map(({ width }: { width: number }) => width)).toEqual([720, 360]);
     expect(paragraph.status).toBe('golden');
     expect(paragraph.goldens).toMatchObject({
+      // Re-derived when the line-terminating word space began to hang (D-257): the
+      // single-line `natural` state ends in ink and is unchanged, while both wrapped
+      // states lost exactly one 9.0 px space -- Inter's space at this fixture's 32 px --
+      // with glyph counts and line counts identical. Measured, not regenerated.
       natural: { layout: { hash: 'bb15bbcc', glyphCount: 55 } },
-      wide: { layout: { hash: '4f111a3f', glyphCount: 55 } },
-      narrow: { layout: { hash: 'e8c0e9d5', glyphCount: 55 } },
+      wide: { layout: { hash: 'f8b5c3ee', glyphCount: 55 } },
+      narrow: { layout: { hash: '5c178199', glyphCount: 55 } },
     });
     expect(glb.container).toMatchObject({ version: 2, alignment: 4, chunkOrder: ['JSON', 'BIN'] });
     expect(new Set(malformed.cases).size).toBe(malformed.cases.length);

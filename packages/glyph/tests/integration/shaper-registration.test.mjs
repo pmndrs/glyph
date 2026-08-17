@@ -1126,7 +1126,11 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   const narrowed = update(96, widened, false);
   assert.equal(narrowed.status, abi.status.ok);
   assert.equal(narrowed.measurement?.lineCount, 3);
-  assert.equal(narrowed.measurement?.inlineExtent, 83.53125);
+  // Same re-derivation as the pinned table below: the widest wrapped line no
+  // longer charges its terminating space, so this drops by exactly one 4.5 px
+  // space. The 300 and 220 extents, whose lines end in ink, are unchanged —
+  // which is what makes this a layout-contract change rather than drift.
+  assert.equal(narrowed.measurement?.inlineExtent, 79.03125);
   // And back out again across the equivalence boundary.
   const restored = update(300, narrowed, false);
   assert.equal(restored.status, abi.status.ok);
@@ -1222,12 +1226,20 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
 
   // Every pinned extent sits on a 1/64 boundary — the F26.6 signature of the
   // authoritative integer fit, exact in f32.
+  // Re-derived once when the line-terminating word space began to hang (D-257).
+  // The derivation is exact and was predicted before it was measured: a wrapped
+  // line no longer charges the space that terminates it, so every multi-line
+  // width loses exactly one space advance — 4.50000 px, Inter's space at 16 px —
+  // while the single-line widths, whose text ends in ink, do not move at all.
+  // Line counts are unchanged at every width, and every value remains on a 1/64
+  // boundary (8918/64, 5058/64, 3572/64), so the F26.6 signature this test exists
+  // to protect still holds.
   const pinned = [
     [300, 1, 181.375],
     [220, 1, 181.375],
-    [150, 2, 143.84375],
-    [96, 3, 83.53125],
-    [73, 4, 60.3125],
+    [150, 2, 139.34375],
+    [96, 3, 79.03125],
+    [73, 4, 55.8125],
   ];
   for (const [width, lineCount, inlineExtent] of pinned) {
     const measureRequest = engineStyleUpdateBytes(abi, {

@@ -11,8 +11,16 @@
     "features": []
   },
   "constraints": [
-    { "id": "wide", "width": 720, "height": null },
-    { "id": "narrow", "width": 360, "height": null }
+    {
+      "id": "wide",
+      "width": 720,
+      "height": null
+    },
+    {
+      "id": "narrow",
+      "width": 360,
+      "height": null
+    }
   ],
   "goldens": {
     "natural": {
@@ -28,54 +36,108 @@
       "layout": {
         "hash": "bb15bbcc",
         "glyphCount": 55,
-        "lineTextStarts": [0],
-        "lineTextEnds": [56],
-        "lineGlyphStarts": [0],
-        "lineGlyphCounts": [55],
-        "lineBaselines": [32.44062423706055],
-        "lineAdvances": [847.625]
+        "lineTextStarts": [
+          0
+        ],
+        "lineTextEnds": [
+          56
+        ],
+        "lineGlyphStarts": [
+          0
+        ],
+        "lineGlyphCounts": [
+          55
+        ],
+        "lineBaselines": [
+          32.44062423706055
+        ],
+        "lineAdvances": [
+          847.625
+        ]
       }
     },
     "wide": {
       "measurement": {
         "width": 696.734375,
         "height": 83.19999999999999,
-        "contentWidth": 696.734375,
+        "contentWidth": 687.734375,
         "contentHeight": 83.19999999999999,
         "firstBaseline": 32.440625,
         "lastBaseline": 74.04062499999999,
         "overflowed": false
       },
       "layout": {
-        "hash": "4f111a3f",
+        "hash": "f8b5c3ee",
         "glyphCount": 55,
-        "lineTextStarts": [0, 47],
-        "lineTextEnds": [47, 56],
-        "lineGlyphStarts": [0, 46],
-        "lineGlyphCounts": [46, 9],
-        "lineBaselines": [32.44062423706055, 74.0406265258789],
-        "lineAdvances": [696.734375, 150.890625]
+        "lineTextStarts": [
+          0,
+          47
+        ],
+        "lineTextEnds": [
+          47,
+          56
+        ],
+        "lineGlyphStarts": [
+          0,
+          46
+        ],
+        "lineGlyphCounts": [
+          46,
+          9
+        ],
+        "lineBaselines": [
+          32.44062423706055,
+          74.0406265258789
+        ],
+        "lineAdvances": [
+          696.734375,
+          150.890625
+        ]
       }
     },
     "narrow": {
       "measurement": {
         "width": 356.546875,
         "height": 124.79999999999998,
-        "contentWidth": 356.546875,
+        "contentWidth": 347.546875,
         "contentHeight": 124.79999999999998,
         "firstBaseline": 32.440625,
         "lastBaseline": 115.64062499999999,
         "overflowed": false
       },
       "layout": {
-        "hash": "e8c0e9d5",
+        "hash": "5c178199",
         "glyphCount": 55,
-        "lineTextStarts": [0, 22, 47],
-        "lineTextEnds": [22, 47, 56],
-        "lineGlyphStarts": [0, 21, 46],
-        "lineGlyphCounts": [21, 25, 9],
-        "lineBaselines": [32.44062423706055, 74.0406265258789, 115.640625],
-        "lineAdvances": [340.1875, 356.546875, 150.890625]
+        "lineTextStarts": [
+          0,
+          22,
+          47
+        ],
+        "lineTextEnds": [
+          22,
+          47,
+          56
+        ],
+        "lineGlyphStarts": [
+          0,
+          21,
+          46
+        ],
+        "lineGlyphCounts": [
+          21,
+          25,
+          9
+        ],
+        "lineBaselines": [
+          32.44062423706055,
+          74.0406265258789,
+          115.640625
+        ],
+        "lineAdvances": [
+          340.1875,
+          356.546875,
+          150.890625
+        ]
       }
     }
   },

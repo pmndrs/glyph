@@ -118,7 +118,11 @@ pub(crate) fn layout_next_line(
                 word_space_shrink,
             ),
         );
+        // The f64 parity twin mirrors the integer path exactly, hanging spaces on the
+        // same predicate; see the integer loop for why a space cannot overflow.
+        let cluster_is_space = flags & CLUSTER_SPACE != 0;
         if wrap != WRAP_NONE
+            && !cluster_is_space
             && max_width.is_finite()
             && next_advance - shrink_credit > max_width
             && index > line_start
@@ -167,6 +171,11 @@ pub(crate) fn layout_next_line(
     if selected_end <= line_start {
         selected_end = line_start + 1;
         selected_advance = clusters.advances[line_start];
+    }
+    let mut visible_end = selected_end;
+    while visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_SPACE != 0 {
+        selected_advance -= clusters.advances[visible_end - 1];
+        visible_end -= 1;
     }
     let last = selected_end - 1;
     let hard_break = clusters.flags[last] & CLUSTER_HARD_BREAK != 0;
@@ -303,7 +312,15 @@ pub(crate) fn layout_next_line_integer(
         } else {
             space_units
         };
+        // A word space at a soft wrap hangs: CSS Text 3 removes it from the line it
+        // terminates, and this engine's justification pass already trims it before
+        // counting (`justifiable_span`). So a space can never overflow the measure --
+        // either the line ends here and the space hangs, or the line continues and the
+        // space becomes interior, charged by the next non-space cluster's own test.
+        // Testing it would refuse words the line has room for, and did.
+        let cluster_is_space = flags & CLUSTER_SPACE != 0;
         if wrap != WRAP_NONE
+            && !cluster_is_space
             && max_width_units.is_some_and(|units| {
                 next_advance - super::layout_units::apply_ratio(next_space_units, word_space_shrink)
                     > units
@@ -373,6 +390,16 @@ pub(crate) fn layout_next_line_integer(
     if selected_end <= line_start {
         selected_end = line_start + 1;
         selected_advance = i64::from(clusters.advances_f26[line_start]);
+    }
+    // The line still CONTAINS its terminating spaces -- they keep their clusters and
+    // their text range -- but they contribute no width, exactly as `justifiable_span`
+    // assumes when it trims them before distributing a deficit. Trimming here rather
+    // than during accumulation covers every selection path at once: scalar, resolved
+    // chunk candidate, forced overflow, and end of text.
+    let mut visible_end = selected_end;
+    while visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_SPACE != 0 {
+        selected_advance -= i64::from(clusters.advances_f26[visible_end - 1]);
+        visible_end -= 1;
     }
     let last = selected_end - 1;
     let hard_break = clusters.flags[last] & CLUSTER_HARD_BREAK != 0;
@@ -671,6 +698,49 @@ mod tests {
             .unwrap();
         assert_eq!(line.cluster_end, 10);
         assert_eq!(line.advance, 10.0);
+    }
+
+    #[test]
+    fn the_line_terminating_space_hangs_instead_of_consuming_the_measure() {
+        // "aaaa bbbb": four ink clusters, a space, four more. Every advance is 1.0,
+        // so the visible ink of the first word is 4.0 and the space sits at index 4.
+        let mut flags = [0_u8; 9];
+        flags[4] = CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE;
+        let clusters = make_clusters(&[1.0; 9], &flags);
+
+        // At width 4.0 only the first word fits. The line still owns the space
+        // cluster, but the space contributes no width -- so the recorded advance is
+        // the visible ink, which is what alignment and justification measure against.
+        let mut cursor = LineCursor::default();
+        let line = layout_next_line(&clusters, &mut cursor, 4.0, WRAP_WORD, 0.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(line.cluster_end, 5, "the line retains the space cluster");
+        assert_eq!(line.advance, 4.0, "the hung space contributes no advance");
+
+        // The integer fit is authoritative and must agree exactly.
+        let mut integer_cursor = LineCursor::default();
+        let integer = layout_next_line_integer(
+            &clusters,
+            &mut integer_cursor,
+            Some(i64::from(super::super::layout_units::layout_units_from_scaled(4.0))),
+            WRAP_WORD,
+            0.0,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(integer, line);
+
+        // And the measure the space used to consume is now available to the fit: a
+        // width that admits "aaaa" plus the space's worth of ink admits nothing more,
+        // but one that admits five ink clusters takes the second word's first cluster
+        // rather than stopping a space short of the edge.
+        let mut wider = LineCursor::default();
+        let wider_line = layout_next_line(&clusters, &mut wider, 5.0, WRAP_WORD, 0.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(wider_line.cluster_end, 5);
+        assert_eq!(wider_line.advance, 4.0);
     }
 
     #[test]
