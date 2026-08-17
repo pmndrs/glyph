@@ -26,6 +26,7 @@ use super::{
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
     sort,
+    staged::Staged,
     style_state::{
         DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
         StyleInvalidation,
@@ -173,23 +174,16 @@ struct ParagraphState {
     pending_styles: StyleArena,
     resolved_styles: ResolvedStyleArena,
     pending_resolved_styles: ResolvedStyleArena,
-    unicode: UnicodeAnalysis,
-    pending_unicode: UnicodeAnalysis,
+    unicode: Staged<UnicodeAnalysis>,
     unicode_reused_for_text_edit: bool,
-    bidi: BidiAnalysis,
-    pending_bidi: BidiAnalysis,
-    shaping_runs: ShapingRunArena,
-    pending_shaping_runs: ShapingRunArena,
-    shape: ShapeArena,
-    pending_shape: ShapeArena,
+    bidi: Staged<BidiAnalysis>,
+    shaping_runs: Staged<ShapingRunArena>,
+    shape: Staged<ShapeArena>,
     incremental_shape_source_run: Option<u32>,
-    clusters: ClusterArena,
-    pending_clusters: ClusterArena,
+    clusters: Staged<ClusterArena>,
     glyph_identity_index: IdentityIndex,
-    geometry: FlowGeometryArena,
-    pending_geometry: FlowGeometryArena,
-    flow_layout: FlowLayoutArena,
-    pending_flow_layout: FlowLayoutArena,
+    geometry: Staged<FlowGeometryArena>,
+    flow_layout: Staged<FlowLayoutArena>,
     intrinsic_geometry_scratch: FlowGeometryArena,
     intrinsic_flow_layout_scratch: FlowLayoutArena,
     intrinsic_flow_slot_scratch: super::flow_geometry::InlineSlotArena,
@@ -200,8 +194,7 @@ struct ParagraphState {
     boundary_shape_scratch: ShapeArena,
     ellipsis_shape_scratch: ShapeArena,
     ellipsis_text_scratch: Vec<u16>,
-    positioned: PositionedGlyphArena,
-    pending_positioned: PositionedGlyphArena,
+    positioned: Staged<PositionedGlyphArena>,
     flow_slot_scratch: super::flow_geometry::InlineSlotArena,
     fallback_spans: Vec<FallbackSpan>,
     pending_fallback_spans: Vec<FallbackSpan>,
@@ -215,18 +208,10 @@ struct ParagraphState {
     style_resolution_scratch: Vec<ResolutionScope>,
     styles_prepared: bool,
     style_invalidation: StyleInvalidation,
-    unicode_prepared: bool,
-    bidi_prepared: bool,
-    shaping_runs_prepared: bool,
-    shape_prepared: bool,
-    clusters_prepared: bool,
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
     speculative_text_fingerprint: u64,
     speculative_style_fingerprint: u64,
-    geometry_prepared: bool,
-    flow_layout_prepared: bool,
-    positioned_prepared: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -531,7 +516,7 @@ impl TextEngine {
         self.sessions
             .get(&handle)
             .and_then(EngineSession::first_paragraph_state)
-            .map(|paragraph| paragraph.shaping_runs.runs().len())
+            .map(|paragraph| paragraph.shaping_runs.active().runs().len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -704,9 +689,8 @@ impl TextEngine {
             };
             // Measurement answers at line level from flow and clusters; only a
             // layout-inspection query needs the per-glyph positioning tail.
-            let position = request.semantic_view_mask
-                & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION
-                != 0;
+            let position =
+                request.semantic_view_mask & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION != 0;
             if prefix_retained {
                 if !geometry_retained {
                     paragraph.positioned_changed = paragraph.state.prepare_geometry_and_layout(
@@ -720,8 +704,8 @@ impl TextEngine {
                         &mut next_content_revision,
                     )?;
                 } else if position
-                    && paragraph.state.flow_layout_prepared
-                    && !paragraph.state.positioned_prepared
+                    && paragraph.state.flow_layout.is_prepared()
+                    && !paragraph.state.positioned.is_prepared()
                 {
                     // An inspection query re-using a measurement-only transaction
                     // runs just the missing positioning tail.
@@ -753,9 +737,8 @@ impl TextEngine {
                     | super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION)
                 != 0
             {
-                let include_layout_inspection = request.semantic_view_mask
-                    & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION
-                    != 0;
+                let include_layout_inspection =
+                    request.semantic_view_mask & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION != 0;
                 let mut records = core::mem::take(&mut session.semantic_records);
                 let query = append_paragraph_measurement(
                     &mut records,
@@ -942,8 +925,8 @@ impl TextEngine {
                     // Adopting a measurement-only transaction: the flow tail is
                     // retained but positioning was deliberately skipped, so the
                     // committing frame runs exactly that missing tail once.
-                    if paragraph.state.flow_layout_prepared
-                        && !paragraph.state.positioned_prepared
+                    if paragraph.state.flow_layout.is_prepared()
+                        && !paragraph.state.positioned.is_prepared()
                         && let Some(shaper) = shaper.as_deref_mut()
                     {
                         paragraph
@@ -1008,11 +991,7 @@ impl TextEngine {
                             let paragraph = session
                                 .paragraph(ordered.id)
                                 .ok_or(EngineError::InvalidRequest)?;
-                            let positioned = if paragraph.state.positioned_prepared {
-                                &paragraph.state.pending_positioned
-                            } else {
-                                &paragraph.state.positioned
-                            };
+                            let positioned = paragraph.state.positioned.active();
                             total
                                 .checked_add(positioned.glyphs().len())
                                 .ok_or(EngineError::ResultTooLarge)
@@ -1258,11 +1237,7 @@ fn prepared_gather_key(prepared: PreparedUpdate, revision: SessionRevision) -> G
 fn session_has_decorations(session: &EngineSession) -> bool {
     session.active_order().iter().any(|ordered| {
         session.paragraph(ordered.id).is_some_and(|paragraph| {
-            let positioned = if paragraph.state.positioned_prepared {
-                &paragraph.state.pending_positioned
-            } else {
-                &paragraph.state.positioned
-            };
+            let positioned = paragraph.state.positioned.active();
             !positioned.decorations().is_empty()
         })
     })
@@ -1303,21 +1278,9 @@ fn append_paragraph_measurement(
     include_layout_inspection: bool,
 ) -> Result<(), EngineError> {
     let visible_extents = {
-        let clusters = if state.clusters_prepared {
-            &state.pending_clusters
-        } else {
-            &state.clusters
-        };
-        let geometry = if state.geometry_prepared {
-            &state.pending_geometry
-        } else {
-            &state.geometry
-        };
-        let flow = if state.flow_layout_prepared {
-            &state.pending_flow_layout
-        } else {
-            &state.flow_layout
-        };
+        let clusters = state.clusters.active();
+        let geometry = state.geometry.active();
+        let flow = state.flow_layout.active();
         let flow_thread_id = geometry
             .constraints
             .first()
@@ -1330,25 +1293,17 @@ fn append_paragraph_measurement(
             thread_typography(geometry, flow_thread_id),
         )?
     };
-    let active_flow = if state.flow_layout_prepared {
-        &state.pending_flow_layout
-    } else {
-        &state.flow_layout
-    };
+    let active_flow = state.flow_layout.active();
     let active_line_count = active_flow.lines.len();
     let has_ellipsis = !active_flow.ellipsis_threads().is_empty();
-    let cluster_count = if state.clusters_prepared {
-        state.pending_clusters.starts.len()
-    } else {
-        state.clusters.starts.len()
-    };
-    let constraint = if state.geometry_prepared {
-        state.pending_geometry.constraints.first()
-    } else {
-        state.geometry.constraints.first()
-    }
-    .copied()
-    .ok_or(EngineError::InvalidRequest)?;
+    let cluster_count = state.clusters.active().starts.len();
+    let constraint = state
+        .geometry
+        .active()
+        .constraints
+        .first()
+        .copied()
+        .ok_or(EngineError::InvalidRequest)?;
     let needs_intrinsic = visible_extents.consumed_clusters < cluster_count || has_ellipsis;
     if needs_intrinsic {
         state.prepare_intrinsic_flow_layout(
@@ -1372,26 +1327,10 @@ fn append_paragraph_measurement(
     } else {
         &state.text
     };
-    let clusters = if state.clusters_prepared {
-        &state.pending_clusters
-    } else {
-        &state.clusters
-    };
-    let geometry = if state.geometry_prepared {
-        &state.pending_geometry
-    } else {
-        &state.geometry
-    };
-    let active_flow = if state.flow_layout_prepared {
-        &state.pending_flow_layout
-    } else {
-        &state.flow_layout
-    };
-    let active_positioned = if state.positioned_prepared {
-        &state.pending_positioned
-    } else {
-        &state.positioned
-    };
+    let clusters = state.clusters.active();
+    let geometry = state.geometry.active();
+    let active_flow = state.flow_layout.active();
+    let active_positioned = state.positioned.active();
     let flow = if inspect_full_clipped_layout {
         &state.intrinsic_flow_layout_scratch
     } else {
@@ -1427,13 +1366,13 @@ fn append_paragraph_measurement(
     // A pending positioning over a committed flow (a positioning-only restyle)
     // is a VALID pairing — positioning re-ran over exactly that flow.
     let positioned_matches_flow = inspect_full_clipped_layout
-        || !(state.flow_layout_prepared && !state.positioned_prepared);
+        || !(state.flow_layout.is_prepared() && !state.positioned.is_prepared());
     let (line_glyph_starts, line_glyph_counts) = if positioned_matches_flow {
         positioned.semantic_line_glyph_spans()
     } else {
         (&[][..], &[][..])
     };
-    let boundary_shape = if state.flow_layout_prepared {
+    let boundary_shape = if state.flow_layout.is_prepared() {
         &state.pending_boundary_shape
     } else {
         &state.boundary_shape
@@ -1491,11 +1430,7 @@ fn append_session_gather(
         let paragraph = session
             .paragraph(ordered.id)
             .ok_or(EngineError::InvalidRequest)?;
-        let positioned = if paragraph.state.positioned_prepared {
-            &paragraph.state.pending_positioned
-        } else {
-            &paragraph.state.positioned
-        };
+        let positioned = paragraph.state.positioned.active();
         let semantic_f32 = positioned.semantic_f32();
         let semantic_u32 = positioned.semantic_u32();
         let semantic_change_masks = if retaining && !paragraph.positioned_changed {
@@ -1844,22 +1779,50 @@ impl ParagraphState {
         self.pending_styles.clear();
         self.resolved_styles.clear();
         self.pending_resolved_styles.clear();
-        self.unicode.clear();
-        self.pending_unicode.clear();
+        {
+            let (committed, pending) = self.unicode.pair_mut();
+            committed.clear();
+            pending.clear();
+        }
+        self.unicode.abort();
         self.unicode_reused_for_text_edit = false;
-        self.bidi.clear();
-        self.pending_bidi.clear();
-        self.shaping_runs.clear();
-        self.pending_shaping_runs.clear();
-        self.shape.clear();
-        self.pending_shape.clear();
+        {
+            let (committed, pending) = self.bidi.pair_mut();
+            committed.clear();
+            pending.clear();
+        }
+        self.bidi.abort();
+        {
+            let (committed, pending) = self.shaping_runs.pair_mut();
+            committed.clear();
+            pending.clear();
+        }
+        self.shaping_runs.abort();
+        {
+            let (committed, pending) = self.shape.pair_mut();
+            committed.clear();
+            pending.clear();
+        }
+        self.shape.abort();
         self.incremental_shape_source_run = None;
-        self.clusters.clear();
-        self.pending_clusters.clear();
-        self.geometry.clear();
-        self.pending_geometry.clear();
-        self.flow_layout.clear();
-        self.pending_flow_layout.clear();
+        {
+            let (committed, pending) = self.clusters.pair_mut();
+            committed.clear();
+            pending.clear();
+        }
+        self.clusters.abort();
+        {
+            let (committed, pending) = self.geometry.pair_mut();
+            committed.clear();
+            pending.clear();
+        }
+        self.geometry.abort();
+        {
+            let (committed, pending) = self.flow_layout.pair_mut();
+            committed.clear();
+            pending.clear();
+        }
+        self.flow_layout.abort();
         self.intrinsic_geometry_scratch.clear();
         self.intrinsic_flow_layout_scratch.clear();
         self.intrinsic_positioned_scratch.clear();
@@ -1868,8 +1831,12 @@ impl ParagraphState {
         self.boundary_shape_scratch.clear();
         self.ellipsis_shape_scratch.clear();
         self.ellipsis_text_scratch.clear();
-        self.positioned.clear();
-        self.pending_positioned.clear();
+        {
+            let (committed, pending) = self.positioned.pair_mut();
+            committed.clear();
+            pending.clear();
+        }
+        self.positioned.abort();
         self.fallback_spans.clear();
         self.pending_fallback_spans.clear();
         self.fallback_span_scratch.clear();
@@ -1880,18 +1847,18 @@ impl ParagraphState {
         self.style_resolution_scratch.clear();
         self.styles_prepared = false;
         self.style_invalidation = StyleInvalidation::default();
-        self.unicode_prepared = false;
-        self.bidi_prepared = false;
-        self.shaping_runs_prepared = false;
-        self.shape_prepared = false;
-        self.clusters_prepared = false;
+        self.unicode.abort();
+        self.bidi.abort();
+        self.shaping_runs.abort();
+        self.shape.abort();
+        self.clusters.abort();
         self.geometry_fingerprint = 0;
         self.pending_geometry_fingerprint = 0;
         self.speculative_text_fingerprint = 0;
         self.speculative_style_fingerprint = 0;
-        self.geometry_prepared = false;
-        self.flow_layout_prepared = false;
-        self.positioned_prepared = false;
+        self.geometry.abort();
+        self.flow_layout.abort();
+        self.positioned.abort();
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1953,7 +1920,7 @@ impl ParagraphState {
         } else {
             geometry.fingerprint()
         };
-        let applied_geometry_fingerprint = if self.geometry_prepared {
+        let applied_geometry_fingerprint = if self.geometry.is_prepared() {
             self.pending_geometry_fingerprint
         } else if geometry_fingerprint == 0 {
             0
@@ -1967,8 +1934,8 @@ impl ParagraphState {
     /// exactly the formula [`ParagraphState::prepare`] would have reported for the
     /// pending state this paragraph already carries.
     fn speculative_positioned_changed(&self) -> bool {
-        self.clusters_prepared
-            || self.geometry_prepared
+        self.clusters.is_prepared()
+            || self.geometry.is_prepared()
             || self.style_invalidation.metrics
             || self.style_invalidation.positioning
     }
@@ -1989,14 +1956,15 @@ impl ParagraphState {
         next_content_revision: &mut u32,
     ) -> Result<bool, EngineError> {
         self.prepare_geometry(geometry)?;
-        let flow_changed =
-            self.clusters_prepared || self.geometry_prepared || self.style_invalidation.metrics;
+        let flow_changed = self.clusters.is_prepared()
+            || self.geometry.is_prepared()
+            || self.style_invalidation.metrics;
         let positioned_changed = flow_changed || self.style_invalidation.positioning;
         // Reverting to committed geometry must also revert the speculative layout
         // tail: without this, a query at the committed constraint after a query at a
         // different one reads (and a matching frame would commit) flow and
         // positioning prepared for the earlier speculative geometry.
-        if !flow_changed && (self.flow_layout_prepared || self.positioned_prepared) {
+        if !flow_changed && (self.flow_layout.is_prepared() || self.positioned.is_prepared()) {
             self.abort_flow_layout();
             self.abort_positioned();
         }
@@ -2019,22 +1987,22 @@ impl ParagraphState {
                 // adoption). The pending geometry still commits: it is real
                 // session state, and the equivalence proof is exactly the
                 // statement that the retained flow and positioning answer it.
-                if !self.clusters_prepared
+                if !self.clusters.is_prepared()
                     && !self.text_prepared
                     && !self.styles_prepared
-                    && !self.unicode_prepared
-                    && !self.bidi_prepared
-                    && !self.shape_prepared
-                    && !self.shaping_runs_prepared
+                    && !self.unicode.is_prepared()
+                    && !self.bidi.is_prepared()
+                    && !self.shape.is_prepared()
+                    && !self.shaping_runs.is_prepared()
                     && !self.style_invalidation.metrics
                     && !self.style_invalidation.positioning
                     && super::positioning::flow_positioning_equivalent(
-                        &self.pending_flow_layout,
-                        &self.flow_layout,
-                        &self.clusters,
-                        &self.bidi,
-                        |thread| thread_typography(&self.pending_geometry, thread),
-                        |thread| thread_typography(&self.geometry, thread),
+                        self.flow_layout.pending(),
+                        self.flow_layout.committed(),
+                        self.clusters.committed(),
+                        self.bidi.committed(),
+                        |thread| thread_typography(self.geometry.pending(), thread),
+                        |thread| thread_typography(self.geometry.committed(), thread),
                     )?
                 {
                     self.abort_flow_layout();
@@ -2046,13 +2014,11 @@ impl ParagraphState {
             // so a measurement-only query skips the per-glyph positioning tail
             // entirely; the committing frame (or an inspection query) runs it
             // over the retained flow instead.
+            // A measurement-only query leaves positioning unprepared. It cannot leave a
+            // STALE one behind: staging a flow drops the positioning that described the
+            // previous flow, so there is nothing here to repair.
             if positioned_changed && position {
                 self.prepare_positioned(shaper, next_content_revision)?;
-            } else if flow_changed && !position && self.positioned_prepared {
-                // A stale pending positioning from an EARLIER query in the same
-                // transaction must drop when the flow re-runs without it —
-                // otherwise its per-line lanes describe the superseded flow.
-                self.abort_positioned();
             }
         }
         Ok(positioned_changed)
@@ -2105,21 +2071,37 @@ impl ParagraphState {
         reserve_text_buffer(&mut self.pending_text, capacity)?;
         reserve_vec(&mut self.text_unit_ids, capacity)?;
         reserve_vec(&mut self.pending_text_unit_ids, capacity)?;
-        self.unicode.reserve(capacity).map_err(unicode_error)?;
-        self.pending_unicode
-            .reserve(capacity)
-            .map_err(unicode_error)?;
-        self.bidi.reserve(capacity).map_err(bidi_error)?;
-        self.pending_bidi.reserve(capacity).map_err(bidi_error)?;
-        self.shaping_runs.reserve(capacity)?;
-        self.pending_shaping_runs.reserve(capacity)?;
+        {
+            let (committed, pending) = self.unicode.pair_mut();
+            committed.reserve(capacity).map_err(unicode_error)?;
+            pending.reserve(capacity).map_err(unicode_error)?;
+        }
+        {
+            let (committed, pending) = self.bidi.pair_mut();
+            committed.reserve(capacity).map_err(bidi_error)?;
+            pending.reserve(capacity).map_err(bidi_error)?;
+        }
+        {
+            let (committed, pending) = self.shaping_runs.pair_mut();
+            committed.reserve(capacity)?;
+            pending.reserve(capacity)?;
+        }
         let glyph_capacity = capacity.saturating_mul(2);
-        self.shape.reserve(glyph_capacity)?;
-        self.pending_shape.reserve(glyph_capacity)?;
-        self.clusters.reserve(capacity)?;
-        self.pending_clusters.reserve(capacity)?;
-        self.flow_layout.reserve(capacity, 1)?;
-        self.pending_flow_layout.reserve(capacity, 1)?;
+        {
+            let (committed, pending) = self.shape.pair_mut();
+            committed.reserve(glyph_capacity)?;
+            pending.reserve(glyph_capacity)?;
+        }
+        {
+            let (committed, pending) = self.clusters.pair_mut();
+            committed.reserve(capacity)?;
+            pending.reserve(capacity)?;
+        }
+        {
+            let (committed, pending) = self.flow_layout.pair_mut();
+            committed.reserve(capacity, 1)?;
+            pending.reserve(capacity, 1)?;
+        }
         self.intrinsic_flow_layout_scratch.reserve(capacity, 1)?;
         self.boundary_shape.reserve(capacity.min(64))?;
         self.pending_boundary_shape.reserve(capacity.min(64))?;
@@ -2130,8 +2112,11 @@ impl ParagraphState {
                 .try_reserve_exact(1)
                 .map_err(|_| EngineError::ResultTooLarge)?;
         }
-        self.positioned.reserve(glyph_capacity)?;
-        self.pending_positioned.reserve(glyph_capacity)?;
+        {
+            let (committed, pending) = self.positioned.pair_mut();
+            committed.reserve(glyph_capacity)?;
+            pending.reserve(glyph_capacity)?;
+        }
         self.intrinsic_positioned_scratch.reserve(glyph_capacity)?;
         self.glyph_identity_index
             .prepare(glyph_capacity)
@@ -2330,7 +2315,7 @@ impl ParagraphState {
             return Ok(());
         }
         if let Some(edit) = self.text_edit
-            && self.unicode.reusable_for_ascii_letter_edit(
+            && self.unicode.committed().reusable_for_ascii_letter_edit(
                 &self.text,
                 &self.pending_text,
                 edit.old_start,
@@ -2341,21 +2326,22 @@ impl ParagraphState {
             self.unicode_reused_for_text_edit = true;
             return Ok(());
         }
-        self.pending_unicode
+        self.unicode
+            .pending_mut()
             .analyze(&self.pending_text)
             .map_err(unicode_error)?;
-        self.unicode_prepared = true;
+        self.unicode.mark_prepared();
         Ok(())
     }
 
     fn abort_unicode(&mut self) {
-        self.unicode_prepared = false;
+        self.unicode.abort();
         self.unicode_reused_for_text_edit = false;
     }
 
     fn commit_unicode(&mut self) {
-        if self.unicode_prepared {
-            core::mem::swap(&mut self.unicode, &mut self.pending_unicode);
+        if self.unicode.is_prepared() {
+            self.unicode.commit();
         }
         self.abort_unicode();
     }
@@ -2382,18 +2368,18 @@ impl ParagraphState {
             .segments()
             .first()
             .map_or(DIRECTION_AUTO, |segment| segment.style.direction);
-        analyze_bidi_into(text, direction, &mut self.pending_bidi).map_err(bidi_error)?;
-        self.bidi_prepared = true;
+        analyze_bidi_into(text, direction, self.bidi.pending_mut()).map_err(bidi_error)?;
+        self.bidi.mark_prepared();
         Ok(())
     }
 
     fn abort_bidi(&mut self) {
-        self.bidi_prepared = false;
+        self.bidi.abort();
     }
 
     fn commit_bidi(&mut self) {
-        if self.bidi_prepared {
-            core::mem::swap(&mut self.bidi, &mut self.pending_bidi);
+        if self.bidi.is_prepared() {
+            self.bidi.commit();
         }
         self.abort_bidi();
     }
@@ -2403,7 +2389,7 @@ impl ParagraphState {
         if !self.text_prepared
             && !self.style_invalidation.shaping
             && !self.style_invalidation.metrics
-            && !self.bidi_prepared
+            && !self.bidi.is_prepared()
         {
             return Ok(());
         }
@@ -2422,30 +2408,23 @@ impl ParagraphState {
         } else {
             &self.styles
         };
-        let unicode = if self.unicode_prepared {
-            &self.pending_unicode
-        } else {
-            &self.unicode
-        };
-        let bidi = if self.bidi_prepared {
-            &self.pending_bidi
-        } else {
-            &self.bidi
-        };
-        self.pending_shaping_runs
+        let unicode = self.unicode.active();
+        let bidi = self.bidi.active();
+        self.shaping_runs
+            .pending_mut()
             .build(text, styles, style_storage, unicode, bidi)?;
-        self.shaping_runs_prepared = true;
+        self.shaping_runs.mark_prepared();
         Ok(())
     }
 
     fn abort_shaping_runs(&mut self) {
-        self.pending_shaping_runs.clear();
-        self.shaping_runs_prepared = false;
+        self.shaping_runs.pending_mut().clear();
+        self.shaping_runs.abort();
     }
 
     fn commit_shaping_runs(&mut self) {
-        if self.shaping_runs_prepared {
-            core::mem::swap(&mut self.shaping_runs, &mut self.pending_shaping_runs);
+        if self.shaping_runs.is_prepared() {
+            self.shaping_runs.commit();
         }
         self.abort_shaping_runs();
     }
@@ -2463,19 +2442,19 @@ impl ParagraphState {
         // One exception: a metric change can MERGE adjacent runs whose layout styles became identical, and the
         // retained shaped runs then index a run list that no longer exists — the shape must re-run whenever the
         // rebuilt run list breaks positional topology with the committed one.
-        if !self.shaping_runs_prepared
+        if !self.shaping_runs.is_prepared()
             || (!self.text_prepared
                 && !self.style_invalidation.shaping
-                && !self.bidi_prepared
+                && !self.bidi.is_prepared()
                 && shaping_run_topology_stable(
-                    self.shaping_runs.runs(),
-                    self.pending_shaping_runs.runs(),
+                    self.shaping_runs.committed().runs(),
+                    self.shaping_runs.pending().runs(),
                 ))
         {
             return Ok(());
         }
         if self.try_prepare_incremental_shape(shaper)? {
-            self.shape_prepared = true;
+            self.shape.mark_prepared();
             return Ok(());
         }
         let text = if self.text_prepared {
@@ -2484,7 +2463,7 @@ impl ParagraphState {
             self.text.as_slice()
         };
         if text.is_empty() {
-            self.shape_prepared = true;
+            self.shape.mark_prepared();
             return Ok(());
         }
         let styles = if self.styles_prepared {
@@ -2492,7 +2471,7 @@ impl ParagraphState {
         } else {
             &self.styles
         };
-        let runs = self.pending_shaping_runs.runs();
+        let runs = self.shaping_runs.pending_mut().runs();
         let mut max_stack_depth = 0usize;
         for (index, run) in runs.iter().copied().enumerate() {
             let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
@@ -2512,12 +2491,12 @@ impl ParagraphState {
             )?;
         }
         for _ in 0..max_stack_depth.max(1) {
-            self.pending_shape.clear();
+            self.shape.pending_mut().clear();
             for span in self.pending_fallback_spans.iter().copied() {
                 let source_index =
                     usize::try_from(span.source_run).map_err(|_| EngineError::InvalidRequest)?;
                 let run = *runs.get(source_index).ok_or(EngineError::InvalidRequest)?;
-                let output = &mut self.pending_shape;
+                let output = self.shape.pending_mut();
                 shaper
                     .with_shaped_run(
                         span.font_handle,
@@ -2546,7 +2525,7 @@ impl ParagraphState {
                     .map_err(shaper_error)?;
             }
             collect_cluster_records(
-                &self.pending_shape,
+                self.shape.pending_mut(),
                 &mut self.fallback_cluster_scratch,
                 &mut self.sort_pair_scratch,
             )?;
@@ -2638,7 +2617,7 @@ impl ParagraphState {
                 }
             }
             if !changed {
-                self.shape_prepared = true;
+                self.shape.mark_prepared();
                 return Ok(());
             }
             core::mem::swap(
@@ -2656,8 +2635,8 @@ impl ParagraphState {
         let Some(edit) = self.text_edit else {
             return Ok(false);
         };
-        let old_runs = self.shaping_runs.runs();
-        let new_runs = self.pending_shaping_runs.runs();
+        let old_runs = self.shaping_runs.committed().runs();
+        let new_runs = self.shaping_runs.pending().runs();
         if old_runs.len() != new_runs.len() || old_runs.is_empty() {
             return Ok(false);
         }
@@ -2693,6 +2672,7 @@ impl ParagraphState {
         }
         if self
             .shape
+            .committed()
             .runs
             .iter()
             .filter(|run| run.source_run == affected_source_run)
@@ -2739,10 +2719,16 @@ impl ParagraphState {
             self.boundary_shape_scratch.clear();
             return Ok(false);
         }
-        for (shape_run_index, shaped_run) in self.shape.runs.iter().copied().enumerate() {
+        // One split borrow for the whole scatter: the committed runs are read while the
+        // pending arena is appended to, which is exactly the shape `derive_mut` exists for.
+        // Copying the run list to satisfy the borrow checker instead would allocate on the
+        // incremental edit path this function exists to keep cheap.
+        let boundary_scratch = &self.boundary_shape_scratch;
+        let (pending_shape, committed_shape) = self.shape.derive_mut();
+        for (shape_run_index, shaped_run) in committed_shape.runs.iter().copied().enumerate() {
             if shaped_run.source_run == affected_source_run {
-                self.pending_shape.append_text_range_from(
-                    &self.boundary_shape_scratch,
+                pending_shape.append_text_range_from(
+                    boundary_scratch,
                     0,
                     affected_source_run,
                     new_run.text_start,
@@ -2756,8 +2742,8 @@ impl ParagraphState {
             } else {
                 0
             };
-            self.pending_shape.append_text_range_from(
-                &self.shape,
+            pending_shape.append_text_range_from(
+                committed_shape,
                 shape_run_index,
                 shaped_run.source_run,
                 shaped_run.text_start,
@@ -2786,17 +2772,17 @@ impl ParagraphState {
     }
 
     fn abort_shape(&mut self) {
-        self.pending_shape.clear();
+        self.shape.pending_mut().clear();
         self.pending_fallback_spans.clear();
         self.fallback_span_scratch.clear();
         self.fallback_cluster_scratch.clear();
         self.incremental_shape_source_run = None;
-        self.shape_prepared = false;
+        self.shape.abort();
     }
 
     fn commit_shape(&mut self) {
-        if self.shape_prepared {
-            core::mem::swap(&mut self.shape, &mut self.pending_shape);
+        if self.shape.is_prepared() {
+            self.shape.commit();
             core::mem::swap(&mut self.fallback_spans, &mut self.pending_fallback_spans);
         }
         self.abort_shape();
@@ -2808,7 +2794,7 @@ impl ParagraphState {
         next_glyph_id: &mut u32,
     ) -> Result<(), EngineError> {
         self.abort_clusters();
-        if !self.shape_prepared && !self.style_invalidation.metrics {
+        if !self.shape.is_prepared() && !self.style_invalidation.metrics {
             return Ok(());
         }
         let text = if self.text_prepared {
@@ -2821,24 +2807,16 @@ impl ParagraphState {
         } else {
             self.text_unit_ids.as_slice()
         };
-        let unicode = if self.unicode_prepared {
-            &self.pending_unicode
-        } else {
-            &self.unicode
-        };
+        let unicode = self.unicode.active();
         let styles = if self.styles_prepared {
             self.pending_resolved_styles.segments()
         } else {
             self.resolved_styles.segments()
         };
-        let runs = if self.shaping_runs_prepared {
-            self.pending_shaping_runs.runs()
-        } else {
-            self.shaping_runs.runs()
-        };
+        let runs = self.shaping_runs.active().runs();
         if runs.is_empty() {
-            self.pending_clusters.clear();
-            self.clusters_prepared = true;
+            self.clusters.pending_mut().clear();
+            self.clusters.mark_prepared();
             return Ok(());
         }
         // A metrics-only restyle retains the shape, so the cluster arena needs
@@ -2849,23 +2827,18 @@ impl ParagraphState {
         // styles became identical, so the refresh additionally requires the
         // rebuilt run list to keep the previous topology. Any admission
         // failure falls back to the full build.
-        let run_topology_stable = !self.shaping_runs_prepared
-            || shaping_run_topology_stable(self.shaping_runs.runs(), runs);
-        if !self.shape_prepared
-            && run_topology_stable
-            && self
-                .pending_clusters
-                .refresh_scales_from_stream(&self.clusters, styles)?
+        let run_topology_stable = !self.shaping_runs.is_prepared()
+            || shaping_run_topology_stable(self.shaping_runs.committed().runs(), runs);
+        if !self.shape.is_prepared() && run_topology_stable && {
+            let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
+            pending_clusters
+                .refresh_scales_from_stream(committed_clusters, styles)?
                 .is_some()
-        {
-            self.clusters_prepared = true;
+        } {
+            self.clusters.mark_prepared();
             return Ok(());
         }
-        let shape = if self.shape_prepared {
-            &self.pending_shape
-        } else {
-            &self.shape
-        };
+        let shape = self.shape.active();
         let build_input = || ClusterBuildInput {
             text,
             text_unit_ids,
@@ -2875,17 +2848,19 @@ impl ParagraphState {
             shape,
         };
         if let Some(source_run) = self.incremental_shape_source_run
-            && let Some((cluster_start, cluster_end)) = self
-                .pending_clusters
-                .rebuild_source_run_if_topology_is_stable(
-                    &self.clusters,
+            && let Some((cluster_start, cluster_end)) = {
+                let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
+                pending_clusters.rebuild_source_run_if_topology_is_stable(
+                    committed_clusters,
                     build_input(),
                     source_run,
                     |handle| shaper.font_metrics(handle),
                 )?
+            }
         {
-            if let Err(error) = self.pending_clusters.assign_stable_glyph_ids_in_range(
-                &self.clusters,
+            let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
+            if let Err(error) = pending_clusters.assign_stable_glyph_ids_in_range(
+                committed_clusters,
                 cluster_start,
                 cluster_end,
                 &mut self.glyph_identity_index,
@@ -2894,31 +2869,33 @@ impl ParagraphState {
                 self.abort_clusters();
                 return Err(error);
             }
-            self.clusters_prepared = true;
+            self.clusters.mark_prepared();
             return Ok(());
         }
-        self.pending_clusters
+        self.clusters
+            .pending_mut()
             .build(build_input(), |handle| shaper.font_metrics(handle))?;
-        if let Err(error) = self.pending_clusters.assign_stable_glyph_ids(
-            &self.clusters,
+        let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
+        if let Err(error) = pending_clusters.assign_stable_glyph_ids(
+            committed_clusters,
             &mut self.glyph_identity_index,
             next_glyph_id,
         ) {
             self.abort_clusters();
             return Err(error);
         }
-        self.clusters_prepared = true;
+        self.clusters.mark_prepared();
         Ok(())
     }
 
     fn abort_clusters(&mut self) {
-        self.pending_clusters.clear();
-        self.clusters_prepared = false;
+        self.clusters.pending_mut().clear();
+        self.clusters.abort();
     }
 
     fn commit_clusters(&mut self) {
-        if self.clusters_prepared {
-            core::mem::swap(&mut self.clusters, &mut self.pending_clusters);
+        if self.clusters.is_prepared() {
+            self.clusters.commit();
         }
         self.abort_clusters();
     }
@@ -2939,27 +2916,29 @@ impl ParagraphState {
         geometry
             .validate_text_length(text_length)
             .map_err(|_| EngineError::InvalidRequest)?;
-        self.pending_geometry.build(geometry)?;
+        self.geometry.pending_mut().build(geometry)?;
         self.pending_geometry_fingerprint = geometry.fingerprint();
-        if geometry.inline_object_count() == 0 && self.pending_geometry == self.geometry {
-            self.pending_geometry.clear();
+        if geometry.inline_object_count() == 0
+            && self.geometry.pending() == self.geometry.committed()
+        {
+            self.geometry.pending_mut().clear();
             self.pending_geometry_fingerprint = 0;
             return Ok(());
         }
-        self.geometry_prepared = true;
+        self.geometry.mark_prepared();
         Ok(())
     }
 
     fn abort_geometry(&mut self) {
-        self.pending_geometry.clear();
+        self.geometry.pending_mut().clear();
         self.pending_geometry_fingerprint = 0;
-        self.geometry_prepared = false;
+        self.geometry.abort();
     }
 
     fn commit_geometry(&mut self) {
-        if self.geometry_prepared {
+        if self.geometry.is_prepared() {
             self.geometry_fingerprint = self.pending_geometry_fingerprint;
-            core::mem::swap(&mut self.geometry, &mut self.pending_geometry);
+            self.geometry.commit();
         }
         self.abort_geometry();
     }
@@ -2974,12 +2953,14 @@ impl ParagraphState {
         next_glyph_id: &mut u32,
     ) -> Result<(), EngineError> {
         self.abort_flow_layout();
+        // Positioning is derived from one specific flow: its per-line lanes describe the
+        // lines that flow composed. Re-running the flow therefore invalidates any pending
+        // positioning by construction, so dropping it here — at the single place a new
+        // flow is staged — is what makes "positioning that describes a superseded flow"
+        // unrepresentable rather than something each caller has to remember to repair.
+        self.abort_positioned();
         self.pending_boundary_shape.clear();
-        let clusters = if self.clusters_prepared {
-            &self.pending_clusters
-        } else {
-            &self.clusters
-        };
+        let clusters = self.clusters.active();
         let styles = if self.styles_prepared {
             self.pending_resolved_styles.segments()
         } else {
@@ -2990,25 +2971,17 @@ impl ParagraphState {
         } else {
             &self.styles
         };
-        let runs = if self.shaping_runs_prepared {
-            self.pending_shaping_runs.runs()
-        } else {
-            self.shaping_runs.runs()
-        };
+        let runs = self.shaping_runs.active().runs();
         let text = if self.text_prepared {
             self.pending_text.as_slice()
         } else {
             self.text.as_slice()
         };
-        let geometry = if self.geometry_prepared {
-            &self.pending_geometry
-        } else {
-            &self.geometry
-        };
+        let geometry = self.geometry.active();
         let max_slots_per_band =
             usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?;
         let max_lines = usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?;
-        if !self.geometry_prepared
+        if !self.geometry.is_prepared()
             && !self.style_invalidation.metrics
             && self.boundary_shape.records.is_empty()
             && geometry
@@ -3018,35 +2991,38 @@ impl ParagraphState {
             && let Some(edit) = self.text_edit
             && edit.old_end.saturating_sub(edit.old_start)
                 == edit.new_end.saturating_sub(edit.old_start)
-            && self.pending_flow_layout.rebuild_until_state_converges(
-                &self.flow_layout,
-                geometry,
-                &self.clusters,
-                clusters,
-                styles,
-                &mut self.flow_slot_scratch,
-                u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?,
-                max_lines,
-                max_slots_per_band,
-                |handle| shaper.font_metrics(handle),
-                |stack_handle| {
-                    font_stacks
-                        .binary_search_by_key(&stack_handle, |stack| stack.handle)
-                        .ok()
-                        .and_then(|index| font_stacks[index].fonts.first().copied())
-                        .and_then(|handle| {
-                            font_bindings
-                                .iter()
-                                .find(|binding| binding.handle == handle)
-                                .map(|binding| binding.shaping_handle)
-                        })
-                },
-            )?
+            && {
+                let (pending_flow, committed_flow) = self.flow_layout.derive_mut();
+                pending_flow.rebuild_until_state_converges(
+                    committed_flow,
+                    geometry,
+                    self.clusters.committed(),
+                    clusters,
+                    styles,
+                    &mut self.flow_slot_scratch,
+                    u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?,
+                    max_lines,
+                    max_slots_per_band,
+                    |handle| shaper.font_metrics(handle),
+                    |stack_handle| {
+                        font_stacks
+                            .binary_search_by_key(&stack_handle, |stack| stack.handle)
+                            .ok()
+                            .and_then(|index| font_stacks[index].fonts.first().copied())
+                            .and_then(|handle| {
+                                font_bindings
+                                    .iter()
+                                    .find(|binding| binding.handle == handle)
+                                    .map(|binding| binding.shaping_handle)
+                            })
+                    },
+                )?
+            }
         {
-            self.flow_layout_prepared = true;
+            self.flow_layout.mark_prepared();
             return Ok(());
         }
-        self.pending_flow_layout.build(
+        self.flow_layout.pending_mut().build(
             geometry,
             clusters,
             styles,
@@ -3068,10 +3044,11 @@ impl ParagraphState {
             },
         )?;
         let mut ellipsis_index = 0usize;
-        while ellipsis_index < self.pending_flow_layout.ellipsis_threads().len() {
-            let flow_thread_id = self.pending_flow_layout.ellipsis_threads()[ellipsis_index];
+        while ellipsis_index < self.flow_layout.pending_mut().ellipsis_threads().len() {
+            let flow_thread_id = self.flow_layout.pending_mut().ellipsis_threads()[ellipsis_index];
             let line = self
-                .pending_flow_layout
+                .flow_layout
+                .pending_mut()
                 .lines
                 .iter()
                 .rev()
@@ -3084,7 +3061,8 @@ impl ParagraphState {
                 .and_then(|end| end.checked_sub(1))
                 .ok_or(EngineError::InvalidRequest)?;
             let fragment = *self
-                .pending_flow_layout
+                .flow_layout
+                .pending_mut()
                 .fragments
                 .get(fragment_index)
                 .ok_or(EngineError::InvalidRequest)?;
@@ -3096,7 +3074,8 @@ impl ParagraphState {
             let ellipsis_text = &mut self.ellipsis_text_scratch;
             let mut final_candidate = None;
             let target = self
-                .pending_flow_layout
+                .flow_layout
+                .pending_mut()
                 .truncate_for_ellipsis(flow_thread_id, clusters, |cluster_end, text_end| {
                     let candidate = prepare_boundary_candidate(
                         shaper,
@@ -3194,10 +3173,11 @@ impl ParagraphState {
                 ellipsis_glyph_start: ellipsis_span.0,
                 ellipsis_glyph_count: ellipsis_span.1,
             });
-            self.pending_flow_layout.fragments[fragment_index].boundary_index = boundary_index;
+            self.flow_layout.pending_mut().fragments[fragment_index].boundary_index =
+                boundary_index;
             ellipsis_index += 1;
         }
-        self.flow_layout_prepared = true;
+        self.flow_layout.mark_prepared();
         Ok(())
     }
 
@@ -3209,11 +3189,7 @@ impl ParagraphState {
         max_lines: u32,
         max_slots_per_band: u32,
     ) -> Result<(), EngineError> {
-        let source_geometry = if self.geometry_prepared {
-            &self.pending_geometry
-        } else {
-            &self.geometry
-        };
+        let source_geometry = self.geometry.active();
         self.intrinsic_geometry_scratch.clone_from(source_geometry);
         let constraint = self
             .intrinsic_geometry_scratch
@@ -3237,11 +3213,7 @@ impl ParagraphState {
         constraint.overflow = OVERFLOW_VISIBLE;
         region.record.block_end = INTRINSIC_BLOCK_END;
 
-        let clusters = if self.clusters_prepared {
-            &self.pending_clusters
-        } else {
-            &self.clusters
-        };
+        let clusters = self.clusters.active();
         let styles = if self.styles_prepared {
             self.pending_resolved_styles.segments()
         } else {
@@ -3276,31 +3248,15 @@ impl ParagraphState {
         } else {
             self.text.as_slice()
         };
-        let clusters = if self.clusters_prepared {
-            &self.pending_clusters
-        } else {
-            &self.clusters
-        };
-        let runs = if self.shaping_runs_prepared {
-            self.pending_shaping_runs.runs()
-        } else {
-            self.shaping_runs.runs()
-        };
+        let clusters = self.clusters.active();
+        let runs = self.shaping_runs.active().runs();
         let styles = if self.styles_prepared {
             self.pending_resolved_styles.segments()
         } else {
             self.resolved_styles.segments()
         };
-        let bidi = if self.bidi_prepared {
-            &self.pending_bidi
-        } else {
-            &self.bidi
-        };
-        let previous = if self.positioned_prepared {
-            &self.pending_positioned
-        } else {
-            &self.positioned
-        };
+        let bidi = self.bidi.active();
+        let previous = self.positioned.active();
         let mut next_content_revision = 1;
         let geometry = &self.intrinsic_geometry_scratch;
         self.intrinsic_positioned_scratch.build(
@@ -3321,16 +3277,17 @@ impl ParagraphState {
     }
 
     fn abort_flow_layout(&mut self) {
-        self.pending_flow_layout.clear();
+        self.flow_layout.pending_mut().clear();
         self.pending_boundary_shape.clear();
-        self.flow_layout_prepared = false;
+        self.flow_layout.abort();
     }
 
     fn commit_flow_layout(&mut self) {
-        if self.flow_layout_prepared {
-            core::mem::swap(&mut self.flow_layout, &mut self.pending_flow_layout);
+        if self.flow_layout.is_prepared() {
+            // The boundary shape is the flow's own output and commits with it.
             core::mem::swap(&mut self.boundary_shape, &mut self.pending_boundary_shape);
         }
+        self.flow_layout.commit();
         self.abort_flow_layout();
     }
 
@@ -3345,43 +3302,24 @@ impl ParagraphState {
         } else {
             self.text.as_slice()
         };
-        let clusters = if self.clusters_prepared {
-            &self.pending_clusters
-        } else {
-            &self.clusters
-        };
-        let runs = if self.shaping_runs_prepared {
-            self.pending_shaping_runs.runs()
-        } else {
-            self.shaping_runs.runs()
-        };
+        let clusters = self.clusters.active();
+        let runs = self.shaping_runs.active().runs();
         let styles = if self.styles_prepared {
             self.pending_resolved_styles.segments()
         } else {
             self.resolved_styles.segments()
         };
-        let bidi = if self.bidi_prepared {
-            &self.pending_bidi
-        } else {
-            &self.bidi
-        };
-        let flow = if self.flow_layout_prepared {
-            &self.pending_flow_layout
-        } else {
-            &self.flow_layout
-        };
-        let boundary_shape = if self.flow_layout_prepared {
+        let bidi = self.bidi.active();
+        let flow = self.flow_layout.active();
+        let boundary_shape = if self.flow_layout.is_prepared() {
             &self.pending_boundary_shape
         } else {
             &self.boundary_shape
         };
-        let geometry = if self.geometry_prepared {
-            &self.pending_geometry
-        } else {
-            &self.geometry
-        };
-        self.pending_positioned.build(
-            &self.positioned,
+        let geometry = self.geometry.active();
+        let (committed_positioned, pending_positioned) = self.positioned.pair_mut();
+        pending_positioned.build(
+            committed_positioned,
             flow,
             text,
             clusters,
@@ -3395,20 +3333,18 @@ impl ParagraphState {
             |handle| shaper.font_metrics(handle),
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
         )?;
-        self.positioned_prepared = true;
+        self.positioned.mark_prepared();
         Ok(())
     }
 
     fn abort_positioned(&mut self) {
-        self.pending_positioned.clear();
-        self.positioned_prepared = false;
+        self.positioned.pending_mut().clear();
+        self.positioned.abort();
     }
 
     fn commit_positioned(&mut self) {
-        if self.positioned_prepared {
-            core::mem::swap(&mut self.positioned, &mut self.pending_positioned);
-        }
-        self.abort_positioned();
+        self.positioned.commit();
+        self.positioned.pending_mut().clear();
     }
 }
 
@@ -4694,6 +4630,7 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap()
                 .unicode
+                .active()
                 .grapheme_boundaries(),
             &[0, 1, 2, 3, 4]
         );
@@ -4771,8 +4708,8 @@ mod tests {
         let session = engine.sessions.get(&4).unwrap();
         let paragraph = session.first_paragraph_state().unwrap();
         assert!(paragraph.text.is_empty());
-        assert!(paragraph.unicode.grapheme_boundaries().is_empty());
-        assert!(paragraph.bidi.levels.is_empty());
+        assert!(paragraph.unicode.active().grapheme_boundaries().is_empty());
+        assert!(paragraph.bidi.active().levels.is_empty());
     }
 
     #[test]
@@ -4787,13 +4724,17 @@ mod tests {
             new_end: 2,
         });
         paragraph.style_invalidation.bidi = true;
-        paragraph.unicode.analyze(&paragraph.text).unwrap();
+        paragraph
+            .unicode
+            .pending_mut()
+            .analyze(&paragraph.text)
+            .unwrap();
 
         paragraph.prepare_unicode().unwrap();
         assert!(paragraph.unicode_reused_for_text_edit);
         paragraph.prepare_bidi().unwrap();
-        assert!(paragraph.bidi_prepared);
-        assert_eq!(paragraph.pending_bidi.paragraph_levels, [0]);
+        assert!(paragraph.bidi.is_prepared());
+        assert_eq!(paragraph.bidi.pending().paragraph_levels, [0]);
     }
 
     #[test]
@@ -4819,6 +4760,7 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap()
                 .bidi
+                .committed()
                 .paragraph_levels,
             &[0]
         );
@@ -4836,6 +4778,7 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap()
                 .bidi
+                .committed()
                 .paragraph_levels,
             &[0]
         );
@@ -4848,6 +4791,7 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap()
                 .bidi
+                .committed()
                 .paragraph_levels,
             &[1]
         );
