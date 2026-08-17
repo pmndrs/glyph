@@ -95,13 +95,18 @@ These tables are static upstream data — the same pattern sets TeX, LibreOffice
 consume — revised on a cadence of years. They are compiled once by a generator in this repository, not
 produced by the baker, whose job is transforming a caller's font.
 
-### Correctness before quality
+### What the engine does today
 
-The engine assigns UAX #14 class `SA` in its generated table but never resolves or handles it, so the
-Complex Context scripts have no correct break behaviour today. Rule LB1 resolves `SA` to `AL` (or `ID`
-for combining marks); that is a small, data-free change and it lands **first**, independently. It makes
-dictionary segmentation an upgrade rather than a prerequisite, and it is a correctness fix where
-hyphenation is a quality improvement.
+UAX #14 rule LB1 is already applied when the property table is generated, not at run time: `AI`, `SG`,
+and `XX` resolve to `AL`, `CJ` resolves to `NS`, and `SA` resolves to `CM` for combining marks and `AL`
+otherwise. No unresolved class reaches the breaker, which is why the Unicode conformance suite passes
+and why `line_break.rs` has no `SA` arm — the constant exists because the class names are generated
+wholesale, but no code point carries it.
+
+The consequence is the documented fallback rather than a defect: Thai, Lao, Khmer, and Burmese break as
+though they were Latin, so a run of them offers no interior break opportunity and wraps only at spaces
+and punctuation that those scripts largely do not use. That is conformant, and it is also the reason
+dictionary segmentation is the one payload in this channel that buys correctness rather than polish.
 
 ### Open question
 
@@ -118,7 +123,6 @@ real Brotli figures before committing to the shape.
 | Benchmark 16/32 strike evidence                  |     ⏳     | Publish representative multi-strike fixtures and show selected strike, scale ratio, transport, decoded, and GPU bytes at both DPRs.                                        |
 | External strike/raster paging                    |   ⏳ M13   | Load, deduplicate, cancel, retain, and evict independently addressed logical pages without changing shaping identity.                                                      |
 | Language-aware family directory                  | ⏳ M13/M17 | M13 proves coverage-directed raster delivery over the full CJK shaping core; M17 adds compiler-produced shaping units, closure, optional remapping, and normalized lookup. |
-| UAX #14 `SA` resolution (LB1)                    |     ⏳     | Resolve `SA` to `AL`/`ID` so Complex Context scripts break correctly with no data; lands before and independently of any dictionary.                                       |
 | Static per-language data subpaths (D-256)        |     ⏳     | One `lang/<tag>` subpath per language behind a static import map, carrying segmentation, hyphenation, and break tailorings; measure the segmentation dictionaries first.   |
 
 ## Required evidence
