@@ -1,5 +1,15 @@
 # pmndrs/glyph documentation update log
 
+## 2026-08-17
+
+- **Commit-time digest hook** — Contributors editing package sources repeatedly shipped stale
+  `source_digest` pins, failing the knowledge-base gate one round-trip later. A committed, dependency-free
+  hook (`.githooks/okf-digests`, enabled per clone through Git 2.54 config-based hooks documented in the
+  README) now re-pins affected digests automatically at commit time, refuses when a package's working tree
+  diverges from the staged commit, and runs the full OKF validation as the gate. A fallback dispatcher
+  covers `core.hooksPath` clones on older Git. The setup pass also removed the last tracked file under the
+  pre-rename `packages/text/` path, a byte-identical duplicate of the relocated policy fixture.
+
 ## 2026-08-16
 
 - **Integer-pen and state-machine follow-ups recorded (slice 6)** — The closing number-system audit found

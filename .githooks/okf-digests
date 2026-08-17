@@ -1,0 +1,66 @@
+#!/bin/sh
+# Refresh and validate OKF source digests for the packages a commit touches.
+#
+# Enable once per clone (Git >= 2.54 config-based hooks):
+#   git config set hook.okf-digests.event pre-commit
+#   git config set hook.okf-digests.command .githooks/okf-digests
+# Verify with: git hook list --show-scope pre-commit
+#
+# Every docs/packages/<name>.md pins a source_digest over its package tree.
+# Editing package sources without re-pinning fails the knowledge-base gate in
+# CI; this hook re-pins automatically at commit time and stages the result, so
+# the digest can never trail the sources it attests.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+run_ruby() {
+  if command -v mise >/dev/null 2>&1; then
+    mise exec -- ruby "$@"
+  else
+    ruby "$@"
+  fi
+}
+
+staged=$(git diff --cached --name-only)
+[ -n "$staged" ] || exit 0
+
+# Package roots whose staged changes affect a pinned digest, by the
+# docs/packages/<basename>.md convention.
+affected=""
+for root in apps/benchmarks apps/r3f-hello-world packages/glyph packages/glyph-example-raster; do
+  if printf '%s\n' "$staged" | grep -q "^$root/"; then
+    affected="$affected $root"
+  fi
+done
+if [ -z "$affected" ]; then
+  # Doc-only commits still get the conformance gate: stale digests, broken
+  # links, and producer-profile errors fail here instead of in CI.
+  if printf '%s\n' "$staged" | grep -q "^docs/"; then
+    run_ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb docs --workspace-root .
+  fi
+  exit 0
+fi
+
+# The generator hashes the working tree; refuse to pin a digest for a package
+# whose working tree differs from what this commit stages.
+for root in $affected; do
+  if ! git diff --quiet -- "$root"; then
+    echo "okf-digests: $root has unstaged changes; stage or stash them so the digest matches the commit." >&2
+    exit 1
+  fi
+done
+
+digests=$(run_ruby .agents/skills/open-knowledge-format/scripts/generate_package_digests.rb .)
+for root in $affected; do
+  doc="docs/packages/$(basename "$root").md"
+  [ -f "$doc" ] || continue
+  digest=$(printf '%s\n' "$digests" | awk -F'\t' -v r="$root" '$3 == r { print $2 }')
+  [ -n "$digest" ] || continue
+  if ! grep -q "source_digest: '$digest'" "$doc"; then
+    perl -pi -e "s/source_digest: 'sha256:[0-9a-f]+'/source_digest: '$digest'/" "$doc"
+    git add "$doc"
+    echo "okf-digests: re-pinned $doc"
+  fi
+done
+
+run_ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb docs --workspace-root .

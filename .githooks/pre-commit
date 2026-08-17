@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fallback dispatcher for Git < 2.54 clones using `git config core.hooksPath
+# .githooks`; the config-based route in the README is preferred.
+exec "$(git rev-parse --show-toplevel)/.githooks/okf-digests"
