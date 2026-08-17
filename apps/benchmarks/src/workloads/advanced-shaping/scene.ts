@@ -179,12 +179,21 @@ export const ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS = Math.ceil(
     1_000,
 );
 
-export function initialAdvancedShapingState(): AdvancedShapingState {
+/**
+ * Who advances the case: the operator, or the timed demo.
+ *
+ * Only the automated presentation capture cycles cases on its own. An interactive
+ * benchmark run holds the selected case until the operator changes it, so a case
+ * under investigation stays on screen instead of scrolling past.
+ */
+export type AdvancedShapingCaseCycle = 'manual' | 'auto';
+
+export function initialAdvancedShapingState(caseCycle: AdvancedShapingCaseCycle): AdvancedShapingState {
   const definition = advancedShapingCase(ADVANCED_SHAPING_PRESENTATION_CASE_IDS[0]!);
   return {
     caseId: definition.id,
     playing: true,
-    auto: true,
+    auto: caseCycle === 'auto',
     revealUnitsPerSecond: DEFAULT_ADVANCED_SHAPING_REVEAL_UNITS_PER_SECOND,
     revealCarryMs: 0,
     tick: 1,

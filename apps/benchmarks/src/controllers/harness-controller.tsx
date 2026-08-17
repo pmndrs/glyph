@@ -138,7 +138,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const [warmup, setWarmup] = useState(1);
   const [conformanceView, setConformanceView] = useState(INITIAL_CONFORMANCE_VIEW);
   const [comparisonText, setComparisonText] = useState(() => rasterConformanceSpecimen(location.fontFixture).text);
-  const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState);
+  const [showcaseState, setShowcaseState] = useState(() => initialAdvancedShapingState('manual'));
   const [advancedFontFixture, setAdvancedFontFixture] = useState<BenchmarkFontFixture>('noto-sans-cjk-showcase');
   const [workloadPanelOpen, setWorkloadPanelOpen] = useState(() => desktopSnapshot());
   const [fontNoticesOpen, setFontNoticesOpen] = useState(false);
@@ -247,7 +247,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     const requestRevision = ++locationRequestRevisionRef.current;
     requestedLocationRef.current = value;
     const entersAdvancedShaping = value.workload === 'advanced-shaping' && previous.workload !== 'advanced-shaping';
-    const nextAdvancedShapingState = entersAdvancedShaping ? initialAdvancedShapingState() : undefined;
+    const nextAdvancedShapingState = entersAdvancedShaping ? initialAdvancedShapingState('manual') : undefined;
     const sceneFontFixture =
       value.workload === 'advanced-shaping'
         ? nextAdvancedShapingState === undefined
@@ -403,7 +403,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       workload: startWorkload,
     };
     if (startWorkload === 'advanced-shaping') {
-      const initial = initialAdvancedShapingState();
+      const initial = initialAdvancedShapingState('auto');
       setShowcaseState(initial);
       setAdvancedFontFixture(advancedShapingCase(initial.caseId).fontFixture);
     }
@@ -420,7 +420,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     if (frame.workload !== playback.workload) {
       playback.workload = frame.workload;
       if (frame.workload === 'advanced-shaping') {
-        const initial = initialAdvancedShapingState();
+        const initial = initialAdvancedShapingState('auto');
         setShowcaseState(initial);
         setAdvancedFontFixture(advancedShapingCase(initial.caseId).fontFixture);
       }
