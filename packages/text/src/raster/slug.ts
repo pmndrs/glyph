@@ -7,7 +7,7 @@ import {
 } from 'ktx-parse';
 import * as THREE from 'three/webgpu';
 import type { Node, UniformNode } from 'three/webgpu';
-import { Fn, add, attribute, mul, positionLocal, sub, uniform, varyingProperty, vec2, vec3 } from 'three/tsl';
+import { attribute, varyingProperty } from 'three/tsl';
 import * as t3 from '@typegpu/three';
 
 import type { RegisteredFont } from '../font.js';
@@ -47,7 +47,7 @@ import {
   type RasterResourceSource,
   type RegisteredRaster,
 } from '../raster.js';
-import tgpu, { d, std } from 'typegpu';
+import { tgpu, d, std } from 'typegpu';
 
 export {
   SLUG_DEFAULT_BAND_COUNT,
@@ -329,10 +329,6 @@ async function decodeSlugPage(
     THREE.RedIntegerFormat,
     THREE.UnsignedIntType,
   );
-
-  // const comptimeLog = tgpu.comptime((msg: string) => {
-  //   console.log(msg);
-  // });
 
   const curveTextureAccess = t3.fromTSL(curveTexture, d.texture2d(d.f32));
   const headerTextureAccess = t3.fromTSL(headerTexture, d.texture2d(d.u32));
@@ -1007,34 +1003,32 @@ function slugMaterialState(page: TSLSlugPageResource): SlugMaterialState {
   const emOriginAttribute = t3.attribute('slugEmOrigin', d.vec2f);
   const emSizeAttribute = t3.attribute('slugEmSize', d.vec2f);
   const inverseScaleAttribute = t3.attribute('slugInverseScale', d.f32);
-  const bandTransform: Node<'vec4'> = attribute<'vec4'>('slugBandTransform', 'vec4');
-  const curveBaseTexel: Node<'uint'> = attribute<'uint'>('slugCurveBase', 'uint');
-  const horizontalHeaderBase: Node<'uint'> = attribute<'uint'>('slugHorizontalHeaderBase', 'uint');
-  const verticalHeaderBase: Node<'uint'> = attribute<'uint'>('slugVerticalHeaderBase', 'uint');
-  const referenceBase: Node<'uint'> = attribute<'uint'>('slugReferenceBase', 'uint');
-  const horizontalBandCount: Node<'uint'> = attribute<'uint'>('slugHorizontalBandCount', 'uint');
-  const verticalBandCount: Node<'uint'> = attribute<'uint'>('slugVerticalBandCount', 'uint');
-  const color: Node<'vec4'> = attribute<'vec4'>('slugColor', 'vec4');
+  const bandTransformAttribute = t3.attribute('slugBandTransform', d.vec4f);
+  const curveBaseTexelAttribute = t3.attribute('slugCurveBase', d.u32);
+  const horizontalHeaderBaseAttribute = t3.attribute('slugHorizontalHeaderBase', d.u32);
+  const verticalHeaderBaseAttribute = t3.attribute('slugVerticalHeaderBase', d.u32);
+  const referenceBaseAttribute = t3.attribute('slugReferenceBase', d.u32);
+  const horizontalBandCountAttribute = t3.attribute('slugHorizontalBandCount', d.u32);
+  const verticalBandCountAttribute = t3.attribute('slugVerticalBandCount', d.u32);
+  const colorAttribute: Node<'vec4'> = attribute<'vec4'>('slugColor', 'vec4');
 
-  material.positionNode = Fn(() => {
-    const origin = originAttribute.node;
-    const size = sizeAttribute.node;
-    const emSize = emSizeAttribute.node;
-    const emOrigin = emOriginAttribute.node;
-    const inverseScale = inverseScaleAttribute.node;
-    const mvpRow0 = mvpRow0Uniform.node;
-    const mvpRow1 = mvpRow1Uniform.node;
-    const mvpRow3 = mvpRow3Uniform.node;
-    const viewport = viewportUniform.node;
+  material.positionNode = t3.toTSL(() => {
+    'use gpu';
+    const origin = originAttribute.$;
+    const size = sizeAttribute.$;
+    const emSize = emSizeAttribute.$;
+    const emOrigin = emOriginAttribute.$;
+    const inverseScale = inverseScaleAttribute.$;
+    const mvpRow0 = mvpRow0Uniform.$;
+    const mvpRow1 = mvpRow1Uniform.$;
+    const mvpRow3 = mvpRow3Uniform.$;
+    const viewport = viewportUniform.$;
 
-    const localPosition = vec2(
-      add(origin.x, mul(positionLocal.x, size.x)),
-      add(origin.y, mul(positionLocal.y, size.y)),
-    );
-    const outwardNormal = vec2(mul(sub(positionLocal.x, 0.5), size.x), mul(sub(positionLocal.y, 0.5), size.y));
-    const emCoordinate = vec2(
-      add(emOrigin.x, mul(positionLocal.x, emSize.x)),
-      add(emOrigin.y, mul(positionLocal.y, emSize.y)),
+    const localPosition = d.vec2f(origin.x + t3.positionLocal.$.x * size.x, origin.y + t3.positionLocal.$.y * size.y);
+    const outwardNormal = d.vec2f((t3.positionLocal.$.x - 0.5) * size.x, (t3.positionLocal.$.y - 0.5) * size.y);
+    const emCoordinate = d.vec2f(
+      emOrigin.x + t3.positionLocal.$.x * emSize.x,
+      emOrigin.y + t3.positionLocal.$.y * emSize.y,
     );
     const dilated = slugDilate(
       localPosition,
@@ -1046,10 +1040,11 @@ function slugMaterialState(page: TSLSlugPageResource): SlugMaterialState {
       mvpRow3,
       viewport,
     );
-    renderCoordinate.node.assign(dilated.textureCoordinate);
-    return vec3(dilated.position.x, dilated.position.y, 0);
-  })();
-  material.colorNode = color.rgb;
+    // @ts-expect-error: TODO: Make the fields writeable on the type level
+    renderCoordinate.$ = d.vec2f(dilated.zw);
+    return d.vec3f(dilated.x, dilated.y, 0);
+  });
+  material.colorNode = colorAttribute.rgb;
 
   const specializedSlugRender = tgpu.fn(slugRender).with(pageSlot, page);
 
@@ -1060,18 +1055,18 @@ function slugMaterialState(page: TSLSlugPageResource): SlugMaterialState {
 
     const coverage = specializedSlugRender(
       SlugShaderGlyph({
-        curveBaseTexel: t3.fromTSL(curveBaseTexel, d.u32).$,
-        horizontalHeaderBase: t3.fromTSL(horizontalHeaderBase, d.u32).$,
-        verticalHeaderBase: t3.fromTSL(verticalHeaderBase, d.u32).$,
-        referenceBase: t3.fromTSL(referenceBase, d.u32).$,
-        horizontalBandCount: t3.fromTSL(horizontalBandCount, d.u32).$,
-        verticalBandCount: t3.fromTSL(verticalBandCount, d.u32).$,
-        bandTransform: t3.fromTSL(bandTransform, d.vec4f).$,
+        curveBaseTexel: curveBaseTexelAttribute.$,
+        horizontalHeaderBase: horizontalHeaderBaseAttribute.$,
+        verticalHeaderBase: verticalHeaderBaseAttribute.$,
+        referenceBase: referenceBaseAttribute.$,
+        horizontalBandCount: horizontalBandCountAttribute.$,
+        verticalBandCount: verticalBandCountAttribute.$,
+        bandTransform: bandTransformAttribute.$,
       }),
       coord,
     );
 
-    return t3.fromTSL(color.a, d.f32).$ * coverage;
+    return t3.fromTSL(colorAttribute.a, d.f32).$ * coverage;
   });
 
   const state = {

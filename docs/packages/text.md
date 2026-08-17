@@ -86,9 +86,6 @@ sources:
   - id: slug-shader-core
     resource: ../../packages/text/src/internal/slug-shaders/core
     title: Host-agnostic TypeGPU Slug shader core
-  - id: slug-core-boundary
-    resource: ../../packages/text/src/internal/slug-shaders/core-boundary.ts
-    title: TypeGPU-to-TSL core boundary
   - id: slug-outline-research
     resource: ../planning/slug-outline-research.md
     title: Slug outline architecture
@@ -310,7 +307,7 @@ The five-line, 120-glyph text above is the bounded conformance specimen. The sep
 | Script  | Purpose                                                                                                                                                                                                                    |
 | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `build` | Check generated Unicode data, derive portable ABI contracts, emit ESM/declarations, compile the no-WASI Bitmap, MTSDF, Slug, and shaper Wasm modules, and optimize them with pinned Binaryen.                              |
-| `check` | Run the complete test, main and Slug shader type-check, lint, and format gates.                                                                                                                                               |
+| `check` | Run the complete test, main and Slug shader type-check, lint, and format gates.                                                                                                                                            |
 | `test`  | Build once, then run compile-only public API fixtures, Rust/Wasm unit and integration gates, MTSDF evidence, Unicode 17 conformance, package/registration/golden tests, malformed artifacts, and deterministic fuzz smoke. |
 
 Run `pnpm scripts list text` from the workspace root to discover Unicode, fixture, bake-evidence, and explicit MTSDF diagnostic workflows.
