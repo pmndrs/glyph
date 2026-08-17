@@ -242,6 +242,84 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   assert.equal(inlineObjectView.getUint32(inlineObject.paragraphId, true), 3);
 });
 
+test('style payloads stay in per-record order when several paragraphs carry language and features', async () => {
+  // The engine proves style payloads neither overlap nor alias the record table in a
+  // single forward pass: every record's payloads must begin at or after the previous
+  // record's payload end. Allocating all languages before all features satisfies that
+  // only for a single record — from the second styled paragraph on, its language would
+  // start behind the first paragraph's features and the whole update is rejected. The
+  // live Advanced-shaping workload hits exactly this, since each case sets a language
+  // and a feature list across four paragraphs.
+  const abi = JSON.parse(await readFile(abiUrl, 'utf8'));
+  const styleMutation = (paragraphId) => ({
+    opcode: 'upsert',
+    paragraphId,
+    styleId: 1,
+    cascadeOrder: 0,
+    start: 0,
+    end: 5,
+    root: true,
+    value: {
+      fontStackHandle: 1,
+      language: 'en',
+      features: [
+        { tag: 'kern', value: 1, start: 0, end: 5 },
+        { tag: 'liga', value: 1, start: 0, end: 5 },
+      ],
+      fontSize: 16,
+      lineHeight: 1.25,
+      rasterPixelRatio: 1,
+    },
+  });
+  const paragraphIds = [1, 2, 3, 4];
+  const bytes = compileTextEngineFrameUpdate({
+    sessionId: 1,
+    policyHandle: 2,
+    capabilitySet: 1,
+    expectedEngineRevision: 0,
+    consumedPlanRevision: 0,
+    acknowledgedPublicationGeneration: 0,
+    semanticViewMask: 0,
+    compositingIndependent: false,
+    limits: {
+      maxParagraphs: 4,
+      maxClusters: 32,
+      maxLines: 16,
+      maxRegions: 4,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 8,
+      maxOutputBytes: 1_048_576,
+    },
+    paragraphMutations: paragraphIds.map((paragraphId, order) => ({ opcode: 'upsert', paragraphId, order })),
+    styleMutations: paragraphIds.map(styleMutation),
+  });
+
+  const request = abi.layouts.engineUpdateRequest;
+  const style = abi.layouts.engineStyleMutation;
+  const header = new DataView(bytes.buffer, bytes.byteOffset, request.size);
+  const styleOffset = header.getUint32(request.styleMutationsOffset, true);
+  let previousPayloadEnd = styleOffset + paragraphIds.length * style.size;
+  for (const [index] of paragraphIds.entries()) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset + styleOffset + index * style.size, style.size);
+    const languageOffset = view.getUint32(style.languageOffset, true);
+    const languageLength = view.getUint16(style.languageLength, true);
+    const featuresOffset = view.getUint32(style.featuresOffset, true);
+    const featureCount = view.getUint16(style.featureCount, true);
+    for (const [start, end] of [
+      [languageOffset, languageOffset + languageLength],
+      [featuresOffset, featuresOffset + featureCount * abi.layouts.feature.size],
+    ]) {
+      assert.ok(
+        start >= previousPayloadEnd,
+        `style ${index} payload at ${start} must not start before the previous payload end ${previousPayloadEnd}`,
+      );
+      previousPayloadEnd = end;
+    }
+  }
+  assert.equal(previousPayloadEnd, bytes.byteLength);
+});
+
 test('production frame compiler encodes typography controls and their defaults', async () => {
   const abi = JSON.parse(await readFile(abiUrl, 'utf8'));
   const constraint = (typography) => ({

@@ -1030,6 +1030,56 @@ test('repeated measureLayout under changing constraints stays on the paragraph q
   label.dispose();
 });
 
+test('a standard ligature that absorbs a grapheme publishes and keeps typing', async () => {
+  // A ligature reports one glyph at the first grapheme of the pair, so the trailing
+  // grapheme's cluster owns no glyph. It still belongs to the shaped run and positioning
+  // still derives a scale for it, so the cluster arena must record the owning font's
+  // units-per-em for it as well. Amiri applies `liga` to Latin f-pairs; Inter as baked
+  // does not, which is why every existing Latin fixture missed this.
+  const runtime = await createTextRuntime({
+    registry: new FontRegistry(),
+    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+  });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(amiriFontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup({ batching: 'group' });
+  scene.add(group);
+  const text = new Text({
+    font,
+    text: '',
+    style: { fontSize: 20, lineHeight: 1.25 },
+    contentBox: { width: { mode: 'exact', size: 600 }, wrap: 'word' },
+  });
+  group.add(text);
+
+  const typed = 'meet office';
+  for (let length = 1; length <= typed.length; length += 1) {
+    text.text = typed.slice(0, length);
+    scene.updateMatrixWorld(true);
+    assert.equal(text.error, undefined, `typing "${typed.slice(0, length)}" must publish`);
+  }
+  const ligated = text.measureLayout();
+  assert.equal(ligated?.missingGlyphCount, 0, 'the ligature resolves to a real glyph');
+
+  // The ligature genuinely absorbs graphemes: with `liga` off the same text needs more
+  // glyphs, which is what makes the glyph-less trailing cluster reachable at all.
+  text.style = { fontSize: 20, lineHeight: 1.25, features: [{ tag: 'liga', value: 0 }] };
+  scene.updateMatrixWorld(true);
+  assert.equal(text.error, undefined);
+  const unligated = text.measureLayout();
+  assert.ok(
+    unligated !== undefined && ligated !== undefined && unligated.glyphCount > ligated.glyphCount,
+    `disabling liga must add glyphs (ligated ${ligated?.glyphCount}, unligated ${unligated?.glyphCount})`,
+  );
+
+  group.dispose();
+  text.dispose();
+  runtime.dispose();
+});
+
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 }

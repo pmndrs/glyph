@@ -306,7 +306,14 @@ impl ClusterArena {
             }
         }
         for shaped_run in shape.runs.iter().filter(|run| run.source_run == source_run) {
-            self.fill_glyphless_run_ownership(runs, *shaped_run, cluster_start, cluster_end)?;
+            let metrics = metrics_for(shaped_run.font_handle).ok_or(EngineError::InvalidRequest)?;
+            self.fill_glyphless_run_ownership(
+                runs,
+                *shaped_run,
+                f64::from(metrics.units_per_em),
+                cluster_start,
+                cluster_end,
+            )?;
         }
         let adjacency_start = usize::try_from(previous.glyph_starts[cluster_start])
             .map_err(|_| EngineError::InvalidRequest)?;
@@ -786,7 +793,14 @@ impl ClusterArena {
             }
         }
         for shaped_run in &shape.runs {
-            self.fill_glyphless_run_ownership(runs, *shaped_run, 0, self.starts.len())?;
+            let metrics = metrics_for(shaped_run.font_handle).ok_or(EngineError::InvalidRequest)?;
+            self.fill_glyphless_run_ownership(
+                runs,
+                *shaped_run,
+                f64::from(metrics.units_per_em),
+                0,
+                self.starts.len(),
+            )?;
         }
         let mut glyph_start = 0_u32;
         for index in 0..self.glyph_starts.len() {
@@ -882,10 +896,18 @@ impl ClusterArena {
         Ok(())
     }
 
+    /// Claims the clusters a shaped run covers but produced no glyphs for.
+    ///
+    /// A ligature absorbs its trailing graphemes: `fi` shapes to one glyph reported at
+    /// the first grapheme, so the second grapheme's cluster ends the glyph loop with no
+    /// owner. Positioning still walks that cluster and derives a scale from the owning
+    /// font, so the run's units-per-em is recorded here alongside the handles — ownership
+    /// and the scale it implies are established together, never one without the other.
     fn fill_glyphless_run_ownership(
         &mut self,
         runs: &[ShapingRun],
         shaped_run: super::shaping_state::ShapedRun,
+        units_per_em: f64,
         allowed_start: usize,
         allowed_end: usize,
     ) -> Result<(), EngineError> {
@@ -911,14 +933,13 @@ impl ClusterArena {
             return Err(EngineError::InvalidRequest);
         }
         for cluster in cluster_start..cluster_end {
-            let source_slot = &mut self.source_runs[cluster];
-            let binding_slot = &mut self.binding_handles[cluster];
-            let font_slot = &mut self.font_handles[cluster];
-            if *source_slot == NO_SOURCE_RUN {
-                *source_slot = shaped_run.source_run;
-                *binding_slot = shaped_run.binding_handle;
-                *font_slot = shaped_run.font_handle;
+            if self.source_runs[cluster] != NO_SOURCE_RUN {
+                continue;
             }
+            self.source_runs[cluster] = shaped_run.source_run;
+            self.binding_handles[cluster] = shaped_run.binding_handle;
+            self.font_handles[cluster] = shaped_run.font_handle;
+            self.units_per_em[cluster] = units_per_em;
         }
         Ok(())
     }

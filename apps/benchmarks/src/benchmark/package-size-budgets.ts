@@ -62,11 +62,19 @@ export const packageSizeBudgets = {
   // -4,228 raw before the retained adjacency stream (+2,209), the metric-only
   // scale refresh (+1,753), and integer justification (+1,071: euclidean unit
   // distribution and the Q16 growth caps) priced their layers back in.
+  // Corrected baseline: the recorded ceiling was already exceeded before the style-wire
+  // fixes below it. At the previous commit the measured artifact stood at 1,121,718 raw /
+  // 435,656 gzip / 345,593 Brotli against a 1,117,500 / 434,800 / 344,100 ceiling — an
+  // unpriced overage of 4,218 raw, 856 gzip, and 1,493 Brotli carried by the slice 3b and
+  // slice 4 layers, which re-priced their own evidence but not this ceiling. The style-wire
+  // fixes then added 83 raw while shrinking gzip by 9 and Brotli by 272. These values price
+  // the measured artifact plus the documented cross-host margin, and name the overage rather
+  // than absorbing it silently.
   'text-shaper-wasm': {
-    rawBytes: 1_117_500,
-    minifiedBytes: 1_117_500,
-    gzipBytes: 434_800,
-    brotliBytes: 344_100,
+    rawBytes: 1_125_000,
+    minifiedBytes: 1_125_000,
+    gzipBytes: 438_000,
+    brotliBytes: 347_500,
   },
   // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250),
   // then the review-closure pass added +3,535 raw / +1,711 minified / +439 Brotli

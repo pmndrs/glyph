@@ -1064,8 +1064,11 @@ fn validate_style_payload(
     for feature in features.chunks_exact(abi::FEATURE_RECORD_SIZE as usize) {
         let start = read_u32(feature, abi::FEATURE_START)?;
         let end = read_u32(feature, abi::FEATURE_END)?;
+        // An empty feature range is inert, not malformed: it is exactly what the empty
+        // root style permitted above spans, so it admits the same start == end the
+        // enclosing style range does. Only an inverted range is rejected here.
         if !valid_tag(read_u32(feature, abi::FEATURE_TAG)?)
-            || start >= end
+            || start > end
             || start < text_start
             || end > text_end
         {
@@ -2068,6 +2071,38 @@ mod tests {
         assert!(parse_style_mutations(&removal, STYLE_OFFSET as u32, 1).is_ok());
         removal[STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_DIRECTION] = DIRECTION_LTR;
         assert!(parse_style_mutations(&removal, STYLE_OFFSET as u32, 1).is_err());
+    }
+
+    #[test]
+    fn an_empty_root_style_carries_features_over_its_empty_range() {
+        // A paragraph with no text still carries a root style spanning [0, 0), and the
+        // public API attaches every declared feature to that root span. Rejecting the
+        // empty range would fail every `Text` that declares features before its content
+        // arrives (or after it is cleared), so the range check must admit start == end
+        // exactly where the enclosing style range check already does.
+        let mut empty = valid_style_bytes();
+        write_u32(&mut empty, STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_TEXT_END, 0);
+        let features_offset = {
+            let language_offset = STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+            (language_offset + 2 + 3) & !3
+        };
+        write_u32(&mut empty, features_offset + abi::FEATURE_END, 0);
+        let batch = parse_style_mutations(&empty, STYLE_OFFSET as u32, 1).unwrap();
+        let StyleMutation::Upsert(style) = batch.get(0).unwrap() else {
+            panic!("upsert");
+        };
+        let feature = StyleMutationBatch::feature(style, 0).unwrap();
+        assert_eq!((feature.start, feature.end), (0, 0));
+
+        // An inverted range remains malformed, and bounds still bind.
+        let mut inverted = valid_style_bytes();
+        write_u32(&mut inverted, features_offset + abi::FEATURE_START, 3);
+        write_u32(&mut inverted, features_offset + abi::FEATURE_END, 2);
+        assert!(parse_style_mutations(&inverted, STYLE_OFFSET as u32, 1).is_err());
+
+        let mut past_end = valid_style_bytes();
+        write_u32(&mut past_end, features_offset + abi::FEATURE_END, 5);
+        assert!(parse_style_mutations(&past_end, STYLE_OFFSET as u32, 1).is_err());
     }
 
     #[test]

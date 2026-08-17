@@ -228,15 +228,24 @@ export function compileTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint
       ? encoder.encode(mutation.value.language)
       : new Uint8Array(),
   );
-  const languageOffsets = languageBytes.map((bytes) => allocate(bytes.length, 1, 1, 'style language'));
-  const featureOffsets = styleMutations.map((mutation) =>
-    allocate(
-      mutation.opcode === 'upsert' ? (mutation.value.features?.length ?? 0) : 0,
-      abi.layouts.feature.size,
-      abi.layouts.feature.alignment,
-      'style features',
-    ),
-  );
+  // The engine proves style payloads neither overlap nor alias the record table in one
+  // forward pass, so every record's payloads must begin at or after the previous
+  // record's payload end. Allocating language and features together per record keeps
+  // that order; allocating all languages before all features would place the second
+  // record's language behind the first record's features.
+  const languageOffsets: number[] = [];
+  const featureOffsets: number[] = [];
+  for (const [index, mutation] of styleMutations.entries()) {
+    languageOffsets.push(allocate(languageBytes[index]!.length, 1, 1, 'style language'));
+    featureOffsets.push(
+      allocate(
+        mutation.opcode === 'upsert' ? (mutation.value.features?.length ?? 0) : 0,
+        abi.layouts.feature.size,
+        abi.layouts.feature.alignment,
+        'style features',
+      ),
+    );
+  }
   const regionVertexOffsets = regions.map((region) =>
     allocate(region.vertices?.length ?? 0, abi.layouts.engineFlowVertex.size, 4, 'region vertices'),
   );
