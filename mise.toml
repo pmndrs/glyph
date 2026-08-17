@@ -1,2 +1,5 @@
 [settings]
 idiomatic_version_file_enable_tools = ["node", "pnpm", "rust"]
+
+[tools]
+ruby = "3.4.10"

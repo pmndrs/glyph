@@ -325,18 +325,20 @@ pnpm dev
 ### Enable the repository hooks
 
 Every `docs/packages/<name>.md` pins a `source_digest` over its package tree, and CI rejects commits whose
-digests trail their sources. The committed hook in `.githooks/` re-pins those digests automatically at
-commit time and runs the knowledge-base validation, so the pin can never go stale by accident. Enable it
-once per clone (Git 2.54 or newer, no dependencies or install scripts):
+digests trail their sources. Hook definitions ship versioned in the repository's `.gitconfig` (Git 2.54
+config-based hooks) with their scripts in `.githooks/`; the committed pre-commit hook re-pins those digests
+automatically at commit time and runs the knowledge-base validation, so the pin can never go stale by
+accident. Opt in once per clone — the explicit include is the consent boundary for repository-supplied
+configuration, and every future hook change then ships with `git pull`, nothing to re-run:
 
 ```sh
-git config set hook.okf-digests.event pre-commit
-git config set hook.okf-digests.command .githooks/okf-digests
+git config set include.path ../.gitconfig
 ```
 
 Verify with `git hook list --show-scope pre-commit`. On older Git, `git config core.hooksPath .githooks`
 enables the same script through the fallback dispatcher. The hook refuses to pin a digest for a package
 with unstaged edits — stage or stash them first so the digest matches exactly what the commit records —
-and it can be run directly at any time as `.githooks/okf-digests`.
+and it can be run directly at any time as `.githooks/okf-digests`. The digest and validation scripts run
+on the mise-pinned Ruby, so `mise install` covers the toolchain.
 
 `@pmndrs/glyph` is ESM-only and MIT licensed.

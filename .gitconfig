@@ -1,0 +1,8 @@
+# Versioned repository git configuration (Git >= 2.54 config-based hooks).
+# Opt in once per clone — this file is only read after you explicitly include
+# it, which is the consent boundary for everything declared here:
+#   git config set include.path ../.gitconfig
+# Verify with: git hook list --show-scope pre-commit
+[hook "okf-digests"]
+	event = pre-commit
+	command = .githooks/okf-digests
