@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { chmod, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,6 +8,15 @@ import { writeGeneratedTypescriptAbi } from './support/generated-typescript-abi.
 import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
+// The distribution is assembled in a staging directory and swapped into place by two
+// renames. Emptying `dist/` up front and refilling it file by file leaves consumers --
+// a watching dev server above all -- reading a package that is missing for the length of
+// a Rust build, which they observe as a burst of 404s and invalidations. Staging makes
+// the switch a single atomic-enough step: one invalidation, never a partial tree.
+const distributionDirectory = new URL('../dist/', import.meta.url);
+const stagingDirectory = new URL('../.dist-staging/', import.meta.url);
+const supersededDirectory = new URL('../.dist-superseded/', import.meta.url);
+const staged = (path) => new URL(path, stagingDirectory);
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const tsc = fileURLToPath(
   new URL(process.platform === 'win32' ? '../node_modules/.bin/tsc.CMD' : '../node_modules/.bin/tsc', import.meta.url),
@@ -45,17 +54,17 @@ const wasmOpt = fileURLToPath(new URL(`../node_modules/.bin/${executable}`, impo
 const rustWasm = fileURLToPath(
   new URL('../rust/bitmap-baker/target/wasm32-unknown-unknown/release/pmndrs_glyph_bitmap_baker.wasm', import.meta.url),
 );
-const distributedWasm = fileURLToPath(new URL('../dist/bitmap_baker.wasm', import.meta.url));
+const distributedWasm = fileURLToPath(staged('bitmap_baker.wasm'));
 const shaperWasm = join(shaperTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_shaper.wasm');
-const distributedShaperWasm = fileURLToPath(new URL('../dist/text_shaper.wasm', import.meta.url));
+const distributedShaperWasm = fileURLToPath(staged('text_shaper.wasm'));
 const mtsdfWasm = join(mtsdfArtifactTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_mtsdf_baker.wasm');
-const distributedMtsdfWasm = fileURLToPath(new URL('../dist/mtsdf_baker.wasm', import.meta.url));
+const distributedMtsdfWasm = fileURLToPath(staged('mtsdf_baker.wasm'));
 const slugWasm = join(slugArtifactTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_slug_baker.wasm');
-const distributedSlugWasm = fileURLToPath(new URL('../dist/slug_baker.wasm', import.meta.url));
+const distributedSlugWasm = fileURLToPath(staged('slug_baker.wasm'));
 const fontBakerWasm = fileURLToPath(
   new URL('../rust/font-baker/target/wasm32-unknown-unknown/release/pmndrs_glyph_font_baker.wasm', import.meta.url),
 );
-const distributedFontBakerWasm = fileURLToPath(new URL('../dist/font_baker.wasm', import.meta.url));
+const distributedFontBakerWasm = fileURLToPath(staged('font_baker.wasm'));
 
 const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson, slugAbiJson, fontBakerAbiJson] = await Promise.all([
   runCapture('cargo', [
@@ -214,9 +223,10 @@ await run(
   ],
   rustEnvironment,
 );
-await rm(new URL('../dist/', import.meta.url), { recursive: true, force: true });
-await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
-await run(tsc, ['-p', 'tsconfig.build.json']);
+await rm(stagingDirectory, { recursive: true, force: true });
+await rm(supersededDirectory, { recursive: true, force: true });
+await mkdir(stagingDirectory, { recursive: true });
+await run(tsc, ['-p', 'tsconfig.build.json', '--outDir', fileURLToPath(stagingDirectory)]);
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',
@@ -277,22 +287,36 @@ await Promise.all([
   assertMtsdfArtifactBakerExports(distributedMtsdfWasm, mtsdfAbiJson),
   assertSlugArtifactBakerExports(distributedSlugWasm, slugAbiJson),
 ]);
-await writeFile(new URL('../dist/bitmap-baker-abi-v0.json', import.meta.url), bitmapAbiJson);
-await writeFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), shaperAbiJson);
-await writeFile(new URL('../dist/mtsdf-baker-abi-v1.json', import.meta.url), mtsdfAbiJson);
-await writeFile(new URL('../dist/slug-baker-abi-v0.json', import.meta.url), slugAbiJson);
-await writeFile(new URL('../dist/font-baker-abi-v0.json', import.meta.url), fontBakerAbiJson);
-await mkdir(new URL('../dist/font-baker/schemas/', import.meta.url), { recursive: true });
+await writeFile(staged('bitmap-baker-abi-v0.json'), bitmapAbiJson);
+await writeFile(staged('text-shaper-abi-v0.json'), shaperAbiJson);
+await writeFile(staged('mtsdf-baker-abi-v1.json'), mtsdfAbiJson);
+await writeFile(staged('slug-baker-abi-v0.json'), slugAbiJson);
+await writeFile(staged('font-baker-abi-v0.json'), fontBakerAbiJson);
+await mkdir(staged('font-baker/schemas/'), { recursive: true });
 await copyFile(
   new URL('../src/font-baker/schemas/KHRONOS-SPEC-LICENSE.txt', import.meta.url),
-  new URL('../dist/font-baker/schemas/KHRONOS-SPEC-LICENSE.txt', import.meta.url),
+  staged('font-baker/schemas/KHRONOS-SPEC-LICENSE.txt'),
 );
-await copyFile(
-  new URL('../src/font-baker/schemas/README.md', import.meta.url),
-  new URL('../dist/font-baker/schemas/README.md', import.meta.url),
-);
+await copyFile(new URL('../src/font-baker/schemas/README.md', import.meta.url), staged('font-baker/schemas/README.md'));
 if (process.platform !== 'win32') {
-  await chmod(new URL('../dist/node/cli.js', import.meta.url), 0o755);
+  await chmod(staged('node/cli.js'), 0o755);
+}
+await publishStagedDistribution();
+
+/**
+ * Swap the staged distribution into place. The previous tree is renamed aside first so
+ * the window in which `dist/` does not exist spans two renames rather than a build, and
+ * is then removed. A failed swap leaves the superseded tree on disk under its own name
+ * rather than deleting a working distribution.
+ */
+async function publishStagedDistribution() {
+  const exists = await stat(distributionDirectory).then(
+    () => true,
+    () => false,
+  );
+  if (exists) await rename(distributionDirectory, supersededDirectory);
+  await rename(stagingDirectory, distributionDirectory);
+  if (exists) await rm(supersededDirectory, { recursive: true, force: true });
 }
 
 function run(command, args, environment = process.env) {

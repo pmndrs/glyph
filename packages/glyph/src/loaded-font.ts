@@ -91,13 +91,31 @@ export class LoadedFontImpl<Technique extends AnyRasterTechnique> implements Loa
   }
 
   dispose(): void {
-    const state = stateOf(this);
-    if (state.disposed) return;
-    if (state.leases !== 0) throw new FontLeaseError(state.leases);
-    state.disposed = true;
-    state.release();
-    notifyDisposed(state);
+    disposeLoadedFont(stateOf(this), 'font');
   }
+}
+
+/**
+ * Disposal is total: it always completes, it is safe to repeat, and it never throws.
+ *
+ * Teardown runs in `finally` blocks and in unmount paths that are already handling an
+ * earlier failure. A throw there destroys the original error and leaves the resource
+ * half-released, so outstanding leases are reported and force-released rather than
+ * refused. A paragraph that outlives the font it leased still fails loudly at its next
+ * use, which is the correct place to notice it.
+ */
+function disposeLoadedFont(state: LoadedFontState, owner: 'font' | 'runtime'): void {
+  if (state.disposed) return;
+  if (state.leases !== 0) {
+    const leases = new FontLeaseError(state.leases);
+    console.warn(
+      `${leases.message}; disposing anyway during ${owner} teardown. Dispose every Text that leased it first — a TextGroup does not dispose its children.`,
+    );
+    state.leases = 0;
+  }
+  state.disposed = true;
+  state.release();
+  notifyDisposed(state);
 }
 
 /** @internal Acquire one retained paragraph lease on every concrete font. */
@@ -170,14 +188,9 @@ export function concreteFonts<Technique extends AnyRasterTechnique>(
   return isFontStack(selection) ? selection.fonts : [selection];
 }
 
-/** @internal Runtime teardown after every paragraph lease has been released. */
+/** @internal Runtime teardown. Total and non-throwing, like every other disposal path. */
 export function disposeLoadedFontFromRuntime(font: LoadedFont<AnyRasterTechnique>): void {
-  const state = stateOf(font);
-  if (state.disposed) return;
-  if (state.leases !== 0) throw new FontLeaseError(state.leases);
-  state.disposed = true;
-  state.release();
-  notifyDisposed(state);
+  disposeLoadedFont(stateOf(font), 'runtime');
 }
 
 /** Observe successful loaded-font disposal without wrapping its identity. Public through `@pmndrs/glyph/core`. */

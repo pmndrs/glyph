@@ -438,3 +438,49 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
     runtime.dispose();
   }
 });
+
+test('teardown is total, idempotent, and non-throwing while paragraphs still hold leases', async () => {
+  // Disposal runs in `finally` blocks and unmount paths that are often already unwinding
+  // an earlier failure. A throw there destroys the original error and strands the Wasm
+  // instance, so outstanding leases are reported and force-released instead of refused.
+  // A TextGroup deliberately does not dispose its children -- Three's ownership rule --
+  // so this is the ordinary shape of an application shutting down.
+  const runtime = await createTextRuntime({
+    registry: new FontRegistry(),
+    wasm: await readFile(shaperWasmUrl),
+  });
+  const fonts = await loadFonts(runtime);
+  const scene = new THREE.Scene();
+  const group = new TextGroup({ batching: 'group' });
+  scene.add(group);
+  for (let index = 0; index < 4; index += 1) {
+    group.add(
+      new Text({
+        font: fonts.inter,
+        text: 'retained',
+        style: { fontSize: 20, lineHeight: 1.25 },
+        contentBox: { width: { mode: 'exact', size: 400 }, wrap: 'word' },
+      }),
+    );
+  }
+  scene.updateMatrixWorld(true);
+
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => void warnings.push(args.join(' '));
+  try {
+    group.dispose();
+    runtime.dispose();
+    // Repeating every teardown must be a no-op, not a second failure.
+    group.dispose();
+    runtime.dispose();
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.ok(
+    warnings.some((line) => line.includes('live paragraph lease')),
+    `force-released leases must be reported; saw ${JSON.stringify(warnings)}`,
+  );
+  assert.equal(fonts.inter.disposed, true, 'the font must actually be disposed, not left half-torn-down');
+});

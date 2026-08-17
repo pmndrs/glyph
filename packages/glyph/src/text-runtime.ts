@@ -190,22 +190,47 @@ class TextRuntimeImpl implements TextRuntime {
     return consumePending(promise, signal);
   }
 
+  /**
+   * Teardown is total: every stage runs even if an earlier one fails, so a single bad
+   * font cannot strand the shaper instance and its Wasm memory. Failures are reported
+   * rather than thrown, because this runs from `finally` blocks and unmount paths that
+   * are frequently already unwinding an earlier error.
+   */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    const report = (stage: string, error: unknown): void => {
+      console.warn(`text runtime teardown continued after ${stage} failed: ${String(error)}`);
+    };
     for (const techniques of this.#pending.values()) {
       for (const loads of techniques.values()) {
-        for (const pending of loads.values()) pending.controller.abort();
+        for (const pending of loads.values()) {
+          try {
+            pending.controller.abort();
+          } catch (error) {
+            report('aborting a pending font load', error);
+          }
+        }
       }
     }
     this.#pending.clear();
     for (const techniques of [...this.#loaded.values()]) {
       for (const fonts of [...techniques.values()]) {
-        for (const font of [...fonts.values()]) disposeLoadedFontFromRuntime(font);
+        for (const font of [...fonts.values()]) {
+          try {
+            disposeLoadedFontFromRuntime(font);
+          } catch (error) {
+            report('disposing a loaded font', error);
+          }
+        }
       }
     }
     this.#loaded.clear();
-    this.#shaper.dispose();
+    try {
+      this.#shaper.dispose();
+    } catch (error) {
+      report('disposing the shaper', error);
+    }
   }
 
   async #loadRegisteredFont(
