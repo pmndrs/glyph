@@ -26,7 +26,7 @@ use super::{
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
     sort,
-    staged::Staged,
+    staged::{Staged, StyleStage},
     style_state::{
         DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
         StyleInvalidation,
@@ -170,10 +170,7 @@ struct ParagraphState {
     pending_next_text_unit_id: u32,
     text_prepared: bool,
     text_edit: Option<TextEdit>,
-    styles: StyleArena,
-    pending_styles: StyleArena,
-    resolved_styles: ResolvedStyleArena,
-    pending_resolved_styles: ResolvedStyleArena,
+    styles: Staged<StyleStage>,
     unicode: Staged<UnicodeAnalysis>,
     unicode_reused_for_text_edit: bool,
     bidi: Staged<BidiAnalysis>,
@@ -206,7 +203,6 @@ struct ParagraphState {
     style_order_scratch: Vec<usize>,
     style_nesting_scratch: Vec<u32>,
     style_resolution_scratch: Vec<ResolutionScope>,
-    styles_prepared: bool,
     style_invalidation: StyleInvalidation,
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
@@ -498,7 +494,7 @@ impl TextEngine {
         self.sessions
             .get(&handle)
             .and_then(EngineSession::first_paragraph_state)
-            .map(|paragraph| paragraph.styles.len())
+            .map(|paragraph| paragraph.styles.committed().arena.len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -507,7 +503,7 @@ impl TextEngine {
         self.sessions
             .get(&handle)
             .and_then(EngineSession::first_paragraph_state)
-            .map(|paragraph| paragraph.resolved_styles.segments().len())
+            .map(|paragraph| paragraph.styles.committed().resolved.segments().len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -516,7 +512,7 @@ impl TextEngine {
         self.sessions
             .get(&handle)
             .and_then(EngineSession::first_paragraph_state)
-            .map(|paragraph| paragraph.shaping_runs.active().runs().len())
+            .map(|paragraph| paragraph.shaping_runs.committed().runs().len())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -1775,10 +1771,14 @@ impl ParagraphState {
         self.pending_next_text_unit_id = 0;
         self.text_prepared = false;
         self.text_edit = None;
-        self.styles.clear();
-        self.pending_styles.clear();
-        self.resolved_styles.clear();
-        self.pending_resolved_styles.clear();
+        {
+            let (committed, pending) = self.styles.pair_mut();
+            committed.arena.clear();
+            committed.resolved.clear();
+            pending.arena.clear();
+            pending.resolved.clear();
+        }
+        self.styles.abort();
         {
             let (committed, pending) = self.unicode.pair_mut();
             committed.clear();
@@ -1845,7 +1845,7 @@ impl ParagraphState {
         self.style_order_scratch.clear();
         self.style_nesting_scratch.clear();
         self.style_resolution_scratch.clear();
-        self.styles_prepared = false;
+        self.styles.abort();
         self.style_invalidation = StyleInvalidation::default();
         self.unicode.abort();
         self.bidi.abort();
@@ -1989,7 +1989,7 @@ impl ParagraphState {
                 // statement that the retained flow and positioning answer it.
                 if !self.clusters.is_prepared()
                     && !self.text_prepared
-                    && !self.styles_prepared
+                    && !self.styles.is_prepared()
                     && !self.unicode.is_prepared()
                     && !self.bidi.is_prepared()
                     && !self.shape.is_prepared()
@@ -2055,10 +2055,13 @@ impl ParagraphState {
     }
 
     fn initialize(&mut self) -> Result<(), EngineError> {
-        self.styles.reserve_default()?;
-        self.pending_styles.reserve_default()?;
-        self.resolved_styles.reserve_default()?;
-        self.pending_resolved_styles.reserve_default()?;
+        {
+            let (committed, pending) = self.styles.pair_mut();
+            committed.arena.reserve_default()?;
+            committed.resolved.reserve_default()?;
+            pending.arena.reserve_default()?;
+            pending.resolved.reserve_default()?;
+        }
         reserve_vec(&mut self.style_mutation_scratch, DEFAULT_STYLE_CAPACITY)?;
         reserve_vec(&mut self.style_order_scratch, DEFAULT_STYLE_CAPACITY)?;
         reserve_vec(&mut self.style_sort_pair_scratch, DEFAULT_STYLE_CAPACITY)?;
@@ -2211,10 +2214,10 @@ impl ParagraphState {
     ) -> Result<(), EngineError> {
         self.abort_styles();
         if mutations.len() == 0 {
-            if !self.text_prepared || self.styles.len() == 0 {
+            if !self.text_prepared || self.styles.committed().arena.len() == 0 {
                 return Ok(());
             }
-            return self.styles.validate(
+            return self.styles.committed().arena.validate(
                 self.pending_text.as_slice(),
                 font_stack_exists,
                 &mut self.style_order_scratch,
@@ -2223,13 +2226,16 @@ impl ParagraphState {
                 &mut self.style_sort_pair_scratch,
             );
         }
-        self.pending_styles.prepare_from(
-            &self.styles,
+        {
+            let (pending_styles, committed_styles) = self.styles.derive_mut();
+            pending_styles.arena.prepare_from(
+                &committed_styles.arena,
             mutations,
-            &mut self.style_mutation_scratch,
-            &mut self.sort_pair_scratch,
-        )?;
-        if self.styles.len() != 0 && self.pending_styles.len() == 0 {
+                &mut self.style_mutation_scratch,
+                &mut self.sort_pair_scratch,
+            )?;
+        }
+        if self.styles.committed().arena.len() != 0 && self.styles.pending().arena.len() == 0 {
             self.abort_styles();
             return Err(EngineError::InvalidRequest);
         }
@@ -2238,7 +2244,7 @@ impl ParagraphState {
         } else {
             self.text.as_slice()
         };
-        if let Err(error) = self.pending_styles.validate(
+        if let Err(error) = self.styles.pending_mut().arena.validate(
             text,
             font_stack_exists,
             &mut self.style_order_scratch,
@@ -2249,39 +2255,39 @@ impl ParagraphState {
             self.abort_styles();
             return Err(error);
         }
-        if let Err(error) = self.pending_styles.resolve(
+        let StyleStage { arena: pending_arena, resolved: pending_resolved } = self.styles.pending_mut();
+        if let Err(error) = pending_arena.resolve(
             &self.style_order_scratch,
-            &mut self.pending_resolved_styles,
+            pending_resolved,
             &mut self.style_resolution_scratch,
         ) {
             self.abort_styles();
             return Err(error);
         }
-        self.style_invalidation = self.resolved_styles.invalidation_against(
-            &self.styles,
-            &self.pending_resolved_styles,
-            &self.pending_styles,
+        let (pending_styles, committed_styles) = self.styles.derive_mut();
+        self.style_invalidation = committed_styles.resolved.invalidation_against(
+            &committed_styles.arena,
+            &pending_styles.resolved,
+            &pending_styles.arena,
         );
-        self.styles_prepared = true;
+        self.styles.mark_prepared();
         Ok(())
     }
 
     fn abort_styles(&mut self) {
-        self.pending_styles.clear();
-        self.pending_resolved_styles.clear();
+        self.styles.pending_mut().arena.clear();
+        self.styles.pending_mut().resolved.clear();
         self.style_mutation_scratch.clear();
         self.style_order_scratch.clear();
         self.style_nesting_scratch.clear();
         self.style_resolution_scratch.clear();
-        self.styles_prepared = false;
+        self.styles.abort();
         self.style_invalidation = StyleInvalidation::default();
     }
 
     fn commit_styles(&mut self) {
-        if self.styles_prepared {
-            core::mem::swap(&mut self.styles, &mut self.pending_styles);
-            core::mem::swap(&mut self.resolved_styles, &mut self.pending_resolved_styles);
-        }
+        // One swap publishes both buffers, because they are one stage.
+        self.styles.commit();
         self.abort_styles();
     }
 
@@ -2359,10 +2365,10 @@ impl ParagraphState {
         } else {
             self.text.as_slice()
         };
-        let styles = if self.styles_prepared {
-            &self.pending_resolved_styles
+        let styles = if self.styles.is_prepared() {
+            &self.styles.pending_mut().resolved
         } else {
-            &self.resolved_styles
+            &self.styles.committed().resolved
         };
         let direction = styles
             .segments()
@@ -2398,16 +2404,8 @@ impl ParagraphState {
         } else {
             self.text.as_slice()
         };
-        let styles = if self.styles_prepared {
-            self.pending_resolved_styles.segments()
-        } else {
-            self.resolved_styles.segments()
-        };
-        let style_storage = if self.styles_prepared {
-            &self.pending_styles
-        } else {
-            &self.styles
-        };
+        let styles = self.styles.active().resolved.segments();
+        let style_storage = &self.styles.active().arena;
         let unicode = self.unicode.active();
         let bidi = self.bidi.active();
         self.shaping_runs
@@ -2466,11 +2464,7 @@ impl ParagraphState {
             self.shape.mark_prepared();
             return Ok(());
         }
-        let styles = if self.styles_prepared {
-            &self.pending_styles
-        } else {
-            &self.styles
-        };
+        let styles = &self.styles.active().arena;
         let runs = self.shaping_runs.pending_mut().runs();
         let mut max_stack_depth = 0usize;
         for (index, run) in runs.iter().copied().enumerate() {
@@ -2682,11 +2676,7 @@ impl ParagraphState {
             return Ok(false);
         }
         let delta = edit_delta(edit)?;
-        let styles = if self.styles_prepared {
-            &self.pending_styles
-        } else {
-            &self.styles
-        };
+        let styles = &self.styles.active().arena;
         self.boundary_shape_scratch.clear();
         let scratch = &mut self.boundary_shape_scratch;
         shaper
@@ -2808,11 +2798,7 @@ impl ParagraphState {
             self.text_unit_ids.as_slice()
         };
         let unicode = self.unicode.active();
-        let styles = if self.styles_prepared {
-            self.pending_resolved_styles.segments()
-        } else {
-            self.resolved_styles.segments()
-        };
+        let styles = self.styles.active().resolved.segments();
         let runs = self.shaping_runs.active().runs();
         if runs.is_empty() {
             self.clusters.pending_mut().clear();
@@ -2961,16 +2947,8 @@ impl ParagraphState {
         self.abort_positioned();
         self.pending_boundary_shape.clear();
         let clusters = self.clusters.active();
-        let styles = if self.styles_prepared {
-            self.pending_resolved_styles.segments()
-        } else {
-            self.resolved_styles.segments()
-        };
-        let style_storage = if self.styles_prepared {
-            &self.pending_styles
-        } else {
-            &self.styles
-        };
+        let styles = self.styles.active().resolved.segments();
+        let style_storage = &self.styles.active().arena;
         let runs = self.shaping_runs.active().runs();
         let text = if self.text_prepared {
             self.pending_text.as_slice()
@@ -3214,11 +3192,7 @@ impl ParagraphState {
         region.record.block_end = INTRINSIC_BLOCK_END;
 
         let clusters = self.clusters.active();
-        let styles = if self.styles_prepared {
-            self.pending_resolved_styles.segments()
-        } else {
-            self.resolved_styles.segments()
-        };
+        let styles = self.styles.active().resolved.segments();
         self.intrinsic_flow_layout_scratch.build(
             &self.intrinsic_geometry_scratch,
             clusters,
@@ -3250,11 +3224,7 @@ impl ParagraphState {
         };
         let clusters = self.clusters.active();
         let runs = self.shaping_runs.active().runs();
-        let styles = if self.styles_prepared {
-            self.pending_resolved_styles.segments()
-        } else {
-            self.resolved_styles.segments()
-        };
+        let styles = self.styles.active().resolved.segments();
         let bidi = self.bidi.active();
         let previous = self.positioned.active();
         let mut next_content_revision = 1;
@@ -3304,11 +3274,7 @@ impl ParagraphState {
         };
         let clusters = self.clusters.active();
         let runs = self.shaping_runs.active().runs();
-        let styles = if self.styles_prepared {
-            self.pending_resolved_styles.segments()
-        } else {
-            self.resolved_styles.segments()
-        };
+        let styles = self.styles.active().resolved.segments();
         let bidi = self.bidi.active();
         let flow = self.flow_layout.active();
         let boundary_shape = if self.flow_layout.is_prepared() {

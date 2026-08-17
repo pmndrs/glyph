@@ -172,3 +172,16 @@ mod tests {
         );
     }
 }
+
+/// The style stage's two buffers.
+///
+/// A style upsert produces an arena of retained style records and the resolved,
+/// cascade-flattened segments derived from it. They are built together, validated
+/// together, and published together — one prepared flag governed both even when they were
+/// four separate fields — so they are one stage carrying two buffers rather than two
+/// stages that must be kept in step.
+#[derive(Default)]
+pub(crate) struct StyleStage {
+    pub arena: super::style_state::StyleArena,
+    pub resolved: super::style_state::ResolvedStyleArena,
+}
