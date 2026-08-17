@@ -69,6 +69,47 @@ It chooses the nearest declared strike deterministically. A 16 CSS px label ther
 
 Strikes remain separate grayscale textures and record sets. Packing unrelated 1×/2×/3× atlases into RGB(A) channels would couple different rectangle layouts, prevent selective residency and eviction, waste channels, and complicate filtering. One transport artifact may contain several strikes, but each strike keeps independent identity and pages. Large deployments should use one manifest with separately fetched strike payloads, retain the previous usable strike until replacement readiness, and evict unused density/language pages under the raster module's memory policy.
 
+## Static per-language data is not font data
+
+Everything above concerns _font_ units: which glyphs, which shaping tables, which strikes. A second,
+independent class of language data does not belong to any font and must not be delivered as one.
+
+Hyphenation patterns, hyphenation exceptions with their `lefthyphenmin`/`righthyphenmin`, dictionary
+segmentation for the UAX #14 Complex Context scripts, Japanese kinsoku strictness sets, and Korean
+word-break behaviour all vary with language alone. Baking them into a GLB duplicates identical bytes
+across every weight of a family — an ordinary one-family four-weight English app would carry the same
+pattern set four times and could never share a cache entry with the next font it loads. Each language
+therefore publishes one package subpath reached by dynamic import (D-256), so a language is downloaded
+once, cached once, and shared across every font on the page.
+
+| Payload                                                        | Varies with     | Built by                 | Ships in                |
+| -------------------------------------------------------------- | --------------- | ------------------------ | ----------------------- |
+| Dictionary segmentation (Thai, Lao, Khmer, Burmese)            | language        | us, at package build     | `lang/<tag>` subpath    |
+| Hyphenation patterns, exceptions, and hyphen minima            | language        | us, at package build     | `lang/<tag>` subpath    |
+| Kinsoku strictness sets; Korean word-break behaviour           | language        | us, at package build     | `lang/<tag>` subpath    |
+| Unicode line-break, script, and bidi property tables           | nothing         | us, at package build     | the Wasm                |
+| Glyph coverage, `locl` and language-system subsetting, kerning | font × language | the baker, per user font | the font GLB            |
+| CLDR exemplar sets backing the baker's `languages` shorthand   | language        | us, at package build     | the CLI (never shipped) |
+
+These tables are static upstream data — the same pattern sets TeX, LibreOffice, Chromium, and Firefox
+consume — revised on a cadence of years. They are compiled once by a generator in this repository, not
+produced by the baker, whose job is transforming a caller's font.
+
+### Correctness before quality
+
+The engine assigns UAX #14 class `SA` in its generated table but never resolves or handles it, so the
+Complex Context scripts have no correct break behaviour today. Rule LB1 resolves `SA` to `AL` (or `ID`
+for combining marks); that is a small, data-free change and it lands **first**, independently. It makes
+dictionary segmentation an upgrade rather than a prerequisite, and it is a correctness fix where
+hyphenation is a quality improvement.
+
+### Open question
+
+The segmentation dictionaries have not been measured. Order-of-magnitude expectations put them two
+decimal places above a hyphenation pattern set, which would make delivery — and possibly a trimmed
+dictionary rather than the full ICU one — the dominant design concern rather than an afterthought. Take
+real Brotli figures before committing to the shape.
+
 ## Staged delivery
 
 | Stage                                            |   Status   | Scope                                                                                                                                                                      |
@@ -77,6 +118,8 @@ Strikes remain separate grayscale textures and record sets. Packing unrelated 1�
 | Benchmark 16/32 strike evidence                  |     ⏳     | Publish representative multi-strike fixtures and show selected strike, scale ratio, transport, decoded, and GPU bytes at both DPRs.                                        |
 | External strike/raster paging                    |   ⏳ M13   | Load, deduplicate, cancel, retain, and evict independently addressed logical pages without changing shaping identity.                                                      |
 | Language-aware family directory                  | ⏳ M13/M17 | M13 proves coverage-directed raster delivery over the full CJK shaping core; M17 adds compiler-produced shaping units, closure, optional remapping, and normalized lookup. |
+| UAX #14 `SA` resolution (LB1)                    |     ⏳     | Resolve `SA` to `AL`/`ID` so Complex Context scripts break correctly with no data; lands before and independently of any dictionary.                                       |
+| Static per-language data subpaths (D-256)        |     ⏳     | One `lang/<tag>` subpath per language behind a static import map, carrying segmentation, hyphenation, and break tailorings; measure the segmentation dictionaries first.   |
 
 ## Required evidence
 
