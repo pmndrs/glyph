@@ -1,3 +1,5 @@
+import { DEV } from './internal/dev.js';
+
 import type { RegisteredFont } from './font.js';
 import type { RegisteredRaster, RasterKindOf } from './raster.js';
 import type { AnyRasterTechnique, RasterDataOf } from './raster-technique.js';
@@ -107,10 +109,12 @@ export class LoadedFontImpl<Technique extends AnyRasterTechnique> implements Loa
 function disposeLoadedFont(state: LoadedFontState, owner: 'font' | 'runtime'): void {
   if (state.disposed) return;
   if (state.leases !== 0) {
-    const leases = new FontLeaseError(state.leases);
-    console.warn(
-      `${leases.message}; disposing anyway during ${owner} teardown. Dispose every Text that leased it first — a TextGroup does not dispose its children.`,
-    );
+    if (DEV) {
+      console.warn(
+        `${new FontLeaseError(state.leases).message}; disposing anyway during ${owner} teardown. ` +
+          'Dispose every Text that leased it first — a TextGroup does not dispose its children.',
+      );
+    }
     state.leases = 0;
   }
   state.disposed = true;
@@ -159,6 +163,12 @@ export function acquireFontSelectionForRuntime(
 export function releaseFontSelection<Technique extends AnyRasterTechnique>(selection: FontSelection<Technique>): void {
   for (const font of concreteFonts(selection)) {
     const state = stateOf(font);
+    // A disposed font's lease ledger is closed: teardown already force-released whatever
+    // was outstanding, so a late release is not a double release. Teardown order is not
+    // ours to choose — react-three-fiber defers dispose to idle priority, so a paragraph
+    // routinely disposes after the runtime an application tore down on unmount. The
+    // underflow check still guards live fonts, where a double release is a real defect.
+    if (state.disposed) continue;
     if (state.leases <= 0) throw new Error('font lease underflow');
     state.leases -= 1;
   }

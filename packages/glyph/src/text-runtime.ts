@@ -1,3 +1,5 @@
+import { DEV } from './internal/dev.js';
+
 import type { RasterBakeArtifact } from './bake.js';
 import type { RegisteredFont } from './font.js';
 import { disposeLoadedFontFromRuntime, LoadedFontImpl, type LoadedFont } from './loaded-font.js';
@@ -200,7 +202,7 @@ class TextRuntimeImpl implements TextRuntime {
     if (this.#disposed) return;
     this.#disposed = true;
     const report = (stage: string, error: unknown): void => {
-      console.warn(`text runtime teardown continued after ${stage} failed: ${String(error)}`);
+      if (DEV) console.warn(`text runtime teardown continued after ${stage} failed: ${String(error)}`);
     };
     for (const techniques of this.#pending.values()) {
       for (const loads of techniques.values()) {

@@ -484,3 +484,44 @@ test('teardown is total, idempotent, and non-throwing while paragraphs still hol
   );
   assert.equal(fonts.inter.disposed, true, 'the font must actually be disposed, not left half-torn-down');
 });
+
+test('teardown order does not matter, including a paragraph disposed after its runtime', async () => {
+  // react-three-fiber defers dispose to idle priority (disposeOnIdle), so a Text routinely
+  // disposes AFTER the runtime an application tore down on unmount. Ownership assertions
+  // that hold for a live font are meaningless once it is disposed: the ledger is closed,
+  // and a late release is not a double release. r3f swallows dispose errors, so a throw
+  // here would be invisible in React and fatal in plain Three.
+  const runtime = await createTextRuntime({
+    registry: new FontRegistry(),
+    wasm: await readFile(shaperWasmUrl),
+  });
+  const fonts = await loadFonts(runtime);
+  const scene = new THREE.Scene();
+  const group = new TextGroup({ batching: 'group' });
+  scene.add(group);
+  const texts = Array.from({ length: 3 }, () => {
+    const node = new Text({
+      font: fonts.inter,
+      text: 'deferred',
+      style: { fontSize: 20, lineHeight: 1.25 },
+      contentBox: { width: { mode: 'exact', size: 400 }, wrap: 'word' },
+    });
+    group.add(node);
+    return node;
+  });
+  scene.updateMatrixWorld(true);
+
+  const originalWarn = console.warn;
+  console.warn = () => undefined;
+  try {
+    // Deliberately the wrong order: the runtime goes first, the paragraphs afterwards.
+    runtime.dispose();
+    for (const text of texts) text.dispose();
+    group.dispose();
+    // And again, because idle callbacks can also fire more than the paragraph count.
+    for (const text of texts) text.dispose();
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.equal(fonts.inter.disposed, true);
+});

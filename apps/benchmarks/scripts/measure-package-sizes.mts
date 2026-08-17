@@ -35,7 +35,17 @@ interface BundleResult {
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const diagnosticModuleFragments = ['/packages/glyph/dist/internal/raster-baker-profile.js'];
-const diagnosticCodeFragments = ['createProfiledDirectRasterBakerFromInstance', 'profiled MSDF baker'];
+const diagnosticCodeFragments = [
+  'createProfiledDirectRasterBakerFromInstance',
+  'profiled MSDF baker',
+  // Development-only guidance must not reach a production graph. These fragments come
+  // from `if (DEV)` blocks in the package; the production define below folds them away,
+  // so seeing one here means a diagnostic escaped its guard and every consumer is paying
+  // for it.
+  'disposing anyway during',
+  'teardown continued after',
+  'process.env.NODE_ENV',
+];
 
 function isTextPeerDependency(id: string): boolean {
   return id === 'three' || id.startsWith('three/') || id === 'react' || id.startsWith('@react-three/fiber');
@@ -51,6 +61,10 @@ async function bundle(
   const result = await build({
     configFile: false,
     logLevel: 'silent',
+    // Measure what a consumer actually ships. A library build deliberately leaves
+    // `process.env.NODE_ENV` for the consuming bundler to replace, so measuring without
+    // this define would price development-only diagnostics into every recorded ceiling.
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     plugins: externalizeWasmAsset
       ? [
           {

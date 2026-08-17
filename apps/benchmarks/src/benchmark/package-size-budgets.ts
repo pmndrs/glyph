@@ -19,12 +19,13 @@ export const packageSizeBudgets = {
   // synchronous measure entry, the retained speculative transaction, and the host
   // fast path. Measured byte-identical on linux-x64 and darwin; the integer-units
   // slices above ride within the remaining headroom (+360 raw at their tip).
-  // Total teardown (D-255) added +1,295 raw / +465 over the previous ceiling: the
-  // force-release warning text and the per-stage guards that keep runtime disposal
-  // completing after any single stage fails. It rides both graphs because the core
-  // disposal path is reachable from each.
+  // These ceilings now price the PRODUCTION graph: the size harness defines
+  // process.env.NODE_ENV="production" so development-only `if (DEV)` diagnostics fold
+  // away exactly as they do in a consumer's build, and asserts that none of their text
+  // survives. Total teardown (D-255) cost +1,295 raw measured unstripped; guarding its
+  // guidance left +468 of real production behaviour, which fits the existing ceiling.
   'core-subpath-js': {
-    rawBytes: 234_000,
+    rawBytes: 232_000,
     minifiedBytes: 158_000,
     gzipBytes: 40_000,
     brotliBytes: 34_200,
@@ -90,12 +91,13 @@ export const packageSizeBudgets = {
   // The external-raster routing rode into the Three bundle too (+1,786 raw /
   // +914 minified), then the 11.17 frame adoption and measureLayout host fast
   // path added +5,310 raw / +2,690 minified in the Three adapter.
-  // Total teardown (D-255) added +1,295 raw / +465 over the previous ceiling: the
-  // force-release warning text and the per-stage guards that keep runtime disposal
-  // completing after any single stage fails. It rides both graphs because the core
-  // disposal path is reachable from each.
+  // These ceilings now price the PRODUCTION graph: the size harness defines
+  // process.env.NODE_ENV="production" so development-only `if (DEV)` diagnostics fold
+  // away exactly as they do in a consumer's build, and asserts that none of their text
+  // survives. Total teardown (D-255) cost +1,295 raw measured unstripped; guarding its
+  // guidance left +468 of real production behaviour, which fits the existing ceiling.
   'three-runtime-js': {
-    rawBytes: 379_500,
+    rawBytes: 377_000,
     minifiedBytes: 245_500,
     gzipBytes: 63_300,
     brotliBytes: 53_500,
