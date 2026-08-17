@@ -28,7 +28,7 @@ test('buffer ids appear only inside schema declarations', async () => {
       if (lookup && /byPolicyId|buffers/.test(line)) {
         offenders.push(`${relative}:${index + 1} literal buffer lookup: ${line.trim()}`);
       }
-      if (/_pmndrsText_\d/.test(line)) {
+      if (/_pmndrsGlyph_\d/.test(line)) {
         offenders.push(`${relative}:${index + 1} literal attribute name: ${line.trim()}`);
       }
       if (!DEFINITION_SITES.has(relative) && /BUFFER_ID\s*=\s*\d/.test(line)) {

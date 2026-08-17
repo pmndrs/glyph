@@ -61,7 +61,7 @@ flowchart TB
   subgraph three ["@pmndrs/glyph/three"]
     policy["render-policy.ts\nBITMAP_COLOR = 5\n(ids = declared here)"]
     exec["engine-plan-target.ts\nbyPolicyId.get(1)\n(ids = known again, by hand)"]
-    material["material wiring\n_pmndrsText_5 → color node\n(ids = known a third time)"]
+    material["material wiring\n_pmndrsGlyph_5 → color node\n(ids = known a third time)"]
   end
   subgraph bakers ["@pmndrs/glyph/bakers/bitmap"]
     baker["baker + validator\n(artifact schema)"]
@@ -210,7 +210,7 @@ The contract is sound when these hold, each as a permanent gate:
    and must import nothing undocumented — it _is_ the documentation's test.
 4. **The canvas technique exists**: a `runtime-sourced` technique rendering platform-rasterized glyphs, proving
    the data-origin axis end-to-end in the browser lane.
-5. **The schema is the only witness**: grep-level gate — no `_pmndrsText_<literal>`, no `byPolicyId.get(<literal>)`,
+5. **The schema is the only witness**: grep-level gate — no `_pmndrsGlyph_<literal>`, no `byPolicyId.get(<literal>)`,
    no parallel id consts outside technique declarations, no literal-width buffer builders outside core, no literal
    id ranges mapped into buffer lookups, and no restated system-buffer ids.
 

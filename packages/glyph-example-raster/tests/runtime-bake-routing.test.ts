@@ -3,15 +3,15 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createTextRuntime, type RuntimeFontBakeRequest } from '@pmndrs/text';
-import { bakeFont } from '@pmndrs/text/bake';
-import { workerRasterKinds } from '@pmndrs/text/runtime-bake';
+import { createTextRuntime, type RuntimeFontBakeRequest } from '@pmndrs/glyph';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { workerRasterKinds } from '@pmndrs/glyph/runtime-bake';
 import { afterEach, test } from 'vitest';
 
 import { glyphExample } from '../src/index.js';
 
 const fixtureDirectory = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
-const shaperWasmUrl = new URL('../../text/dist/text_shaper.wasm', import.meta.url);
+const shaperWasmUrl = new URL('../../glyph/dist/text_shaper.wasm', import.meta.url);
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
