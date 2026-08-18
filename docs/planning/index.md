@@ -54,6 +54,7 @@
 - [Three.js text effect composition](text-effect-composition.md) — superseded bespoke-effects proposal; custom material authority is the selected direction.
 - [Implementation difficulty](implementation-difficulty.md) — relative correctness and performance effort.
 - [Payload budget](payload-budget.md) — serialized, decoded, and resident cost model.
+- [Shaper and baker Wasm size reduction](wasm-size-reduction.md) — measured byte attribution for the distributed Wasm artifacts, the remaining levers, and the staged-table delivery model that keeps one runtime.
 - [GPU compression and Rust container ownership](gpu-compression.md) — transport/GPU compression constraints plus the GLB/KTX2 serializer decision.
 - [Slug audit](slug-audit.md) — prior-art findings and implementation disposition.
 
