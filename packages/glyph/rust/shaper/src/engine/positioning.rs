@@ -1534,6 +1534,13 @@ struct JustifiableSpan {
 }
 
 fn justifiable_span(clusters: &ClusterArena, start: usize, mut end: usize) -> JustifiableSpan {
+    // A hard break is a zero-advance sentinel that ends the line, so the spaces behind it
+    // are still the line's terminating spaces. Stopping at the sentinel would leave them
+    // justifiable here while the fit hangs them, and the two stages must agree on which
+    // spaces exist — that disagreement is the whole subject of D-257.
+    if end > start && clusters.flags[end - 1] & CLUSTER_HARD_BREAK != 0 {
+        end -= 1;
+    }
     while end > start && clusters.flags[end - 1] & CLUSTER_SPACE != 0 {
         end -= 1;
     }

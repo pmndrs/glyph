@@ -91,6 +91,7 @@ pub(crate) fn layout_next_line(
     let mut space_pixels = 0.0_f64;
     let mut last_allowed = None;
     let mut last_allowed_advance = 0.0;
+    let mut trailing_space_pixels = 0.0_f64;
     let mut last_safe = None;
     let mut last_safe_advance = 0.0;
     let mut selected_end = count;
@@ -121,10 +122,11 @@ pub(crate) fn layout_next_line(
         // The f64 parity twin mirrors the integer path exactly, hanging spaces on the
         // same predicate; see the integer loop for why a space cannot overflow.
         let cluster_is_space = flags & CLUSTER_SPACE != 0;
+        let hanging = if required_break { trailing_space_pixels } else { 0.0 };
         if wrap != WRAP_NONE
             && !cluster_is_space
             && max_width.is_finite()
-            && next_advance - shrink_credit > max_width
+            && next_advance - hanging - shrink_credit > max_width
             && index > line_start
         {
             if let Some(end) = last_allowed.filter(|end| *end > line_start) {
@@ -146,6 +148,11 @@ pub(crate) fn layout_next_line(
         }
         advance = next_advance;
         space_pixels = next_space_pixels;
+        trailing_space_pixels = if cluster_is_space {
+            trailing_space_pixels + clusters.advances[index]
+        } else {
+            0.0
+        };
         if required_break {
             selected_end = index + 1;
             selected_advance = advance;
@@ -173,6 +180,9 @@ pub(crate) fn layout_next_line(
         selected_advance = clusters.advances[line_start];
     }
     let mut visible_end = selected_end;
+    if visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_HARD_BREAK != 0 {
+        visible_end -= 1;
+    }
     while visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_SPACE != 0 {
         selected_advance -= clusters.advances[visible_end - 1];
         visible_end -= 1;
@@ -253,6 +263,8 @@ pub(crate) fn layout_next_line_integer(
     let mut space_units = 0_i64;
     let mut last_allowed = None;
     let mut last_allowed_advance = 0_i64;
+    // The advance of the space run currently sitting at the end of the accumulated line.
+    let mut trailing_space_units = 0_i64;
     let mut last_safe = None;
     let mut last_safe_advance = 0_i64;
     let mut selected_end = count;
@@ -319,10 +331,16 @@ pub(crate) fn layout_next_line_integer(
         // space becomes interior, charged by the next non-space cluster's own test.
         // Testing it would refuse words the line has room for, and did.
         let cluster_is_space = flags & CLUSTER_SPACE != 0;
+        // A required break ends the line here, so the spaces already accumulated behind it
+        // hang exactly as they would at a soft wrap and must not be charged. Any other
+        // cluster continues the line, making those spaces interior and chargeable.
+        let hanging_units = if required_break { trailing_space_units } else { 0 };
         if wrap != WRAP_NONE
             && !cluster_is_space
             && max_width_units.is_some_and(|units| {
-                next_advance - super::layout_units::apply_ratio(next_space_units, word_space_shrink)
+                next_advance
+                    - hanging_units
+                    - super::layout_units::apply_ratio(next_space_units, word_space_shrink)
                     > units
             })
             && index > line_start
@@ -361,6 +379,11 @@ pub(crate) fn layout_next_line_integer(
         }
         advance = next_advance;
         space_units = next_space_units;
+        trailing_space_units = if cluster_is_space {
+            trailing_space_units + cluster_advance
+        } else {
+            0
+        };
         if required_break {
             selected_end = index + 1;
             selected_advance = advance;
@@ -397,6 +420,9 @@ pub(crate) fn layout_next_line_integer(
     // than during accumulation covers every selection path at once: scalar, resolved
     // chunk candidate, forced overflow, and end of text.
     let mut visible_end = selected_end;
+    if visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_HARD_BREAK != 0 {
+        visible_end -= 1;
+    }
     while visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_SPACE != 0 {
         selected_advance -= i64::from(clusters.advances_f26[visible_end - 1]);
         visible_end -= 1;
@@ -741,6 +767,36 @@ mod tests {
             .unwrap();
         assert_eq!(wider_line.cluster_end, 5);
         assert_eq!(wider_line.advance, 4.0);
+    }
+
+    #[test]
+    fn a_space_before_a_hard_break_hangs_like_any_other_terminating_space() {
+        // "ab\n": four units of ink, a one-unit space, then the hard break. At width 4 the
+        // visible ink is exactly the measure, so the paragraph is one hard-broken line
+        // plus the trailing empty line the hard break implies. Charging the space would
+        // overflow at the hard-break cluster and split the line in two.
+        let clusters = make_clusters(
+            &[4.0, 1.0, 0.0],
+            &[
+                0,
+                CLUSTER_ALLOWED_BREAK | CLUSTER_SPACE,
+                CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK | CLUSTER_SAFE_BEFORE,
+            ],
+        );
+        let lines = fit_all(&clusters, 4.0, WRAP_WORD, 0.0);
+        assert_eq!(lines.len(), 2, "one hard-broken line and its trailing empty line");
+        assert_eq!(lines[0].cluster_end, 3, "the hard break belongs to the line it ends");
+        assert_eq!(lines[0].advance, 4.0, "the space before the hard break hangs");
+        assert!(lines[0].hard_break);
+
+        // The integer fit is authoritative and must agree exactly.
+        let integer = fit_all_integer(
+            &clusters,
+            Some(i64::from(super::super::layout_units::layout_units_from_scaled(4.0))),
+            WRAP_WORD,
+            0.0,
+        );
+        assert_eq!(integer, lines);
     }
 
     #[test]
