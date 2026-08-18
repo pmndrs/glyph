@@ -226,7 +226,19 @@ await run(
 await rm(stagingDirectory, { recursive: true, force: true });
 await rm(supersededDirectory, { recursive: true, force: true });
 await mkdir(stagingDirectory, { recursive: true });
-await run(tsc, ['-p', 'tsconfig.build.json', '--outDir', fileURLToPath(stagingDirectory)]);
+// The build info has to travel with the outputs it describes. `tsconfig.build.json` points
+// it at `dist/`, and overriding only `--outDir` leaves tsc recording staged emits against a
+// path that survives a failed build: the next run deletes the staging tree, tsc reads the
+// stale record, concludes its outputs are current, emits nothing, and fails in the same
+// place forever. Staging it means a crashed build discards the record with the tree.
+await run(tsc, [
+  '-p',
+  'tsconfig.build.json',
+  '--outDir',
+  fileURLToPath(stagingDirectory),
+  '--tsBuildInfoFile',
+  join(fileURLToPath(stagingDirectory), '.tsbuildinfo'),
+]);
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',
