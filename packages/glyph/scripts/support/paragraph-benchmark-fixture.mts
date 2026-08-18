@@ -10,14 +10,34 @@ export const paragraphBenchmarkSource = [
   'Scientific copy adds x2+y2~z2, 0<=a<=1, and pi. Arrows point both ways. These symbols expose missing coverage, uneven baselines, bad advances, and atlas placement errors that plain alphabet samples can hide.',
 ].join('\n');
 
-export async function loadParagraphBenchmarkFixture() {
+/**
+ * Simplified and Japanese copy carrying the punctuation that drives UAX #14 LB16/LB17 -- fullwidth
+ * comma, ideographic full stop, and bracket pairs. Latin prose reaches those rules rarely; CJK reaches
+ * them on most characters, which is the only reason the quadratic scan in `class_after_spaces` stayed
+ * invisible for so long. Every scalar here is covered by the pinned CJK contract strike.
+ */
+export const paragraphBenchmarkSourceCjk = [
+  '简体中文段落没有空格，需要在合法边界换行，并保持（标点）与、完整。',
+  '日本語の段落も空白を使わず、句読点や括弧（例）で行を折り返します。',
+].join('\n');
+
+export type BenchmarkCorpus = 'latin' | 'cjk';
+
+const corpusFixtures = {
+  latin: { source: paragraphBenchmarkSource, font: 'inter-bitmap-16.font.glb' },
+  cjk: { source: paragraphBenchmarkSourceCjk, font: 'noto-sans-cjk-showcase-bitmap-16.font.glb' },
+} as const satisfies Record<BenchmarkCorpus, { readonly source: string; readonly font: string }>;
+
+export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'latin') {
   const workspaceRoot = new URL('../../../../', import.meta.url);
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
     wasm: await readFile(new URL('packages/glyph/dist/text_shaper.wasm', workspaceRoot)),
   });
-  const bytes = await readFile(new URL('apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', workspaceRoot));
+  const bytes = await readFile(
+    new URL(`apps/benchmarks/fixtures/rendering/${corpusFixtures[corpus].font}`, workspaceRoot),
+  );
   const loaded = await runtime.loadFont({
     input: { baked: `data:application/octet-stream;base64,${bytes.toString('base64')}` },
     raster: { technique: bitmap, options: { strikes: [16] } },
@@ -46,8 +66,9 @@ export function disposeBenchmarkParagraph(created: ReturnType<typeof createBench
   created.paragraph.dispose();
 }
 
-export function paragraphTextForGlyphs(target: number): string {
-  const perCopy = paragraphBenchmarkSource.replaceAll(/\s/gu, '').length;
+export function paragraphTextForGlyphs(target: number, corpus: BenchmarkCorpus = 'latin'): string {
+  const source = corpusFixtures[corpus].source;
+  const perCopy = source.replaceAll(/\s/gu, '').length;
   const copies = Math.max(1, Math.round(target / perCopy));
-  return Array.from({ length: copies }, () => paragraphBenchmarkSource).join('\n');
+  return Array.from({ length: copies }, () => source).join('\n');
 }

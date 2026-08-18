@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "glyph:rust-layout-benchmark",
   "summary": "Measures the complete retained Rust text_update path with real font data and render-plan publication.",
-  "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, and --json.",
+  "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, --corpus (latin|cjk), --allocation, --wasm, and --json.",
   "writes": "stdout and the optional JSON report path"
 } */
 import { createHash } from 'node:crypto';
@@ -30,7 +30,7 @@ const regionHeight = options.height;
 const [wasm, abi, artifact] = await Promise.all([
   readFile(options.wasm ?? new URL('../dist/text_shaper.wasm', import.meta.url)),
   readFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8').then(JSON.parse),
-  loadArtifact(options.technique),
+  loadArtifact(options.technique, options.corpus),
 ]);
 const validated = await validateFontArtifact(artifact);
 const raster = await validateRaster(options.technique, artifact, validated);
@@ -50,7 +50,7 @@ registerStack();
 registerPolicy();
 const memoryAfterRegistration = memory.buffer.byteLength;
 
-const text = paragraphTextForGlyphs(options.glyphs);
+const text = paragraphTextForGlyphs(options.glyphs, options.corpus);
 const utf16 = stringToUtf16(text);
 const limits = {
   maxClusters: utf16.length + 1,
@@ -67,7 +67,7 @@ const initial = updateBytes({
 let sessionMemory;
 
 console.log(
-  `technique=${options.technique} allocation=${options.allocation} output=${technique.outputBytesPerGlyph} bytes/glyph · memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
+  `technique=${options.technique} corpus=${options.corpus} allocation=${options.allocation} output=${technique.outputBytesPerGlyph} bytes/glyph · memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
 );
 
 const reports = [];
@@ -421,6 +421,7 @@ function parseArguments(arguments_) {
     technique: normalizeTechnique(readString('--technique', 'bitmap')),
     allocation: readAllocation('--allocation'),
     wasm: readString('--wasm'),
+    corpus: normalizeCorpus(readString('--corpus', 'latin')),
     case: readCase('--case'),
     glyphs: read('--glyphs', 22_000),
     height: read('--height', 100_000),
@@ -470,13 +471,29 @@ function normalizeTechnique(value) {
   return name;
 }
 
-async function loadArtifact(techniqueName) {
-  const fixtures = {
-    bitmap: ['inter-bitmap-16.font.glb', false],
-    mtsdf: ['inter-mtsdf.font.glb.gz', true],
-    slug: ['inter-slug.font.glb.gz', true],
-  };
-  const [file, compressed] = fixtures[techniqueName];
+function normalizeCorpus(name) {
+  if (name !== 'latin' && name !== 'cjk') {
+    throw new Error(`--corpus must be latin or cjk, received ${name}`);
+  }
+  return name;
+}
+
+async function loadArtifact(techniqueName, corpus) {
+  // CJK ships only the pinned contract strike, which is the one proven to cover the CJK
+  // benchmark source. The Latin fixtures carry no CJK coverage, so the pairing is not free.
+  const fixtures =
+    corpus === 'cjk'
+      ? { bitmap: ['noto-sans-cjk-showcase-bitmap-16.font.glb', false] }
+      : {
+          bitmap: ['inter-bitmap-16.font.glb', false],
+          mtsdf: ['inter-mtsdf.font.glb.gz', true],
+          slug: ['inter-slug.font.glb.gz', true],
+        };
+  const entry = fixtures[techniqueName];
+  if (entry === undefined) {
+    throw new Error(`corpus ${corpus} has no pinned ${techniqueName} artifact`);
+  }
+  const [file, compressed] = entry;
   const bytes = await readFile(new URL(`../../../apps/benchmarks/fixtures/rendering/${file}`, import.meta.url));
   return compressed ? gunzipSync(bytes) : bytes;
 }

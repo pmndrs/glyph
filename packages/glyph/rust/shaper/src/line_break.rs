@@ -454,11 +454,16 @@ impl<'a> BreakState<'a> {
     }
 
     fn class_after_spaces(&self, position: u32) -> i16 {
-        self.source
+        // `source` is filled by one forward pass, so `start` increases strictly and every
+        // character below the partition point fails `start >= position` by construction.
+        // Scanning from index 0 instead cost O(i) per call, and LB16/LB17 consult this on
+        // every CL/CP/B2 -- which in CJK is most punctuation -- making the analysis O(n^2).
+        let first = self
+            .source
+            .partition_point(|character| character.start < position);
+        self.source[first..]
             .iter()
-            .find(|character| {
-                character.start >= position && character.class != i16::from(generated::SP)
-            })
+            .find(|character| character.class != i16::from(generated::SP))
             .map_or(EOT, |character| character.class)
     }
 
@@ -470,10 +475,9 @@ impl<'a> BreakState<'a> {
                 self.previous
             } else if let Some(character) = self
                 .source
-                .iter()
-                .rev()
-                .find(|character| character.end <= position)
-                .copied()
+                .partition_point(|character| character.end <= position)
+                .checked_sub(1)
+                .and_then(|index| self.source.get(index).copied())
             {
                 character
             } else {
