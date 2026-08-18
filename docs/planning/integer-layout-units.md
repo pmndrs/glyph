@@ -47,7 +47,7 @@ and measurement all inherited serial f64 arithmetic. This plan moves the scaling
 **F26.6 layout units** (`i32`, 1/64 of a layout unit — the FreeType convention): every inline and block
 advance, cursor, slot boundary, and extent inside flow fitting, justification, and positioning. One scale per
 `(font_size, units_per_em)` pair converts font units to layout units at cluster build under a single documented
-rounding contract — round-half-up, computed as `floor(value * 64 + 1/2)` — and that contract *is* the layout
+rounding contract — round-half-up, computed as `floor(value * 64 + 1/2)` — and that contract _is_ the layout
 definition. Tolerance statement: any value derived from a quantized quantity may differ from its pre-contract f64
 equivalent by strictly less than one layout unit (1/64 px) per quantization; sums remain exact in f64 while total
 magnitude stays below 2^53 layout units, a bound the engine's paragraph limits must keep enforced. `f32` appears exactly once,
@@ -119,3 +119,13 @@ explicit enum making invalid flow/positioning pairings unrepresentable, per the 
 explicit-state rule. Run it through the repository maintainability-review skill as the first post-merge
 cleanup slice, together with a direct dual-derivation assertion that positioned-lane and flow-derived
 glyph counts agree (today proven only transitively through the commit-parity test).
+
+**Status: the state-machine half is DONE (D-258).** Every stage is a `Staged<T>` — committed value,
+pending replacement, and prepared flag behind one field — and `ParagraphState` carries no `*_prepared`
+field at all. The invalid pairing is encoded rather than guarded: staging a flow drops the positioning
+that described the previous one, so stale positioning over a re-run flow is unrepresentable and the guard
+that repaired it is deleted. Lanes are unchanged (interleaved three-round A/B at 22,000 glyphs, every lane
+inside noise). The dual-derivation glyph-count assertion is now covered directly by the sequence property
+gate, which asserts per step that the per-glyph inspection lane and the line-level measurement lane agree.
+
+The integer pen remains open and is unaffected by that work.
