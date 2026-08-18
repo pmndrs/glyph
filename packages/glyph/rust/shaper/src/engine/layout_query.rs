@@ -76,7 +76,9 @@ pub(crate) fn visible_glyph_counts(
                     clusters.glyph_starts[cluster],
                     clusters.glyph_counts[cluster],
                 )?;
-                total = total.checked_add(count).ok_or(EngineError::ResultTooLarge)?;
+                total = total
+                    .checked_add(count)
+                    .ok_or(EngineError::ResultTooLarge)?;
                 missing += zeros;
             }
             if let Some(boundary) = boundary {

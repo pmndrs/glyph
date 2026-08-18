@@ -612,7 +612,10 @@ impl<'a> TextMutationBatch<'a> {
             mix_bytes(&mut hash, &mutation.paragraph_id.to_le_bytes());
             mix_bytes(&mut hash, &mutation.text_start.to_le_bytes());
             mix_bytes(&mut hash, &mutation.delete_count.to_le_bytes());
-            mix_bytes(&mut hash, &(mutation.insert_utf16_le.len() as u64).to_le_bytes());
+            mix_bytes(
+                &mut hash,
+                &(mutation.insert_utf16_le.len() as u64).to_le_bytes(),
+            );
             mix_bytes(&mut hash, mutation.insert_utf16_le);
         }
         hash
@@ -2081,7 +2084,11 @@ mod tests {
         // arrives (or after it is cleared), so the range check must admit start == end
         // exactly where the enclosing style range check already does.
         let mut empty = valid_style_bytes();
-        write_u32(&mut empty, STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_TEXT_END, 0);
+        write_u32(
+            &mut empty,
+            STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            0,
+        );
         let features_offset = {
             let language_offset = STYLE_OFFSET + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
             (language_offset + 2 + 3) & !3

@@ -551,8 +551,7 @@ impl ClusterArena {
                 }
                 let scale = f64::from(segment.style.font_size) / units_per_em;
                 for adjacency in glyph_start..glyph_end {
-                    advance +=
-                        f64::from(self.glyph_x_advances[adjacency].unsigned_abs()) * scale;
+                    advance += f64::from(self.glyph_x_advances[adjacency].unsigned_abs()) * scale;
                 }
             }
             self.advances[cluster] = advance;

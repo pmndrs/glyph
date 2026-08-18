@@ -5,7 +5,7 @@ use super::{
         CLUSTER_SPACE, ClusterArena,
     },
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
-    layout_units::{scaled_from_layout_units},
+    layout_units::scaled_from_layout_units,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -113,16 +113,19 @@ pub(crate) fn layout_next_line(
         } else {
             space_pixels
         };
-        let shrink_credit = super::layout_units::scaled_from_layout_units(
-            super::layout_units::apply_ratio(
+        let shrink_credit =
+            super::layout_units::scaled_from_layout_units(super::layout_units::apply_ratio(
                 (next_space_pixels * super::layout_units::LAYOUT_UNITS_PER_PIXEL) as i64,
                 word_space_shrink,
-            ),
-        );
+            ));
         // The f64 parity twin mirrors the integer path exactly, hanging spaces on the
         // same predicate; see the integer loop for why a space cannot overflow.
         let cluster_is_space = flags & CLUSTER_SPACE != 0;
-        let hanging = if required_break { trailing_space_pixels } else { 0.0 };
+        let hanging = if required_break {
+            trailing_space_pixels
+        } else {
+            0.0
+        };
         if wrap != WRAP_NONE
             && !cluster_is_space
             && max_width.is_finite()
@@ -293,7 +296,8 @@ pub(crate) fn layout_next_line_integer(
                 let next_advance = advance + clusters.chunk_advance_sums[chunk];
                 let next_space_units = space_units + clusters.chunk_space_sums[chunk];
                 let fits = max_width_units.is_none_or(|units| {
-                    next_advance - super::layout_units::apply_ratio(next_space_units, word_space_shrink)
+                    next_advance
+                        - super::layout_units::apply_ratio(next_space_units, word_space_shrink)
                         <= units
                 });
                 if fits {
@@ -334,7 +338,11 @@ pub(crate) fn layout_next_line_integer(
         // A required break ends the line here, so the spaces already accumulated behind it
         // hang exactly as they would at a soft wrap and must not be charged. Any other
         // cluster continues the line, making those spaces interior and chargeable.
-        let hanging_units = if required_break { trailing_space_units } else { 0 };
+        let hanging_units = if required_break {
+            trailing_space_units
+        } else {
+            0
+        };
         if wrap != WRAP_NONE
             && !cluster_is_space
             && max_width_units.is_some_and(|units| {
@@ -347,11 +355,9 @@ pub(crate) fn layout_next_line_integer(
         {
             // A pending chunk candidate is always later than any recorded scalar
             // candidate, so it resolves first.
-            if let Some((end, break_advance)) =
-                pending_allowed.and_then(|(chunk, entry)| {
-                    resolve_last_flagged(clusters, chunk, entry, CLUSTER_ALLOWED_BREAK, line_start)
-                })
-            {
+            if let Some((end, break_advance)) = pending_allowed.and_then(|(chunk, entry)| {
+                resolve_last_flagged(clusters, chunk, entry, CLUSTER_ALLOWED_BREAK, line_start)
+            }) {
                 selected_end = end;
                 selected_advance = break_advance;
             } else if let Some(end) = last_allowed.filter(|end| *end > line_start) {
@@ -460,9 +466,9 @@ fn resolve_last_flagged(
 ) -> Option<(usize, i64)> {
     let start = chunk * super::cluster_state::LAYOUT_CHUNK;
     let end = start + super::cluster_state::LAYOUT_CHUNK;
-    let position = (start..end)
-        .rev()
-        .find(|&index| clusters.flags[index] & flag != 0 && (flag != CLUSTER_SAFE_BEFORE || index > line_start))?;
+    let position = (start..end).rev().find(|&index| {
+        clusters.flags[index] & flag != 0 && (flag != CLUSTER_SAFE_BEFORE || index > line_start)
+    })?;
     let mut advance = entry_advance;
     let prefix_end = if flag == CLUSTER_SAFE_BEFORE {
         position
@@ -522,7 +528,9 @@ mod tests {
     ) -> alloc::vec::Vec<ComposedLine> {
         let mut cursor = LineCursor::default();
         let mut lines = alloc::vec::Vec::new();
-        while let Some(line) = layout_next_line(clusters, &mut cursor, max_width, wrap, shrink).unwrap() {
+        while let Some(line) =
+            layout_next_line(clusters, &mut cursor, max_width, wrap, shrink).unwrap()
+        {
             lines.push(line);
         }
         lines
@@ -695,7 +703,12 @@ mod tests {
         while width < 11.0 {
             let width_units =
                 i64::from(super::super::layout_units::layout_units_from_scaled(width));
-            let scalar = fit_all(&clusters, scaled_from_layout_units(width_units), WRAP_WORD, 0.5);
+            let scalar = fit_all(
+                &clusters,
+                scaled_from_layout_units(width_units),
+                WRAP_WORD,
+                0.5,
+            );
             let integer = fit_all_integer(&clusters, Some(width_units), WRAP_WORD, 0.5);
             assert_eq!(integer, scalar, "width {width}");
             width += 0.03125;
@@ -749,7 +762,9 @@ mod tests {
         let integer = layout_next_line_integer(
             &clusters,
             &mut integer_cursor,
-            Some(i64::from(super::super::layout_units::layout_units_from_scaled(4.0))),
+            Some(i64::from(
+                super::super::layout_units::layout_units_from_scaled(4.0),
+            )),
             WRAP_WORD,
             0.0,
         )
@@ -784,15 +799,27 @@ mod tests {
             ],
         );
         let lines = fit_all(&clusters, 4.0, WRAP_WORD, 0.0);
-        assert_eq!(lines.len(), 2, "one hard-broken line and its trailing empty line");
-        assert_eq!(lines[0].cluster_end, 3, "the hard break belongs to the line it ends");
-        assert_eq!(lines[0].advance, 4.0, "the space before the hard break hangs");
+        assert_eq!(
+            lines.len(),
+            2,
+            "one hard-broken line and its trailing empty line"
+        );
+        assert_eq!(
+            lines[0].cluster_end, 3,
+            "the hard break belongs to the line it ends"
+        );
+        assert_eq!(
+            lines[0].advance, 4.0,
+            "the space before the hard break hangs"
+        );
         assert!(lines[0].hard_break);
 
         // The integer fit is authoritative and must agree exactly.
         let integer = fit_all_integer(
             &clusters,
-            Some(i64::from(super::super::layout_units::layout_units_from_scaled(4.0))),
+            Some(i64::from(
+                super::super::layout_units::layout_units_from_scaled(4.0),
+            )),
             WRAP_WORD,
             0.0,
         );

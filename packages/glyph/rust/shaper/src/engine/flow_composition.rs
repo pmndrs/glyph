@@ -1139,18 +1139,20 @@ mod tests {
 
     #[test]
     fn localized_edit_recomposes_one_line_and_reuses_converged_prefix_and_suffix() {
-        let make_clusters = |advances: Vec<f64>| quantized(ClusterArena {
-            starts: vec![0, 1, 2, 3, 4, 5],
-            ends: vec![1, 2, 3, 4, 5, 6],
-            advances,
-            flags: vec![CLUSTER_SAFE_BEFORE; 6],
-            style_indexes: vec![0; 6],
-            source_runs: vec![0; 6],
-            font_handles: vec![1; 6],
-            stable_ids: vec![1, 2, 3, 4, 5, 6],
-            index_at: vec![0, 1, 2, 3, 4, 5, 6],
-            ..ClusterArena::default()
-        });
+        let make_clusters = |advances: Vec<f64>| {
+            quantized(ClusterArena {
+                starts: vec![0, 1, 2, 3, 4, 5],
+                ends: vec![1, 2, 3, 4, 5, 6],
+                advances,
+                flags: vec![CLUSTER_SAFE_BEFORE; 6],
+                style_indexes: vec![0; 6],
+                source_runs: vec![0; 6],
+                font_handles: vec![1; 6],
+                stable_ids: vec![1, 2, 3, 4, 5, 6],
+                index_at: vec![0, 1, 2, 3, 4, 5, 6],
+                ..ClusterArena::default()
+            })
+        };
         let previous_clusters = make_clusters(vec![2.0; 6]);
         let changed_clusters = make_clusters(vec![2.0, 2.0, 1.0, 2.0, 2.0, 2.0]);
         let styles = [StyleSegment {
@@ -1223,18 +1225,20 @@ mod tests {
 
     #[test]
     fn localized_edit_recomposes_multiple_lines_until_cursor_state_converges() {
-        let make_clusters = |advances: Vec<f64>| quantized(ClusterArena {
-            starts: (0..9).collect(),
-            ends: (1..10).collect(),
-            advances,
-            flags: vec![CLUSTER_SAFE_BEFORE; 9],
-            style_indexes: vec![0; 9],
-            source_runs: vec![0; 9],
-            font_handles: vec![1; 9],
-            stable_ids: (1..10).collect(),
-            index_at: (0..10).collect(),
-            ..ClusterArena::default()
-        });
+        let make_clusters = |advances: Vec<f64>| {
+            quantized(ClusterArena {
+                starts: (0..9).collect(),
+                ends: (1..10).collect(),
+                advances,
+                flags: vec![CLUSTER_SAFE_BEFORE; 9],
+                style_indexes: vec![0; 9],
+                source_runs: vec![0; 9],
+                font_handles: vec![1; 9],
+                stable_ids: (1..10).collect(),
+                index_at: (0..10).collect(),
+                ..ClusterArena::default()
+            })
+        };
         let previous_clusters = make_clusters(vec![2.0; 9]);
         let changed_clusters = make_clusters(vec![2.0, 2.0, 2.0, 3.0, 3.0, 1.0, 1.0, 2.0, 2.0]);
         let styles = [StyleSegment {
@@ -1321,18 +1325,20 @@ mod tests {
 
     #[test]
     fn localized_edit_clears_partial_layout_when_line_state_does_not_converge() {
-        let make_clusters = |advances: Vec<f64>| quantized(ClusterArena {
-            starts: vec![0, 1, 2, 3, 4, 5],
-            ends: vec![1, 2, 3, 4, 5, 6],
-            advances,
-            flags: vec![CLUSTER_SAFE_BEFORE; 6],
-            style_indexes: vec![0; 6],
-            source_runs: vec![0; 6],
-            font_handles: vec![1; 6],
-            stable_ids: vec![1, 2, 3, 4, 5, 6],
-            index_at: vec![0, 1, 2, 3, 4, 5, 6],
-            ..ClusterArena::default()
-        });
+        let make_clusters = |advances: Vec<f64>| {
+            quantized(ClusterArena {
+                starts: vec![0, 1, 2, 3, 4, 5],
+                ends: vec![1, 2, 3, 4, 5, 6],
+                advances,
+                flags: vec![CLUSTER_SAFE_BEFORE; 6],
+                style_indexes: vec![0; 6],
+                source_runs: vec![0; 6],
+                font_handles: vec![1; 6],
+                stable_ids: vec![1, 2, 3, 4, 5, 6],
+                index_at: vec![0, 1, 2, 3, 4, 5, 6],
+                ..ClusterArena::default()
+            })
+        };
         let previous_clusters = make_clusters(vec![2.0; 6]);
         let changed_clusters = make_clusters(vec![2.0, 2.0, 3.0, 2.0, 2.0, 2.0]);
         let styles = [StyleSegment {

@@ -1,7 +1,9 @@
 use std::{hint::black_box, time::Instant};
 
 use pmndrs_glyph_mtsdf_core::MtsdfGenerator;
-pub use pmndrs_glyph_mtsdf_fontations::{FontationsOutlineSource, font_outline_source, glyph_count};
+pub use pmndrs_glyph_mtsdf_fontations::{
+    FontationsOutlineSource, font_outline_source, glyph_count,
+};
 use skrifa::{FontRef, GlyphId};
 
 use crate::{REGION, fnv1a};

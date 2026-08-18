@@ -6,10 +6,13 @@ use crate::{
     STATUS_OK, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING, STATUS_RESULT_TOO_LARGE,
     STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT, STATUS_SESSION_MISSING, ShaperRegistry,
     engine::{
-        EngineError, TextEngine, font_binding_wire::parse_font_binding, frame::SessionRevision,
+        EngineError, TextEngine,
+        font_binding_wire::parse_font_binding,
+        frame::SessionRevision,
         frame_wire::parse_update_request,
         render_plan_wire::{publication_layout, query_layout},
-        transport::FrameTransport, wire::parse_policy,
+        transport::FrameTransport,
+        wire::parse_policy,
     },
 };
 
@@ -692,7 +695,14 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
                 // adoptable transaction behind; the reported watermark lets the
                 // host reserve and retry exactly like an update.
                 let _ = state.engine.abort_measure(measured);
-                publish_failure(state, session_id, revision, status, 0, required_result_capacity)
+                publish_failure(
+                    state,
+                    session_id,
+                    revision,
+                    status,
+                    0,
+                    required_result_capacity,
+                )
             }
         }
     })

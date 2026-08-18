@@ -891,7 +891,9 @@ mod tests {
         ];
         let mut edges = EdgeSoa::default();
         let contour = 0..outline.len();
-        edges.populate(&outline, core::slice::from_ref(&contour)).unwrap();
+        edges
+            .populate(&outline, core::slice::from_ref(&contour))
+            .unwrap();
         let points = [
             Point::new(-0.25, 0.5),
             Point::new(0.25, 0.5),

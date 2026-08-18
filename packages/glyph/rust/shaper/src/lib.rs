@@ -261,7 +261,8 @@ impl ShaperRegistry {
     }
 
     pub(crate) fn font_metrics(&self, handle: u32) -> Option<FontMetrics> {
-        self.font_index(handle).map(|index| self.fonts[index].metrics)
+        self.font_index(handle)
+            .map(|index| self.fonts[index].metrics)
     }
 
     pub(crate) fn font_glyph_extents(&self, handle: u32, glyph: u32) -> Option<FontGlyphExtents> {
@@ -790,8 +791,14 @@ mod tests {
         let extents_b = alloc::vec![0u8; glyph_count * 8];
         let availability = alloc::vec![0u8; glyph_count.div_ceil(8)];
         let mut registry = ShaperRegistry::default();
-        assert_eq!(registry.register_font(9, INTER, &extents_a, &availability, 0, 0), STATUS_OK);
-        assert_eq!(registry.register_font(3, INTER, &extents_b, &availability, 0, 0), STATUS_OK);
+        assert_eq!(
+            registry.register_font(9, INTER, &extents_a, &availability, 0, 0),
+            STATUS_OK
+        );
+        assert_eq!(
+            registry.register_font(3, INTER, &extents_b, &availability, 0, 0),
+            STATUS_OK
+        );
         // Alternating queries exercise the memo's miss path; the same handle twice
         // exercises its hit path.
         assert!(registry.font_metrics(9).is_some());
@@ -805,7 +812,10 @@ mod tests {
         assert!(registry.font_metrics(9).is_some());
         assert_eq!(registry.glyph_count(9), Some(glyph_count as u32));
         // Re-registering a lower handle shifts index assignments again.
-        assert_eq!(registry.register_font(2, INTER, &extents_b, &availability, 0, 0), STATUS_OK);
+        assert_eq!(
+            registry.register_font(2, INTER, &extents_b, &availability, 0, 0),
+            STATUS_OK
+        );
         assert!(registry.font_metrics(2).is_some());
         assert!(registry.font_metrics(9).is_some());
         assert_eq!(registry.font_count(), 2);

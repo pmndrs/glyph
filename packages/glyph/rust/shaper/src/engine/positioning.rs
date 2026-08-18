@@ -1342,7 +1342,11 @@ fn fragment_pen(
     } else {
         0.0
     };
-    let indent_shift = if paragraph_level & 1 == 0 { indent } else { 0.0 };
+    let indent_shift = if paragraph_level & 1 == 0 {
+        indent
+    } else {
+        0.0
+    };
     (justify, fragment.slot_start + indent_shift + offset)
 }
 
@@ -1770,10 +1774,7 @@ mod tests {
             justify: JustifyControls::default(),
         };
         let arena = |align: u8, slot_end: f64| FlowLayoutArena {
-            lines: vec![FlowLine {
-                align,
-                ..line
-            }],
+            lines: vec![FlowLine { align, ..line }],
             fragments: vec![FlowFragment {
                 slot_end,
                 ..fragment
@@ -1782,17 +1783,31 @@ mod tests {
             recomposed_lines: None,
         };
         let equivalent = |pending: &FlowLayoutArena, committed: &FlowLayoutArena| {
-            flow_positioning_equivalent(pending, committed, &clusters, &bidi, typography, typography)
-                .unwrap()
+            flow_positioning_equivalent(
+                pending, committed, &clusters, &bidi, typography, typography,
+            )
+            .unwrap()
         };
         // A start-aligned line ignores the right edge: widening is a no-op.
-        assert!(equivalent(&arena(ALIGN_START, 17.0), &arena(ALIGN_START, 25.0)));
+        assert!(equivalent(
+            &arena(ALIGN_START, 17.0),
+            &arena(ALIGN_START, 25.0)
+        ));
         // End alignment derives the pen origin from the slot end: not a no-op.
-        assert!(!equivalent(&arena(ALIGN_END, 17.0), &arena(ALIGN_END, 25.0)));
-        assert!(!equivalent(&arena(ALIGN_CENTER, 17.0), &arena(ALIGN_CENTER, 25.0)));
+        assert!(!equivalent(
+            &arena(ALIGN_END, 17.0),
+            &arena(ALIGN_END, 25.0)
+        ));
+        assert!(!equivalent(
+            &arena(ALIGN_CENTER, 17.0),
+            &arena(ALIGN_CENTER, 25.0)
+        ));
         // A final line under the auto last-line policy never justifies, so a
         // width change is genuinely a positioning no-op there.
-        assert!(equivalent(&arena(ALIGN_JUSTIFY, 17.0), &arena(ALIGN_JUSTIFY, 25.0)));
+        assert!(equivalent(
+            &arena(ALIGN_JUSTIFY, 17.0),
+            &arena(ALIGN_JUSTIFY, 25.0)
+        ));
         // With the last line justified, the distribution tracks the slot span:
         // not a no-op when the span differs, a no-op when it matches exactly.
         let justified = |_: u32| ThreadTypography {
@@ -1806,8 +1821,14 @@ mod tests {
             flow_positioning_equivalent(pending, committed, &clusters, &bidi, justified, justified)
                 .unwrap()
         };
-        assert!(!justified_equivalent(&arena(ALIGN_JUSTIFY, 17.0), &arena(ALIGN_JUSTIFY, 25.0)));
-        assert!(justified_equivalent(&arena(ALIGN_JUSTIFY, 17.0), &arena(ALIGN_JUSTIFY, 17.0)));
+        assert!(!justified_equivalent(
+            &arena(ALIGN_JUSTIFY, 17.0),
+            &arena(ALIGN_JUSTIFY, 25.0)
+        ));
+        assert!(justified_equivalent(
+            &arena(ALIGN_JUSTIFY, 17.0),
+            &arena(ALIGN_JUSTIFY, 17.0)
+        ));
         // A boundary-bearing fragment always takes the full path.
         let mut with_boundary = arena(ALIGN_START, 17.0);
         with_boundary.fragments[0].boundary_index = 0;
