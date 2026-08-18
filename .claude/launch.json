@@ -4,8 +4,14 @@
     {
       "name": "dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "5273"],
+      "runtimeArgs": ["--filter", "@pmndrs/glyph-benchmarks", "run", "dev", "--port", "5273", "--strictPort"],
       "port": 5273
+    },
+    {
+      "name": "r3f",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@pmndrs/glyph-r3f-hello-world", "run", "dev", "--port", "5274", "--strictPort"],
+      "port": 5274
     }
   ]
 }
