@@ -185,3 +185,17 @@ pub(crate) struct StyleStage {
     pub arena: super::style_state::StyleArena,
     pub resolved: super::style_state::ResolvedStyleArena,
 }
+
+/// The text stage's buffers.
+///
+/// A text mutation rewrites the UTF-16 units, the per-unit stable identities that survive
+/// edits, and the counter those identities are drawn from. All three are rewritten by the
+/// same mutation and published by the same commit, so they are one stage. Splitting them
+/// into six fields plus a flag is what allowed an edit to advance the counter without the
+/// identities that justified it.
+#[derive(Default)]
+pub(crate) struct TextStage {
+    pub units: alloc::vec::Vec<u16>,
+    pub unit_ids: alloc::vec::Vec<u32>,
+    pub next_unit_id: u32,
+}

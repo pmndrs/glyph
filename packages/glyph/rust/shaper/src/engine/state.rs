@@ -26,7 +26,7 @@ use super::{
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapeArena, ShapingRun, ShapingRunArena},
     sort,
-    staged::{Staged, StyleStage},
+    staged::{Staged, StyleStage, TextStage},
     style_state::{
         DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
         StyleInvalidation,
@@ -161,14 +161,10 @@ struct ParagraphOrder {
 
 #[derive(Default)]
 struct ParagraphState {
-    text: Vec<u16>,
-    pending_text: Vec<u16>,
-    text_unit_ids: Vec<u32>,
-    pending_text_unit_ids: Vec<u32>,
+    text: Staged<TextStage>,
+    /// Whether the pending buffers are a byte-identical copy of the committed ones, so a
+    /// mutation batch can skip re-seeding them.
     pending_text_mirrors_committed: bool,
-    next_text_unit_id: u32,
-    pending_next_text_unit_id: u32,
-    text_prepared: bool,
     text_edit: Option<TextEdit>,
     styles: Staged<StyleStage>,
     unicode: Staged<UnicodeAnalysis>,
@@ -485,7 +481,7 @@ impl TextEngine {
         self.sessions
             .get(&handle)
             .and_then(EngineSession::first_paragraph_state)
-            .map(|paragraph| paragraph.text.as_slice())
+            .map(|paragraph| paragraph.text.committed().units.as_slice())
             .ok_or(EngineError::SessionMissing)
     }
 
@@ -1318,11 +1314,7 @@ fn append_paragraph_measurement(
     if inspect_full_clipped_layout {
         state.prepare_intrinsic_positioned(shaper.ok_or(EngineError::InvalidRequest)?)?;
     }
-    let text = if state.text_prepared {
-        &state.pending_text
-    } else {
-        &state.text
-    };
+    let text = &state.text.active().units;
     let clusters = state.clusters.active();
     let geometry = state.geometry.active();
     let active_flow = state.flow_layout.active();
@@ -1762,14 +1754,20 @@ impl ParagraphState {
     /// Clears paragraph identity and committed/pending semantics while retaining every allocation.
     #[inline(never)]
     fn reset_for_reuse(&mut self) {
-        self.text.clear();
-        self.pending_text.clear();
-        self.text_unit_ids.clear();
-        self.pending_text_unit_ids.clear();
+        {
+            let (committed, pending) = self.text.pair_mut();
+            committed.units.clear();
+            committed.unit_ids.clear();
+            pending.units.clear();
+            pending.unit_ids.clear();
+        }
         self.pending_text_mirrors_committed = true;
-        self.next_text_unit_id = 0;
-        self.pending_next_text_unit_id = 0;
-        self.text_prepared = false;
+        {
+            let (committed, pending) = self.text.pair_mut();
+            committed.next_unit_id = 0;
+            pending.next_unit_id = 0;
+        }
+        self.text.abort();
         self.text_edit = None;
         {
             let (committed, pending) = self.styles.pair_mut();
@@ -1988,7 +1986,7 @@ impl ParagraphState {
                 // session state, and the equivalence proof is exactly the
                 // statement that the retained flow and positioning answer it.
                 if !self.clusters.is_prepared()
-                    && !self.text_prepared
+                    && !self.text.is_prepared()
                     && !self.styles.is_prepared()
                     && !self.unicode.is_prepared()
                     && !self.bidi.is_prepared()
@@ -2070,10 +2068,13 @@ impl ParagraphState {
     }
 
     fn reserve_text(&mut self, capacity: usize) -> Result<(), EngineError> {
-        reserve_text_buffer(&mut self.text, capacity)?;
-        reserve_text_buffer(&mut self.pending_text, capacity)?;
-        reserve_vec(&mut self.text_unit_ids, capacity)?;
-        reserve_vec(&mut self.pending_text_unit_ids, capacity)?;
+        {
+            let (committed, pending) = self.text.pair_mut();
+            reserve_text_buffer(&mut committed.units, capacity)?;
+            reserve_text_buffer(&mut pending.units, capacity)?;
+            reserve_vec(&mut committed.unit_ids, capacity)?;
+            reserve_vec(&mut pending.unit_ids, capacity)?;
+        }
         {
             let (committed, pending) = self.unicode.pair_mut();
             committed.reserve(capacity).map_err(unicode_error)?;
@@ -2140,70 +2141,73 @@ impl ParagraphState {
             return Ok(());
         }
         if !self.pending_text_mirrors_committed {
-            if self.pending_text.try_reserve(self.text.len()).is_err() {
-                return Err(EngineError::ResultTooLarge);
-            }
-            if self
-                .pending_text_unit_ids
-                .try_reserve(self.text_unit_ids.len())
-                .is_err()
+            let (pending, committed) = self.text.derive_mut();
+            if pending.units.try_reserve(committed.units.len()).is_err()
+                || pending.unit_ids.try_reserve(committed.unit_ids.len()).is_err()
             {
                 return Err(EngineError::ResultTooLarge);
             }
-            self.pending_text.clear();
-            self.pending_text.extend_from_slice(&self.text);
-            self.pending_text_unit_ids.clear();
-            self.pending_text_unit_ids
-                .extend_from_slice(&self.text_unit_ids);
+            pending.units.clear();
+            pending.units.extend_from_slice(&committed.units);
+            pending.unit_ids.clear();
+            pending.unit_ids.extend_from_slice(&committed.unit_ids);
             self.pending_text_mirrors_committed = true;
         }
-        self.pending_next_text_unit_id = self.next_text_unit_id.max(1);
-        self.text_prepared = true;
+        let seed_next_unit_id = self.text.committed().next_unit_id.max(1);
+        self.text.pending_mut().next_unit_id = seed_next_unit_id;
+        self.text.mark_prepared();
         self.pending_text_mirrors_committed = false;
         for index in 0..mutations.len() {
             let Some(mutation) = mutations.get(index) else {
                 self.abort_text();
                 return Err(EngineError::InvalidRequest);
             };
-            if let Err(error) = apply_text_mutation(&mut self.pending_text, mutation) {
+            if let Err(error) = apply_text_mutation(&mut self.text.pending_mut().units, mutation) {
                 self.abort_text();
                 return Err(match error {
                     TextMutationError::Invalid => EngineError::InvalidRequest,
                     TextMutationError::Allocation => EngineError::ResultTooLarge,
                 });
             }
+            let TextStage { unit_ids: pending_unit_ids, next_unit_id: pending_next_unit_id, .. } =
+                self.text.pending_mut();
             if let Err(error) = apply_text_identity_mutation(
-                &mut self.pending_text_unit_ids,
-                &mut self.pending_next_text_unit_id,
+                pending_unit_ids,
+                pending_next_unit_id,
                 mutation,
             ) {
                 self.abort_text();
                 return Err(error);
             }
         }
-        if self.pending_text.len() != self.pending_text_unit_ids.len() {
+        if self.text.pending().units.len() != self.text.pending().unit_ids.len() {
             self.abort_text();
             return Err(EngineError::InvalidRequest);
         }
-        self.text_edit = changed_identity_range(&self.text_unit_ids, &self.pending_text_unit_ids);
+        self.text_edit = {
+            let (pending, committed) = self.text.derive_mut();
+            changed_identity_range(&committed.unit_ids, &pending.unit_ids)
+        };
         Ok(())
     }
 
     fn abort_text(&mut self) {
-        if self.text_prepared {
-            self.pending_text.clear();
-            self.pending_text.extend_from_slice(&self.text);
-            self.pending_text_unit_ids.clear();
-            self.pending_text_unit_ids
-                .extend_from_slice(&self.text_unit_ids);
+        if self.text.is_prepared() {
+            // Restore the pending buffers to mirror the committed ones, so the next
+            // mutation batch can skip re-seeding them.
+            let (pending, committed) = self.text.derive_mut();
+            pending.units.clear();
+            pending.units.extend_from_slice(&committed.units);
+            pending.unit_ids.clear();
+            pending.unit_ids.extend_from_slice(&committed.unit_ids);
             self.pending_text_mirrors_committed = true;
         }
         self.clear_text_preparation();
     }
 
     fn clear_text_preparation(&mut self) {
-        self.pending_next_text_unit_id = 0;
-        self.text_prepared = false;
+        self.text.pending_mut().next_unit_id = 0;
+        self.text.abort();
         self.text_edit = None;
     }
 
@@ -2214,11 +2218,11 @@ impl ParagraphState {
     ) -> Result<(), EngineError> {
         self.abort_styles();
         if mutations.len() == 0 {
-            if !self.text_prepared || self.styles.committed().arena.len() == 0 {
+            if !self.text.is_prepared() || self.styles.committed().arena.len() == 0 {
                 return Ok(());
             }
             return self.styles.committed().arena.validate(
-                self.pending_text.as_slice(),
+                self.text.pending().units.as_slice(),
                 font_stack_exists,
                 &mut self.style_order_scratch,
                 &mut self.style_nesting_scratch,
@@ -2239,11 +2243,7 @@ impl ParagraphState {
             self.abort_styles();
             return Err(EngineError::InvalidRequest);
         }
-        let text = if self.text_prepared {
-            self.pending_text.as_slice()
-        } else {
-            self.text.as_slice()
-        };
+        let text = self.text.active().units.as_slice();
         if let Err(error) = self.styles.pending_mut().arena.validate(
             text,
             font_stack_exists,
@@ -2292,23 +2292,27 @@ impl ParagraphState {
     }
 
     fn commit_text(&mut self) {
-        if self.text_prepared {
-            let retains_mirror = self.pending_text.len() == self.text.len();
+        if self.text.is_prepared() {
+            let retains_mirror =
+                self.text.pending().units.len() == self.text.committed().units.len();
             let edit = self.text_edit;
-            core::mem::swap(&mut self.text, &mut self.pending_text);
-            core::mem::swap(&mut self.text_unit_ids, &mut self.pending_text_unit_ids);
-            self.next_text_unit_id = self.pending_next_text_unit_id;
+            // One swap publishes units, identities, and the counter together. The
+            // counter swaps rather than being assigned, which the original did by hand;
+            // the difference is erased because `clear_text_preparation` zeroes the
+            // pending counter immediately below.
+            self.text.commit();
             if retains_mirror {
                 if let Some(edit) = edit {
-                    self.pending_text[edit.old_start..edit.new_end]
-                        .copy_from_slice(&self.text[edit.old_start..edit.new_end]);
-                    self.pending_text_unit_ids[edit.old_start..edit.new_end]
-                        .copy_from_slice(&self.text_unit_ids[edit.old_start..edit.new_end]);
+                    let (pending, committed) = self.text.derive_mut();
+                    pending.units[edit.old_start..edit.new_end]
+                        .copy_from_slice(&committed.units[edit.old_start..edit.new_end]);
+                    pending.unit_ids[edit.old_start..edit.new_end]
+                        .copy_from_slice(&committed.unit_ids[edit.old_start..edit.new_end]);
                 }
                 self.pending_text_mirrors_committed = true;
             } else {
-                self.pending_text.clear();
-                self.pending_text_unit_ids.clear();
+                self.text.pending_mut().units.clear();
+                self.text.pending_mut().unit_ids.clear();
                 self.pending_text_mirrors_committed = false;
             }
         }
@@ -2317,13 +2321,13 @@ impl ParagraphState {
 
     fn prepare_unicode(&mut self) -> Result<(), EngineError> {
         self.abort_unicode();
-        if !self.text_prepared {
+        if !self.text.is_prepared() {
             return Ok(());
         }
         if let Some(edit) = self.text_edit
             && self.unicode.committed().reusable_for_ascii_letter_edit(
-                &self.text,
-                &self.pending_text,
+                &self.text.committed().units,
+                &self.text.pending().units,
                 edit.old_start,
                 edit.old_end,
                 edit.new_end,
@@ -2334,7 +2338,7 @@ impl ParagraphState {
         }
         self.unicode
             .pending_mut()
-            .analyze(&self.pending_text)
+            .analyze(&self.text.pending().units)
             .map_err(unicode_error)?;
         self.unicode.mark_prepared();
         Ok(())
@@ -2357,14 +2361,10 @@ impl ParagraphState {
         if self.unicode_reused_for_text_edit && !self.style_invalidation.bidi {
             return Ok(());
         }
-        if !self.text_prepared && !self.style_invalidation.bidi {
+        if !self.text.is_prepared() && !self.style_invalidation.bidi {
             return Ok(());
         }
-        let text = if self.text_prepared {
-            self.pending_text.as_slice()
-        } else {
-            self.text.as_slice()
-        };
+        let text = self.text.active().units.as_slice();
         let styles = if self.styles.is_prepared() {
             &self.styles.pending_mut().resolved
         } else {
@@ -2392,18 +2392,14 @@ impl ParagraphState {
 
     fn prepare_shaping_runs(&mut self) -> Result<(), EngineError> {
         self.abort_shaping_runs();
-        if !self.text_prepared
+        if !self.text.is_prepared()
             && !self.style_invalidation.shaping
             && !self.style_invalidation.metrics
             && !self.bidi.is_prepared()
         {
             return Ok(());
         }
-        let text = if self.text_prepared {
-            self.pending_text.as_slice()
-        } else {
-            self.text.as_slice()
-        };
+        let text = self.text.active().units.as_slice();
         let styles = self.styles.active().resolved.segments();
         let style_storage = &self.styles.active().arena;
         let unicode = self.unicode.active();
@@ -2441,7 +2437,7 @@ impl ParagraphState {
         // retained shaped runs then index a run list that no longer exists — the shape must re-run whenever the
         // rebuilt run list breaks positional topology with the committed one.
         if !self.shaping_runs.is_prepared()
-            || (!self.text_prepared
+            || (!self.text.is_prepared()
                 && !self.style_invalidation.shaping
                 && !self.bidi.is_prepared()
                 && shaping_run_topology_stable(
@@ -2455,11 +2451,7 @@ impl ParagraphState {
             self.shape.mark_prepared();
             return Ok(());
         }
-        let text = if self.text_prepared {
-            self.pending_text.as_slice()
-        } else {
-            self.text.as_slice()
-        };
+        let text = self.text.active().units.as_slice();
         if text.is_empty() {
             self.shape.mark_prepared();
             return Ok(());
@@ -2682,7 +2674,7 @@ impl ParagraphState {
         shaper
             .with_shaped_run(
                 fallback.font_handle,
-                &self.pending_text,
+                &self.text.pending().units,
                 ShapeRunRef {
                     text_start: new_run.text_start,
                     text_end: new_run.text_end,
@@ -2787,16 +2779,8 @@ impl ParagraphState {
         if !self.shape.is_prepared() && !self.style_invalidation.metrics {
             return Ok(());
         }
-        let text = if self.text_prepared {
-            self.pending_text.as_slice()
-        } else {
-            self.text.as_slice()
-        };
-        let text_unit_ids = if self.text_prepared {
-            self.pending_text_unit_ids.as_slice()
-        } else {
-            self.text_unit_ids.as_slice()
-        };
+        let text = self.text.active().units.as_slice();
+        let text_unit_ids = self.text.active().unit_ids.as_slice();
         let unicode = self.unicode.active();
         let styles = self.styles.active().resolved.segments();
         let runs = self.shaping_runs.active().runs();
@@ -2894,10 +2878,10 @@ impl ParagraphState {
         if geometry.is_empty() {
             return Ok(());
         }
-        let text_length = if self.text_prepared {
-            self.pending_text.len()
+        let text_length = if self.text.is_prepared() {
+            self.text.pending().units.len()
         } else {
-            self.text.len()
+            self.text.committed().units.len()
         };
         geometry
             .validate_text_length(text_length)
@@ -2950,11 +2934,7 @@ impl ParagraphState {
         let styles = self.styles.active().resolved.segments();
         let style_storage = &self.styles.active().arena;
         let runs = self.shaping_runs.active().runs();
-        let text = if self.text_prepared {
-            self.pending_text.as_slice()
-        } else {
-            self.text.as_slice()
-        };
+        let text = self.text.active().units.as_slice();
         let geometry = self.geometry.active();
         let max_slots_per_band =
             usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?;
@@ -3217,11 +3197,7 @@ impl ParagraphState {
     }
 
     fn prepare_intrinsic_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
-        let text = if self.text_prepared {
-            self.pending_text.as_slice()
-        } else {
-            self.text.as_slice()
-        };
+        let text = self.text.active().units.as_slice();
         let clusters = self.clusters.active();
         let runs = self.shaping_runs.active().runs();
         let styles = self.styles.active().resolved.segments();
@@ -3267,11 +3243,7 @@ impl ParagraphState {
         next_content_revision: &mut u32,
     ) -> Result<(), EngineError> {
         self.abort_positioned();
-        let text = if self.text_prepared {
-            self.pending_text.as_slice()
-        } else {
-            self.text.as_slice()
-        };
+        let text = self.text.active().units.as_slice();
         let clusters = self.clusters.active();
         let runs = self.shaping_runs.active().runs();
         let styles = self.styles.active().resolved.segments();
@@ -4381,8 +4353,8 @@ mod tests {
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
         let session = engine.sessions.get(&4).unwrap();
         let state = session.first_paragraph_state().unwrap();
-        assert!(state.text_prepared);
-        assert_eq!(state.pending_text, [0x61, 0x62, 0x63, 0x64, 0x58, 0x59]);
+        assert!(state.text.is_prepared());
+        assert_eq!(state.text.pending().units, [0x61, 0x62, 0x63, 0x64, 0x58, 0x59]);
         let transaction = session.speculative.unwrap();
         assert_eq!(transaction.revision, session.revision);
 
@@ -4407,7 +4379,7 @@ mod tests {
         let session = engine.sessions.get(&4).unwrap();
         assert!(session.speculative.unwrap().generation > transaction.generation);
         assert_eq!(
-            session.first_paragraph_state().unwrap().pending_text,
+            session.first_paragraph_state().unwrap().text.pending().units,
             [0x61, 0x62, 0x63, 0x64, 0x5a]
         );
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
@@ -4474,7 +4446,7 @@ mod tests {
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         engine.measure_paragraph(first, 1).unwrap();
         let session = engine.sessions.get(&4).unwrap();
-        assert!(session.paragraph(1).unwrap().state.text_prepared);
+        assert!(session.paragraph(1).unwrap().state.text.is_prepared());
         let generation = session.speculative.unwrap().generation;
 
         // Measuring paragraph 2 extends the SAME transaction: a lifecycle-neutral
@@ -4504,10 +4476,10 @@ mod tests {
             "a query for a second existing paragraph extends the transaction"
         );
         assert!(
-            session.paragraph(1).unwrap().state.text_prepared,
+            session.paragraph(1).unwrap().state.text.is_prepared(),
             "the first paragraph's speculative state survives the second query"
         );
-        assert!(session.paragraph(2).unwrap().state.text_prepared);
+        assert!(session.paragraph(2).unwrap().state.text.is_prepared());
     }
 
     #[test]
@@ -4585,7 +4557,9 @@ mod tests {
                 .unwrap()
                 .first_paragraph_state()
                 .unwrap()
-                .text_unit_ids,
+                .text
+                .committed()
+                .unit_ids,
             [1, 2, 3, 4]
         );
         assert_eq!(
@@ -4611,8 +4585,8 @@ mod tests {
         assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
         let session = engine.sessions.get(&4).unwrap();
         let paragraph = session.first_paragraph_state().unwrap();
-        assert_eq!(paragraph.text_unit_ids, [1, 2, 3, 4]);
-        assert_eq!(paragraph.next_text_unit_id, 5);
+        assert_eq!(paragraph.text.committed().unit_ids, [1, 2, 3, 4]);
+        assert_eq!(paragraph.text.committed().next_unit_id, 5);
 
         let retry = engine.prepare_update(edit, 2).unwrap();
         engine.commit_update(retry).unwrap();
@@ -4627,14 +4601,16 @@ mod tests {
                 .unwrap()
                 .first_paragraph_state()
                 .unwrap()
-                .text_unit_ids,
+                .text
+                .committed()
+                .unit_ids,
             [1, 5, 6, 3, 4, 7]
         );
 
         let settled_capacities = {
             let session = engine.sessions.get(&4).unwrap();
             let paragraph = session.first_paragraph_state().unwrap();
-            [paragraph.text.capacity(), paragraph.pending_text.capacity()]
+            [paragraph.text.committed().units.capacity(), paragraph.text.pending().units.capacity()]
         };
         let warm_bytes = text_mutation_bytes(&[(0, 1, &[0x7a])]);
         let warm_batch =
@@ -4645,12 +4621,12 @@ mod tests {
         engine.commit_update(prepared).unwrap();
         let session = engine.sessions.get(&4).unwrap();
         let paragraph = session.first_paragraph_state().unwrap();
-        assert_eq!(paragraph.text_unit_ids, [8, 5, 6, 3, 4, 7]);
+        assert_eq!(paragraph.text.committed().unit_ids, [8, 5, 6, 3, 4, 7]);
         assert!(paragraph.pending_text_mirrors_committed);
-        assert_eq!(paragraph.pending_text, paragraph.text);
-        assert_eq!(paragraph.pending_text_unit_ids, paragraph.text_unit_ids);
+        assert_eq!(paragraph.text.pending().units, paragraph.text.committed().units);
+        assert_eq!(paragraph.text.pending().unit_ids, paragraph.text.committed().unit_ids);
         assert_eq!(
-            [paragraph.pending_text.capacity(), paragraph.text.capacity(),],
+            [paragraph.text.pending().units.capacity(), paragraph.text.committed().units.capacity(),],
             settled_capacities
         );
     }
@@ -4673,7 +4649,7 @@ mod tests {
         );
         let session = engine.sessions.get(&4).unwrap();
         let paragraph = session.first_paragraph_state().unwrap();
-        assert!(paragraph.text.is_empty());
+        assert!(paragraph.text.committed().units.is_empty());
         assert!(paragraph.unicode.active().grapheme_boundaries().is_empty());
         assert!(paragraph.bidi.active().levels.is_empty());
     }
@@ -4681,9 +4657,12 @@ mod tests {
     #[test]
     fn ascii_text_reuse_does_not_suppress_an_independent_bidi_invalidation() {
         let mut paragraph = ParagraphState::default();
-        paragraph.text = "abc".encode_utf16().collect();
-        paragraph.pending_text = "axc".encode_utf16().collect();
-        paragraph.text_prepared = true;
+        {
+            let (committed, pending) = paragraph.text.pair_mut();
+            committed.units = "abc".encode_utf16().collect();
+            pending.units = "axc".encode_utf16().collect();
+        }
+        paragraph.text.mark_prepared();
         paragraph.text_edit = Some(TextEdit {
             old_start: 1,
             old_end: 2,
@@ -4693,7 +4672,7 @@ mod tests {
         paragraph
             .unicode
             .pending_mut()
-            .analyze(&paragraph.text)
+            .analyze(&paragraph.text.committed().units)
             .unwrap();
 
         paragraph.prepare_unicode().unwrap();
@@ -4865,8 +4844,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             [1, 2]
         );
-        assert_eq!(session.paragraph(1).unwrap().state.text, [0x61, 0x62]);
-        assert_eq!(session.paragraph(2).unwrap().state.text, [0x63, 0x64]);
+        assert_eq!(session.paragraph(1).unwrap().state.text.committed().units, [0x61, 0x62]);
+        assert_eq!(session.paragraph(2).unwrap().state.text.committed().units, [0x63, 0x64]);
 
         let reorder_bytes = paragraph_mutation_bytes(&[
             (PARAGRAPH_MUTATION_UPSERT, 1, 1),
@@ -4888,8 +4867,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             [2, 1]
         );
-        assert_eq!(session.paragraph(1).unwrap().state.text, [0x61, 0x62]);
-        assert_eq!(session.paragraph(2).unwrap().state.text, [0x63, 0x64]);
+        assert_eq!(session.paragraph(1).unwrap().state.text.committed().units, [0x61, 0x62]);
+        assert_eq!(session.paragraph(2).unwrap().state.text.committed().units, [0x63, 0x64]);
 
         let remove_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 1, 0)]);
         let mut remove = update(2, 2, 2);
@@ -4904,10 +4883,10 @@ mod tests {
             [ParagraphOrder { order: 0, id: 2 }]
         );
         assert!(session.paragraph(1).is_none());
-        assert_eq!(session.paragraph(2).unwrap().state.text, [0x63, 0x64]);
+        assert_eq!(session.paragraph(2).unwrap().state.text.committed().units, [0x63, 0x64]);
         assert!(session.spare_paragraph.is_some());
 
-        let spare_text_capacity = session.spare_paragraph.as_ref().unwrap().text.capacity();
+        let spare_text_capacity = session.spare_paragraph.as_ref().unwrap().text.committed().units.capacity();
         let replacement_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 3, 1)]);
         let replacement_text = paragraph_text_mutation_bytes(&[(3, 0, 0, &[0x7a])]);
         let mut replacement = update(3, 3, 3);
@@ -4921,12 +4900,12 @@ mod tests {
         engine.commit_update(prepared).unwrap();
         let recycled = &engine.sessions.get(&4).unwrap().paragraph(3).unwrap().state;
         assert_eq!(
-            recycled.text,
+            recycled.text.committed().units,
             [0x7a],
             "a recycled paragraph must begin semantically empty"
         );
         assert_eq!(
-            recycled.text.capacity(),
+            recycled.text.committed().units.capacity(),
             spare_text_capacity,
             "paragraph recycling must retain its reserved text allocation"
         );
@@ -4981,8 +4960,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             [1, 2]
         );
-        assert_eq!(session.paragraph(1).unwrap().state.text, [0x61]);
-        assert_eq!(session.paragraph(2).unwrap().state.text, [0x62]);
+        assert_eq!(session.paragraph(1).unwrap().state.text.committed().units, [0x61]);
+        assert_eq!(session.paragraph(2).unwrap().state.text.committed().units, [0x62]);
         assert!(!session.lifecycle_prepared);
     }
 
