@@ -491,6 +491,9 @@ fn write_curves(
             .contour_starts
             .get(contour_index + 1)
             .map_or(glyph.curves.len(), |value| usize::from(*value));
+        // The index addresses `glyph.curves` as well as `map`, so an iterator over `map`
+        // alone would still need it. Clippy sees only the `map` use.
+        #[allow(clippy::needless_range_loop)]
         for curve_index in start..end {
             if *cursor % usize::from(width) == usize::from(width) - 1 {
                 *cursor = cursor.checked_add(1).ok_or(PackError::ArithmeticOverflow)?;
@@ -926,9 +929,14 @@ mod tests {
         );
         assert_eq!(quantize_f16(1.0).unwrap(), 1.0);
         assert_eq!(quantize_f16(-0.0).unwrap().to_bits(), (-0.0_f32).to_bits());
-        assert_eq!(
-            quantize_f16(0.000_061_035_156_25).unwrap(),
-            0.000_061_035_156_25
-        );
+        // 2^-14, the smallest normal f16. The full expansion is the point of the case,
+        // so it stays spelled out rather than shortened to its round-trip form.
+        #[allow(clippy::excessive_precision)]
+        {
+            assert_eq!(
+                quantize_f16(0.000_061_035_156_25).unwrap(),
+                0.000_061_035_156_25
+            );
+        }
     }
 }

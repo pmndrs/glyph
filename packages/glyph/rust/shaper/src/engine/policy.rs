@@ -427,6 +427,10 @@ impl ValidatedPolicy {
         )
     }
 
+    // Stage aggregation: each argument is one explicit input threaded through the
+    // pipeline rather than hidden mutable state, and D-244 measured outlining these
+    // bodies as size-neutral. Arity is the shape, not a smell.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn execute_buffers(
         &self,
         capability_set: CapabilitySetId,

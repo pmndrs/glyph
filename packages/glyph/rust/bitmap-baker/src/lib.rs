@@ -67,8 +67,7 @@ pub fn bake_bitmap(
         .map_or(request.glyph_count, |selection| selection.selected_glyphs());
     let mut strikes = Vec::with_capacity(request.descriptor.strikes.len());
     let progress_total = u32::from(selected_glyphs)
-        .checked_mul(u32::try_from(request.descriptor.strikes.len()).unwrap_or(u32::MAX))
-        .unwrap_or(u32::MAX);
+        .saturating_mul(u32::try_from(request.descriptor.strikes.len()).unwrap_or(u32::MAX));
     for (strike_index, ppem) in request.descriptor.strikes.iter().copied().enumerate() {
         let strike = rasterize::rasterize_strike(
             source,

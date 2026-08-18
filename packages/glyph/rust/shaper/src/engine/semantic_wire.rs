@@ -486,17 +486,6 @@ impl<'a> ParagraphMutationBatch<'a> {
         }
     }
 
-    /// Identity of the speculative lifecycle input: 0 when no mutations ride the
-    /// request, otherwise a hash over the fixed-size mutation records.
-    pub(crate) fn fingerprint(self) -> u64 {
-        if self.records.is_empty() {
-            return 0;
-        }
-        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-        mix_bytes(&mut hash, self.records);
-        hash
-    }
-
     pub(crate) fn len(self) -> usize {
         self.records.len() / abi::ENGINE_PARAGRAPH_MUTATION_RECORD_SIZE as usize
     }

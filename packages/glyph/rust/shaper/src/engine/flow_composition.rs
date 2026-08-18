@@ -236,10 +236,10 @@ impl FlowLayoutArena {
         if !previous.ellipsis_threads.is_empty()
             || previous.lines.is_empty()
             || previous.lines.len() > max_lines
-            || previous.lines.iter().any(|line| {
-                usize::try_from(line.fragment_count)
-                    .map_or(true, |count| count > max_slots_per_band)
-            })
+            || previous
+                .lines
+                .iter()
+                .any(|line| usize::from(line.fragment_count) > max_slots_per_band)
             || previous_clusters.starts.len() != clusters.starts.len()
         {
             return Ok(false);

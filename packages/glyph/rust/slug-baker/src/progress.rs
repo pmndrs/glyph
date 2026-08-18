@@ -9,12 +9,14 @@ pub(crate) fn report(completed: u32, total: u32) {
         return;
     }
     let interval = (total / 100).max(1);
-    if completed != 0 && completed != total && completed % interval != 0 {
-        return;
-    }
-    #[cfg(target_arch = "wasm32")]
-    // SAFETY: the browser baker instantiates this module with a matching, synchronous import.
-    unsafe {
-        pmndrs_glyph_bake_progress(completed, total);
+    // Positive guard rather than an early return: off wasm32 the reporting block below
+    // compiles away, which would leave that `return` as the function's last statement.
+    let milestone = completed == 0 || completed == total || completed.is_multiple_of(interval);
+    if milestone {
+        #[cfg(target_arch = "wasm32")]
+        // SAFETY: the browser baker instantiates this module with a matching, synchronous import.
+        unsafe {
+            pmndrs_glyph_bake_progress(completed, total);
+        }
     }
 }

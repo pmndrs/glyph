@@ -133,7 +133,7 @@ mod tests {
         // The review counterexample that retired the Q16 family: a 1,000,000-unit
         // space sum under the f32 minimum ratio 0.6666666865348816 must shrink by
         // the exactly-applied fraction, not a Q16 approximation 5 units short.
-        let ratio = 1.0 - f64::from(0.666_666_686_534_881_6_f32);
+        let ratio = 1.0 - f64::from(0.666_666_7_f32);
         let capacity = apply_ratio(1_000_000, ratio);
         assert_eq!(capacity, 333_333);
         assert!((capacity as f64 - 1_000_000.0 * ratio).abs() < 1.0);

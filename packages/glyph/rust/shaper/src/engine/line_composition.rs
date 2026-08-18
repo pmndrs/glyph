@@ -287,7 +287,7 @@ pub(crate) fn layout_next_line_integer(
     let mut index = line_start;
     while index < count {
         if chunk_summaries
-            && index % super::cluster_state::LAYOUT_CHUNK == 0
+            && index.is_multiple_of(super::cluster_state::LAYOUT_CHUNK)
             && index + super::cluster_state::LAYOUT_CHUNK <= count
         {
             let chunk = index / super::cluster_state::LAYOUT_CHUNK;

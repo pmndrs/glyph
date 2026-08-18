@@ -28,8 +28,7 @@ use super::{
     sort,
     staged::{Staged, StyleStage, TextStage},
     style_state::{
-        DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
-        StyleInvalidation,
+        DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, StyleArena, StyleInvalidation,
     },
 };
 
@@ -1239,7 +1238,6 @@ fn session_has_decorations(session: &EngineSession) -> bool {
 /// paragraph, preparing intrinsic layouts on demand. Every stage reads pending state
 /// when prepared and committed state otherwise, so the same emission serves the full
 /// update path and the paragraph-scoped measure query.
-#[allow(clippy::too_many_arguments)]
 /// Whether a rebuilt shaping-run list keeps the previous list's positional
 /// topology: same count and, per index, the same text span and shaping
 /// identity. Style VALUES may differ — that is what a metrics-only refresh
@@ -1259,6 +1257,10 @@ fn shaping_run_topology_stable(
         })
 }
 
+// Stage aggregation: each argument is one explicit input threaded through the
+// pipeline rather than hidden mutable state, and D-244 measured outlining these
+// bodies as size-neutral. Arity is the shape, not a smell.
+#[allow(clippy::too_many_arguments)]
 fn append_paragraph_measurement(
     records: &mut Vec<super::semantic_view::SemanticRecord>,
     state: &mut ParagraphState,

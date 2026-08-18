@@ -104,6 +104,10 @@ pub(crate) struct LayoutExtents {
     pub consumed_clusters: usize,
 }
 
+// Stage aggregation: each argument is one explicit input threaded through the
+// pipeline rather than hidden mutable state, and D-244 measured outlining these
+// bodies as size-neutral. Arity is the shape, not a smell.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn append_measurement(
     target: &mut Vec<SemanticRecord>,
     paragraph_id: u32,
@@ -284,7 +288,6 @@ pub(crate) fn append_measurement(
         block_start: height,
         inline_extent: finite_nonnegative_f32(full_content_width)?,
         block_extent: finite_nonnegative_f32(full_content_height)?,
-        ..SemanticRecord::default()
     };
     Ok(())
 }

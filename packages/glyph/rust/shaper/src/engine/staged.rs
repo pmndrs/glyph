@@ -100,8 +100,9 @@ impl<T> Staged<T> {
         self.prepared = false;
     }
 
-    /// Replaces the committed value outright, discarding anything in flight. Session
-    /// reuse resets a paragraph this way.
+    /// Seeds the committed value for a test. Session reuse goes through the owning
+    /// arena's `reset_for_reuse`, not through this.
+    #[cfg(test)]
     pub(crate) fn reset(&mut self, value: T) {
         self.committed = value;
         self.prepared = false;

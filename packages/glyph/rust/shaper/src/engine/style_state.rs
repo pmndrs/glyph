@@ -870,8 +870,10 @@ mod tests {
             StyleInvalidation::default(),
         );
 
-        let mut font_size = ResolvedStyle::default();
-        font_size.font_size = 24.0;
+        let font_size = ResolvedStyle {
+            font_size: 24.0,
+            ..ResolvedStyle::default()
+        };
         assert_eq!(
             previous.invalidation_against(&storage, &resolved(font_size), &storage),
             StyleInvalidation {
@@ -882,8 +884,10 @@ mod tests {
             },
         );
 
-        let mut foreground = ResolvedStyle::default();
-        foreground.foreground_rgba = 0xff00_00ff;
+        let foreground = ResolvedStyle {
+            foreground_rgba: 0xff00_00ff,
+            ..ResolvedStyle::default()
+        };
         assert_eq!(
             previous.invalidation_against(&storage, &resolved(foreground), &storage),
             StyleInvalidation {
@@ -894,8 +898,10 @@ mod tests {
             },
         );
 
-        let mut direction = ResolvedStyle::default();
-        direction.direction = 2;
+        let direction = ResolvedStyle {
+            direction: 2,
+            ..ResolvedStyle::default()
+        };
         assert_eq!(
             previous.invalidation_against(&storage, &resolved(direction), &storage),
             StyleInvalidation {
