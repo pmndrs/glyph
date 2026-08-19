@@ -565,6 +565,11 @@ impl FlowLayoutArena {
             u32::try_from(cluster_end).map_err(|_| EngineError::ResultTooLarge)?;
         fragment.line.text_end = text_end;
         fragment.line.advance = (source_advance + replacement.advance_adjustment).max(0.0);
+        // The replacement now terminates the line, so nothing hangs off its end any more:
+        // whatever the fit trimmed is either gone with the truncated suffix or interior to
+        // the ellipsis. Leaving the fitted value here would make RTL positioning discount a
+        // space the retained range no longer contains.
+        fragment.line.hung_advance = 0.0;
         fragment.line.hard_break = false;
         Ok(Some(EllipsisTarget {
             fragment_index: u32::try_from(fragment_index)
@@ -1461,6 +1466,64 @@ mod tests {
         assert_eq!(layout.fragments[0].line.cluster_end, 1);
         assert_eq!(layout.fragments[0].line.text_end, 1);
         assert_eq!(layout.fragments[0].line.advance, 8.0);
+    }
+
+    #[test]
+    fn ellipsis_truncation_clears_a_hung_terminating_space() {
+        // The fit may hand truncation a line whose trailing space hangs. Once the
+        // replacement terminates the line that suffix is gone or interior, so the hung
+        // width must not survive: RTL positioning discounts it from the pen, and a stale
+        // value would shift every glyph on the line by a space it no longer owns.
+        let clusters = quantized(ClusterArena {
+            starts: vec![0, 1, 2, 3],
+            ends: vec![1, 2, 3, 4],
+            advances: vec![3.0; 4],
+            flags: vec![CLUSTER_SAFE_BEFORE; 4],
+            ..ClusterArena::default()
+        });
+        let mut layout = FlowLayoutArena {
+            lines: vec![FlowLine {
+                flow_thread_id: 7,
+                region_id: 1,
+                transform_index: 0,
+                clip_id: 1,
+                fragment_start: 0,
+                fragment_count: 1,
+                align: ALIGN_START,
+                block_start: 0.0,
+                baseline: 8.0,
+                height: 10.0,
+            }],
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 0,
+                    cluster_end: 2,
+                    text_start: 0,
+                    text_end: 2,
+                    advance: 6.0,
+                    hung_advance: 3.0,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 10.0,
+                boundary_index: NO_BOUNDARY,
+            }],
+            ..FlowLayoutArena::default()
+        };
+
+        layout
+            .truncate_for_ellipsis(7, &clusters, |cluster_end, _| {
+                Ok(EllipsisReplacement {
+                    cluster_start: cluster_end,
+                    advance_adjustment: 5.0,
+                })
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            layout.fragments[0].line.hung_advance, 0.0,
+            "the ellipsis terminates the line, so nothing hangs off its end",
+        );
     }
 
     #[test]
