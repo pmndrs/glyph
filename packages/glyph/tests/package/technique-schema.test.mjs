@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defineTechniqueSchema, floatBuffers, schemaPolicyBuffers, textShaperAbi, u32Buffers } from '@pmndrs/glyph/core';
+import {
+  defineTechniqueSchema,
+  floatBuffers,
+  schemaPolicyBuffers,
+  textShaperAbi,
+  u32Buffers,
+} from '@pmndrs/glyph/core';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 import { msdfSchema } from '@pmndrs/glyph/raster/msdf';
 import { slugSchema } from '@pmndrs/glyph/raster/slug';
