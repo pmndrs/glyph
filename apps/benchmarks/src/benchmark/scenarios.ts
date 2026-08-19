@@ -7,7 +7,12 @@ import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
 // structural pin held exactly across the change -- 5 cases, 68 frames, 709 glyphs,
 // 625 rendered, 0 missing, 17,362 layout bytes, 63 draws -- so only the composed
 // position hash moved, which is the signature of a pure geometry shift.
-const ADVANCED_SHAPING_HASH = '6a33daf9';
+// Re-pinned for the RTL hung-space fix: an RTL line no longer shifts by the width of the
+// terminating space it hangs. Only glyph POSITIONS moved -- every structural metric this
+// matrix asserts is unchanged (709 glyphs, 625 rendered, 63 draws, 17,362 output bytes,
+// 68 frames, zero missing), and `a_hung_terminating_space_does_not_move_rtl_ink` pins the
+// LTR pen as unmoved, so the delta is confined to the RTL and mixed-direction cases.
+const ADVANCED_SHAPING_HASH = 'b947b219';
 const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
 function deterministicValidation(hashes: readonly string[]): string {
