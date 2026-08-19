@@ -468,6 +468,24 @@ impl PositionedGlyphArena {
         }
 
         let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
+        // Whether the hung suffix lands visually FIRST is a property of that cluster's own
+        // resolved level, not of the paragraph: a span-level bidi override can give the
+        // terminating space the opposite parity to the paragraph it sits in. Alignment and
+        // indent deliberately keep asking the paragraph, because CSS resolves `start`/`end`
+        // against the inline base direction; only visual order asks the cluster.
+        let hung_leads = if fragment.line.hung_advance == 0.0 {
+            false
+        } else {
+            let terminating = retained_cluster_end.saturating_sub(1).max(cluster_start);
+            cluster_level(
+                terminating,
+                fragment.line.text_start,
+                clusters,
+                runs,
+                &self.line_levels,
+            )? & 1
+                != 0
+        };
         let (justify, pen_origin) = fragment_pen(
             line,
             fragment,
@@ -478,6 +496,7 @@ impl PositionedGlyphArena {
             indent,
             controls,
             paragraph_level,
+            hung_leads,
         );
         let mut cursor = pen_origin;
         let baseline = line.block_start + line.baseline;
@@ -1328,6 +1347,7 @@ fn fragment_pen(
     indent: f64,
     controls: JustifyControls,
     paragraph_level: u8,
+    hung_leads: bool,
 ) -> (JustifyDistribution, f64) {
     let available =
         (fragment.slot_end - fragment.slot_start - indent - fragment.line.advance).max(0.0);
@@ -1358,10 +1378,10 @@ fn fragment_pen(
     // width. Discounting them here puts the ink back exactly where a line with no
     // terminating space would sit, which is what makes the right edge hold still while
     // text is typed.
-    let hung_shift = if paragraph_level & 1 == 0 {
-        0.0
-    } else {
+    let hung_shift = if hung_leads {
         fragment.line.hung_advance
+    } else {
+        0.0
     };
     (
         justify,
@@ -1438,6 +1458,12 @@ pub(crate) fn flow_positioning_equivalent(
                     indent,
                     typography.justify,
                     paragraph_level_at(bidi, fragment.line.text_start),
+                    // This compares two pens rather than placing glyphs, and the caller's
+                    // precondition is that text, styles, clusters, and bidi are unchanged --
+                    // so the real predicate resolves identically on both sides. Any predicate
+                    // applied to both therefore yields the same equality answer, and shaping
+                    // runs are not in scope here to resolve the true one.
+                    paragraph_level_at(bidi, fragment.line.text_start) & 1 != 0,
                 );
                 (distribution, origin.to_bits(), indent.to_bits())
             };
@@ -1751,6 +1777,10 @@ mod tests {
     #[test]
     fn a_hung_terminating_space_does_not_move_rtl_ink() {
         fn pen(paragraph_level: u8, hung_advance: f64) -> f64 {
+            pen_with(paragraph_level, hung_advance, paragraph_level & 1 != 0)
+        }
+
+        fn pen_with(paragraph_level: u8, hung_advance: f64, hung_leads: bool) -> f64 {
             let line = FlowLine {
                 flow_thread_id: 1,
                 region_id: 1,
@@ -1788,6 +1818,7 @@ mod tests {
                 0.0,
                 JustifyControls::default(),
                 paragraph_level,
+                hung_leads,
             );
             assert!(justify.is_zero(), "start alignment must not justify");
             origin
@@ -1813,6 +1844,20 @@ mod tests {
                 "LTR pen moved with a hung space of {hung}"
             );
         }
+
+        // The discount follows the terminating cluster's RESOLVED level, not the
+        // paragraph's. A span-level bidi override can give that space the opposite parity
+        // to the paragraph it sits in, and the pen has to believe the cluster.
+        assert_eq!(
+            pen_with(0, 3.0, true),
+            -3.0,
+            "an RTL-override suffix in an LTR paragraph must still be discounted",
+        );
+        assert_eq!(
+            pen_with(1, 3.0, false),
+            10.0,
+            "an LTR-override suffix in an RTL paragraph must not be discounted",
+        );
     }
     use crate::engine::{
         cluster_state::CLUSTER_SAFE_BEFORE, flow_composition::NO_BOUNDARY,
