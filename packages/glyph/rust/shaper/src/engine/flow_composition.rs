@@ -1435,6 +1435,7 @@ mod tests {
                     text_start: 0,
                     text_end: 2,
                     advance: 6.0,
+                    hung_advance: 0.0,
                     hard_break: false,
                 },
                 slot_start: 0.0,

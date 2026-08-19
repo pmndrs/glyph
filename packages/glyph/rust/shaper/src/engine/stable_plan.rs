@@ -1225,10 +1225,10 @@ impl StablePlanCompiler {
         // plan wire rejects as malformed.
         if key.resource_id != 0
             && !self.batches.iter().enumerate().any(|(index, candidate)| {
-            index != batch_index
-                && self.batch_pending_indices[index] != NONE
-                && candidate.key.resource_id == key.resource_id
-                && candidate.key.resource_generation == key.resource_generation
+                index != batch_index
+                    && self.batch_pending_indices[index] != NONE
+                    && candidate.key.resource_id == key.resource_id
+                    && candidate.key.resource_generation == key.resource_generation
             })
             && !self.retirements.iter().any(|retirement| {
                 retirement.kind == RETIRE_RESOURCE
@@ -2404,7 +2404,15 @@ mod tests {
             inline_extent: 12.0,
             block_extent: 0.5,
         };
-        prepare(&mut compiler, &policy, &[glyph(1, 1), decoration], &[1.0, 4.0], true, 1, 0);
+        prepare(
+            &mut compiler,
+            &policy,
+            &[glyph(1, 1), decoration],
+            &[1.0, 4.0],
+            true,
+            1,
+            0,
+        );
         compiler
             .plan_view(7, CAPABILITY, policy.fingerprint())
             .unwrap();

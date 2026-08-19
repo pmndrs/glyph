@@ -38,6 +38,10 @@ pub(crate) struct ComposedLine {
     pub text_start: u32,
     pub text_end: u32,
     pub advance: f64,
+    /// Width of the terminating spaces this line still owns but does not charge to
+    /// `advance`. Positioning lays them, and in RTL they sit visually first, so the pen
+    /// has to discount them or every glyph shifts by their width.
+    pub hung_advance: f64,
     pub hard_break: bool,
 }
 
@@ -75,6 +79,7 @@ pub(crate) fn layout_next_line(
             text_start: text_end,
             text_end,
             advance: 0.0,
+            hung_advance: 0.0,
             hard_break: false,
         }));
     }
@@ -186,8 +191,11 @@ pub(crate) fn layout_next_line(
     if visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_HARD_BREAK != 0 {
         visible_end -= 1;
     }
+    let mut hung_advance = 0.0;
     while visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_SPACE != 0 {
-        selected_advance -= clusters.advances[visible_end - 1];
+        let trimmed = clusters.advances[visible_end - 1];
+        selected_advance -= trimmed;
+        hung_advance += trimmed;
         visible_end -= 1;
     }
     let last = selected_end - 1;
@@ -206,6 +214,7 @@ pub(crate) fn layout_next_line(
         text_start,
         text_end,
         advance: selected_advance,
+        hung_advance,
         hard_break,
     }))
 }
@@ -250,6 +259,7 @@ pub(crate) fn layout_next_line_integer(
             text_start: text_end,
             text_end,
             advance: 0.0,
+            hung_advance: 0.0,
             hard_break: false,
         }));
     }
@@ -429,8 +439,11 @@ pub(crate) fn layout_next_line_integer(
     if visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_HARD_BREAK != 0 {
         visible_end -= 1;
     }
+    let mut hung_units = 0_i64;
     while visible_end > line_start && clusters.flags[visible_end - 1] & CLUSTER_SPACE != 0 {
-        selected_advance -= i64::from(clusters.advances_f26[visible_end - 1]);
+        let trimmed = i64::from(clusters.advances_f26[visible_end - 1]);
+        selected_advance -= trimmed;
+        hung_units += trimmed;
         visible_end -= 1;
     }
     let last = selected_end - 1;
@@ -449,6 +462,7 @@ pub(crate) fn layout_next_line_integer(
         text_start,
         text_end,
         advance: scaled_from_layout_units(selected_advance),
+        hung_advance: scaled_from_layout_units(hung_units),
         hard_break,
     }))
 }
@@ -846,6 +860,7 @@ mod tests {
                 text_start: 0,
                 text_end: 2,
                 advance: 8.0,
+                hung_advance: 0.0,
                 hard_break: false,
             })
         );

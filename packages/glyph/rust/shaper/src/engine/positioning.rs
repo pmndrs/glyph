@@ -1351,7 +1351,22 @@ fn fragment_pen(
     } else {
         0.0
     };
-    (justify, fragment.slot_start + indent_shift + offset)
+    // A line keeps its terminating spaces but does not charge them to `advance`. Visual
+    // order decides whether that is free: LTR lays them last, past the end of the line,
+    // where they have no ink and no consequence. RTL lays them FIRST -- they are visually
+    // leftmost -- so they occupy the pen and push every visible glyph right by their
+    // width. Discounting them here puts the ink back exactly where a line with no
+    // terminating space would sit, which is what makes the right edge hold still while
+    // text is typed.
+    let hung_shift = if paragraph_level & 1 == 0 {
+        0.0
+    } else {
+        fragment.line.hung_advance
+    };
+    (
+        justify,
+        fragment.slot_start + indent_shift + offset - hung_shift,
+    )
 }
 
 /// Whether a freshly composed flow would position EXACTLY as the committed
@@ -1728,6 +1743,77 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
 mod tests {
     use super::super::shaping_state::ShapeArena;
     use super::*;
+
+    /// A line that ends in a space keeps that space but does not charge it to `advance`.
+    /// In LTR it is laid last, past the end, and costs nothing. In RTL it is laid FIRST,
+    /// so without a discount it pushes every visible glyph right by its width -- which is
+    /// the whole line visibly jumping right as each new character lands.
+    #[test]
+    fn a_hung_terminating_space_does_not_move_rtl_ink() {
+        fn pen(paragraph_level: u8, hung_advance: f64) -> f64 {
+            let line = FlowLine {
+                flow_thread_id: 1,
+                region_id: 1,
+                transform_index: 0,
+                clip_id: 0,
+                fragment_start: 0,
+                fragment_count: 1,
+                align: ALIGN_START,
+                block_start: 0.0,
+                baseline: 8.0,
+                height: 10.0,
+            };
+            let fragment = FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 0,
+                    cluster_end: 0,
+                    text_start: 0,
+                    text_end: 0,
+                    advance: 10.0,
+                    hung_advance,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 20.0,
+                boundary_index: 0,
+            };
+            let clusters = ClusterArena::default();
+            let (justify, origin) = fragment_pen(
+                line,
+                fragment,
+                true,
+                &clusters,
+                0,
+                0,
+                0.0,
+                JustifyControls::default(),
+                paragraph_level,
+            );
+            assert!(justify.is_zero(), "start alignment must not justify");
+            origin
+        }
+
+        // RTL start-alignment pins the ink's RIGHT edge to the slot end. The hung space is
+        // laid before the ink, so the ink begins at `pen + hung` and must still end at 20.
+        for hung in [0.0, 3.0] {
+            let origin = pen(1, hung);
+            assert_eq!(
+                origin + hung + 10.0,
+                20.0,
+                "RTL ink right edge moved with a hung space of {hung}",
+            );
+        }
+
+        // LTR start-alignment never consults the advance, so it was never affected and
+        // must stay exactly where it was.
+        for hung in [0.0, 3.0] {
+            assert_eq!(
+                pen(0, hung),
+                0.0,
+                "LTR pen moved with a hung space of {hung}"
+            );
+        }
+    }
     use crate::engine::{
         cluster_state::CLUSTER_SAFE_BEFORE, flow_composition::NO_BOUNDARY,
         line_composition::ComposedLine, style_state::ResolvedStyle,
@@ -1907,6 +1993,7 @@ mod tests {
                 text_start: 0,
                 text_end: 7,
                 advance: 7.0,
+                hung_advance: 0.0,
                 hard_break: false,
             },
             slot_start: 0.0,
@@ -2073,6 +2160,7 @@ mod tests {
                     text_start: 0,
                     text_end: 2,
                     advance: 10.2,
+                    hung_advance: 0.0,
                     hard_break: true,
                 },
                 slot_start: 0.0,
@@ -2206,6 +2294,7 @@ mod tests {
                     text_start: 0,
                     text_end: 2,
                     advance: 12.0,
+                    hung_advance: 0.0,
                     hard_break: true,
                 },
                 slot_start: 0.0,
@@ -2427,6 +2516,7 @@ mod tests {
                         text_start: 0,
                         text_end: 2,
                         advance: 15.0,
+                        hung_advance: 0.0,
                         hard_break: false,
                     },
                     slot_start: 0.0,
@@ -2440,6 +2530,7 @@ mod tests {
                         text_start: 2,
                         text_end: 4,
                         advance: 12.0,
+                        hung_advance: 0.0,
                         hard_break: false,
                     },
                     slot_start: 0.0,
@@ -2578,6 +2669,7 @@ mod tests {
                     text_start: 0,
                     text_end: 2,
                     advance: 12.0,
+                    hung_advance: 0.0,
                     hard_break: true,
                 },
                 slot_start: 0.0,
