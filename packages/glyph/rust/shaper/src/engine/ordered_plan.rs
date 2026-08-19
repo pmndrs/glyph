@@ -1292,7 +1292,11 @@ impl OrderedPlanCompiler {
                     && retirement.id == batch.key.resource_id
                     && retirement.generation == batch.key.resource_generation
             });
-            if !resource_remains && !resource_retired {
+            // Decoration batches are resource-free and publish no resource lifecycle
+            // (see the matching guard on the publication path), so they have no
+            // resource to retire either. Emitting one anyway produces a retirement
+            // record with id 0, which the plan wire rejects as malformed.
+            if batch.key.resource_id != 0 && !resource_remains && !resource_retired {
                 self.retirements.push(RetirementRecord {
                     kind: RETIRE_RESOURCE,
                     id: batch.key.resource_id,
@@ -1950,25 +1954,27 @@ mod tests {
         }
     }
 
+    /// Standard descriptor plus one resource-free decoration program.
+    fn decoration_policy() -> ValidatedPolicy {
+        let mut descriptor = descriptor_with_options(false, 1024, true);
+        let mut program = descriptor.programs[0].clone();
+        program.primitive_kind = PRIMITIVE_DECORATION;
+        program.technique = DECORATION_TECHNIQUE;
+        program.id = ProgramId(9);
+        program.resource_kind_mask = 0;
+        program.buffers[0].id = BufferId(9);
+        for operation in &mut program.operations {
+            if let Operation::StoreF32 { buffer, .. } = operation {
+                *buffer = BufferId(9);
+            }
+        }
+        descriptor.programs.push(program);
+        ValidatedPolicy::new(descriptor).unwrap()
+    }
+
     #[test]
     fn decoration_rows_pack_and_draw_without_resources() {
-        let policy = {
-            // Reuse the standard descriptor and add a resource-free decoration program.
-            let mut descriptor = descriptor_with_options(false, 1024, true);
-            let mut program = descriptor.programs[0].clone();
-            program.primitive_kind = PRIMITIVE_DECORATION;
-            program.technique = DECORATION_TECHNIQUE;
-            program.id = ProgramId(9);
-            program.resource_kind_mask = 0;
-            program.buffers[0].id = BufferId(9);
-            for operation in &mut program.operations {
-                if let Operation::StoreF32 { buffer, .. } = operation {
-                    *buffer = BufferId(9);
-                }
-            }
-            descriptor.programs.push(program);
-            ValidatedPolicy::new(descriptor).unwrap()
-        };
+        let policy = decoration_policy();
         let mut compiler = OrderedPlanCompiler::default();
         let rows = [glyph(1, 1), decoration_row(0x8000_0000)];
         prepare(&mut compiler, &policy, &rows, &[1.0, 4.0], true);
@@ -1992,6 +1998,42 @@ mod tests {
             })
             .expect("decoration draw");
         assert_eq!(decoration_draw.resource_count, 0);
+    }
+
+    #[test]
+    fn retiring_a_resource_free_decoration_batch_emits_no_resource_retirement() {
+        // A decoration batch carries resource_id 0 by construction, and the publication path
+        // already skips its resource lifecycle. Retiring it must skip the same way: a
+        // RETIRE_RESOURCE record with id 0 is malformed, and the plan wire rejects the whole
+        // publication rather than the record, which takes the frame down with it.
+        let policy = decoration_policy();
+        let mut compiler = OrderedPlanCompiler::default();
+
+        let with_decoration = [glyph(1, 1), decoration_row(0x8000_0000)];
+        prepare(&mut compiler, &policy, &with_decoration, &[1.0, 4.0], true);
+        compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        compiler.commit().unwrap();
+
+        // Drop the decoration row: its batch is removed, which is the retirement path.
+        let without_decoration = [glyph(1, 2)];
+        prepare(&mut compiler, &policy, &without_decoration, &[1.0], true);
+        let view = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+
+        assert!(
+            !view
+                .retirements
+                .iter()
+                .any(|retirement| retirement.kind == RETIRE_RESOURCE && retirement.id == 0),
+            "resource-free batch retired a resource: {:?}",
+            view.retirements,
+        );
+        // The publication must remain encodable. Before the guard this returned Err and the
+        // host surfaced it as text-engine status 6.
+        plan_layout(view).expect("resource-free retirement keeps the publication valid");
     }
 
     fn policy_with_material_storage(partition_materials: bool) -> ValidatedPolicy {

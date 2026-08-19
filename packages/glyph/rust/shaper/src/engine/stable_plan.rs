@@ -1219,16 +1219,23 @@ impl StablePlanCompiler {
         publication_generation: u32,
     ) -> Result<(), StablePlanError> {
         let key = self.batches[batch_index].key;
-        if !self.batches.iter().enumerate().any(|(index, candidate)| {
+        // Decoration batches are resource-free and publish no resource lifecycle (see the
+        // matching guard on the publication path), so they have no resource to retire
+        // either. Emitting one anyway produces a retirement record with id 0, which the
+        // plan wire rejects as malformed.
+        if key.resource_id != 0
+            && !self.batches.iter().enumerate().any(|(index, candidate)| {
             index != batch_index
                 && self.batch_pending_indices[index] != NONE
                 && candidate.key.resource_id == key.resource_id
                 && candidate.key.resource_generation == key.resource_generation
-        }) && !self.retirements.iter().any(|retirement| {
-            retirement.kind == RETIRE_RESOURCE
-                && retirement.id == key.resource_id
-                && retirement.generation == key.resource_generation
-        }) {
+            })
+            && !self.retirements.iter().any(|retirement| {
+                retirement.kind == RETIRE_RESOURCE
+                    && retirement.id == key.resource_id
+                    && retirement.generation == key.resource_generation
+            })
+        {
             reserve(&mut self.retirements, 1)?;
             self.retirements.push(RetirementRecord {
                 kind: RETIRE_RESOURCE,
@@ -2354,6 +2361,68 @@ mod tests {
             })
             .expect("decoration draw");
         assert_eq!(draw.resource_count, 0);
+    }
+
+    #[test]
+    fn stable_retiring_a_resource_free_decoration_batch_emits_no_resource_retirement() {
+        // Twin of the ordered-plan regression: a decoration batch carries resource_id 0, and
+        // retiring it must skip the resource lifecycle the publication path already skips.
+        // A RETIRE_RESOURCE record with id 0 is malformed and fails the whole publication.
+        let policy = {
+            let mut descriptor = descriptor_with_budget(false, 8);
+            let mut program = descriptor.programs[0].clone();
+            program.primitive_kind = PRIMITIVE_DECORATION;
+            program.technique = TechniqueId(99);
+            program.id = ProgramId(9);
+            program.resource_kind_mask = 0;
+            program.buffers[0].id = BufferId(9);
+            for operation in &mut program.operations {
+                if let Operation::StoreF32 { buffer, .. } = operation {
+                    *buffer = BufferId(9);
+                }
+            }
+            descriptor.programs.push(program);
+            ValidatedPolicy::new(descriptor).unwrap()
+        };
+        let mut compiler = StablePlanCompiler::default();
+        let decoration = StableGlyph {
+            stable_id: 0x8000_0000,
+            content_revision: 1,
+            technique: TechniqueId(99),
+            program_variant: 0,
+            resource_id: 0,
+            resource_generation: 0,
+            resource_kind: 0,
+            resource_reference: 0,
+            semantic_id: 0x8000_0000,
+            transform_id: 1,
+            material_id: 1,
+            clip_id: 0,
+            depth_key: 0,
+            inline_start: 4.0,
+            block_start: 9.0,
+            inline_extent: 12.0,
+            block_extent: 0.5,
+        };
+        prepare(&mut compiler, &policy, &[glyph(1, 1), decoration], &[1.0, 4.0], true, 1, 0);
+        compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        compiler.commit().unwrap();
+
+        prepare(&mut compiler, &policy, &[glyph(1, 2)], &[1.0], true, 2, 1);
+        let view = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+        assert!(
+            !view
+                .retirements
+                .iter()
+                .any(|retirement| retirement.kind == RETIRE_RESOURCE && retirement.id == 0),
+            "resource-free batch retired a resource: {:?}",
+            view.retirements,
+        );
+        assert!(plan_layout(view).is_ok(), "{:?}", plan_layout(view));
     }
 
     fn descriptor_with_budget(
