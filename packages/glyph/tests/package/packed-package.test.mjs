@@ -79,7 +79,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   ]) {
     assert.throws(
       () => import.meta.resolve(removed, consumerEntry),
-      /ERR_PACKAGE_PATH_NOT_EXPORTED/,
+      { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' },
       `${removed} was replaced by a typed subpath and must not resolve`,
     );
   }
