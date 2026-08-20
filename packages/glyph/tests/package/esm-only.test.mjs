@@ -28,6 +28,18 @@ test('the published contract is ESM-only', async () => {
     glyph: { bitmap: './bakers/bitmap', msdf: './bakers/msdf', slug: './bakers/slug' },
   });
 
+  // The JSON ABI subpaths were replaced by typed module subpaths. Assert the removed names are gone
+  // whatever target shape they might reappear with, since the resource allow-list below only sees strings.
+  for (const removed of [
+    './shaper-abi.json',
+    './bitmap-abi.json',
+    './mtsdf-abi.json',
+    './slug-abi.json',
+    './font-baker-abi.json',
+  ]) {
+    assert.ok(!(removed in manifest.exports), `${removed} was replaced by a typed subpath and must stay removed`);
+  }
+
   for (const [subpath, target] of Object.entries(manifest.exports)) {
     if (typeof target === 'string') {
       assert.ok(
