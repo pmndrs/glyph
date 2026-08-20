@@ -1,6 +1,9 @@
 import * as TSL from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
 
+// Upstream types this export as an unparameterized `Node`; it is always vec4. Narrow once, not per use.
+const modelViewProjection = TSL.modelViewProjection as Node<'vec4'>;
+
 /**
  * One glyph instance's canonical Bitmap fields, already resolved to nodes. Core owns what each field means; how a
  * program addresses it — storage buffers, instanced attributes, or a texture — stays the program's own choice.
@@ -72,7 +75,7 @@ export function bitmapShader(
       instance.origin.y.add(TSL.positionLocal.y.mul(instance.size.y)).negate(),
       0,
     ),
-    clipPosition: options.pixelSnapping === true ? pixelSnappedClipPosition() : TSL.modelViewProjection,
+    clipPosition: options.pixelSnapping === true ? pixelSnappedClipPosition() : modelViewProjection,
     atlasUv,
     coverage,
     color: instance.color.rgb,
@@ -86,7 +89,7 @@ export function bitmapShader(
  * its device-space landing is what has to sit on the grid the atlas was baked for.
  */
 function pixelSnappedClipPosition(): Node<'vec4'> {
-  const clip: Node<'vec4'> = TSL.modelViewProjection;
+  const clip = modelViewProjection;
   return TSL.vec4(
     snapClipAxis(clip.x, clip.w, TSL.screenSize.x),
     snapClipAxis(clip.y, clip.w, TSL.screenSize.y),

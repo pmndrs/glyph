@@ -7,4 +7,3 @@ onlyBuiltDependencies: []
 patchedDependencies:
   '@react-three/fiber@10.0.0-alpha.2': packages/glyph/patches/@react-three__fiber@10.0.0-alpha.2.patch
   '@react-three/test-renderer@9.1.0': packages/glyph/patches/@react-three__test-renderer@9.1.0.patch
-  '@types/three@0.185.1': packages/glyph/patches/@types__three@0.185.1.patch

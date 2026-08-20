@@ -124,7 +124,6 @@
     "ajv": "6.15.0",
     "gltf-validator": "2.0.0-dev.3.10",
     "ktx-parse": "1.1.0",
-    "typescript": "7.0.2",
     "unicode-segmenter": "0.15.0"
   },
   "devDependencies": {
@@ -132,7 +131,7 @@
     "@react-three/test-renderer": "9.1.0",
     "@types/node": "24.13.3",
     "@types/react": "19.2.14",
-    "@types/three": "0.185.1",
+    "@types/three": "0.185.4",
     "@unicode/unicode-17.0.0": "1.6.17",
     "@webgpu/types": "0.1.71",
     "binaryen": "129.0.0",
@@ -141,6 +140,7 @@
     "oxlint": "1.75.0",
     "react": "19.2.8",
     "three": "0.185.1",
+    "typescript": "7.0.2",
     "unicode-property-value-aliases": "3.9.0"
   },
   "peerDependencies": {

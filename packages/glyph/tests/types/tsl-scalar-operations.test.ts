@@ -21,6 +21,7 @@ declare const right: Node<'float'>;
 const sum: Node<'float'> = add(left, right);
 const product: Node<'float'> = mul(left, right);
 const scaled: Node<'float'> = mul(float(0.5), 2);
+// @ts-expect-error upstream types this export as `Node`; fails once DefinitelyTyped narrows it
 const clipPosition: Node<'vec4'> = modelViewProjection;
 const chainedProduct: Node<'float'> = left.mul(right);
 

@@ -5,7 +5,7 @@ description: Proves the published raster and baker extension boundary with a pri
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:20461836283d635e8411ff0557b06c7f976966c4d07e419f295b3a6b892c19d3'
+source_digest: 'sha256:1456a25d26deb2133553f6613d7923ad11e53355da30a65d3feb5285bb434979'
 tags: [package, raster, extension-proof, threejs, tsl]
 sources:
   - id: manifest

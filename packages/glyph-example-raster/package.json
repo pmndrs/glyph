@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "24.13.3",
-    "@types/three": "0.185.1",
+    "@types/three": "0.185.4",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
     "vitest": "4.1.0"
