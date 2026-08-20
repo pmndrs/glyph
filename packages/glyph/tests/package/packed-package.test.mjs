@@ -68,6 +68,22 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     assert.ok((await readFile(fileURLToPath(resolved))).byteLength > 0, `${specifier} must be packed`);
   }
 
+  // The JSON ABI subpaths were replaced by typed module subpaths. Prove they are unreachable from a real
+  // install rather than absent from the manifest, so a wildcard or alias cannot resurrect them unnoticed.
+  for (const removed of [
+    '@pmndrs/glyph/shaper-abi.json',
+    '@pmndrs/glyph/bitmap-abi.json',
+    '@pmndrs/glyph/mtsdf-abi.json',
+    '@pmndrs/glyph/slug-abi.json',
+    '@pmndrs/glyph/font-baker-abi.json',
+  ]) {
+    assert.throws(
+      () => import.meta.resolve(removed, consumerEntry),
+      /ERR_PACKAGE_PATH_NOT_EXPORTED/,
+      `${removed} was replaced by a typed subpath and must not resolve`,
+    );
+  }
+
   const runtimeHost = await readFile(join(installedDirectory, 'dist/runtime-bake.js'), 'utf8');
   const serialWorkerHost = await readFile(join(installedDirectory, 'dist/internal/serial-worker-host.js'), 'utf8');
   assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\/runtime-bake-worker\.js["']/);
