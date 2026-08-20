@@ -9,11 +9,12 @@ okf_version: '0.2'
 - [Project README](../README.md) — product overview, API preview, implementation order, and local setup.
 - [Project brief](planning/project-brief.md) — product outcome, scope, non-goals, and success criteria.
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
-- [Merged v0 runtime and bake API](planning/api-shapes.md) — migration fixture for the implemented, unreleased package boundaries and explicitly deferred additions.
+- [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
 - [Core text API](planning/core-api.md) — authoritative API for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, fixed-capacity failure, synchronized updates, and renderer-ready glyph batches.
-- [Engine integration contract](planning/engine-integration-contract.md) — exact storage, batching, submission, ownership, staging, and frame-publication boundary for custom renderers.
-- [Raster technique and engine resource API](planning/raster-technique-api.md) — portable artifact loading, CPU raster data, glyph-resource binding, reusable shader-backend programs, and engine target ownership.
+- [Rust layout engine contract](planning/rust-layout-engine.md) — authoritative engine ABI, render-plan policy, and publication boundary for custom renderers.
+- [Engine integration contract](planning/engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
+- [Raster technique and engine resource API](planning/raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [TypeGPU-first shader authority](planning/typegpu-first-shader-authority.md) — exploratory TypeGPU-first shader/program architecture, Three and gpucat bridge limits, fallback authority models, and proof gates.
 - [Merged v0 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [External gpucat integration fitness plan](planning/gpucat-integration.md) — source-validated proof plan for consuming the target v1 core without private imports or core changes.

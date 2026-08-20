@@ -40,13 +40,13 @@ generated:
 
 # Merged v0 runtime and bake API fixture
 
-Status: merged v0 surfaces are implemented but unreleased; sections labeled deferred remain proposals
+Status: superseded; the merged v0 surface described here was deleted by the Rust render-plan cutover
 Scope: baked-first loading, lazy Worker baking, HarfRust Wasm shaping, JavaScript paragraph layout, and explicit raster loading
 
 > [!NOTE]
-> This page is retained for migration and regression comparison. The root [README](../../README.md),
-> [core text API](core-api.md), and [engine integration contract](engine-integration-contract.md) define the
-> authoritative extraction API.
+> This page is retained for migration and regression comparison only. The root [README](../../README.md),
+> [core text API](core-api.md), and [Rust layout engine contract](rust-layout-engine.md) define the
+> authoritative API.
 
 ## Milestone 0.1 acceptance evidence
 

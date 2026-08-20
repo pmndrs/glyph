@@ -3,11 +3,12 @@
 ## Product, API, and execution
 
 - [Project brief](project-brief.md) — product intent, merged v0, target v1, and later horizon.
-- [Merged v0 runtime and bake API](api-shapes.md) — public and internal TypeScript migration fixture.
+- [Merged v0 runtime and bake API](api-shapes.md) — superseded migration fixture; describes the merged v0 surface deleted by the Rust render-plan cutover.
 - [Three.js text API](three-api.md) — authoritative `FontLoader`, `TextGroup`, and `Text` surface, including late binding, group disposal/rebinding, font leases, retained non-throwing errors, ordering, and render-loop synchronization.
 - [Core text API](core-api.md) — authoritative API and rationale for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, font leases, fixed-capacity failure, physical batching, and cascading disposal.
-- [Engine integration contract](engine-integration-contract.md) — exact prepared glyph-batch/run, variant, target storage, transform, draw compilation, staging, attachment ownership, and disposal contract.
-- [Raster technique and engine resource API](raster-technique-api.md) — authoritative split between portable baker/artifact/CPU technique data, reusable backend technique shaders, variant-aware programs, and engine GPU targets.
+- [Rust layout engine contract](rust-layout-engine.md) — authoritative engine ABI, render-plan policy, and publication boundary for custom renderers.
+- [Engine integration contract](engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
+- [Raster technique and engine resource API](raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [TypeGPU raster programs and text engine](typegpu-api.md) — complete direct TypeGPU API for typed technique shaders, programs, variants, caller-owned render passes, transforms, synchronization, and disposal.
 - [TypeGPU-first shader authority](typegpu-first-shader-authority.md) — exploratory package shape and falsifiable proof ladder for sharing complete raster kernels with direct WebGPU hosts, Three.js, and gpucat without changing core.
 - [Three material authority for text draws](three-material-authority.md) — **work in progress.** Fixes the Rust `material_id` route and shared-storage/draw-split contract while leaving the exact Three material-factory types for a later design pass.
