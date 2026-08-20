@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:64a166ff4a100c7be21a68e7c87abd9bd3a4f35082c685b9e9a2985ea811ee52'
+source_digest: 'sha256:d33d005c4d23fe5530a2695ae2c5516120ad8829c7e212d0b56db322b2f6956f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -111,10 +111,11 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 | `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                        |
 | `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                        |
 | `@pmndrs/glyph/react`        | React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                              |
-| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `text` CLI.                                      |
+| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                      |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                        |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                 |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers and validators.                                                                                  |
+| `@pmndrs/glyph/*-abi`        | Typed ABI constants, one subpath per Wasm module, so a host imports only the contract it uses.                                   |
 
 The font-baker Rust source, direct-memory wrapper, schemas, tests, build pipeline, optimized Wasm, and generated ABI are
 owned by this package. There is no separately published font-baker package. The root entry has no static edge to the

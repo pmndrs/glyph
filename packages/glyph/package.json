@@ -99,15 +99,30 @@
       "import": "./dist/runtime-bake.js"
     },
     "./text-shaper.wasm": "./dist/text_shaper.wasm",
-    "./shaper-abi.json": "./dist/text-shaper-abi-v0.json",
+    "./shaper-abi": {
+      "types": "./dist/shaper-abi.d.ts",
+      "import": "./dist/shaper-abi.js"
+    },
     "./bitmap-baker.wasm": "./dist/bitmap_baker.wasm",
-    "./bitmap-abi.json": "./dist/bitmap-baker-abi-v0.json",
+    "./bitmap-abi": {
+      "types": "./dist/bitmap-abi.d.ts",
+      "import": "./dist/bitmap-abi.js"
+    },
     "./mtsdf-baker.wasm": "./dist/mtsdf_baker.wasm",
-    "./mtsdf-abi.json": "./dist/mtsdf-baker-abi-v1.json",
+    "./mtsdf-abi": {
+      "types": "./dist/mtsdf-abi.d.ts",
+      "import": "./dist/mtsdf-abi.js"
+    },
     "./slug-baker.wasm": "./dist/slug_baker.wasm",
-    "./slug-abi.json": "./dist/slug-baker-abi-v0.json",
+    "./slug-abi": {
+      "types": "./dist/slug-abi.d.ts",
+      "import": "./dist/slug-abi.js"
+    },
     "./font-baker.wasm": "./dist/font_baker.wasm",
-    "./font-baker-abi.json": "./dist/font-baker-abi-v0.json",
+    "./font-baker-abi": {
+      "types": "./dist/font-baker-abi.d.ts",
+      "import": "./dist/font-baker-abi.js"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {

@@ -62,16 +62,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     assert.ok(Object.keys(imported).length > 0, `${specifier} must expose at least one ESM export`);
   }
 
-  for (const subpath of [
-    './text-shaper.wasm',
-    './shaper-abi.json',
-    './bitmap-baker.wasm',
-    './bitmap-abi.json',
-    './mtsdf-baker.wasm',
-    './mtsdf-abi.json',
-    './slug-baker.wasm',
-    './slug-abi.json',
-  ]) {
+  for (const subpath of ['./text-shaper.wasm', './bitmap-baker.wasm', './mtsdf-baker.wasm', './slug-baker.wasm']) {
     const specifier = `@pmndrs/glyph${subpath.slice(1)}`;
     const resolved = import.meta.resolve(specifier, consumerEntry);
     assert.ok((await readFile(fileURLToPath(resolved))).byteLength > 0, `${specifier} must be packed`);
