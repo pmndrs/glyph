@@ -38,8 +38,7 @@
   hook (`.githooks/okf-digests`, enabled per clone through Git 2.54 config-based hooks documented in the
   README) now re-pins affected digests automatically at commit time, refuses when a package's working tree
   diverges from the staged commit, and runs the full OKF validation as the gate. A fallback dispatcher
-  covers `core.hooksPath` clones on older Git. The setup pass also removed the last tracked file under the
-  pre-rename `packages/text/` path, a byte-identical duplicate of the relocated policy fixture.
+  covers `core.hooksPath` clones on older Git.
 
 ## 2026-08-16
 
