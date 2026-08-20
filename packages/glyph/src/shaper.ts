@@ -78,6 +78,7 @@ interface ShaperExports {
   readonly requestPointer: (handle: number) => number;
   readonly requestCapacity: (handle: number) => number;
   readonly textUpdate: (handle: number, pointer: number, length: number) => number;
+  readonly measureParagraph: (handle: number, pointer: number, length: number, paragraphId: number) => number;
 }
 
 interface ShaperModule {
@@ -238,6 +239,7 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       requestPointer: exportedFunction(instance, functions.requestPointer),
       requestCapacity: exportedFunction(instance, functions.requestCapacity),
       textUpdate: exportedFunction(instance, functions.textUpdate),
+      measureParagraph: exportedFunction(instance, functions.measureParagraph),
     },
   };
 }

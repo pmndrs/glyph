@@ -71,7 +71,16 @@ console.log(
 );
 
 const reports = [];
-const cases = ['cold', 'no-op', 'font-size', 'column-resize', 'suffix-edit', 'localized-edit', 'localized-splice'];
+const cases = [
+  'cold',
+  'no-op',
+  'font-size',
+  'column-resize',
+  'measure-query',
+  'suffix-edit',
+  'localized-edit',
+  'localized-splice',
+];
 for (const name of options.case === undefined ? cases : [options.case]) {
   reports.push(name === 'cold' ? measureCold() : measureWarm(name));
 }
@@ -144,6 +153,16 @@ function measureWarm(name) {
         ...common,
         geometry: { ...baseGeometry, width: 420 + index * 7, revision },
       });
+    } else if (name === 'measure-query') {
+      bytes = updateBytes({
+        ...common,
+        geometry: { ...baseGeometry, width: 420 + index * 7, revision },
+      });
+      new DataView(bytes.buffer).setUint32(
+        abi.layouts.engineUpdateRequest.semanticViewMask,
+        abi.engine.semanticViewMasks.measurement,
+        true,
+      );
     } else if (name === 'suffix-edit') {
       const nextLength = utf16.length - index;
       const deleteCount = suffixLength - nextLength;
@@ -180,7 +199,7 @@ function measureWarm(name) {
     } else {
       bytes = updateBytes({ ...common, geometry: baseGeometry });
     }
-    state = execute(bytes, index < options.warmup, `${name}[${index}]`);
+    state = execute(bytes, index < options.warmup, `${name}[${index}]`, name === 'measure-query' ? 1 : undefined);
     if (index >= options.warmup) {
       samples.push(state.durationMs);
       plans.push(state);
@@ -201,7 +220,7 @@ function createSession(requestCapacity) {
   }
 }
 
-function execute(bytes, allowGrowth = false, operation = 'text_update') {
+function execute(bytes, allowGrowth = false, operation = 'text_update', measureParagraphId) {
   const requestPointer = fn.requestPointer(sessionId);
   if (requestPointer === 0 || fn.requestCapacity(sessionId) < bytes.byteLength) {
     throw new Error('benchmark request exceeds its pre-reserved arena');
@@ -210,7 +229,10 @@ function execute(bytes, allowGrowth = false, operation = 'text_update') {
   const bufferBytes = buffer.byteLength;
   const started = performance.now();
   new Uint8Array(buffer, requestPointer, bytes.byteLength).set(bytes);
-  const resultPointer = fn.textUpdate(sessionId, requestPointer, bytes.byteLength);
+  const resultPointer =
+    measureParagraphId === undefined
+      ? fn.textUpdate(sessionId, requestPointer, bytes.byteLength)
+      : fn.measureParagraph(sessionId, requestPointer, bytes.byteLength, measureParagraphId);
   const durationMs = performance.now() - started;
   if (memory.buffer !== buffer && !allowGrowth) {
     throw new Error(`measured text_update grew Wasm memory from ${bufferBytes} to ${memory.buffer.byteLength} bytes`);
@@ -348,6 +370,9 @@ function printReport(caseReports) {
   }
   console.log('column-resize is the existing layout-width case: one fully active column is reflowed end to end.');
   console.log(
+    'measure-query answers the same alternating widths through the paragraph-scoped synchronous measure: no gather, plan, or publication.',
+  );
+  console.log(
     'suffix-edit matches the TypeScript text benchmark; localized-edit replaces one code unit; localized-splice alternates one middle insertion/deletion.',
   );
   console.log(`Wasm memory after retained high-water mark: ${(memory.buffer.byteLength / 1024 / 1024).toFixed(2)} MiB`);
@@ -391,9 +416,16 @@ function parseArguments(arguments_) {
     const value = readString(name);
     if (
       value !== undefined &&
-      !['cold', 'no-op', 'font-size', 'column-resize', 'suffix-edit', 'localized-edit', 'localized-splice'].includes(
-        value,
-      )
+      ![
+        'cold',
+        'no-op',
+        'font-size',
+        'column-resize',
+        'measure-query',
+        'suffix-edit',
+        'localized-edit',
+        'localized-splice',
+      ].includes(value)
     ) {
       throw new RangeError(`unknown benchmark case: ${value}`);
     }

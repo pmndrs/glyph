@@ -14,14 +14,15 @@ export const packageSizeBudgets = {
   // schemaPolicyBuffers/schemaFieldTable). Re-based when tsdown bundling lands per
   // the technique contract plan.
   // The external-raster routing around the Worker font-bake plan added +1,786 raw /
-  // +919 minified of core routing code; the generated evidence was not refolded at
-  // the time, so the growth first surfaced in the CI gate's fresh build (228,199 raw
-  // / 155,956 minified, byte-identical across linux-x64 and darwin). Gzip and Brotli
-  // still fit under their prior ceilings.
+  // +919 minified of unrecorded growth (the evidence refold rides this branch), and
+  // the 11.17 measure tier added +2,481 raw / +1,258 minified / +211 gzip for the
+  // synchronous measure entry, the retained speculative transaction, and the host
+  // fast path. Measured byte-identical on linux-x64 and darwin; the integer-units
+  // slices above ride within the remaining headroom (+360 raw at their tip).
   'core-subpath-js': {
-    rawBytes: 229_000,
-    minifiedBytes: 156_500,
-    gzipBytes: 39_700,
+    rawBytes: 232_000,
+    minifiedBytes: 158_000,
+    gzipBytes: 40_000,
     brotliBytes: 34_200,
   },
   'tsl-subpath-js': {
@@ -55,11 +56,16 @@ export const packageSizeBudgets = {
   // D-245 kernels total roughly +1.3 KB raw. The margins cover cross-host build variance: the Linux toolchain
   // emits equal-length but byte-different wasm (different sha256) whose compressed sizes run a few hundred bytes
   // above the recorded macOS host's.
+  // The 11.17 measure tier grew the engine by +9,413 raw / +5,028 gzip / +4,014
+  // Brotli: speculative measure transactions, candidate adoption, and the
+  // paragraph query path. The integer-units slices then shrank the tip by a net
+  // -4,228 raw; the ceilings stay priced at the 11.17 peak plus the cross-host
+  // compression margin above.
   'text-shaper-wasm': {
-    rawBytes: 1_112_000,
-    minifiedBytes: 1_112_000,
-    gzipBytes: 430_500,
-    brotliBytes: 341_000,
+    rawBytes: 1_116_500,
+    minifiedBytes: 1_116_500,
+    gzipBytes: 434_200,
+    brotliBytes: 343_600,
   },
   // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250),
   // then the review-closure pass added +3,535 raw / +1,711 minified / +439 Brotli
@@ -68,14 +74,14 @@ export const packageSizeBudgets = {
   // the compressed ceilings hold with tight headroom by design.
   // Column flow (contentBox columns over ordered regions) added ~+1.7 KB raw of
   // geometry derivation and validation in the Three adapter.
-  // The external-raster routing rode into the Three bundle too: +1,786 raw /
-  // +914 minified (370,521 raw / 241,995 minified measured by the CI gate).
-  // Gzip and Brotli still fit under their prior ceilings.
+  // The external-raster routing rode into the Three bundle too (+1,786 raw /
+  // +914 minified), then the 11.17 frame adoption and measureLayout host fast
+  // path added +5,310 raw / +2,690 minified in the Three adapter.
   'three-runtime-js': {
-    rawBytes: 371_500,
-    minifiedBytes: 242_500,
-    gzipBytes: 62_500,
-    brotliBytes: 52_800,
+    rawBytes: 377_000,
+    minifiedBytes: 245_500,
+    gzipBytes: 63_300,
+    brotliBytes: 53_500,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,

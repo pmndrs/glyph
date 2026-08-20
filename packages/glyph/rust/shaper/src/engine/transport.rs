@@ -24,7 +24,7 @@ use crate::{
     engine::{
         frame::{CommittedUpdate, RESULT_FLAG_CHECKPOINT, SessionRevision},
         render_plan::RenderPlanView,
-        render_plan_wire::{EncodedPlanLayout, encode_publication},
+        render_plan_wire::{EncodedPlanLayout, encode_publication, encode_query},
         semantic_view::SemanticRecord,
     },
     wire::write_u32,
@@ -157,6 +157,38 @@ impl FrameTransport {
         self.active_slot = Some(staged.slot);
         self.publication_generation = generation;
         self.outputs[staged.slot].pointer()
+    }
+
+    /// Stages a query result in the inactive slot without publishing: the header and
+    /// semantic table are written for the host to copy out before its next update call
+    /// (host lease), while the active slot, publication generation, and A/B
+    /// alternation stay untouched.
+    pub fn stage_query(
+        &mut self,
+        session_id: u32,
+        revision: SessionRevision,
+        semantic_views: &[SemanticRecord],
+    ) -> Result<usize, u32> {
+        let slot = self.inactive_slot();
+        let layout = encode_query(semantic_views, self.outputs[slot].bytes_mut())?;
+        self.write_header(
+            slot,
+            HeaderValues {
+                status: 0,
+                flags: 0,
+                session_id,
+                revision,
+                required_base_revision: revision.plan,
+                publication_generation: self.publication_generation,
+                required_request_capacity: 0,
+                required_result_capacity: 0,
+                policy_handle: 0,
+                capability_set: 0,
+                policy_fingerprint: 0,
+                layout,
+            },
+        );
+        Ok(self.outputs[slot].pointer())
     }
 
     pub fn publish_failure(

@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 0,
+  "generatedBy": "text:rust-layout-benchmark",
+  "wasmSha256": "30669ca92723e629208f541fd30ae03602a75b1ecb573fb2c280db19615563f0",
+  "technique": "bitmap",
+  "allocation": "ordered",
+  "glyphTarget": 22000,
+  "warmup": 8,
+  "repetitions": 31,
+  "reports": [
+    {
+      "name": "cold",
+      "glyphs": 21805,
+      "medianMs": 16.99158300000005,
+      "p95Ms": 17.32237500000008,
+      "minMs": 16.586374999999975,
+      "rsdPercent": 1.1702054953685461,
+      "patchCount": 12,
+      "writeBytes": 1133860
+    },
+    {
+      "name": "no-op",
+      "glyphs": 21805,
+      "medianMs": 0.001167000000009466,
+      "p95Ms": 0.0013750000000527507,
+      "minMs": 0.001082999999994172,
+      "rsdPercent": 9.811906168052992,
+      "patchCount": 0,
+      "writeBytes": 0
+    },
+    {
+      "name": "font-size",
+      "glyphs": 21805,
+      "medianMs": 6.788749999999936,
+      "p95Ms": 6.979125000000067,
+      "minMs": 6.580249999999978,
+      "rsdPercent": 1.5597920845436914,
+      "patchCount": 2,
+      "writeBytes": 348880
+    },
+    {
+      "name": "column-resize",
+      "glyphs": 21805,
+      "medianMs": 3.162417000000005,
+      "p95Ms": 4.761792000000014,
+      "minMs": 2.6422090000000935,
+      "rsdPercent": 21.777184779704253,
+      "patchCount": 1,
+      "writeBytes": 174440
+    },
+    {
+      "name": "measure-query",
+      "glyphs": 21805,
+      "medianMs": 1.861750000000029,
+      "p95Ms": 1.9779579999999441,
+      "minMs": 1.7543330000000878,
+      "rsdPercent": 3.591992642700713,
+      "patchCount": 0,
+      "writeBytes": 0
+    },
+    {
+      "name": "suffix-edit",
+      "glyphs": 21805,
+      "medianMs": 14.585415999999896,
+      "p95Ms": 14.905749999999898,
+      "minMs": 14.154041000000007,
+      "rsdPercent": 1.6447092153648084,
+      "patchCount": 0,
+      "writeBytes": 0
+    },
+    {
+      "name": "localized-edit",
+      "glyphs": 21805,
+      "medianMs": 1.4098329999997077,
+      "p95Ms": 6.398834000000079,
+      "minMs": 1.1903749999996762,
+      "rsdPercent": 74.3619157790932,
+      "patchCount": 6,
+      "writeBytes": 988
+    },
+    {
+      "name": "localized-splice",
+      "glyphs": 21805,
+      "medianMs": 9.123916999999892,
+      "p95Ms": 9.29279200000019,
+      "minMs": 8.88354100000015,
+      "rsdPercent": 0.9935212165170699,
+      "patchCount": 6,
+      "writeBytes": 567216
+    }
+  ]
+}

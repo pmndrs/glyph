@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:adb0aa8d4dd23153e97b36b3a359b699b0656c5f449331c30d8293b72d5e302e'
+source_digest: 'sha256:f176a35cb01f0558a4b8ed7c412067e57474b85eed6ca4299598cffb7897fce1'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -251,8 +251,32 @@ selected font binding—not a `Text` technique selector—carries the renderer p
 
 Ordinary rendering requests no layout readback. `Text.measureLayout()` explicitly requests aggregate measurements and
 counts; `Text.inspectLayout()` additionally copies line and glyph arrays. Query results are cached by committed revision.
-If a query observes pending changes, it synchronizes the containing Rust session once and the following render traversal
-reuses that publication.
+When the only pending change is the measured text's geometry, `measureLayout()` routes through the core host's
+`session.measureParagraph` — the paragraph-scoped synchronous query below — so repeated measurement under changing
+constraints performs no publication flips and no revision burns, and the next ordinary frame adopts the speculative
+work. Any other pending change synchronizes the containing Rust session once and the following render traversal reuses
+that publication.
+
+The engine additionally exports `pmndrs_glyph_engine_measure_paragraph`, a paragraph-scoped synchronous query beside
+`pmndrs_glyph_engine_update`. It reuses the update request layout with the queried paragraph as an ABI argument, runs
+validation and speculative preparation for that paragraph only, and writes the header plus semantic table into the
+inactive result slot without publishing: no A/B flip, no publication-generation bump, no revision advance, and no
+renderer-fence acknowledgment. The host must copy the records out before its next update call (host lease). The query
+terminates leave-committed, so the following ordinary frame proceeds from pre-measure revisions with no checkpoint
+hazard.
+
+The prepared pending state is retained as one speculative session transaction. Sequential queries extend it while the
+committed revision, lifecycle input, and the queried paragraph's text/style input fingerprints still match — a
+geometry-only follow-up query re-runs just geometry, flow, and positioning over the retained semantic prefix, and
+identities extend linearly from the transaction's high-water marks instead of rolling back between queries. Any
+fingerprint mismatch rebuilds cold with results identical to a fresh preparation.
+
+The committing frame adopts the transaction instead of discarding it: when the frame's lifecycle input matches, its
+identity counters continue from the transaction's reserved high-water marks, and each paragraph whose text/style/geometry
+inputs fingerprint-match its speculative pending state skips preparation entirely — the stable glyph identities a query
+reported stay valid in the committed frame. A paragraph whose prefix matches but whose geometry changed re-runs only the
+geometry/flow/positioning tail; anything else prepares cold. A frame whose inputs do not match the transaction drops it
+leave-committed at entry, so committed state never observes an unadopted query.
 
 The semantic values preserve information useful to callers:
 
@@ -456,6 +480,15 @@ size, 3.29× on width, and 2.94× on suffix edit; even the slowest technique for
 and 2.76× faster. This proves the migration comparison on this machine; it does not close the stricter p95-under-4-ms
 objective. Local-edit p95 remains about 6 ms and high-variance, while width p95 ranges from 4.29 to 4.75 ms across
 techniques.
+
+The paragraph-scoped synchronous measure (11.17) closes that objective for the explicit measure shape. At the same
+22,000-glyph corpus and cadence, the new `measure-query` lane answers the identical alternating widths as the
+`column-resize` lane through `pmndrs_glyph_engine_measure_paragraph`: 1.815 ms median / 1.930 ms p95 / 3.0% RSD with
+zero patches and zero publication bytes, beside the full update's 2.996 ms median / 4.483 ms p95 / 21.7% RSD in the
+same run — the first width-change lane under the 4 ms p95 objective, recorded in the
+[measure-query record](../../apps/benchmarks/fixtures/results/rust-layout-bitmap-measure-a42c976-darwin-arm64.json).
+The variance collapse follows from what the query skips: no gather, no plan compile, no publication packing, and no
+revision burn, so the following ordinary frame adopts the speculative layout instead of paying a checkpoint rebuild.
 
 The preceding unchanged 22,000-glyph localized-edit lane measured the complete production `text_update` plus Bitmap render
 plan at 2.607 ms median / 6.184 ms p95 after 40 warmups over 101 updates. The fast ASCII-letter path reuses Unicode and

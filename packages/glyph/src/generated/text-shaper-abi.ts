@@ -200,6 +200,7 @@ export const textShaperAbi = {
     "fontCount": "pmndrs_glyph_shaper_font_count",
     "fontStackCount": "pmndrs_glyph_engine_font_stack_count",
     "initialize": "pmndrs_glyph_shaper_initialize",
+    "measureParagraph": "pmndrs_glyph_engine_measure_paragraph",
     "planCount": "pmndrs_glyph_shaper_plan_count",
     "policyCount": "pmndrs_glyph_engine_policy_count",
     "registerFont": "pmndrs_glyph_shaper_register_font",

@@ -1845,7 +1845,8 @@ pub fn json() -> String {
             "sessionCount": "pmndrs_glyph_engine_session_count",
             "requestPointer": "pmndrs_glyph_engine_request_ptr",
             "requestCapacity": "pmndrs_glyph_engine_request_capacity",
-            "textUpdate": "pmndrs_glyph_engine_update"
+            "textUpdate": "pmndrs_glyph_engine_update",
+            "measureParagraph": "pmndrs_glyph_engine_measure_paragraph"
         },
         "layouts": {
             "policyRequest": {
