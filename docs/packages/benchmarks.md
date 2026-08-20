@@ -445,7 +445,7 @@ authored reflows in every case. The committed baseline measured 14.295 ms median
 that baseline measured 13.615 ms; adding semantic dirty tiers while retaining the same old Rust measured 7.450 ms; the
 complete candidate measured 6.885 ms. These telemetry histories contain 13–16 settled samples and establish direction
 and isolation, not a portable frame-time gate. A normal phase capture attributes most changed-frame CPU time to the
-single Rust `text_update`; TypeScript preparation, semantic readback, plan application, and renderer submit are smaller.
+single Rust `pmndrs_glyph_engine_update`; TypeScript preparation, semantic readback, plan application, and renderer submit are smaller.
 A symbol-preserving diagnostic did not provide honest finer Rust attribution because LTO inlines most warm work into the
 export, so internal phase timers are required before claiming a particular Rust loop is dominant.
 

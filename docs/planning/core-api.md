@@ -211,10 +211,10 @@ augmentation—not GPU instance storage. Repeated unchanged queries may reuse th
 
 ## Synchronization boundary
 
-There is one engine update export, `text_update(requestOffset, requestLength)`. The TypeScript host writes a complete frame
-request into retained Wasm staging memory; Rust applies mutations, shapes and lays out affected paragraphs, packs canonical
-instance records, and emits the render-plan command buffer plus coalesced dirty ranges. Renderer policy is compiled data,
-not a JavaScript callback executed from Rust.
+There is one mutating engine update export, `pmndrs_glyph_engine_update(sessionId, requestOffset, requestLength)`.
+The TypeScript host writes a complete frame request into retained Wasm staging memory; Rust applies mutations, shapes
+and lays out affected paragraphs, packs canonical instance records, and emits the render-plan command buffer plus
+coalesced dirty ranges. Renderer policy is compiled data, not a JavaScript callback executed from Rust.
 
 The low-level engine session and wire format are package-internal during this foundation stack. This prevents applications
 from binding to an unstable ABI while the maintained Three implementation proves the policy and command-buffer model.

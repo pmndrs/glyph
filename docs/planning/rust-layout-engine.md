@@ -272,7 +272,7 @@ It does not decide bidi runs, break lines, position glyphs, synthesize decoratio
 The hot operation is one mutation transaction:
 
 ```text
-text_update(session_id: u32, request_offset: u32, request_len: u32) -> u32
+pmndrs_glyph_engine_update(session_id: u32, request_offset: u32, request_len: u32) -> u32
 ```
 
 “One crossing” means one call for a dirty session update. It does not mean one call on every `requestAnimationFrame`,
@@ -354,7 +354,7 @@ declared settling policy, re-pins all views, and performs no typography. The nor
 1. reserve request and result capacity at session creation, or call `text_reserve` before pinning when a later mutation
    exceeds either watermark;
 2. write the next mutation request into the retained staging arena;
-3. call `text_update` once;
+3. call `pmndrs_glyph_engine_update` once;
 4. compare `memory.buffer` identity, re-pin all views if it changed, and validate the result header;
 5. synchronously consume the published slot, or copy retained/asynchronous bytes into a worker-owned transfer buffer;
 6. transfer that buffer to root with the plan revision and ownership token; and
@@ -438,7 +438,7 @@ order and advances the cursor to the next region when its block extent is exhaus
 retry, redistribution, or implicit balancing solver. A shorter final column is valid output.
 
 Sequential overflow through at least two supplied regions is required. Every region and exclusion is supplied before
-the one `text_update` call, which completes shaping, band construction, exclusion subtraction, breaking, boundary
+the one `pmndrs_glyph_engine_update` call, which completes shaping, band construction, exclusion subtraction, breaking, boundary
 reshaping, positioning, and plan compilation without a measurement callback or host round trip. The measured envelope
 may cap how many regions, vertices, exclusions, lines, and clusters one realtime transaction accepts; it may not remove
 multi-region continuation. Missing the 4 ms gate blocks the milestone until the implementation or supported numeric
@@ -615,7 +615,7 @@ availability, not a renderer eligibility decision.
 The Rust engine cold-registers stack identity as a nonempty, duplicate-free ordered list of already registered
 shaping-font handles. Equivalent registration is idempotent; conflicting order fails, and a member font cannot be
 disposed while any registered stack retains it. Technique/resource data is deliberately not duplicated in the stack.
-During `text_update`, HarfRust output is collapsed to logical cluster records; only clusters containing an actual glyph
+During `pmndrs_glyph_engine_update`, HarfRust output is collapsed to logical cluster records; only clusters containing an actual glyph
 zero advance to the next registered font. Flat source-ordered spans are reshaped at most once per stack depth and then
 retained with the final shaped SoA. Sorting by source-run/cluster restores logical order for RTL output before one linear
 span merge. A compiled Inter-to-Noto-Devanagari test observes two plan constructions in the same update, proving the
@@ -726,7 +726,7 @@ but the retained text engine already has a more precise input: exact changed rec
 The [dirty-range upload research](dirty-range-upload-research.md) therefore keeps range selection in the Rust plan
 compiler, identifies per-physical-buffer costing and stable-order coalescing as the remaining planner work, and reserves
 Flatland-style bucket trackers for renderer-local transform and presentation-origin writes that never cross
-`text_update`. Its thresholds remain a benchmark candidate, not evidence that three or five ranges are optimal for text.
+`pmndrs_glyph_engine_update`. Its thresholds remain a benchmark candidate, not evidence that three or five ranges are optimal for text.
 
 V0 does not alias several logical stores into one mutable interleaved byte span. Augmentation instead combines semantic
 fields into independently bindable `vec2`/`vec4` or integer-vector records, including the existing MSDF and Slug
@@ -927,7 +927,7 @@ Three related experiments are reserved for a later stack:
 Font-local OpenType payloads remain in each baked font or fallback font; applications already control their glyph and
 font-stack subsets. Data-pack discovery should therefore be driven before font registration by declared Unicode/script
 coverage. A cold unexpected script may report a stable missing-pack identifier and retry after asynchronous loading, but
-steady-state `text_update` remains one synchronous call and never initiates I/O. Native consumers may memory-map the same
+steady-state `pmndrs_glyph_engine_update` remains one synchronous call and never initiates I/O. Native consumers may memory-map the same
 pack format, while browsers retain the initialized bytes in Wasm linear memory. Each experiment must report raw, gzip,
 Brotli, compile/startup, retained-memory, cold-load, and hot-path results before changing the default package.
 
@@ -939,11 +939,11 @@ That sweep excludes mandatory hard-break controls and emits allocation-reusing s
 968,086 / 362,664 / 286,438 raw/gzip/Brotli bytes (+4,067 / +1,899 / -2,304 from retained Unicode). HarfRust fallback
 shaping has not consumed the runs yet, so plan output and complete-path timing remain open.
 
-Primary-font HarfRust shaping now consumes retained runs during Wasm `text_update`. The legacy batch export and frame
+Primary-font HarfRust shaping now consumes retained runs during Wasm `pmndrs_glyph_engine_update`. The legacy batch export and frame
 engine share one borrowed run view, actual prewarmed `UnicodeBuffer`, UTF-16 context scratch, and reusable 128-feature
 scratch vector. Frame language/features borrow the retained style arena; glyph IDs, clusters, advances, offsets, flags,
 and source-run/font records append directly into a pre-reserved A/B shape arena without constructing or serializing a
-`ShapeBatchRequest`. A compiled real-Inter test observes plan-cache count 0→1 only after `text_update` and no increase
+`ShapeBatchRequest`. A compiled real-Inter test observes plan-cache count 0→1 only after `pmndrs_glyph_engine_update` and no increase
 after an aborted update. Optimized Wasm is 973,367 / 364,517 / 287,942 raw/gzip/Brotli bytes (+5,281 / +1,853 /
 +1,504). Ordered fallback is not yet applied, and layout/gather still receive no glyphs, so nonempty plan output and
 complete-path timing remain open.
@@ -1046,7 +1046,7 @@ the existing semantic-glyph records instead of duplicating two float arrays. Six
 region, flow-thread, transform, and stable-glyph identity. Exact float bits plus all
 integer and semantic fields determine a monotonic transactional `content_revision`. A unit fixture retains revisions
 `[1,2]` across an identical rebuild and advances to `[3,4]` after shifting the slot one pixel. A compiled real-Inter
-`text_update` publishes nonzero resource/buffer/patch/primitive/draw tables; the identical next call keeps the same Wasm
+`pmndrs_glyph_engine_update` publishes nonzero resource/buffer/patch/primitive/draw tables; the identical next call keeps the same Wasm
 buffer and emits zero patches. Optimized Wasm is 1,057,210 / 400,071 / 311,492 raw/gzip/Brotli bytes (+12,413 / +4,849 /
 +3,697). This proves plan reachability and minimal no-op updates, not the still-unmeasured 25,515-glyph latency target.
 
@@ -1396,7 +1396,7 @@ After the public Three command-buffer cutover and deletion of its parallel targe
 `recordCount` values from the published Rust plan and rejects a workload below 95% of the requested target; the former
 `primitiveCount` label counted primitive-table rows and misleadingly reported one. The unchanged fixture produces 25,515
 positioned TypeScript glyphs and 21,805 Rust renderable records. TypeScript cold/font-size/width/text medians are
-61.29/11.40/8.33/39.15 ms. Complete Rust `text_update` plus Bitmap plan publication measures
+61.29/11.40/8.33/39.15 ms. Complete Rust `pmndrs_glyph_engine_update` plus Bitmap plan publication measures
 14.77/4.95/3.78/14.43 ms for cold/font-size/column-resize/suffix-edit, MTSDF measures
 15.37/5.35/4.35/14.84 ms, and Slug measures 15.43/6.11/5.08/15.61 ms. All three beat the TypeScript implementation;
 none closes the required resize p95 below 4 ms (4.16/4.95/5.68 ms). This scope includes request copying into retained
@@ -1493,7 +1493,7 @@ not an ellipsis-only attribution.
 
 ### Stage 4 — atomic cutover and foundation performance gate
 
-- cut the public hot path to one `text_update` call after byte and semantic parity is established;
+- cut the public hot path to one `pmndrs_glyph_engine_update` call after byte and semantic parity is established;
 - remove TypeScript shaping and layout orchestration and the old analysis/shape/reshape exports together;
 - apply retained patches through both Three/TSL backends, including WebGL2's required retained PBO copy; and
 - pass the complete 25,515-glyph target-hardware gate before any additional publishing feature enters the stack.
@@ -1536,7 +1536,7 @@ not an ellipsis-only attribution.
   111 Vitest cases and 16 isolated headless Chromium targets, with the manifest authoritative rather than these counts;
 - the mixed-direction Amiri golden and packed-consumer contract remain exact until an explicitly versioned render-plan
   contract replaces the latter;
-- `glyph:rust-layout-benchmark -- --glyphs 22000` measures the packaged release Wasm's complete `text_update` and render
+- `glyph:rust-layout-benchmark -- --glyphs 22000` measures the packaged release Wasm's complete `pmndrs_glyph_engine_update` and render
   plan for every current technique. Historical TypeScript tables remain labeled evidence; deleted code is not rebuilt as
   a second implementation merely to manufacture a live baseline;
 - Unicode segmentation and line breaking pass the repository's unchanged official vectors;

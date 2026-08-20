@@ -56,7 +56,7 @@ The useful work is therefore narrower:
 2. make the cost decision per physical buffer, including the stable-indirect order buffer, rather than treating every
    program stream as if it had the same changed-range economics;
 3. use a Flatland-style reusable tracker only for renderer-local matrix and presentation-origin edits, which never cross
-   `text_update`; and
+   `pmndrs_glyph_engine_update`; and
 4. remove avoidable host allocations while forwarding already-coalesced Rust patches to Three.
 
 No new policy-program opcode is required. The renderer declares integer capabilities; the renderer-neutral Rust plan
@@ -187,7 +187,7 @@ renderer-neutral patch ABI.
 | cost constants and backend limits                       | registered renderer capability set | renderer knowledge expressed as validated data, not a callback |
 | packing math                                            | policy program executed by Rust    | existing straight-line data transformation boundary            |
 | byte-range to Three update-range translation            | Three executor                     | backend object and scalar-width knowledge                      |
-| scene matrices and presentation-origin dirty tracking   | Three executor                     | renderer-local data never seen by `text_update`                |
+| scene matrices and presentation-origin dirty tracking   | Three executor                     | renderer-local data never seen by `pmndrs_glyph_engine_update`                |
 | final GPU command submission                            | Three WebGPU/WebGL backend         | outside the renderer-neutral plan                              |
 
 Adding bucket size or a fixed dirty-bucket count to the public policy now would overfit Flatland. The existing byte-cost
@@ -240,7 +240,7 @@ Compare at least these planners:
 
 Capture per update:
 
-- `text_update`, range-planning, policy packing, publication, Three apply, render submit, and GPU time;
+- `pmndrs_glyph_engine_update`, range-planning, policy packing, publication, Three apply, render submit, and GPU time;
 - patch count, update-range count, payload bytes, uploaded bytes, and full-live promotions per physical buffer;
 - retained scratch high-water marks and warm allocations/GC;
 - draw count and framebuffer/conformance hash; and

@@ -95,7 +95,8 @@ The package owns five runtime layers:
 Runtime Rust and all shared Rust code remain `no_std + alloc` compatible with the package allocator contract. The optional
 font-baker Wasm alone enables a feature-gated `std` adapter for Fontations subsetting; the same crate continues to
 pass its `wasm32-unknown-unknown --no-default-features` build. The text engine uses the existing compile-time direct-memory mapping
-for font registrations and the single `text_update(requestOffset, requestLength)` export for retained engine sessions.
+for font registrations and the single mutating `pmndrs_glyph_engine_update(sessionId, requestOffset, requestLength)`
+export for retained engine sessions.
 TypeScript does not independently shape, lay out, or pack paragraphs.
 
 ## Public package surfaces
@@ -290,7 +291,7 @@ The semantic values preserve information useful to callers:
 ## Wasm memory and copying
 
 The host pins request/result staging views and re-pins after any `memory.grow()`, because growth detaches existing views.
-Growth is permitted only at the `text_update` boundary. Result capacity is negotiated and retried without publishing a
+Growth is permitted only at the `pmndrs_glyph_engine_update` boundary. Result capacity is negotiated and retried without publishing a
 partial revision.
 
 Batch and paragraph capacities are intentionally separate. Request/result arenas scale with aggregate `TextGroup`
@@ -478,7 +479,7 @@ The migration comparison is checked evidence rather than a reconstructed recolle
 `feat/three-api` base, was rebuilt in an isolated worktree using its own lockfile and original
 `glyph:layout-benchmark` workflow on this Darwin arm64 host. At the same eight-warmup/31-sample cadence its retained
 TypeScript path measured 58.32/12.09/9.15/39.61 ms for cold/font-size/width/suffix-edit medians. The current Bitmap,
-MTSDF, and Slug records all use one byte-identical optimized shaper Wasm and the complete `text_update` plus
+MTSDF, and Slug records all use one byte-identical optimized shaper Wasm and the complete `pmndrs_glyph_engine_update` plus
 technique-specific Rust render plan. The base reports 25,515 positioned glyphs; the current plan reports 21,805
 renderable instances from the unchanged 22,000-glyph target because it omits non-rendering glyphs from GPU records.
 
@@ -501,7 +502,7 @@ same run — the first width-change lane under the 4 ms p95 objective, recorded 
 The variance collapse follows from what the query skips: no gather, no plan compile, no publication packing, and no
 revision burn, so the following ordinary frame adopts the speculative layout instead of paying a checkpoint rebuild.
 
-The preceding unchanged 22,000-glyph localized-edit lane measured the complete production `text_update` plus Bitmap render
+The preceding unchanged 22,000-glyph localized-edit lane measured the complete production `pmndrs_glyph_engine_update` plus Bitmap render
 plan at 2.607 ms median / 6.184 ms p95 after 40 warmups over 101 updates. The fast ASCII-letter path reuses Unicode and
 bidi state and recomposes until the line cursor converges; punctuation and spacing edits deliberately retain the full
 break-sensitive path, so the 42.4% RSD describes remaining workload classes rather than a completed latency result. The

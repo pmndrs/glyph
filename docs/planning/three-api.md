@@ -144,7 +144,7 @@ Setters change desired state. The nearest `TextGroup` applies all pending descen
 `updateMatrixWorld()` traversal. Reassigning a value that normalizes to the current state is a no-op. Transform-only
 changes update the transform buffer and do not reshape or recompose text.
 
-One group traversal performs at most one mutating `text_update` transaction for that group's pending values. Calling a
+One group traversal performs at most one mutating `pmndrs_glyph_engine_update` transaction for that group's pending values. Calling a
 layout query with pending mutations may perform that synchronization earlier; the following traversal observes the
 committed revision and does not repeat the semantic work.
 
