@@ -1,4 +1,4 @@
-import { extend, useThree, type ThreeElements } from '@react-three/fiber/webgpu';
+import { extend, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber/webgpu';
 import {
   createElement,
   forwardRef,
@@ -30,6 +30,11 @@ import {
 } from './three.js';
 
 type Object3DProps = Omit<ThreeElements['object3D'], 'children' | 'ref'>;
+
+// Pass-through props are forwarded to a `Text`/`TextGroup` element, not a bare `Object3D`. R3F keeps method
+// signatures in element props, so props typed for the base class do not satisfy the subclass element.
+type TextElementProps = Omit<ThreeElement<typeof ThreeText>, 'children' | 'ref'>;
+type TextGroupElementProps = Omit<ThreeElement<typeof ThreeTextGroup>, 'children' | 'ref'>;
 
 export type R3fTextChild<Technique extends AnyRasterTechnique> =
   | string
@@ -141,11 +146,13 @@ function TextObject({
   publishObject: publishCommittedObject,
 }: {
   readonly desired: DesiredR3fTextProperties<AnyRasterTechnique>;
-  readonly object: Object3DProps;
+  readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
   readonly publishObject: (value: ThreeText<AnyRasterTechnique> | null) => void;
 }): ReactElement {
-  const [constructorArguments] = useState(() => [desired as StandaloneTextProperties<AnyRasterTechnique>] as const);
+  const [constructorArguments] = useState<[StandaloneTextProperties<AnyRasterTechnique>]>(() => [
+    desired as StandaloneTextProperties<AnyRasterTechnique>,
+  ]);
   const appliedRef = useRef(desired);
   const capacityRef = useRef(desired.capacity);
   const [store] = useState(() => createObjectStore<ThreeText<AnyRasterTechnique>>());
@@ -173,7 +180,7 @@ function TextObject({
 
   return createElement(ThreeTextElement, {
     ...objectProps,
-    args: constructorArguments as unknown as readonly [StandaloneTextProperties<AnyRasterTechnique>],
+    args: constructorArguments,
     onError,
     ref: publishObject,
   });
@@ -198,22 +205,19 @@ function TextGroupObject({
   options,
   publishObject: publishCommittedObject,
 }: {
-  readonly object: Object3DProps;
+  readonly object: TextGroupElementProps;
   readonly options: Omit<R3fTextGroupProps, 'ref'>;
   readonly publishObject: (value: ThreeTextGroup | null) => void;
 }): ReactElement {
-  const [constructorArguments] = useState(
-    () =>
-      [
-        {
-          ...(options.capacity === undefined ? {} : { capacity: options.capacity }),
-          ...(options.compositing === undefined ? {} : { compositing: options.compositing }),
-          ...(options.renderOrder === undefined ? {} : { renderOrder: options.renderOrder }),
-          ...(options.material === undefined ? {} : { material: options.material }),
-          ...(options.pixelSnapping === undefined ? {} : { pixelSnapping: options.pixelSnapping }),
-        },
-      ] as const,
-  );
+  const [constructorArguments] = useState<[TextGroupOptions]>(() => [
+    {
+      ...(options.capacity === undefined ? {} : { capacity: options.capacity }),
+      ...(options.compositing === undefined ? {} : { compositing: options.compositing }),
+      ...(options.renderOrder === undefined ? {} : { renderOrder: options.renderOrder }),
+      ...(options.material === undefined ? {} : { material: options.material }),
+      ...(options.pixelSnapping === undefined ? {} : { pixelSnapping: options.pixelSnapping }),
+    },
+  ]);
   const [store] = useState(() => createObjectStore<ThreeTextGroup>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
@@ -405,7 +409,7 @@ function textProperties<Technique extends AnyRasterTechnique>(
   });
 }
 
-function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fTextProps<Technique>): Object3DProps {
+function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fTextProps<Technique>): TextElementProps {
   const object = { ...properties } as Record<string, unknown>;
   for (const key of [
     'font',
@@ -421,14 +425,14 @@ function objectProperties<Technique extends AnyRasterTechnique>(properties: R3fT
     'ref',
   ])
     delete object[key];
-  return object as Object3DProps;
+  return object as TextElementProps;
 }
 
-function groupObjectProperties(properties: R3fTextGroupProps): Object3DProps {
+function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementProps {
   const object = { ...properties } as Record<string, unknown>;
   for (const key of ['capacity', 'compositing', 'material', 'pixelSnapping', 'children', 'onError', 'ref'])
     delete object[key];
-  return object as Object3DProps;
+  return object as TextGroupElementProps;
 }
 
 export { span, txt } from './formatted-text.js';

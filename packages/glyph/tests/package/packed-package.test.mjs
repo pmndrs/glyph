@@ -5,6 +5,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 
+// `/react` reaches R3F's client-only WebGPU entry, which needs a browser global to import at all.
+import '../support/browser-globals.mjs';
+
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
 
 test('the packed package exposes every ESM subpath and no CommonJS entry', async (context) => {

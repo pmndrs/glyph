@@ -4,10 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  '@react-three/fiber@10.0.0-alpha.2': 0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8
-  '@react-three/test-renderer@9.1.0': d950389bba30f10cc54781d343dcedf3aace346d11f507a16a445072f2ed899d
-
 importers:
 
   .:
@@ -37,8 +33,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/glyph-example-raster
       '@react-three/fiber':
-        specifier: 10.0.0-alpha.2
-        version: 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+        specifier: 10.0.0-alpha.3
+        version: 10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -137,8 +133,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/glyph
       '@react-three/fiber':
-        specifier: 10.0.0-alpha.2
-        version: 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+        specifier: 10.0.0-alpha.3
+        version: 10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -208,11 +204,11 @@ importers:
         version: 0.15.0
     devDependencies:
       '@react-three/fiber':
-        specifier: 10.0.0-alpha.2
-        version: 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+        specifier: 10.0.0-alpha.3
+        version: 10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       '@react-three/test-renderer':
-        specifier: 9.1.0
-        version: 9.1.0(patch_hash=d950389bba30f10cc54781d343dcedf3aace346d11f507a16a445072f2ed899d)(@react-three/fiber@10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
+        specifier: 10.0.0-alpha.3
+        version: 10.0.0-alpha.3(@react-three/fiber@10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -624,6 +620,11 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
+  '@monogrid/gainmap-js@3.4.0':
+    resolution: {integrity: sha512-2Z0FATFHaoYJ8b+Y4y4Hgfn3FRFwuU5zRrk+9dFWp4uGAdHGqVEdP7HP+gLA3X469KXHmfupJaUbKo1b/aDKIg==}
+    peerDependencies:
+      three: '>= 0.159.0'
+
   '@napi-rs/wasm-runtime@1.1.6':
     resolution: {integrity: sha512-ZLv/JdUfkvOy9eCnnBaGfiO+XimbjebAeO+MRQqD/B+FR1tnRN0tpKSJHRbE8sFfS6aqsXZ67TQjfwfsxULVbg==}
     peerDependencies:
@@ -889,22 +890,33 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@react-three/fiber@10.0.0-alpha.2':
-    resolution: {integrity: sha512-X4zbB5shS7QQX8X7lFxx6RXtXMIvshZBid4+7B4+lc+7Eg+qayVXt7ch0/NC/WqqNCfsNV4AOfGGXJ33yogKeQ==}
+  '@pmndrs/scheduler@0.1.0':
+    resolution: {integrity: sha512-LjWt2FVi7RDOpgBdSBDxToQwnMWP1wkZwVeAkr8ARvVBtvlfyMqCCvr1y9YcLm9RTUhSebN5Bx4bJTntdSd22Q==}
+    peerDependencies:
+      react: '>=18'
+      react-dom: '>=18'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
+  '@react-three/fiber@10.0.0-alpha.3':
+    resolution: {integrity: sha512-5Y5AGzkJiE9iD4PGQXdXv/Al5WgZe7OKM4l/RXE+RrK7zkPMqIwuujlTnb0Gmgg60Qwf/H4cro3lt3ILeaUr3g==}
     peerDependencies:
       react: '>=19.0 <19.3'
       react-dom: '>=19.0 <19.3'
-      three: '>=0.181.2'
+      three: '>=0.185.0'
     peerDependenciesMeta:
       react-dom:
         optional: true
 
-  '@react-three/test-renderer@9.1.0':
-    resolution: {integrity: sha512-bLjG+cdpVW69wG1W3TuziHrHvA1JQbLesYddY94QMaFF8yzpgwovWK8hGaHWBET1dvsCPIOWVNYHbKAbRj2xSg==}
+  '@react-three/test-renderer@10.0.0-alpha.3':
+    resolution: {integrity: sha512-Ow4N/wSSNQfzkY3rH1qLmVqRTVCsR86wiLEGt5Bla9VCkLfRNKoKqjY67vFHA9JsHjDgCSF7h+PIS/zaWV4dSw==}
     peerDependencies:
-      '@react-three/fiber': '>=9.0.0'
-      react: ^19.0.0
-      three: '>=0.156'
+      '@react-three/fiber': '>=10.0.0-alpha.0'
+      react: '>=19.0 <19.3'
+      three: '>=0.185.0'
 
   '@rolldown/binding-android-arm64@1.1.5':
     resolution: {integrity: sha512-lZg8fqIv2v7FF237bwMgzGZEJvGL79/s5knJ/i6FmsGF4XXlzccZ4jb+TrFIxtSSxFtIpdsgrPZeMk1I9AFcyQ==}
@@ -1963,6 +1975,9 @@ packages:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
 
+  immediate@3.0.6:
+    resolution: {integrity: sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ==}
+
   import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
     engines: {node: '>=6'}
@@ -2034,6 +2049,9 @@ packages:
   is-plain-obj@4.1.0:
     resolution: {integrity: sha512-+Pgi+vMuUNkJyExiMBt5IlFoMyKnr5zhJ4Uspz58WOhBF5QoIZkFyNHIbBAtHwzVAgk5RtndVNsDRN61/mmDqg==}
     engines: {node: '>=12'}
+
+  is-promise@2.2.2:
+    resolution: {integrity: sha512-+lP4/6lKUBfQjZ2pdxThZvLUAafmZb8OAxFb8XXtiQmS35INgr85hdOGoEs124ez1FCnZJt6jau/T+alh58QFQ==}
 
   is-promise@4.0.0:
     resolution: {integrity: sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ==}
@@ -2157,6 +2175,9 @@ packages:
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
+
+  lie@3.3.0:
+    resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
 
   lightningcss-android-arm64@1.31.1:
     resolution: {integrity: sha512-HXJF3x8w9nQ4jbXRiNppBCqeZPIAfUo8zE/kOEGbW5NZvGc/K7nMxbhIr+YlFlHW5mpbg/YFPdbnCh1wAXCKFg==}
@@ -2597,6 +2618,9 @@ packages:
   pretty-ms@9.3.0:
     resolution: {integrity: sha512-gjVS5hOP+M3wMm5nmNOucbIrqudzs9v/57bWRHQWLYklXqoXKrVfYW2W9+glfGsqtPgpiz5WwyEEB+ksXIx3gQ==}
     engines: {node: '>=18'}
+
+  promise-worker-transferable@1.0.4:
+    resolution: {integrity: sha512-bN+0ehEnrXfxV2ZQvU2PetO0n4gqBD4ulq3MI1WOPLgr7/Mg9yRQkX5+0v1vagr74ZTsl7XtzlaYDo2EuCeYJw==}
 
   prompts@2.4.2:
     resolution: {integrity: sha512-NxNv/kLguCA7p3jE8oL2aEBsrJWgAakBpgmgK6lpPWV+WuOmY6r2/zbAVnP+T8bQlA0nzHXSJSJW0Hq7ylaD2Q==}
@@ -3542,6 +3566,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@monogrid/gainmap-js@3.4.0(three@0.185.1)':
+    dependencies:
+      promise-worker-transferable: 1.0.4
+      three: 0.185.1
+
   '@napi-rs/wasm-runtime@1.1.6(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)':
     dependencies:
       '@emnapi/core': 1.11.1
@@ -3677,9 +3706,16 @@ snapshots:
   '@oxlint/binding-win32-x64-msvc@1.75.0':
     optional: true
 
-  '@react-three/fiber@10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)':
+  '@pmndrs/scheduler@0.1.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    optionalDependencies:
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+
+  '@react-three/fiber@10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)':
     dependencies:
       '@babel/runtime': 7.29.7
+      '@monogrid/gainmap-js': 3.4.0(three@0.185.1)
+      '@pmndrs/scheduler': 0.1.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       dequal: 2.0.3
       its-fine: 2.0.0(@types/react@19.2.14)(react@19.2.8)
       react: 19.2.8
@@ -3695,9 +3731,9 @@ snapshots:
       - '@types/react'
       - immer
 
-  '@react-three/test-renderer@9.1.0(patch_hash=d950389bba30f10cc54781d343dcedf3aace346d11f507a16a445072f2ed899d)(@react-three/fiber@10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)':
+  '@react-three/test-renderer@10.0.0-alpha.3(@react-three/fiber@10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)':
     dependencies:
-      '@react-three/fiber': 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      '@react-three/fiber': 10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       react: 19.2.8
       three: 0.185.1
 
@@ -4612,6 +4648,8 @@ snapshots:
 
   ignore@5.3.2: {}
 
+  immediate@3.0.6: {}
+
   import-fresh@3.3.1:
     dependencies:
       parent-module: 1.0.1
@@ -4654,6 +4692,8 @@ snapshots:
   is-obj@3.0.0: {}
 
   is-plain-obj@4.1.0: {}
+
+  is-promise@2.2.2: {}
 
   is-promise@4.0.0: {}
 
@@ -4741,6 +4781,10 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
       type-check: 0.4.0
+
+  lie@3.3.0:
+    dependencies:
+      immediate: 3.0.6
 
   lightningcss-android-arm64@1.31.1:
     optional: true
@@ -5119,6 +5163,11 @@ snapshots:
   pretty-ms@9.3.0:
     dependencies:
       parse-ms: 4.0.0
+
+  promise-worker-transferable@1.0.4:
+    dependencies:
+      is-promise: 2.2.2
+      lie: 3.3.0
 
   prompts@2.4.2:
     dependencies:

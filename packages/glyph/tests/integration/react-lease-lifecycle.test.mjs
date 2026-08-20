@@ -21,6 +21,8 @@ import { StrictMode, createElement } from 'react';
 
 import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import '../support/browser-globals.mjs';
+
 import { Text } from '@pmndrs/glyph/react';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -62,7 +64,7 @@ async function loadRuntime() {
 }
 
 test('mounting and unmounting a React Text returns every paragraph lease', async () => {
-  const { create } = (await import('@react-three/test-renderer')).default;
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
   const { runtime, font } = await loadRuntime();
   try {
     const renderer = await create(
@@ -92,7 +94,7 @@ test('mounting and unmounting a React Text returns every paragraph lease', async
 });
 
 test('StrictMode remount cycles balance their paragraph leases', async () => {
-  const { create } = (await import('@react-three/test-renderer')).default;
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
   const { runtime, font } = await loadRuntime();
   try {
     // StrictMode double-invokes and, in development, mounts/unmounts/remounts. Repeating
@@ -135,7 +137,7 @@ test('a runtime torn down before its paragraphs unmount stays quiet on the secon
   // reconciler disposes afterwards. Teardown force-releases and says so once; the
   // unmount that follows must not throw, because r3f would swallow the error and the
   // same code path is fatal in plain Three.
-  const { create } = (await import('@react-three/test-renderer')).default;
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
   const { runtime, font } = await loadRuntime();
   const renderer = await create(
     createElement(

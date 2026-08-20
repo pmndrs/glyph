@@ -75,7 +75,18 @@ function clickCanvas(targetCanvas: HTMLCanvasElement, clientX: number, clientY: 
       pointerId: 1,
       pointerType: 'mouse',
     }),
-    new MouseEvent('click', { bubbles: true, button: 0, clientX, clientY }),
+    // R3F v10 keys pointer state by `pointerId`, so the click must carry the same id as the
+    // preceding down/up. A MouseEvent has none and resolves to a different pointer with no
+    // recorded initial click, which suppresses the synthetic click entirely.
+    new PointerEvent('click', {
+      bubbles: true,
+      button: 0,
+      buttons: 0,
+      clientX,
+      clientY,
+      pointerId: 1,
+      pointerType: 'mouse',
+    }),
   ]) {
     targetCanvas.dispatchEvent(event);
   }

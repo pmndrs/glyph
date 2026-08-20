@@ -1,4 +1,5 @@
 import { Canvas } from '@react-three/fiber/webgpu';
+import { NoToneMapping } from 'three/webgpu';
 import { StrictMode } from 'react';
 import { Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -12,8 +13,8 @@ createRoot(root).render(
     <Canvas
       camera={{ far: 1_000, near: -1_000, position: [0, 0, 10] }}
       fallback={<div className="fallback">WebGPU or WebGL2 is required.</div>}
-      flat
       orthographic
+      renderer={{ toneMapping: NoToneMapping }}
     >
       <color attach="background" args={['#07090f']} />
       <Suspense fallback={null}>

@@ -111,7 +111,6 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
         top: 0,
       },
       dpr,
-      flat: true,
       frameloop: 'never',
       orthographic: true,
       renderer,

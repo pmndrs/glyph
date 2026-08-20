@@ -142,8 +142,8 @@
     "unicode-segmenter": "0.15.0"
   },
   "devDependencies": {
-    "@react-three/fiber": "10.0.0-alpha.2",
-    "@react-three/test-renderer": "9.1.0",
+    "@react-three/fiber": "10.0.0-alpha.3",
+    "@react-three/test-renderer": "10.0.0-alpha.3",
     "@types/node": "24.13.3",
     "@types/react": "19.2.14",
     "@types/three": "0.185.4",
@@ -159,7 +159,7 @@
     "unicode-property-value-aliases": "3.9.0"
   },
   "peerDependencies": {
-    "@react-three/fiber": ">=10.0.0-alpha.2 <11",
+    "@react-three/fiber": ">=10.0.0-alpha.3 <11",
     "react": ">=19.2 <19.3",
     "three": ">=0.185.1"
   },
