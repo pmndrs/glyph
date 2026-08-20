@@ -34,19 +34,14 @@ test('the published contract is ESM-only', async () => {
         [
           './package.json',
           './bitmap-baker.wasm',
-          './bitmap-abi.json',
           './mtsdf-baker.wasm',
-          './mtsdf-abi.json',
           './slug-baker.wasm',
-          './slug-abi.json',
           './font-baker.wasm',
-          './font-baker-abi.json',
           './text-shaper.wasm',
-          './shaper-abi.json',
         ].includes(subpath),
         `unexpected non-JavaScript resource export ${subpath}`,
       );
-      assert.match(target, /^\.\/dist\/.*\.(?:json|wasm)$|^\.\/package\.json$/);
+      assert.match(target, /^\.\/dist\/.*\.wasm$|^\.\/package\.json$/);
       continue;
     }
 
