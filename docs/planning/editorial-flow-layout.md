@@ -62,7 +62,7 @@ The showcase should exercise all four lanes and label them separately. Repeated 
 
 ## Current boundary
 
-Target v1 lays out horizontal text in a rectangular content box. It can reshape changed line boundaries efficiently, but it does not represent columns, holes, floats, arbitrary contours, or more than one usable interval on a baseline. An oversized letter can be rendered beside a box today, but body text cannot correctly flow around its contour.
+Target v1 lays out horizontal text in a rectangular content box, and flows it through side-by-side ordered columns inside that box. It can reshape changed line boundaries efficiently, but it does not represent column balancing, holes, floats, arbitrary contours, or more than one usable interval on a baseline. An oversized letter can be rendered beside a box today, but body text cannot correctly flow around its contour.
 
 The shaping engine is not the missing piece. The missing piece is a flow planner between paragraph measurement and final positioning.
 

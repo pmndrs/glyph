@@ -71,6 +71,8 @@ Three uses `txt` and `span` where React uses nested `Text`. A span may override 
 
 Add a `Text` directly to the scene when it does not need to share a batch. The nearest `TextGroup` applies all pending descendant changes together during Three's normal scene traversal.
 
+A content box may also declare `columns: { count, gap }` to flow one paragraph through side-by-side ordered columns. Columns fill in order without balancing, so the last column may run short, and an exact `width` is required.
+
 Setters update the desired state, mutating the text or style property will not mark the label as dirty:
 
 ```ts

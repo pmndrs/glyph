@@ -212,6 +212,11 @@ The Three executor does not infer paragraph layout from GPU records and does not
 target state machine. It applies the Rust command buffer transactionally and retains only renderer resources required by
 future deltas.
 
+A paragraph's content box may declare `columns: { count, gap }`, flowing text through side-by-side ordered columns inside
+the exact content-box width. Columns fill in order without balancing, so the final column may run short, and an exact
+`width` is required because the column advance is derived from it. Ordered columns are the only multi-interval flow the
+engine represents; balancing, exclusions, and contour flow remain post-v1.
+
 ## Renderer policy
 
 Each Three technique registers a static policy descriptor and a cold font compiler. Rust validates and interprets the
