@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
-import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { rmSync } from 'node:fs';
+import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { captureCommand } from './support/capture-command.mjs';
 import { writeGeneratedTypescriptAbi } from './support/generated-typescript-abi.mjs';
@@ -14,9 +15,37 @@ const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 // a Rust build, which they observe as a burst of 404s and invalidations. Staging makes
 // the switch a single atomic-enough step: one invalidation, never a partial tree.
 const distributionDirectory = new URL('../dist/', import.meta.url);
-const stagingDirectory = new URL('../.dist-staging/', import.meta.url);
-const supersededDirectory = new URL('../.dist-superseded/', import.meta.url);
+// Staging is per-build inside the ignored package cache. A single shared directory let a
+// second build delete the first build's tree mid-write, which surfaced as a missing Wasm
+// file rather than as the collision it was. Everything this build writes outside `dist/`
+// lives under one cache root, so a stray tree can be cleared by deleting that root.
+const buildCacheDirectory = join(packageRoot, '.cache', 'build');
+const stagingPrefix = 'staging-';
+const supersededPrefix = 'superseded-';
+await mkdir(buildCacheDirectory, { recursive: true });
+await reclaimAbandonedBuildDirectories();
+const stagingPath = await mkdtemp(join(buildCacheDirectory, `${stagingPrefix}${process.pid}-`));
+const supersededPath = join(buildCacheDirectory, basename(stagingPath).replace(stagingPrefix, supersededPrefix));
+// `exit` fires for a clean finish, a thrown error, and an unhandled rejection alike, so a
+// failed build cannot leave its staging tree behind. After a successful publish the tree
+// has already been renamed away and the removal is a no-op.
+//
+// Only staging is removed here. The superseded tree exists solely between the two renames
+// in `publishStagedDistribution`, and a swap that fails midway leaves it holding the only
+// copy of the previous distribution -- deleting it on the way out would turn a failed
+// build into a missing `dist/`. A successful publish removes it; an abandoned one is
+// reclaimed by the next build, which is about to publish a replacement anyway.
+process.on('exit', () => {
+  try {
+    rmSync(stagingPath, { recursive: true, force: true });
+  } catch {
+    // A tree that cannot be removed on the way out is reclaimed by the next build.
+  }
+});
+const stagingDirectory = pathToFileURL(`${stagingPath}/`);
 const staged = (path) => new URL(path, stagingDirectory);
+/** How long a build keeps re-attempting the publish swap while other builds keep winning it. */
+const publishRaceBudgetMs = 10_000;
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const tsc = fileURLToPath(
   new URL(process.platform === 'win32' ? '../node_modules/.bin/tsc.CMD' : '../node_modules/.bin/tsc', import.meta.url),
@@ -223,9 +252,6 @@ await run(
   ],
   rustEnvironment,
 );
-await rm(stagingDirectory, { recursive: true, force: true });
-await rm(supersededDirectory, { recursive: true, force: true });
-await mkdir(stagingDirectory, { recursive: true });
 // The build info has to travel with the outputs it describes. `tsconfig.build.json` points
 // it at `dist/`, and overriding only `--outDir` leaves tsc recording staged emits against a
 // path that survives a failed build: the next run deletes the staging tree, tsc reads the
@@ -322,13 +348,66 @@ await publishStagedDistribution();
  * rather than deleting a working distribution.
  */
 async function publishStagedDistribution() {
-  const exists = await stat(distributionDirectory).then(
-    () => true,
-    () => false,
+  const startedAt = Date.now();
+  for (let attempt = 0; ; attempt += 1) {
+    // A fresh superseded path per attempt. Reusing one path deadlocks the retry: an attempt
+    // that renames `dist/` aside and then loses the second rename leaves that path populated,
+    // so every later attempt fails against its own leftover rather than the race it is
+    // retrying. Leftovers are reclaimed by a later build.
+    const attemptSupersededPath = `${supersededPath}-${attempt}`;
+    const exists = await stat(distributionDirectory).then(
+      () => true,
+      () => false,
+    );
+    try {
+      if (exists) await rename(distributionDirectory, pathToFileURL(`${attemptSupersededPath}/`));
+      await rename(stagingDirectory, distributionDirectory);
+      if (exists) await rm(attemptSupersededPath, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      // Another build published between the check above and the rename, so what was observed
+      // is already stale: `dist/` moved out from under the first rename, or reappeared under
+      // the second. Both are the same race seen from either side, and both are resolved by
+      // observing the new state and trying again rather than failing a build that has already
+      // produced a complete tree.
+      const raced = error?.code === 'ENOENT' || error?.code === 'ENOTEMPTY' || error?.code === 'EEXIST';
+      // Losing a race means another build published, so the contention is real work rather
+      // than a spin, and a complete staged tree should not fail over which build goes first.
+      // The budget is wall-clock instead of a fixed count so heavier contention resolves,
+      // while an error that merely looks like a race cannot retry forever.
+      if (!raced || Date.now() - startedAt >= publishRaceBudgetMs) throw error;
+      await new Promise((settle) => setTimeout(settle, Math.min(25 * (attempt + 1), 200)));
+    }
+  }
+}
+
+/**
+ * Remove staging and superseded trees left by builds that died before their exit handler
+ * ran, so a crashed or killed build cannot accumulate trees inside the cache. A
+ * tree is only removed once its owning process is gone, so a concurrent build is safe.
+ */
+async function reclaimAbandonedBuildDirectories() {
+  const entries = await readdir(buildCacheDirectory, { withFileTypes: true }).catch(() => []);
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.isDirectory()) return;
+      const prefix = [stagingPrefix, supersededPrefix].find((candidate) => entry.name.startsWith(candidate));
+      if (prefix === undefined) return;
+      const owner = Number.parseInt(entry.name.slice(prefix.length), 10);
+      if (!Number.isInteger(owner) || owner <= 0 || isProcessAlive(owner)) return;
+      await rm(join(buildCacheDirectory, entry.name), { recursive: true, force: true });
+    }),
   );
-  if (exists) await rename(distributionDirectory, supersededDirectory);
-  await rename(stagingDirectory, distributionDirectory);
-  if (exists) await rm(supersededDirectory, { recursive: true, force: true });
+}
+
+/** Signal 0 checks for existence without delivering anything; EPERM means alive but not ours. */
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
 }
 
 function run(command, args, environment = process.env) {
