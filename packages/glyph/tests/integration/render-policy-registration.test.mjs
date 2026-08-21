@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { renderPolicyBytes } from '../support/engine-abi.mjs';
 
-const wasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
+const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 
 test('registers compiler-mapped render policies as retained typed Wasm state', async () => {

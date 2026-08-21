@@ -353,7 +353,7 @@ Item 3.1 is closed. Item 3.2 is active and replaces the injected fallback seam's
 
 - [x] A baked miss dynamically imports `@pmndrs/glyph/runtime-bake`; the initial browser graph contains only the import boundary and cannot construct a Worker or reach the bake wrapper/Wasm.
 - [x] The standard host creates a named module Worker lazily, queues concurrent requests behind one active bake, reuses that instance within the burst, copies only the source transfer buffer needed to preserve loader provenance, and transfers the returned artifact buffer.
-- [x] The Worker imports the exact portable `@pmndrs/glyph/bake` wrapper, lazily instantiates the same optimized `font_baker.wasm`, accepts only the versioned face descriptor, and serializes structured failures.
+- [x] The Worker imports the exact portable `@pmndrs/glyph/bake` wrapper, lazily instantiates the same optimized `font-baker.wasm`, accepts only the versioned face descriptor, and serializes structured failures.
 - [x] The loader routes standard fallback output through the same provenance and hostile-input validator used for baked hits before registration.
 - [x] Canonical Inter integration tests exercise the public host, default loader path, transfer lists, Worker entry, and exact portable-core artifact bytes; package tests prove the runtime host/Worker/Wasm remain outside the static entry graph.
 - [x] Independent size lanes report the runtime host, Worker JavaScript, and portable Wasm separately instead of folding lazy code or Wasm into the initial core.

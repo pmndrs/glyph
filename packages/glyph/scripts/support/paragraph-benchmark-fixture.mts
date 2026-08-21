@@ -33,7 +33,7 @@ export async function loadParagraphBenchmarkFixture(corpus: BenchmarkCorpus = 'l
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('packages/glyph/dist/text_shaper.wasm', workspaceRoot)),
+    wasm: await readFile(new URL('packages/glyph/dist/text-shaper.wasm', workspaceRoot)),
   });
   const bytes = await readFile(
     new URL(`apps/benchmarks/fixtures/rendering/${corpusFixtures[corpus].font}`, workspaceRoot),

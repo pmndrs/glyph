@@ -127,7 +127,7 @@ export function slugBakerFromCore(
 }
 
 async function loadDefaultSlugBaker(): Promise<ReturnType<typeof slugBakerFromCore>> {
-  const wasmUrl = new URL('../slug_baker.wasm', import.meta.url);
+  const wasmUrl = new URL('../slug-baker.wasm', import.meta.url);
   let bytes: BufferSource;
   if (wasmUrl.protocol === 'file:') {
     const { readFile } = await import('node:fs/promises');

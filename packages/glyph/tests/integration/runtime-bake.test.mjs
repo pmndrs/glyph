@@ -319,7 +319,7 @@ test('one TextRuntime source load sends its normalized ranges and complete raste
   );
   const requests = [];
   const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   t.after(() => runtime.dispose());
   const runtimeBake = async (request) => {
@@ -393,7 +393,7 @@ test('external techniques bake through their own declared baker, never the Worke
   });
   const requests = [];
   const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   t.after(() => runtime.dispose());
   const runtimeBake = async (request) => {

@@ -100,7 +100,7 @@ describe('public external raster proof', () => {
     const registry = new FontRegistry();
     const runtime = await createTextRuntime({
       registry,
-      wasm: await readFile(new URL('../../glyph/dist/text_shaper.wasm', import.meta.url)),
+      wasm: await readFile(new URL('../../glyph/dist/text-shaper.wasm', import.meta.url)),
     });
     const font = await runtime.loadFont({
       input: { baked: dataUrl(await readFile(core.file)) },

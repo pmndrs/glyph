@@ -10,11 +10,11 @@
       "label": "Renderer-neutral core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "36b55b752cbf9b1e1dc131b2895877222314514f06711acc84615fab3030160e",
+      "sha256": "359fc27465c1c42d752e72ab83cc472df7f68bc6a6d1b4c8e54e1ae20e3b8de5",
       "rawBytes": 231670,
       "minifiedBytes": 157263,
-      "gzipBytes": 39662,
-      "brotliBytes": 33730
+      "gzipBytes": 39661,
+      "brotliBytes": 33670
     },
     {
       "id": "tsl-subpath-js",
@@ -32,11 +32,11 @@
       "label": "Core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "057f086615eb2f9c0b52baed72dcf890469390e668395fb0cbda95b46b4217e6",
+      "sha256": "db91a09aaec56dcfd41e86fdbcf4ea80ccd45f62e3f225c49b4dd75498d08e72",
       "rawBytes": 96480,
       "minifiedBytes": 68711,
-      "gzipBytes": 19203,
-      "brotliBytes": 16645
+      "gzipBytes": 19201,
+      "brotliBytes": 16644
     },
     {
       "id": "text-shaper-wasm",
@@ -54,11 +54,11 @@
       "label": "Three.js adapter JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "6b139a3d68eaa5dc364ad2fd45cb466d9c4352509498fe29b85862657b8d3ab3",
+      "sha256": "fd7bc6180c6a9284dcbd2fb81468427fa830729bcdc6ae96d43adbe8b1f9027a",
       "rawBytes": 376899,
       "minifiedBytes": 244764,
-      "gzipBytes": 62850,
-      "brotliBytes": 53023
+      "gzipBytes": 62847,
+      "brotliBytes": 53053
     },
     {
       "id": "font-inter-bitmap-16-32",
@@ -153,11 +153,11 @@
       "label": "Runtime bake Worker JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "aec7b94debde8a0ce9ed6ed751c7775158c0ebc9a806d7f1ee03c88204a08cc7",
+      "sha256": "029914c54dddc8be7a284785c0fc7983979d2b9e751fb180cf170a1b0139be6c",
       "rawBytes": 782444,
       "minifiedBytes": 613617,
       "gzipBytes": 145901,
-      "brotliBytes": 119829
+      "brotliBytes": 119881
     },
     {
       "id": "bitmap-runtime-js",
@@ -274,11 +274,11 @@
       "label": "Slug baker JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "327ce803557f620c5ab33e3c5b5d1ca046acb7f534e4245f610dc0bd427b6df1",
+      "sha256": "6232efefeae5a9eb171ec646c3809292e3a7ec86b205790cdb85267fcc1dd4b4",
       "rawBytes": 18661,
       "minifiedBytes": 12896,
-      "gzipBytes": 4114,
-      "brotliBytes": 3663
+      "gzipBytes": 4113,
+      "brotliBytes": 3662
     },
     {
       "id": "portable-baker-js",

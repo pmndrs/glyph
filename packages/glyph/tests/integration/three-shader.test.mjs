@@ -22,7 +22,7 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -73,7 +73,7 @@ test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },

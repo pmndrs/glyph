@@ -98,27 +98,27 @@
       "types": "./dist/runtime-bake.d.ts",
       "import": "./dist/runtime-bake.js"
     },
-    "./text-shaper.wasm": "./dist/text_shaper.wasm",
+    "./text-shaper.wasm": "./dist/text-shaper.wasm",
     "./text-shaper-abi": {
       "types": "./dist/text-shaper-abi.d.ts",
       "import": "./dist/text-shaper-abi.js"
     },
-    "./bitmap-baker.wasm": "./dist/bitmap_baker.wasm",
+    "./bitmap-baker.wasm": "./dist/bitmap-baker.wasm",
     "./bitmap-baker-abi": {
       "types": "./dist/bitmap-baker-abi.d.ts",
       "import": "./dist/bitmap-baker-abi.js"
     },
-    "./mtsdf-baker.wasm": "./dist/mtsdf_baker.wasm",
+    "./mtsdf-baker.wasm": "./dist/mtsdf-baker.wasm",
     "./mtsdf-baker-abi": {
       "types": "./dist/mtsdf-baker-abi.d.ts",
       "import": "./dist/mtsdf-baker-abi.js"
     },
-    "./slug-baker.wasm": "./dist/slug_baker.wasm",
+    "./slug-baker.wasm": "./dist/slug-baker.wasm",
     "./slug-baker-abi": {
       "types": "./dist/slug-baker-abi.d.ts",
       "import": "./dist/slug-baker-abi.js"
     },
-    "./font-baker.wasm": "./dist/font_baker.wasm",
+    "./font-baker.wasm": "./dist/font-baker.wasm",
     "./font-baker-abi": {
       "types": "./dist/font-baker-abi.d.ts",
       "import": "./dist/font-baker-abi.js"

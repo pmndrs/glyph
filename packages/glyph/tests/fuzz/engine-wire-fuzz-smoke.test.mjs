@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { copyIntoAllocation, engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
 
-const wasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
+const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 const mutationCount = 64;
 

@@ -27,7 +27,7 @@ const coverage = Object.values(retained.cases)
   .replace(/[\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}]/gu, '');
 const [source, bakerWasm] = await Promise.all([
   readFile(new URL('../fixtures/fonts/noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf', import.meta.url)),
-  readFile(new URL('../../../packages/glyph/dist/font_baker.wasm', import.meta.url)),
+  readFile(new URL('../../../packages/glyph/dist/font-baker.wasm', import.meta.url)),
 ]);
 const baker = await createFontBaker(bakerWasm);
 const artifact = baker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } }).artifacts[0];

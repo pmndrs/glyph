@@ -9,12 +9,12 @@ import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { fontBindingBytes, renderPolicyBytes, renderPolicyBytesFromPrograms } from '../support/engine-abi.mjs';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
+const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const shaperAbiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 async function fixture() {
   const [source, bakerWasm, shaperWasm] = await Promise.all([
     readFile(new URL('Inter-Regular.ttf', fixtureDirectory)),
-    readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../dist/font-baker.wasm', import.meta.url)),
     readFile(shaperWasmUrl),
   ]);
   const baker = await createFontBaker(bakerWasm);

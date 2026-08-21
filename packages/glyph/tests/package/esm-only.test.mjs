@@ -76,7 +76,7 @@ test('the public loader graph exposes registration without eager baker or Node h
   ]);
   const initialGraph = `${entry}\n${loader}`;
   assert.match(loader, /import\(["']\.\/runtime-bake\.js["']\)/);
-  assert.doesNotMatch(initialGraph, /(?:from\s+["']\.\/runtime-bake|new Worker|font_baker\.wasm|node:)/);
+  assert.doesNotMatch(initialGraph, /(?:from\s+["']\.\/runtime-bake|new Worker|font-baker\.wasm|node:)/);
   assert.doesNotMatch(initialGraph, /(?:\.\/node\/|\.\/bakers\/)/);
   assert.doesNotMatch(initialGraph, /(?:PMNDRS_font_slug|\.\/raster\/slug|slug-shaders)/);
   assert.doesNotMatch(entry, /(?:three\/|three["'])/, 'core entry must not import Three');
@@ -92,5 +92,5 @@ test('the public loader graph exposes registration without eager baker or Node h
     const source = await readFile(new URL(`../../dist/internal/${helper}`, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /(?:^|\n)\s*(?:import|export\s+\{.*\}\s+from)\s/m);
   }
-  assert.ok((await readFile(new URL('../../dist/font_baker.wasm', import.meta.url))).byteLength > 0);
+  assert.ok((await readFile(new URL('../../dist/font-baker.wasm', import.meta.url))).byteLength > 0);
 });

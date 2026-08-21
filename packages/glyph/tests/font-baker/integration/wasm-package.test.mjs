@@ -10,7 +10,7 @@ import {
 } from '../../../dist/font-baker/index.js';
 
 const [wasm, rustReleaseWasm] = await Promise.all([
-  readFile(new URL('../../../dist/font_baker.wasm', import.meta.url)),
+  readFile(new URL('../../../dist/font-baker.wasm', import.meta.url)),
   readFile(
     new URL(
       '../../../rust/font-baker/target/wasm32-unknown-unknown/release/pmndrs_glyph_font_baker.wasm',

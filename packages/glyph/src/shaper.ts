@@ -204,7 +204,7 @@ class RuntimeShaperImpl implements RuntimeShaper {
 }
 
 async function fetchDefaultWasm(): Promise<ArrayBuffer> {
-  const response = await fetch(new URL('./text_shaper.wasm', import.meta.url));
+  const response = await fetch(new URL('./text-shaper.wasm', import.meta.url));
   if (!response.ok) {
     throw new Error(`text shaper Wasm request failed with HTTP ${response.status}`);
   }

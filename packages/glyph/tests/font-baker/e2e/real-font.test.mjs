@@ -42,7 +42,7 @@ async function shapeReducedFont(t, shapingSfnt, fontFile, shapingCasesDirectory)
 
 test('the canonical Inter fixture bakes deterministically and retains HarfRust shaping', async (t) => {
   const [wasm, source, manifestSource, expectedOracleSource] = await Promise.all([
-    readFile(new URL('../../../dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../../dist/font-baker.wasm', import.meta.url)),
     readFile(new URL('Inter-Regular.ttf', fixtureDirectory)),
     readFile(new URL('manifest.json', fixtureDirectory), 'utf8'),
     readFile(new URL('harfrust.json', shapingDirectory), 'utf8'),
@@ -113,7 +113,7 @@ test('the canonical Amiri fixture preserves exact complex shaping through the GL
   const directory = new URL('../../../../../apps/benchmarks/fixtures/fonts/amiri-1.002/', import.meta.url);
   const casesDirectory = new URL('../../../../../apps/benchmarks/fixtures/shaping/amiri-regular/', import.meta.url);
   const [wasm, source, manifestSource, expectedOracleSource] = await Promise.all([
-    readFile(new URL('../../../dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../../dist/font-baker.wasm', import.meta.url)),
     readFile(new URL('Amiri-Regular.ttf', directory)),
     readFile(new URL('manifest.json', directory), 'utf8'),
     readFile(new URL('harfrust.json', casesDirectory), 'utf8'),
@@ -167,7 +167,7 @@ test('the authenticated Noto CJK fixture retains the closed shaping profile at t
   const directory = new URL('../../../../../apps/benchmarks/fixtures/fonts/noto-sans-cjk-2.004/', import.meta.url);
   const casesDirectory = new URL('../../../../../apps/benchmarks/fixtures/shaping/noto-sans-cjk/', import.meta.url);
   const [wasm, source, manifestSource, expectedOracleSource] = await Promise.all([
-    readFile(new URL('../../../dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../../dist/font-baker.wasm', import.meta.url)),
     readFile(new URL('NotoSansCJKjp-Regular.otf', directory)),
     readFile(new URL('manifest.json', directory), 'utf8'),
     readFile(new URL('harfrust.json', casesDirectory), 'utf8'),

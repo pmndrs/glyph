@@ -26,7 +26,7 @@ import { ThreeTextRenderPlanExecutor } from '../../dist/three/engine-plan-target
 import { defineTextMaterial } from '../../dist/three/material.js';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
-const wasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
+const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
 test('Three coordinator shares shaping data across technique bindings and reference-counts stack handles', async () => {
   const [bitmapBytes, compressedMsdf, compressedSlug, wasm] = await Promise.all([

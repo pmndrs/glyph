@@ -10,7 +10,7 @@ import { composeFontBake } from '../dist/internal/compose-bake.js';
 import { bitmapDescriptor, bitmapRasterKey } from '../dist/raster/bitmap-technique.js';
 
 const sourceUrl = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
-const wasmUrl = new URL('../dist/bitmap_baker.wasm', import.meta.url);
+const wasmUrl = new URL('../dist/bitmap-baker.wasm', import.meta.url);
 const outputUrl = new URL('../tests/fixtures/inter-bitmap-v0.json', import.meta.url);
 const renderingFixtureUrl = new URL(
   '../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb',

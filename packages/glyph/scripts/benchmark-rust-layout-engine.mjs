@@ -28,7 +28,7 @@ const fontStackHandle = 1;
 const regionHeight = options.height;
 
 const [wasm, abi, artifact] = await Promise.all([
-  readFile(options.wasm ?? new URL('../dist/text_shaper.wasm', import.meta.url)),
+  readFile(options.wasm ?? new URL('../dist/text-shaper.wasm', import.meta.url)),
   readFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8').then(JSON.parse),
   loadArtifact(options.technique, options.corpus),
 ]);

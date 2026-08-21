@@ -11,7 +11,7 @@ import { afterEach, test } from 'vitest';
 import { glyphExample } from '../src/index.js';
 
 const fixtureDirectory = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
-const shaperWasmUrl = new URL('../../glyph/dist/text_shaper.wasm', import.meta.url);
+const shaperWasmUrl = new URL('../../glyph/dist/text-shaper.wasm', import.meta.url);
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {

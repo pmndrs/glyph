@@ -145,10 +145,10 @@ jobs:
         with:
           name: wasm-failure-evidence
           path: |
-            packages/glyph/dist/font_baker.wasm
-            packages/glyph/dist/bitmap_baker.wasm
-            packages/glyph/dist/mtsdf_baker.wasm
-            packages/glyph/dist/slug_baker.wasm
-            packages/glyph/dist/text_shaper.wasm
+            packages/glyph/dist/font-baker.wasm
+            packages/glyph/dist/bitmap-baker.wasm
+            packages/glyph/dist/mtsdf-baker.wasm
+            packages/glyph/dist/slug-baker.wasm
+            packages/glyph/dist/text-shaper.wasm
           if-no-files-found: error
           retention-days: 7

@@ -124,7 +124,7 @@ export function bitmapBakerFromCore(
 }
 
 async function loadDefaultBitmapBaker(): Promise<ReturnType<typeof bitmapBakerFromCore>> {
-  const wasmUrl = new URL('../bitmap_baker.wasm', import.meta.url);
+  const wasmUrl = new URL('../bitmap-baker.wasm', import.meta.url);
   let bytes: BufferSource;
   if (wasmUrl.protocol === 'file:') {
     const { readFile } = await import('node:fs/promises');

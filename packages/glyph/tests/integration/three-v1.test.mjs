@@ -27,7 +27,7 @@ const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/i
 
 test('one runtime request registers one font and returns typed resources for every declared technique', async () => {
   const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const [bitmapFont, msdfFont, slugFont] = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(multiTechniqueFontUrl)) },
@@ -45,7 +45,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -351,7 +351,7 @@ test('TextGroup drops disposed descendants and reuses their committed transform 
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -397,7 +397,7 @@ test('Three retires materials bound to a replaced buffer generation', async () =
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -435,7 +435,7 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () 
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const [latin, icon] = await Promise.all([
     runtime.loadFont({
@@ -686,7 +686,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
 });
 
 async function createInstrumentedRuntime(registry) {
-  const wasm = await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url));
+  const wasm = await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url));
   const abi = JSON.parse(await readFile(new URL('../../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8'));
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
@@ -771,7 +771,7 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(densityFontUrl)) },
@@ -823,7 +823,7 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
 
 test('multi-page Bitmap strikes remain one ordered texture-array draw', async () => {
   const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(densityFontUrl)) },
@@ -857,7 +857,7 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(amiriFontUrl)) },
@@ -902,7 +902,7 @@ test('TextGroup atomically replaces child paragraphs without multiplying retaine
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -941,7 +941,7 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -1038,7 +1038,7 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
   // does not, which is why every existing Latin fixture missed this.
   const runtime = await createTextRuntime({
     registry: new FontRegistry(),
-    wasm: await readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
   });
   const font = await runtime.loadFont({
     input: { baked: dataUrl(await readFile(amiriFontUrl)) },

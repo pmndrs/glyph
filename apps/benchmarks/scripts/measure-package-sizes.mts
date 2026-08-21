@@ -71,11 +71,11 @@ async function bundle(
             name: 'externalize-package-wasm-for-size-measurement',
             transform(code, id) {
               const wasmAssets = [
-                'bitmap_baker.wasm',
-                'font_baker.wasm',
-                'text_shaper.wasm',
-                'mtsdf_baker.wasm',
-                'slug_baker.wasm',
+                'bitmap-baker.wasm',
+                'font-baker.wasm',
+                'text-shaper.wasm',
+                'mtsdf-baker.wasm',
+                'slug-baker.wasm',
               ];
               let transformed = code;
               let changed = false;
@@ -359,7 +359,7 @@ const coreJavaScript = await measureJavaScript(
 const textShaperWasm = await measureWasm(
   'text-shaper-wasm',
   'Shaper Wasm',
-  new URL('../../../packages/glyph/dist/text_shaper.wasm', import.meta.url),
+  new URL('../../../packages/glyph/dist/text-shaper.wasm', import.meta.url),
 );
 const coreSubpath = await measureJavaScript(
   'core-subpath-js',
@@ -494,7 +494,7 @@ const entries: SizeEntry[] = [
   await measureWasm(
     'bitmap-baker-wasm',
     'Bitmap baker Wasm',
-    new URL('../../../packages/glyph/dist/bitmap_baker.wasm', import.meta.url),
+    new URL('../../../packages/glyph/dist/bitmap-baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'bitmap-baker-js',
@@ -515,7 +515,7 @@ const entries: SizeEntry[] = [
   await measureWasm(
     'mtsdf-baker-wasm',
     'MTSDF baker Wasm',
-    new URL('../../../packages/glyph/dist/mtsdf_baker.wasm', import.meta.url),
+    new URL('../../../packages/glyph/dist/mtsdf-baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'mtsdf-baker-js',
@@ -530,7 +530,7 @@ const entries: SizeEntry[] = [
   await measureWasm(
     'slug-baker-wasm',
     'Slug baker Wasm',
-    new URL('../../../packages/glyph/dist/slug_baker.wasm', import.meta.url),
+    new URL('../../../packages/glyph/dist/slug-baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'slug-baker-js',
@@ -551,7 +551,7 @@ const entries: SizeEntry[] = [
   await measureWasm(
     'portable-baker-wasm',
     'Font baker Wasm',
-    new URL('../../../packages/glyph/dist/font_baker.wasm', import.meta.url),
+    new URL('../../../packages/glyph/dist/font-baker.wasm', import.meta.url),
   ),
   await measureJavaScript(
     'unicode-analysis-js',

@@ -8,7 +8,7 @@ import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
 
-const wasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
+const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 
 test('production text-engine host publishes borrowed A/B plans through the runtime shaper instance', async () => {

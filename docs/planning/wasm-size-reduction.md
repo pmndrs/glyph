@@ -32,7 +32,7 @@ D-242, D-243, and D-244 remain the accepted optimizer decisions.
 
 ## Why this note exists
 
-`text_shaper.wasm` is the artifact a consumer downloads to render one line of text. At the
+`text-shaper.wasm` is the artifact a consumer downloads to render one line of text. At the
 measured baseline it is `1,122,345 B` raw, `435,781 B` gzip, `345,445 B` Brotli. Community
 feedback compares that unfavourably against all of Three.js. The comparison is fair, and the
 answer is not a second "minimal" runtime — two runtimes means two correctness surfaces, two
@@ -409,7 +409,7 @@ and should be priced before any upstream HarfRust fork is contemplated.
 
 ## Portable baker
 
-`font_baker.wasm` is `1,081,312 B` raw / `386,725 B` gzip. Its 2.6× step at `285475b4`
+`font-baker.wasm` is `1,081,312 B` raw / `386,725 B` gzip. Its 2.6× step at `285475b4`
 (422,538 → 1,097,702) is fully explained: the Wasm build invocation gained
 `--features subsetting`, where `subsetting = ["std", "dep:skera"]`.
 

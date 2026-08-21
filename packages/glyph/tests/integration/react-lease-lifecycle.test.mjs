@@ -26,7 +26,7 @@ import '../support/browser-globals.mjs';
 import { Text } from '@pmndrs/glyph/react';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
+const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
 const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 

@@ -157,7 +157,7 @@ export function msdfBakerFromCore(core: MsdfBakerCore): RasterBakerModule<'msdf'
 }
 
 async function loadDefaultMsdfBaker(): Promise<ReturnType<typeof msdfBakerFromCore>> {
-  const wasmUrl = new URL('../mtsdf_baker.wasm', import.meta.url);
+  const wasmUrl = new URL('../mtsdf-baker.wasm', import.meta.url);
   let bytes: BufferSource;
   if (wasmUrl.protocol === 'file:') {
     const { readFile } = await import('node:fs/promises');

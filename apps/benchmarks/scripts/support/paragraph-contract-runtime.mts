@@ -33,7 +33,7 @@ export async function createParagraphContractRuntime() {
   const registry = new FontRegistry();
   const runtime = await createTextRuntime({
     registry,
-    wasm: await readFile(new URL('../../../../packages/glyph/dist/text_shaper.wasm', import.meta.url)),
+    wasm: await readFile(new URL('../../../../packages/glyph/dist/text-shaper.wasm', import.meta.url)),
   });
   return {
     async loadFont(url: URL, coverage?: string) {

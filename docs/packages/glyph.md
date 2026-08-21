@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:626c740b47a701883e50169eb1bfe7fbd0a56d36eb3f563ed163315e7ffb205b'
+source_digest: 'sha256:640f9095ab66a8398d8b56a414b419e7ee2551060cc3d05deab79e1096358bb5'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -439,7 +439,7 @@ removes its decoded renderer resources. The unchanged eight-warmup/31-sample pub
 run was 19.42/6.59/3.10/14.24 ms median; process-separated samples support no regression and a plausible cold-path
 reduction, not causal attribution.
 
-The canonical direct benchmark loads the packaged `dist/text_shaper.wasm`: Cargo release optimization, LTO, one codegen
+The canonical direct benchmark loads the packaged `dist/text-shaper.wasm`: Cargo release optimization, LTO, one codegen
 unit, default-on `simd128`, stripping, and `wasm-opt -Oz --enable-simd` have already run. On the identical Rust artifact,
 Binaryen `-O3` and `-O4` added 11,976 and 13,661 raw bytes without a demonstrated latency improvement. The
 evidence-backed pipeline is now `--merge-similar-functions -Oz --merge-similar-functions -Oz` (D-244): the merge pass

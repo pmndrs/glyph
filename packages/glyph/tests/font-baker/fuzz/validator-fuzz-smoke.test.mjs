@@ -9,7 +9,7 @@ import { FONT_ARTIFACT_FUZZ_SEED, mutateFontArtifact } from '../support/font-art
 test('fixed-seed font artifact mutations fail safely and deterministically', async () => {
   const [source, wasm] = await Promise.all([
     readFile(new URL('../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
-    readFile(new URL('../../../dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../../dist/font-baker.wasm', import.meta.url)),
   ]);
   const baker = await createFontBaker(wasm);
   const artifact = baker.bake({

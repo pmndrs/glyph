@@ -12,7 +12,7 @@ import {
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { SLUG_EXTENSION, slugDescriptor, slugDescriptorRasterKey } from '../../dist/internal/slug-contract.js';
 
-const wasmUrl = new URL('../../dist/slug_baker.wasm', import.meta.url);
+const wasmUrl = new URL('../../dist/slug-baker.wasm', import.meta.url);
 const abiUrl = new URL('../../dist/slug-baker-abi-v0.json', import.meta.url);
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';

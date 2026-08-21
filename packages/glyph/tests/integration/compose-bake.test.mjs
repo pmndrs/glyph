@@ -19,8 +19,8 @@ let golden;
 before(async () => {
   const [source, fontWasm, bitmapWasm, goldenBytes] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
-    readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
-    readFile(new URL('../../dist/bitmap_baker.wasm', import.meta.url)),
+    readFile(new URL('../../dist/font-baker.wasm', import.meta.url)),
+    readFile(new URL('../../dist/bitmap-baker.wasm', import.meta.url)),
     readFile(new URL('../fixtures/inter-bitmap-v0.json', import.meta.url)),
   ]);
   golden = JSON.parse(goldenBytes);

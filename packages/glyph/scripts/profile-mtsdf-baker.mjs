@@ -104,7 +104,7 @@ async function runDirectProfile(profileCase, source) {
     import('../dist/internal/msdf-contract.js'),
   ]);
   const instance = await WebAssembly.instantiate(
-    await WebAssembly.compile(await readFile(new URL('../dist/mtsdf_baker.wasm', import.meta.url))),
+    await WebAssembly.compile(await readFile(new URL('../dist/mtsdf-baker.wasm', import.meta.url))),
     {
       env: { pmndrs_glyph_bake_progress() {} },
     },

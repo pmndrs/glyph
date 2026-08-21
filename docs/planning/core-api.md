@@ -64,7 +64,7 @@ interface TextRuntime {
 declare function createTextRuntime(options?: TextRuntimeOptions): Promise<TextRuntime>;
 ```
 
-The default runtime instantiates the packaged `text_shaper.wasm`. Supplying `wasm` is intended for controlled builds,
+The default runtime instantiates the packaged `text-shaper.wasm`. Supplying `wasm` is intended for controlled builds,
 tests, and compile-time SIMD variants. A runtime owns its Rust registration domain and all fonts loaded through it.
 
 ```ts

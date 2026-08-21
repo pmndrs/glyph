@@ -83,17 +83,17 @@ const wasmOpt = fileURLToPath(new URL(`../node_modules/.bin/${executable}`, impo
 const rustWasm = fileURLToPath(
   new URL('../rust/bitmap-baker/target/wasm32-unknown-unknown/release/pmndrs_glyph_bitmap_baker.wasm', import.meta.url),
 );
-const distributedWasm = fileURLToPath(staged('bitmap_baker.wasm'));
+const distributedWasm = fileURLToPath(staged('bitmap-baker.wasm'));
 const shaperWasm = join(shaperTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_shaper.wasm');
-const distributedShaperWasm = fileURLToPath(staged('text_shaper.wasm'));
+const distributedShaperWasm = fileURLToPath(staged('text-shaper.wasm'));
 const mtsdfWasm = join(mtsdfArtifactTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_mtsdf_baker.wasm');
-const distributedMtsdfWasm = fileURLToPath(staged('mtsdf_baker.wasm'));
+const distributedMtsdfWasm = fileURLToPath(staged('mtsdf-baker.wasm'));
 const slugWasm = join(slugArtifactTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_slug_baker.wasm');
-const distributedSlugWasm = fileURLToPath(staged('slug_baker.wasm'));
+const distributedSlugWasm = fileURLToPath(staged('slug-baker.wasm'));
 const fontBakerWasm = fileURLToPath(
   new URL('../rust/font-baker/target/wasm32-unknown-unknown/release/pmndrs_glyph_font_baker.wasm', import.meta.url),
 );
-const distributedFontBakerWasm = fileURLToPath(staged('font_baker.wasm'));
+const distributedFontBakerWasm = fileURLToPath(staged('font-baker.wasm'));
 
 const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson, slugAbiJson, fontBakerAbiJson] = await Promise.all([
   runCapture('cargo', [

@@ -16,7 +16,7 @@ let cjkProfileArtifact;
 before(async () => {
   const [source, wasm] = await Promise.all([
     readFile(new URL('../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
-    readFile(new URL('../../../dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../../dist/font-baker.wasm', import.meta.url)),
   ]);
   const baker = await createFontBaker(wasm);
   artifact = baker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } }).artifacts[0].bytes;
@@ -129,7 +129,7 @@ test('keeps the packaged extension schema byte-identical to the canonical schema
   });
   assert.equal(FONT_BAKER_VERSION, manifest.version);
   assert.equal(FONT_FORMAT_VERSION, 0);
-  assert.equal(fontBakerWasmUrl, new URL('../../../dist/font_baker.wasm', import.meta.url).href);
+  assert.equal(fontBakerWasmUrl, new URL('../../../dist/font-baker.wasm', import.meta.url).href);
   assert.doesNotMatch(coreSource, /(?:ajv|gltf-validator|validator\.js)/);
 
   const property = JSON.parse(

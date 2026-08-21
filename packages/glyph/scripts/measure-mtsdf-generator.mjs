@@ -15,7 +15,7 @@ import { performance } from 'node:perf_hooks';
 import { createMtsdfGenerator } from '../dist/internal/mtsdf-generator.js';
 import { mtsdfOracleCases } from '../tests/fixtures/mtsdf-oracle-cases.mjs';
 
-const wasm = await readFile(new URL('../dist/mtsdf_baker.wasm', import.meta.url));
+const wasm = await readFile(new URL('../dist/mtsdf-baker.wasm', import.meta.url));
 const compileStart = performance.now();
 const module = await WebAssembly.compile(wasm);
 const compileMilliseconds = performance.now() - compileStart;

@@ -22,7 +22,7 @@ import { Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
+const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
 /** Fonts chosen for shaping behaviour that has broken the engine before. */
 const FONT_FIXTURES = {
