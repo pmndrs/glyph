@@ -13,10 +13,10 @@ export interface FontBakeRequestV0 {
   readonly descriptor: FontBakeDescriptorV0;
 }
 
-export interface UnicodeRangeV0 {
+export type UnicodeRangeV0 = {
   readonly start: number;
   readonly end: number;
-}
+};
 
 export interface FontSelectionV0 {
   readonly formatVersion: 0;

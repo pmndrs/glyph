@@ -252,7 +252,7 @@ class TextRuntimeImpl implements TextRuntime {
     const planKey = canonicalJson({
       rasters,
       unicodeRanges: unicodeRanges ?? null,
-    } as unknown as import('./raster.js').JsonValue);
+    });
     let loaders = this.#sourceLoaders.get(input.runtimeBake);
     if (loaders === undefined) {
       loaders = new Map();

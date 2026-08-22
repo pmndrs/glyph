@@ -1,5 +1,4 @@
 import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from '../font-baker/contract.js';
-import type { JsonValue } from '../raster.js';
 
 import { copyToOwnedArrayBuffer } from './owned-array-buffer.js';
 import { canonicalJson } from './raster-identity.js';
@@ -45,7 +44,7 @@ export function createCache(storage: CacheStorage, origin: string, now: () => nu
         rasters: request.rasters ?? [],
         sourceHash,
         unicodeRanges: request.unicodeRanges ?? null,
-      } as unknown as JsonValue);
+      });
       return sha256(new TextEncoder().encode(identity));
     },
     async match(key) {
