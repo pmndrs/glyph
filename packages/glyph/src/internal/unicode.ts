@@ -1,5 +1,5 @@
 import { Rules } from '@cto.af/linebreak';
-import { graphemeSegments } from 'unicode-segmenter/grapheme';
+import { assertWellFormed, findGraphemeBoundaries } from './graphemes.js';
 import {
   commonScript,
   inheritedScript,
@@ -50,7 +50,7 @@ export function analyzeUnicodeText(text: string): UnicodeTextAnalysis {
   assertWellFormed(text);
   // One segmentation pass. Grapheme boundaries and script itemization both walk the same segmenter, and walking it
   // twice segments the whole paragraph twice for two views of one answer.
-  const boundaries = segmentGraphemes(text);
+  const boundaries = findGraphemeBoundaries(text);
   return {
     graphemeBoundaries: boundaries,
     lineBreaks: findLineBreaks(text),
@@ -58,10 +58,7 @@ export function analyzeUnicodeText(text: string): UnicodeTextAnalysis {
   };
 }
 
-export function findGraphemeBoundaries(text: string): Uint32Array {
-  assertWellFormed(text);
-  return segmentGraphemes(text);
-}
+export { findGraphemeBoundaries } from './graphemes.js';
 
 export function findLineBreaks(text: string): readonly UnicodeBreak[] {
   assertWellFormed(text);
@@ -74,24 +71,7 @@ export function findLineBreaks(text: string): readonly UnicodeBreak[] {
 
 export function itemizeScripts(text: string): readonly ScriptItem[] {
   assertWellFormed(text);
-  return itemizeSegmentedScripts(text, segmentGraphemes(text));
-}
-
-function segmentGraphemes(text: string): Uint32Array {
-  // A grapheme is never shorter than one code unit, so the text length bounds the boundary count and the result is
-  // sliced to what was written. Accumulating into a plain array and converting copied every boundary twice.
-  let boundaries = new Uint32Array(text.length + 1);
-  let count = 1;
-  for (const segment of graphemeSegments(text)) {
-    if (count === boundaries.length) {
-      const grown = new Uint32Array(boundaries.length * 2);
-      grown.set(boundaries);
-      boundaries = grown;
-    }
-    boundaries[count] = segment.index + segment.segment.length;
-    count += 1;
-  }
-  return boundaries.subarray(0, count);
+  return itemizeSegmentedScripts(text, findGraphemeBoundaries(text));
 }
 
 function itemizeSegmentedScripts(text: string, boundaries: Uint32Array): readonly ScriptItem[] {
@@ -282,8 +262,4 @@ function assertScalar(codePoint: number): void {
   ) {
     throw new RangeError('code point must be a Unicode scalar value');
   }
-}
-
-function assertWellFormed(text: string): void {
-  if (!text.isWellFormed()) throw new RangeError('paragraph text must be well-formed UTF-16');
 }
