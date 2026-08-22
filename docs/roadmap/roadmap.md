@@ -898,6 +898,7 @@ Closes the class of defect behind the displaced-record-slot corruption, in depen
 - [x] a differential oracle through the packed instanced attributes, covering every edit class that moves a glyph between record slots, on Bitmap, MSDF and Slug (D-261);
 - [x] repack a record slot handed to another glyph identity, and stop narrowing registers for pushed rows that have no prior value;
 - [ ] the same oracle over bidi reorder, ligature absorption and cluster-splitting edits, and over span edits that move a boundary independently of the text;
+- [x] a source row carried with the identity that owns it, so a paragraph shedding a recordless glyph cannot strand a sibling's record (D-264);
 - [ ] a render-plan payload that is fully determined before publication, with a non-covering seed failing loudly rather than shipping zeros (D-260);
 - [ ] one address space for change detection, removing the identity guard rather than retaining it as a detector (D-259);
 - [ ] stable-indirect reachable from the public API and under the D-261 oracle, or removed (D-262);
