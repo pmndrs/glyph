@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { bakeProgressMessage, isBakeProgressMessageV0 } from '../../dist/internal/bake-progress-protocol.js';
+import { bakeProgressMessage, isBakeProgressMessage } from '../../dist/internal/bake-progress-protocol.js';
 
 test('bake progress protocol accepts bounded typed progress', () => {
   const progress = bakeProgressMessage(7, 'raster', 'rasterizing', 42, 100);
-  assert.equal(isBakeProgressMessageV0(progress), true);
+  assert.equal(isBakeProgressMessage(progress), true);
 });
 
 test('bake progress protocol rejects impossible and unknown progress', () => {
   assert.equal(
-    isBakeProgressMessageV0({
+    isBakeProgressMessage({
       type: 'bake-progress-v0',
       id: 1,
       stage: 'raster',
@@ -21,7 +21,7 @@ test('bake progress protocol rejects impossible and unknown progress', () => {
     false,
   );
   assert.equal(
-    isBakeProgressMessageV0({
+    isBakeProgressMessage({
       type: 'bake-progress-v0',
       id: 1,
       stage: 'shader',

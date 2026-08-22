@@ -13,7 +13,7 @@ import {
   BITMAP_FORMAT_VERSION,
   BITMAP_KIND,
   bitmapDescriptor,
-  type BitmapDescriptorV0,
+  type BitmapDescriptor,
 } from '../internal/bitmap-contract.js';
 import type { RasterCoverage } from '../raster-coverage.js';
 
@@ -24,7 +24,7 @@ export interface BitmapBakerOptions {
   readonly coverage?: RasterCoverage;
 }
 
-export interface BitmapBakerRequestV0 {
+export interface BitmapBakerRequest {
   readonly fontFaceIndex: number;
   readonly glyphCount: number;
   readonly shapingHash: string;
@@ -33,22 +33,22 @@ export interface BitmapBakerRequestV0 {
     readonly artifact: 'embedded' | 'external';
     readonly pages: 'embedded' | 'external';
   };
-  readonly descriptor: BitmapDescriptorV0;
+  readonly descriptor: BitmapDescriptor;
 }
 
-export interface BitmapBakerCoreRequestV0 {
+export interface BitmapBakerCoreRequest {
   readonly source: Uint8Array;
-  readonly request: BitmapBakerRequestV0;
+  readonly request: BitmapBakerRequest;
   readonly onProgress?: BakeProgressListener;
 }
 
 export interface BitmapBakerCore {
-  bake(request: BitmapBakerCoreRequestV0): RasterBakeArtifact<'bitmap'>;
+  bake(request: BitmapBakerCoreRequest): RasterBakeArtifact<'bitmap'>;
 }
 
 export type BitmapBakerWasmSource = BufferSource | WebAssembly.Module;
 
-export type BitmapBakerAbiV0 = BitmapBakerAbi;
+export type { BitmapBakerAbi };
 
 export class BitmapBakeError extends Error {
   readonly code: string;
@@ -85,7 +85,7 @@ export async function createBitmapBaker(source: BitmapBakerWasmSource): Promise<
 }
 
 export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): BitmapBakerCore {
-  return createDirectRasterBakerFromInstance<BitmapBakerRequestV0, 'bitmap'>(instance, bitmapBakerAbi, {
+  return createDirectRasterBakerFromInstance<BitmapBakerRequest, 'bitmap'>(instance, bitmapBakerAbi, {
     label: 'bitmap baker',
     kind: BITMAP_KIND,
     extension: BITMAP_EXTENSION,
@@ -97,13 +97,13 @@ export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): B
 
 export function bitmapBakerFromCore(
   core: BitmapBakerCore,
-): RasterBakerModule<'bitmap', BitmapBakerOptions, BitmapDescriptorV0> {
+): RasterBakerModule<'bitmap', BitmapBakerOptions, BitmapDescriptor> {
   return {
     kind: BITMAP_KIND,
     extension: BITMAP_EXTENSION,
     version: BITMAP_FORMAT_VERSION,
     descriptor: bitmapDescriptor,
-    async bake(request: RasterBakeRequest<BitmapDescriptorV0>) {
+    async bake(request: RasterBakeRequest<BitmapDescriptor>) {
       request.signal?.throwIfAborted();
       const result = core.bake({
         source: request.font.source,
@@ -139,7 +139,7 @@ async function loadDefaultBitmapBaker(): Promise<ReturnType<typeof bitmapBakerFr
 
 const defaultBitmapBaker = cacheSuccessfulPromise(loadDefaultBitmapBaker);
 
-export const bitmapBaker: RasterBakerModule<'bitmap', BitmapBakerOptions, BitmapDescriptorV0> = {
+export const bitmapBaker: RasterBakerModule<'bitmap', BitmapBakerOptions, BitmapDescriptor> = {
   kind: BITMAP_KIND,
   extension: BITMAP_EXTENSION,
   version: BITMAP_FORMAT_VERSION,

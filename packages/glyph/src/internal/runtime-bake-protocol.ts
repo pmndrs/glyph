@@ -1,8 +1,8 @@
-import type { FontBakeDescriptorV0, SerializedBakeError } from '../font-baker/index.js';
+import type { FontBakeDescriptor, SerializedBakeError } from '../font-baker/index.js';
 import type { RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
 
-export type RuntimeBakeUnicodeRangeV0 = {
+export type RuntimeBakeUnicodeRange = {
   readonly start: number;
   readonly end: number;
 };
@@ -17,7 +17,7 @@ export type RuntimeBakeUnicodeRangeV0 = {
  */
 export const workerRasterKinds: readonly string[] = Object.freeze(['bitmap', 'msdf', 'slug']);
 
-export type RuntimeBakeRasterV0 = {
+export type RuntimeBakeRaster = {
   readonly kind: string;
   readonly extension: string;
   readonly version: number;
@@ -25,42 +25,42 @@ export type RuntimeBakeRasterV0 = {
   readonly descriptor: JsonValue;
 };
 
-export interface RuntimeBakeRequestV0 {
+export interface RuntimeBakeRequest {
   readonly type: 'bake-font-v0';
   readonly id: number;
   readonly source: ArrayBuffer;
-  readonly font: FontBakeDescriptorV0;
+  readonly font: FontBakeDescriptor;
   readonly cache?: { readonly expiresAt: number };
-  readonly unicodeRanges?: readonly RuntimeBakeUnicodeRangeV0[];
-  readonly rasters?: readonly RuntimeBakeRasterV0[];
+  readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  readonly rasters?: readonly RuntimeBakeRaster[];
 }
 
-export interface RuntimeBakeSuccessV0 {
+export interface RuntimeBakeSuccess {
   readonly type: 'bake-font-result-v0';
   readonly id: number;
   readonly ok: true;
-  readonly artifacts: readonly [RuntimeBakeArtifactV0];
+  readonly artifacts: readonly [RuntimeBakeArtifact];
   readonly report: unknown;
   readonly warnings: readonly unknown[];
 }
 
-export interface RuntimeBakeArtifactV0 {
+export interface RuntimeBakeArtifact {
   readonly role: 'font';
   readonly id: string;
   readonly bytes: ArrayBuffer;
   readonly sha256: string;
 }
 
-export interface RuntimeBakeFailureV0 {
+export interface RuntimeBakeFailure {
   readonly type: 'bake-font-result-v0';
   readonly id: number;
   readonly ok: false;
   readonly error: SerializedBakeError;
 }
 
-export type RuntimeBakeResultV0 = RuntimeBakeSuccessV0 | RuntimeBakeFailureV0;
+export type RuntimeBakeResult = RuntimeBakeSuccess | RuntimeBakeFailure;
 
-export function isRuntimeBakeResultV0(value: unknown): value is RuntimeBakeResultV0 {
+export function isRuntimeBakeResult(value: unknown): value is RuntimeBakeResult {
   if (!isNonArrayObject(value) || value.type !== 'bake-font-result-v0' || !isRequestId(value.id)) {
     return false;
   }
@@ -76,13 +76,13 @@ export function isRuntimeBakeResultV0(value: unknown): value is RuntimeBakeResul
     value.ok === true &&
     Array.isArray(value.artifacts) &&
     value.artifacts.length === 1 &&
-    value.artifacts.every(isRuntimeBakeArtifactV0) &&
+    value.artifacts.every(isRuntimeBakeArtifact) &&
     isNonArrayObject(value.report) &&
     Array.isArray(value.warnings)
   );
 }
 
-export function isRuntimeBakeRequestV0(value: unknown): value is RuntimeBakeRequestV0 {
+export function isRuntimeBakeRequest(value: unknown): value is RuntimeBakeRequest {
   return (
     isNonArrayObject(value) &&
     value.type === 'bake-font-v0' &&
@@ -102,7 +102,7 @@ export function isRuntimeBakeRequestV0(value: unknown): value is RuntimeBakeRequ
   );
 }
 
-function isUnicodeRanges(value: unknown): value is readonly RuntimeBakeUnicodeRangeV0[] {
+function isUnicodeRanges(value: unknown): value is readonly RuntimeBakeUnicodeRange[] {
   return (
     Array.isArray(value) &&
     value.length > 0 &&
@@ -119,7 +119,7 @@ function isUnicodeRanges(value: unknown): value is readonly RuntimeBakeUnicodeRa
   );
 }
 
-function isRasters(value: unknown): value is readonly RuntimeBakeRasterV0[] {
+function isRasters(value: unknown): value is readonly RuntimeBakeRaster[] {
   return (
     Array.isArray(value) &&
     value.length <= 256 &&
@@ -151,7 +151,7 @@ function isJsonValue(value: unknown, seen = new Set<object>(), depth = 0): value
   return valid;
 }
 
-function isRuntimeBakeArtifactV0(value: unknown): value is RuntimeBakeArtifactV0 {
+function isRuntimeBakeArtifact(value: unknown): value is RuntimeBakeArtifact {
   return (
     isNonArrayObject(value) &&
     value.role === 'font' &&

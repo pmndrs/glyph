@@ -4,10 +4,10 @@ import type { RasterBakerModule } from '../bake.js';
 import type { JsonValue } from '../raster.js';
 import { transferableArrayBuffer } from './owned-array-buffer.js';
 import {
-  isRasterBakeWorkerRequestV0,
-  type RasterBakeWorkerFailureV0,
-  type RasterBakeWorkerRequestV0,
-  type RasterBakeWorkerSuccessV0,
+  isRasterBakeWorkerRequest,
+  type RasterBakeWorkerFailure,
+  type RasterBakeWorkerRequest,
+  type RasterBakeWorkerSuccess,
 } from './raster-bake-worker-protocol.js';
 import { bakeProgressMessage } from './bake-progress-protocol.js';
 
@@ -21,7 +21,7 @@ export function startRasterBakeWorker<Kind extends string, Options, Descriptor e
   let pending = Promise.resolve();
   scope.addEventListener('message', (event: MessageEvent<unknown>) => {
     const value = event.data;
-    if (!isRasterBakeWorkerRequestV0(value)) return;
+    if (!isRasterBakeWorkerRequest(value)) return;
     pending = pending.then(() => handleMessage(scope, baker, normalizeOptions, value));
   });
 }
@@ -30,7 +30,7 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
   scope: DedicatedWorkerGlobalScope,
   baker: RasterBakerModule<Kind, Options, Descriptor>,
   normalizeOptions: OptionsNormalizer<Options>,
-  request: RasterBakeWorkerRequestV0,
+  request: RasterBakeWorkerRequest,
 ): Promise<void> {
   try {
     scope.postMessage(bakeProgressMessage(request.id, 'raster', 'loading', 0, 1));
@@ -52,7 +52,7 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
       },
     });
     scope.postMessage(bakeProgressMessage(request.id, 'raster', 'packaging', 0, 1));
-    const artifacts: RasterBakeWorkerSuccessV0['artifacts'] = result.artifacts.map((artifact) => {
+    const artifacts: RasterBakeWorkerSuccess['artifacts'] = result.artifacts.map((artifact) => {
       if (artifact.role === 'font') {
         throw new TypeError(`${result.kind} raster baker returned a core font artifact`);
       }
@@ -63,7 +63,7 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
         sha256: artifact.sha256,
       };
     });
-    const response: RasterBakeWorkerSuccessV0 = {
+    const response: RasterBakeWorkerSuccess = {
       type: 'bake-raster-result-v0',
       id: request.id,
       ok: true,
@@ -81,7 +81,7 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
       artifacts.map(({ bytes }) => bytes),
     );
   } catch (error) {
-    const response: RasterBakeWorkerFailureV0 = {
+    const response: RasterBakeWorkerFailure = {
       type: 'bake-raster-result-v0',
       id: request.id,
       ok: false,
@@ -91,7 +91,7 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
   }
 }
 
-function serializeError(error: unknown): RasterBakeWorkerFailureV0['error'] {
+function serializeError(error: unknown): RasterBakeWorkerFailure['error'] {
   if (error instanceof Error) {
     const value = error as Error & { readonly code?: unknown; readonly path?: unknown };
     return {

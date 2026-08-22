@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { AnyRasterBakerModule, RasterBakePlan } from '../bake.js';
-import type { UnicodeRangeV0 } from '../font-baker/index.js';
+import type { UnicodeRange } from '../font-baker/index.js';
 import { normalizeUnicodeRanges } from '../internal/font-selection.js';
 import {
   bakeFont,
@@ -244,7 +244,7 @@ interface DirectBakeArguments {
   readonly bitmapStrikes?: readonly [number, ...number[]];
   readonly msdf: boolean;
   readonly slug: boolean;
-  readonly unicodeRanges?: readonly UnicodeRangeV0[];
+  readonly unicodeRanges?: readonly UnicodeRange[];
   readonly check: boolean;
 }
 
@@ -260,7 +260,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let bitmapStrikes: readonly [number, ...number[]] | undefined;
   let msdf = false;
   let slug = false;
-  let unicodeRanges: readonly UnicodeRangeV0[] | undefined;
+  let unicodeRanges: readonly UnicodeRange[] | undefined;
   let check = false;
   let json = false;
   let help = false;
@@ -363,7 +363,7 @@ function bitmapStrikeList(value: string): readonly [number, ...number[]] {
   return strikes as [number, ...number[]];
 }
 
-function parseUnicodeSet(value: string): readonly UnicodeRangeV0[] {
+function parseUnicodeSet(value: string): readonly UnicodeRange[] {
   const ranges = value.split(',').map((part) => {
     const match = /^U\+([0-9A-Fa-f]{1,6})(?:-U\+?([0-9A-Fa-f]{1,6})|-([0-9A-Fa-f]{1,6}))?$/u.exec(part.trim());
     if (match === null) throw new TypeError('--unicodes requires comma-separated U+XXXX or U+XXXX-YYYY ranges');

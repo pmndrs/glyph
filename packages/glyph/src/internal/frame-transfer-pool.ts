@@ -12,7 +12,7 @@ export interface FrameTransferPoolLimits {
   readonly maximumPooledBytes: number;
 }
 
-export interface FrameTransferPublicationV0 {
+export interface FrameTransferPublication {
   readonly type: typeof FRAME_PUBLICATION_TYPE;
   readonly protocolVersion: typeof FRAME_TRANSFER_PROTOCOL_VERSION;
   readonly transferId: number;
@@ -23,7 +23,7 @@ export interface FrameTransferPublicationV0 {
   readonly buffer: ArrayBuffer;
 }
 
-export interface FrameTransferReturnV0 {
+export interface FrameTransferReturn {
   readonly type: typeof FRAME_RETURN_TYPE;
   readonly protocolVersion: typeof FRAME_TRANSFER_PROTOCOL_VERSION;
   readonly transferId: number;
@@ -49,7 +49,7 @@ export interface FrameTransferPoolStats {
 }
 
 export type FrameTransferResult =
-  | Readonly<{ ok: true; publication: FrameTransferPublicationV0 }>
+  | Readonly<{ ok: true; publication: FrameTransferPublication }>
   | Readonly<{ ok: false; reason: 'backpressure' | 'oversized' | 'transfer-failed'; error?: unknown }>;
 
 export type FrameReturnResult =
@@ -60,7 +60,7 @@ export interface FrameTransferPool {
   transfer(
     bytes: Uint8Array,
     publication: Readonly<{ sessionId: number; planRevision: number }>,
-    send: (message: FrameTransferPublicationV0, transfer: readonly Transferable[]) => void,
+    send: (message: FrameTransferPublication, transfer: readonly Transferable[]) => void,
   ): FrameTransferResult;
   acceptReturn(message: unknown): FrameReturnResult;
   stats(): FrameTransferPoolStats;
@@ -126,7 +126,7 @@ export function createFrameTransferPool(limits: FrameTransferPoolLimits): FrameT
 
       const transferId = nextAvailableTransferId(nextTransferId, outstanding);
       nextTransferId = transferId === 0xffff_ffff ? 1 : transferId + 1;
-      const message: FrameTransferPublicationV0 = {
+      const message: FrameTransferPublication = {
         type: FRAME_PUBLICATION_TYPE,
         protocolVersion: FRAME_TRANSFER_PROTOCOL_VERSION,
         transferId,
@@ -165,7 +165,7 @@ export function createFrameTransferPool(limits: FrameTransferPoolLimits): FrameT
     },
 
     acceptReturn(message) {
-      if (!isFrameTransferReturnV0(message)) {
+      if (!isFrameTransferReturn(message)) {
         stats.rejectedReturns += 1;
         return { ok: false, reason: 'invalid-message' };
       }
@@ -207,14 +207,14 @@ export function createFrameTransferPool(limits: FrameTransferPoolLimits): FrameT
 
 /** Transfer a retired root-owned publication back to its originating worker. */
 export function returnFrameTransfer(
-  publication: FrameTransferPublicationV0,
-  send: (message: FrameTransferReturnV0, transfer: readonly Transferable[]) => void,
+  publication: FrameTransferPublication,
+  send: (message: FrameTransferReturn, transfer: readonly Transferable[]) => void,
 ): void {
-  if (!isFrameTransferPublicationV0(publication)) throw new TypeError('invalid frame transfer publication');
+  if (!isFrameTransferPublication(publication)) throw new TypeError('invalid frame transfer publication');
   if (publication.buffer.byteLength !== publication.capacity) {
     throw new TypeError('frame transfer is detached or has the wrong capacity');
   }
-  const message: FrameTransferReturnV0 = {
+  const message: FrameTransferReturn = {
     type: FRAME_RETURN_TYPE,
     protocolVersion: FRAME_TRANSFER_PROTOCOL_VERSION,
     transferId: publication.transferId,
@@ -227,7 +227,7 @@ export function returnFrameTransfer(
   }
 }
 
-export function isFrameTransferPublicationV0(value: unknown): value is FrameTransferPublicationV0 {
+export function isFrameTransferPublication(value: unknown): value is FrameTransferPublication {
   if (!isRecord(value) || value.type !== FRAME_PUBLICATION_TYPE || value.protocolVersion !== 0) return false;
   return (
     positiveU32(value.transferId) &&
@@ -240,7 +240,7 @@ export function isFrameTransferPublicationV0(value: unknown): value is FrameTran
   );
 }
 
-export function isFrameTransferReturnV0(value: unknown): value is FrameTransferReturnV0 {
+export function isFrameTransferReturn(value: unknown): value is FrameTransferReturn {
   if (!isRecord(value) || value.type !== FRAME_RETURN_TYPE || value.protocolVersion !== 0) return false;
   return positiveU32(value.transferId) && positiveU32(value.capacity) && value.buffer instanceof ArrayBuffer;
 }

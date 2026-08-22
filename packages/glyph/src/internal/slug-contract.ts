@@ -10,17 +10,17 @@ export const SLUG_PLANE_UNITS_PER_EM = 2048 as const;
 export const SLUG_DEFAULT_BAND_COUNT = 16 as const;
 export const SLUG_GLYPH_RECORD_STRIDE = 40 as const;
 
-export interface SlugDescriptorV0 {
+export interface SlugDescriptor {
   readonly [key: string]: JsonValue;
   readonly generatorVersion: typeof SLUG_GENERATOR_VERSION;
 }
 
 const descriptor = Object.freeze({
   generatorVersion: SLUG_GENERATOR_VERSION,
-}) satisfies SlugDescriptorV0;
+}) satisfies SlugDescriptor;
 
 /** Return the fixed, quality-preserving Slug V0 payload descriptor. */
-export function slugDescriptor(): SlugDescriptorV0 {
+export function slugDescriptor(): SlugDescriptor {
   return descriptor;
 }
 

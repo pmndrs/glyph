@@ -43,7 +43,7 @@ export interface KhronosValidationReport {
   readonly info: Readonly<Record<string, unknown>>;
 }
 
-export interface ValidatedFontArtifactV0 {
+export interface ValidatedFontArtifact {
   readonly document: Readonly<Record<string, unknown>>;
   readonly shapingSfnt: Uint8Array;
   readonly glyphExtents: Uint8Array;
@@ -67,7 +67,7 @@ export class FontArtifactValidationError extends Error {
   }
 }
 
-export async function validateFontArtifact(bytes: Uint8Array): Promise<ValidatedFontArtifactV0> {
+export async function validateFontArtifact(bytes: Uint8Array): Promise<ValidatedFontArtifact> {
   const parsed = parseGlb(bytes);
   const khronos = await validateWithKhronos(bytes, parsed.document);
   validateFontExtensionSchema(parsed.document);
@@ -287,7 +287,7 @@ function schemaIssue(error: ErrorObject): FontArtifactValidationIssue {
 async function validateFontSemantics(
   parsed: ParsedGlb,
   khronos: KhronosValidationReport,
-): Promise<ValidatedFontArtifactV0> {
+): Promise<ValidatedFontArtifact> {
   const { document, bin, declaredBinLength } = parsed;
   const extensionsUsed = stringArray(document.extensionsUsed, 'extensionsUsed', '/extensionsUsed');
   const extensionsRequired = stringArray(document.extensionsRequired, 'extensionsRequired', '/extensionsRequired');

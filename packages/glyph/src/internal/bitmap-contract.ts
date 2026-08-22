@@ -1,6 +1,6 @@
 import type { RasterKey } from '../identity.js';
 import type { JsonValue, StaticNumberTuple } from '../raster.js';
-import { normalizeRasterCoverage, type RasterCoverage, type RasterCoverageV0 } from '../raster-coverage.js';
+import { normalizeRasterCoverage, type RasterCoverage } from '../raster-coverage.js';
 import { deriveRasterKey } from './raster-identity.js';
 
 export const BITMAP_KIND = 'bitmap' as const;
@@ -14,16 +14,16 @@ export interface BitmapOptions<Strikes extends readonly [number, ...number[]]> {
   readonly coverage?: RasterCoverage;
 }
 
-export interface BitmapDescriptorV0 {
+export interface BitmapDescriptor {
   readonly [key: string]: JsonValue;
   readonly generatorVersion: typeof BITMAP_GENERATOR_VERSION;
   readonly strikes: readonly number[];
-  readonly coverage?: RasterCoverageV0;
+  readonly coverage?: RasterCoverage;
 }
 
 export interface NormalizedBitmapOptions {
   readonly strikes: readonly [number, ...number[]];
-  readonly coverage?: RasterCoverageV0;
+  readonly coverage?: RasterCoverage;
 }
 
 function canonicalStrikes(values: readonly number[]): readonly number[] {
@@ -43,7 +43,7 @@ function canonicalStrikes(values: readonly number[]): readonly number[] {
 /** Create the complete payload-changing descriptor owned by the bitmap package. */
 export function bitmapDescriptor<const Strikes extends readonly [number, ...number[]]>(
   options: BitmapOptions<Strikes>,
-): BitmapDescriptorV0 {
+): BitmapDescriptor {
   const normalized = normalizeBitmapOptions(options);
   return canonicalizeBitmapDescriptor(normalized.strikes, normalized.coverage);
 }
@@ -70,7 +70,7 @@ export function normalizeBitmapOptions(value: unknown): NormalizedBitmapOptions 
 }
 
 /** Canonicalize JSON strike data at analyzer and artifact-validation boundaries. */
-export function canonicalizeBitmapDescriptor(strikes: readonly number[], coverage?: unknown): BitmapDescriptorV0 {
+export function canonicalizeBitmapDescriptor(strikes: readonly number[], coverage?: unknown): BitmapDescriptor {
   const normalizedCoverage = normalizeRasterCoverage(coverage);
   return Object.freeze({
     ...(normalizedCoverage === undefined ? {} : { coverage: normalizedCoverage }),
@@ -80,7 +80,7 @@ export function canonicalizeBitmapDescriptor(strikes: readonly number[], coverag
 }
 
 /** Derive a key from a descriptor that has already crossed package-owned validation. */
-export function bitmapDescriptorRasterKey(descriptor: BitmapDescriptorV0): Promise<RasterKey> {
+export function bitmapDescriptorRasterKey(descriptor: BitmapDescriptor): Promise<RasterKey> {
   return deriveRasterKey({
     descriptor,
     extension: BITMAP_EXTENSION,

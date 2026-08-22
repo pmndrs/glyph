@@ -576,25 +576,25 @@ Every raster module's draw-batch type extends the renderer-neutral `RasterDrawBa
 ## Shared bake core
 
 ```ts
-interface FontBakeRequestV0 {
+interface FontBakeRequest {
   source: Uint8Array;
-  descriptor: FontBakeDescriptorV0;
+  descriptor: FontBakeDescriptor;
 }
 
-interface FontBakeDescriptorV0 {
+interface FontBakeDescriptor {
   formatVersion: 0;
   fontFaceIndex: number;
 }
 
-interface BakeArtifactV0 {
+interface BakeArtifact {
   role: 'font' | 'raster' | 'raster-page';
   id: string;
   bytes: Uint8Array;
   sha256: Sha256Hex;
 }
 
-interface BakeResultV0 {
-  artifacts: readonly BakeArtifactV0[];
+interface BakeResult {
+  artifacts: readonly BakeArtifact[];
   report: FontPayloadReport;
   warnings: readonly BakeWarning[];
 }
@@ -639,7 +639,7 @@ interface FontPayloadReport {
   }[];
   containers: readonly {
     artifactId: string;
-    role: BakeArtifactV0['role'];
+    role: BakeArtifact['role'];
     jsonBytes: number;
     paddingBytes: number;
     totalBytes: number;
@@ -650,7 +650,7 @@ interface FontPayloadReport {
 
 The font bake core owns only shaping data, shared metrics, glyph identity, provenance, and the read-only source-font context offered to raster bakers. It has no raster descriptor union. Bitmap, MSDF, Slug, and external packages each own their options, descriptor schema, generator, artifact schema, writer, validator, and diagnostics.
 
-The Node and Worker hosts orchestrate selected raster baker modules and compose their returned artifacts. `RasterPackagingV0` belongs to that generic composition envelope, not to a raster's internal data schema. `artifact` controls whether the companion raster index is embedded in the core GLB or emitted separately; `pages` controls whether page payloads are embedded in that companion asset or emitted as independently addressable artifacts. Descriptor bodies remain opaque to core. For embedded composition, every integer glTF buffer-view reference in extension JSON is named exactly `bufferView` or ends in `BufferView`; the host range-checks and rebases those fields without interpreting package semantics.
+The Node and Worker hosts orchestrate selected raster baker modules and compose their returned artifacts. `RasterPackaging` belongs to that generic composition envelope, not to a raster's internal data schema. `artifact` controls whether the companion raster index is embedded in the core GLB or emitted separately; `pages` controls whether page payloads are embedded in that companion asset or emitted as independently addressable artifacts. Descriptor bodies remain opaque to core. For embedded composition, every integer glTF buffer-view reference in extension JSON is named exactly `bufferView` or ends in `BufferView`; the host range-checks and rebases those fields without interpreting package semantics.
 
 ## Node host
 
@@ -660,7 +660,7 @@ interface NodeBakeOptions<
 > {
   input: string | URL;
   output: string | URL;
-  font: Omit<FontBakeDescriptorV0, 'formatVersion'>;
+  font: Omit<FontBakeDescriptor, 'formatVersion'>;
   rasters?: Rasters;
   signal?: AbortSignal;
 }
@@ -683,7 +683,7 @@ interface NodeBakeExecutionReport {
     processMaxRssBytes: number;
   };
   outputs: readonly {
-    role: BakeArtifactV0['role'];
+    role: BakeArtifact['role'];
     file: string;
     bytes: number;
     sha256: string;
@@ -779,14 +779,14 @@ Dynamic font URLs remain valid. When discovery cannot establish a local source, 
 ## Worker protocol
 
 ```ts
-interface RuntimeBakeRequestV0 {
+interface RuntimeBakeRequest {
   type: 'bake-font-v0';
   id: number;
   source: ArrayBuffer;
-  font: FontBakeDescriptorV0;
+  font: FontBakeDescriptor;
 }
 
-interface RuntimeBakeSuccessV0 {
+interface RuntimeBakeSuccess {
   type: 'bake-font-result-v0';
   id: number;
   ok: true;
@@ -800,7 +800,7 @@ interface RuntimeBakeSuccessV0 {
   warnings: readonly BakeWarning[];
 }
 
-interface RuntimeBakeFailureV0 {
+interface RuntimeBakeFailure {
   type: 'bake-font-result-v0';
   id: number;
   ok: false;
@@ -1223,12 +1223,12 @@ interface RasterBakeFontContext {
 interface RasterBakeRequest<Descriptor> {
   font: RasterBakeFontContext;
   rasterKey: string;
-  packaging: RasterPackagingV0;
+  packaging: RasterPackaging;
   descriptor: Descriptor;
   signal?: AbortSignal;
 }
 
-interface RasterPackagingV0 {
+interface RasterPackaging {
   artifact: 'embedded' | 'external';
   pages: 'embedded' | 'external';
 }
@@ -1238,7 +1238,7 @@ interface RasterBakeArtifact<Kind extends string = string> {
   kind: Kind;
   extension: string;
   version: number;
-  artifacts: readonly BakeArtifactV0[];
+  artifacts: readonly BakeArtifact[];
   report: RasterPayloadReport;
 }
 
@@ -1248,7 +1248,7 @@ declare function defineRasterBaker<const Kind extends string, Options, Descripto
 
 interface RasterBakePlan<M extends AnyRasterBakerModule> {
   baker: M;
-  packaging: RasterPackagingV0;
+  packaging: RasterPackaging;
   options: RasterBakeOptionsOf<M>;
 }
 ```

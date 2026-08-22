@@ -1,38 +1,24 @@
-import type { JsonValue } from './raster.js';
-
 export const MAX_RASTER_COVERAGE_RANGES = 1_024 as const;
 export const MAX_RASTER_COVERAGE_SCALARS = 65_536 as const;
 export const MAX_RASTER_COVERAGE_TEXT_CODE_POINTS = 65_536 as const;
 export const MAX_RASTER_COVERAGE_GLYPH_IDS = 65_535 as const;
 
-export interface RasterUnicodeRange {
+export type RasterUnicodeRange = {
   /** Inclusive Unicode scalar value. */
   readonly start: number;
   /** Inclusive Unicode scalar value. */
   readonly end: number;
-}
-
-export interface RasterUnicodeRangeV0 extends RasterUnicodeRange {
-  readonly [key: string]: number;
-}
+};
 
 /**
  * Bounded seeds for a sparse raster artifact. Seeds select nominal font-local glyph IDs only;
  * they do not request source subsetting, glyph remapping, or transitive shaping closure.
  */
-export interface RasterCoverage {
+export type RasterCoverage = {
   readonly unicodeRanges?: readonly RasterUnicodeRange[];
   readonly text?: string;
   readonly glyphIds?: readonly number[];
-}
-
-/** Canonical JSON representation authenticated as part of a raster descriptor. */
-export interface RasterCoverageV0 {
-  readonly [key: string]: JsonValue;
-  readonly unicodeRanges?: readonly RasterUnicodeRangeV0[];
-  readonly text?: string;
-  readonly glyphIds?: readonly number[];
-}
+};
 
 /** A shaped layout references font-local glyphs omitted from its bounded raster artifact. */
 export class RasterCoverageError extends Error {
@@ -48,7 +34,7 @@ export class RasterCoverageError extends Error {
 }
 
 /** Validate, copy, sort, and freeze caller-authored sparse raster coverage. */
-export function normalizeRasterCoverage(value: unknown): RasterCoverageV0 | undefined {
+export function normalizeRasterCoverage(value: unknown): RasterCoverage | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError('raster coverage must be an object');
@@ -75,7 +61,7 @@ export function normalizeRasterCoverage(value: unknown): RasterCoverageV0 | unde
   });
 }
 
-function normalizeUnicodeRanges(value: unknown): readonly RasterUnicodeRangeV0[] | undefined {
+function normalizeUnicodeRanges(value: unknown): readonly RasterUnicodeRange[] | undefined {
   if (!Array.isArray(value)) throw new TypeError('raster coverage unicodeRanges must be an array');
   if (value.length === 0) return undefined;
   if (value.length > MAX_RASTER_COVERAGE_RANGES) {

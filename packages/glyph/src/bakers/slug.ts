@@ -16,7 +16,7 @@ import {
   SLUG_FORMAT_VERSION,
   SLUG_KIND,
   slugDescriptor,
-  type SlugDescriptorV0,
+  type SlugDescriptor,
 } from '../internal/slug-contract.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
 
@@ -24,7 +24,7 @@ export { slugBakerAbi } from '../generated/slug-baker-abi.js';
 
 export type SlugBakerOptions = undefined;
 
-export interface SlugBakerRequestV0 {
+export interface SlugBakerRequest {
   readonly fontFaceIndex: number;
   readonly glyphCount: number;
   readonly shapingHash: string;
@@ -33,21 +33,21 @@ export interface SlugBakerRequestV0 {
     readonly artifact: 'embedded' | 'external';
     readonly pages: 'embedded' | 'external';
   };
-  readonly descriptor: SlugDescriptorV0;
+  readonly descriptor: SlugDescriptor;
 }
 
-export interface SlugBakerCoreRequestV0 {
+export interface SlugBakerCoreRequest {
   readonly source: Uint8Array;
-  readonly request: SlugBakerRequestV0;
+  readonly request: SlugBakerRequest;
   readonly onProgress?: BakeProgressListener;
 }
 
 export interface SlugBakerCore {
-  bake(request: SlugBakerCoreRequestV0): RasterBakeArtifact<typeof SLUG_KIND>;
+  bake(request: SlugBakerCoreRequest): RasterBakeArtifact<typeof SLUG_KIND>;
 }
 
 export type SlugBakerWasmSource = BufferSource | WebAssembly.Module;
-export type SlugBakerAbiV0 = SlugBakerAbi;
+export type { SlugBakerAbi };
 
 export class SlugBakeError extends Error {
   readonly code: string;
@@ -84,7 +84,7 @@ export async function createSlugBaker(source: SlugBakerWasmSource): Promise<Slug
 }
 
 export function createSlugBakerFromInstance(instance: WebAssembly.Instance): SlugBakerCore {
-  return createDirectRasterBakerFromInstance<SlugBakerRequestV0, typeof SLUG_KIND>(
+  return createDirectRasterBakerFromInstance<SlugBakerRequest, typeof SLUG_KIND>(
     instance,
     slugBakerAbi satisfies DirectRasterBakerAbi,
     {
@@ -100,13 +100,13 @@ export function createSlugBakerFromInstance(instance: WebAssembly.Instance): Slu
 
 export function slugBakerFromCore(
   core: SlugBakerCore,
-): RasterBakerModule<typeof SLUG_KIND, SlugBakerOptions, SlugDescriptorV0> {
+): RasterBakerModule<typeof SLUG_KIND, SlugBakerOptions, SlugDescriptor> {
   return {
     kind: SLUG_KIND,
     extension: SLUG_EXTENSION,
     version: SLUG_FORMAT_VERSION,
     descriptor: slugDescriptor,
-    async bake(request: RasterBakeRequest<SlugDescriptorV0>) {
+    async bake(request: RasterBakeRequest<SlugDescriptor>) {
       request.signal?.throwIfAborted();
       const result = core.bake({
         source: request.font.source,
@@ -142,7 +142,7 @@ async function loadDefaultSlugBaker(): Promise<ReturnType<typeof slugBakerFromCo
 
 const defaultSlugBaker = cacheSuccessfulPromise(loadDefaultSlugBaker);
 
-export const slugBaker: RasterBakerModule<typeof SLUG_KIND, SlugBakerOptions, SlugDescriptorV0> = {
+export const slugBaker: RasterBakerModule<typeof SLUG_KIND, SlugBakerOptions, SlugDescriptor> = {
   kind: SLUG_KIND,
   extension: SLUG_EXTENSION,
   version: SLUG_FORMAT_VERSION,

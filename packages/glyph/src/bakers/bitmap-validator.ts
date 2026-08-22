@@ -49,7 +49,7 @@ import {
   BITMAP_FORMAT_VERSION,
   bitmapDescriptorRasterKey,
   canonicalizeBitmapDescriptor,
-  type BitmapDescriptorV0,
+  type BitmapDescriptor,
 } from '../internal/bitmap-contract.js';
 
 const RECORD_STRIDE = 20;
@@ -104,12 +104,12 @@ export interface BitmapArtifactValidationContext {
   readonly shapingHash: Sha256Hex | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
-  readonly descriptor: BitmapDescriptorV0;
+  readonly descriptor: BitmapDescriptor;
   readonly externalPages?: ReadonlyMap<string, Uint8Array>;
   readonly limits?: Partial<BitmapArtifactValidationLimits>;
 }
 
-export interface ValidatedBitmapPageV0 {
+export interface ValidatedBitmapPage {
   readonly width: number;
   readonly height: number;
   readonly bytes: Uint8Array;
@@ -117,19 +117,19 @@ export interface ValidatedBitmapPageV0 {
   readonly uri?: string;
 }
 
-export interface ValidatedBitmapStrikeV0 {
+export interface ValidatedBitmapStrike {
   readonly ppem: number;
   readonly planeUnitsPerEm: number;
   readonly records: Uint8Array;
-  readonly pages: readonly ValidatedBitmapPageV0[];
+  readonly pages: readonly ValidatedBitmapPage[];
 }
 
-export interface ValidatedBitmapArtifactV0 {
+export interface ValidatedBitmapArtifact {
   readonly document: Readonly<Record<string, unknown>>;
   readonly rasterKey: RasterKey;
   readonly shapingHash: Sha256Hex;
   readonly glyphCount: number;
-  readonly strikes: readonly ValidatedBitmapStrikeV0[];
+  readonly strikes: readonly ValidatedBitmapStrike[];
   readonly khronos: KhronosValidationReport;
 }
 
@@ -150,7 +150,7 @@ export class BitmapArtifactValidationError extends Error {
 export async function validateBitmapArtifact(
   bytes: Uint8Array,
   context: BitmapArtifactValidationContext,
-): Promise<ValidatedBitmapArtifactV0> {
+): Promise<ValidatedBitmapArtifact> {
   try {
     const parsed = parseGlb(bytes);
     const khronos = await validateWithKhronos(bytes, parsed.document);
@@ -168,7 +168,7 @@ async function validateBitmapSemantics(
   parsed: ParsedGlb,
   khronos: KhronosValidationReport,
   context: BitmapArtifactValidationContext,
-): Promise<ValidatedBitmapArtifactV0> {
+): Promise<ValidatedBitmapArtifact> {
   const expectedDescriptor = canonicalizeBitmapDescriptor(context.descriptor.strikes, context.descriptor.coverage);
   if (canonicalJson(context.descriptor) !== canonicalJson(expectedDescriptor)) {
     fail('BITMAP_DESCRIPTOR', 'descriptor is not in canonical bitmap form', '/descriptor');
@@ -264,7 +264,7 @@ async function validateBitmapSemantics(
   }
 
   let gpuBytes = 0;
-  const strikes: ValidatedBitmapStrikeV0[] = [];
+  const strikes: ValidatedBitmapStrike[] = [];
   for (let strikeIndex = 0; strikeIndex < strikeValues.length; strikeIndex += 1) {
     const path = `/extensions/${BITMAP_EXTENSION}/strikes/${strikeIndex}`;
     const strike = requireNonArrayObject(strikeValues[strikeIndex], path);
@@ -283,7 +283,7 @@ async function validateBitmapSemantics(
       fail('RECORD_LENGTH', 'record view must contain exactly glyphCount × 20 bytes', `${path}/recordBufferView`);
     }
     const pageValues = asArray(strike.pages, `${path}/pages`);
-    const pages: ValidatedBitmapPageV0[] = [];
+    const pages: ValidatedBitmapPage[] = [];
     for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
       const pagePath = `${path}/pages/${pageIndex}`;
       const page = requireNonArrayObject(pageValues[pageIndex], pagePath);
@@ -294,7 +294,7 @@ async function validateBitmapSemantics(
       }
       const variants = asArray(page.variants, `${pagePath}/variants`);
       const seenFormats = new Set<string>();
-      let baselinePage: ValidatedBitmapPageV0 | undefined;
+      let baselinePage: ValidatedBitmapPage | undefined;
       for (let variantIndex = 0; variantIndex < variants.length; variantIndex += 1) {
         const variantPath = `${pagePath}/variants/${variantIndex}`;
         const variant = requireNonArrayObject(variants[variantIndex], variantPath);

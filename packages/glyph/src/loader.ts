@@ -1,4 +1,4 @@
-import type { ParsedGlb, ValidatedFontArtifactV0 } from './font-baker/validator.js';
+import type { ParsedGlb, ValidatedFontArtifact } from './font-baker/validator.js';
 import {
   FONT_BAKER_VERSION as CORE_BAKER_VERSION,
   FONT_FORMAT_VERSION as CORE_FORMAT_VERSION,
@@ -24,7 +24,7 @@ import type {
   RegisteredRaster,
 } from './raster.js';
 import type { BakeProgressListener } from './bake.js';
-import type { RuntimeBakeRasterV0, RuntimeBakeUnicodeRangeV0 } from './internal/runtime-bake-protocol.js';
+import type { RuntimeBakeRaster, RuntimeBakeUnicodeRange } from './internal/runtime-bake-protocol.js';
 
 const DEFAULT_MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
 const DEFAULT_MAX_BUFFER_VIEWS = 4_096;
@@ -53,8 +53,8 @@ export interface RuntimeFontBakeRequest {
   readonly bakedUrl?: string;
   /** Persistent derived-artifact lifetime inherited from the source response. Omitted means memory-only. */
   readonly cache?: { readonly expiresAt: number };
-  readonly unicodeRanges?: readonly RuntimeBakeUnicodeRangeV0[];
-  readonly rasters?: readonly RuntimeBakeRasterV0[];
+  readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  readonly rasters?: readonly RuntimeBakeRaster[];
   readonly signal?: AbortSignal;
   readonly onProgress?: BakeProgressListener;
 }
@@ -146,7 +146,7 @@ export class FontRegistry {
     this.#checkArtifactSize(bytes.byteLength);
     const owned = copyView(bytes);
     const validator = await loadValidator();
-    let validated: ValidatedFontArtifactV0;
+    let validated: ValidatedFontArtifact;
     try {
       validated = await validator.validateFontArtifact(owned);
     } catch (error) {

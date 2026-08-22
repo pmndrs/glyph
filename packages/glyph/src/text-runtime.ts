@@ -14,8 +14,8 @@ import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
 import { normalizeUnicodeRanges } from './internal/font-selection.js';
 import {
   workerRasterKinds,
-  type RuntimeBakeRasterV0,
-  type RuntimeBakeUnicodeRangeV0,
+  type RuntimeBakeRaster,
+  type RuntimeBakeUnicodeRange,
 } from './internal/runtime-bake-protocol.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
 import type {
@@ -45,7 +45,7 @@ export type LoadedFontInput =
   | {
       readonly source: string | URL;
       readonly runtimeBake: RuntimeFontBake;
-      readonly unicodeRanges?: readonly RuntimeBakeUnicodeRangeV0[];
+      readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
     };
 
 export interface LoadedFontRequest<Technique extends AnyRasterTechnique> {
@@ -430,7 +430,7 @@ class TextRuntimeImpl implements TextRuntime {
   }
 }
 
-async function runtimeBakeRaster(request: RasterTechniqueRequest<AnyRasterTechnique>): Promise<RuntimeBakeRasterV0> {
+async function runtimeBakeRaster(request: RasterTechniqueRequest<AnyRasterTechnique>): Promise<RuntimeBakeRaster> {
   const { technique } = request;
   const descriptor = techniqueOperations(technique).descriptor(
     request.options as RasterOptionsArgument<RasterOptionsOf<AnyRasterTechnique>>,

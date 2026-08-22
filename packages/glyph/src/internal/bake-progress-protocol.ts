@@ -10,7 +10,7 @@ const PHASES = new Set<BakeProgressPhase>([
   'complete',
 ]);
 
-export interface BakeProgressMessageV0 extends BakeProgress {
+export interface BakeProgressMessage extends BakeProgress {
   readonly type: 'bake-progress-v0';
   readonly id: number;
 }
@@ -21,11 +21,11 @@ export function bakeProgressMessage(
   phase: BakeProgressPhase,
   completed: number,
   total: number,
-): BakeProgressMessageV0 {
+): BakeProgressMessage {
   return { type: 'bake-progress-v0', id, stage, phase, completed, total };
 }
 
-export function isBakeProgressMessageV0(value: unknown): value is BakeProgressMessageV0 {
+export function isBakeProgressMessage(value: unknown): value is BakeProgressMessage {
   if (!isObject(value)) return false;
   return (
     value.type === 'bake-progress-v0' &&

@@ -1,10 +1,10 @@
-import type { FontBakeDescriptorV0 } from '../font-baker/index.js';
+import type { FontBakeDescriptor } from '../font-baker/index.js';
 
 interface CoreFontArtifact {
   readonly role: 'font';
 }
 
-export function fontBakeDescriptorV0(fontFaceIndex: number): FontBakeDescriptorV0 {
+export function fontBakeDescriptor(fontFaceIndex: number): FontBakeDescriptor {
   return { formatVersion: 0, fontFaceIndex };
 }
 

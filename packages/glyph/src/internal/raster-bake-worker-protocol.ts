@@ -1,7 +1,7 @@
 import type { RasterPayloadReport, SerializedBakeError } from '../bake.js';
 import type { RasterKey, Sha256Hex } from '../identity.js';
 
-export interface RasterBakeWorkerRequestV0 {
+export interface RasterBakeWorkerRequest {
   readonly type: 'bake-raster-v0';
   readonly id: number;
   readonly source: ArrayBuffer;
@@ -12,14 +12,14 @@ export interface RasterBakeWorkerRequestV0 {
   readonly options: unknown;
 }
 
-export interface RasterBakeWorkerArtifactV0 {
+export interface RasterBakeWorkerArtifact {
   readonly role: 'raster' | 'raster-page';
   readonly id: string;
   readonly bytes: ArrayBuffer;
   readonly sha256: Sha256Hex;
 }
 
-export interface RasterBakeWorkerSuccessV0 {
+export interface RasterBakeWorkerSuccess {
   readonly type: 'bake-raster-result-v0';
   readonly id: number;
   readonly ok: true;
@@ -27,20 +27,20 @@ export interface RasterBakeWorkerSuccessV0 {
   readonly kind: string;
   readonly extension: string;
   readonly version: number;
-  readonly artifacts: readonly RasterBakeWorkerArtifactV0[];
+  readonly artifacts: readonly RasterBakeWorkerArtifact[];
   readonly report: RasterPayloadReport;
 }
 
-export interface RasterBakeWorkerFailureV0 {
+export interface RasterBakeWorkerFailure {
   readonly type: 'bake-raster-result-v0';
   readonly id: number;
   readonly ok: false;
   readonly error: SerializedBakeError;
 }
 
-export type RasterBakeWorkerResultV0 = RasterBakeWorkerSuccessV0 | RasterBakeWorkerFailureV0;
+export type RasterBakeWorkerResult = RasterBakeWorkerSuccess | RasterBakeWorkerFailure;
 
-export function isRasterBakeWorkerRequestV0(value: unknown): value is RasterBakeWorkerRequestV0 {
+export function isRasterBakeWorkerRequest(value: unknown): value is RasterBakeWorkerRequest {
   return (
     isObject(value) &&
     value.type === 'bake-raster-v0' &&
@@ -54,7 +54,7 @@ export function isRasterBakeWorkerRequestV0(value: unknown): value is RasterBake
   );
 }
 
-export function isRasterBakeWorkerResultV0(value: unknown): value is RasterBakeWorkerResultV0 {
+export function isRasterBakeWorkerResult(value: unknown): value is RasterBakeWorkerResult {
   if (
     !isObject(value) ||
     value.type !== 'bake-raster-result-v0' ||
@@ -75,7 +75,7 @@ export function isRasterBakeWorkerResultV0(value: unknown): value is RasterBakeW
   );
 }
 
-function isArtifact(value: unknown): value is RasterBakeWorkerArtifactV0 {
+function isArtifact(value: unknown): value is RasterBakeWorkerArtifact {
   return (
     isObject(value) &&
     (value.role === 'raster' || value.role === 'raster-page') &&

@@ -48,7 +48,7 @@ import {
   SLUG_GLYPH_RECORD_STRIDE,
   SLUG_PLANE_UNITS_PER_EM,
   slugDescriptorRasterKey,
-  type SlugDescriptorV0,
+  type SlugDescriptor,
 } from '../internal/slug-contract.js';
 
 const CURVE_BYTES_PER_TEXEL = 8;
@@ -81,38 +81,38 @@ export interface SlugArtifactValidationContext {
   readonly shapingHash: Sha256Hex | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
-  readonly descriptor: SlugDescriptorV0;
+  readonly descriptor: SlugDescriptor;
   readonly externalPages?: ReadonlyMap<string, Uint8Array>;
   readonly limits?: Partial<SlugArtifactValidationLimits>;
 }
 
-export interface ValidatedSlugResourceV0 {
+export interface ValidatedSlugResource {
   readonly bytes: Uint8Array;
   readonly source: 'embedded' | 'external';
   readonly uri?: string;
 }
 
-export interface ValidatedSlugPageV0 {
+export interface ValidatedSlugPage {
   readonly curveWidth: number;
   readonly curveHeight: number;
-  readonly curve: ValidatedSlugResourceV0;
+  readonly curve: ValidatedSlugResource;
   readonly headerCount: number;
   readonly headerWidth: number;
   readonly headerHeight: number;
-  readonly headers: ValidatedSlugResourceV0;
+  readonly headers: ValidatedSlugResource;
   readonly referenceCount: number;
   readonly referenceWidth: number;
   readonly referenceHeight: number;
-  readonly references: ValidatedSlugResourceV0;
+  readonly references: ValidatedSlugResource;
 }
 
-export interface ValidatedSlugArtifactV0 {
+export interface ValidatedSlugArtifact {
   readonly document: Readonly<Record<string, unknown>>;
   readonly rasterKey: RasterKey;
   readonly shapingHash: Sha256Hex;
   readonly glyphCount: number;
   readonly records: Uint8Array;
-  readonly pages: readonly ValidatedSlugPageV0[];
+  readonly pages: readonly ValidatedSlugPage[];
   readonly khronos: KhronosValidationReport;
 }
 
@@ -134,7 +134,7 @@ export class SlugArtifactValidationError extends Error {
 export async function validateSlugArtifact(
   bytes: Uint8Array,
   context: SlugArtifactValidationContext,
-): Promise<ValidatedSlugArtifactV0> {
+): Promise<ValidatedSlugArtifact> {
   try {
     const parsed = parseGlb(bytes);
     const khronos = await validateWithKhronos(bytes, parsed.document);
@@ -152,7 +152,7 @@ async function validateSlugSemantics(
   parsed: ParsedGlb,
   khronos: KhronosValidationReport,
   context: SlugArtifactValidationContext,
-): Promise<ValidatedSlugArtifactV0> {
+): Promise<ValidatedSlugArtifact> {
   await validateContext(context);
   const document = parsed.document;
   const used = stringArray(document.extensionsUsed, '/extensionsUsed');
@@ -229,7 +229,7 @@ async function validateSlugSemantics(
   }
 
   let gpuBytes = 0;
-  const pages: ValidatedSlugPageV0[] = [];
+  const pages: ValidatedSlugPage[] = [];
   const pageValues = asArray(extension.pages, `${extensionPath}/pages`);
   for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
     const pagePath = `${extensionPath}/pages/${pageIndex}`;
@@ -290,7 +290,7 @@ async function validatePage(
   claimedViews: Set<number>,
   externalPages: ReadonlyMap<string, Uint8Array> | undefined,
   limits: SlugArtifactValidationLimits,
-): Promise<ValidatedSlugPageV0> {
+): Promise<ValidatedSlugPage> {
   const curve = requireNonArrayObject(page.curve, `${pagePath}/curve`);
   const curveWidth = asInteger(curve.width, `${pagePath}/curve/width`, 1, limits.maxTextureDimension2D);
   const curveHeight = asInteger(curve.height, `${pagePath}/curve/height`, 1, limits.maxTextureDimension2D);
@@ -418,7 +418,7 @@ function validateIntegerGrid(
 
 function validateSlugRecords(
   records: Uint8Array,
-  pages: readonly ValidatedSlugPageV0[],
+  pages: readonly ValidatedSlugPage[],
   glyphCount: number,
   path: string,
 ): void {
@@ -490,7 +490,7 @@ function validateSlugRecords(
 }
 
 function validateHeaderRange(
-  page: ValidatedSlugPageV0,
+  page: ValidatedSlugPage,
   headerBase: number,
   headerCount: number,
   curveBase: number,
@@ -542,7 +542,7 @@ function recordAbsentPayloadIsZero(records: Uint8Array, offset: number): boolean
   return true;
 }
 
-function pageGpuBytes(page: ValidatedSlugPageV0, path: string): number {
+function pageGpuBytes(page: ValidatedSlugPage, path: string): number {
   const curveBytes = checkedProduct(
     checkedProduct(page.curveWidth, page.curveHeight, path),
     CURVE_BYTES_PER_TEXEL,
@@ -555,7 +555,7 @@ function pageGpuBytes(page: ValidatedSlugPageV0, path: string): number {
   );
 }
 
-function validatedResource(resource: ResolvedRasterPageSource): ValidatedSlugResourceV0 {
+function validatedResource(resource: ResolvedRasterPageSource): ValidatedSlugResource {
   return {
     bytes: resource.bytes,
     source: resource.source,
