@@ -4,8 +4,8 @@
  * Each one is the smallest input that exhibits a defect the differential/packed-lane oracle or the
  * script corpora uncovered, reduced to the public `Text`/`TextGroup` surface and one baked fixture.
  * They are pinned here rather than inside the coverage files so that a red run names the defect
- * instead of naming a corpus, and so that fixing one turns exactly one test green. Cases 2 and 3
- * still fail against the current source, by design; case 1 is fixed and now guards its fix.
+ * instead of naming a corpus, and so that fixing one turns exactly one test green. All three are
+ * now fixed, and each pins its fix: reverting the fix turns exactly the case below red again.
  *
  * None of these is the defect fixed by `fix(glyph): rebuild only a slot whose retained identity
  * moved`. That fix holds: the Latin gate and every non-bidi script case pass with it and fail
@@ -20,19 +20,20 @@
  *      source glyph, never the identity that bit belonged to, so a deleted space let an unchanged
  *      glyph read a neighbour's row and skip its own record.
  *
- *   2. `replaceText` MANUFACTURES A PARAGRAPH THE ENGINE REFUSES TO PUBLISH.
- *      The engine requires every extended grapheme cluster to resolve to exactly one style, which
- *      the roadmap records as validating span boundaries against grapheme clusters. `Text` neither
- *      enforces that on its `spans` input nor preserves it across its own edit helpers: inserting a
- *      combining scalar at a legal, cluster-aligned span boundary moves that boundary into the
- *      middle of the cluster the insertion just created. The paragraph then stops publishing and
- *      reports an opaque numeric engine status.
+ *   2. `replaceText` MANUFACTURED A PARAGRAPH THE ENGINE REFUSES TO PUBLISH. FIXED.
+ *      The engine requires every extended grapheme cluster to resolve to exactly one style. `Text`
+ *      neither held that on its `spans` input nor preserved it across its own edit helpers:
+ *      inserting a combining scalar at a legal, cluster-aligned span boundary moved that boundary
+ *      into the middle of the cluster the insertion just created, and the paragraph stopped
+ *      publishing with an opaque numeric engine status. `Text` now resolves every span boundary
+ *      onto the cluster grid before a frame is built (D-265); the surface around this one case is
+ *      covered by `text-mutation-span-alignment.test.mjs`.
  *
- *   3. A SPACE FOLLOWED BY A COMBINING MARK IS REJECTED OUTRIGHT.
+ *   3. A SPACE FOLLOWED BY A COMBINING MARK WAS REJECTED OUTRIGHT. FIXED.
  *      UAX #14 LB9 does NOT attach a combining mark to a preceding SPACE, so it yields a break
  *      opportunity between them; UAX #29 GB9 attaches it unconditionally, so the two are one
  *      grapheme cluster. The break opportunity therefore falls strictly inside a cluster, and the
- *      engine rejects the whole frame instead of ignoring an opportunity it cannot take. The same
+ *      engine rejected the whole frame instead of ignoring an opportunity it cannot take. The same
  *      text after any base the two standards agree on -- a letter, a hyphen, a tab, U+00A0 -- is
  *      accepted, which isolates the disagreement as the cause.
  */
@@ -104,35 +105,31 @@ test('1. an unedited paragraph keeps every record when a bidi island is deleted 
   }
 });
 
-test(
-  '2. replaceText keeps its own spans aligned to grapheme clusters',
-  { timeout, todo: 'replaceText does not keep its own spans cluster-aligned' },
-  async () => {
-    const font = await fonts.load('inter');
-    const latin = { fontSize: 6, lineHeight: 1 };
-    // 'abc' is three single-scalar clusters, so a span over the first is cluster-aligned and legal.
-    const spans = [{ start: 0, end: 1, paint: { color: '#ff2f00' } }];
-    const mounted = mount(font, [authored('abc', latin, spans)]);
-    try {
-      const node = mounted.nodes[0];
-      assert.equal(node.inspectLayout().glyphCount, 3, 'the starting paragraph must publish');
-      // Legal by the public contract: scalar-aligned, splits no surrogate pair. It fuses 'a' and the
-      // mark into one cluster spanning [0, 2), leaving the span boundary at 1 inside it.
-      node.replaceText(1, 1, '́');
-      mounted.scene.updateMatrixWorld(true);
-      assert.equal(node.text, 'ábc');
-      assert.deepEqual(
-        [...findGraphemeBoundaries(node.text)],
-        [0, 2, 3, 4],
-        'the insertion must fuse the base and the mark into one cluster',
-      );
-      assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
-      assert.equal(node.inspectLayout().glyphCount, 3);
-    } finally {
-      unmount(mounted);
-    }
-  },
-);
+test('2. replaceText keeps its own spans aligned to grapheme clusters', { timeout }, async () => {
+  const font = await fonts.load('inter');
+  const latin = { fontSize: 6, lineHeight: 1 };
+  // 'abc' is three single-scalar clusters, so a span over the first is cluster-aligned and legal.
+  const spans = [{ start: 0, end: 1, paint: { color: '#ff2f00' } }];
+  const mounted = mount(font, [authored('abc', latin, spans)]);
+  try {
+    const node = mounted.nodes[0];
+    assert.equal(node.inspectLayout().glyphCount, 3, 'the starting paragraph must publish');
+    // Legal by the public contract: scalar-aligned, splits no surrogate pair. It fuses 'a' and the
+    // mark into one cluster spanning [0, 2), leaving the span boundary at 1 inside it.
+    node.replaceText(1, 1, '́');
+    mounted.scene.updateMatrixWorld(true);
+    assert.equal(node.text, 'ábc');
+    assert.deepEqual(
+      [...findGraphemeBoundaries(node.text)],
+      [0, 2, 3, 4],
+      'the insertion must fuse the base and the mark into one cluster',
+    );
+    assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
+    assert.equal(node.inspectLayout().glyphCount, 3);
+  } finally {
+    unmount(mounted);
+  }
+});
 
 test('3. a break opportunity inside a grapheme cluster is ignored, not rejected', { timeout }, async () => {
   const font = await fonts.load('inter');
