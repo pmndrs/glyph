@@ -15,7 +15,7 @@
     "dev": "vite",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
-    "live:check": "vitexec --gpu ./scripts/live-check.probe.ts",
+    "live:check": "node ./scripts/live-check.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
