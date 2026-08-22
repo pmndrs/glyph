@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { mtsdfBakerAbi as abi } from '@pmndrs/glyph/mtsdf-baker-abi';
+
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const manifest = 'rust/mtsdf-baker/Cargo.toml';
 const targetDirectory = fileURLToPath(new URL('../rust/mtsdf-baker/target/kernel-only-wasm/', import.meta.url));
@@ -28,7 +30,6 @@ assert.deepEqual(WebAssembly.Module.imports(module), []);
 const { exports } = await WebAssembly.instantiate(module, {});
 const memory = exports.memory;
 assert.ok(memory instanceof WebAssembly.Memory);
-const abi = JSON.parse(await readFile(new URL('../dist/mtsdf-baker-abi-v1.json', import.meta.url), 'utf8'));
 assert.equal(abi.name, 'pmndrs-glyph-mtsdf-baker');
 assert.ok(abi.artifactBaker);
 const exportNames = new Set(WebAssembly.Module.exports(module).map(({ name }) => name));

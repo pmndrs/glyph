@@ -9,6 +9,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
+import { textShaperAbi as abi } from '@pmndrs/glyph/text-shaper-abi';
 import { validateBitmapArtifact } from '@pmndrs/glyph/bakers/bitmap/validate';
 import { validateMsdfArtifact } from '@pmndrs/glyph/bakers/msdf/validate';
 import { validateSlugArtifact } from '@pmndrs/glyph/bakers/slug/validate';
@@ -27,9 +28,8 @@ const fontHandle = 1;
 const fontStackHandle = 1;
 const regionHeight = options.height;
 
-const [wasm, abi, artifact] = await Promise.all([
+const [wasm, artifact] = await Promise.all([
   readFile(options.wasm ?? new URL('../dist/text-shaper.wasm', import.meta.url)),
-  readFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8').then(JSON.parse),
   loadArtifact(options.technique, options.corpus),
 ]);
 const validated = await validateFontArtifact(artifact);

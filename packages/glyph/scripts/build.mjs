@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
-import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -325,11 +325,6 @@ await Promise.all([
   assertMtsdfArtifactBakerExports(distributedMtsdfWasm, mtsdfAbiJson),
   assertSlugArtifactBakerExports(distributedSlugWasm, slugAbiJson),
 ]);
-await writeFile(staged('bitmap-baker-abi-v0.json'), bitmapAbiJson);
-await writeFile(staged('text-shaper-abi-v0.json'), shaperAbiJson);
-await writeFile(staged('mtsdf-baker-abi-v1.json'), mtsdfAbiJson);
-await writeFile(staged('slug-baker-abi-v0.json'), slugAbiJson);
-await writeFile(staged('font-baker-abi-v0.json'), fontBakerAbiJson);
 await mkdir(staged('font-baker/schemas/'), { recursive: true });
 await copyFile(
   new URL('../src/font-baker/schemas/KHRONOS-SPEC-LICENSE.txt', import.meta.url),

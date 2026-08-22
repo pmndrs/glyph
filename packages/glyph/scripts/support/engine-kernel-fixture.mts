@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { textShaperAbi as abi } from '@pmndrs/glyph/text-shaper-abi';
 
 import {
   createBenchmarkParagraph,
@@ -25,10 +25,7 @@ export interface CapturedKernelInput {
 }
 
 export async function captureKernelWorkloads(targets: readonly number[]): Promise<readonly CapturedKernelInput[]> {
-  const [fixture, abi] = await Promise.all([
-    loadParagraphBenchmarkFixture(),
-    readFile(new URL('../../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8').then(JSON.parse),
-  ]);
+  const fixture = await loadParagraphBenchmarkFixture();
   const policy = kernelPolicyBytes(abi);
   try {
     return targets.map((target) => captureWorkload(fixture, target, policy));
