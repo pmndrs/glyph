@@ -25,7 +25,7 @@ export function bakeProgressMessage(
   return { type: 'bake-progress-v0', id, stage, phase, completed, total };
 }
 
-export function isBakeProgressMessageV0(value: unknown): value is BakeProgressMessage {
+export function isBakeProgressMessage(value: unknown): value is BakeProgressMessage {
   if (!isObject(value)) return false;
   return (
     value.type === 'bake-progress-v0' &&

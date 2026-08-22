@@ -3,12 +3,12 @@ import type { RasterKey } from '../identity.js';
 import type { RuntimeRasterBakeRequest, RuntimeRasterBakerModule } from '../raster.js';
 import { copyToOwnedArrayBuffer } from './owned-array-buffer.js';
 import {
-  isRasterBakeWorkerResultV0,
+  isRasterBakeWorkerResult,
   type RasterBakeWorkerRequest,
   type RasterBakeWorkerResult,
 } from './raster-bake-worker-protocol.js';
 import { SerialWorkerHost } from './serial-worker-host.js';
-import { isBakeProgressMessageV0, type BakeProgressMessage } from './bake-progress-protocol.js';
+import { isBakeProgressMessage, type BakeProgressMessage } from './bake-progress-protocol.js';
 
 class RuntimeRasterBakeError extends Error {
   readonly code: string;
@@ -52,7 +52,7 @@ export function createRasterBakeWorkerHost<Kind extends string, Options>(options
         transfer: [source],
       };
     },
-    isResponse: isRasterBakeWorkerResultV0,
+    isResponse: isRasterBakeWorkerResult,
     responseId: (response) => response.id,
     resolve(response) {
       if (!response.ok) throw new RuntimeRasterBakeError(response.error);
@@ -72,7 +72,7 @@ export function createRasterBakeWorkerHost<Kind extends string, Options>(options
       };
     },
     progress: {
-      isProgress: isBakeProgressMessageV0,
+      isProgress: isBakeProgressMessage,
       progressId: (progress) => progress.id,
       report: (request, { stage, phase, completed, total }) => request.onProgress?.({ stage, phase, completed, total }),
     },

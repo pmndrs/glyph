@@ -4,7 +4,7 @@ interface CoreFontArtifact {
   readonly role: 'font';
 }
 
-export function fontBakeDescriptorV0(fontFaceIndex: number): FontBakeDescriptor {
+export function fontBakeDescriptor(fontFaceIndex: number): FontBakeDescriptor {
   return { formatVersion: 0, fontFaceIndex };
 }
 

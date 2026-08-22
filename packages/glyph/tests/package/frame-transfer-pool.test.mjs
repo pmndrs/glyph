@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import {
   createFrameTransferPool,
-  isFrameTransferPublicationV0,
+  isFrameTransferPublication,
   returnFrameTransfer,
 } from '../../dist/internal/frame-transfer-pool.js';
 
@@ -26,7 +26,7 @@ test('frame transfers copy opaque Wasm bytes once and return the same storage to
 
   assert.equal(first.ok, true);
   assert.equal(first.publication.buffer.byteLength, 0);
-  assert.equal(isFrameTransferPublicationV0(rootPublication), true);
+  assert.equal(isFrameTransferPublication(rootPublication), true);
   assert.equal(rootPublication.capacity, 256);
   assert.deepEqual(new Uint8Array(rootPublication.buffer, 0, rootPublication.byteLength), source);
   assert.deepEqual(pool.stats(), {

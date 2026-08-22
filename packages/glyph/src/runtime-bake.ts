@@ -1,18 +1,18 @@
 import { FontBakeError } from './font-baker/index.js';
 
 import type { RuntimeFontBake, RuntimeFontBakeRequest } from './loader.js';
-import { fontBakeDescriptorV0 } from './internal/core-bake-policy.js';
+import { fontBakeDescriptor } from './internal/core-bake-policy.js';
 import { copyToOwnedArrayBuffer } from './internal/owned-array-buffer.js';
 import { normalizeUnicodeRanges } from './internal/font-selection.js';
 import {
-  isRuntimeBakeResultV0,
+  isRuntimeBakeResult,
   type RuntimeBakeRequest,
   type RuntimeBakeResult,
 } from './internal/runtime-bake-protocol.js';
 
 export { workerRasterKinds } from './internal/runtime-bake-protocol.js';
 import { SerialWorkerHost } from './internal/serial-worker-host.js';
-import { isBakeProgressMessageV0, type BakeProgressMessage } from './internal/bake-progress-protocol.js';
+import { isBakeProgressMessage, type BakeProgressMessage } from './internal/bake-progress-protocol.js';
 
 const host = new SerialWorkerHost<
   RuntimeFontBakeRequest,
@@ -30,7 +30,7 @@ const host = new SerialWorkerHost<
         type: 'bake-font-v0',
         id,
         source,
-        font: fontBakeDescriptorV0(0),
+        font: fontBakeDescriptor(0),
         ...(request.cache === undefined ? {} : { cache: request.cache }),
         ...(request.unicodeRanges === undefined
           ? {}
@@ -40,14 +40,14 @@ const host = new SerialWorkerHost<
       transfer: [source],
     };
   },
-  isResponse: isRuntimeBakeResultV0,
+  isResponse: isRuntimeBakeResult,
   responseId: (response) => response.id,
   resolve(response) {
     if (!response.ok) throw new FontBakeError(response.error);
     return new Uint8Array(response.artifacts[0]!.bytes);
   },
   progress: {
-    isProgress: isBakeProgressMessageV0,
+    isProgress: isBakeProgressMessage,
     progressId: (progress) => progress.id,
     report: (request, { stage, phase, completed, total }) => request.onProgress?.({ stage, phase, completed, total }),
   },
