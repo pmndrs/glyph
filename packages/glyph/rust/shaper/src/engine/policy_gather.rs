@@ -11,7 +11,7 @@ use super::{
     },
     plan_input::{PlanGlyph, PlanInput},
     policy::{CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedPolicy},
-    positioning::SemanticGlyph,
+    positioning::{ALL_SEMANTIC_CHANGES, SemanticGlyph},
 };
 
 // `fontSize` and `rasterPixelRatio` can select a different baked resource.
@@ -313,12 +313,21 @@ impl PolicyGatherWorkspace {
                 self.retained_source_cursor = source_cursor - 1;
                 return Ok(RetainedGather::RebuildFrom(glyph_index));
             };
-            // The change mask is identity-relative: positioning derives it against this glyph's
-            // own previous slot. The retained columns are slot-relative. Both conventions agree
-            // only while a slot keeps its occupant, so a slot handed to a different identity must
-            // leave the retained path entirely rather than apply a mask that names the registers
-            // the *identity* changed while the *slot* changed in every register.
-            if previous.stable_id != next.stable_id || !same_storage_topology(previous, next) {
+            // The change mask is identity-relative: `assign_content_revision` derives it against
+            // the slot this glyph occupied in the previous frame, wherever that was. The retained
+            // columns are slot-relative. The two conventions agree while a slot keeps its
+            // occupant; when a slot is handed to another identity, a narrow mask names the
+            // registers the *identity* changed while the *slot* changed in every register, so the
+            // skipped registers would keep the displaced occupant's bytes.
+            //
+            // An identity with no previous slot is exempt: `assign_content_revision` gives it
+            // `ALL_SEMANTIC_CHANGES`, `input_masks_for_changes` widens that to every declared
+            // input, and `update_fields` then rewrites the whole record in place -- identical to
+            // what a rebuild would push, without re-gathering the suffix. So only a *retained*
+            // identity landing on another identity's slot has to leave the retained path.
+            if (previous.stable_id != next.stable_id && change_mask != ALL_SEMANTIC_CHANGES)
+                || !same_storage_topology(previous, next)
+            {
                 self.retained_cursor = cursor;
                 self.retained_source_cursor = source_cursor - 1;
                 return Ok(RetainedGather::RebuildFrom(glyph_index));
@@ -1481,6 +1490,7 @@ mod tests {
         before: &[LayoutGlyph],
         after: &[LayoutGlyph],
         masks: &[u16],
+        expected: RetainedGather,
     ) {
         let binding = binding();
         let policy = policy();
@@ -1511,10 +1521,11 @@ mod tests {
             .gather(&policy, CAPABILITY, initial, |_| Some(&binding))
             .unwrap();
         assert!(incremental.begin_retained(&policy, 16).unwrap(), "{label}");
-        if let RetainedGather::RebuildFrom(source_start) = incremental
+        let outcome = incremental
             .append_retained(&policy, CAPABILITY, edited, |_| Some(&binding))
-            .unwrap()
-        {
+            .unwrap();
+        assert_eq!(outcome, expected, "{label}: retained outcome");
+        if let RetainedGather::RebuildFrom(source_start) = outcome {
             incremental.truncate_to_retained_prefix();
             incremental
                 .append_from(&policy, CAPABILITY, edited, source_start, |_| {
@@ -1627,29 +1638,39 @@ mod tests {
     #[test]
     fn retained_gather_repacks_slots_a_topology_edit_hands_to_another_identity() {
         const MOVED: u16 = 1 << 6;
+        // A survivor that only shifted position reports a narrow mask while landing on the slot
+        // its neighbour vacated. Every register the mask omits still holds the displaced
+        // occupant's bytes, so the suffix has to be rebuilt.
         retained_matches_fresh(
             "interior deletion",
             &[layout_glyph(1, 0), layout_glyph(2, 1), layout_glyph(3, 0)],
             &[layout_glyph(1, 0), layout_glyph(3, 0)],
             &[0, MOVED],
+            RetainedGather::RebuildFrom(1),
         );
         retained_matches_fresh(
             "prefix deletion",
             &[layout_glyph(1, 0), layout_glyph(2, 1), layout_glyph(3, 0)],
             &[layout_glyph(2, 1), layout_glyph(3, 0)],
             &[MOVED, MOVED],
+            RetainedGather::RebuildFrom(0),
         );
+        // A substitution mints an identity that had no previous slot, so positioning reports
+        // `ALL_SEMANTIC_CHANGES` and the in-place update rewrites the whole record. Rebuilding
+        // the suffix here would be wasted work, and the untouched tail proves it is not needed.
         retained_matches_fresh(
-            "same-length substitution",
+            "same-slot substitution",
             &[layout_glyph(1, 0), layout_glyph(2, 1), layout_glyph(3, 0)],
             &[layout_glyph(1, 0), layout_glyph(4, 0), layout_glyph(3, 0)],
-            &[0, MOVED, 0],
+            &[0, ALL_SEMANTIC_CHANGES, 0],
+            RetainedGather::Complete,
         );
         retained_matches_fresh(
             "tail deletion",
             &[layout_glyph(1, 0), layout_glyph(2, 1), layout_glyph(3, 0)],
             &[layout_glyph(1, 0), layout_glyph(2, 1)],
             &[0, 0],
+            RetainedGather::Complete,
         );
     }
 
