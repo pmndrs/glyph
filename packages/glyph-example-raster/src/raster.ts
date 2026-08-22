@@ -10,7 +10,7 @@ import type {
 } from '@pmndrs/glyph';
 import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
 
-import { isGlyphExampleHeader, type GlyphExampleExtensionV0 } from './artifact.js';
+import { isGlyphExampleHeader, type GlyphExampleExtension } from './artifact.js';
 import {
   GLYPH_EXAMPLE_EXTENSION,
   GLYPH_EXAMPLE_FORMAT_VERSION,
@@ -75,7 +75,7 @@ export const glyphExample: RasterTechnique<
 function decodeExtension(
   font: RegisteredFont,
   raster: RegisteredRaster<typeof GLYPH_EXAMPLE_KIND>,
-): GlyphExampleExtensionV0 {
+): GlyphExampleExtension {
   const extension = objectValue(raster.extensionData, 'glyph-example extension');
   if (
     extension.version !== GLYPH_EXAMPLE_FORMAT_VERSION ||
