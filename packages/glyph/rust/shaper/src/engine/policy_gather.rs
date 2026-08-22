@@ -126,10 +126,23 @@ impl DecorationPass {
     }
 }
 
+/// One source glyph the previous gather saw, and whether it produced a record.
+///
+/// The retained walk consumes source space while writing record space, and a source glyph that
+/// selects no raster -- a space above all -- advances only the former. Carrying the identity is
+/// what makes the walk's pairing checkable at every source position rather than only at the ones
+/// that own a record: an unchanged glyph is skipped on the strength of `selected`, and that flag
+/// belongs to this glyph only if the identity beside it does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct GatherSource {
+    stable_id: u32,
+    selected: bool,
+}
+
 #[derive(Default)]
 pub struct PolicyGatherWorkspace {
     glyphs: Vec<PlanGlyph>,
-    source_selected: Vec<u8>,
+    sources: Vec<GatherSource>,
     semantic_change_masks: Vec<u16>,
     f32_fields: Vec<AlignedField<f32>>,
     u32_fields: Vec<AlignedField<u32>>,
@@ -159,7 +172,7 @@ pub struct GatheredPlanInput<'a> {
 impl PolicyGatherWorkspace {
     pub fn reserve_records(&mut self, record_capacity: usize) -> Result<(), GatherError> {
         reserve(&mut self.glyphs, record_capacity)?;
-        reserve(&mut self.source_selected, record_capacity)?;
+        reserve(&mut self.sources, record_capacity)?;
         reserve(&mut self.semantic_change_masks, record_capacity)
     }
 
@@ -242,7 +255,8 @@ impl PolicyGatherWorkspace {
         let mut cached_program = None;
         for glyph_index in 0..input.glyphs.len() {
             let glyph = input.glyphs[glyph_index];
-            let Some(was_selected) = self.source_selected.get(source_cursor).copied() else {
+            let source_index = source_cursor;
+            let Some(previous_source) = self.sources.get(source_index).copied() else {
                 self.retained_cursor = cursor;
                 self.retained_source_cursor = source_cursor;
                 return Ok(RetainedGather::RebuildFrom(glyph_index));
@@ -254,7 +268,20 @@ impl PolicyGatherWorkspace {
                 .copied()
                 .unwrap_or(0);
             if change_mask == 0 {
-                if was_selected != 0 {
+                // An empty delta is the one branch that consults neither the binding nor the
+                // record: it trusts `selected` to say whether this glyph owns the record under
+                // `cursor`. That trust is sound for a *retained* identity, whose glyph, size, and
+                // pixel ratio cannot have moved the selection, and only for it. `positioning`
+                // mints every new identity with `ALL_SEMANTIC_CHANGES`, so an empty delta beside a
+                // different identity means the walk is reading another glyph's source row and has
+                // to rebuild -- otherwise a recordless row skipped here silently retires a record
+                // that belongs to a glyph nobody edited.
+                if previous_source.stable_id != glyph.stable_id {
+                    self.retained_cursor = cursor;
+                    self.retained_source_cursor = source_cursor - 1;
+                    return Ok(RetainedGather::RebuildFrom(glyph_index));
+                }
+                if previous_source.selected {
                     let Some(previous) = self.glyphs.get(cursor) else {
                         self.retained_cursor = cursor;
                         self.retained_source_cursor = source_cursor - 1;
@@ -283,12 +310,15 @@ impl PolicyGatherWorkspace {
             };
             let selected =
                 binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio);
-            if selected.is_some() != (was_selected != 0) {
+            if selected.is_some() != previous_source.selected {
                 self.retained_cursor = cursor;
                 self.retained_source_cursor = source_cursor - 1;
                 return Ok(RetainedGather::RebuildFrom(glyph_index));
             }
             let Some(selected) = selected else {
+                // A changed identity that renders nothing still owns this source position next
+                // frame, and the row is what the next retained walk pairs against.
+                self.sources[source_index].stable_id = glyph.stable_id;
                 continue;
             };
             let technique = binding.technique();
@@ -354,6 +384,10 @@ impl PolicyGatherWorkspace {
             )?;
             self.glyphs[cursor] = next;
             self.semantic_change_masks[cursor] = change_mask;
+            // A substitution retained in place keeps the slot and takes a new identity, so the
+            // source row has to follow it. Leaving the displaced identity here would make the next
+            // frame's pairing read a glyph this frame already replaced.
+            self.sources[source_index].stable_id = glyph.stable_id;
             cursor += 1;
         }
         self.retained_cursor = cursor;
@@ -363,12 +397,12 @@ impl PolicyGatherWorkspace {
 
     pub fn finish_retained(&self) -> bool {
         self.retained_cursor == self.glyphs.len()
-            && self.retained_source_cursor == self.source_selected.len()
+            && self.retained_source_cursor == self.sources.len()
     }
 
     pub fn truncate_to_retained_prefix(&mut self) {
         self.glyphs.truncate(self.retained_cursor);
-        self.source_selected.truncate(self.retained_source_cursor);
+        self.sources.truncate(self.retained_source_cursor);
         self.semantic_change_masks.truncate(self.retained_cursor);
         for field in &mut self.f32_fields {
             field.truncate(self.retained_cursor);
@@ -402,9 +436,9 @@ impl PolicyGatherWorkspace {
             return Err(GatherError::InvalidSemanticShape);
         }
         let required = self.glyphs.len().saturating_add(remaining);
-        let source_required = self.source_selected.len().saturating_add(remaining);
+        let source_required = self.sources.len().saturating_add(remaining);
         if self.glyphs.capacity() < required
-            || self.source_selected.capacity() < source_required
+            || self.sources.capacity() < source_required
             || self.semantic_change_masks.capacity() < required
             || self
                 .f32_fields
@@ -431,10 +465,16 @@ impl PolicyGatherWorkspace {
                 cached_binding = Some(binding);
                 binding
             };
-            let selected =
-                binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio);
-            self.source_selected.push(u8::from(selected.is_some()));
-            let Some(selected) = selected else {
+            let Some(selected) =
+                binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio)
+            else {
+                // A glyph that selects no raster still occupies a source row. The retained walk
+                // pairs source rows against emitted records, so omitting the row would shift every
+                // later pairing -- which is the defect this lane exists to prevent.
+                self.sources.push(GatherSource {
+                    stable_id: glyph.stable_id,
+                    selected: false,
+                });
                 continue;
             };
             let technique = binding.technique();
@@ -465,8 +505,12 @@ impl PolicyGatherWorkspace {
                 u32::MAX,
                 u32::MAX,
             )?;
-            self.glyphs
-                .push(plan_glyph(input, glyph_index, glyph, binding, selected)?);
+            let planned = plan_glyph(input, glyph_index, glyph, binding, selected)?;
+            self.sources.push(GatherSource {
+                stable_id: glyph.stable_id,
+                selected: true,
+            });
+            self.glyphs.push(planned);
             self.semantic_change_masks.push(
                 input
                     .semantic_change_masks
@@ -688,7 +732,7 @@ impl PolicyGatherWorkspace {
         self.retained_cursor = 0;
         self.retained_source_cursor = 0;
         self.glyphs.clear();
-        self.source_selected.clear();
+        self.sources.clear();
         self.semantic_change_masks.clear();
         for field in &mut self.f32_fields {
             field.clear();
@@ -1671,6 +1715,198 @@ mod tests {
             &[layout_glyph(1, 0), layout_glyph(2, 1)],
             &[0, 0],
             RetainedGather::Complete,
+        );
+    }
+
+    /// A glyph whose binding selects no raster -- a space -- commits an identity and occupies no
+    /// record, so it advances source space without advancing record space. The retained walk pairs
+    /// the two by position across the whole session, which is why deleting one is the edit that
+    /// unpicks the pairing: every glyph after it reads a neighbour's source row, and an unchanged
+    /// glyph reading a recordless row is skipped, retiring a record nobody edited. `RECORDLESS`
+    /// below is the id of a glyph the fixture binding cannot select; a fresh gather of the same
+    /// final paragraphs is the independent oracle.
+    #[test]
+    fn retained_gather_realigns_when_a_paragraph_sheds_a_recordless_glyph() {
+        const RECORDLESS: u32 = 2;
+        const MOVED: u16 = 1 << 6;
+        let space = |stable_id| layout_glyph(stable_id, RECORDLESS);
+
+        // Inside one paragraph: the surviving glyph reports nothing changed, so the walk reads the
+        // deleted space's source row as its own and skips the record it owns.
+        retained_session_matches_fresh(
+            "recordless glyph deleted inside a paragraph",
+            &[(1, &[layout_glyph(1, 0), space(2), layout_glyph(3, 1)], &[])],
+            &[(1, &[layout_glyph(1, 0), layout_glyph(3, 1)], &[0, 0])],
+            false,
+        );
+
+        // Across paragraphs: the edited paragraph's own walk stays self-consistent -- every
+        // surviving glyph reports a change -- and still leaves the running cursors short of where
+        // its rows ended, so the untouched paragraph below it resumes inside its predecessor's
+        // rows. This is `text-mutation-known-defects.test.mjs` case 1 in miniature.
+        retained_session_matches_fresh(
+            "leading run and its space deleted above an untouched paragraph",
+            &[
+                (
+                    1,
+                    &[
+                        layout_glyph(1, 0),
+                        layout_glyph(2, 1),
+                        space(3),
+                        layout_glyph(4, 0),
+                    ],
+                    &[],
+                ),
+                (2, &[layout_glyph(5, 1), layout_glyph(6, 0)], &[]),
+            ],
+            &[
+                (1, &[layout_glyph(4, 0)], &[MOVED]),
+                (2, &[layout_glyph(5, 1), layout_glyph(6, 0)], &[]),
+            ],
+            false,
+        );
+
+        // The mirror image: the paragraph that shed the glyph is last, so nothing follows it to
+        // detect the short walk and `finish_retained` is what must catch it.
+        retained_session_matches_fresh(
+            "recordless glyph deleted in the last paragraph",
+            &[
+                (1, &[layout_glyph(1, 0), layout_glyph(2, 1)], &[]),
+                (2, &[layout_glyph(3, 0), space(4), layout_glyph(5, 1)], &[]),
+            ],
+            &[
+                (1, &[layout_glyph(1, 0), layout_glyph(2, 1)], &[]),
+                (2, &[layout_glyph(3, 0), layout_glyph(5, 1)], &[0, 0]),
+            ],
+            false,
+        );
+
+        // A recordless glyph that stays put must not cost the retained path anything: a session
+        // holding a space and changing nothing is retained end to end, so the checks above buy
+        // their correctness without a rebuild.
+        let mut workspace = PolicyGatherWorkspace::default();
+        let binding = binding();
+        let policy = policy();
+        let paragraphs: &[Paragraph<'_>] = &[
+            (1, &[layout_glyph(1, 0), space(2), layout_glyph(3, 1)], &[]),
+            (2, &[layout_glyph(4, 1)], &[]),
+        ];
+        workspace.reserve_policy(&policy, 16).unwrap();
+        gather_session(&policy, &binding, &mut workspace, paragraphs, false);
+        assert!(workspace.begin_retained(&policy, 16).unwrap());
+        assert!(gather_session(
+            &policy,
+            &binding,
+            &mut workspace,
+            paragraphs,
+            true
+        ));
+    }
+
+    /// One paragraph as `append_session_gather` sees it: its transform, its glyphs, and the
+    /// semantic deltas positioning reports. An empty delta slice is an untouched paragraph.
+    type Paragraph<'a> = (u32, &'a [LayoutGlyph], &'a [u16]);
+
+    /// Gathers a whole session the way `state::append_session_gather` does, and reports whether
+    /// the retained path survived to the end.
+    fn gather_session(
+        policy: &ValidatedPolicy,
+        binding: &FontRenderBinding,
+        workspace: &mut PolicyGatherWorkspace,
+        paragraphs: &[Paragraph<'_>],
+        retained: bool,
+    ) -> bool {
+        let mut retaining = retained;
+        for &(transform_id, glyphs, masks) in paragraphs {
+            let semantic: Vec<f32> = (0..glyphs.len()).map(|index| index as f32).collect();
+            let kinds: Vec<u32> = (0..glyphs.len()).map(|index| index as u32 + 100).collect();
+            let semantic_f32: [&[f32]; 1] = [&semantic];
+            let semantic_u32: [&[u32]; 1] = [&kinds];
+            let input = LayoutPlanInput {
+                transform_id,
+                glyphs,
+                semantic_glyphs: &[],
+                semantic_change_masks: masks,
+                semantic_f32: &semantic_f32,
+                semantic_u32: &semantic_u32,
+            };
+            if retaining {
+                match workspace
+                    .append_retained(policy, CAPABILITY, input, |_| Some(binding))
+                    .unwrap()
+                {
+                    RetainedGather::Complete => {}
+                    RetainedGather::RebuildFrom(source_start) => {
+                        workspace.truncate_to_retained_prefix();
+                        workspace
+                            .append_from(policy, CAPABILITY, input, source_start, |_| Some(binding))
+                            .unwrap();
+                        retaining = false;
+                    }
+                }
+            } else {
+                workspace
+                    .append(policy, CAPABILITY, input, |_| Some(binding))
+                    .unwrap();
+            }
+        }
+        if retaining && !workspace.finish_retained() {
+            workspace.truncate_to_retained_prefix();
+            retaining = false;
+        }
+        retaining
+    }
+
+    /// A session edited into some content must gather exactly what a session built with that
+    /// content gathers -- every record, every register, in order.
+    /// `expect_retained` names whether the edit is supposed to stay on the incremental path.
+    /// Without it an implementation that abandoned retention entirely and rebuilt every frame
+    /// would satisfy every comparison below, so the differential would prove correctness while
+    /// silently losing the fast path it exists to protect.
+    fn retained_session_matches_fresh(
+        label: &str,
+        before: &[Paragraph<'_>],
+        after: &[Paragraph<'_>],
+        expect_retained: bool,
+    ) {
+        let binding = binding();
+        let policy = policy();
+
+        let mut incremental = PolicyGatherWorkspace::default();
+        incremental.reserve_policy(&policy, 16).unwrap();
+        gather_session(&policy, &binding, &mut incremental, before, false);
+        assert!(incremental.begin_retained(&policy, 16).unwrap(), "{label}");
+        let retained = gather_session(&policy, &binding, &mut incremental, after, true);
+        assert_eq!(retained, expect_retained, "{label}: retention");
+
+        let mut fresh = PolicyGatherWorkspace::default();
+        fresh.reserve_policy(&policy, 16).unwrap();
+        gather_session(&policy, &binding, &mut fresh, after, false);
+
+        let incremental_view = incremental.view();
+        let fresh_view = fresh.view();
+        let incremental_input = incremental_view.plan_input();
+        let fresh_input = fresh_view.plan_input();
+        assert_eq!(
+            incremental_input
+                .glyphs
+                .iter()
+                .map(|glyph| (glyph.stable_id, glyph.transform_id))
+                .collect::<Vec<_>>(),
+            fresh_input
+                .glyphs
+                .iter()
+                .map(|glyph| (glyph.stable_id, glyph.transform_id))
+                .collect::<Vec<_>>(),
+            "{label}: records"
+        );
+        assert_eq!(
+            incremental_input.f32_fields, fresh_input.f32_fields,
+            "{label}: f32 registers"
+        );
+        assert_eq!(
+            incremental_input.u32_fields, fresh_input.u32_fields,
+            "{label}: u32 registers"
         );
     }
 

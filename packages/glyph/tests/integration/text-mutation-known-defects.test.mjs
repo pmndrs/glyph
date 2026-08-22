@@ -1,22 +1,24 @@
 /**
  * Minimal reproductions of three defects found while extending incremental-mutation coverage.
  *
- * EVERY TEST IN THIS FILE FAILS AGAINST THE CURRENT SOURCE, BY DESIGN. Each one is the smallest
- * input that exhibits a defect the differential/packed-lane oracle or the script corpora uncovered,
- * reduced to the public `Text`/`TextGroup` surface and one baked fixture. They are pinned here
- * rather than inside the coverage files so that a red run names the defect instead of naming a
- * corpus, and so that fixing one turns exactly one test green.
+ * Each one is the smallest input that exhibits a defect the differential/packed-lane oracle or the
+ * script corpora uncovered, reduced to the public `Text`/`TextGroup` surface and one baked fixture.
+ * They are pinned here rather than inside the coverage files so that a red run names the defect
+ * instead of naming a corpus, and so that fixing one turns exactly one test green. Cases 2 and 3
+ * still fail against the current source, by design; case 1 is fixed and now guards its fix.
  *
  * None of these is the defect fixed by `fix(glyph): rebuild only a slot whose retained identity
  * moved`. That fix holds: the Latin gate and every non-bidi script case pass with it and fail
  * without it.
  *
- *   1. A GLYPH DISAPPEARS FROM THE GPU BUFFER.
+ *   1. A GLYPH DISAPPEARS FROM THE GPU BUFFER. FIXED.
  *      Deleting a leading left-to-right island, together with its separating space, from a
- *      right-to-left paragraph inside a `TextGroup` leaves a LATER, UNEDITED paragraph with one
- *      fewer instanced record than it has committed glyphs. The engine still reports every glyph;
- *      the GPU is handed one fewer. Nothing engine-side can see this, which is exactly why the
- *      packed lanes are worth asserting.
+ *      right-to-left paragraph inside a `TextGroup` left a LATER, UNEDITED paragraph with one
+ *      fewer instanced record than it has committed glyphs. The engine still reported every glyph;
+ *      the GPU was handed one fewer. Nothing engine-side could see this, which is exactly why the
+ *      packed lanes are worth asserting. The retained gather recorded only a selection bit per
+ *      source glyph, never the identity that bit belonged to, so a deleted space let an unchanged
+ *      glyph read a neighbour's row and skip its own record.
  *
  *   2. `replaceText` MANUFACTURES A PARAGRAPH THE ENGINE REFUSES TO PUBLISH.
  *      The engine requires every extended grapheme cluster to resolve to exactly one style, which
@@ -54,40 +56,53 @@ const paint = { color: '#ffffff' };
 
 const authored = (text, style, spans = []) => ({ properties: { contentBox: box, paint, spans, style, text } });
 
-/** Committed glyphs against records actually handed to the GPU, summed over the whole group. */
+/**
+ * Committed glyphs against records actually handed to the GPU, per paragraph and in total.
+ *
+ * Totals alone would catch the loss but not attribute it. A group batches its paragraphs into one
+ * draw, so the GPU side cannot name which paragraph lost a record -- the per-paragraph committed
+ * counts are the attribution, and they must sum to the records the group actually hands over.
+ */
 function drawn(mounted) {
   const scene = lanes(mounted);
+  const glyphs = scene.paragraphs.map((entry) => entry.glyphCount);
+  // Draws are ordered by run start, and each paragraph owns one contiguous run here.
+  const instances = [...scene.draws].sort((left, right) => left.start - right.start).map((draw) => draw.instances);
   return {
-    glyphs: scene.paragraphs.reduce((total, entry) => total + entry.glyphCount, 0),
-    instances: scene.draws.reduce((total, draw) => total + draw.instances, 0),
+    byParagraph: glyphs,
+    byDraw: instances,
+    glyphs: glyphs.reduce((total, count) => total + count, 0),
+    instances: instances.reduce((total, count) => total + count, 0),
   };
 }
 
-test(
-  '1. an unedited paragraph keeps every record when a bidi island is deleted above it',
-  { timeout, todo: 'an unedited sibling paragraph loses one instanced record' },
-  async () => {
-    const font = await fonts.load('amiri');
-    const arabic = { fontSize: 6, lineHeight: 1, direction: 'rtl', language: 'ar' };
-    // Neither final text contains a space, so every committed glyph must occupy an instanced record.
-    // The second paragraph is never touched.
-    const settled = [authored('النص', arabic), authored('العربي', arabic)];
-    const mounted = mount(font, [authored('PMNDRS النص', arabic), authored('العربي', arabic)]);
-    let fresh;
-    try {
-      edit(mounted, font, settled);
-      // The comparison group is built AFTER the edit on purpose. Building a second group BEFORE the
-      // edit masks the defect -- the edited group then hands over all ten records -- so the order
-      // here is load-bearing, not incidental.
-      fresh = mount(font, settled);
-      assert.deepEqual(drawn(mounted), drawn(fresh), 'an edited group must hand the GPU what a fresh one does');
-      assert.deepEqual(drawn(mounted), { glyphs: 10, instances: 10 }, 'every committed glyph must occupy a record');
-    } finally {
-      unmount(mounted);
-      if (fresh !== undefined) unmount(fresh);
-    }
-  },
-);
+test('1. an unedited paragraph keeps every record when a bidi island is deleted above it', { timeout }, async () => {
+  const font = await fonts.load('amiri');
+  const arabic = { fontSize: 6, lineHeight: 1, direction: 'rtl', language: 'ar' };
+  // Neither final text contains a space, so every committed glyph must occupy an instanced record.
+  // The second paragraph is never touched.
+  const settled = [authored('النص', arabic), authored('العربي', arabic)];
+  const mounted = mount(font, [authored('PMNDRS النص', arabic), authored('العربي', arabic)]);
+  let fresh;
+  try {
+    edit(mounted, font, settled);
+    // The comparison group is built AFTER the edit on purpose. Building a second group BEFORE the
+    // edit masks the defect -- the edited group then hands over all ten records -- so the order
+    // here is load-bearing, not incidental.
+    fresh = mount(font, settled);
+    assert.deepEqual(drawn(mounted), drawn(fresh), 'an edited group must hand the GPU what a fresh one does');
+    // The unedited second paragraph owns 6 of the 10 glyphs. Pinning the split is what separates
+    // this defect from a loss in the edited paragraph, which would leave the totals identical.
+    assert.deepEqual(
+      drawn(mounted),
+      { byParagraph: [4, 6], byDraw: [10], glyphs: 10, instances: 10 },
+      'every committed glyph must occupy a record, in the paragraph that committed it',
+    );
+  } finally {
+    unmount(mounted);
+    if (fresh !== undefined) unmount(fresh);
+  }
+});
 
 test(
   '2. replaceText keeps its own spans aligned to grapheme clusters',
