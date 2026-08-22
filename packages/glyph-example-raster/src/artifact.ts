@@ -1,5 +1,5 @@
 import type {
-  BakeArtifactV0,
+  BakeArtifact,
   RasterBakeArtifact,
   RasterBakeRequest,
   RasterResourceSource,
@@ -19,7 +19,7 @@ const BIN_CHUNK = 0x004e_4942;
 const HEADER = Uint8Array.of(0x47, 0x44, 0x42, GLYPH_EXAMPLE_FORMAT_VERSION);
 const GLTF_WITNESS = new Uint8Array(12);
 
-export interface GlyphExampleExtensionV0 {
+export interface GlyphExampleExtension {
   readonly version: 0;
   readonly rasterKey: string;
   readonly shapingHash: string;
@@ -44,7 +44,7 @@ export async function bakeGlyphExampleArtifact(
   const recordSource: RasterResourceSource = external
     ? { type: 'external', uri: recordId, byteLength: records.byteLength, artifactHash: recordHash }
     : { type: 'bufferView', bufferView: 2 };
-  const extension: GlyphExampleExtensionV0 = {
+  const extension: GlyphExampleExtension = {
     version: GLYPH_EXAMPLE_FORMAT_VERSION,
     rasterKey: request.rasterKey,
     shapingHash: request.font.shapingHash,
@@ -90,7 +90,7 @@ export async function bakeGlyphExampleArtifact(
   };
   const bytes = encodeGlb(document, binary);
   const metadataBytes = HEADER.byteLength + new TextEncoder().encode(JSON.stringify(extension)).byteLength;
-  const artifacts: BakeArtifactV0[] = [
+  const artifacts: BakeArtifact[] = [
     {
       role: 'raster',
       id: `${request.rasterKey}.glyph-example.glb`,
