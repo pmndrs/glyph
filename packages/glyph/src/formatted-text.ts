@@ -1,3 +1,4 @@
+import { type ClusterAlignableRange, alignRangesToClusters, findGraphemeBoundaries } from './internal/graphemes.js';
 import { statedProperties } from './internal/span-cascade.js';
 import type { FontSelection } from './loaded-font.js';
 import type { ParagraphStyle } from './text-properties.js';
@@ -35,6 +36,38 @@ export interface TextSpanFragment<Technique extends AnyRasterTechnique = never> 
   readonly text: string;
   readonly spans: readonly ParagraphSpan<Technique>[];
   readonly properties: Omit<ParagraphSpan<Technique>, 'start' | 'end'>;
+}
+
+export type { IdentifiedSpanRange, SpanRange } from './internal/span-cascade.js';
+
+/**
+ * Resolve every span boundary onto the extended grapheme cluster grid of `text`.
+ *
+ * The engine resolves exactly one style per extended grapheme cluster and rejects a whole frame
+ * whose styles split one (`cluster_state.rs`, `build`), reporting a numeric status that names no
+ * span. `Text` therefore resolves span offsets through this function before any of them reach the
+ * engine, so the rule a caller sees is the constructive one -- a cluster takes the style of its
+ * base -- rather than a deferred rejection.
+ *
+ * It is exported because a caller that would rather detect the shift than accept it needs the same
+ * answer the library will use. The argument array is returned by identity when nothing moves, so
+ * `alignSpansToClusters(text, spans) === spans` is the whole check.
+ *
+ * ```ts
+ * const resolved = alignSpansToClusters(text, spans);
+ * if (resolved !== spans) reportToTheEditorThatItsOffsetsSplitACluster(resolved);
+ * ```
+ *
+ * Text that is not well-formed UTF-16 has no cluster grid to resolve against and is the engine's to
+ * reject; its spans are returned untouched so that the presence of a span cannot decide whether a
+ * lone surrogate is accepted.
+ */
+export function alignSpansToClusters<Span extends ClusterAlignableRange>(
+  text: string,
+  spans: readonly Span[],
+): readonly Span[] {
+  if (spans.length === 0 || !text.isWellFormed()) return spans;
+  return alignRangesToClusters(spans, findGraphemeBoundaries(text));
 }
 
 export type FormattedText<Technique extends AnyRasterTechnique> = TextLiteral<Technique> | TextLiteral<never>;
