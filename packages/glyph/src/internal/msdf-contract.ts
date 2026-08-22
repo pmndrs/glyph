@@ -1,6 +1,6 @@
 import type { RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
-import { normalizeRasterCoverage, type RasterCoverage, type RasterCoverageV0 } from '../raster-coverage.js';
+import { normalizeRasterCoverage, type RasterCoverage } from '../raster-coverage.js';
 import { deriveRasterKey } from './raster-identity.js';
 
 export const MSDF_KIND = 'msdf' as const;
@@ -31,28 +31,28 @@ export interface MsdfConfiguration {
   readonly planeUnitsPerEm: number;
 }
 
-export interface DefaultMsdfDescriptorV0 {
+export interface DefaultMsdfDescriptor {
   readonly [key: string]: JsonValue;
   readonly generatorVersion: typeof MSDF_GENERATOR_VERSION;
-  readonly coverage?: RasterCoverageV0;
+  readonly coverage?: RasterCoverage;
 }
 
-export interface ConfiguredMsdfDescriptorV0 {
+export interface ConfiguredMsdfDescriptor {
   readonly [key: string]: JsonValue;
   readonly emSize: number;
   readonly generatorVersion: typeof MSDF_GENERATOR_VERSION;
   readonly pixelRange: number;
-  readonly coverage?: RasterCoverageV0;
+  readonly coverage?: RasterCoverage;
 }
 
-export type MsdfDescriptorV0 = DefaultMsdfDescriptorV0 | ConfiguredMsdfDescriptorV0;
+export type MsdfDescriptor = DefaultMsdfDescriptor | ConfiguredMsdfDescriptor;
 
 const defaultDescriptor = Object.freeze({
   generatorVersion: MSDF_GENERATOR_VERSION,
-}) satisfies DefaultMsdfDescriptorV0;
+}) satisfies DefaultMsdfDescriptor;
 
 /** Return the complete payload-changing MTSDF descriptor. */
-export function msdfDescriptor(options?: MsdfOptions): MsdfDescriptorV0 {
+export function msdfDescriptor(options?: MsdfOptions): MsdfDescriptor {
   const normalized = normalizeMsdfOptions(options);
   if (normalized === undefined) return defaultDescriptor;
   const emSize = normalized.emSize ?? MSDF_EM_SIZE;
@@ -72,7 +72,7 @@ export function msdfDescriptor(options?: MsdfOptions): MsdfDescriptorV0 {
 }
 
 /** Resolve the authenticated generation policy represented by a descriptor. */
-export function msdfDescriptorConfiguration(descriptor: MsdfDescriptorV0): MsdfConfiguration {
+export function msdfDescriptorConfiguration(descriptor: MsdfDescriptor): MsdfConfiguration {
   const keys = Object.keys(descriptor);
   if (
     descriptor.generatorVersion !== MSDF_GENERATOR_VERSION ||
@@ -113,7 +113,7 @@ const defaultConfiguration = Object.freeze({
 }) satisfies MsdfConfiguration;
 
 /** Derive a key from a descriptor that has crossed package-owned validation. */
-export function msdfDescriptorRasterKey(descriptor: MsdfDescriptorV0 = defaultDescriptor): Promise<RasterKey> {
+export function msdfDescriptorRasterKey(descriptor: MsdfDescriptor = defaultDescriptor): Promise<RasterKey> {
   msdfDescriptorConfiguration(descriptor);
   return deriveRasterKey({
     descriptor,

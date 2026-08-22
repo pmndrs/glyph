@@ -2,7 +2,7 @@ import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from '../font-baker/contract.
 
 import { copyToOwnedArrayBuffer } from './owned-array-buffer.js';
 import { canonicalJson } from './raster-identity.js';
-import type { RuntimeBakeRequestV0 } from './runtime-bake-protocol.js';
+import type { RuntimeBakeRequest } from './runtime-bake-protocol.js';
 
 const CACHE_NAME = `pmndrs-glyph-font-bakes-${FONT_FORMAT_VERSION}-${FONT_BAKER_VERSION}`;
 const CACHE_PATH = '/.pmndrs-glyph/font-bakes/';
@@ -12,7 +12,7 @@ const ARTIFACT_ID_HEADER = 'x-pmndrs-artifact-id';
 const SHA256_HEADER = 'x-pmndrs-sha256';
 
 export interface RuntimeFontCache {
-  key(source: Uint8Array, request: RuntimeBakeRequestV0): Promise<string>;
+  key(source: Uint8Array, request: RuntimeBakeRequest): Promise<string>;
   match(key: string): Promise<CachedFontArtifact | undefined>;
   put(key: string, artifact: CachedFontArtifact, expiresAt: number): Promise<void>;
 }

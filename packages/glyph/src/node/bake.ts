@@ -7,10 +7,10 @@ import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:z
 
 import {
   createFontBaker,
-  type FontBakeDescriptorV0,
-  type FontInspectionV0,
-  type PreparedFontReportV0,
-  type UnicodeRangeV0,
+  type FontBakeDescriptor,
+  type FontInspection,
+  type PreparedFontReport,
+  type UnicodeRange,
 } from '../font-baker/index.js';
 import { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
 
@@ -20,17 +20,17 @@ export {
   createFontBakerFromInstance,
   fontBakerAbi,
   type FontBakeCore,
-  type FontBakeDescriptorV0,
-  type FontBakeRequestV0,
-  type FontBakeResultV0,
-  type FontBakerAbiV0,
+  type FontBakeDescriptor,
+  type FontBakeRequest,
+  type FontBakeResult,
+  type FontBakerAbi,
   type FontBakerWasmSource,
   type SerializedBakeError,
 } from '../font-baker/index.js';
 export { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
 export * from '../font-baker/validator.js';
 
-import type { AnyRasterBakerModule, BakeArtifactV0, BakeWarning, FontPayloadReport, RasterBakePlan } from '../bake.js';
+import type { AnyRasterBakerModule, BakeArtifact, BakeWarning, FontPayloadReport, RasterBakePlan } from '../bake.js';
 import type {
   DiscoveryDiagnostic,
   DiscoveredFontDefinition,
@@ -47,8 +47,8 @@ export interface NodeBakeOptions<
 > {
   readonly input: string | URL;
   readonly output: string | URL;
-  readonly font: Omit<FontBakeDescriptorV0, 'formatVersion'>;
-  readonly unicodeRanges?: readonly UnicodeRangeV0[];
+  readonly font: Omit<FontBakeDescriptor, 'formatVersion'>;
+  readonly unicodeRanges?: readonly UnicodeRange[];
   readonly rasters?: Rasters;
   readonly signal?: AbortSignal;
 }
@@ -79,7 +79,7 @@ export interface NodeBakeExecutionReport {
     readonly processMaxRssBytes: number;
   };
   readonly outputs: readonly {
-    readonly role: BakeArtifactV0['role'];
+    readonly role: BakeArtifact['role'];
     readonly file: string;
     readonly bytes: number;
     readonly sha256: string;
@@ -87,7 +87,7 @@ export interface NodeBakeExecutionReport {
 }
 
 export interface NodeFontBakeReport extends FontPayloadReport {
-  readonly preparation?: PreparedFontReportV0;
+  readonly preparation?: PreparedFontReport;
   readonly execution: NodeBakeExecutionReport;
 }
 
@@ -139,7 +139,7 @@ export async function bakeFont<const Rasters extends readonly RasterBakePlan<Any
   return bakeFontWithResolvedPlans(options);
 }
 
-export async function inspectFont(options: NodeFontInspectOptions): Promise<FontInspectionV0> {
+export async function inspectFont(options: NodeFontInspectOptions): Promise<FontInspection> {
   const source = new Uint8Array(await readFile(filePath(options.input, 'input')));
   const fontBaker = await defaultFontBaker();
   return fontBaker.inspect({
@@ -356,8 +356,8 @@ function bakedSiblingPath(path: string): string {
 
 function outputTargets(
   fontOutput: string,
-  artifacts: readonly BakeArtifactV0[],
-): readonly { artifact: BakeArtifactV0; file: string }[] {
+  artifacts: readonly BakeArtifact[],
+): readonly { artifact: BakeArtifact; file: string }[] {
   const directory = dirname(fontOutput);
   const targets = artifacts.map((artifact) => {
     if (artifact.role === 'font') return { artifact, file: fontOutput };
@@ -391,7 +391,7 @@ interface StagedArtifactOutput {
 }
 
 async function publishArtifactsWithRollback(
-  outputs: readonly { artifact: BakeArtifactV0; file: string }[],
+  outputs: readonly { artifact: BakeArtifact; file: string }[],
   signal?: AbortSignal,
 ): Promise<void> {
   const staged: StagedArtifactOutput[] = [];
@@ -501,7 +501,7 @@ function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
-function finalizeTransport(report: FontPayloadReport, artifacts: readonly BakeArtifactV0[]): FontPayloadReport {
+function finalizeTransport(report: FontPayloadReport, artifacts: readonly BakeArtifact[]): FontPayloadReport {
   return {
     ...report,
     transport: artifacts.flatMap(({ id, role, bytes }) => {

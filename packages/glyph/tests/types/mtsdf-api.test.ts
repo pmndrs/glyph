@@ -2,7 +2,7 @@ import type { RegisteredFont, RegisteredRaster } from '@pmndrs/glyph';
 import {
   validateMsdfArtifact,
   type MsdfArtifactValidationContext,
-  type ValidatedMsdfArtifactV0,
+  type ValidatedMsdfArtifact,
 } from '@pmndrs/glyph/bakers/msdf/validate';
 import {
   MSDF_KIND,
@@ -23,7 +23,7 @@ declare const raster: RegisteredRaster<'msdf'>;
 const data: Promise<MsdfData> = msdf.decode(font, raster);
 declare const artifactBytes: Uint8Array;
 declare const validationContext: MsdfArtifactValidationContext;
-const validation: Promise<ValidatedMsdfArtifactV0> = validateMsdfArtifact(artifactBytes, validationContext);
+const validation: Promise<ValidatedMsdfArtifact> = validateMsdfArtifact(artifactBytes, validationContext);
 
 void descriptor;
 void configuredDescriptor;

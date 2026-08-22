@@ -1,9 +1,9 @@
 import type { BakeProgressListener } from '../bake.js';
-import type { FontBakeCore, PreparedFontReportV0 } from '../font-baker/index.js';
+import type { FontBakeCore, PreparedFontReport } from '../font-baker/index.js';
 import { validateFontArtifact } from '../font-baker/validator.js';
 import type { Sha256Hex } from '../identity.js';
 
-import { composeFontBake, type ComposedFontBakeResultV0 } from './compose-bake.js';
+import { composeFontBake, type ComposedFontBakeResult } from './compose-bake.js';
 import { soleCoreFontArtifact } from './core-bake-policy.js';
 import { normalizeUnicodeRanges } from './font-selection.js';
 import type { ResolvedRasterBakePlan } from './raster-bake-plan.js';
@@ -26,8 +26,8 @@ export interface FontBakePipelineTimings {
 }
 
 export interface FontBakePipelineResult {
-  readonly composed: ComposedFontBakeResultV0;
-  readonly preparation?: PreparedFontReportV0;
+  readonly composed: ComposedFontBakeResult;
+  readonly preparation?: PreparedFontReport;
   readonly timings: FontBakePipelineTimings;
 }
 

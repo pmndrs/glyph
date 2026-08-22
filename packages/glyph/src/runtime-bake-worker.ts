@@ -11,10 +11,10 @@ import { deriveRasterKey } from './internal/raster-identity.js';
 import { createRuntimeFontCache, type CachedFontArtifact } from './internal/runtime-font-cache.js';
 import {
   isRuntimeBakeRequestV0,
-  type RuntimeBakeRasterV0,
-  type RuntimeBakeRequestV0,
-  type RuntimeBakeFailureV0,
-  type RuntimeBakeSuccessV0,
+  type RuntimeBakeRaster,
+  type RuntimeBakeRequest,
+  type RuntimeBakeFailure,
+  type RuntimeBakeSuccess,
 } from './internal/runtime-bake-protocol.js';
 import { cacheSuccessfulPromise } from './internal/successful-promise-cache.js';
 import { bakeProgressMessage } from './internal/bake-progress-protocol.js';
@@ -35,7 +35,7 @@ scope.addEventListener('message', (event: MessageEvent<unknown>) => {
   pending = pending.then(() => handleMessage(value));
 });
 
-async function handleMessage(value: RuntimeBakeRequestV0): Promise<void> {
+async function handleMessage(value: RuntimeBakeRequest): Promise<void> {
   try {
     const source = new Uint8Array(value.source);
     const cache =
@@ -72,7 +72,7 @@ async function handleMessage(value: RuntimeBakeRequestV0): Promise<void> {
     scope.postMessage(bakeProgressMessage(value.id, 'font', 'complete', 1, 1));
     postSuccess(value.id, artifact, result.composed.report, result.composed.warnings);
   } catch (error) {
-    const response: RuntimeBakeFailureV0 = {
+    const response: RuntimeBakeFailure = {
       type: 'bake-font-result-v0',
       id: value.id,
       ok: false,
@@ -83,7 +83,7 @@ async function handleMessage(value: RuntimeBakeRequestV0): Promise<void> {
 }
 
 function postSuccess(id: number, artifact: CachedFontArtifact, report: unknown, warnings: readonly unknown[]): void {
-  const artifacts: RuntimeBakeSuccessV0['artifacts'] = [
+  const artifacts: RuntimeBakeSuccess['artifacts'] = [
     {
       role: 'font',
       id: artifact.id,
@@ -91,7 +91,7 @@ function postSuccess(id: number, artifact: CachedFontArtifact, report: unknown, 
       sha256: artifact.sha256,
     },
   ];
-  const response: RuntimeBakeSuccessV0 = {
+  const response: RuntimeBakeSuccess = {
     type: 'bake-font-result-v0',
     id,
     ok: true,
@@ -105,11 +105,11 @@ function postSuccess(id: number, artifact: CachedFontArtifact, report: unknown, 
   );
 }
 
-async function resolveRasters(rasters: readonly RuntimeBakeRasterV0[]): Promise<readonly ResolvedRasterBakePlan[]> {
+async function resolveRasters(rasters: readonly RuntimeBakeRaster[]): Promise<readonly ResolvedRasterBakePlan[]> {
   return Promise.all(rasters.map(resolveRaster));
 }
 
-async function resolveRaster(raster: RuntimeBakeRasterV0): Promise<ResolvedRasterBakePlan> {
+async function resolveRaster(raster: RuntimeBakeRaster): Promise<ResolvedRasterBakePlan> {
   let baker: AnyRasterBakerModule;
   switch (raster.kind) {
     case 'bitmap':

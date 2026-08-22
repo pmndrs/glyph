@@ -49,7 +49,7 @@ import {
   msdfDescriptor,
   msdfDescriptorRasterKey,
   type MsdfConfiguration,
-  type MsdfDescriptorV0,
+  type MsdfDescriptor,
 } from '../internal/msdf-contract.js';
 
 const RECORD_STRIDE = 20;
@@ -79,12 +79,12 @@ export interface MsdfArtifactValidationContext {
   readonly shapingHash: Sha256Hex | string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
-  readonly descriptor: MsdfDescriptorV0;
+  readonly descriptor: MsdfDescriptor;
   readonly externalPages?: ReadonlyMap<string, Uint8Array>;
   readonly limits?: Partial<MsdfArtifactValidationLimits>;
 }
 
-export interface ValidatedMsdfPageV0 {
+export interface ValidatedMsdfPage {
   readonly width: number;
   readonly height: number;
   readonly bytes: Uint8Array;
@@ -92,13 +92,13 @@ export interface ValidatedMsdfPageV0 {
   readonly uri?: string;
 }
 
-export interface ValidatedMsdfArtifactV0 {
+export interface ValidatedMsdfArtifact {
   readonly document: Readonly<Record<string, unknown>>;
   readonly rasterKey: RasterKey;
   readonly shapingHash: Sha256Hex;
   readonly glyphCount: number;
   readonly records: Uint8Array;
-  readonly pages: readonly ValidatedMsdfPageV0[];
+  readonly pages: readonly ValidatedMsdfPage[];
   readonly khronos: KhronosValidationReport;
 }
 
@@ -120,7 +120,7 @@ export class MsdfArtifactValidationError extends Error {
 export async function validateMsdfArtifact(
   bytes: Uint8Array,
   context: MsdfArtifactValidationContext,
-): Promise<ValidatedMsdfArtifactV0> {
+): Promise<ValidatedMsdfArtifact> {
   try {
     const parsed = parseGlb(bytes);
     const khronos = await validateWithKhronos(bytes, parsed.document);
@@ -138,7 +138,7 @@ async function validateMsdfSemantics(
   parsed: ParsedGlb,
   khronos: KhronosValidationReport,
   context: MsdfArtifactValidationContext,
-): Promise<ValidatedMsdfArtifactV0> {
+): Promise<ValidatedMsdfArtifact> {
   requireNonArrayObject(context.descriptor, '/descriptor');
   let configuration: MsdfConfiguration;
   try {
@@ -251,7 +251,7 @@ async function validateMsdfSemantics(
 
   let textureArrayWidth = 0;
   let textureArrayHeight = 0;
-  const pages: ValidatedMsdfPageV0[] = [];
+  const pages: ValidatedMsdfPage[] = [];
   const pageValues = asArray(extension.pages, `${extensionPath}/pages`);
   for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
     const pagePath = `${extensionPath}/pages/${pageIndex}`;

@@ -1,9 +1,9 @@
-import type { UnicodeRangeV0 } from '../font-baker/index.js';
+import type { UnicodeRange } from '../font-baker/index.js';
 
 const MAX_UNICODE_RANGES = 4_096;
 const MAX_UNICODE = 0x10ffff;
 
-export function normalizeUnicodeRanges(ranges: readonly UnicodeRangeV0[]): readonly UnicodeRangeV0[] {
+export function normalizeUnicodeRanges(ranges: readonly UnicodeRange[]): readonly UnicodeRange[] {
   if (!Array.isArray(ranges) || ranges.length === 0) {
     throw new TypeError('font selection requires at least one Unicode range');
   }
@@ -21,7 +21,7 @@ export function normalizeUnicodeRanges(ranges: readonly UnicodeRangeV0[]): reado
     return { start, end };
   });
   normalized.sort((left, right) => left.start - right.start || left.end - right.end);
-  const merged: UnicodeRangeV0[] = [];
+  const merged: UnicodeRange[] = [];
   for (const range of normalized) {
     const previous = merged.at(-1);
     if (previous !== undefined && range.start <= previous.end + 1) {

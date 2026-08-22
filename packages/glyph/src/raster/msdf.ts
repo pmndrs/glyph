@@ -15,7 +15,7 @@ import {
   MSDF_MAX_PIXEL_RANGE,
   msdfDescriptor,
   msdfRasterKey,
-  type MsdfDescriptorV0,
+  type MsdfDescriptor,
   type MsdfOptions,
 } from '../internal/msdf-contract.js';
 import {
@@ -52,7 +52,7 @@ export {
   msdfDescriptorRasterKey,
   msdfRasterKey,
   type MsdfConfiguration,
-  type MsdfDescriptorV0,
+  type MsdfDescriptor,
   type MsdfOptions,
 } from '../internal/msdf-contract.js';
 export { DENSE_GLYPH_RECORD_STRIDE as MSDF_GLYPH_RECORD_STRIDE } from '../internal/raster-atlas.js';
@@ -86,7 +86,7 @@ export const msdf: RasterTechnique<
   RasterTechniqueId & 'pmndrs.msdf',
   typeof MSDF_KIND,
   MsdfOptions | undefined,
-  MsdfDescriptorV0,
+  MsdfDescriptor,
   MsdfData
 > = defineRasterTechnique({
   id: 'pmndrs.msdf',
@@ -94,7 +94,7 @@ export const msdf: RasterTechnique<
   extension: MSDF_EXTENSION,
   version: MSDF_FORMAT_VERSION,
   runtimeBaker: () => import('../runtime-bakers/msdf.js'),
-  descriptor(options: MsdfOptions | undefined): MsdfDescriptorV0 {
+  descriptor(options: MsdfOptions | undefined): MsdfDescriptor {
     return msdfDescriptor(options);
   },
   async decode(font, raster, signal): Promise<MsdfData> {

@@ -4,11 +4,11 @@ import type { RuntimeRasterBakeRequest, RuntimeRasterBakerModule } from '../rast
 import { copyToOwnedArrayBuffer } from './owned-array-buffer.js';
 import {
   isRasterBakeWorkerResultV0,
-  type RasterBakeWorkerRequestV0,
-  type RasterBakeWorkerResultV0,
+  type RasterBakeWorkerRequest,
+  type RasterBakeWorkerResult,
 } from './raster-bake-worker-protocol.js';
 import { SerialWorkerHost } from './serial-worker-host.js';
-import { isBakeProgressMessageV0, type BakeProgressMessageV0 } from './bake-progress-protocol.js';
+import { isBakeProgressMessageV0, type BakeProgressMessage } from './bake-progress-protocol.js';
 
 class RuntimeRasterBakeError extends Error {
   readonly code: string;
@@ -29,10 +29,10 @@ export function createRasterBakeWorkerHost<Kind extends string, Options>(options
 }): RuntimeRasterBakerModule<Kind, Options> {
   const host = new SerialWorkerHost<
     RuntimeRasterBakeRequest<Options>,
-    RasterBakeWorkerRequestV0,
-    RasterBakeWorkerResultV0,
+    RasterBakeWorkerRequest,
+    RasterBakeWorkerResult,
     RasterBakeArtifact<Kind>,
-    BakeProgressMessageV0
+    BakeProgressMessage
   >({
     name: options.name,
     workerUrl: options.workerUrl,
