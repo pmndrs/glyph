@@ -9,6 +9,7 @@ import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 import { defineTextMaterial, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
+import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const densityFontUrl = new URL(
@@ -687,7 +688,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
 
 async function createInstrumentedRuntime(registry) {
   const wasm = await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url));
-  const abi = JSON.parse(await readFile(new URL('../../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8'));
+  const abi = textShaperAbi;
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
   let measureCrossings = 0;
@@ -980,7 +981,7 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
  * speculative work without a checkpoint rebuild.
  */
 test('repeated measureLayout under changing constraints stays on the paragraph query path', async () => {
-  const abi = JSON.parse(await readFile(new URL('../../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8'));
+  const abi = textShaperAbi;
   const registry = new FontRegistry();
   const instrumented = await createInstrumentedRuntime(registry);
   const font = await instrumented.runtime.loadFont({

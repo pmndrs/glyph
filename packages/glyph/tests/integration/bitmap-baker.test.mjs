@@ -12,10 +12,9 @@ import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/
 import { validateBitmapArtifact } from '@pmndrs/glyph/bakers/bitmap/validate';
 
 const wasmUrl = new URL('../../dist/bitmap-baker.wasm', import.meta.url);
-const abiUrl = new URL('../../dist/bitmap-baker-abi-v0.json', import.meta.url);
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';
-const publishedAbi = JSON.parse(await readFile(abiUrl, 'utf8'));
+const publishedAbi = bitmapBakerAbi;
 const progressImports = { env: { pmndrs_glyph_bake_progress() {} } };
 
 async function setup() {

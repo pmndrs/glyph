@@ -7,10 +7,10 @@ import { createRuntimeShaper } from '../../dist/shaper.js';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { fontBindingBytes, renderPolicyBytes, renderPolicyBytesFromPrograms } from '../support/engine-abi.mjs';
+import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
 const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const shaperAbiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 async function fixture() {
   const [source, bakerWasm, shaperWasm] = await Promise.all([
     readFile(new URL('Inter-Regular.ttf', fixtureDirectory)),
@@ -26,7 +26,7 @@ async function fixture() {
 }
 
 test('ships a zero-import optimized shaper module whose published ABI is generated', async () => {
-  const [wasm, published] = await Promise.all([readFile(shaperWasmUrl), readFile(shaperAbiUrl, 'utf8')]);
+  const wasm = await readFile(shaperWasmUrl);
   const module = await WebAssembly.compile(wasm);
   assert.deepEqual(WebAssembly.Module.imports(module), []);
   assert.equal(
@@ -34,7 +34,9 @@ test('ships a zero-import optimized shaper module whose published ABI is generat
     false,
   );
   const generated = await import('../../dist/generated/text-shaper-abi.js');
-  assert.deepEqual(generated.textShaperAbi, JSON.parse(published));
+  // The published subpath must surface the generated module itself, not a copy of it. Identity is
+  // the assertion that matters: a copy is what would let the two drift.
+  assert.equal(textShaperAbi, generated.textShaperAbi);
   assert.deepEqual(generated.textShaperAbi.versions, {
     fontFormat: 0,
     harfrust: '0.12.0',
@@ -80,10 +82,7 @@ test('the shaper registers only the exact shaping views retained from the valida
 
 test('compiled Wasm retains ordered font stacks and prevents dangling font disposal', async () => {
   const { artifact, shaperWasm } = await fixture();
-  const [validated, abi] = await Promise.all([
-    validateFontArtifact(artifact),
-    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
-  ]);
+  const [validated, abi] = await Promise.all([validateFontArtifact(artifact), textShaperAbi]);
   const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
   const memory = instance.exports[abi.memory];
   const fn = Object.fromEntries(
@@ -229,7 +228,7 @@ test('text_update advances missing clusters through an ordered font stack', asyn
       ),
     ),
     readFile(shaperWasmUrl),
-    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+    textShaperAbi,
   ]);
   const [inter, devanagari] = await Promise.all([
     validateFontArtifact(interArtifact),
@@ -292,7 +291,7 @@ test('text_update appends a reordered Devanagari grapheme after a conjunct', asy
       ),
     ),
     readFile(shaperWasmUrl),
-    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+    textShaperAbi,
   ]);
   const validated = await validateFontArtifact(artifact);
   const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
@@ -590,7 +589,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
     readFile(shaperWasmUrl),
-    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+    textShaperAbi,
   ]);
   const inter = await validateFontArtifact(interArtifact);
   const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
@@ -779,7 +778,7 @@ test('the committing frame adopts the speculative transaction and its reserved g
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
     readFile(shaperWasmUrl),
-    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+    textShaperAbi,
   ]);
   const inter = await validateFontArtifact(interArtifact);
   const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
@@ -905,7 +904,7 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
     readFile(shaperWasmUrl),
-    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+    textShaperAbi,
   ]);
   const inter = await validateFontArtifact(interArtifact);
   const createEngine = async () => {
@@ -1032,7 +1031,7 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
     readFile(shaperWasmUrl),
-    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+    textShaperAbi,
   ]);
   const inter = await validateFontArtifact(interArtifact);
   const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});
@@ -1154,7 +1153,7 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
   const [interArtifact, shaperWasm, abi] = await Promise.all([
     readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
     readFile(shaperWasmUrl),
-    readFile(shaperAbiUrl, 'utf8').then(JSON.parse),
+    textShaperAbi,
   ]);
   const inter = await validateFontArtifact(interArtifact);
   const instance = await WebAssembly.instantiate(await WebAssembly.compile(shaperWasm), {});

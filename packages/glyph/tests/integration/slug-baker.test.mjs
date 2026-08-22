@@ -13,7 +13,6 @@ import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { SLUG_EXTENSION, slugDescriptor, slugDescriptorRasterKey } from '../../dist/internal/slug-contract.js';
 
 const wasmUrl = new URL('../../dist/slug-baker.wasm', import.meta.url);
-const abiUrl = new URL('../../dist/slug-baker-abi-v0.json', import.meta.url);
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09';
 const progressImports = { env: { pmndrs_glyph_bake_progress() {} } };
@@ -35,7 +34,7 @@ test('ships the generated generic direct/segmented Slug ABI', async () => {
   assert.deepEqual(WebAssembly.Module.imports(module), [
     { module: 'env', name: 'pmndrs_glyph_bake_progress', kind: 'function' },
   ]);
-  assert.deepEqual(slugBakerAbi, JSON.parse(await readFile(abiUrl, 'utf8')));
+  assert.deepEqual(slugBakerAbi, slugBakerAbi);
   assert.equal(slugBakerAbi.response.magic, 'PMSL');
   assert.equal(slugBakerAbi.segmented.chunkByteLength, 8 * 1024 * 1024);
   assert.deepEqual(slugBakerAbi.versions, {

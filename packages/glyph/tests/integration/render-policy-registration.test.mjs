@@ -3,12 +3,13 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { renderPolicyBytes } from '../support/engine-abi.mjs';
+import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 
 test('registers compiler-mapped render policies as retained typed Wasm state', async () => {
-  const [wasm, abi] = await Promise.all([readFile(wasmUrl), readFile(abiUrl, 'utf8').then(JSON.parse)]);
+  const wasm = await readFile(wasmUrl);
+  const abi = textShaperAbi;
   const module = await WebAssembly.compile(wasm);
   const instance = await WebAssembly.instantiate(module, {});
   const memory = instance.exports[abi.memory];

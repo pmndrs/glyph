@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
-
-const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
+import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
 
 test('production frame compiler preserves the established benchmark request bytes', async () => {
-  const abi = JSON.parse(await readFile(abiUrl, 'utf8'));
+  const abi = textShaperAbi;
   const text = 'A😀B';
   const units = Array.from({ length: text.length }, (_, index) => text.charCodeAt(index));
   const limits = { maxClusters: 8, maxLines: 8, maxOutputBytes: 65_536 };
@@ -97,7 +95,7 @@ test('production frame compiler preserves the established benchmark request byte
 });
 
 test('production frame compiler carries full style, polygon, exclusion, and inline-object payloads', async () => {
-  const abi = JSON.parse(await readFile(abiUrl, 'utf8'));
+  const abi = textShaperAbi;
   const bytes = compileTextEngineFrameUpdate({
     sessionId: 1,
     policyHandle: 2,
@@ -250,7 +248,7 @@ test('style payloads stay in per-record order when several paragraphs carry lang
   // start behind the first paragraph's features and the whole update is rejected. The
   // live Advanced-shaping workload hits exactly this, since each case sets a language
   // and a feature list across four paragraphs.
-  const abi = JSON.parse(await readFile(abiUrl, 'utf8'));
+  const abi = textShaperAbi;
   const styleMutation = (paragraphId) => ({
     opcode: 'upsert',
     paragraphId,
@@ -321,7 +319,7 @@ test('style payloads stay in per-record order when several paragraphs carry lang
 });
 
 test('production frame compiler encodes typography controls and their defaults', async () => {
-  const abi = JSON.parse(await readFile(abiUrl, 'utf8'));
+  const abi = textShaperAbi;
   const constraint = (typography) => ({
     paragraphId: 1,
     flowThreadId: 1,

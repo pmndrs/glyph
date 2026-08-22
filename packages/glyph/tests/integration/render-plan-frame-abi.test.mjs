@@ -3,14 +3,15 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { copyIntoAllocation, engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
+import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 const sessionId = 5;
 const policyHandle = 11;
 
 test('publishes retained frame transactions through aligned A/B Wasm arenas', async () => {
-  const [wasm, abi] = await Promise.all([readFile(wasmUrl), readFile(abiUrl, 'utf8').then(JSON.parse)]);
+  const wasm = await readFile(wasmUrl);
+  const abi = textShaperAbi;
   const instance = await WebAssembly.instantiate(await WebAssembly.compile(wasm), {});
   const memory = instance.exports[abi.memory];
   const fn = Object.fromEntries(

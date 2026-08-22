@@ -40,10 +40,14 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.equal(packedFiles.includes('dist/.tsbuildinfo'), false);
   assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.d.ts'), false);
   assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.js'), false);
-  assert.equal(packedFiles.includes('dist/mtsdf-baker-abi-v0.json'), false);
-  assert.equal(packedFiles.includes('dist/mtsdf-baker-abi-v1.json'), true);
-  assert.equal(packedFiles.includes('dist/slug-baker-abi-v1.json'), false);
-  assert.equal(packedFiles.includes('dist/slug-baker-abi-v0.json'), true);
+  // The ABI ships as the generated TypeScript module its subpath export names. No JSON copy is
+  // published: nothing could import one, because `exports` has no wildcard and names no ABI JSON.
+  assert.deepEqual(
+    packedFiles.filter((path) => /-abi-v[0-9]\.json$/.test(path)),
+    [],
+  );
+  assert.equal(packedFiles.includes('dist/mtsdf-baker-abi.js'), true);
+  assert.equal(packedFiles.includes('dist/slug-baker-abi.js'), true);
   assert.deepEqual([...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(), [
     'LICENSE',
     'bin',

@@ -10,10 +10,10 @@ import {
   mtsdfGeneratorAbi,
 } from '../../dist/internal/mtsdf-generator.js';
 import { mtsdfOracleCases } from '../fixtures/mtsdf-oracle-cases.mjs';
+import { mtsdfBakerAbi } from '@pmndrs/glyph/mtsdf-baker-abi';
 
 const wasmUrl = new URL('../../dist/mtsdf-baker.wasm', import.meta.url);
-const abiUrl = new URL('../../dist/mtsdf-baker-abi-v1.json', import.meta.url);
-const publishedAbi = JSON.parse(await readFile(abiUrl, 'utf8'));
+const publishedAbi = mtsdfBakerAbi;
 const progressImports = { env: { pmndrs_glyph_bake_progress() {} } };
 
 async function setup() {

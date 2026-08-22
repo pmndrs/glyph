@@ -3,13 +3,14 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { copyIntoAllocation, engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
+import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 const mutationCount = 64;
 
 test('fixed-seed policy and frame mutations fail safely, deterministically, and recoverably', async () => {
-  const [wasm, abi] = await Promise.all([readFile(wasmUrl), readFile(abiUrl, 'utf8').then(JSON.parse)]);
+  const wasm = await readFile(wasmUrl);
+  const abi = textShaperAbi;
   const module = await WebAssembly.compile(wasm);
   const policyCases = mutations(renderPolicyBytes(abi), 0x504f_4c59);
   const frameCases = mutations(frameBytes(abi, 1), 0x4652_414d);

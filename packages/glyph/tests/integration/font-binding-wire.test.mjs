@@ -14,12 +14,12 @@ import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
 import { defineRasterResourceId } from '../../dist/raster-technique.js';
 import { techniqueProof } from '../../scripts/support/render-technique-proof.mjs';
+import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
-const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 
 test('production first-party bindings preserve every proven field-major raster lane', async () => {
-  const abi = JSON.parse(await readFile(abiUrl, 'utf8'));
+  const abi = textShaperAbi;
   for (const name of ['bitmap', 'mtsdf', 'slug']) {
     const { core, raster, loaded } = await fixture(name);
     const actual = loadedFontBindingBytes(loaded);

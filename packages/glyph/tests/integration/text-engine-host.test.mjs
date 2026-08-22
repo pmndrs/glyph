@@ -7,12 +7,13 @@ import { techniqueWireIds } from '../../dist/core/render-policy.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
+import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 
 test('production text-engine host publishes borrowed A/B plans through the runtime shaper instance', async () => {
-  const [wasm, abi] = await Promise.all([readFile(wasmUrl), readFile(abiUrl, 'utf8').then(JSON.parse)]);
+  const wasm = await readFile(wasmUrl);
+  const abi = textShaperAbi;
   const shaper = await createRuntimeShaper({ wasm });
   const host = new TextEngineHost(shaper);
   const policyHandle = 11;
@@ -62,7 +63,8 @@ test('production text-engine host publishes borrowed A/B plans through the runti
 });
 
 test('one deterministic Three policy registers Bitmap, MSDF, and Slug with material-directed draws', async () => {
-  const [wasm, abi] = await Promise.all([readFile(wasmUrl), readFile(abiUrl, 'utf8').then(JSON.parse)]);
+  const wasm = await readFile(wasmUrl);
+  const abi = textShaperAbi;
   assert.deepEqual(techniqueWireIds, {
     bitmap: 0x1775_3b8c,
     msdf: 0xf9a7_e4fd,

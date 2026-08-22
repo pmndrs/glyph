@@ -18,9 +18,7 @@ const [wasm, rustReleaseWasm] = await Promise.all([
     ),
   ),
 ]);
-const publishedAbi = JSON.parse(
-  await readFile(new URL('../../../dist/font-baker-abi-v0.json', import.meta.url), 'utf8'),
-);
+const publishedAbi = fontBakerAbi;
 
 test('the distributed module is the pinned size-optimized zero-import release module', async () => {
   assert(wasm.byteLength < rustReleaseWasm.byteLength);
