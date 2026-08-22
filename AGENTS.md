@@ -22,7 +22,7 @@ Use these canonical sources instead of creating shadow plans or duplicate status
 - `docs/packages/*.md` for current package ownership, boundaries, and evidence;
 - `docs/log.md` for knowledge-bundle chronology.
 
-Update affected canonical documentation in the same change as source. Package source or configuration changes require reviewing the matching package concept, regenerating its `source_digest`, and running `pnpm docs:check`.
+Update affected canonical documentation in the same change as source. Package source or configuration changes require reviewing the matching package concept, regenerating its `source_digest`, and running `mise exec -- pnpm scripts run docs:check`.
 
 Use the exact root toolchain pins through mise. Agent commands must enter that environment explicitly with `mise exec -- pnpm ...` or `mise exec -- <tool> ...`; do not depend on `mise activate` surviving across non-interactive commands. Mise owns tool selection, while pnpm remains the only repository workflow surface. Install workload-scoped mise tools only when their documented pnpm workflow requires them. The dated nightly under `packages/glyph/rust/font-baker-fuzz` is isolated to cargo-fuzz. Verify narrowly first, then run the relevant package and repository checks. Keep tests deterministic; do not use sleeps, timer cushions, arbitrary retries, or regenerated goldens as correctness mechanisms.
 

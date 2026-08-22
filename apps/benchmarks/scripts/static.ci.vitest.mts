@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
+import { runKnowledgeBaseCheck } from './check-knowledge-base.mts';
 import { run } from './support/command-cli.mts';
 
 const timeout = 5 * 60 * 1_000;
@@ -44,14 +45,7 @@ describe.sequential('static repository gates', () => {
   gate('repository tooling synchronization', () =>
     run(process.execPath, ['../../.claude/hooks/sync-agent-config.test.ts']),
   );
-  gate('knowledge base', () =>
-    run('ruby', [
-      '../../.agents/skills/open-knowledge-format/scripts/validate_okf.rb',
-      '../../docs',
-      '--workspace-root',
-      '../..',
-    ]),
-  );
+  gate('knowledge base', () => runKnowledgeBaseCheck());
 });
 
 function gate(name: string, command: () => Promise<void>): void {
