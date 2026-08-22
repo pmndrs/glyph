@@ -46,7 +46,7 @@ export interface MtsdfGenerator {
   generate(request: MtsdfGlyphRequest): MtsdfGlyph;
 }
 
-export type MtsdfGeneratorAbiV1 = MtsdfBakerAbi;
+export type MtsdfGeneratorAbi = MtsdfBakerAbi;
 
 export type MtsdfGenerationErrorCode = 'INVALID_REQUEST' | 'INVALID_OUTLINE' | 'GENERATION_FAILED';
 
@@ -120,7 +120,7 @@ export function createMtsdfGeneratorFromInstance(instance: WebAssembly.Instance)
   };
 }
 
-function encodeRequest(request: MtsdfGlyphRequest, abi: MtsdfGeneratorAbiV1): Uint8Array {
+function encodeRequest(request: MtsdfGlyphRequest, abi: MtsdfGeneratorAbi): Uint8Array {
   validateRequest(request);
   const requestLayout = abi.layouts.request;
   const commandLayout = abi.layouts.command;
@@ -213,7 +213,7 @@ function checkedDimension(inner: number, padding: number, label: string): number
   return checkedSum(inner, checkedProduct(padding, 2));
 }
 
-function readExports(wasmExports: WebAssembly.Exports, abi: MtsdfGeneratorAbiV1): MtsdfGeneratorExports {
+function readExports(wasmExports: WebAssembly.Exports, abi: MtsdfGeneratorAbi): MtsdfGeneratorExports {
   const memory = wasmExports[abi.memory];
   const allocate = wasmExports[abi.functions.allocate];
   const deallocate = wasmExports[abi.functions.deallocate];
@@ -240,7 +240,7 @@ function readExports(wasmExports: WebAssembly.Exports, abi: MtsdfGeneratorAbiV1)
   };
 }
 
-function statusCode(status: number, abi: MtsdfGeneratorAbiV1): MtsdfGenerationErrorCode {
+function statusCode(status: number, abi: MtsdfGeneratorAbi): MtsdfGenerationErrorCode {
   if (status === abi.status.invalidRequest) return 'INVALID_REQUEST';
   if (status === abi.status.invalidOutline) return 'INVALID_OUTLINE';
   return 'GENERATION_FAILED';

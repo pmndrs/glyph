@@ -20,14 +20,14 @@ import {
   MSDF_KIND,
   msdfDescriptor,
   type MsdfOptions,
-  type MsdfDescriptorV0,
+  type MsdfDescriptor,
 } from '../internal/msdf-contract.js';
 
 export { mtsdfBakerAbi as msdfBakerAbi } from '../generated/mtsdf-baker-abi.js';
 
 export type MsdfBakerOptions = MsdfOptions | undefined;
 
-export interface MsdfBakerRequestV0 {
+export interface MsdfBakerRequest {
   readonly fontFaceIndex: number;
   readonly glyphCount: number;
   readonly shapingHash: string;
@@ -36,22 +36,22 @@ export interface MsdfBakerRequestV0 {
     readonly artifact: 'embedded' | 'external';
     readonly pages: 'embedded' | 'external';
   };
-  readonly descriptor: MsdfDescriptorV0;
+  readonly descriptor: MsdfDescriptor;
 }
 
-export interface MsdfBakerCoreRequestV0 {
+export interface MsdfBakerCoreRequest {
   readonly source: Uint8Array;
-  readonly request: MsdfBakerRequestV0;
+  readonly request: MsdfBakerRequest;
   readonly onProgress?: BakeProgressListener;
 }
 
 export interface MsdfBakerCore {
-  bake(request: MsdfBakerCoreRequestV0): RasterBakeArtifact<'msdf'>;
+  bake(request: MsdfBakerCoreRequest): RasterBakeArtifact<'msdf'>;
 }
 
 export type MsdfBakerWasmSource = BufferSource | WebAssembly.Module;
 
-export type MsdfBakerAbiV1 = MsdfBakerAbi;
+export type { MsdfBakerAbi };
 
 export class MsdfBakeError extends Error {
   readonly code: string;
@@ -120,7 +120,7 @@ export function createMsdfBakerFromInstance(instance: WebAssembly.Instance): Msd
       },
     },
   };
-  return createDirectRasterBakerFromInstance<MsdfBakerRequestV0, 'msdf'>(instance, directAbi, {
+  return createDirectRasterBakerFromInstance<MsdfBakerRequest, 'msdf'>(instance, directAbi, {
     label: 'MSDF baker',
     kind: MSDF_KIND,
     extension: MSDF_EXTENSION,
@@ -130,13 +130,13 @@ export function createMsdfBakerFromInstance(instance: WebAssembly.Instance): Msd
   });
 }
 
-export function msdfBakerFromCore(core: MsdfBakerCore): RasterBakerModule<'msdf', MsdfBakerOptions, MsdfDescriptorV0> {
+export function msdfBakerFromCore(core: MsdfBakerCore): RasterBakerModule<'msdf', MsdfBakerOptions, MsdfDescriptor> {
   return {
     kind: MSDF_KIND,
     extension: MSDF_EXTENSION,
     version: MSDF_FORMAT_VERSION,
     descriptor: msdfDescriptor,
-    async bake(request: RasterBakeRequest<MsdfDescriptorV0>) {
+    async bake(request: RasterBakeRequest<MsdfDescriptor>) {
       request.signal?.throwIfAborted();
       const result = core.bake({
         source: request.font.source,
@@ -172,7 +172,7 @@ async function loadDefaultMsdfBaker(): Promise<ReturnType<typeof msdfBakerFromCo
 
 const defaultMsdfBaker = cacheSuccessfulPromise(loadDefaultMsdfBaker);
 
-export const msdfBaker: RasterBakerModule<'msdf', MsdfBakerOptions, MsdfDescriptorV0> = {
+export const msdfBaker: RasterBakerModule<'msdf', MsdfBakerOptions, MsdfDescriptor> = {
   kind: MSDF_KIND,
   extension: MSDF_EXTENSION,
   version: MSDF_FORMAT_VERSION,

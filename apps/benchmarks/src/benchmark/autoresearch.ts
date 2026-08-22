@@ -1,11 +1,11 @@
-export interface AutoresearchEvidenceV0 {
+export interface AutoresearchEvidence {
   readonly id: string;
   readonly path: string;
   readonly sha256: string;
   readonly bytes: number;
 }
 
-export type AutoresearchCampaignV0 =
+export type AutoresearchCampaign =
   | { readonly state: 'disabled'; readonly reason: string }
   | {
       readonly state: 'enabled';
@@ -14,19 +14,19 @@ export type AutoresearchCampaignV0 =
       readonly manifest: string;
     };
 
-export interface AutoresearchBaselineV0 {
+export interface AutoresearchBaseline {
   readonly schemaVersion: 0;
   readonly baseCommit: string;
-  readonly campaign: AutoresearchCampaignV0;
+  readonly campaign: AutoresearchCampaign;
   readonly environment: {
     readonly node: string;
     readonly pnpm: string;
     readonly rust: string;
   };
-  readonly evidence: readonly AutoresearchEvidenceV0[];
+  readonly evidence: readonly AutoresearchEvidence[];
 }
 
-export function assertAutoresearchBaseline(value: unknown): asserts value is AutoresearchBaselineV0 {
+export function assertAutoresearchBaseline(value: unknown): asserts value is AutoresearchBaseline {
   assertPlainObject(value, 'baseline');
   if (value.schemaVersion !== 0) invalid('schemaVersion must be 0');
   if (!isHexDigest(value.baseCommit, 40)) invalid('baseCommit must be a full Git SHA-1');
@@ -50,16 +50,16 @@ export function assertAutoresearchBaseline(value: unknown): asserts value is Aut
 }
 
 export function assertAutoresearchDisabled(
-  baseline: AutoresearchBaselineV0,
-): asserts baseline is AutoresearchBaselineV0 & {
-  readonly campaign: Extract<AutoresearchCampaignV0, { readonly state: 'disabled' }>;
+  baseline: AutoresearchBaseline,
+): asserts baseline is AutoresearchBaseline & {
+  readonly campaign: Extract<AutoresearchCampaign, { readonly state: 'disabled' }>;
 } {
   if (baseline.campaign.state !== 'disabled') {
     throw new Error('autoresearch campaigns require explicit maintainer approval');
   }
 }
 
-function assertCampaign(value: unknown): asserts value is AutoresearchCampaignV0 {
+function assertCampaign(value: unknown): asserts value is AutoresearchCampaign {
   assertPlainObject(value, 'campaign');
   if (value.state === 'disabled') {
     if (!isNonEmptyString(value.reason)) invalid('disabled campaign reason is required');

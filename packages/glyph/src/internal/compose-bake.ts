@@ -1,16 +1,16 @@
-import type { FontBakeResultV0 } from '../font-baker/index.js';
+import type { FontBakeResult } from '../font-baker/index.js';
 import { parseGlb } from '../font-baker/validator.js';
 
-import type { BakeArtifactV0, BakeWarning, FontPayloadReport, RasterBakeArtifact, RasterPackagingV0 } from '../bake.js';
+import type { BakeArtifact, BakeWarning, FontPayloadReport, RasterBakeArtifact, RasterPackaging } from '../bake.js';
 import type { Sha256Hex } from '../identity.js';
 
-export interface RasterCompositionV0 {
+export interface RasterComposition {
   readonly raster: RasterBakeArtifact;
-  readonly packaging: RasterPackagingV0;
+  readonly packaging: RasterPackaging;
 }
 
-export interface ComposedFontBakeResultV0 {
-  readonly artifacts: readonly BakeArtifactV0[];
+export interface ComposedFontBakeResult {
+  readonly artifacts: readonly BakeArtifact[];
   readonly report: FontPayloadReport;
   readonly warnings: readonly BakeWarning[];
 }
@@ -29,9 +29,9 @@ export class BakeCompositionError extends Error {
 
 /** Compose package-owned raster artifacts without interpreting companion semantics. */
 export async function composeFontBake(
-  core: FontBakeResultV0,
-  rasters: readonly RasterCompositionV0[],
-): Promise<ComposedFontBakeResultV0> {
+  core: FontBakeResult,
+  rasters: readonly RasterComposition[],
+): Promise<ComposedFontBakeResult> {
   const coreArtifact = exactlyOne(
     core.artifacts.filter(({ role }) => role === 'font'),
     'CORE_ARTIFACT',
@@ -68,7 +68,7 @@ export async function composeFontBake(
   let binaryLength = parsedCore.declaredBinLength;
   const rasterKeys = new Set<string>();
   const embeddedExtensions = new Set<string>();
-  const outputArtifacts: BakeArtifactV0[] = [];
+  const outputArtifacts: BakeArtifact[] = [];
 
   for (let index = 0; index < rasters.length; index += 1) {
     const { raster, packaging } = rasters[index]!;
@@ -169,7 +169,7 @@ export async function composeFontBake(
   document.extensionsRequired = required;
   requireNonArrayObject(asArray(document.buffers, '/buffers')[0], '/buffers/0').byteLength = binaryLength;
   const combined = encodeGlb(document, concatenate(binaryParts, binaryLength));
-  const fontArtifact: BakeArtifactV0 = {
+  const fontArtifact: BakeArtifact = {
     role: 'font',
     id: coreArtifact.id,
     bytes: combined,
@@ -229,9 +229,9 @@ function rebaseBufferViewReferences(value: unknown, offset: number, count: numbe
 }
 
 function mapReport(
-  core: FontBakeResultV0,
-  rasters: readonly RasterCompositionV0[],
-  artifacts: readonly BakeArtifactV0[],
+  core: FontBakeResult,
+  rasters: readonly RasterComposition[],
+  artifacts: readonly BakeArtifact[],
 ): FontPayloadReport {
   const shaping = core.report.shared.shaping;
   return {
@@ -258,7 +258,7 @@ function mapReport(
   };
 }
 
-function assertUniqueArtifactIds(artifacts: readonly BakeArtifactV0[]): void {
+function assertUniqueArtifactIds(artifacts: readonly BakeArtifact[]): void {
   const ids = new Set<string>();
   for (let index = 0; index < artifacts.length; index += 1) {
     const id = artifacts[index]!.id;
@@ -269,7 +269,7 @@ function assertUniqueArtifactIds(artifacts: readonly BakeArtifactV0[]): void {
   }
 }
 
-function containerReport(artifact: BakeArtifactV0): FontPayloadReport['containers'][number] {
+function containerReport(artifact: BakeArtifact): FontPayloadReport['containers'][number] {
   const jsonChunkBytes = readU32(artifact.bytes, 12);
   const json = artifact.bytes.subarray(20, 20 + jsonChunkBytes);
   let jsonBytes = json.byteLength;
@@ -331,7 +331,7 @@ function asArtifact(artifact: {
   readonly id: string;
   readonly bytes: Uint8Array;
   readonly sha256: string;
-}): BakeArtifactV0 {
+}): BakeArtifact {
   return { ...artifact, sha256: asHash(artifact.sha256, '/artifact/sha256') };
 }
 

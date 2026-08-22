@@ -87,7 +87,7 @@ A combined GLB may embed at most one raster for a given companion extension name
 Every raster extension root contains the reciprocal binding:
 
 ```ts
-interface RasterBindingV0 {
+interface RasterBinding {
   version: 0;
   rasterKey: string;
   shapingHash: string;
@@ -115,15 +115,15 @@ interface RasterBindingV0 {
 Bitmap and distance-field pages, and losslessly wrapped Slug textures, use the same descriptor:
 
 ```ts
-interface TextureResourceV0 {
+interface TextureResource {
   width: number;
   height: number;
   mipLevelCount: number;
   colorSpace: 'linear' | 'srgb';
-  variants: readonly TextureVariantV0[];
+  variants: readonly TextureVariant[];
 }
 
-type ResourceSourceV0 =
+type ResourceSource =
   | { type: 'bufferView'; bufferView: number }
   | {
       type: 'external';
@@ -132,12 +132,12 @@ type ResourceSourceV0 =
       artifactHash: string;
     };
 
-interface BinaryResourceV0 {
-  source: ResourceSourceV0;
+interface BinaryResource {
+  source: ResourceSource;
 }
 
-interface TextureVariantV0 {
-  source: ResourceSourceV0;
+interface TextureVariant {
+  source: ResourceSource;
   container: 'ktx2';
   gpuFormat:
     | 'r8unorm'
@@ -176,13 +176,13 @@ V0 bitmap raster contains one or more generated strikes. Each strike owns dense 
 The bitmap API accepts a non-empty, duplicate-free tuple of positive integer ppem values. Each public scalar produces a square `(ppemX, ppemY) = (value, value)` strike. Its package-owned descriptor sorts those values in ascending order before key derivation. The extension's `strikes` array MUST use that canonical order and contain exactly those declared pairs; an artifact missing a requested strike, containing a different strike tuple, or carrying a different `rasterKey` does not satisfy the configured bitmap raster. The loader treats it as a baked miss, emits the normal deduplicated development warning, and automatically invokes the bitmap package's runtime baker when source bytes are available. It never silently substitutes a nearby baked strike for one requested by the font token.
 
 ```ts
-interface BitmapStrikeV0 {
+interface BitmapStrike {
   ppemX: number;
   ppemY: number;
   planeUnitsPerEm: number;
   recordBufferView: number;
   recordStride: 20;
-  pages: readonly TextureResourceV0[];
+  pages: readonly TextureResource[];
 }
 ```
 
@@ -224,14 +224,14 @@ For the non-subsetted V0 fixtures, records are 58,740 bytes for the pinned 2,937
 This extension is the serialized resource for the public MSDF raster module. Merged v0 and target v1 support one encoding: MTSDF in linear RGBA8. RGB stores the multi-channel signed-distance field and alpha stores true signed distance. The lossless GPU baseline is already four-channel because WebGPU has no ordinary `rgb8unorm` sampled texture format; discarding alpha would not reduce that baseline's GPU residency.
 
 ```ts
-interface MsdfRasterV0 {
+interface MsdfRaster {
   encoding: 'mtsdf';
   emSize: number;
   pixelRange: number;
   planeUnitsPerEm: number;
   recordBufferView: number;
   recordStride: 20;
-  pages: readonly TextureResourceV0[];
+  pages: readonly TextureResource[];
 }
 ```
 
@@ -315,16 +315,16 @@ Pages expose the curve payload as RGBA16F, headers as R32UI, and references as R
 ### Slug page descriptor
 
 ```ts
-interface SlugPageV0 {
-  curve: TextureResourceV0;
+interface SlugPage {
+  curve: TextureResource;
   headerCount: number;
   headerWidth: number;
   headerHeight: number;
-  headerResource: BinaryResourceV0;
+  headerResource: BinaryResource;
   referenceCount: number;
   referenceWidth: number;
   referenceHeight: number;
-  referenceResource: BinaryResourceV0;
+  referenceResource: BinaryResource;
 }
 ```
 

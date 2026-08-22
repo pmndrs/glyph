@@ -1,5 +1,5 @@
 import type {
-  BakeArtifactV0,
+  BakeArtifact,
   RasterBakeArtifact,
   RasterPagePayloadReport,
   RasterPayloadReport,
@@ -253,7 +253,7 @@ export function decodeSegmentedResponse<Kind extends string>(
   }
   assertResultMetadata(metadata, artifactLength, spec);
   const result = metadata;
-  const artifacts = result.artifacts.map<BakeArtifactV0>((artifact, index) => {
+  const artifacts = result.artifacts.map<BakeArtifact>((artifact, index) => {
     const byteLength = artifactLengths[index];
     if (byteLength === undefined || byteLength !== artifact.byteLength) {
       throw new TypeError(`${spec.label} segmented artifact length does not match its directory`);
@@ -322,7 +322,7 @@ export function decodeResponse<Kind extends string>(
   if (status !== contract.successStatus) throw spec.createError(parseError(metadata, spec.label));
   assertResultMetadata(metadata, artifactLength, spec);
   const result = metadata;
-  const artifacts = result.artifacts.map<BakeArtifactV0>((artifact) => ({
+  const artifacts = result.artifacts.map<BakeArtifact>((artifact) => ({
     role: artifact.role,
     id: artifact.id,
     bytes: response

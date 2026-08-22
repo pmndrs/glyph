@@ -155,7 +155,7 @@ This domain-separated encoding is used identically by the baker, loader, cache, 
 `PMNDRS_font` repeats a small set of values outside the SFNT so the loader can validate and expose them without a JavaScript table walk:
 
 ```ts
-interface FontMetricsV0 {
+interface FontMetrics {
   glyphCount: number;
   glyphIdWidth: 16;
   unitsPerEm: number;
@@ -321,7 +321,7 @@ total shaping bytes = sfnt bytes + font-function bytes
 Every bake report MUST list each retained table independently:
 
 ```ts
-interface ShapingPayloadReportV0 {
+interface ShapingPayloadReport {
   format: 'opentype-sfnt-harfrust-v0';
   sfntDirectoryBytes: number;
   tables: readonly {

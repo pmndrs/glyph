@@ -17,7 +17,7 @@ import {
   SLUG_KIND,
   SLUG_PLANE_UNITS_PER_EM,
   slugDescriptor,
-  type SlugDescriptorV0,
+  type SlugDescriptor,
 } from '../internal/slug-contract.js';
 import type { JsonValue, RasterResourceSource, RegisteredRaster } from '../raster.js';
 import {
@@ -38,7 +38,7 @@ export {
   SLUG_PLANE_UNITS_PER_EM,
   slugDescriptor,
   slugDescriptorRasterKey,
-  type SlugDescriptorV0,
+  type SlugDescriptor,
 } from '../internal/slug-contract.js';
 
 const ABSENT_PAGE = 0xffff;
@@ -71,7 +71,7 @@ export const slug: RasterTechnique<
   RasterTechniqueId & 'pmndrs.slug',
   typeof SLUG_KIND,
   undefined,
-  SlugDescriptorV0,
+  SlugDescriptor,
   SlugData
 > = defineRasterTechnique({
   id: 'pmndrs.slug',
@@ -79,7 +79,7 @@ export const slug: RasterTechnique<
   extension: SLUG_EXTENSION,
   version: SLUG_FORMAT_VERSION,
   runtimeBaker: () => import('../runtime-bakers/slug.js'),
-  descriptor(): SlugDescriptorV0 {
+  descriptor(): SlugDescriptor {
     return slugDescriptor();
   },
   async decode(font, raster, signal): Promise<SlugData> {

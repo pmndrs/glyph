@@ -7,7 +7,7 @@ import {
   BITMAP_KIND,
   bitmapDescriptorRasterKey,
   canonicalizeBitmapDescriptor,
-  type BitmapDescriptorV0,
+  type BitmapDescriptor,
 } from '../internal/bitmap-contract.js';
 import { nearestBitmapStrikeIndex } from '../internal/bitmap-strike.js';
 import {
@@ -41,7 +41,7 @@ export {
   bitmapDescriptorRasterKey,
   bitmapRasterKey,
   canonicalizeBitmapDescriptor,
-  type BitmapDescriptorV0,
+  type BitmapDescriptor,
   type BitmapOptions,
 } from '../internal/bitmap-contract.js';
 
@@ -88,7 +88,7 @@ export const bitmap: RasterTechnique<
   RasterTechniqueId & 'pmndrs.bitmap',
   typeof BITMAP_KIND,
   BitmapTechniqueOptions,
-  BitmapDescriptorV0,
+  BitmapDescriptor,
   BitmapData
 > = defineRasterTechnique({
   id: 'pmndrs.bitmap',
@@ -96,7 +96,7 @@ export const bitmap: RasterTechnique<
   extension: BITMAP_EXTENSION,
   version: BITMAP_FORMAT_VERSION,
   runtimeBaker: () => import('../runtime-bakers/bitmap.js'),
-  descriptor(options: BitmapTechniqueOptions): BitmapDescriptorV0 {
+  descriptor(options: BitmapTechniqueOptions): BitmapDescriptor {
     return canonicalizeBitmapDescriptor(options.strikes, options.coverage);
   },
   async decode(font, raster, signal): Promise<BitmapData> {

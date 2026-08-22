@@ -3,33 +3,33 @@ import { fontBakerAbi, type FontBakerAbi } from './generated/font-baker-abi.js';
 export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
 export { fontBakerAbi } from './generated/font-baker-abi.js';
 
-export interface FontBakeDescriptorV0 {
+export interface FontBakeDescriptor {
   readonly formatVersion: 0;
   readonly fontFaceIndex: number;
 }
 
-export interface FontBakeRequestV0 {
+export interface FontBakeRequest {
   readonly source: Uint8Array;
-  readonly descriptor: FontBakeDescriptorV0;
+  readonly descriptor: FontBakeDescriptor;
 }
 
-export type UnicodeRangeV0 = {
+export type UnicodeRange = {
   readonly start: number;
   readonly end: number;
 };
 
-export interface FontSelectionV0 {
+export interface FontBakeSelection {
   readonly formatVersion: 0;
   readonly fontFaceIndex: number;
-  readonly unicodeRanges: readonly UnicodeRangeV0[];
+  readonly unicodeRanges: readonly UnicodeRange[];
 }
 
-export interface FontPrepareRequestV0 {
+export interface FontPrepareRequest {
   readonly source: Uint8Array;
-  readonly selection: FontSelectionV0;
+  readonly selection: FontBakeSelection;
 }
 
-export interface PreparedFontReportV0 {
+export interface PreparedFontReport {
   readonly formatVersion: 0;
   readonly sourceBytes: number;
   readonly preparedBytes: number;
@@ -38,31 +38,31 @@ export interface PreparedFontReportV0 {
   readonly sha256: string;
 }
 
-export interface PreparedFontV0 {
+export interface PreparedFont {
   readonly bytes: Uint8Array;
-  readonly report: PreparedFontReportV0;
+  readonly report: PreparedFontReport;
 }
 
-export interface FontInspectRequestV0 {
+export interface FontInspectRequest {
   readonly source: Uint8Array;
-  readonly descriptor: FontBakeDescriptorV0;
+  readonly descriptor: FontBakeDescriptor;
 }
 
-export interface GlyphInspectionV0 {
+export interface GlyphInspection {
   readonly codePoint: number;
   readonly glyphId: number;
   readonly name?: string;
 }
 
-export interface FontInspectionV0 {
+export interface FontInspection {
   readonly formatVersion: 0;
   readonly fontFaceIndex: number;
   readonly glyphCount: number;
   readonly glyphNameSource: 'post' | 'cff' | 'none';
-  readonly glyphs: readonly GlyphInspectionV0[];
+  readonly glyphs: readonly GlyphInspection[];
 }
 
-export interface BakeArtifactV0 {
+export interface BakeArtifact {
   readonly role: 'font';
   readonly id: string;
   readonly bytes: Uint8Array;
@@ -75,7 +75,7 @@ export interface BakeWarning {
   readonly path?: string;
 }
 
-export interface ShapingPayloadReportV0 {
+export interface ShapingPayloadReport {
   readonly format: 'opentype-sfnt-harfrust-v0';
   readonly sfntDirectoryBytes: number;
   readonly tables: readonly {
@@ -90,9 +90,9 @@ export interface ShapingPayloadReportV0 {
   readonly brotliBytes?: number;
 }
 
-export interface FontPayloadReportV0 {
+export interface FontBakePayloadReport {
   readonly source: { readonly bytes: number };
-  readonly shared: { readonly shaping: ShapingPayloadReportV0 };
+  readonly shared: { readonly shaping: ShapingPayloadReport };
   readonly rasters: readonly unknown[];
   readonly containers: readonly {
     readonly artifactId: string;
@@ -108,9 +108,9 @@ export interface FontPayloadReportV0 {
   }[];
 }
 
-export interface FontBakeResultV0 {
-  readonly artifacts: readonly BakeArtifactV0[];
-  readonly report: FontPayloadReportV0;
+export interface FontBakeResult {
+  readonly artifacts: readonly BakeArtifact[];
+  readonly report: FontBakePayloadReport;
   readonly warnings: readonly BakeWarning[];
 }
 
@@ -133,14 +133,14 @@ export class FontBakeError extends Error {
 }
 
 export interface FontBakeCore {
-  bake(request: FontBakeRequestV0): FontBakeResultV0;
-  prepare(request: FontPrepareRequestV0): PreparedFontV0;
-  inspect(request: FontInspectRequestV0): FontInspectionV0;
+  bake(request: FontBakeRequest): FontBakeResult;
+  prepare(request: FontPrepareRequest): PreparedFont;
+  inspect(request: FontInspectRequest): FontInspection;
 }
 
 export type FontBakerWasmSource = BufferSource | WebAssembly.Module;
 
-export type FontBakerAbiV0 = FontBakerAbi;
+export type { FontBakerAbi };
 
 interface FontArtifactMetadata {
   readonly role: 'font';
@@ -150,7 +150,7 @@ interface FontArtifactMetadata {
 
 interface FontResultMetadata {
   readonly artifacts: readonly FontArtifactMetadata[];
-  readonly report: FontPayloadReportV0;
+  readonly report: FontBakePayloadReport;
   readonly warnings: readonly BakeWarning[];
 }
 
@@ -201,7 +201,7 @@ interface FontBakerExports {
   readonly pmndrs_font_baker_result_len: () => number;
 }
 
-function readExports(exports: WebAssembly.Exports, abi: FontBakerAbiV0): FontBakerExports {
+function readExports(exports: WebAssembly.Exports, abi: FontBakerAbi): FontBakerExports {
   const memory = exports[abi.memory];
   const alloc = exports[abi.functions.allocate.export];
   const dealloc = exports[abi.functions.deallocate.export];
@@ -236,7 +236,7 @@ function invoke<Result>(
   operation: FontBakerOperation,
   source: Uint8Array,
   descriptor: unknown,
-  decode: (bytes: Uint8Array, abi: FontBakerAbiV0) => Result,
+  decode: (bytes: Uint8Array, abi: FontBakerAbi) => Result,
 ): Result {
   const descriptorBytes = textEncoder.encode(JSON.stringify(descriptor));
   let sourcePointer = 0;
@@ -277,7 +277,7 @@ function copyIntoWasm(exports: FontBakerExports, bytes: Uint8Array): number {
   }
 }
 
-function decodeEnvelope(bytes: Uint8Array, abi: FontBakerAbiV0): { metadata: unknown; artifact: Uint8Array } {
+function decodeEnvelope(bytes: Uint8Array, abi: FontBakerAbi): { metadata: unknown; artifact: Uint8Array } {
   const response = abi.response;
   if (
     bytes.byteLength < response.headerByteLength ||
@@ -305,7 +305,7 @@ function decodeEnvelope(bytes: Uint8Array, abi: FontBakerAbiV0): { metadata: unk
   };
 }
 
-function decodeBakeResponse(bytes: Uint8Array, abi: FontBakerAbiV0): FontBakeResultV0 {
+function decodeBakeResponse(bytes: Uint8Array, abi: FontBakerAbi): FontBakeResult {
   const { metadata, artifact: artifactBytes } = decodeEnvelope(bytes, abi);
   assertFontResultMetadata(metadata);
   const result = metadata;
@@ -320,7 +320,7 @@ function decodeBakeResponse(bytes: Uint8Array, abi: FontBakerAbiV0): FontBakeRes
   };
 }
 
-function decodePreparedFont(bytes: Uint8Array, abi: FontBakerAbiV0): PreparedFontV0 {
+function decodePreparedFont(bytes: Uint8Array, abi: FontBakerAbi): PreparedFont {
   const { metadata, artifact } = decodeEnvelope(bytes, abi);
   if (!isPreparedFontReport(metadata) || artifact.byteLength !== metadata.preparedBytes) {
     throw new TypeError('font baker returned invalid prepared font metadata');
@@ -328,7 +328,7 @@ function decodePreparedFont(bytes: Uint8Array, abi: FontBakerAbiV0): PreparedFon
   return { bytes: artifact, report: metadata };
 }
 
-function decodeFontInspection(bytes: Uint8Array, abi: FontBakerAbiV0): FontInspectionV0 {
+function decodeFontInspection(bytes: Uint8Array, abi: FontBakerAbi): FontInspection {
   const { metadata, artifact } = decodeEnvelope(bytes, abi);
   if (!isFontInspection(metadata) || artifact.byteLength !== 0) {
     throw new TypeError('font baker returned invalid font inspection metadata');
@@ -360,7 +360,7 @@ function isFontArtifactMetadata(value: unknown): value is FontArtifactMetadata {
   );
 }
 
-function isFontPayloadReport(value: unknown): value is FontPayloadReportV0 {
+function isFontPayloadReport(value: unknown): value is FontBakePayloadReport {
   if (!isNonArrayObject(value)) return false;
   const { source, shared, containers, transport } = value;
   return (
@@ -376,7 +376,7 @@ function isFontPayloadReport(value: unknown): value is FontPayloadReportV0 {
   );
 }
 
-function isShapingPayloadReport(value: unknown): value is ShapingPayloadReportV0 {
+function isShapingPayloadReport(value: unknown): value is ShapingPayloadReport {
   return (
     isNonArrayObject(value) &&
     value.format === 'opentype-sfnt-harfrust-v0' &&
@@ -429,7 +429,7 @@ function isBakeWarning(value: unknown): value is BakeWarning {
   );
 }
 
-function isPreparedFontReport(value: unknown): value is PreparedFontReportV0 {
+function isPreparedFontReport(value: unknown): value is PreparedFontReport {
   return (
     isNonArrayObject(value) &&
     value.formatVersion === 0 &&
@@ -443,7 +443,7 @@ function isPreparedFontReport(value: unknown): value is PreparedFontReportV0 {
   );
 }
 
-function isFontInspection(value: unknown): value is FontInspectionV0 {
+function isFontInspection(value: unknown): value is FontInspection {
   return (
     isNonArrayObject(value) &&
     value.formatVersion === 0 &&
@@ -455,7 +455,7 @@ function isFontInspection(value: unknown): value is FontInspectionV0 {
   );
 }
 
-function isGlyphInspection(value: unknown): value is GlyphInspectionV0 {
+function isGlyphInspection(value: unknown): value is GlyphInspection {
   return (
     isNonArrayObject(value) &&
     isNonnegativeSafeInteger(value.codePoint) &&

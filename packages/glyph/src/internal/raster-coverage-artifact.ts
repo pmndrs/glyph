@@ -1,10 +1,10 @@
 import type { ParagraphLayout } from '../layout.js';
 import type { JsonValue } from '../raster.js';
-import { normalizeRasterCoverage, RasterCoverageError, type RasterCoverageV0 } from '../raster-coverage.js';
+import { normalizeRasterCoverage, RasterCoverageError, type RasterCoverage } from '../raster-coverage.js';
 import { canonicalJson } from './raster-identity.js';
 
 export interface DecodedRasterCoverage {
-  readonly descriptor: RasterCoverageV0;
+  readonly descriptor: RasterCoverage;
   readonly bits: Uint8Array;
 }
 

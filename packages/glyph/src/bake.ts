@@ -21,12 +21,12 @@ export interface BakeProgress {
 
 export type BakeProgressListener = (progress: BakeProgress) => void;
 
-export interface RasterPackagingV0 {
+export interface RasterPackaging {
   readonly artifact: 'embedded' | 'external';
   readonly pages: 'embedded' | 'external';
 }
 
-export interface BakeArtifactV0 {
+export interface BakeArtifact {
   readonly role: 'font' | 'raster' | 'raster-page';
   readonly id: string;
   readonly bytes: Uint8Array;
@@ -43,7 +43,7 @@ export interface RasterBakeFontContext {
 export interface RasterBakeRequest<Descriptor extends JsonValue> {
   readonly font: RasterBakeFontContext;
   readonly rasterKey: RasterKey;
-  readonly packaging: RasterPackagingV0;
+  readonly packaging: RasterPackaging;
   readonly descriptor: Descriptor;
   readonly signal?: AbortSignal;
   readonly onProgress?: BakeProgressListener;
@@ -77,7 +77,7 @@ export interface FontPayloadReport {
   }[];
   readonly containers: readonly {
     readonly artifactId: string;
-    readonly role: BakeArtifactV0['role'];
+    readonly role: BakeArtifact['role'];
     readonly jsonBytes: number;
     readonly paddingBytes: number;
     readonly totalBytes: number;
@@ -94,7 +94,7 @@ export interface RasterBakeArtifact<Kind extends string = string> {
   readonly kind: Kind;
   readonly extension: string;
   readonly version: number;
-  readonly artifacts: readonly BakeArtifactV0[];
+  readonly artifacts: readonly BakeArtifact[];
   readonly report: RasterPayloadReport;
 }
 
@@ -122,7 +122,7 @@ export function defineRasterBaker<const Kind extends string, Options, Descriptor
 
 export interface RasterBakePlan<Module extends AnyRasterBakerModule> {
   readonly baker: Module;
-  readonly packaging: RasterPackagingV0;
+  readonly packaging: RasterPackaging;
   readonly options: RasterBakeOptionsOf<Module>;
 }
 

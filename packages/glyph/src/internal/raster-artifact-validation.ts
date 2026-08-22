@@ -6,7 +6,7 @@ import {
 } from './raster-ktx.js';
 import { DenseGlyphRecordError, validateDenseGlyphRecordTable, type RasterPageDimensions } from './raster-records.js';
 import { canonicalJson } from './raster-identity.js';
-import { normalizeRasterCoverage, type RasterCoverageV0 } from '../raster-coverage.js';
+import { normalizeRasterCoverage, type RasterCoverage } from '../raster-coverage.js';
 import type { JsonValue } from '../raster.js';
 
 export interface RasterArtifactValidationIssue {
@@ -100,7 +100,7 @@ export function validateDenseRasterRecords(
 export function validateRasterCoverage(
   parsed: ParsedGlb,
   extension: Readonly<Record<string, unknown>>,
-  expectedCoverage: RasterCoverageV0 | undefined,
+  expectedCoverage: RasterCoverage | undefined,
   views: readonly RasterBufferView[],
   claimedViews: Set<number>,
   glyphCount: number,
@@ -118,7 +118,7 @@ export function validateRasterCoverage(
   }
   if (expectedCoverage === undefined) return undefined;
 
-  let actualCoverage: RasterCoverageV0;
+  let actualCoverage: RasterCoverage;
   try {
     actualCoverage = normalizeRasterCoverage(extension.coverage)!;
   } catch {

@@ -3,7 +3,7 @@ export type {
   BakeProgressListener,
   BakeProgressPhase,
   AnyRasterBakerModule,
-  BakeArtifactV0,
+  BakeArtifact,
   RasterBakeArtifact,
   RasterBakeDescriptorOf,
   RasterBakeFontContext,
@@ -11,7 +11,7 @@ export type {
   RasterBakePlan,
   RasterBakeRequest,
   RasterBakerModule,
-  RasterPackagingV0,
+  RasterPackaging,
   RasterPagePayloadReport,
   RasterPayloadReport,
   BakeWarning,
@@ -124,7 +124,7 @@ export type {
 } from './raster-technique.js';
 export { defineRasterResourceId, defineRasterTechnique } from './raster-technique.js';
 
-export type { RasterCoverage, RasterCoverageV0, RasterUnicodeRange, RasterUnicodeRangeV0 } from './raster-coverage.js';
+export type { RasterCoverage, RasterUnicodeRange } from './raster-coverage.js';
 export {
   MAX_RASTER_COVERAGE_GLYPH_IDS,
   MAX_RASTER_COVERAGE_RANGES,

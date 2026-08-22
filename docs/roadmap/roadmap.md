@@ -276,7 +276,7 @@ Item 2.1 is closed. Its analyzer remains internal until item 2.4 exposes the com
 
 ### 2.2 closure checklist
 
-- [x] The portable TypeScript boundary accepts exactly one `FontBakeRequestV0` and returns `FontBakeResultV0`; Node's separate filesystem-oriented `bakeFont(options)` name remains reserved for item 2.4.
+- [x] The portable TypeScript boundary accepts exactly one `FontBakeRequest` and returns `FontBakeResult`; Node's separate filesystem-oriented `bakeFont(options)` name remains reserved for item 2.4.
 - [x] One `no_std + alloc`, zero-import `wasm32-unknown-unknown` core is shared-ready for Node and Worker hosts through the generated direct-memory ABI with no WASI or binding generator.
 - [x] Fontations owns SFNT/TTC parsing and Skrifa owns maintained glyph bounds; fixtures cover invalid bytes, WOFF/WOFF2, required tables, variable/AAT shaping systems, TTC face selection, and out-of-range face indexes.
 - [x] The canonical Inter 4.1 result binds exact source, descriptor, artifact, shaping, table, metric, extent, and byte identities in its immutable fixture manifest.

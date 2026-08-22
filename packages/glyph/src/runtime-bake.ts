@@ -6,20 +6,20 @@ import { copyToOwnedArrayBuffer } from './internal/owned-array-buffer.js';
 import { normalizeUnicodeRanges } from './internal/font-selection.js';
 import {
   isRuntimeBakeResultV0,
-  type RuntimeBakeRequestV0,
-  type RuntimeBakeResultV0,
+  type RuntimeBakeRequest,
+  type RuntimeBakeResult,
 } from './internal/runtime-bake-protocol.js';
 
 export { workerRasterKinds } from './internal/runtime-bake-protocol.js';
 import { SerialWorkerHost } from './internal/serial-worker-host.js';
-import { isBakeProgressMessageV0, type BakeProgressMessageV0 } from './internal/bake-progress-protocol.js';
+import { isBakeProgressMessageV0, type BakeProgressMessage } from './internal/bake-progress-protocol.js';
 
 const host = new SerialWorkerHost<
   RuntimeFontBakeRequest,
-  RuntimeBakeRequestV0,
-  RuntimeBakeResultV0,
+  RuntimeBakeRequest,
+  RuntimeBakeResult,
   Uint8Array,
-  BakeProgressMessageV0
+  BakeProgressMessage
 >({
   name: 'pmndrs-glyph-font-baker',
   workerUrl: new URL('./runtime-bake-worker.js', import.meta.url),
