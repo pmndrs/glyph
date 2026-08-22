@@ -1008,7 +1008,6 @@ impl TextEngine {
                         capability_set,
                         font_bindings,
                         true,
-                        checkpoint,
                     )?;
                 }
                 if !retained {
@@ -1020,7 +1019,6 @@ impl TextEngine {
                         capability_set,
                         font_bindings,
                         false,
-                        checkpoint,
                     )?;
                 }
                 let gathered = gather.view();
@@ -1412,9 +1410,7 @@ fn append_session_gather(
     capability_set: CapabilitySetId,
     font_bindings: &[RegisteredFontBinding],
     retained: bool,
-    checkpoint: bool,
 ) -> Result<(), EngineError> {
-    let incremental = retained;
     let mut retaining = retained;
     for ordered in session.active_order() {
         let paragraph = session
@@ -1466,7 +1462,6 @@ fn append_session_gather(
                             capability_set,
                             input,
                             source_start,
-                            true,
                             binding_for_font,
                         )
                         .map_err(gather_error)?;
@@ -1475,13 +1470,7 @@ fn append_session_gather(
             }
         } else {
             gather
-                .append(
-                    policy,
-                    capability_set,
-                    input,
-                    incremental || checkpoint || !paragraph.positioned_changed,
-                    binding_for_font,
-                )
+                .append(policy, capability_set, input, binding_for_font)
                 .map_err(gather_error)?;
         }
         gather

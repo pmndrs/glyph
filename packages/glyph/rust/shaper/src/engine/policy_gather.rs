@@ -191,17 +191,10 @@ impl PolicyGatherWorkspace {
         policy: &ValidatedPolicy,
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
-        force_all_inputs: bool,
         binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
         self.begin(policy, input.glyphs.len())?;
-        self.append(
-            policy,
-            capability_set,
-            input,
-            force_all_inputs,
-            binding_for_font,
-        )
+        self.append(policy, capability_set, input, binding_for_font)
     }
 
     pub fn begin(
@@ -320,7 +313,12 @@ impl PolicyGatherWorkspace {
                 self.retained_source_cursor = source_cursor - 1;
                 return Ok(RetainedGather::RebuildFrom(glyph_index));
             };
-            if !same_storage_topology(previous, next) {
+            // The change mask is identity-relative: positioning derives it against this glyph's
+            // own previous slot. The retained columns are slot-relative. Both conventions agree
+            // only while a slot keeps its occupant, so a slot handed to a different identity must
+            // leave the retained path entirely rather than apply a mask that names the registers
+            // the *identity* changed while the *slot* changed in every register.
+            if previous.stable_id != next.stable_id || !same_storage_topology(previous, next) {
                 self.retained_cursor = cursor;
                 self.retained_source_cursor = source_cursor - 1;
                 return Ok(RetainedGather::RebuildFrom(glyph_index));
@@ -376,17 +374,9 @@ impl PolicyGatherWorkspace {
         policy: &ValidatedPolicy,
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
-        force_all_inputs: bool,
         binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
-        self.append_from(
-            policy,
-            capability_set,
-            input,
-            0,
-            force_all_inputs,
-            binding_for_font,
-        )
+        self.append_from(policy, capability_set, input, 0, binding_for_font)
     }
 
     pub fn append_from<'binding>(
@@ -395,7 +385,6 @@ impl PolicyGatherWorkspace {
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         source_start: usize,
-        force_all_inputs: bool,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
         validate_semantic_shape(input)?;
@@ -419,16 +408,6 @@ impl PolicyGatherWorkspace {
         {
             return Err(GatherError::AllocationFailed);
         }
-        let semantic_changes = if input.semantic_change_masks.len() == input.glyphs.len() {
-            input
-                .semantic_change_masks
-                .iter()
-                .copied()
-                .fold(0_u16, |union, mask| union | mask)
-        } else {
-            super::positioning::ALL_SEMANTIC_CHANGES
-        };
-        let selection_changed = semantic_changes & RESOURCE_SELECTION_CHANGES != 0;
         let mut cached_font_handle = None;
         let mut cached_binding = None;
         let mut cached_program = None;
@@ -451,37 +430,31 @@ impl PolicyGatherWorkspace {
             };
             let technique = binding.technique();
             let variant = binding.program_variant();
-            let (program, f32_inputs, u32_inputs) = match cached_program {
-                Some((cached_technique, cached_variant, program, f32_inputs, u32_inputs))
+            let program = match cached_program {
+                Some((cached_technique, cached_variant, program))
                     if cached_technique == technique && cached_variant == variant =>
                 {
-                    (program, f32_inputs, u32_inputs)
+                    program
                 }
                 _ => {
                     let program = policy
                         .program(capability_set, technique, variant)
                         .ok_or(GatherError::ProgramMissing)?;
-                    let (f32_inputs, u32_inputs) = policy
-                        .input_masks_for_changes(
-                            capability_set,
-                            technique,
-                            variant,
-                            semantic_changes,
-                            force_all_inputs || selection_changed,
-                        )
-                        .ok_or(GatherError::ProgramMissing)?;
-                    cached_program = Some((technique, variant, program, f32_inputs, u32_inputs));
-                    (program, f32_inputs, u32_inputs)
+                    cached_program = Some((technique, variant, program));
+                    program
                 }
             };
+            // A pushed row has no prior value to preserve, so a change mask cannot narrow it: the
+            // registers it omits would be published as zeros rather than as retained values.
+            // `gather_fields` bounds these by the program's declared input counts.
             self.gather_fields(
                 input,
                 glyph_index,
                 binding,
                 selected,
                 program,
-                f32_inputs,
-                u32_inputs,
+                u32::MAX,
+                u32::MAX,
             )?;
             self.glyphs
                 .push(plan_glyph(input, glyph_index, glyph, binding, selected)?);
@@ -1129,7 +1102,6 @@ mod tests {
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
                 },
-                true,
                 |handle| (handle == 9).then_some(&binding),
             )
             .unwrap();
@@ -1200,14 +1172,16 @@ mod tests {
                     semantic_f32: &[&initial_x],
                     semantic_u32: &[&semantic_kind],
                 },
-                true,
                 |_| Some(&binding),
             )
             .unwrap();
 
+        // Slot 1 keeps its identity and only revises its content: that is the case a narrow mask
+        // is allowed to patch in place. A slot whose identity changes leaves the retained path
+        // instead, which `retained_gather_repacks_slots_a_topology_edit_hands_to_another_identity`
+        // covers.
         let changed_x = [999.0, 25.0];
         let mut changed_glyphs = glyphs;
-        changed_glyphs[1].stable_id = 3;
         changed_glyphs[1].content_revision = 2;
         assert!(workspace.begin_retained(&policy, 2).unwrap());
         assert_eq!(
@@ -1231,7 +1205,8 @@ mod tests {
         assert!(workspace.finish_retained());
         let gathered = workspace.view();
         let input = gathered.plan_input();
-        assert_eq!(input.glyphs[1].stable_id, 3);
+        assert_eq!(input.glyphs[1].stable_id, 2);
+        assert_eq!(input.glyphs[1].content_revision, 2);
         assert_eq!(input.f32_fields[0], [10.0, 25.0]);
         assert_eq!(input.f32_fields[1], [1.0, 2.0]);
 
@@ -1273,7 +1248,6 @@ mod tests {
                     semantic_u32: &[&semantic_kind],
                 },
                 1,
-                true,
                 |_| Some(&binding),
             )
             .unwrap();
@@ -1315,7 +1289,7 @@ mod tests {
             },
         ] {
             workspace
-                .append(&policy, CAPABILITY, input, true, |_| Some(&binding))
+                .append(&policy, CAPABILITY, input, |_| Some(&binding))
                 .unwrap();
         }
         let gathered = workspace.view();
@@ -1343,8 +1317,12 @@ mod tests {
         );
     }
 
+    /// Narrowing reads to the inputs that reach a changed buffer is the retained path's whole
+    /// point, and it is sound there precisely because the untouched registers already hold this
+    /// slot's own previous values. The registers the mask skips must therefore be *retained*, not
+    /// zeroed -- zeroing is what a fresh push would do, and a fresh push may not narrow at all.
     #[test]
-    fn changed_gather_reads_only_inputs_reaching_changed_buffers() {
+    fn retained_gather_reads_only_inputs_reaching_changed_buffers() {
         let binding = binding();
         let policy = policy();
         let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
@@ -1359,23 +1337,49 @@ mod tests {
                     transform_id: 1,
                     glyphs: &glyphs,
                     semantic_glyphs: &[],
-                    semantic_change_masks: &[1, 1],
+                    semantic_change_masks: &[],
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
                 },
-                false,
                 |_| Some(&binding),
             )
             .unwrap();
+
+        let moved_x = [10.0, 55.0];
+        let mut revised = glyphs;
+        revised[1].content_revision = 2;
+        assert!(workspace.begin_retained(&policy, 2).unwrap());
+        assert_eq!(
+            workspace
+                .append_retained(
+                    &policy,
+                    CAPABILITY,
+                    LayoutPlanInput {
+                        transform_id: 1,
+                        glyphs: &revised,
+                        semantic_glyphs: &[],
+                        semantic_change_masks: &[0, 1],
+                        semantic_f32: &[&moved_x],
+                        semantic_u32: &[&semantic_kind],
+                    },
+                    |_| Some(&binding),
+                )
+                .unwrap(),
+            RetainedGather::Complete
+        );
+        assert!(workspace.finish_retained());
         let gathered = workspace.view();
         let input = gathered.plan_input();
-        assert_eq!(input.f32_fields[0], &[10.0, 20.0]);
-        assert!(
-            input.f32_fields[1..]
-                .iter()
-                .all(|field| *field == [0.0, 0.0])
-        );
-        assert!(input.u32_fields.iter().all(|field| *field == [0, 0]));
+        // Register 0 feeds the only buffer the mask reaches, so it is re-read.
+        assert_eq!(input.f32_fields[0], &[10.0, 55.0]);
+        // Every other register is skipped, and keeps the value the first gather sourced.
+        assert_eq!(input.f32_fields[1], &[1.0, 2.0]);
+        assert_eq!(input.f32_fields[2], &[3.0, 4.0]);
+        assert_eq!(input.f32_fields[3], &[5.0, 5.0]);
+        assert_eq!(input.u32_fields[0], &[100, 200]);
+        assert_eq!(input.u32_fields[1], &[11, 12]);
+        assert_eq!(input.u32_fields[2], &[13, 14]);
+        assert_eq!(input.u32_fields[3], &[15, 15]);
     }
 
     #[test]
@@ -1401,7 +1405,6 @@ mod tests {
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
                 },
-                false,
                 |_| Some(&binding),
             )
             .unwrap();
@@ -1430,7 +1433,6 @@ mod tests {
                     semantic_f32: &[],
                     semantic_u32: &[],
                 },
-                true,
                 |_| None,
             ),
             Err(GatherError::FontBindingMissing)
@@ -1447,7 +1449,6 @@ mod tests {
                     semantic_f32: &[],
                     semantic_u32: &[],
                 },
-                true,
                 |_| Some(&binding),
             ),
             Err(GatherError::ProgramMissing)
@@ -1464,10 +1465,191 @@ mod tests {
                     semantic_f32: &[],
                     semantic_u32: &[],
                 },
-                true,
                 |_| Some(&binding),
             ),
             Err(GatherError::SourceFieldMissing)
+        );
+    }
+
+    /// Retained slots that a topology edit hands to a different stable identity must carry the
+    /// whole record, not just the registers named by that glyph's own semantic delta. The engine
+    /// computes each mask against the glyph's *previous slot*, so a survivor that merely shifted
+    /// position reports a narrow mask while its new slot still holds the displaced occupant's
+    /// registers. A fresh gather of the same final layout is the independent oracle.
+    fn retained_matches_fresh(
+        label: &str,
+        before: &[LayoutGlyph],
+        after: &[LayoutGlyph],
+        masks: &[u16],
+    ) {
+        let binding = binding();
+        let policy = policy();
+        let semantic_before: Vec<f32> = (0..before.len()).map(|index| index as f32).collect();
+        let semantic_after: Vec<f32> = (0..after.len()).map(|index| index as f32).collect();
+        let kinds_before: Vec<u32> = (0..before.len()).map(|index| index as u32 + 100).collect();
+        let kinds_after: Vec<u32> = (0..after.len()).map(|index| index as u32 + 100).collect();
+        let initial = LayoutPlanInput {
+            transform_id: 1,
+            glyphs: before,
+            semantic_glyphs: &[],
+            semantic_change_masks: &[],
+            semantic_f32: &[&semantic_before],
+            semantic_u32: &[&kinds_before],
+        };
+        let edited = LayoutPlanInput {
+            transform_id: 1,
+            glyphs: after,
+            semantic_glyphs: &[],
+            semantic_change_masks: masks,
+            semantic_f32: &[&semantic_after],
+            semantic_u32: &[&kinds_after],
+        };
+
+        let mut incremental = PolicyGatherWorkspace::default();
+        incremental.reserve_policy(&policy, 16).unwrap();
+        incremental
+            .gather(&policy, CAPABILITY, initial, |_| Some(&binding))
+            .unwrap();
+        assert!(incremental.begin_retained(&policy, 16).unwrap(), "{label}");
+        if let RetainedGather::RebuildFrom(source_start) = incremental
+            .append_retained(&policy, CAPABILITY, edited, |_| Some(&binding))
+            .unwrap()
+        {
+            incremental.truncate_to_retained_prefix();
+            incremental
+                .append_from(&policy, CAPABILITY, edited, source_start, |_| {
+                    Some(&binding)
+                })
+                .unwrap();
+        } else if !incremental.finish_retained() {
+            incremental.truncate_to_retained_prefix();
+        }
+
+        let mut fresh = PolicyGatherWorkspace::default();
+        fresh.reserve_policy(&policy, 16).unwrap();
+        fresh
+            .gather(&policy, CAPABILITY, edited, |_| Some(&binding))
+            .unwrap();
+
+        let incremental_view = incremental.view();
+        let fresh_view = fresh.view();
+        let incremental_input = incremental_view.plan_input();
+        let fresh_input = fresh_view.plan_input();
+        assert_eq!(
+            incremental_input.glyphs.len(),
+            fresh_input.glyphs.len(),
+            "{label}: record count"
+        );
+        for (slot, (incremental_glyph, fresh_glyph)) in incremental_input
+            .glyphs
+            .iter()
+            .zip(fresh_input.glyphs)
+            .enumerate()
+        {
+            assert_eq!(
+                incremental_glyph.stable_id, fresh_glyph.stable_id,
+                "{label}: stable id at slot {slot}"
+            );
+        }
+        for (field, (incremental_field, fresh_field)) in incremental_input
+            .f32_fields
+            .iter()
+            .zip(fresh_input.f32_fields)
+            .enumerate()
+        {
+            assert_eq!(
+                incremental_field, fresh_field,
+                "{label}: f32 register {field}"
+            );
+        }
+        for (field, (incremental_field, fresh_field)) in incremental_input
+            .u32_fields
+            .iter()
+            .zip(fresh_input.u32_fields)
+            .enumerate()
+        {
+            assert_eq!(
+                incremental_field, fresh_field,
+                "{label}: u32 register {field}"
+            );
+        }
+    }
+
+    /// A fresh gather pushes rows that have no prior value, so nothing is left to preserve and a
+    /// register the mask omits becomes a zero rather than a retained value. Its output therefore
+    /// may not depend on a change mask at all: whatever the caller reports as changed, a freshly
+    /// built row must carry every register the program declares.
+    #[test]
+    fn fresh_gather_sources_every_declared_register_whatever_the_change_mask_says() {
+        let binding = binding();
+        let policy = policy();
+        let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
+        let semantic_x = [10.0, 20.0];
+        let semantic_kind = [100, 200];
+        let semantic_f32: [&[f32]; 1] = [&semantic_x];
+        let semantic_u32: [&[u32]; 1] = [&semantic_kind];
+        let gathered = |masks: &[u16]| {
+            let input = LayoutPlanInput {
+                transform_id: 1,
+                glyphs: &glyphs,
+                semantic_glyphs: &[],
+                semantic_change_masks: masks,
+                semantic_f32: &semantic_f32,
+                semantic_u32: &semantic_u32,
+            };
+            let mut workspace = PolicyGatherWorkspace::default();
+            workspace.reserve_policy(&policy, 8).unwrap();
+            workspace
+                .gather(&policy, CAPABILITY, input, |_| Some(&binding))
+                .unwrap();
+            let view = workspace.view();
+            let plan = view.plan_input();
+            (
+                plan.f32_fields
+                    .iter()
+                    .map(|field| field.to_vec())
+                    .collect::<Vec<_>>(),
+                plan.u32_fields
+                    .iter()
+                    .map(|field| field.to_vec())
+                    .collect::<Vec<_>>(),
+            )
+        };
+
+        // A delta naming only a field this program's buffer does not read, or naming nothing at
+        // all, must still produce complete rows rather than rows of placeholders.
+        let complete = gathered(&[]);
+        assert_eq!(gathered(&[1 << 1, 1 << 1]), complete);
+        assert_eq!(gathered(&[1, 1]), complete);
+        assert_eq!(gathered(&[0, 0]), complete);
+    }
+
+    #[test]
+    fn retained_gather_repacks_slots_a_topology_edit_hands_to_another_identity() {
+        const MOVED: u16 = 1 << 6;
+        retained_matches_fresh(
+            "interior deletion",
+            &[layout_glyph(1, 0), layout_glyph(2, 1), layout_glyph(3, 0)],
+            &[layout_glyph(1, 0), layout_glyph(3, 0)],
+            &[0, MOVED],
+        );
+        retained_matches_fresh(
+            "prefix deletion",
+            &[layout_glyph(1, 0), layout_glyph(2, 1), layout_glyph(3, 0)],
+            &[layout_glyph(2, 1), layout_glyph(3, 0)],
+            &[MOVED, MOVED],
+        );
+        retained_matches_fresh(
+            "same-length substitution",
+            &[layout_glyph(1, 0), layout_glyph(2, 1), layout_glyph(3, 0)],
+            &[layout_glyph(1, 0), layout_glyph(4, 0), layout_glyph(3, 0)],
+            &[0, MOVED, 0],
+        );
+        retained_matches_fresh(
+            "tail deletion",
+            &[layout_glyph(1, 0), layout_glyph(2, 1), layout_glyph(3, 0)],
+            &[layout_glyph(1, 0), layout_glyph(2, 1)],
+            &[0, 0],
         );
     }
 

@@ -27,6 +27,11 @@ import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 import * as THREE from 'three/webgpu';
 
+// The identity lane is named by the policy contract that packs it, not by a literal here.
+import { STABLE_GLYPH_BUFFER_ID } from '../../dist/three/render-policy.js';
+
+const IDENTITY_LANE = `_pmndrsGlyph_${STABLE_GLYPH_BUFFER_ID}`;
+
 const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
@@ -113,8 +118,11 @@ function lanes(group, node) {
  * Assert an edited node is indistinguishable from one built with the same text.
  *
  * Stable ids are compared separately and only for length: identity is expected to differ, because
- * retaining a glyph across an edit is the point of the incremental path. Every other lane, packed
- * bytes included, must agree exactly.
+ * retaining a glyph across an edit is the point of the incremental path. That exemption covers the
+ * packed identity lane too -- it carries the same allocation-order ids -- so that lane is instead
+ * held to the stronger local invariant that it equals the engine's committed identities for the
+ * run it draws. A slot left holding its pre-edit occupant breaks that equality. Every other lane,
+ * packed bytes included, must agree exactly with the fresh build.
  */
 function assertMatchesFreshBuild(font, node, group, text, context) {
   const fresh = mount(font, text);
@@ -138,6 +146,15 @@ function assertMatchesFreshBuild(font, node, group, text, context) {
       `${context}: draw ${index} attribute set`,
     );
     for (const name of Object.keys(draw.attributes)) {
+      if (name === IDENTITY_LANE) {
+        // Held to the engine's own committed identities rather than to the fresh build's.
+        assert.deepEqual(
+          draw.attributes[name],
+          got.glyphStableIds.slice(draw.start, draw.start + draw.instances),
+          `${context}: draw ${index} packed ${name} against committed identities`,
+        );
+        continue;
+      }
       // The packed lane. This is what the GPU samples, and the only lane that caught the defect.
       assert.deepEqual(draw.attributes[name], expected.attributes[name], `${context}: draw ${index} packed ${name}`);
     }
@@ -195,7 +212,13 @@ for (const technique of Object.keys(TECHNIQUES)) {
         text = chaoticEdit(text, alphabet, random);
         node.set({ contentBox, font, paint, spans: [], style, text });
         scene.updateMatrixWorld(true);
-        assertMatchesFreshBuild(font, node, group, text, `${technique} seed ${seed} step ${step} -> ${JSON.stringify(text)}`);
+        assertMatchesFreshBuild(
+          font,
+          node,
+          group,
+          text,
+          `${technique} seed ${seed} step ${step} -> ${JSON.stringify(text)}`,
+        );
       }
     }
   });
