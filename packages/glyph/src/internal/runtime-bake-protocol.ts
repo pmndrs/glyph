@@ -2,10 +2,10 @@ import type { FontBakeDescriptorV0, SerializedBakeError } from '../font-baker/in
 import type { RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
 
-export interface RuntimeBakeUnicodeRangeV0 {
+export type RuntimeBakeUnicodeRangeV0 = {
   readonly start: number;
   readonly end: number;
-}
+};
 
 /**
  * The raster kinds the runtime bake Worker embeds bakers for. This set is the
@@ -17,13 +17,13 @@ export interface RuntimeBakeUnicodeRangeV0 {
  */
 export const workerRasterKinds: readonly string[] = Object.freeze(['bitmap', 'msdf', 'slug']);
 
-export interface RuntimeBakeRasterV0 {
+export type RuntimeBakeRasterV0 = {
   readonly kind: string;
   readonly extension: string;
   readonly version: number;
   readonly rasterKey: RasterKey;
   readonly descriptor: JsonValue;
-}
+};
 
 export interface RuntimeBakeRequestV0 {
   readonly type: 'bake-font-v0';
