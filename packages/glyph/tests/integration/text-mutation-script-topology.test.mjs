@@ -67,15 +67,6 @@ import {
 // it inside a cluster the engine sees -- which the engine rejects outright.
 import { findGraphemeBoundaries, findLineBreaks } from '../../dist/internal/unicode.js';
 
-/**
- * A group-scoped defect these cases reach, reproduced minimally in
- * `text-mutation-known-defects.test.mjs` case 1: deleting a leading bidi island together with its
- * space leaves an UNEDITED sibling paragraph one instanced record short of what a fresh build hands
- * the GPU. Pinned as `todo` here so the matrix reports it without failing the suite twice; the
- * known-defects file owns the reproduction.
- */
-const GROUP_RECORD_DEFECT = 'group-scoped record loss, see text-mutation-known-defects.test.mjs case 1';
-
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 const bitmap16 = { technique: bitmap, options: { strikes: [16] } };
@@ -204,7 +195,7 @@ const CASES = [
     // left-to-right island. Changing the length of any run renumbers the VISUAL order of every
     // glyph on the line, while logical order changes only at the edit site.
     edits: [
-      ['latin island deleted from an rtl paragraph', 'PMNDRS النص العربي', 'النص العربي', GROUP_RECORD_DEFECT],
+      ['latin island deleted from an rtl paragraph', 'PMNDRS النص العربي', 'النص العربي'],
       ['latin island inserted into an rtl paragraph', 'النص العربي', 'PMNDRS النص العربي'],
       ['latin island grows, moving the direction boundary', 'PMNDR النص', 'PMNDRS النص'],
       ['latin island shrinks, moving the direction boundary', 'PMNDRS النص', 'PMNDR النص'],
@@ -214,12 +205,7 @@ const CASES = [
       ['rtl run deleted from between two latin islands', 'PMNDRS النص 2026', 'PMNDRS 2026'],
       ['substitution at the direction boundary', 'PMNDRS النص', 'PMNDRT النص'],
       ['the whole rtl half is deleted, collapsing the paragraph to one direction', 'PMNDRS النص', 'PMNDRS'],
-      [
-        'the whole latin half is deleted, collapsing the paragraph to one direction',
-        'PMNDRS النص',
-        'النص',
-        GROUP_RECORD_DEFECT,
-      ],
+      ['the whole latin half is deleted, collapsing the paragraph to one direction', 'PMNDRS النص', 'النص'],
     ],
     alphabet: [...'PMNDRS 2026النصالعربي'],
     anchors: ['PMNDRS', 'النص العربي'],
@@ -377,7 +363,7 @@ for (const shaping of CASES) {
       });
     }
 
-    for (const [label, from, to, knownDefect] of shaping.edits) {
+    for (const [label, from, to] of shaping.edits) {
       test(`${where}: ${label}`, { timeout }, async () => {
         const font = await fonts.load(fixture);
         const mounted = mount(font, [paragraph(shaping, from)]);
@@ -391,23 +377,19 @@ for (const shaping of CASES) {
         }
       });
 
-      test(
-        `${where}: ${label}, across a styled multi-node group`,
-        { timeout, ...(knownDefect === undefined ? {} : { todo: knownDefect }) },
-        async () => {
-          const font = await fonts.load(fixture);
-          const [head, tail] = shaping.anchors;
-          const before = styledScene(shaping, [head, from, tail]);
-          const edited = styledScene(shaping, [head, to, tail]);
-          const mounted = mount(font, before);
-          try {
-            edit(mounted, font, edited);
-            assertMatchesFreshBuild(font, mounted, edited, `${where} styled group ${label}`);
-          } finally {
-            unmount(mounted);
-          }
-        },
-      );
+      test(`${where}: ${label}, across a styled multi-node group`, { timeout }, async () => {
+        const font = await fonts.load(fixture);
+        const [head, tail] = shaping.anchors;
+        const before = styledScene(shaping, [head, from, tail]);
+        const edited = styledScene(shaping, [head, to, tail]);
+        const mounted = mount(font, before);
+        try {
+          edit(mounted, font, edited);
+          assertMatchesFreshBuild(font, mounted, edited, `${where} styled group ${label}`);
+        } finally {
+          unmount(mounted);
+        }
+      });
 
       test(`${where}: ${label}, reverted and reapplied on a clipped single line`, { timeout }, async () => {
         // Round-tripping is the cheapest way to reach a slot whose occupant left and came back, and
