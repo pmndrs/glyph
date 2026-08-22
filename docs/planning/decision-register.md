@@ -365,6 +365,20 @@ The [raster contract](raster-data-contract.md) owns records. The [capability mat
 
 The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md), and [autoresearch protocol](autoresearch.md) define the gates.
 
+## Incremental update correctness
+
+An incremental text edit shipped displaced record slots holding the previous occupant's packed bytes. Every engine lane stayed correct while the buffers the GPU samples were wrong, so no existing gate could observe it. These decisions close the class rather than the instance.
+
+| ID    | Decision                                                                                                                                                                                                                                                                                                                                                                                                                          |  Status  |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------: |
+| D-259 | Change detection uses one address space. `positioning` derives a glyph's semantic change mask against its own previous slot while the policy gather consumes it against a cached slot index; the two answers coincide only while a slot keeps its occupant. The gather consumes slot-relative masks, derived as `collect_changed_ranges` already derives its ranges. The identity guard in `append_retained` detects that divergence and is removed once the convention is unified. | Proposed |
+| D-260 | A render-plan payload is fully determined before publication: wholly seeded from a prior proven to correspond, or wholly written by the packing kernel, never a mix and never zero by default. A non-replacing seed whose prior does not cover the range is a planner invariant violation and fails loudly instead of shipping a zero-filled record. | Proposed |
+| D-261 | Incremental correctness is gated by a differential oracle through the packed instanced attributes. A node edited into some text must be indistinguishable from a node built with that text in every lane the GPU samples. Agreement between two engine-derived lanes is not sufficient evidence, because both derive from the same upstream. | Accepted |
+| D-262 | An allocation strategy is not shipped unreachable. Stable-indirect is either reachable from the public API and covered by the D-261 oracle, or removed. Unifying the ordered and stable planners is contingent on that coverage existing first, because a merge no test can observe is unverifiable by construction. | Proposed |
+| D-263 | The glyph-origin augmentation lane reports one coordinate space. A glyph without an origin record fails rather than silently substituting the caller's layout-space fallback, which returns one array holding two spaces with nothing marking the boundary. | Proposed |
+
+Randomized input alone does not establish correctness. Mutation fuzzing asserts that malformed input fails safely and cannot observe valid operations producing wrong output; sequence property tests that compare two engine-derived lanes cannot observe a lane neither of them reads. D-261 is the oracle that makes randomness able to find wrongness.
+
 ## Decisions required before implementation
 
 1. ✅ The maintainer accepted all contract decisions and acceptance criteria through roadmap item 5.4; deferred and experiment rows retain those lifecycle states.
