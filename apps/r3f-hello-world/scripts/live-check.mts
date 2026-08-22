@@ -11,7 +11,13 @@ const applicationRoot = fileURLToPath(new URL('..', import.meta.url));
 
 const child = spawn(
   process.platform === 'win32' ? 'npx.cmd' : 'npx',
-  ['vitexec', '--gpu', './scripts/live-check.probe.ts', ...process.argv.slice(2)],
+  [
+    'vitexec',
+    '--gpu',
+    '--browser-arg=--use-webgpu-adapter=swiftshader',
+    './scripts/live-check.probe.ts',
+    ...process.argv.slice(2),
+  ],
   { cwd: applicationRoot, stdio: ['inherit', 'pipe', 'inherit'] },
 );
 

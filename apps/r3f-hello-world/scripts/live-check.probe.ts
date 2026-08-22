@@ -1,5 +1,19 @@
 export {};
 
+// DIAGNOSTIC (throwaway branch): report what GPU stack CI actually resolves before anything
+// touches it, so a device death is attributable instead of inferred from the cascade.
+const adapter = await navigator.gpu?.requestAdapter();
+console.log(
+  'DIAG_ADAPTER=' +
+    JSON.stringify({
+      hasNavigatorGpu: typeof navigator.gpu !== 'undefined',
+      vendor: adapter?.info?.vendor ?? null,
+      architecture: adapter?.info?.architecture ?? null,
+      maxBufferSize: adapter?.limits.maxBufferSize ?? null,
+      maxTextureDimension2D: adapter?.limits.maxTextureDimension2D ?? null,
+    }),
+);
+
 const { _roots } = await import('@react-three/fiber/webgpu');
 
 const canvas = await waitForCanvas();
