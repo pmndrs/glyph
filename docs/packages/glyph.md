@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:d0c9cdc49ef6fe43f4271ab26f853b7a564a30687e7389c676c51e03cab4fd2a'
+source_digest: 'sha256:79f95471f3083efebfb281b0d89b6e4a4f3c0c2ee15904093100bdd7c75ded90'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -146,6 +146,16 @@ because it is flattened into an inline span and inherits from its outer text; a 
 invalid. `TextGroup` owns batching and compositing policy, never font inheritance. Both components register their Three
 objects with the R3F host and are constructed during its commit rather than in a layout effect. React `Activity` can
 therefore pre-render a hidden text or whole text group, while R3F retains visibility and eventual disposal ownership.
+
+Span offsets are resolved onto the extended grapheme cluster grid before any frame is built (D-265). The engine
+resolves one style per cluster and refuses a frame whose styles split one, so `Text` settles the question at its own
+boundary and settles it constructively: a cluster takes the style of its base, and every boundary moves forward to the
+end of the cluster containing it. One rule covers spans a caller authored and spans `replaceText`/`insertText`/
+`deleteText` rebased, because a declarative React caller re-authoring `text` and `spans` after an edit passes what the
+edit helpers would have derived; nothing throws, so no span fault can escape a React mount before `onError` exists. A
+span left holding no cluster becomes an empty range and stays in `Text.spans` rather than vanishing, and empty spans
+compile to no engine style. `alignSpansToClusters` is exported so a caller can resolve or check its own offsets against
+the same segmentation, which is this package's `findGraphemeBoundaries` rather than the host's `Intl.Segmenter`.
 
 One baked GLB may expose several raster techniques without repeating its input identity. `TextRuntime.loadFont()` and
 R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The
