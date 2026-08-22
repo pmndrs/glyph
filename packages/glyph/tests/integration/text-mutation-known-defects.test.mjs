@@ -119,31 +119,27 @@ test(
   },
 );
 
-test(
-  '3. a break opportunity inside a grapheme cluster is ignored, not rejected',
-  { timeout, todo: 'a break opportunity inside a grapheme cluster is rejected instead of ignored' },
-  async () => {
-    const font = await fonts.load('inter');
-    const latin = { fontSize: 6, lineHeight: 1 };
-    const text = 'x ́y';
-    const clusters = [...findGraphemeBoundaries(text)];
-    const breaks = findLineBreaks(text).map((entry) => entry.position);
-    // The precondition this case rests on: the two standards genuinely disagree here.
-    assert.deepEqual(clusters, [0, 1, 3, 4], 'the space and the mark must form one grapheme cluster');
-    assert.ok(
-      breaks.some((position) => position > 0 && position < text.length && !clusters.includes(position)),
-      'UAX #14 must offer a break strictly inside that cluster for this case to mean anything',
-    );
+test('3. a break opportunity inside a grapheme cluster is ignored, not rejected', { timeout }, async () => {
+  const font = await fonts.load('inter');
+  const latin = { fontSize: 6, lineHeight: 1 };
+  const text = 'x ́y';
+  const clusters = [...findGraphemeBoundaries(text)];
+  const breaks = findLineBreaks(text).map((entry) => entry.position);
+  // The precondition this case rests on: the two standards genuinely disagree here.
+  assert.deepEqual(clusters, [0, 1, 3, 4], 'the space and the mark must form one grapheme cluster');
+  assert.ok(
+    breaks.some((position) => position > 0 && position < text.length && !clusters.includes(position)),
+    'UAX #14 must offer a break strictly inside that cluster for this case to mean anything',
+  );
 
-    const mounted = mount(font, [authored(text, latin)]);
-    try {
-      assert.equal(mounted.nodes[0].error, undefined, `the paragraph was rejected: ${String(mounted.nodes[0].error)}`);
-      assert.equal(mounted.nodes[0].inspectLayout().glyphCount, 4);
-    } finally {
-      unmount(mounted);
-    }
-  },
-);
+  const mounted = mount(font, [authored(text, latin)]);
+  try {
+    assert.equal(mounted.nodes[0].error, undefined, `the paragraph was rejected: ${String(mounted.nodes[0].error)}`);
+    assert.equal(mounted.nodes[0].inspectLayout().glyphCount, 4);
+  } finally {
+    unmount(mounted);
+  }
+});
 
 test('3b. the same mark after a base the two standards agree on is accepted', { timeout }, async () => {
   // The negative control for case 3. These pass today; they are here so that a fix for case 3

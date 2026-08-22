@@ -378,7 +378,8 @@ impl ClusterArena {
             self.flags[cluster_start - 1] &= !CLUSTER_ALLOWED_BREAK;
         }
         for line_break in unicode.line_breaks() {
-            let Ok(preceding) = self.ends.binary_search(&line_break.position) else {
+            let Some(preceding) = self.break_target(line_break.position, line_break.required)
+            else {
                 continue;
             };
             if preceding < cluster_start.saturating_sub(1) || preceding >= cluster_end {
@@ -949,10 +950,9 @@ impl ClusterArena {
             if self.ends.is_empty() && end == 0 {
                 continue;
             }
-            let preceding = self
-                .ends
-                .binary_search(&end)
-                .map_err(|_| EngineError::InvalidRequest)?;
+            let Some(preceding) = self.break_target(end, line_break.required) else {
+                continue;
+            };
             if line_break.required {
                 self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
                 continue;
@@ -968,6 +968,25 @@ impl ClusterArena {
             }
         }
         Ok(())
+    }
+
+    /// Resolve a UAX #14 opportunity to the cluster it can act on, or discard it.
+    ///
+    /// The two standards disagree by design: UAX #14 LB9 does not attach a combining mark to a
+    /// preceding SPACE while UAX #29 GB9 does, so an opportunity can fall strictly inside a
+    /// grapheme cluster. A cluster is indivisible for layout, so an OPTIONAL opportunity there is
+    /// unusable and is discarded rather than promoted to the enclosing boundary -- promoting it
+    /// would manufacture a break UAX #14 never offered. A REQUIRED break must never be dropped, so
+    /// it acts on the cluster that contains it.
+    ///
+    /// `ends` is strictly increasing, so `partition_point` names the cluster ending at the offset
+    /// when the offset is a boundary and the cluster containing it otherwise. Both consumers of
+    /// `line_breaks()` route through here; writing the rule twice let them disagree about whether
+    /// an interior required break survives.
+    fn break_target(&self, position: u32, required: bool) -> Option<usize> {
+        let index = self.ends.partition_point(|end| *end < position);
+        let target = self.ends.get(index)?;
+        (*target == position || required).then_some(index)
     }
 
     fn cluster_at(&self, offset: u32) -> Result<usize, EngineError> {
@@ -1172,6 +1191,89 @@ mod tests {
         );
         assert_eq!(clusters.flags[1], CLUSTER_SAFE_BEFORE | CLUSTER_SPACE);
         assert_eq!(clusters.flags[2], 0);
+    }
+
+    /// UAX #14 LB9 does not attach a combining mark to a preceding SPACE, while UAX #29 GB9 does,
+    /// so `"x \u{301}y"` offers a line break at offset 2 that falls strictly inside the grapheme
+    /// cluster spanning [1, 3). A cluster is indivisible for layout, so that opportunity is
+    /// unusable -- but it is well-formed input from two standards that disagree by design, and
+    /// rejecting the whole frame for it made the paragraph unpublishable.
+    #[test]
+    fn a_line_break_inside_a_grapheme_cluster_is_ignored_rather_than_rejected() {
+        let text: Vec<u16> = "x \u{301}y".encode_utf16().collect();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        assert!(
+            unicode
+                .line_breaks()
+                .iter()
+                .any(|entry| entry.position == 2),
+            "the case rests on UAX #14 offering a break strictly inside the cluster",
+        );
+
+        let style = ResolvedStyle::test_typography(16.0, 1.0, 0.0);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: 4,
+            style,
+        }];
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end: 4,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 4,
+            bidi_level: 0,
+            style,
+        }];
+        let shape = ShapeArena {
+            runs: vec![ShapedRun {
+                source_run: 0,
+                binding_handle: 19,
+                font_handle: 9,
+                text_start: 0,
+                text_end: 4,
+                glyph_start: 0,
+                glyph_count: 3,
+            }],
+            glyph_ids: vec![1, 2, 3],
+            clusters: vec![0, 1, 3],
+            x_advances: vec![500, 250, 500],
+            y_advances: vec![0; 3],
+            x_offsets: vec![0; 3],
+            y_offsets: vec![0; 3],
+            glyph_flags: vec![0; 3],
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let mut clusters = ClusterArena::default();
+        clusters
+            .build(
+                ClusterBuildInput {
+                    text: &text,
+                    text_unit_ids: &[1, 2, 3, 4],
+                    unicode: &unicode,
+                    styles: &styles,
+                    runs: &runs,
+                    shape: &shape,
+                },
+                metrics,
+            )
+            .expect("a break opportunity inside a cluster must not reject the paragraph");
+
+        assert_eq!(clusters.starts, [0, 1, 3]);
+        assert_eq!(clusters.ends, [1, 3, 4]);
+        // The unusable opportunity leaves no break on the cluster that contains it.
+        assert_eq!(clusters.flags[1] & CLUSTER_ALLOWED_BREAK, 0);
     }
 
     #[test]
