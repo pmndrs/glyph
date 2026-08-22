@@ -12,14 +12,20 @@
  *      origin back into the buffer the renderer reads, so a stale record does not merely misreport
  *      -- it corrupts what is drawn.
  *
- * The oracle is construction from scratch: a node edited into some text may not disagree with a
- * node built with that text. It compares the augmentation lane against itself across two paths
- * rather than against the layout lane, so it stays correct without asserting which coordinate
- * space the buffer uses.
+ * Backing is proved POSITIVELY, by writing a per-glyph sentinel through `setGlyphOrigins` and
+ * reading it back: an override only lands where a record exists, so an unbacked glyph reports the
+ * layout fallback instead of its sentinel. Comparing a snapshot against the fallback proves
+ * nothing on its own -- if every record were missing, every glyph would report the fallback and
+ * agree with it.
+ *
+ * The staleness oracle is construction from scratch: a node edited into some text may not disagree
+ * with a node built with that text. It compares the augmentation lane against itself across two
+ * paths rather than against the layout lane, so it stays correct without asserting which
+ * coordinate space the buffer uses.
  */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
 import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
@@ -41,14 +47,25 @@ const contentBox = {
 const style = { fontSize: 6, lineHeight: 1 };
 const paint = { color: '#ffffff' };
 
+// One Wasm runtime and one baked font for the whole file; each test mounts its own scene on them.
+let runtime;
+let loaded;
+
 async function loadFont() {
-  const runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  const font = await runtime.loadFont({
+  if (loaded !== undefined) return loaded;
+  runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
+  loaded = await runtime.loadFont({
     input: { baked: dataUrl(gunzipSync(await readFile(new URL('inter-slug.font.glb.gz', fixtures)))) },
     raster: { technique: slug },
   });
-  return { font, runtime };
+  return loaded;
 }
+
+after(() => {
+  runtime?.dispose();
+  runtime = undefined;
+  loaded = undefined;
+});
 
 function mount(font, text) {
   const scene = new THREE.Scene();
@@ -57,58 +74,86 @@ function mount(font, text) {
   const node = new Text({ contentBox, font, paint, style, text });
   group.add(node);
   scene.updateMatrixWorld(true);
-  return { node, scene };
+  return { group, node, scene };
+}
+
+function unmount(mounted) {
+  mounted.node.dispose();
+  mounted.group.dispose();
 }
 
 /** Round to a stable precision so float noise cannot decide a comparison. */
 const fixed = (values) => [...values].map((value) => Math.round(value * 1000) / 1000);
 
 test('every committed glyph is origin-record backed', async () => {
-  const { font } = await loadFont();
-  const { node } = mount(font, 'ACTIVE');
-  const layout = node.inspectLayout();
-  const snapshot = node.snapshotGlyphOrigins();
+  const font = await loadFont();
+  const mounted = mount(font, 'ACTIVE');
+  try {
+    const before = mounted.node.snapshotGlyphOrigins();
+    assert.ok(before.layout.glyphStableIds.length > 0, 'the fixture committed no glyphs to check');
 
-  // A record-backed glyph reports the buffer origin. An unbacked one silently reports the layout
-  // fallback instead, so equality with the fallback for SOME glyphs and not others is the
-  // observable signature of a partially populated lane.
-  const fallbackMatches = fixed(layout.x).map((value, index) => value === fixed(snapshot.shapedX)[index]);
-  assert.equal(
-    fallbackMatches.every((matched) => matched === fallbackMatches[0]),
-    true,
-    `origin records covered only part of the glyph run: ${JSON.stringify(fallbackMatches)}`,
-  );
+    // Sentinels are far outside any plausible layout coordinate, so a glyph that reports its
+    // sentinel is provably reading its record and not the fallback the snapshot substitutes.
+    const x = before.shapedX.map((_, index) => -9_000 - index);
+    const y = before.shapedY.map((_, index) => 9_000 + index);
+    mounted.node.setGlyphOrigins({ layout: before.layout, x, y });
+
+    const overridden = mounted.node.snapshotGlyphOrigins();
+    assert.deepEqual([...overridden.displayedX], [...x], 'a glyph without an origin record kept the layout fallback');
+    assert.deepEqual([...overridden.displayedY], [...y], 'a glyph without an origin record kept the layout fallback');
+    // The recorded origin is the pre-override value, which is what `clear` must restore.
+    assert.deepEqual(fixed(overridden.shapedX), fixed(before.shapedX), 'an override rewrote the recorded origin');
+    assert.deepEqual(fixed(overridden.shapedY), fixed(before.shapedY), 'an override rewrote the recorded origin');
+
+    mounted.node.clearGlyphOriginOverrides();
+    const cleared = mounted.node.snapshotGlyphOrigins();
+    assert.deepEqual(fixed(cleared.displayedX), fixed(before.displayedX), 'clearing did not restore every record');
+    assert.deepEqual(fixed(cleared.displayedY), fixed(before.displayedY), 'clearing did not restore every record');
+  } finally {
+    unmount(mounted);
+  }
 });
 
 test('an edited node reports the origins of a node built with the same text', async () => {
-  const { font } = await loadFont();
-  const control = mount(font, 'ACTIVE').node.snapshotGlyphOrigins();
+  const font = await loadFont();
+  const control = mount(font, 'ACTIVE');
+  const mounted = mount(font, 'ACTIVATE');
+  try {
+    const want = control.node.snapshotGlyphOrigins();
+    mounted.node.set({ contentBox, font, paint, spans: [], style, text: 'ACTIVE' });
+    mounted.scene.updateMatrixWorld(true);
+    const edited = mounted.node.snapshotGlyphOrigins();
 
-  const { node, scene } = mount(font, 'ACTIVATE');
-  node.set({ contentBox, font, paint, spans: [], style, text: 'ACTIVE' });
-  scene.updateMatrixWorld(true);
-  const edited = node.snapshotGlyphOrigins();
-
-  assert.deepEqual(fixed(edited.shapedX), fixed(control.shapedX), 'edited shaped origins diverged from a fresh build');
-  assert.deepEqual(fixed(edited.shapedY), fixed(control.shapedY), 'edited shaped origins diverged from a fresh build');
-  assert.deepEqual(
-    fixed(edited.displayedX),
-    fixed(control.displayedX),
-    'edited displayed origins diverged from a fresh build',
-  );
+    for (const lane of ['shapedX', 'shapedY', 'displayedX', 'displayedY']) {
+      assert.deepEqual(fixed(edited[lane]), fixed(want[lane]), `edited ${lane} diverged from a fresh build`);
+    }
+  } finally {
+    unmount(mounted);
+    unmount(control);
+  }
 });
 
 test('repeated edits keep the origin lane addressable', async () => {
-  const { font } = await loadFont();
-  const { node, scene } = mount(font, 'ACTIVATE');
-
-  // Deletion and insertion alternate so the run both shrinks and grows, which is what retires and
-  // reallocates the records the lane indexes.
-  for (const text of ['ACTIVE', 'ACTIVATE', 'ACTIVE', 'ACTIVATE', 'ACTIVE']) {
-    node.set({ contentBox, font, paint, spans: [], style, text });
-    scene.updateMatrixWorld(true);
-    const control = mount(font, text).node.snapshotGlyphOrigins();
-    const edited = node.snapshotGlyphOrigins();
-    assert.deepEqual(fixed(edited.shapedX), fixed(control.shapedX), `origins diverged after editing to ${text}`);
+  const font = await loadFont();
+  const mounted = mount(font, 'ACTIVATE');
+  try {
+    // Deletion and insertion alternate so the run both shrinks and grows, which is what retires and
+    // reallocates the records the lane indexes.
+    for (const text of ['ACTIVE', 'ACTIVATE', 'ACTIVE', 'ACTIVATE', 'ACTIVE']) {
+      mounted.node.set({ contentBox, font, paint, spans: [], style, text });
+      mounted.scene.updateMatrixWorld(true);
+      const control = mount(font, text);
+      try {
+        const want = control.node.snapshotGlyphOrigins();
+        const edited = mounted.node.snapshotGlyphOrigins();
+        for (const lane of ['shapedX', 'shapedY', 'displayedX', 'displayedY']) {
+          assert.deepEqual(fixed(edited[lane]), fixed(want[lane]), `${lane} diverged after editing to ${text}`);
+        }
+      } finally {
+        unmount(control);
+      }
+    }
+  } finally {
+    unmount(mounted);
   }
 });
