@@ -40,7 +40,7 @@ export interface RasterBakeWorkerFailure {
 
 export type RasterBakeWorkerResult = RasterBakeWorkerSuccess | RasterBakeWorkerFailure;
 
-export function isRasterBakeWorkerRequestV0(value: unknown): value is RasterBakeWorkerRequest {
+export function isRasterBakeWorkerRequest(value: unknown): value is RasterBakeWorkerRequest {
   return (
     isObject(value) &&
     value.type === 'bake-raster-v0' &&
@@ -54,7 +54,7 @@ export function isRasterBakeWorkerRequestV0(value: unknown): value is RasterBake
   );
 }
 
-export function isRasterBakeWorkerResultV0(value: unknown): value is RasterBakeWorkerResult {
+export function isRasterBakeWorkerResult(value: unknown): value is RasterBakeWorkerResult {
   if (
     !isObject(value) ||
     value.type !== 'bake-raster-result-v0' ||

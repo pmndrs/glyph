@@ -37,7 +37,7 @@ import type {
   DiscoveryOptions,
   ResolvedRasterBaker,
 } from '../discovery.js';
-import { fontBakeDescriptorV0 } from '../internal/core-bake-policy.js';
+import { fontBakeDescriptor } from '../internal/core-bake-policy.js';
 import { bakeFontPipeline } from '../internal/font-bake-pipeline.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js';
@@ -144,7 +144,7 @@ export async function inspectFont(options: NodeFontInspectOptions): Promise<Font
   const fontBaker = await defaultFontBaker();
   return fontBaker.inspect({
     source,
-    descriptor: fontBakeDescriptorV0(options.fontFaceIndex ?? 0),
+    descriptor: fontBakeDescriptor(options.fontFaceIndex ?? 0),
   });
 }
 

@@ -10,7 +10,7 @@ import type { ResolvedRasterBakePlan } from './internal/raster-bake-plan.js';
 import { deriveRasterKey } from './internal/raster-identity.js';
 import { createRuntimeFontCache, type CachedFontArtifact } from './internal/runtime-font-cache.js';
 import {
-  isRuntimeBakeRequestV0,
+  isRuntimeBakeRequest,
   type RuntimeBakeRaster,
   type RuntimeBakeRequest,
   type RuntimeBakeFailure,
@@ -31,7 +31,7 @@ let pending = Promise.resolve();
 
 scope.addEventListener('message', (event: MessageEvent<unknown>) => {
   const value = event.data;
-  if (!isRuntimeBakeRequestV0(value)) return;
+  if (!isRuntimeBakeRequest(value)) return;
   pending = pending.then(() => handleMessage(value));
 });
 

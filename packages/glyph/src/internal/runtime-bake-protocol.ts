@@ -60,7 +60,7 @@ export interface RuntimeBakeFailure {
 
 export type RuntimeBakeResult = RuntimeBakeSuccess | RuntimeBakeFailure;
 
-export function isRuntimeBakeResultV0(value: unknown): value is RuntimeBakeResult {
+export function isRuntimeBakeResult(value: unknown): value is RuntimeBakeResult {
   if (!isNonArrayObject(value) || value.type !== 'bake-font-result-v0' || !isRequestId(value.id)) {
     return false;
   }
@@ -76,13 +76,13 @@ export function isRuntimeBakeResultV0(value: unknown): value is RuntimeBakeResul
     value.ok === true &&
     Array.isArray(value.artifacts) &&
     value.artifacts.length === 1 &&
-    value.artifacts.every(isRuntimeBakeArtifactV0) &&
+    value.artifacts.every(isRuntimeBakeArtifact) &&
     isNonArrayObject(value.report) &&
     Array.isArray(value.warnings)
   );
 }
 
-export function isRuntimeBakeRequestV0(value: unknown): value is RuntimeBakeRequest {
+export function isRuntimeBakeRequest(value: unknown): value is RuntimeBakeRequest {
   return (
     isNonArrayObject(value) &&
     value.type === 'bake-font-v0' &&
@@ -151,7 +151,7 @@ function isJsonValue(value: unknown, seen = new Set<object>(), depth = 0): value
   return valid;
 }
 
-function isRuntimeBakeArtifactV0(value: unknown): value is RuntimeBakeArtifact {
+function isRuntimeBakeArtifact(value: unknown): value is RuntimeBakeArtifact {
   return (
     isNonArrayObject(value) &&
     value.role === 'font' &&

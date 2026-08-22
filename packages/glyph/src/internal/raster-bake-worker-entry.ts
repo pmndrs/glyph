@@ -4,7 +4,7 @@ import type { RasterBakerModule } from '../bake.js';
 import type { JsonValue } from '../raster.js';
 import { transferableArrayBuffer } from './owned-array-buffer.js';
 import {
-  isRasterBakeWorkerRequestV0,
+  isRasterBakeWorkerRequest,
   type RasterBakeWorkerFailure,
   type RasterBakeWorkerRequest,
   type RasterBakeWorkerSuccess,
@@ -21,7 +21,7 @@ export function startRasterBakeWorker<Kind extends string, Options, Descriptor e
   let pending = Promise.resolve();
   scope.addEventListener('message', (event: MessageEvent<unknown>) => {
     const value = event.data;
-    if (!isRasterBakeWorkerRequestV0(value)) return;
+    if (!isRasterBakeWorkerRequest(value)) return;
     pending = pending.then(() => handleMessage(scope, baker, normalizeOptions, value));
   });
 }

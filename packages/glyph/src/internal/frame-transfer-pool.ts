@@ -165,7 +165,7 @@ export function createFrameTransferPool(limits: FrameTransferPoolLimits): FrameT
     },
 
     acceptReturn(message) {
-      if (!isFrameTransferReturnV0(message)) {
+      if (!isFrameTransferReturn(message)) {
         stats.rejectedReturns += 1;
         return { ok: false, reason: 'invalid-message' };
       }
@@ -210,7 +210,7 @@ export function returnFrameTransfer(
   publication: FrameTransferPublication,
   send: (message: FrameTransferReturn, transfer: readonly Transferable[]) => void,
 ): void {
-  if (!isFrameTransferPublicationV0(publication)) throw new TypeError('invalid frame transfer publication');
+  if (!isFrameTransferPublication(publication)) throw new TypeError('invalid frame transfer publication');
   if (publication.buffer.byteLength !== publication.capacity) {
     throw new TypeError('frame transfer is detached or has the wrong capacity');
   }
@@ -227,7 +227,7 @@ export function returnFrameTransfer(
   }
 }
 
-export function isFrameTransferPublicationV0(value: unknown): value is FrameTransferPublication {
+export function isFrameTransferPublication(value: unknown): value is FrameTransferPublication {
   if (!isRecord(value) || value.type !== FRAME_PUBLICATION_TYPE || value.protocolVersion !== 0) return false;
   return (
     positiveU32(value.transferId) &&
@@ -240,7 +240,7 @@ export function isFrameTransferPublicationV0(value: unknown): value is FrameTran
   );
 }
 
-export function isFrameTransferReturnV0(value: unknown): value is FrameTransferReturn {
+export function isFrameTransferReturn(value: unknown): value is FrameTransferReturn {
   if (!isRecord(value) || value.type !== FRAME_RETURN_TYPE || value.protocolVersion !== 0) return false;
   return positiveU32(value.transferId) && positiveU32(value.capacity) && value.buffer instanceof ArrayBuffer;
 }
