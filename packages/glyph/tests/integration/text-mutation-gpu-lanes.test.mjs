@@ -7,15 +7,9 @@
  * record slot holding its pre-edit occupant therefore passes every engine-side check while
  * rendering the wrong glyph, which is exactly the defect this file exists to catch.
  *
- * The oracle is construction from scratch. A node edited into some text may not differ, in any
- * lane, from a node built with that text: same glyphs, same layout, same packed bytes. That
- * invariant needs no knowledge of what each buffer means, so it holds as techniques and packing
- * policies change.
- *
- * Both sides of every comparison are produced by the same packing code from the same authored
- * inputs, so every lane is compared bit-for-bit. Rounding here would hide exactly the corruption
- * the file exists to detect: a stale slot whose retained bytes happen to be close to the correct
- * ones.
+ * This file owns the Latin corpus and the three raster techniques. The differential oracle it
+ * asserts lives in `../support/text-mutation-lanes.mjs`, shared with the script-topology and span
+ * files so the invariant cannot drift between them.
  *
  * Sequences are seeded and fixed. A failure names the case and step that reproduce it, with no
  * wall-clock input and no `Math.random`.
@@ -27,27 +21,21 @@
  * option or a host-level test that drives `TextEngineHost` directly, as
  * `three-engine-runtime.test.mjs` does.
  */
-import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
-import { gunzipSync } from 'node:zlib';
 
-import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
-import * as THREE from 'three/webgpu';
 
-// The identity lane is named by the policy contract that packs it, not by a literal here.
-import { STABLE_GLYPH_BUFFER_ID } from '../../dist/three/render-policy.js';
-
-const IDENTITY_LANE = `_pmndrsGlyph_${STABLE_GLYPH_BUFFER_ID}`;
-
-const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
-const timeout = 5 * 60 * 1_000;
+import {
+  assertMatchesFreshBuild,
+  createFontCache,
+  edit,
+  mount,
+  seededRandom,
+  timeout,
+  unmount,
+} from '../support/text-mutation-lanes.mjs';
 
 /** The product-shaped box from the reported regression: centered, single line, clipped. */
 const contentBox = {
@@ -63,35 +51,13 @@ const style = { fontSize: 6, lineHeight: 1 };
 const paint = { color: '#ffffff' };
 
 const TECHNIQUES = {
-  bitmap: { file: 'inter-bitmap-16.font.glb', gzip: false, raster: { technique: bitmap, options: { strikes: [16] } } },
-  msdf: { file: 'inter-mtsdf.font.glb.gz', gzip: true, raster: { technique: msdf } },
-  slug: { file: 'inter-slug.font.glb.gz', gzip: true, raster: { technique: slug } },
+  bitmap: { file: 'inter-bitmap-16.font.glb', raster: { technique: bitmap, options: { strikes: [16] } } },
+  msdf: { file: 'inter-mtsdf.font.glb.gz', raster: { technique: msdf } },
+  slug: { file: 'inter-slug.font.glb.gz', raster: { technique: slug } },
 };
 
-// One Wasm runtime and one baked font per technique for the whole file. Every mount in here is a
-// scene built on top of them, so loading per test would retain dozens of runtimes for no coverage.
-let runtime;
-const loadedFonts = new Map();
-
-async function loadFont(name) {
-  const cached = loadedFonts.get(name);
-  if (cached !== undefined) return cached;
-  runtime ??= await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  const spec = TECHNIQUES[name];
-  const bytes = await readFile(new URL(spec.file, fixtures));
-  const font = await runtime.loadFont({
-    input: { baked: dataUrl(spec.gzip ? gunzipSync(bytes) : bytes) },
-    raster: spec.raster,
-  });
-  loadedFonts.set(name, font);
-  return font;
-}
-
-after(() => {
-  runtime?.dispose();
-  runtime = undefined;
-  loadedFonts.clear();
-});
+const fonts = createFontCache(TECHNIQUES);
+after(() => fonts.dispose());
 
 /**
  * Author one paragraph's content.
@@ -122,137 +88,6 @@ function spansFor(text) {
     { start: 0, end: third, paint: { color: '#ff2f00' }, style: { fontSize: 9, lineHeight: 1 } },
     { start: third, end: third * 2, paint: { color: '#0040ff' }, style: { fontSize: 4, lineHeight: 1 } },
   ];
-}
-
-/** Build a group holding one Text node per authored paragraph. */
-function mount(font, paragraphs) {
-  const scene = new THREE.Scene();
-  const group = new TextGroup({ batching: 'group' });
-  scene.add(group);
-  const nodes = paragraphs.map(({ position, properties }) => {
-    const node = new Text({ font, ...properties });
-    if (position !== undefined) node.position.set(...position);
-    group.add(node);
-    return node;
-  });
-  scene.updateMatrixWorld(true);
-  return { group, nodes, scene };
-}
-
-function unmount(mounted) {
-  for (const node of mounted.nodes) node.dispose();
-  mounted.group.dispose();
-}
-
-/** Re-author every node in a mounted scene and re-synchronize. */
-function edit(mounted, font, paragraphs) {
-  for (const [index, { properties }] of paragraphs.entries()) {
-    mounted.nodes[index].set({ font, ...properties });
-  }
-  mounted.scene.updateMatrixWorld(true);
-}
-
-/**
- * Read every lane a scene exposes, engine-side and GPU-side.
- *
- * Every draw in a group shares one retained buffer per policy lane and addresses its own run
- * through `pmndrsGlyphRunStart`, so a lane must be read from `start` rather than from the head of
- * the array. Only the run's own `instanceCount` records are read: capacity beyond it is allowed to
- * hold anything, and asserting it would fail on legal slack rather than on a defect.
- */
-function lanes(mounted) {
-  const draws = [];
-  mounted.group.traverse((object) => {
-    if (object.userData.pmndrsGlyphRunStart === undefined) return;
-    const geometry = object.geometry;
-    if (geometry === undefined) return;
-    const instances = geometry.instanceCount;
-    const start = object.userData.pmndrsGlyphRunStart;
-    const attributes = {};
-    for (const [name, attribute] of Object.entries(geometry.attributes ?? {})) {
-      // Per-vertex attributes describe the unit quad, not the run, so they carry no edit state.
-      if (!(attribute instanceof THREE.InstancedBufferAttribute)) continue;
-      const width = attribute.itemSize ?? 1;
-      attributes[name] = [...attribute.array].slice(start * width, (start + instances) * width);
-    }
-    draws.push({ attributes, instances, start });
-  });
-  draws.sort((left, right) => left.start - right.start);
-  const paragraphs = mounted.nodes.map((node) => {
-    const layout = node.inspectLayout();
-    const measured = node.measureLayout();
-    return {
-      glyphCount: measured?.glyphCount,
-      glyphIds: [...(layout?.glyphIds ?? [])],
-      glyphStableIds: [...(layout?.glyphStableIds ?? [])],
-      lineCount: measured?.lineCount,
-      x: [...(layout?.x ?? [])],
-      y: [...(layout?.y ?? [])],
-    };
-  });
-  return {
-    draws,
-    // Record slots are allocated across the whole group in paragraph order, so the identity a
-    // draw's slot must carry is read out of this concatenation by `pmndrsGlyphRunStart`.
-    identities: paragraphs.flatMap((entry) => entry.glyphStableIds),
-    paragraphs,
-  };
-}
-
-/**
- * Assert an edited scene is indistinguishable from one built with the same content.
- *
- * Stable ids are compared separately and only for length: identity is expected to differ, because
- * retaining a glyph across an edit is the point of the incremental path. That exemption covers the
- * packed identity lane too -- it carries the same allocation-order ids -- so that lane is instead
- * held to the stronger local invariant that it equals the engine's committed identities for the
- * run it draws. A slot left holding its pre-edit occupant breaks that equality. Every other lane,
- * packed bytes included, must agree exactly with the fresh build.
- */
-function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
-  const fresh = mount(font, paragraphs);
-  try {
-    const want = lanes(fresh);
-    const got = lanes(mounted);
-
-    assert.equal(got.paragraphs.length, want.paragraphs.length, `${context}: paragraph count`);
-    for (const [index, entry] of got.paragraphs.entries()) {
-      const expected = want.paragraphs[index];
-      const where = `${context}: paragraph ${index}`;
-      assert.equal(entry.glyphCount, expected.glyphCount, `${where} glyph count`);
-      assert.equal(entry.lineCount, expected.lineCount, `${where} line count`);
-      assert.deepEqual(entry.glyphIds, expected.glyphIds, `${where} glyph ids`);
-      assert.deepEqual(entry.x, expected.x, `${where} glyph x origins`);
-      assert.deepEqual(entry.y, expected.y, `${where} glyph y origins`);
-      assert.equal(entry.glyphStableIds.length, expected.glyphStableIds.length, `${where} stable id lane length`);
-    }
-
-    assert.equal(got.draws.length, want.draws.length, `${context}: draw count`);
-    for (const [index, draw] of got.draws.entries()) {
-      const expected = want.draws[index];
-      assert.equal(draw.instances, expected.instances, `${context}: draw ${index} instanceCount`);
-      assert.deepEqual(
-        Object.keys(draw.attributes).sort(),
-        Object.keys(expected.attributes).sort(),
-        `${context}: draw ${index} attribute set`,
-      );
-      for (const name of Object.keys(draw.attributes)) {
-        if (name === IDENTITY_LANE) {
-          // Held to the engine's own committed identities rather than to the fresh build's.
-          assert.deepEqual(
-            draw.attributes[name],
-            got.identities.slice(draw.start, draw.start + draw.instances),
-            `${context}: draw ${index} packed ${name} against committed identities`,
-          );
-          continue;
-        }
-        // The packed lane. This is what the GPU samples, and the only lane that caught the defect.
-        assert.deepEqual(draw.attributes[name], expected.attributes[name], `${context}: draw ${index} packed ${name}`);
-      }
-    }
-  } finally {
-    unmount(fresh);
-  }
 }
 
 /** Every edit class the incremental path distinguishes, each as (from, to). */
@@ -299,7 +134,7 @@ function styledScene(texts) {
 for (const technique of Object.keys(TECHNIQUES)) {
   for (const [label, from, to] of EDIT_CLASSES) {
     test(`${technique}: ${label}`, { timeout }, async () => {
-      const font = await loadFont(technique);
+      const font = await fonts.load(technique);
       const mounted = mount(font, [paragraph(from)]);
       try {
         edit(mounted, font, [paragraph(to)]);
@@ -310,7 +145,7 @@ for (const technique of Object.keys(TECHNIQUES)) {
     });
 
     test(`${technique}: ${label} across a styled multi-node group`, { timeout }, async () => {
-      const font = await loadFont(technique);
+      const font = await fonts.load(technique);
       // The edit lands on the middle node, so the nodes around it must keep their own transform,
       // colour, and size lanes while the record run under them shifts.
       const before = styledScene(['STEADY', from, 'ANCHOR']);
@@ -326,7 +161,7 @@ for (const technique of Object.keys(TECHNIQUES)) {
   }
 
   test(`${technique}: repeated edits without remounting`, { timeout }, async () => {
-    const font = await loadFont(technique);
+    const font = await fonts.load(technique);
     const mounted = mount(font, [paragraph('ACTIVATE')]);
     try {
       for (const [step, text] of ['ACTIVE', 'ACTIVATE', 'ACTIVE', 'ACTIVATE', 'ACTIVE'].entries()) {
@@ -339,7 +174,7 @@ for (const technique of Object.keys(TECHNIQUES)) {
   });
 
   test(`${technique}: seeded chaotic edit sequences`, { timeout }, async () => {
-    const font = await loadFont(technique);
+    const font = await fonts.load(technique);
     // A small alphabet with real kern pairs and repeated letters, so edits land on shared
     // prefixes and suffixes far more often than random text would.
     const alphabet = 'ACEIRTVX';
@@ -380,15 +215,4 @@ function chaoticEdit(text, alphabet, random) {
   const next = text.slice(0, start) + insert + text.slice(Math.min(end, text.length));
   // An edit that changes nothing exercises no path; nudge it into one that does.
   return next === text ? text.slice(0, Math.max(0, text.length - 1)) : next;
-}
-
-/** Deterministic 32-bit PRNG. Seeded sequences make a failure exactly reproducible. */
-function seededRandom(seed) {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let value = Math.imul(state ^ (state >>> 15), 1 | state);
-    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
-    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
-  };
 }
