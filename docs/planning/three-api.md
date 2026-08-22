@@ -161,7 +161,47 @@ Multiple operations before traversal remain one Wasm call. Direct `label.text = 
 the adapter derives its smallest common-prefix/common-suffix replacement without allocating a second scan buffer.
 Offsets match JavaScript and DOM selection APIs and cannot split a surrogate pair. Existing spans shift with edits;
 inserted text inherits a span only when inserted strictly inside it, so span-boundary affinity does not become hidden
-mutable state.
+mutable state. Text inserted at a boundary that FUSES into the cluster beside it is the one exception, and it follows
+from the cluster rule below rather than from affinity: a combining mark has no style of its own to keep.
+
+### Span offsets resolve to grapheme clusters
+
+The engine resolves exactly one style per extended grapheme cluster, so a span boundary is a cluster boundary. `Text`
+settles that before a frame is built, and settles it constructively rather than by rejection (D-265):
+
+> **A cluster takes the style of its base.** Every span boundary moves forward to the end of the cluster containing it,
+> so the marks that attach to a base follow the base's style.
+
+The rule is the same for spans you author and for spans `insertText`/`deleteText`/`replaceText` rebase, because through
+React those are one act. Nothing throws, and `text.spans` always reports the resolved offsets:
+
+```ts
+const label = new Text({ font, text: 'abc', spans: [{ start: 0, end: 1, paint }] });
+label.insertText(1, '\u0301'); // 'ábc'; 'a' and the mark are now one cluster spanning [0, 2)
+label.spans; // [{ start: 0, end: 2, paint }] -- the mark joined the style of its base
+```
+
+Forward is a policy, not arithmetic. Moving both boundaries backward preserves ordering and adjacency just as well;
+forward is chosen because backward would take style away from a base you styled and never edited, handing the cluster to
+a mark that attached to it. Both boundaries move the same way, so two spans meeting at one offset still meet.
+
+A span that keeps no cluster of its own becomes an empty range and stays in the array. Deleting the base between a
+styled letter and a mark leaves that mark on the previous cluster, and the span it came from reports `[2, 2)` rather
+than disappearing: the loss is visible, and `setSpan(index, ...)`/`removeSpan(index)` keep addressing the span they
+always did. An empty span states nothing and reaches no engine style.
+
+Offsets outside the text are left exactly as given. Range validity is a separate rule with its own error, and clamping
+an out-of-range offset would turn an arithmetic mistake into a plausible-looking style.
+
+To derive cluster-aligned ranges yourself -- or to detect a shift instead of accepting one -- use the same function
+`Text` uses. It returns its argument by identity when nothing moves:
+
+```ts
+import { alignSpansToClusters } from '@pmndrs/glyph/three';
+
+const resolved = alignSpansToClusters(text, spans);
+if (resolved !== spans) editor.reportOffsetsThatSplitACluster(resolved);
+```
 
 Errors are retained on `text.error` and the owning `group.error`, then forwarded to `onError`. They do not escape Three.js
 scene traversal. A renderer-side failure leaves the Rust publication unconsumed; `retry()` or the next group traversal
