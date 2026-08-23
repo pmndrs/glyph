@@ -107,7 +107,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
         width: { mode: 'exact', size: contentWidth },
         height: { mode: 'exact', size: contentHeight },
       };
-      const layout = paragraph.layout(constraints);
+      const layout = paragraph.measure(constraints);
       const contentLeft = -outerWidth / 2 + borderLeft + paddingLeft;
       const contentTop = outerHeight / 2 - borderTop - paddingTop;
       return {

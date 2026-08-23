@@ -25,7 +25,7 @@ import type { RuntimeShaper } from './shaper.js';
 import { textRuntimeShaper } from './text-runtime.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 import type { FontSelection, LoadedFont } from './loaded-font.js';
-import type { ParagraphLayoutInspection, ParagraphLayoutSummary, ParagraphMetrics } from './layout.js';
+import type { ParagraphLayout, ParagraphLayoutInspection, ParagraphLayoutSummary, ParagraphMetrics } from './layout.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 import type { TextRuntime } from './text-runtime.js';
 import type {
@@ -125,6 +125,38 @@ interface ResolvedParagraphState<Technique extends AnyRasterTechnique> {
  * host, so they cannot re-enter; returned measurements and layouts own their memory (the
  * readers copy out of borrowed Wasm publication bytes).
  */
+/**
+ * The fields that only exist once positioning has run and its output has crossed the Wasm boundary.
+ *
+ * `inkBounds` rides this list rather than the immediate metrics: the paragraph's ink union is a
+ * running min/max over glyph ink boxes, so it is knowable only after positioning. Reading it
+ * materializes the positioned query exactly as reading `x` does, which is why a caller centring on
+ * the visual extent gets it from the same call as one centring on the advance extent.
+ */
+const POSITIONED_FIELDS = [
+  'inkBounds',
+  'fontHandles',
+  'glyphFontSlots',
+  'glyphIds',
+  'clusters',
+  'glyphFontSizes',
+  'x',
+  'y',
+  'glyphAdvances',
+  'glyphInkX',
+  'glyphInkY',
+  'glyphInkWidths',
+  'glyphInkHeights',
+  'glyphFlags',
+  'lineTextStarts',
+  'lineTextEnds',
+  'lineGlyphStarts',
+  'lineGlyphCounts',
+  'lineBaselines',
+  'lineAdvances',
+  'glyphStableIds',
+] as const;
+
 export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
   #desired: ResolvedParagraphState<Technique>;
   #leasedFonts: readonly LoadedFont<Technique>[];
@@ -203,54 +235,71 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
   }
 
   /**
-   * Synchronously measures the paragraph at `constraints`, without materializing per-glyph
-   * arrays and without touching authored state.
+   * Measures the paragraph at `constraints`, synchronously, with no scene, no renderer, no world
+   * matrix, and no committed frame. Every value is paragraph-local: the origin is the box's
+   * top-left corner, positive X is right, positive Y is down. Scale and placement are the host's,
+   * applied afterwards.
    *
-   * The returned metrics carry the constrained measurement plus intrinsic
-   * `minContentWidth`/`maxContentWidth`; the intrinsics are content-only and ride the same pass, so
-   * a host never pays a second query at zero width. Repeated measurement at the same constraints
-   * answers from cache with no engine call; different constraints ride the engine's retained
-   * speculative transaction, so only geometry, flow, and positioning re-run over the retained
-   * shaping. Equal inputs answer with the identical cached object.
+   * There is one call rather than a measure/layout pair, because there was only ever one piece of
+   * work. Both ran the same line breaking; they differed in whether the per-glyph columns were
+   * copied out of Wasm, which is an implementation cost this API should not have asked a caller to
+   * choose. Every comparable API — Skia, Flutter, DirectWrite, Pango, `measureText` — lays out once
+   * and reads metrics off the result.
+   *
+   * So metrics are immediate and the columns are lazy. Sizes, baselines, ascent and descent, and
+   * the intrinsic widths cost one engine query. `inkBounds` and every per-glyph and per-line column
+   * materialize the positioned query on first access and then stay resolved, so a flexbox host that
+   * probes many widths and reads only sizes never pays for arrays it does not touch.
+   *
+   * Repeated measurement at equal constraints answers from cache with the identical object;
+   * different constraints ride the engine's retained speculative transaction, so only geometry,
+   * flow, and positioning re-run over the retained shaping.
    *
    * A constraint that is not finite and nonnegative, or an impossible column policy, throws from
-   * here -- caller arithmetic, reported where it was written.
+   * here — caller arithmetic, reported where it was written.
    */
-  measure(constraints?: ParagraphConstraints): ParagraphMetrics {
-    this.#assertActive();
-    const resolved = resolveConstraints(constraints);
-    const key = axisKey(resolved);
-    const cached = this.#measurements.get(key);
-    if (cached !== undefined) return cached;
-    const { summary } = this.#query(this.#fullBox(resolved), false);
-    this.#measurements.set(key, summary);
-    return summary;
-  }
-
-  /**
-   * Produces the final positioned glyph arrays for `constraints`.
-   *
-   * Like {@link Paragraph.measure}, this is synchronous, scene-free, and leaves authored state
-   * untouched; it additionally materializes the per-line and per-glyph arrays out of Wasm. The
-   * `paragraph.layoutRevision` advances exactly when the positioned output differs from the
-   * previous layout's (see the property's contract), so a layout host gates array readback on
-   * `paragraph.layoutRevision !== lastSeenRevision` instead of copying arrays to compare them.
-   */
-  layout(constraints?: ParagraphConstraints): ParagraphLayoutInspection {
+  measure(constraints?: ParagraphConstraints): ParagraphLayoutInspection {
     this.#assertActive();
     const resolved = resolveConstraints(constraints);
     const key = axisKey(resolved);
     const cached = this.#layouts.get(key);
     if (cached !== undefined) return cached;
-    const { inspection } = this.#query(this.#fullBox(resolved), true);
-    if (inspection === undefined) throw new Error('paragraph layout query returned no layout inspection');
-    const digest = layoutDigest(inspection);
-    if (digest !== this.#lastLayoutDigest) {
-      this.#lastLayoutDigest = digest;
-      this.#layoutRevision += 1;
+    const { summary } = this.#query(this.#fullBox(resolved), false);
+    const layout = this.#lazyLayout(summary, resolved);
+    this.#layouts.set(key, layout);
+    return layout;
+  }
+
+  /**
+   * Wraps a measurement so the positioned columns resolve on first touch.
+   *
+   * The positioned query runs at most once per constraint set, and `layoutRevision` advances when
+   * it does and the output differs — which is exactly when it matters, because the revision exists
+   * to answer "must I re-read the columns?" and a caller who never reads them never asks.
+   */
+  #lazyLayout(summary: ParagraphMetrics, resolved: ResolvedConstraints): ParagraphLayoutInspection {
+    let positioned: ParagraphLayoutInspection | undefined;
+    const resolve = (): ParagraphLayoutInspection => {
+      if (positioned !== undefined) return positioned;
+      const { inspection } = this.#query(this.#fullBox(resolved), true);
+      if (inspection === undefined) throw new Error('paragraph layout query returned no layout inspection');
+      const digest = layoutDigest(inspection);
+      if (digest !== this.#lastLayoutDigest) {
+        this.#lastLayoutDigest = digest;
+        this.#layoutRevision += 1;
+      }
+      positioned = inspection;
+      return inspection;
+    };
+    const layout = { ...summary } as Record<string, unknown>;
+    for (const column of POSITIONED_FIELDS) {
+      Object.defineProperty(layout, column, {
+        enumerable: true,
+        configurable: false,
+        get: () => resolve()[column as keyof ParagraphLayoutInspection],
+      });
     }
-    this.#layouts.set(key, inspection);
-    return inspection;
+    return Object.freeze(layout) as unknown as ParagraphLayoutInspection;
   }
 
   /**
@@ -453,7 +502,6 @@ function flowBox(
     ...(height === undefined ? {} : { height }),
   };
 }
-
 
 function classifyChanges<Technique extends AnyRasterTechnique>(update: ParagraphUpdate<Technique>): number {
   let changes = 0;

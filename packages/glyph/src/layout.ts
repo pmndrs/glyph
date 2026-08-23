@@ -181,7 +181,13 @@ export interface ParagraphLayout extends ParagraphMeasurement {
 }
 
 /** Explicit demand-shaped inspection of retained Rust layout, including stable identities for directed augmentation. */
-export interface ParagraphLayoutInspection extends ParagraphLayout, ParagraphLayoutSummary {
+/**
+ * One measured paragraph: the metrics, the intrinsic widths, and the positioned columns.
+ *
+ * `measure()` returns this whole shape. The metrics are immediate; `inkBounds` and the columns resolve on
+ * first access, so a caller that reads only sizes never pays to copy arrays out of Wasm.
+ */
+export interface ParagraphLayoutInspection extends ParagraphLayout, ParagraphLayoutSummary, ParagraphIntrinsicWidths {
   readonly glyphStableIds: Uint32Array;
 }
 

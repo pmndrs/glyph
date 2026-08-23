@@ -32,7 +32,9 @@ function published(source) {
       if (name && name !== 'type') names.add(name);
     }
   }
-  for (const [, name] of source.matchAll(/export\s+declare\s+(?:abstract\s+)?(?:class|function|const)\s+([A-Za-z_$][\w$]*)/g)) {
+  for (const [, name] of source.matchAll(
+    /export\s+declare\s+(?:abstract\s+)?(?:class|function|const)\s+([A-Za-z_$][\w$]*)/g,
+  )) {
     names.add(name);
   }
   return names;
