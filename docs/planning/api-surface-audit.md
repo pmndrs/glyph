@@ -117,20 +117,23 @@ This section is the handoff. Keep it current as work lands, so anyone can resume
 
 | # | Item | State | Where |
 | --- | --- | :--: | --- |
-| -- | Un-publish the reconciler protocol, delete-list surgery | ✅ landed | `worktree-agent-a8f83a2041d346932` |
-| -- | Keep `/core` and `/tsl` published, correct the false "no consumers" finding | ✅ landed | same branch |
-| -- | `packages/glyph-example-renderer`, a second engine consumer on `/core` alone | ✅ stubbed, 4 tests green | same branch |
-| F1-F3, F6, F9 | Rejection diagnostics, latch, span validation at `set()`, late registration, layout type re-exports | ✅ landed | `api/frame-rejection-taxonomy` |
-| F4-F5, F7-F8 | Origin-lane partial application, parallel-array invariant, `glyphFlags` names, React inline props | 🚧 in flight | animation-api agent |
-| 1-3, 5 | Line and font metrics, ink bounds, per-line metrics on the summary, shared coordinate space with glyph extents | 🚧 in flight | animation-api agent |
-| 4 | Non-circular measure ordering, readiness signal | ⬜ not started | -- |
-| 6-7 | Framework-neutral `Paragraph`; split per-call constraints from stable policy | ⬜ not started | -- |
-| 8-10 | Intrinsic widths from one pass; failure returned from the measure call; re-point the uikit fixture | ⬜ not started | -- |
-| 11 | Retention and ownership protocol for the render plan | ⬜ not started | -- |
-| 12-15 | Host font path, published size delta, uikit parity gate, correct `uikit-integration.md` | ⬜ not started | -- |
-| 16-17 | Paragraph-scoped layout revision; change notification | ⬜ not started | -- |
-| 18-23 | Font readiness, measurement purity, constraint model, direction, baseline contract, revision primitive | ⬜ not started | -- |
-| 24 | `@pmndrs/glyph/typegpu` shader subpath | ⬜ not started | -- |
+| -- | Un-publish the reconciler protocol, delete-list surgery | ✅ | [#104](https://github.com/pmndrs/glyph/pull/104) |
+| -- | Keep `/core` and `/tsl` published; correct the false "no consumers" finding | ✅ | #104 |
+| -- | `packages/glyph-example-renderer`, a second engine consumer on `/core` alone | ✅ stub | #104 |
+| -- | Adversarial review of #104 addressed: broken `mtsdf-baker-abi` import, `capacity.policy: 'fixed'` restored, four stale docs, vacuous ownership test, missing indirect draw fields | ✅ | #104 |
+| F1-F3, F6, F9 | Rejection diagnostics, latch, span validation at `set()`, late registration, layout re-exports | ✅ | [#106](https://github.com/pmndrs/glyph/pull/106) |
+| F4-F5, F7-F8 | Origin-lane partial application, parallel-array invariant, `glyphFlags` names, React inline props split | ✅ | [#107](https://github.com/pmndrs/glyph/pull/107) |
+| 1-3, 5 | Ascent/descent/line height per line and paragraph, ink bounds beside advance extents, per-line metrics on the summary, shared space with glyph extents | ✅ | #107 |
+| -- | Animation API: snapshot to manipulate to restore, over glyphs/words/lines, with extents | ✅ | #107 |
+| -- | Reshape: `commitState()` readiness signal, cluster-first `caretAt`/`selectionRects` | ✅ | #107 |
+| 4 | Non-circular measure ordering | 🚧 | folded into item 6 |
+| 6-10, 16 | Framework-neutral `Paragraph`, constraint/policy split, intrinsic widths, failure from the measure call, re-point the uikit fixture, paragraph-scoped revision | 🚧 | `feat/paragraph-api` |
+| 24 | `@pmndrs/glyph/typegpu` shader subpath | 🚧 | `feat/typegpu-subpath` |
+| 11 | Retention and ownership protocol for the render plan | ⬜ | -- |
+| 12-15 | Host font path, published size delta, uikit parity gate, correct `uikit-integration.md` | ⬜ | -- |
+| 17-23 | Change notification, font readiness, measurement purity, constraint model, direction, baseline contract, revision primitive | ⬜ | -- |
+| -- | `anchorX`/`anchorY` (needs the resolved box; own change, D-272) | ⬜ | -- |
+
 
 24. Publish `@pmndrs/glyph/typegpu`, a sibling of `/tsl`: the same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host without adopting our renderer. No scene integration and no engine driving, exactly as `/tsl` carries none. A TSL realization can be rendered to WGSL and GLSL in a browser probe and its final source extracted, rather than translated by inspection. An old pull request from TypeGPU's author carries a partial slug port; assume it needs reimplementation rather than resumption, but read it closely first, because it is authoritative on TypeGPU idiom. See [example renderer](example-renderer.md) for how this divides from the engine-consumer work.
 
