@@ -36,6 +36,22 @@ pub(crate) struct ShapedRun {
     pub glyph_count: u32,
 }
 
+/// A line break before this glyph may change how the surrounding text shapes.
+pub(crate) const GLYPH_FLAG_UNSAFE_TO_BREAK: u16 = 1 << 0;
+/// Concatenating another run at this boundary may change how the surrounding text shapes.
+pub(crate) const GLYPH_FLAG_UNSAFE_TO_CONCAT: u16 = 1 << 1;
+
+/// Every bit the engine can produce in a glyph's flags. HarfRust owns both the bit positions and
+/// their meaning: `push_shaped` below stores `GlyphFlags::to_bits()` verbatim, so these constants
+/// are a published *name* for the shaper's answer, never a pmndrs remapping of it.
+///
+/// `SAFE_TO_INSERT_TATWEEL` (bit 2) is deliberately absent. Producing it requires the
+/// `PRODUCE_SAFE_TO_INSERT_TATWEEL` buffer flag, which no shaping call in `state.rs` sets, so the
+/// bit is unconditionally zero. Naming it would invite a consumer to branch on a fact this engine
+/// never reports; the name arrives with the buffer flag that makes it true.
+pub(crate) const GLYPH_FLAGS_PRODUCED: u16 =
+    GLYPH_FLAG_UNSAFE_TO_BREAK | GLYPH_FLAG_UNSAFE_TO_CONCAT;
+
 #[derive(Default)]
 pub(crate) struct ShapeArena {
     pub runs: Vec<ShapedRun>,
@@ -618,6 +634,26 @@ mod tests {
         assert_eq!(runs.runs().len(), 2);
     }
 
+    /// The published names are HarfRust's bits, not a parallel table. If a HarfRust upgrade moves a
+    /// bit, this fails here rather than silently redefining what `ParagraphLayout.glyphFlags` means.
+    #[test]
+    fn published_glyph_flag_names_match_the_shaper_that_produces_them() {
+        assert_eq!(
+            u32::from(GLYPH_FLAG_UNSAFE_TO_BREAK),
+            harfrust::GlyphFlags::UNSAFE_TO_BREAK.to_bits(),
+        );
+        assert_eq!(
+            u32::from(GLYPH_FLAG_UNSAFE_TO_CONCAT),
+            harfrust::GlyphFlags::UNSAFE_TO_CONCAT.to_bits(),
+        );
+        // The unnamed remainder is exactly tatweel safety, which this engine never asks for.
+        assert_eq!(
+            u32::from(GLYPH_FLAGS_PRODUCED)
+                | harfrust::GlyphFlags::SAFE_TO_INSERT_TATWEEL.to_bits(),
+            harfrust::GlyphFlags::ALL.to_bits(),
+        );
+    }
+
     #[test]
     fn copies_and_rebases_one_contiguous_text_range_in_shaping_order() {
         let source = ShapeArena {
@@ -636,7 +672,7 @@ mod tests {
             y_advances: vec![0; 4],
             x_offsets: vec![0; 4],
             y_offsets: vec![0; 4],
-            glyph_flags: vec![0, 2, 0, 0],
+            glyph_flags: vec![0, GLYPH_FLAG_UNSAFE_TO_CONCAT, 0, 0],
         };
         let mut destination = ShapeArena::default();
         destination
@@ -645,7 +681,7 @@ mod tests {
         assert_eq!(destination.glyph_ids, [20, 10]);
         assert_eq!(destination.clusters, [4, 3]);
         assert_eq!(destination.x_advances, [2, 1]);
-        assert_eq!(destination.glyph_flags, [2, 0]);
+        assert_eq!(destination.glyph_flags, [GLYPH_FLAG_UNSAFE_TO_CONCAT, 0]);
         assert_eq!(
             destination.runs,
             [ShapedRun {

@@ -148,18 +148,45 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(label.layout, undefined, 'query data must not restore layout arrays to rendering');
   assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
 
-  const origins = label.snapshotGlyphOrigins();
-  assert.equal(origins.layout, inspection);
-  assert.deepEqual(origins.displayedX, origins.shapedX);
-  assert.deepEqual(origins.displayedY, origins.shapedY);
-  const presentedX = origins.shapedX.slice();
-  presentedX[0] += 3;
-  label.setGlyphOrigins({ layout: inspection, x: presentedX, y: origins.shapedY });
-  const presented = label.snapshotGlyphOrigins();
-  assert.equal(presented.shapedX[0], origins.shapedX[0], 'presentation must not mutate authoritative layout');
-  assert.equal(presented.displayedX[0], origins.shapedX[0] + 3);
-  label.clearGlyphOriginOverrides();
-  assert.deepEqual(label.snapshotGlyphOrigins().displayedX, origins.shapedX);
+  const placements = label.snapshotGlyphs();
+  assert.equal(placements.layout, inspection);
+  assert.equal(placements.space, 'paragraph');
+  // A glyph the GPU plan omits — the non-rendering space here — has no retained record, so its
+  // drawn position cannot be read. That is reported, not substituted, and the count is pinned
+  // against the plan's own instance count rather than restated.
+  assert.equal(
+    placements.incomplete.length,
+    measurement.glyphCount - firstDraws[0].geometry.instanceCount,
+    'incomplete must name exactly the glyphs the render plan does not draw',
+  );
+  assert.equal(inspection.glyphIds[placements.incomplete[0]], inspection.glyphIds[5]);
+  for (const glyph of placements.glyphs) {
+    assert.equal(glyph.x, glyph.shapedX, 'a freshly committed paragraph draws where it shaped');
+    assert.equal(glyph.y, glyph.shapedY, 'a freshly committed paragraph draws where it shaped');
+  }
+  const shapedX = placements.glyphs.map((glyph) => glyph.shapedX);
+  placements.glyphs[0].x += 3;
+  const application = label.applyGlyphs(placements);
+  // A write that cannot reach a glyph says so. The unreachable set is exactly the unreadable one,
+  // because both are the glyphs the plan never gave a record.
+  assert.equal(application.requested, measurement.glyphCount);
+  assert.equal(application.applied, application.requested - placements.incomplete.length);
+  assert.deepEqual([...application.unapplied], [...placements.incomplete]);
+  const presented = label.snapshotGlyphs();
+  assert.equal(presented.glyphs[0].shapedX, shapedX[0], 'presentation must not mutate authoritative layout');
+  assert.equal(presented.glyphs[0].x, shapedX[0] + 3);
+  label.restoreGlyphs();
+  assert.deepEqual(
+    label.snapshotGlyphs().glyphs.map((glyph) => glyph.x),
+    shapedX,
+  );
+
+  // The units a caller animates, and the extents that make them addressable at all.
+  assert.ok(placements.lines.length >= 1);
+  assert.ok(placements.words.length >= 1);
+  assert.equal(placements.lines[0].ascent + placements.lines[0].descent, placements.lines[0].lineHeight);
+  assert.ok(placements.glyphs[0].advance > 0, 'a shaped glyph must report the advance the pen moved by');
+  assert.ok(placements.lines[0].bounds.width > 0);
 
   group.renderOrder = 20;
   scene.updateMatrixWorld();
@@ -596,23 +623,23 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 1, 'mutation, render plan, and demanded measurement must share one text_update');
 
-  const leftOrigins = left.snapshotGlyphOrigins();
-  const rightOrigins = right.snapshotGlyphOrigins();
-  assert.equal(leftOrigins.shapedX.length, 2);
-  assert.equal(rightOrigins.shapedX.length, 2);
-  const shiftedRightX = rightOrigins.shapedX.slice();
-  const shiftedLeftX = leftOrigins.shapedX.slice();
-  shiftedLeftX[0] += 2;
-  shiftedRightX[0] += 4;
+  const leftOrigins = left.snapshotGlyphs();
+  const rightOrigins = right.snapshotGlyphs();
+  assert.equal(leftOrigins.glyphs.length, 2);
+  assert.equal(rightOrigins.glyphs.length, 2);
+  const leftShapedX = leftOrigins.glyphs.map((glyph) => glyph.shapedX);
+  const rightShapedX = rightOrigins.glyphs.map((glyph) => glyph.shapedX);
+  leftOrigins.glyphs[0].x += 2;
+  rightOrigins.glyphs[0].x += 4;
   const originsAttribute = draws[0].geometry.getAttribute('_pmndrsGlyph_1');
   const canonicalOrigins = originsAttribute.array;
   const pboUploadOrigins = new Float32Array(canonicalOrigins.length + 4);
   pboUploadOrigins.set(canonicalOrigins);
   originsAttribute.array = pboUploadOrigins;
   originsAttribute.clearUpdateRanges();
-  left.setGlyphOrigins({ layout: leftOrigins.layout, x: shiftedLeftX, y: leftOrigins.shapedY });
+  left.applyGlyphs(leftOrigins);
   const leftUploadRanges = originsAttribute.updateRanges.map((range) => ({ ...range }));
-  right.setGlyphOrigins({ layout: rightOrigins.layout, x: shiftedRightX, y: rightOrigins.shapedY });
+  right.applyGlyphs(rightOrigins);
   assert.ok(
     leftUploadRanges.every(({ start: rangeStart, count }) =>
       originsAttribute.updateRanges.some(
@@ -621,8 +648,8 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
     ),
     'separate presentation edits may coalesce but must retain every earlier upload range',
   );
-  assert.equal(left.snapshotGlyphOrigins().displayedX[0], leftOrigins.shapedX[0] + 2);
-  assert.equal(right.snapshotGlyphOrigins().displayedX[0], rightOrigins.shapedX[0] + 4);
+  assert.equal(left.snapshotGlyphs().glyphs[0].x, leftShapedX[0] + 2);
+  assert.equal(right.snapshotGlyphs().glyphs[0].x, rightShapedX[0] + 4);
   assert.deepEqual(
     pboUploadOrigins.subarray(0, canonicalOrigins.length),
     canonicalOrigins,
@@ -665,13 +692,13 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   nestedParent.visible = true;
   scene.updateMatrixWorld();
   assert.equal(
-    right.snapshotGlyphOrigins().displayedX[0],
-    rightOrigins.shapedX[0] + 4,
+    right.snapshotGlyphs().glyphs[0].x,
+    rightShapedX[0] + 4,
     'transform-only updates must not cross into Rust or discard presentation overrides',
   );
 
   originsAttribute.clearUpdateRanges();
-  left.clearGlyphOriginOverrides();
+  left.restoreGlyphs();
   const clearedOriginRanges = originsAttribute.updateRanges.map((range) => ({ ...range }));
   assert.ok(clearedOriginRanges.length > 0);
   right.style = { ...right.style, color: '#00ff00' };
@@ -687,11 +714,11 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
 
   right.style = { ...right.style, fontSize: 20 };
   scene.updateMatrixWorld();
-  const resizedOrigins = right.snapshotGlyphOrigins();
+  const resizedOrigins = right.snapshotGlyphs();
   assert.notEqual(resizedOrigins.layout, rightOrigins.layout);
   assert.deepEqual(
-    resizedOrigins.displayedX,
-    resizedOrigins.shapedX,
+    resizedOrigins.glyphs.map((glyph) => glyph.x),
+    resizedOrigins.glyphs.map((glyph) => glyph.shapedX),
     'an authoritative command-buffer update must retire the previous presentation override',
   );
 

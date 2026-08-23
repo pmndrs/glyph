@@ -296,18 +296,36 @@ declared by the active Three policy.
 
 ## Directed glyph presentation
 
+The cycle is snapshot, manipulate, restore.
+
 ```ts
-const snapshot = label.snapshotGlyphOrigins();
-if (snapshot !== undefined) {
-  const x = snapshot.shapedX.slice();
-  x[0] += 4;
-  label.setGlyphOrigins({ layout: snapshot.layout, x, y: snapshot.shapedY });
+const placements = label.snapshotGlyphs();
+if (placements !== undefined) {
+  // Units people animate, addressable directly.
+  for (const [index, word] of placements.words.entries()) word.translate(0, Math.sin(index) * 4);
+  const applied = label.applyGlyphs(placements);
+  if (applied.applied !== applied.requested) reportUnmoved(applied.unapplied);
 }
+label.restoreGlyphs();
 ```
 
-Origin overrides are presentation-only. They use stable glyph identities from the inspected layout and never mutate
-authoritative Rust shaping or layout. A semantic text/style/geometry revision retires incompatible overrides.
-`clearGlyphOriginOverrides()` restores shaped positions.
+Placements are presentation-only: they never mutate authoritative Rust shaping or layout, and a semantic
+text/style/geometry revision retires incompatible overrides. `applyGlyphs` refuses a snapshot whose layout the
+paragraph has since replaced, because the identities in it no longer address the same glyphs.
+
+Every position and box in a snapshot is in one stated space, `space: 'paragraph'`. `GlyphPlacement` carries the
+shaped origin, the drawn position, the shaped advance, and the ink box; `GlyphRun` carries the advance box and the ink
+box of a word or a line, and a line adds its baseline, ascent, and descent. `incomplete` names any glyph with no
+retained render record — a space, ordinarily — whose position therefore cannot be read or written.
+
+`GlyphKey` is the package's identity for a glyph: font, glyph id, cluster, and occurrence. It survives a reflow that
+MOVES glyphs (content box, font size, anchor, pixel ratio) and deliberately not one that RESHAPES them (text, font,
+language, direction, features). `placements.adopt(previous)` recovers each matching glyph's previous drawn position and
+reports how many matched, so a caller never rebuilds the key itself.
+
+`caretAt(x, y)` and `selectionRects(start, end)` are built on the same extents and resolve to clusters, not to
+JavaScript characters: a ligature is one glyph over several characters, and under bidi the character after an offset can
+be drawn to its left.
 
 ## Ownership and disposal
 

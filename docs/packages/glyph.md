@@ -140,9 +140,13 @@ compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without au
 than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
 
 The R3F `Text` component infers the technique union from a required outer font selection, including a font stack chosen
-from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. A nested `Text` may omit `font`
-because it is flattened into an inline span and inherits from its outer text; a rendered outer `Text` without a font is
-invalid. `TextGroup` owns batching and compositing policy, never font inheritance. Both components register their Three
+from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. An inline `TextSpan` may omit
+`font` because it is flattened into a styled run and inherits from its enclosing paragraph; a rendered `Text` without a
+font is invalid. The two are separate components because they are separate kinds of thing: `Text` is a paragraph box and
+a Three `Object3D`, while `TextSpan` is never mounted and its props are exactly the five the flattener reads. Every
+box-level prop is a type error on a span rather than a value silently discarded, and a `ref` on a span — which could
+never fire, because no object exists — no longer type-checks. Flutter separates `RichText` from `TextSpan` on the same
+line. `TextGroup` owns batching and compositing policy, never font inheritance. Both components register their Three
 objects with the R3F host and are constructed during its commit rather than in a layout effect. React `Activity` can
 therefore pre-render a hidden text or whole text group, while R3F retains visibility and eventual disposal ownership.
 

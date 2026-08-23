@@ -7,7 +7,7 @@ Portable font baking, Unicode shaping, paragraph layout, and batched text render
 ## Render text with React Three Fiber
 
 ```tsx
-import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
+import { Text, TextGroup, TextSpan, useFont } from '@pmndrs/glyph/react';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 
 const fontRequest = {
@@ -28,14 +28,14 @@ function Labels() {
         style={{ fontSize: 32, lineHeight: 1.2 }}
         paint={{ color: '#f4f7ff' }}
       >
-        Hello <Text paint={{ color: '#70d6ff' }}>world</Text>
+        Hello <TextSpan paint={{ color: '#70d6ff' }}>world</TextSpan>
       </Text>
     </TextGroup>
   );
 }
 ```
 
-`Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is a span and inherits the surrounding font, style, paint, and material unless it overrides them. Nested spans may not always be in the same draw if they can't be batched with their parents.
+`Text` is a retained paragraph and a Three `Object3D`. `TextSpan` is an inline run inside one: it inherits the surrounding font, style, paint, and material unless it overrides them, and it accepts nothing else, because a span is not an object in the scene and has no transform, capacity, error handler, or instance to hold a ref to. Spans may not always land in the same draw if they cannot be batched with their parent.
 
 `TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text semantics and lazily owns an implicit batch of one.
 
