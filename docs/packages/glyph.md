@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:dda0ac26efb10ae6fc0a053771e78dbf2576628388d47d15c3533243d8befe27'
+source_digest: 'sha256:6448fe852190f534babd4c78d544145abe2c98c2c27e8a85c1388f25834af078'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -47,6 +47,9 @@ sources:
   - id: tsl-shaders
     resource: ../../packages/glyph/src/tsl.ts
     title: Technique shader library layer
+  - id: typegpu-shaders
+    resource: ../../packages/glyph/src/typegpu.ts
+    title: TypeGPU technique shader layer
   - id: three-api
     resource: ../../packages/glyph/src/three.ts
     title: Three.js public exports
@@ -126,7 +129,13 @@ The TypeScript paragraph engine, paragraph batches/attachments, direct shaping e
 are removed. TypeGPU is a later adapter stack built against the Rust render plan; it is not a compatibility wrapper over
 the removed batch model. The exception is the `@pmndrs/glyph/typegpu` shader library, which publishes the same technique
 realizations as `/tsl` as typed TypeGPU functions for any WebGPU host; `typegpu` is an optional peer and the root entry
-has no static edge to it.
+has no static edge to it. Bitmap and Slug both ship end to end there, and each parity pin stands on the `/tsl`
+realization's actual generated WGSL — extracted device-free at test time from built artifacts — rather than on an
+eye-translation of the node graph. The Slug extraction pinned three facts the port reproduces exactly: the curve-count
+cap passes the header's high half through f32 before its 512 clamp, the canonical no-compensation fragment still
+multiplies every root by an explicit unit thickening factor (and TypeGPU resolves that factor as f32 only when the call
+site supplies one), and the vertex dilation keeps three.js's exact left-associated squared-gradient denominator in both
+the row and whole-matrix projection forms.
 
 The package-owned `glyph` executable is available through `pnpm exec`; its `bake` command supports both project discovery
 and a direct known-font mode. Its stable packaged shim delegates to the built Node CLI, so workspace installs can link the
