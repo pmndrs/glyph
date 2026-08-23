@@ -241,11 +241,11 @@
       "label": "MTSDF baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "464fed926f7a59f8dd1ec384e261d7175830ebcaf9cf2863fdc0ef3a2157a4d5",
+      "sha256": "7273b354f9c7b6a8224cf90c6d782e047490f0acff9163f872c343526e00fc51",
       "rawBytes": 547921,
       "minifiedBytes": 547921,
-      "gzipBytes": 214245,
-      "brotliBytes": 168257
+      "gzipBytes": 214221,
+      "brotliBytes": 168114
     },
     {
       "id": "mtsdf-baker-js",
