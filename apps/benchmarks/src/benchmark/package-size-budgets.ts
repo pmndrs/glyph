@@ -41,11 +41,18 @@ export const packageSizeBudgets = {
   },
   // The TypeGPU technique shader library is a sibling of `/tsl` with no scene
   // integration; `typegpu` itself is an optional peer and stays outside the graph.
+  // The Slug port raises every dimension by one step change: its analytic core ships
+  // as transpiled syntax trees for runtime resolution, and the tree carries two whole
+  // fill-band walkers, the q-form solver, the root-eligibility table, and the vertex
+  // dilation in both projection forms. Measured against the Bitmap-only library that
+  // set the previous ceiling, that is +84,567 raw, +68,807 minified, +7,491 gzip, and
+  // +6,018 Brotli bytes; the syntax trees compress roughly 8:1, so the compressed
+  // ceilings rise far less than the uncompressed ones.
   'typegpu-subpath-js': {
-    rawBytes: 30_000,
-    minifiedBytes: 16_000,
-    gzipBytes: 5_000,
-    brotliBytes: 4_400,
+    rawBytes: 112_000,
+    minifiedBytes: 89_000,
+    gzipBytes: 11_000,
+    brotliBytes: 9_000,
   },
   'font-validator-js': {
     rawBytes: 741_000,
