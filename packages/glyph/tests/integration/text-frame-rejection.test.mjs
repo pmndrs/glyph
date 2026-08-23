@@ -23,10 +23,8 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
 import '../support/browser-globals.mjs';
-import * as THREE from 'three/webgpu';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text, TextFrameError } from '@pmndrs/glyph/three';
-import { textShaperAbi } from '@pmndrs/glyph/core';
+import { Text } from '@pmndrs/glyph/three';
 
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 
