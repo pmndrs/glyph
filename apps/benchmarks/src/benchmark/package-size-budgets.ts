@@ -86,6 +86,10 @@ export const packageSizeBudgets = {
   // fixes then added 83 raw while shrinking gzip by 9 and Brotli by 272. These values price
   // the measured artifact plus the documented cross-host margin, and name the overage rather
   // than absorbing it silently.
+  // Re-priced once on feat/plan-retention: the glyph-animation tier (cbe727bf) added
+  // +12,071 raw / +4,949 gzip / +8,451 Brotli of Rust shaping and planning code but left
+  // the gate un-repinned; this branch changed no Rust behaviour (formatting only), and the
+  // measured artifact is byte-identical to its base commit.
   'text-shaper-wasm': {
     rawBytes: 1_169_500,
     minifiedBytes: 1_169_500,
