@@ -5,7 +5,10 @@ import type { ExampleDraw, ExampleDrawList, ExampleTableSnapshot } from './draw-
 const drawLayout = textShaperAbi.layouts.engineDraw;
 
 /** Copies one table's records into host-owned bytes. */
-function snapshot(view: TextEngineRenderPlanView, name: 'resources' | 'buffers' | 'patches' | 'primitives' | 'retirements' | 'diagnostics'): ExampleTableSnapshot {
+function snapshot(
+  view: TextEngineRenderPlanView,
+  name: 'resources' | 'buffers' | 'patches' | 'primitives' | 'retirements' | 'diagnostics',
+): ExampleTableSnapshot {
   const table = view.table(name);
   const byteLength = table.count * table.stride;
   const records = byteLength === 0 ? new Uint8Array(0) : view.bytes(table.offset, byteLength).slice();
@@ -39,7 +42,10 @@ function decodeDraw(view: TextEngineRenderPlanView, offset: number): ExampleDraw
  * it does anything else. `readDrawList` is that copy, written once here so the cost and
  * the hazard are visible rather than folded into a renderer.
  */
-export function readDrawList(publication: TextEnginePublication, view: TextEngineRenderPlanView = new TextEngineRenderPlanView()): ExampleDrawList {
+export function readDrawList(
+  publication: TextEnginePublication,
+  view: TextEngineRenderPlanView = new TextEngineRenderPlanView(),
+): ExampleDrawList {
   view.bind(publication);
   const draws = view.table('draws');
   const decoded: ExampleDraw[] = [];

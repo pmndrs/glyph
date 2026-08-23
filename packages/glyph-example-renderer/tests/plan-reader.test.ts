@@ -57,7 +57,14 @@ describe('render-plan reader', () => {
     // reader must copy. This test is the standing proof that it does.
     const source = publication(1);
     const list = readDrawList(source);
-    for (const table of [list.resources, list.buffers, list.patches, list.primitives, list.retirements, list.diagnostics]) {
+    for (const table of [
+      list.resources,
+      list.buffers,
+      list.patches,
+      list.primitives,
+      list.retirements,
+      list.diagnostics,
+    ]) {
       expect(table.records.buffer).not.toBe(source.memoryBuffer);
     }
     new Uint8Array(source.memoryBuffer).fill(0xff);
