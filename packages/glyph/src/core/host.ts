@@ -96,7 +96,6 @@ export class TextEngineHost {
     this.#exports = runtimeShaperEngineExports(shaper);
   }
 
-
   registerFontBinding(bindingHandle: number, shapingFontHandle: number, bytes: Uint8Array): void {
     this.#assertActive();
     uint32Handle(bindingHandle, 'font binding handle');
@@ -107,7 +106,7 @@ export class TextEngineHost {
         'register font binding',
       ),
     );
-    }
+  }
 
   registerFontStack(handle: number, fontHandles: readonly number[]): void {
     this.#assertActive();
@@ -122,14 +121,14 @@ export class TextEngineHost {
       requireStatus(this.#exports.registerFontStack(handle, pointer, fontHandles.length), 'register font stack'),
     );
     this.#fontStacks.add(handle);
-    }
+  }
 
   disposeFontStack(handle: number): void {
     this.#assertActive();
     uint32Handle(handle, 'font stack handle');
     if (!this.#fontStacks.has(handle)) throw new Error(`font stack ${handle} is not owned by this text engine host`);
     requireStatus(this.#exports.disposeFontStack(handle), 'dispose font stack');
-      this.#fontStacks.delete(handle);
+    this.#fontStacks.delete(handle);
   }
 
   registerPolicy(handle: number, bytes: Uint8Array): void {
@@ -139,7 +138,7 @@ export class TextEngineHost {
       requireStatus(this.#exports.registerPolicy(handle, pointer, length), 'register render policy'),
     );
     this.#policies.add(handle);
-    }
+  }
 
   createSession(options: TextEngineSessionOptions): TextEngineSession {
     this.#assertActive();
