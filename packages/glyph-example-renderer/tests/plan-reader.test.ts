@@ -8,13 +8,43 @@ const draw = textShaperAbi.layouts.engineDraw;
 
 /** Every table the plan carries, so the ownership proof covers more than the draw table. */
 const TABLES = [
-  { name: 'resources', record: textShaperAbi.layouts.engineResource, offset: result.resourcesOffset, count: result.resourceCount },
-  { name: 'buffers', record: textShaperAbi.layouts.engineBuffer, offset: result.buffersOffset, count: result.bufferCount },
-  { name: 'patches', record: textShaperAbi.layouts.enginePatch, offset: result.patchesOffset, count: result.patchCount },
-  { name: 'primitives', record: textShaperAbi.layouts.enginePrimitive, offset: result.primitivesOffset, count: result.primitiveCount },
+  {
+    name: 'resources',
+    record: textShaperAbi.layouts.engineResource,
+    offset: result.resourcesOffset,
+    count: result.resourceCount,
+  },
+  {
+    name: 'buffers',
+    record: textShaperAbi.layouts.engineBuffer,
+    offset: result.buffersOffset,
+    count: result.bufferCount,
+  },
+  {
+    name: 'patches',
+    record: textShaperAbi.layouts.enginePatch,
+    offset: result.patchesOffset,
+    count: result.patchCount,
+  },
+  {
+    name: 'primitives',
+    record: textShaperAbi.layouts.enginePrimitive,
+    offset: result.primitivesOffset,
+    count: result.primitiveCount,
+  },
   { name: 'draws', record: draw, offset: result.drawsOffset, count: result.drawCount },
-  { name: 'retirements', record: textShaperAbi.layouts.engineRetirement, offset: result.retirementsOffset, count: result.retirementCount },
-  { name: 'diagnostics', record: textShaperAbi.layouts.engineDiagnostic, offset: result.diagnosticsOffset, count: result.diagnosticCount },
+  {
+    name: 'retirements',
+    record: textShaperAbi.layouts.engineRetirement,
+    offset: result.retirementsOffset,
+    count: result.retirementCount,
+  },
+  {
+    name: 'diagnostics',
+    record: textShaperAbi.layouts.engineDiagnostic,
+    offset: result.diagnosticsOffset,
+    count: result.diagnosticCount,
+  },
 ] as const;
 
 const align = (value: number, to: number) => Math.ceil(value / to) * to;
@@ -27,7 +57,7 @@ const align = (value: number, to: number) => Math.ceil(value / to) * to;
  */
 function publication(rows: number): TextEnginePublication {
   const placed = TABLES.map((table) => ({ ...table, at: 0 }));
-  let cursor = result.size;
+  let cursor: number = result.size;
   for (const table of placed) {
     cursor = align(cursor, table.record.alignment);
     table.at = cursor;
