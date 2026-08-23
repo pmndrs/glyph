@@ -717,12 +717,7 @@ class ThreeTextBatchBinding {
   /**
    * True while a rejected frame is latched.
    *
-   * Every cause the engine can reject a frame for is unreachable from the public API: span offsets
-   * are validated at `set()` and every surviving boundary is snapped onto the cluster grid before it
-   * reaches the engine, and a `Text` cannot name a font that was not already loaded. A rejection is
-   * therefore an invariant this package broke, not a caller mistake, and there is nothing a caller
-   * could retry. The latch exists only so that one such defect is reported once instead of
-   * recompiling and failing silently at frame rate behind the last good picture.
+   * Most causes are unreachable from the public API -- span offsets are validated at `set()` and every surviving boundary is snapped onto the cluster grid before it reaches the engine -- but adversarial review found four that are not. Disjoint-or-nested spans are deliberately forwarded; feature ranges inside a span are copied unchanged while only the outer range is checked; lone surrogates are explicitly left for the engine; and `capacity.policy: 'fixed'` rejects by caller request. The first three are gaps to close at the `set()` boundary, and until they are, a rejection is *usually* an invariant this package broke rather than always. The latch still exists so that one such defect is reported once instead of recompiling and failing silently at frame rate, and there is still no `retry()`: every reachable cause is corrected by a `set()`, which releases the latch on its own.
    */
   get latched(): boolean {
     return this.#rejection !== undefined;
@@ -755,7 +750,15 @@ class ThreeTextBatchBinding {
       ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
     );
     if (this.#rejection !== undefined) {
-      if (this.#frameUnchangedSince(this.#rejection, ordered)) return;
+      if (this.#frameUnchangedSince(this.#rejection, ordered)) {
+        // A latched paragraph must not freeze the scene around it. Transforms, visibility, and
+        // render order are applied to the last accepted publication and never enter the frame the
+        // engine refused, so withholding them would turn one rejected paragraph into a whole group
+        // that stops responding to the camera.
+        this.#target.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
+        this.#dirtyTransformIds.clear();
+        return;
+      }
       this.#rejection = undefined;
     }
     const changed = ordered.flatMap(([text, paragraph], order) => {
