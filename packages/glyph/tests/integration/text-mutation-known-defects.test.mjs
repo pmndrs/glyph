@@ -20,14 +20,15 @@
  *      source glyph, never the identity that bit belonged to, so a deleted space let an unchanged
  *      glyph read a neighbour's row and skip its own record.
  *
- *   2. `replaceText` MANUFACTURED A PARAGRAPH THE ENGINE REFUSES TO PUBLISH. FIXED.
+ *   2. A LEGAL TEXT CHANGE MANUFACTURED A PARAGRAPH THE ENGINE REFUSES TO PUBLISH. FIXED.
  *      The engine requires every extended grapheme cluster to resolve to exactly one style. `Text`
- *      neither held that on its `spans` input nor preserved it across its own edit helpers:
- *      inserting a combining scalar at a legal, cluster-aligned span boundary moved that boundary
- *      into the middle of the cluster the insertion just created, and the paragraph stopped
- *      publishing with an opaque numeric engine status. `Text` now resolves every span boundary
- *      onto the cluster grid before a frame is built (D-265); the surface around this one case is
- *      covered by `text-mutation-span-alignment.test.mjs`.
+ *      did not hold that on its `spans` input: adding a combining scalar at a legal, cluster-
+ *      aligned span boundary moved that boundary into the middle of the cluster the change just
+ *      created, and the paragraph stopped publishing with an opaque numeric engine status. `Text`
+ *      now resolves every span boundary onto the cluster grid before a frame is built (D-265); the
+ *      surface around this one case is covered by `text-mutation-span-alignment.test.mjs`. The
+ *      original reproduction went through `replaceText`, which has since been removed along with
+ *      the rest of the offset-taking edit surface; the case is restated on the `set` that remains.
  *
  *   3. A SPACE FOLLOWED BY A COMBINING MARK WAS REJECTED OUTRIGHT. FIXED.
  *      UAX #14 LB9 does NOT attach a combining mark to a preceding SPACE, so it yields a break
@@ -105,7 +106,7 @@ test('1. an unedited paragraph keeps every record when a bidi island is deleted 
   }
 });
 
-test('2. replaceText keeps its own spans aligned to grapheme clusters', { timeout }, async () => {
+test('2. an authored span kept across a text change stays aligned to clusters', { timeout }, async () => {
   const font = await fonts.load('inter');
   const latin = { fontSize: 6, lineHeight: 1 };
   // 'abc' is three single-scalar clusters, so a span over the first is cluster-aligned and legal.
@@ -114,15 +115,21 @@ test('2. replaceText keeps its own spans aligned to grapheme clusters', { timeou
   try {
     const node = mounted.nodes[0];
     assert.equal(node.inspectLayout().glyphCount, 3, 'the starting paragraph must publish');
-    // Legal by the public contract: scalar-aligned, splits no surrogate pair. It fuses 'a' and the
-    // mark into one cluster spanning [0, 2), leaving the span boundary at 1 inside it.
-    node.replaceText(1, 1, '́');
+    // Legal by the public contract: the caller re-authors the string with a mark inserted and
+    // carries forward the range it already had. That fuses 'a' and the mark into one cluster
+    // spanning [0, 2), leaving the authored boundary at 1 inside it.
+    node.set({ text: 'ábc', spans });
     mounted.scene.updateMatrixWorld(true);
     assert.equal(node.text, 'ábc');
     assert.deepEqual(
       [...findGraphemeBoundaries(node.text)],
       [0, 2, 3, 4],
       'the insertion must fuse the base and the mark into one cluster',
+    );
+    assert.deepEqual(
+      node.spans.map(({ start, end }) => [start, end]),
+      [[0, 2]],
+      'the boundary must resolve onto the cluster whose base the span already held',
     );
     assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
     assert.equal(node.inspectLayout().glyphCount, 3);

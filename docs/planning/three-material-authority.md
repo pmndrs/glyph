@@ -100,7 +100,7 @@ const etched = defineTextMaterial(({ technique, shader, position }) => {
 });
 
 const text = new Text({ font, text: 'Etched', material: etched });
-text.setSpan(0, { start: 0, end: 3, material: warning });
+text.spans = [{ start: 0, end: 3, material: warning }];
 ```
 
 `createDefaultMaterial()` is the DRY path for changing ordinary material state while retaining the package's canonical
