@@ -34,6 +34,10 @@
       "types": "./dist/tsl.d.ts",
       "import": "./dist/tsl.js"
     },
+    "./typegpu": {
+      "types": "./dist/typegpu.d.ts",
+      "import": "./dist/typegpu.js"
+    },
     "./three": {
       "types": "./dist/three.d.ts",
       "import": "./dist/three.js"
@@ -123,19 +127,25 @@
     "oxlint": "1.75.0",
     "react": "19.2.8",
     "three": "0.185.1",
+    "typegpu": "0.12.3",
     "typescript": "7.0.2",
-    "unicode-property-value-aliases": "3.9.0"
+    "unicode-property-value-aliases": "3.9.0",
+    "unplugin-typegpu": "0.12.2"
   },
   "peerDependencies": {
     "@react-three/fiber": ">=10.0.0-alpha.3 <11",
     "react": ">=19.2 <19.3",
-    "three": ">=0.185.1"
+    "three": ">=0.185.1",
+    "typegpu": ">=0.12.3 <0.13"
   },
   "peerDependenciesMeta": {
     "@react-three/fiber": {
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "typegpu": {
       "optional": true
     }
   },

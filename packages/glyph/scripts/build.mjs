@@ -5,6 +5,7 @@ import { basename, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { captureCommand } from './support/capture-command.mjs';
+import { embedTypeGpuMetadata } from './support/embed-typegpu-metadata.mjs';
 import { writeGeneratedTypescriptAbi } from './support/generated-typescript-abi.mjs';
 import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
 
@@ -265,6 +266,7 @@ await run(tsc, [
   '--tsBuildInfoFile',
   join(fileURLToPath(stagingDirectory), '.tsbuildinfo'),
 ]);
+await embedTypeGpuMetadata(fileURLToPath(stagingDirectory));
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',
