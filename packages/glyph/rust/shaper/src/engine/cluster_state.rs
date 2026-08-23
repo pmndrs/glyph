@@ -4,6 +4,7 @@ use crate::{FontMetrics, unicode::UnicodeAnalysis};
 
 use super::{
     EngineError, FrameFault,
+    frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
     identity_index::{IdentityIndex, IdentityIndexError},
     shaping_state::{ShapeArena, ShapingRun},
     style_state::StyleSegment,
@@ -17,6 +18,14 @@ pub(crate) const CLUSTER_ALLOWED_BREAK: u8 = 1 << 3;
 pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
 
 use super::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK as GLYPH_UNSAFE_TO_BREAK;
+
+/// Intrinsic inline extents derived from one cluster-arena scan, mirroring the
+/// line breaker's own wrap-policy decisions rather than approximating them.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct IntrinsicWidths {
+    pub min_content_width: f64,
+    pub max_content_width: f64,
+}
 
 const NO_SOURCE_RUN: u32 = u32::MAX;
 /// Cluster count per chunk summary (D-245).
@@ -455,8 +464,70 @@ impl ClusterArena {
         Ok(())
     }
 
-    fn copy_from(&mut self, source: &Self) -> Result<(), EngineError> {
-        self.clear();
+    /// Derives minimum-content and maximum-content inline extents from one scan over
+    /// the cluster arena, mirroring `line_composition`'s own break decisions so the
+    /// published intrinsics agree with what a zero-width and an unconstrained probe
+    /// would measure — without paying either probe.
+    ///
+    /// - `max_content_width`: the widest run between forced breaks (`REQUIRED_BREAK`
+    ///   or `HARD_BREAK`), with trailing spaces trimmed the way line ends trim them.
+    /// - `min_content_width`: the widest run that remains when soft breaks are also
+    ///   taken under `wrap`: after clusters flagged `ALLOWED_BREAK` for word wrap,
+    ///   before every `SAFE_BEFORE` boundary for character wrap, never under none.
+    pub(crate) fn intrinsic_widths(&self, wrap: u8) -> IntrinsicWidths {
+        let mut min_run = 0.0_f64;
+        let mut max_run = 0.0_f64;
+        let mut space_tail = 0.0_f64;
+        let mut min_content = 0.0_f64;
+        let mut max_content = 0.0_f64;
+        for index in 0..self.starts.len() {
+            let flags = self.flags[index];
+            if flags & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0 {
+                // A forced break terminates the segment. A required-break cluster is
+                // still part of its line (the breaker includes its advance); a hard
+                // break is the newline glyph itself and contributes nothing.
+                if flags & CLUSTER_REQUIRED_BREAK != 0 {
+                    let advance = self.advances[index];
+                    min_run += advance;
+                    max_run += advance;
+                    if flags & CLUSTER_SPACE != 0 {
+                        space_tail += advance;
+                    }
+                }
+                min_content = min_content.max(min_run - space_tail);
+                max_content = max_content.max(max_run - space_tail);
+                min_run = 0.0;
+                max_run = 0.0;
+                space_tail = 0.0;
+                continue;
+            }
+            let advance = self.advances[index];
+            min_run += advance;
+            max_run += advance;
+            space_tail = if flags & CLUSTER_SPACE != 0 { space_tail + advance } else { 0.0 };
+            let can_break_after = match wrap {
+                WRAP_WORD => flags & CLUSTER_ALLOWED_BREAK != 0,
+                WRAP_CHARACTER => {
+                    index + 1 == self.starts.len() || self.flags[index + 1] & CLUSTER_SAFE_BEFORE != 0
+                }
+                WRAP_NONE => false,
+                _ => false,
+            };
+            if can_break_after {
+                min_content = min_content.max(min_run - space_tail);
+                min_run = 0.0;
+                space_tail = 0.0;
+            }
+        }
+        min_content = min_content.max(min_run - space_tail);
+        max_content = max_content.max(max_run - space_tail);
+        IntrinsicWidths {
+            min_content_width: min_content.max(0.0),
+            max_content_width: max_content.max(0.0),
+        }
+    }
+
+    fn copy_from(&mut self, source: &Self) -> Result<(), EngineError> {        self.clear();
         self.reserve(source.starts.len())?;
         reserve(&mut self.glyph_ids, source.glyph_ids.len())?;
         reserve(&mut self.glyph_clusters, source.glyph_clusters.len())?;
@@ -1850,5 +1921,58 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    /// A hand-built arena over "ax by c" plus a hard break, so the intrinsic scan's
+    /// wrap-policy mirroring is pinned cluster by cluster without shaping.
+    fn intrinsic_fixture() -> ClusterArena {
+        let mut clusters = ClusterArena::default();
+        //                 a     x     sp    b     y     sp    c
+        clusters.advances = vec![10.0, 5.0, 3.0, 7.0, 2.0, 3.0, 6.0];
+        clusters.flags = vec![
+            0,
+            CLUSTER_ALLOWED_BREAK,
+            CLUSTER_SPACE | CLUSTER_ALLOWED_BREAK,
+            0,
+            CLUSTER_ALLOWED_BREAK,
+            CLUSTER_SPACE | CLUSTER_ALLOWED_BREAK,
+            0,
+        ];
+        clusters.starts = vec![0, 1, 2, 3, 4, 5, 6];
+        clusters.ends = vec![1, 2, 3, 4, 5, 6, 7];
+        clusters
+    }
+
+    #[test]
+    fn intrinsic_widths_mirror_the_word_wrap_break_decisions() {
+        let clusters = intrinsic_fixture();
+        let widths = clusters.intrinsic_widths(WRAP_WORD);
+        // Word runs: "ax" (15), "b y" (9), "c" (6); separating spaces trim off.
+        assert_eq!(widths.min_content_width, 15.0);
+        assert_eq!(widths.max_content_width, 36.0);
+    }
+
+    #[test]
+    fn character_wrap_takes_every_safe_boundary_and_none_wraps_never() {
+        let mut clusters = intrinsic_fixture();
+        for flag in clusters.flags.iter_mut() {
+            *flag |= CLUSTER_SAFE_BEFORE;
+        }
+        let character = clusters.intrinsic_widths(WRAP_CHARACTER);
+        assert_eq!(character.min_content_width, 10.0);
+        let none = clusters.intrinsic_widths(WRAP_NONE);
+        assert_eq!(none.min_content_width, 36.0);
+        assert_eq!(none.max_content_width, 36.0);
+    }
+
+    #[test]
+    fn forced_breaks_terminate_intrinsic_segments() {
+        let mut clusters = intrinsic_fixture();
+        clusters.flags[4] |= CLUSTER_HARD_BREAK | CLUSTER_REQUIRED_BREAK;
+        let widths = clusters.intrinsic_widths(WRAP_NONE);
+        // "ax b y" ends at the forced break (27); the trailing " c" run closes at
+        // the end of text (9). No soft breaks exist under none, so both agree.
+        assert_eq!(widths.max_content_width, 27.0);
+        assert_eq!(widths.min_content_width, 27.0);
     }
 }

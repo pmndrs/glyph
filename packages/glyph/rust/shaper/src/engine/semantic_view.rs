@@ -51,6 +51,11 @@ pub struct SemanticRecord {
     /// included. Populated for `SEMANTIC_LINE` and `SEMANTIC_PARAGRAPH_MEASUREMENT`; the matching
     /// descent is `block_extent - ascent` exactly, and the box top is `block_start - ascent`.
     pub ascent: f32,
+    /// Paragraph-measurement summaries only: the largest unbreakable run under the
+    /// constraint's wrap policy. Line, glyph, and other records carry zero.
+    pub min_content_width: f32,
+    /// Paragraph-measurement summaries only: the widest hard-break-free run.
+    pub max_content_width: f32,
 }
 
-const _: () = assert!(core::mem::size_of::<SemanticRecord>() == 68);
+const _: () = assert!(core::mem::size_of::<SemanticRecord>() == 76);
