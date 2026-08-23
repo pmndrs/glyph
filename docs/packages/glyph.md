@@ -8,8 +8,8 @@ documentation_type: reference
 <<<<<<< HEAD
 source_digest: 'sha256:3e69c456b1fa3ccac628beb3f6832339d30da86818fc025892b00caf6ad59a26'
 =======
-source_digest: 'sha256:7b53aca3518462b5b0759e2ee715e8013a1f85327b587fa17363628c8c8934d7'
->>>>>>> 462a3b82 (fix(glyph): import the mtsdf baker ABI by its dist path in the wasm core test)
+source_digest: 'sha256:8dd76f844f5dddc09c41ef40a332285251d73d15f9405b721d7872958b87b8c8'
+>>>>>>> cb28783c (fix(glyph): keep the shared encodings outside internal/, silence unused imports, and format the shaper)
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest

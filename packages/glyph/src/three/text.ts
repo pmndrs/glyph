@@ -38,7 +38,6 @@ import {
   type TextEngineRegion,
   type TextEngineSession,
   type TextEngineStyleMutation,
-  type TextEngineStyleValue,
   type TextEngineTextMutation,
 } from '../core.js';
 import type { LayoutBox, ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
@@ -54,7 +53,6 @@ import {
   engineStyleValue,
   minimalTextMutation,
   normalizedColumns,
-  packedForeground,
   replacedContent,
   styledSpans,
 } from '../internal/engine-encoding.js';

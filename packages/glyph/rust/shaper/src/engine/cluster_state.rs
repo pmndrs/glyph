@@ -504,11 +504,16 @@ impl ClusterArena {
             let advance = self.advances[index];
             min_run += advance;
             max_run += advance;
-            space_tail = if flags & CLUSTER_SPACE != 0 { space_tail + advance } else { 0.0 };
+            space_tail = if flags & CLUSTER_SPACE != 0 {
+                space_tail + advance
+            } else {
+                0.0
+            };
             let can_break_after = match wrap {
                 WRAP_WORD => flags & CLUSTER_ALLOWED_BREAK != 0,
                 WRAP_CHARACTER => {
-                    index + 1 == self.starts.len() || self.flags[index + 1] & CLUSTER_SAFE_BEFORE != 0
+                    index + 1 == self.starts.len()
+                        || self.flags[index + 1] & CLUSTER_SAFE_BEFORE != 0
                 }
                 WRAP_NONE => false,
                 _ => false,
@@ -527,7 +532,8 @@ impl ClusterArena {
         }
     }
 
-    fn copy_from(&mut self, source: &Self) -> Result<(), EngineError> {        self.clear();
+    fn copy_from(&mut self, source: &Self) -> Result<(), EngineError> {
+        self.clear();
         self.reserve(source.starts.len())?;
         reserve(&mut self.glyph_ids, source.glyph_ids.len())?;
         reserve(&mut self.glyph_clusters, source.glyph_clusters.len())?;
@@ -1926,10 +1932,9 @@ mod tests {
     /// A hand-built arena over "ax by c" plus a hard break, so the intrinsic scan's
     /// wrap-policy mirroring is pinned cluster by cluster without shaping.
     fn intrinsic_fixture() -> ClusterArena {
-        let mut clusters = ClusterArena::default();
         //                 a     x     sp    b     y     sp    c
-        clusters.advances = vec![10.0, 5.0, 3.0, 7.0, 2.0, 3.0, 6.0];
-        clusters.flags = vec![
+        let advances = vec![10.0, 5.0, 3.0, 7.0, 2.0, 3.0, 6.0];
+        let flags = vec![
             0,
             CLUSTER_ALLOWED_BREAK,
             CLUSTER_SPACE | CLUSTER_ALLOWED_BREAK,
@@ -1938,9 +1943,15 @@ mod tests {
             CLUSTER_SPACE | CLUSTER_ALLOWED_BREAK,
             0,
         ];
-        clusters.starts = vec![0, 1, 2, 3, 4, 5, 6];
-        clusters.ends = vec![1, 2, 3, 4, 5, 6, 7];
-        clusters
+        let starts = vec![0, 1, 2, 3, 4, 5, 6];
+        let ends = vec![1, 2, 3, 4, 5, 6, 7];
+        ClusterArena {
+            advances,
+            flags,
+            starts,
+            ends,
+            ..Default::default()
+        }
     }
 
     #[test]
