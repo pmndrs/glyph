@@ -159,6 +159,32 @@ Required, in addition to the five items above:
 9. Return failure from the measurement itself rather than through an out-of-band group error.
 10. Re-point the paragraph-boundary fixture at the real `Paragraph`. While it runs through an adapter that the package does not ship, the fixture proves the adapter, not the contract.
 
+### Shipping the uikit pull request
+
+The goal is a fork of pmndrs/uikit whose text subsystem is replaced by this package, submitted upstream. [uikit integration](uikit-integration.md) already sequences that migration in five steps, but it is written as guidance for uikit's maintainers and assumes surfaces this package does not ship. Three of its five steps are currently blocked, and one is blocked on an API that was never built.
+
+| uikit migration step | Blocked on | Status |
+| --- | --- | --- |
+| 1. Shadow adapter beside the existing layout | Nothing | Reachable today through the benchmark adapter |
+| 2. Replace measurement | `Paragraph` (items 6-10), line and font metrics (item 1), intrinsic widths (item 8) | Blocked |
+| 3. Replace positioned layout and rendering | A framework-neutral draw-batch surface | Blocked, and the surface does not exist |
+| 4. Replace interaction queries | Cluster-aware hit-test, caret, selection | Blocked |
+| 5. Remove the legacy text subsystem | Steps 2 through 4 | Blocked |
+
+Step 3 is the one the existing document overstates. It describes uikit consuming a "selected raster `stageBatch` transaction", but there is no `stageBatch`, `RasterBatch`, or `DrawBatch` anywhere in `packages/glyph/src`. Everything a renderer can consume today arrives as the `Text` and `TextGroup` `Object3D` pair from `@pmndrs/glyph/three`. uikit cannot adopt those: it owns instancing, clipping, transforms, render ordering, and batching, and its whole value is that those stay uniform across every element. Being a three.js library is not the obstacle -- uikit is three.js, so `/three` and `/tsl` coupling is fine -- the obstacle is that our only renderer entry point is a scene object rather than a batch a host can place itself.
+
+Resolve the `/core` contradiction before either lands. The Demote table above demotes `/core`, while `/core` documents itself as "the renderer-neutral text engine: everything a custom renderer integration needs" and [uikit integration](uikit-integration.md) directs uikit to consume exactly that. Both cannot stand. The resolution is that `/core` is the wrong surface for the job rather than the right surface being demoted: it publishes the frame wire -- `TextEngineHost`, `compileTextEngineFrameUpdate`, paragraph and style mutations, render-plan tables -- which is the same class of caller-maintained state the whole audit exists to remove. `Paragraph` plus a draw-batch surface replaces it as the supported integration contract. Demoting `/core` is therefore correct, but it is *sequenced after* those two ship, and the plan must not demote it before a host has somewhere to go.
+
+Required for a submittable pull request, beyond items 1 through 10:
+
+11. A framework-neutral draw-batch surface: a host supplies a resolved content box, receives the geometry, instance attributes, material context, and texture or atlas resources for a paragraph, and places them in its own scene graph. `Text` becomes one consumer of it rather than the only path to it.
+12. A documented font path for a host that does not use our loader. uikit resolves fonts from URLs through its own signals; `./runtime-bake` exists and must be shown working from a host-owned fetch, with the baked-asset workflow documented for uikit's own font assets.
+13. A published size number. uikit is a general UI toolkit, and a Wasm shaper is a real adoption cost that upstream review will raise first. `release:size:check` already enforces reviewed ceilings; the pull request must state the delta a uikit consumer actually pays, split into shaper, raster module, and baked font assets, so the trade is explicit rather than discovered.
+14. A parity gate against uikit's own fixtures: text, textarea, selection, clipping, and lifecycle. The paragraph-boundary fixture in this repository proves the seam, not the product.
+15. Re-point `docs/planning/uikit-integration.md` at the shipped `Paragraph` and draw-batch surfaces, and correct the `stageBatch` reference. Its fixture-status table must distinguish what the package provides from what the benchmark adapter supplies.
+
+Sequencing consequence: the uikit fork is downstream of every item in this document. It is the acceptance test for the API cleanup, not a parallel workstream.
+
 ## The animation API
 
 ### What is wrong with the one we have
