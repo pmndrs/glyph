@@ -46,12 +46,12 @@ Two separate deliverables, often confused:
 | Surface | Owns | Status |
 | --- | --- | --- |
 | `@pmndrs/glyph/tsl` | The technique shaders realized as three.js TSL node graphs | Published |
-| `@pmndrs/glyph/typegpu` | The same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host | **Not built.** An old TypeGPU pull request carries a partial slug port; it is a reference to follow, not a base to build on, and should be assumed to need reimplementation |
+| `@pmndrs/glyph/typegpu` | The same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host | **Not built.** An old pull request from TypeGPU's author carries a partial slug port. Its age means it likely needs reimplementation rather than resumption, but it is authoritative on TypeGPU idiom and should be read closely before starting |
 | `packages/glyph-example-renderer` | An engine consumer proving `/core` is sufficient | Stubbed, device seam only |
 
 `/typegpu` is a shader library and mirrors `/tsl` exactly: the technique realizations, no scene integration, no engine driving. Anyone using TypeGPU can import it without adopting our renderer. The example renderer is the opposite half — it drives the engine and knows nothing about shading — and it will consume `/typegpu` once that subpath exists. Keeping them apart is what stops the shader work from being trapped inside an example.
 
-When porting a shader, the TSL realization can be rendered to WGSL and GLSL in a browser probe and the final source extracted, rather than translated by inspection. The slug port on the old TypeGPU pull request shows how far that approach gets, though its age means it is worth reading rather than resuming.
+When porting a shader, the TSL realization can be rendered to WGSL and GLSL in a browser probe and the final source extracted, rather than translated by inspection. The slug port on the open pull request shows how far that approach gets. It was written by TypeGPU's author, so its shader structure, buffer typing, and workarounds for `@typegpu/three` are the reference idiom even where the branch itself is too old to rebase.
 
 ## Rules
 
