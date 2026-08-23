@@ -21,6 +21,99 @@ use super::{
 };
 
 pub(crate) const MEASUREMENT_FLAG_OVERFLOWED: u16 = 1;
+/// The measurement's ink box was derived from positioned glyphs and is authoritative. Clear means
+/// this query did not position glyphs, so the ink box is absent rather than empty — a paragraph
+/// that positioned zero glyphs still sets the bit and reports a degenerate box.
+pub(crate) const MEASUREMENT_FLAG_INK_BOUNDS: u16 = 2;
+
+/// Union of glyph ink boxes in positioned space.
+///
+/// `joined` is what separates "no glyph contributed" from "every glyph was degenerate": the first
+/// keeps the box absent, the second reports a real zero-extent box. Collapsing them would publish a
+/// box at the origin for a paragraph whose ink was never measured.
+#[derive(Clone, Copy, Default)]
+struct InkBounds {
+    inline_min: f64,
+    block_min: f64,
+    inline_max: f64,
+    block_max: f64,
+    joined: bool,
+}
+
+impl InkBounds {
+    fn join_glyph(&mut self, glyph: &SemanticGlyph) {
+        let inline_min = f64::from(glyph.ink_inline_start);
+        let block_min = f64::from(glyph.ink_block_start);
+        let inline_max = inline_min + f64::from(glyph.ink_inline_extent);
+        let block_max = block_min + f64::from(glyph.ink_block_extent);
+        if self.joined {
+            self.inline_min = self.inline_min.min(inline_min);
+            self.block_min = self.block_min.min(block_min);
+            self.inline_max = self.inline_max.max(inline_max);
+            self.block_max = self.block_max.max(block_max);
+        } else {
+            self.inline_min = inline_min;
+            self.block_min = block_min;
+            self.inline_max = inline_max;
+            self.block_max = block_max;
+            self.joined = true;
+        }
+    }
+
+    fn join(&mut self, other: Self) {
+        if !other.joined {
+            return;
+        }
+        if self.joined {
+            self.inline_min = self.inline_min.min(other.inline_min);
+            self.block_min = self.block_min.min(other.block_min);
+            self.inline_max = self.inline_max.max(other.inline_max);
+            self.block_max = self.block_max.max(other.block_max);
+        } else {
+            *self = other;
+        }
+    }
+
+    /// Writes the box onto a record. An unjoined box leaves the record's zeroed default in place,
+    /// which the reader reads as absent because the record's flag bit stays clear.
+    fn write(self, record: &mut SemanticRecord) -> Result<(), EngineError> {
+        if !self.joined {
+            return Ok(());
+        }
+        record.ink_inline_start = finite_f32(self.inline_min)?;
+        record.ink_block_start = finite_f32(self.block_min)?;
+        record.ink_inline_extent = finite_nonnegative_f32(self.inline_max - self.inline_min)?;
+        record.ink_block_extent = finite_nonnegative_f32(self.block_max - self.block_min)?;
+        Ok(())
+    }
+}
+
+/// The ink box of one line's glyph span. An out-of-range or absent span yields an unjoined box,
+/// which is the same answer a query that skipped positioning gives.
+fn line_ink_bounds(
+    positioned_glyphs: &[SemanticGlyph],
+    starts: &[u32],
+    counts: &[u32],
+    index: usize,
+) -> InkBounds {
+    let mut bounds = InkBounds::default();
+    let (Some(start), Some(count)) = (starts.get(index), counts.get(index)) else {
+        return bounds;
+    };
+    let (Ok(start), Ok(count)) = (usize::try_from(*start), usize::try_from(*count)) else {
+        return bounds;
+    };
+    let Some(span) = start
+        .checked_add(count)
+        .and_then(|end| positioned_glyphs.get(start..end))
+    else {
+        return bounds;
+    };
+    for glyph in span {
+        bounds.join_glyph(glyph);
+    }
+    bounds
+}
 
 /// The visible glyph totals of a composed flow, derived at line level from the
 /// cluster arena's adjacency stream and the boundary records — the same set
@@ -169,6 +262,9 @@ pub(crate) fn append_measurement(
     target.push(SemanticRecord::default());
     let mut content_width = 0.0_f64;
     let mut content_height = 0.0_f64;
+    let mut paragraph_ink = InkBounds::default();
+    let mut first_ascent = 0.0_f64;
+    let mut line_count_emitted = 0_usize;
     let mut consumed_clusters =
         usize::try_from(constraint.resume_cluster).map_err(|_| EngineError::InvalidRequest)?;
 
@@ -220,8 +316,25 @@ pub(crate) fn append_measurement(
             block_start: finite_f32(line.block_start + line.baseline)?,
             inline_extent: finite_nonnegative_f32(advance)?,
             block_extent: finite_nonnegative_f32(line.height)?,
+            // `line.baseline` is the distance from the line box top to the baseline, half-leading
+            // included, so it IS the line's ascent and `height - ascent` is its descent exactly.
+            ascent: finite_nonnegative_f32(line.baseline)?,
             ..SemanticRecord::default()
         });
+        // The paragraph's ascent is the distance from its box top to the FIRST baseline, which is
+        // the first emitted line's absolute baseline, not that line's own ascent.
+        if line_count_emitted == 0 {
+            first_ascent = line.block_start + line.baseline;
+        }
+        line_count_emitted += 1;
+        let line_ink = line_ink_bounds(
+            positioned_glyphs,
+            semantic_line_glyph_starts,
+            semantic_line_glyph_counts,
+            index,
+        );
+        line_ink.write(target.last_mut().ok_or(EngineError::InvalidRequest)?)?;
+        paragraph_ink.join(line_ink);
     }
 
     if include_glyphs {
@@ -240,6 +353,11 @@ pub(crate) fn append_measurement(
                 inline_start: glyph.inline_origin,
                 block_start: glyph.block_origin,
                 inline_extent: glyph.font_size,
+                inline_advance: glyph.inline_advance,
+                ink_inline_start: glyph.ink_inline_start,
+                ink_block_start: glyph.ink_block_start,
+                ink_inline_extent: glyph.ink_inline_extent,
+                ink_block_extent: glyph.ink_block_extent,
                 ..SemanticRecord::default()
             });
         }
@@ -271,11 +389,19 @@ pub(crate) fn append_measurement(
     // arena, so a measurement-only query (which skips the positioning tail)
     // reports the same counts a positioned frame reports.
     let (visible_glyph_count, missing_glyph_count) = visible_glyphs;
+    // Ink is authoritative exactly when this query positioned the glyphs it measured. A paragraph
+    // that positioned zero glyphs still reports authoritatively — its ink box is genuinely empty —
+    // so the bit tracks whether positioning ran, not whether any ink was found.
+    let ink_measured = !positioned_glyphs.is_empty() || (include_glyphs && line_count == 0);
     target[summary_index] = SemanticRecord {
         id: paragraph_id,
         kind: SEMANTIC_PARAGRAPH_MEASUREMENT,
         flags: if overflowed {
             MEASUREMENT_FLAG_OVERFLOWED
+        } else {
+            0
+        } | if ink_measured {
+            MEASUREMENT_FLAG_INK_BOUNDS
         } else {
             0
         },
@@ -288,7 +414,10 @@ pub(crate) fn append_measurement(
         block_start: height,
         inline_extent: finite_nonnegative_f32(full_content_width)?,
         block_extent: finite_nonnegative_f32(full_content_height)?,
+        ascent: finite_nonnegative_f32(first_ascent)?,
+        ..SemanticRecord::default()
     };
+    paragraph_ink.write(&mut target[summary_index])?;
     Ok(())
 }
 
@@ -535,7 +664,9 @@ mod tests {
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].kind, SEMANTIC_PARAGRAPH_MEASUREMENT);
         assert_eq!(records[0].id, 7);
-        assert_eq!(records[0].flags, 0);
+        // Positioned glyphs were supplied, so the ink box is authoritative even though this
+        // query emits no glyph records.
+        assert_eq!(records[0].flags, MEASUREMENT_FLAG_INK_BOUNDS);
         assert_eq!(records[0].parent_id, 2);
         assert_eq!(records[0].text_start, 1);
         assert_eq!(records[0].item_start, 1);
@@ -740,6 +871,167 @@ mod tests {
             font_size: 16.0,
             inline_origin: 0.0,
             block_origin: 0.0,
+            ..SemanticGlyph::default()
         }
+    }
+
+    fn inked_glyph(glyph_id: u16, inline_start: f32, block_start: f32) -> SemanticGlyph {
+        SemanticGlyph {
+            ink_inline_start: inline_start,
+            ink_block_start: block_start,
+            ink_inline_extent: 3.0,
+            ink_block_extent: 6.0,
+            inline_advance: 4.0,
+            ..layout_glyph(glyph_id)
+        }
+    }
+
+    /// Ascent and descent decompose the line box, and the ink union is a real union rather than the
+    /// advance box. Both are what a positioning caller needs and neither existed before.
+    #[test]
+    fn line_and_paragraph_metrics_carry_ascent_and_a_true_ink_union() {
+        let geometry = FlowGeometryArena {
+            constraints: vec![constraint(AXIS_EXACT, 20.0, AXIS_EXACT, 10.0)],
+            ..FlowGeometryArena::default()
+        };
+        let flow = FlowLayoutArena {
+            lines: vec![FlowLine {
+                flow_thread_id: 11,
+                region_id: 3,
+                transform_index: 1,
+                clip_id: 0,
+                fragment_start: 0,
+                fragment_count: 1,
+                align: 1,
+                block_start: 0.0,
+                baseline: 4.0,
+                height: 5.0,
+            }],
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 0,
+                    cluster_end: 2,
+                    text_start: 0,
+                    text_end: 2,
+                    advance: 7.0,
+                    hung_advance: 0.0,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 20.0,
+                boundary_index: NO_BOUNDARY,
+            }],
+            ..FlowLayoutArena::default()
+        };
+        // The second glyph overhangs the first on both axes, which is the case an advance-derived
+        // extent gets wrong.
+        let positioned = [inked_glyph(3, -1.0, -2.0), inked_glyph(4, 5.0, 1.0)];
+        let mut records = vec![];
+        append_measurement(
+            &mut records,
+            7,
+            2,
+            2,
+            (2, 0),
+            &geometry,
+            &flow,
+            &positioned,
+            &[0],
+            &[2],
+            Some(&[7.0]),
+            &ClusterArena::default(),
+            None,
+            true,
+        )
+        .unwrap();
+
+        let paragraph = records[0];
+        let line = records[1];
+        assert_eq!(line.kind, SEMANTIC_LINE);
+        // block_start is the absolute baseline; ascent splits the box around it.
+        assert_eq!(line.block_start, 4.0);
+        assert_eq!(line.ascent, 4.0);
+        assert_eq!(line.block_extent - line.ascent, 1.0);
+        // Ink spans [-1, 8) inline and [-2, 7) block, which is wider than the 7.0 advance.
+        assert_eq!(line.ink_inline_start, -1.0);
+        assert_eq!(line.ink_inline_extent, 9.0);
+        assert_eq!(line.ink_block_start, -2.0);
+        assert_eq!(line.ink_block_extent, 9.0);
+        assert!(line.ink_inline_extent > line.inline_extent);
+
+        assert_eq!(
+            paragraph.flags & MEASUREMENT_FLAG_INK_BOUNDS,
+            MEASUREMENT_FLAG_INK_BOUNDS
+        );
+        assert_eq!(paragraph.ascent, 4.0);
+        assert_eq!(paragraph.ink_inline_start, line.ink_inline_start);
+        assert_eq!(paragraph.ink_inline_extent, line.ink_inline_extent);
+        assert_eq!(paragraph.ink_block_start, line.ink_block_start);
+        assert_eq!(paragraph.ink_block_extent, line.ink_block_extent);
+        assert_eq!(records[2].inline_advance, 4.0);
+        assert_eq!(records[2].ink_inline_start, -1.0);
+    }
+
+    /// A query that positioned nothing must not publish an ink box at the origin.
+    #[test]
+    fn a_measurement_without_positioned_glyphs_withholds_the_ink_box() {
+        let geometry = FlowGeometryArena {
+            constraints: vec![constraint(AXIS_EXACT, 20.0, AXIS_EXACT, 10.0)],
+            ..FlowGeometryArena::default()
+        };
+        let flow = FlowLayoutArena {
+            lines: vec![FlowLine {
+                flow_thread_id: 11,
+                region_id: 3,
+                transform_index: 1,
+                clip_id: 0,
+                fragment_start: 0,
+                fragment_count: 1,
+                align: 1,
+                block_start: 0.0,
+                baseline: 4.0,
+                height: 5.0,
+            }],
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 0,
+                    cluster_end: 2,
+                    text_start: 0,
+                    text_end: 2,
+                    advance: 7.0,
+                    hung_advance: 0.0,
+                    hard_break: false,
+                },
+                slot_start: 0.0,
+                slot_end: 20.0,
+                boundary_index: NO_BOUNDARY,
+            }],
+            ..FlowLayoutArena::default()
+        };
+        let mut records = vec![];
+        append_measurement(
+            &mut records,
+            7,
+            2,
+            2,
+            (2, 0),
+            &geometry,
+            &flow,
+            &[],
+            &[],
+            &[],
+            Some(&[7.0]),
+            &ClusterArena::default(),
+            None,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(records[0].flags & MEASUREMENT_FLAG_INK_BOUNDS, 0);
+        assert_eq!(records[0].ink_inline_extent, 0.0);
+        assert_eq!(records[0].ink_block_extent, 0.0);
+        // The line box still decomposes; only ink needed positioning.
+        assert_eq!(records[1].ascent, 4.0);
+        assert_eq!(records[1].block_extent, 5.0);
     }
 }

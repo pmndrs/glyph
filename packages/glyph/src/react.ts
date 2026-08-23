@@ -25,7 +25,7 @@ import {
   TextGroup as ThreeTextGroup,
   type StandaloneTextProperties,
   type TextGroupOptions,
-  type TextSpan,
+  type TextSpan as ThreeTextSpanRecord,
   type ThreeTextMaterial,
 } from './three.js';
 
@@ -41,8 +41,35 @@ export type R3fTextChild<Technique extends AnyRasterTechnique> =
   | number
   | null
   | false
-  | ReactElement<R3fTextProps<Technique>>
+  | ReactElement<R3fTextSpanProps<Technique>>
   | readonly R3fTextChild<Technique>[];
+
+/**
+ * Props of an inline `<TextSpan>`: exactly what a styled run inside a paragraph can carry.
+ *
+ * A span is not an object in the scene. It has no transform, no capacity, no error boundary, and no
+ * instance to hold a ref to, because the whole tree collapses into one string and one span array
+ * before any object exists. Naming those props here as `never` is what turns
+ * `<Text><TextSpan position={…}>` into a type error instead of a prop the compiler accepts and the
+ * flattener discards.
+ *
+ * Flutter draws the same line between `RichText`, which is a box, and `TextSpan`, which is not.
+ */
+export type R3fTextSpanProps<Technique extends AnyRasterTechnique> = {
+  readonly font?: R3fFontSelection<Technique>;
+  readonly children?: R3fTextChild<Technique>;
+  readonly style?: ParagraphStyle;
+  readonly paint?: GlyphPaintInput;
+  readonly material?: ThreeTextMaterial;
+} & { readonly [Key in BoxOnlyPropKey]?: never };
+
+/**
+ * The props that belong to the paragraph box and have no meaning on a run inside it.
+ *
+ * Derived from `R3fTextProps` rather than listed, so a prop added to the outer element cannot
+ * quietly become a silently-discarded inline prop.
+ */
+type BoxOnlyPropKey = Exclude<keyof R3fTextProps<AnyRasterTechnique>, keyof InlineProperties<never> | 'children'>;
 
 type R3fFontSelection<Technique extends AnyRasterTechnique> =
   | FontSelection<Technique>
@@ -78,7 +105,7 @@ export type R3fTextGroupProps = Object3DProps &
 
 interface FlattenedText<Technique extends AnyRasterTechnique> {
   readonly text: string;
-  readonly spans: readonly TextSpan<Technique>[];
+  readonly spans: readonly ThreeTextSpanRecord<Technique>[];
 }
 
 interface InlineProperties<Technique extends AnyRasterTechnique> {
@@ -138,6 +165,31 @@ export const Text = forwardRef(function Text<Technique extends AnyRasterTechniqu
     publishObject: publishObject as (value: ThreeText<AnyRasterTechnique> | null) => void,
   });
 }) as TextComponent;
+
+/**
+ * A styled run inside a `<Text>`. It renders nothing on its own.
+ *
+ * `flattenText` reads this element's props and never mounts it, which is why it must not accept
+ * anything that would imply an object: a transform, a capacity, an error handler, or a ref would all
+ * be accepted and then dropped. `<Text>` remains the paragraph; this is the span.
+ */
+export const TextSpan: TextSpanComponent = function TextSpan(): null {
+  throw new TypeError('TextSpan is an inline run of a Text paragraph and cannot be rendered on its own');
+} as TextSpanComponent;
+
+/**
+ * A span infers its technique from its own `font` exactly as `Text` does, because a span routinely
+ * switches font — an icon run inside a text paragraph is the ordinary case — and a span with no font
+ * inherits the surrounding one.
+ */
+interface TextSpanComponent {
+  <const Selection, Technique extends AnyRasterTechnique = FontSelectionTechnique<Selection>>(
+    input: Omit<R3fTextSpanProps<Technique>, 'font'> & {
+      readonly font: Selection & ([FontSelectionTechnique<Selection>] extends [never] ? never : unknown);
+    },
+  ): ReactElement | null;
+  <Technique extends AnyRasterTechnique>(input: R3fTextSpanProps<Technique>): ReactElement | null;
+}
 
 function TextObject({
   desired,
@@ -354,7 +406,7 @@ function flattenText<Technique extends AnyRasterTechnique>(
   children: R3fTextChild<Technique> | undefined,
 ): FlattenedText<Technique> {
   const chunks: string[] = [];
-  const spans: TextSpan<Technique>[] = [];
+  const spans: ThreeTextSpanRecord<Technique>[] = [];
   let length = 0;
 
   const append = (child: R3fTextChild<Technique>, inherited: InlineProperties<Technique>): void => {
@@ -369,8 +421,8 @@ function flattenText<Technique extends AnyRasterTechnique>(
       for (const nested of child) append(nested, inherited);
       return;
     }
-    if (!isValidElement<R3fTextProps<Technique>>(child) || child.type !== Text)
-      throw new TypeError('R3F Text children must be text, numbers, arrays, or nested Text elements');
+    if (!isValidElement<R3fTextSpanProps<Technique>>(child) || child.type !== TextSpan)
+      throw new TypeError('R3F Text children must be text, numbers, arrays, or TextSpan elements');
     const inline = inlineProperties(child.props, inherited);
     const start = length;
     const spanIndex = spans.length;
@@ -385,7 +437,7 @@ function flattenText<Technique extends AnyRasterTechnique>(
 }
 
 function inlineProperties<Technique extends AnyRasterTechnique>(
-  properties: R3fTextProps<Technique>,
+  properties: R3fTextSpanProps<Technique>,
   inherited: InlineProperties<Technique>,
 ): InlineProperties<Technique> {
   return Object.freeze({

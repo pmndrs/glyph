@@ -74,9 +74,16 @@ export interface TechniqueSchemaDeclaration<
   readonly resources?: Readonly<Record<string, TechniqueResourceDeclaration>>;
   /**
    * Opt-in glyph-origin metadata: names the declared f32 buffer whose first two
-   * lanes carry the glyph's inline/block origin. Renderers that augment glyph
-   * origins (animation retargeting) consult this instead of assuming a layout;
+   * lanes carry the glyph's position. Renderers that augment glyph origins
+   * (animation retargeting) consult this instead of assuming a layout;
    * techniques without it are never augmented.
+   *
+   * The lanes are deliberately NOT required to be in any particular space. All
+   * three shipping techniques differ: MSDF and Slug pack the ink box's top-left
+   * corner, and Bitmap stores the origin plus the baked strike's raster bearing.
+   * An augmenting renderer works in displacement from the rest value the plan
+   * wrote, which is space-independent, so no technique has to describe its
+   * packing to be animatable.
    */
   readonly glyphOrigin?: { readonly buffer: string };
 }

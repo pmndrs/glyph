@@ -41,7 +41,7 @@ import { createElement } from 'react';
 import '../support/browser-globals.mjs';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { alignSpansToClusters, span, txt } from '@pmndrs/glyph/three';
-import { Text as R3fText } from '@pmndrs/glyph/react';
+import { Text as R3fText, TextSpan as R3fTextSpan } from '@pmndrs/glyph/react';
 
 import { createFontCache, mount, seededRandom, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { findGraphemeBoundaries } from '../../dist/internal/unicode.js';
@@ -527,7 +527,7 @@ test('a nested React Text whose flattened span splits a cluster mounts and publi
         onError: (error) => void errors.push(error),
         ref: (node) => void (node !== undefined && nodes.push(node)),
       },
-      createElement(R3fText, { paint: { color: '#ff2f00' } }, 'a'),
+      createElement(R3fTextSpan, { paint: { color: '#ff2f00' } }, 'a'),
       `${ACUTE}bc`,
     ),
   );
@@ -568,7 +568,7 @@ test('a nested React Text opening with a combining mark compiles onto its base c
         ref: (node) => void (node !== undefined && nodes.push(node)),
       },
       'a',
-      createElement(R3fText, { paint: { color: '#ff2f00' } }, `${ACUTE}b`),
+      createElement(R3fTextSpan, { paint: { color: '#ff2f00' } }, `${ACUTE}b`),
     ),
   );
   try {

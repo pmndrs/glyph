@@ -1,20 +1,17 @@
-import type {
-  FontFeature,
-  ParagraphLayoutInspection,
-  TextGlyphOriginSnapshot,
-  TextGlyphOriginUpdate,
-} from '@pmndrs/glyph/three';
+import type { FontFeature } from '@pmndrs/glyph';
+import type { GlyphPlacements } from '@pmndrs/glyph/three';
 
 /**
- * The part of a committed target-v1 `Text` this helper needs. Core owns glyph snapshots and topology-guarded
- * displayed-origin writes but deliberately keeps animation and matching policy out of the library, so identity matching
- * and interpolation live here — in the application — and every live technique scene shares this one implementation.
+ * The part of a committed target-v1 `Text` this helper needs.
+ *
+ * Core owns the snapshot, its identity, and the topology-guarded write; interpolation and the policy
+ * that decides whether a reflow may interpolate at all stay here, in the application, because they
+ * are presentation choices rather than layout facts.
  */
 export interface TransitionableText {
-  inspectLayout(): ParagraphLayoutInspection | undefined;
-  snapshotGlyphOrigins(): TextGlyphOriginSnapshot | undefined;
-  setGlyphOrigins(update: TextGlyphOriginUpdate): void;
-  clearGlyphOriginOverrides(): void;
+  snapshotGlyphs(): GlyphPlacements | undefined;
+  applyGlyphs(placements: GlyphPlacements): { readonly applied: number; readonly requested: number };
+  restoreGlyphs(): void;
 }
 
 /**
@@ -34,12 +31,11 @@ export type GlyphOriginPolicy = 'snap' | 'transition';
 /**
  * The one place every live technique scene decides whether a reflow may interpolate glyph identities.
  *
- * Identity matching keys a glyph on its UTF-16 source cluster, which survives a reflow but says nothing about visual
- * order. Under bidi, inserting one character reorders a whole run, so a typewriter reveal that kept matching would
- * slide glyphs across their neighbours to reach positions they never travelled through. A change that alters the
- * source text — or the fixture, script, or features that decide which glyphs the text shapes into — therefore snaps.
- * Geometry and style changes leave the shaped run and its visual order intact, so their glyphs really do move
- * continuously and matching is sound.
+ * This mirrors the durability `GlyphKey` documents. A key survives a reflow that moves glyphs and not one that reshapes
+ * them, so a change to the source text — or to the fixture, script, or features that decide which glyphs the text shapes
+ * into — snaps. Under bidi, inserting one character reorders a whole run, so a typewriter reveal that kept matching
+ * would slide glyphs across their neighbours to reach positions they never travelled through. Geometry and style changes
+ * leave the shaped run and its visual order intact, so their glyphs really do move continuously.
  */
 export function glyphOriginPolicy(previous: ShapedTextIdentity, next: ShapedTextIdentity): GlyphOriginPolicy {
   if (previous.text !== next.text) return 'snap';
@@ -61,16 +57,12 @@ export interface GlyphOriginPresentation {
  * that replaces or reorders glyphs has no correspondence to animate, so zero matches is the honest report.
  */
 export function snapGlyphOrigins(text: TransitionableText): GlyphOriginPresentation {
-  text.clearGlyphOriginOverrides();
-  return { transitioned: false, matchedGlyphs: 0, targetGlyphs: text.inspectLayout()?.glyphIds.length ?? 0 };
+  text.restoreGlyphs();
+  return { transitioned: false, matchedGlyphs: 0, targetGlyphs: text.snapshotGlyphs()?.glyphs.length ?? 0 };
 }
 
 /** Displayed glyph origins copied out of one committed paragraph. It retains no renderer or core resources. */
-export interface GlyphOriginSnapshot {
-  readonly glyphCount: number;
-  /** Displayed origin per glyph, keyed by the shaping identity that survives a reflow. */
-  readonly origins: ReadonlyMap<string, readonly [number, number]>;
-}
+export type GlyphOriginSnapshot = GlyphPlacements;
 
 /** Presentation-only motion toward one authoritative layout. Progress never changes what the layout committed. */
 export interface GlyphOriginTransition {
@@ -83,24 +75,12 @@ export interface GlyphOriginTransition {
   dispose(): void;
 }
 
-const EMPTY_SNAPSHOT: GlyphOriginSnapshot = { glyphCount: 0, origins: new Map() };
-
 /**
  * Copies the displayed origins of the currently committed paragraph. An uncommitted `Text` has nothing to move from,
- * which is a normal first-frame state rather than a failure, so it yields an empty snapshot that matches nothing.
+ * which is a normal first-frame state rather than a failure, so it yields `undefined` and matches nothing.
  */
-export function captureGlyphOrigins(text: TransitionableText): GlyphOriginSnapshot {
-  const layout = text.inspectLayout();
-  if (layout === undefined) return EMPTY_SNAPSHOT;
-  const glyphs = text.snapshotGlyphOrigins();
-  if (glyphs === undefined || glyphs.layout !== layout)
-    throw new TypeError('glyph origin snapshot lost its inspection');
-  const identities = glyphIdentityKeys(layout);
-  const origins = new Map<string, readonly [number, number]>();
-  for (let index = 0; index < identities.length; index += 1) {
-    origins.set(identities[index]!, [glyphs.displayedX[index]!, glyphs.displayedY[index]!]);
-  }
-  return { glyphCount: identities.length, origins };
+export function captureGlyphOrigins(text: TransitionableText): GlyphOriginSnapshot | undefined {
+  return text.snapshotGlyphs();
 }
 
 /**
@@ -110,51 +90,37 @@ export function captureGlyphOrigins(text: TransitionableText): GlyphOriginSnapsh
  */
 export function createGlyphOriginTransition(
   text: TransitionableText,
-  from: GlyphOriginSnapshot,
+  from: GlyphOriginSnapshot | undefined,
 ): GlyphOriginTransition {
-  const layout = text.inspectLayout();
-  if (layout === undefined) throw new TypeError('glyph-origin transition requires a committed paragraph');
-  const glyphs = text.snapshotGlyphOrigins();
-  if (glyphs === undefined || glyphs.layout !== layout)
-    throw new TypeError('glyph origin snapshot lost its inspection');
-  const identities = glyphIdentityKeys(layout);
-  const targetGlyphs = identities.length;
-  const fromX = glyphs.shapedX.slice();
-  const fromY = glyphs.shapedY.slice();
-  let matchedGlyphs = 0;
-  for (let index = 0; index < targetGlyphs; index += 1) {
-    const origin = from.origins.get(identities[index]!);
-    if (origin === undefined) continue;
-    fromX[index] = origin[0];
-    fromY[index] = origin[1];
-    matchedGlyphs += 1;
-  }
-  const targetX = glyphs.shapedX;
-  const targetY = glyphs.shapedY;
-  const displayedX = new Float32Array(targetGlyphs);
-  const displayedY = new Float32Array(targetGlyphs);
+  const placements = text.snapshotGlyphs();
+  if (placements === undefined) throw new TypeError('glyph-origin transition requires a committed paragraph');
+  const adoption = from === undefined ? undefined : placements.adopt(from);
+  const glyphs = placements.glyphs;
+  const targetGlyphs = glyphs.length;
+  // `adopt` left each matched glyph at its previous drawn position and each unmatched glyph at its shaped one, so the
+  // snapshot itself is the start of the interpolation and only the two start columns need retaining.
+  const startX = Float64Array.from(glyphs, (glyph) => glyph.x);
+  const startY = Float64Array.from(glyphs, (glyph) => glyph.y);
   let progress = 1;
   let disposed = false;
   const setProgress = (nextProgress: number): void => {
     if (!Number.isFinite(nextProgress) || nextProgress < 0 || nextProgress > 1) {
       throw new RangeError('glyph-origin transition progress must be in [0, 1]');
     }
-    // A reflow publishes a new layout object and a new topology together, which is exactly when interpolating between
-    // the old and new glyph arrays would be meaningless. Report it as staleness, the way a superseded update reads.
-    if (disposed || text.inspectLayout() !== layout) {
-      throw new DOMException('The glyph-origin transition is stale', 'AbortError');
-    }
+    // A reflow publishes a new layout together with a new topology, which is exactly when interpolating between the old
+    // and new glyph sets would be meaningless. `applyGlyphs` refuses a superseded snapshot, so staleness is reported
+    // rather than written; disposal reads the same way.
+    if (disposed) throw new DOMException('The glyph-origin transition is stale', 'AbortError');
     for (let index = 0; index < targetGlyphs; index += 1) {
-      const startX = fromX[index]!;
-      const startY = fromY[index]!;
-      displayedX[index] = startX + (targetX[index]! - startX) * nextProgress;
-      displayedY[index] = startY + (targetY[index]! - startY) * nextProgress;
+      const glyph = glyphs[index]!;
+      glyph.x = startX[index]! + (glyph.shapedX - startX[index]!) * nextProgress;
+      glyph.y = startY[index]! + (glyph.shapedY - startY[index]!) * nextProgress;
     }
-    text.setGlyphOrigins({ layout, x: displayedX, y: displayedY });
+    text.applyGlyphs(placements);
     progress = nextProgress;
   };
   return {
-    matchedGlyphs,
+    matchedGlyphs: adoption?.matched ?? 0,
     targetGlyphs,
     get progress() {
       return progress;
@@ -163,9 +129,9 @@ export function createGlyphOriginTransition(
     finish() {
       if (disposed) return;
       setProgress(1);
-      // Settled motion must hand authority back to the layout: an override pinned at the target would otherwise
-      // outlive this transition and silently shadow the next committed origins.
-      text.clearGlyphOriginOverrides();
+      // Settled motion hands authority back to the layout. This is a step of the snapshot/manipulate/restore cycle
+      // rather than a call discovered by watching an override outlive the motion that set it.
+      text.restoreGlyphs();
       disposed = true;
     },
     dispose() {
@@ -192,7 +158,7 @@ export interface FrameDrivenGlyphTransition {
  */
 export function createFrameDrivenGlyphTransition(
   text: TransitionableText,
-  from: GlyphOriginSnapshot,
+  from: GlyphOriginSnapshot | undefined,
   durationMs: number = GLYPH_ORIGIN_TRANSITION_MS,
 ): FrameDrivenGlyphTransition {
   if (!Number.isFinite(durationMs) || durationMs <= 0) {
@@ -235,41 +201,4 @@ function sameFontFeatures(previous: readonly FontFeature[], next: readonly FontF
     const other = next[index];
     return other !== undefined && feature.tag === other.tag && feature.value === other.value;
   });
-}
-
-/**
- * Reproduces the identity merged-v0 matched on: font handle, glyph id, cluster, exact font size, and the occurrence
- * index that separates otherwise identical glyphs within one paragraph.
- */
-function glyphIdentityKeys(layout: ParagraphLayoutInspection): readonly string[] {
-  assertParallelGlyphIdentity(layout);
-  const counts = new Map<string, number>();
-  const keys: string[] = [];
-  for (let index = 0; index < layout.glyphIds.length; index += 1) {
-    const fontHandle = layout.fontHandles[layout.glyphFontSlots[index]!];
-    if (fontHandle === undefined) throw new TypeError('paragraph layout references a missing font slot');
-    // Font size is deliberately absent. The merged renderer keyed on it, which made a glyph fail to match itself across
-    // the one change the transition exists to animate, so a size change reported every glyph as new and interpolated
-    // nothing. Font handle, glyph id, cluster, and occurrence still identify a glyph, and a uniform scale preserves
-    // visual order, so matching across a resize recovers exactly the glyph that moved.
-    const baseKey = `${fontHandle}:${layout.glyphIds[index]!}:${layout.clusters[index]!}`;
-    const occurrence = counts.get(baseKey) ?? 0;
-    counts.set(baseKey, occurrence + 1);
-    keys.push(`${baseKey}:${occurrence}`);
-  }
-  return keys;
-}
-
-function assertParallelGlyphIdentity(layout: ParagraphLayoutInspection): void {
-  const glyphCount = layout.glyphIds.length;
-  for (const values of [
-    layout.glyphStableIds,
-    layout.clusters,
-    layout.glyphFontSlots,
-    layout.x,
-    layout.y,
-    layout.glyphFontSizes,
-  ]) {
-    if (values.length !== glyphCount) throw new TypeError('paragraph glyph identity arrays are not parallel');
-  }
 }
