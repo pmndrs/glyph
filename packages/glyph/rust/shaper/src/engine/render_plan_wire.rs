@@ -478,6 +478,8 @@ fn write_semantic(bytes: &mut [u8], at: usize, value: SemanticRecord) {
     );
     f32_at(bytes, at, SEMANTIC_INK_BLOCK_EXTENT, value.ink_block_extent);
     f32_at(bytes, at, SEMANTIC_ASCENT, value.ascent);
+    f32_at(bytes, at, SEMANTIC_MIN_CONTENT_WIDTH, value.min_content_width);
+    f32_at(bytes, at, SEMANTIC_MAX_CONTENT_WIDTH, value.max_content_width);
 }
 
 fn write_resource(bytes: &mut [u8], at: usize, value: ResourceRecord) {

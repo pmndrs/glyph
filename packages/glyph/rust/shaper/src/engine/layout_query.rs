@@ -215,6 +215,7 @@ pub(crate) fn append_measurement(
     semantic_line_inline_extents: Option<&[f64]>,
     clusters: &ClusterArena,
     intrinsic_extents: Option<LayoutExtents>,
+    intrinsics: super::cluster_state::IntrinsicWidths,
     include_glyphs: bool,
 ) -> Result<(), EngineError> {
     let constraint = geometry
@@ -415,6 +416,8 @@ pub(crate) fn append_measurement(
         inline_extent: finite_nonnegative_f32(full_content_width)?,
         block_extent: finite_nonnegative_f32(full_content_height)?,
         ascent: finite_nonnegative_f32(first_ascent)?,
+        min_content_width: finite_nonnegative_f32(intrinsics.min_content_width)?,
+        max_content_width: finite_nonnegative_f32(intrinsics.max_content_width)?,
         ..SemanticRecord::default()
     };
     paragraph_ink.write(&mut target[summary_index])?;
@@ -596,6 +599,7 @@ mod tests {
             None,
             &ClusterArena::default(),
             None,
+            crate::engine::cluster_state::IntrinsicWidths::default(),
             false,
         )
         .unwrap();
@@ -657,6 +661,7 @@ mod tests {
             Some(&[7.0]),
             &ClusterArena::default(),
             None,
+            crate::engine::cluster_state::IntrinsicWidths::default(),
             false,
         )
         .unwrap();
@@ -695,6 +700,7 @@ mod tests {
             Some(&[7.0]),
             &ClusterArena::default(),
             None,
+            crate::engine::cluster_state::IntrinsicWidths::default(),
             true,
         )
         .unwrap();
@@ -761,6 +767,7 @@ mod tests {
                 height: 8.0,
                 consumed_clusters: 2,
             }),
+            crate::engine::cluster_state::IntrinsicWidths::default(),
             false,
         )
         .unwrap();
@@ -822,6 +829,7 @@ mod tests {
             Some(&[140.64]),
             &ClusterArena::default(),
             None,
+            crate::engine::cluster_state::IntrinsicWidths::default(),
             false,
         )
         .unwrap();
