@@ -7,7 +7,7 @@ import { techniqueWireIds } from '../../dist/core/render-policy.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
-import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
+import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 

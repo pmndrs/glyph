@@ -8,7 +8,7 @@ import {
   type FontBindingFieldTable,
   type PolicyBuffer,
   type PolicyF32Value,
-} from '@pmndrs/glyph/core';
+} from '../../dist/core.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 
 // A technique schema is the single authority: buffer ids, scalar kinds, and lane

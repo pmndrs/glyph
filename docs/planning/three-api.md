@@ -124,7 +124,10 @@ Capacity policy controls the instance arena:
 | ------- | ----------------------------------------------------------- |
 | `grow`  | Grow retained storage to fit the group.                     |
 | `chunk` | Use bounded chunks when the group exceeds the initial size. |
-| `fixed` | Reject an update that exceeds the declared capacity.        |
+
+There is no non-resizing policy. A capacity cap could only be enforced after shaping, from inside `synchronize()` inside
+`updateMatrixWorld()`, and `measureLayout()` routes through the same path — so a caller could not ask how many glyphs the
+content needs without already having exceeded the cap (D-267).
 
 The default group capacity is 4,096 glyphs with `chunk` policy. A standalone `Text` defaults to 256 glyphs with `grow`
 policy. `setCapacity()` changes the retained capacity policy without changing text semantics.
@@ -226,8 +229,9 @@ if (resolved !== spans) editor.reportOffsetsThatSplitACluster(resolved);
 ```
 
 Errors are retained on `text.error` and the owning `group.error`, then forwarded to `onError`. They do not escape Three.js
-scene traversal. A renderer-side failure leaves the Rust publication unconsumed; `retry()` or the next group traversal
-reapplies its owned bytes before another engine delta is requested.
+scene traversal. A renderer-side failure leaves the Rust publication unconsumed; the next group traversal reapplies its
+owned bytes before another engine delta is requested. There is no public `retry()`: `synchronize()` already replays an
+unconsumed publication first, so a caller had nothing to do that the next frame did not (D-267).
 
 ## Query committed layout
 

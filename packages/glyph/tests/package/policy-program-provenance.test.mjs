@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { addF32, constantF32, multiplyF32, policyProgram } from '@pmndrs/glyph/core';
+import { addF32, constantF32, multiplyF32, policyProgram } from '../../dist/core.js';
 
 const OPTIONS = { scope: 'glyph', bindingF32: ['bearingX'] };
 const BUFFER = { id: 1, scalar: 'f32', lanes: ['x', 'y'] };

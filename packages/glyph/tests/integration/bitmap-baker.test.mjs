@@ -9,7 +9,7 @@ import {
   createBitmapBakerFromInstance,
 } from '@pmndrs/glyph/bakers/bitmap';
 import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
-import { validateBitmapArtifact } from '@pmndrs/glyph/bakers/bitmap/validate';
+import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 
 const wasmUrl = new URL('../../dist/bitmap-baker.wasm', import.meta.url);
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);

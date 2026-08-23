@@ -55,7 +55,7 @@ export type {
 export { FontLoader, FontLoadError, FontRegistry } from './loader.js';
 
 export type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
-export { createFontStack, FontLeaseError } from './loaded-font.js';
+export { createFontStack } from './loaded-font.js';
 
 export type {
   GlyphBufferCapacity,
@@ -82,9 +82,6 @@ export type {
   UnboundSpanTag,
 } from './formatted-text.js';
 export { alignSpansToClusters, span, txt } from './formatted-text.js';
-
-export type { IdentifiedSpanRange, SpanRange } from './internal/span-cascade.js';
-export { SpanNestingError } from './internal/span-cascade.js';
 
 export type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
 
@@ -125,14 +122,6 @@ export type {
 export { defineRasterResourceId, defineRasterTechnique } from './raster-technique.js';
 
 export type { RasterCoverage, RasterUnicodeRange } from './raster-coverage.js';
-export {
-  MAX_RASTER_COVERAGE_GLYPH_IDS,
-  MAX_RASTER_COVERAGE_RANGES,
-  MAX_RASTER_COVERAGE_SCALARS,
-  MAX_RASTER_COVERAGE_TEXT_CODE_POINTS,
-  RasterCoverageError,
-  normalizeRasterCoverage,
-} from './raster-coverage.js';
 
 export type { FontFeature, ResolvedFontFeature } from './font-feature.js';
 
