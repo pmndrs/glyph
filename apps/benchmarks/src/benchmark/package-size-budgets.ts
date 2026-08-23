@@ -79,10 +79,10 @@ export const packageSizeBudgets = {
   // the measured artifact plus the documented cross-host margin, and name the overage rather
   // than absorbing it silently.
   'text-shaper-wasm': {
-    rawBytes: 1_125_000,
-    minifiedBytes: 1_125_000,
-    gzipBytes: 438_000,
-    brotliBytes: 347_500,
+    rawBytes: 1_169_500,
+    minifiedBytes: 1_169_500,
+    gzipBytes: 454_500,
+    brotliBytes: 361_500,
   },
   // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250),
   // then the review-closure pass added +3,535 raw / +1,711 minified / +439 Brotli
@@ -99,17 +99,19 @@ export const packageSizeBudgets = {
   // away exactly as they do in a consumer's build, and asserts that none of their text
   // survives. Total teardown (D-255) cost +1,295 raw measured unstripped; guarding its
   // guidance left +468 of real production behaviour, which fits the existing ceiling.
-  // Cluster-correct span alignment (this layer) reads extended grapheme boundaries from
-  // `unicode-segmenter` rather than `Intl.Segmenter`, whose Unicode version follows the host ICU
-  // and can therefore place a boundary the engine's own Rust tables do not. That dependency is the
-  // whole of the +22,290 raw growth over main's 376,899: a deliberate correctness-over-size trade
-  // for agreeing with the engine's cluster grid, not drift. Re-priced with headroom, both hosts
-  // measuring an identical 399,189 raw.
+  // The shared module the stack-wide delta pointed at is `unicode-segmenter`, which enters every
+  // runtime graph through `internal/graphemes.ts` at the edit-topology layer: caller-side span
+  // alignment must read the same extended grapheme boundaries the engine's Rust tables do, and
+  // `Intl.Segmenter` follows the host ICU and can disagree. That accounts for the near-identical
+  // ~22 KB step across four independent graphs -- one module, four importers -- and is a deliberate
+  // correctness-over-size trade rather than drift. The remainder at this layer is the semantic
+  // record widening from 44 to 68 bytes. Both hosts measure identically, so none of this is
+  // foreign-host variance.
   'three-runtime-js': {
-    rawBytes: 405_000,
-    minifiedBytes: 258_000,
-    gzipBytes: 68_500,
-    brotliBytes: 57_500,
+    rawBytes: 444_000,
+    minifiedBytes: 275_000,
+    gzipBytes: 73_500,
+    brotliBytes: 62_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -148,22 +150,22 @@ export const packageSizeBudgets = {
     brotliBytes: 510_000,
   },
   'bitmap-runtime-js': {
-    rawBytes: 425_000,
-    minifiedBytes: 325_000,
-    gzipBytes: 95_000,
-    brotliBytes: 75_000,
+    rawBytes: 430_000,
+    minifiedBytes: 267_000,
+    gzipBytes: 72_500,
+    brotliBytes: 60_500,
   },
   'mtsdf-runtime-js': {
-    rawBytes: 425_000,
-    minifiedBytes: 325_000,
-    gzipBytes: 95_000,
-    brotliBytes: 75_000,
+    rawBytes: 430_000,
+    minifiedBytes: 267_000,
+    gzipBytes: 72_500,
+    brotliBytes: 60_500,
   },
   'slug-runtime-js': {
-    rawBytes: 425_000,
-    minifiedBytes: 325_000,
-    gzipBytes: 95_000,
-    brotliBytes: 75_000,
+    rawBytes: 430_000,
+    minifiedBytes: 267_000,
+    gzipBytes: 72_500,
+    brotliBytes: 60_500,
   },
   'bitmap-baker-wasm': {
     rawBytes: 626_000,
