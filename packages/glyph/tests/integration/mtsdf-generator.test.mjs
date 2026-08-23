@@ -10,7 +10,7 @@ import {
   mtsdfGeneratorAbi,
 } from '../../dist/internal/mtsdf-generator.js';
 import { mtsdfOracleCases } from '../fixtures/mtsdf-oracle-cases.mjs';
-import { mtsdfBakerAbi } from '@pmndrs/glyph/mtsdf-baker-abi';
+import { mtsdfBakerAbi } from '../../dist/mtsdf-baker-abi.js';
 
 const wasmUrl = new URL('../../dist/mtsdf-baker.wasm', import.meta.url);
 const publishedAbi = mtsdfBakerAbi;

@@ -9,7 +9,7 @@ import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 import { defineTextMaterial, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
-import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
+import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const densityFontUrl = new URL(

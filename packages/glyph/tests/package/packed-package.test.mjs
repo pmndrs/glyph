@@ -40,8 +40,9 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.equal(packedFiles.includes('dist/.tsbuildinfo'), false);
   assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.d.ts'), false);
   assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.js'), false);
-  // The ABI ships as the generated TypeScript module its subpath export names. No JSON copy is
-  // published: nothing could import one, because `exports` has no wildcard and names no ABI JSON.
+  // The ABI ships as the generated TypeScript module the package's own bakers import. No JSON copy is
+  // published: nothing could import one, because `exports` has no wildcard and names no ABI JSON. The
+  // modules are packed because the published baker subpaths reach them, not because a consumer can.
   assert.deepEqual(
     packedFiles.filter((path) => /-abi-v[0-9]\.json$/.test(path)),
     [],
@@ -83,11 +84,23 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/mtsdf-abi.json',
     '@pmndrs/glyph/slug-abi.json',
     '@pmndrs/glyph/font-baker-abi.json',
+    // Withdrawn entry points. Their modules are still packed, so absence from the manifest is not
+    // enough: prove a real install cannot reach them by specifier either.
+    '@pmndrs/glyph/core',
+    '@pmndrs/glyph/tsl',
+    '@pmndrs/glyph/text-shaper-abi',
+    '@pmndrs/glyph/bitmap-baker-abi',
+    '@pmndrs/glyph/mtsdf-baker-abi',
+    '@pmndrs/glyph/slug-baker-abi',
+    '@pmndrs/glyph/font-baker-abi',
+    '@pmndrs/glyph/bakers/bitmap/validate',
+    '@pmndrs/glyph/bakers/msdf/validate',
+    '@pmndrs/glyph/bakers/slug/validate',
   ]) {
     assert.throws(
       () => import.meta.resolve(removed, consumerEntry),
       { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' },
-      `${removed} was replaced by a typed subpath and must not resolve`,
+      `${removed} is not a published entry point and must not resolve`,
     );
   }
 

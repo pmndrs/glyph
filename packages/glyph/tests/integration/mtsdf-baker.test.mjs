@@ -8,7 +8,7 @@ import {
   msdfBakerAbi,
   msdfBakerFromCore,
 } from '@pmndrs/glyph/bakers/msdf';
-import { MsdfArtifactValidationError, validateMsdfArtifact } from '@pmndrs/glyph/bakers/msdf/validate';
+import { MsdfArtifactValidationError, validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import {
   MSDF_EM_SIZE,
   MSDF_EXTENSION,
@@ -18,7 +18,7 @@ import {
   msdfDescriptor,
   msdfDescriptorRasterKey,
 } from '@pmndrs/glyph/raster/msdf';
-import { mtsdfBakerAbi } from '@pmndrs/glyph/mtsdf-baker-abi';
+import { mtsdfBakerAbi } from '../../dist/mtsdf-baker-abi.js';
 
 const wasmUrl = new URL('../../dist/mtsdf-baker.wasm', import.meta.url);
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);

@@ -1,4 +1,4 @@
-import { textShaperAbi as abi } from '@pmndrs/glyph/text-shaper-abi';
+import { textShaperAbi as abi } from '../../dist/text-shaper-abi.js';
 
 import {
   createBenchmarkParagraph,
