@@ -8,8 +8,8 @@ documentation_type: reference
 <<<<<<< HEAD
 source_digest: 'sha256:3e69c456b1fa3ccac628beb3f6832339d30da86818fc025892b00caf6ad59a26'
 =======
-source_digest: 'sha256:3e69c456b1fa3ccac628beb3f6832339d30da86818fc025892b00caf6ad59a26'
->>>>>>> 61af100b (fix(glyph): export Paragraph from /core so the root entry keeps its bundle boundary)
+source_digest: 'sha256:7b53aca3518462b5b0759e2ee715e8013a1f85327b587fa17363628c8c8934d7'
+>>>>>>> 462a3b82 (fix(glyph): import the mtsdf baker ABI by its dist path in the wasm core test)
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
