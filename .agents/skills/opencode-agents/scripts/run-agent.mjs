@@ -21,8 +21,9 @@ const cwd = flag('cwd', process.cwd());
 const model = flag('model', 'opencode/x-preview-f-free');
 const variant = flag('variant', 'high');
 const traceDir = flag('trace', join(cwd, '.cache', 'opencode-agents'));
-const maxAttempts = Number(flag('attempts', '8'));
-const ceilingMs = Number(flag('ceiling', '120000'));
+const maxAttempts = Number(flag('attempts', '6'));
+const baseMs = Number(flag('base', '30000'));
+const ceilingMs = Number(flag('ceiling', '300000'));
 
 if (briefPath === undefined) {
   console.error('usage: run-agent.mjs --brief <file> [--cwd <dir>] [--model <id>] [--attempts n]');
@@ -62,6 +63,21 @@ const RESUME_PROMPT =
   'Continue where you left off. Your session was interrupted by a provider outage, not cancelled. ' +
   'Report what you had already completed, then finish the remaining work and commit it.';
 
+/**
+ * Full jitter over a doubling window, floored so a struggling endpoint is never hit immediately.
+ *
+ * The service is already failing when we get here, so the point is to stay out of its way rather
+ * than to recover quickly. Jitter matters because several agents retry at once: a fixed schedule
+ * synchronises them into a burst precisely when the provider can least absorb one. A `Retry-After`
+ * is obeyed when the provider states one, since that is the only number it actually asked for.
+ */
+function backoffMs(attempt, blob) {
+  const stated = /retry-after"?[:\s]+(\d+)/i.exec(blob)?.[1];
+  if (stated !== undefined) return Math.min(ceilingMs, Number(stated) * 1000);
+  const window = Math.min(ceilingMs, baseMs * 2 ** (attempt - 1));
+  return Math.floor(baseMs / 2 + Math.random() * (window - baseMs / 2));
+}
+
 /** The session id is the handle that makes a resume possible, so recover it from the first stream. */
 function sessionFrom(text) {
   return /"sessionID":"(ses_[A-Za-z0-9]+)"/.exec(text)?.[1];
@@ -80,10 +96,9 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     console.error(`agent failed for a reason that is not a provider outage (exit ${code}); trace ${tracePath}`);
     process.exit(code ?? 1);
   }
-  // Metered: double each time, capped, so a fifteen-minute outage is ridden out rather than hammered.
-  const waitMs = Math.min(ceilingMs, 5000 * 2 ** (attempt - 1));
+  const waitMs = backoffMs(attempt, blob);
   console.warn(
-    `attempt ${attempt} hit an unavailable provider; ${sessionId === undefined ? 'restarting' : `resuming ${sessionId}`} in ${waitMs / 1000}s`,
+    `attempt ${attempt} hit an unavailable provider; ${sessionId === undefined ? 'restarting' : `resuming ${sessionId}`} in ${Math.round(waitMs / 1000)}s`,
   );
   await new Promise((resolve) => setTimeout(resolve, waitMs));
 }

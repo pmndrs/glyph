@@ -78,10 +78,21 @@ node .agents/skills/opencode-agents/scripts/run-agent.mjs \
   --brief brief.md --cwd <worktree> [--attempts 8]
 ```
 
-It captures the session id from the first stream, and on a transient provider failure it waits with
-doubling backoff (5s, capped at two minutes) and **resumes that session** instead of restarting, so
-an outage costs waiting rather than work. A failure that is not a provider outage exits immediately
-rather than retrying a real defect. The full event trace is retained under `.cache/opencode-agents/`.
+It captures the session id from the first stream, and on a transient provider failure **resumes that
+session** instead of restarting, so an outage costs waiting rather than work. A failure that is not a
+provider outage exits immediately rather than retrying a real defect, and the full event trace is
+retained under `.cache/opencode-agents/`.
+
+The backoff is deliberately unhurried: six attempts over roughly ten minutes of waiting, drawn with
+full jitter from a doubling window that starts at thirty seconds and caps at five. Two properties
+matter more than fast recovery. The service is already failing when we reach this code, so staying
+out of its way beats retrying quickly. And the jitter is not decoration — several agents retry at
+once, and a fixed schedule synchronises them into a burst exactly when the provider can least absorb
+one. A stated `Retry-After` wins over all of it, because it is the only interval the provider
+actually asked for.
+
+Do not shorten these intervals to make a run finish sooner. Being rude to a free endpoint that is
+under load test is how the endpoint stops being available to us at all.
 
 ## Writing the brief
 
