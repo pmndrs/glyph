@@ -1,6 +1,23 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
+import type { LayoutBox, ParagraphLayoutInspection, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
 import type { TextEnginePublication } from './host.js';
+
+/**
+ * Reads the ink box off one semantic record, or reports its absence.
+ *
+ * Absence is carried by a flag bit on the paragraph record rather than by a sentinel extent,
+ * because a zero-extent ink box is a legitimate answer — a paragraph of spaces has one.
+ */
+function inkBoundsOf(view: SemanticViewReader, record: number, measured: boolean): LayoutBox | undefined {
+  if (!measured) return undefined;
+  const layout = textShaperAbi.layouts.engineSemanticView;
+  return Object.freeze({
+    x: view.f32(record + layout.inkInlineStart),
+    y: view.f32(record + layout.inkBlockStart),
+    width: view.f32(record + layout.inkInlineExtent),
+    height: view.f32(record + layout.inkBlockExtent),
+  });
+}
 
 /** Reads an explicitly requested semantic sidecar. Rendering never calls this reader. */
 export function readTextEngineMeasurements(
@@ -19,8 +36,12 @@ export function readTextEngineMeasurements(
     const lineCount = view.u32(record + recordLayout.itemCount);
     if (lineStart + lineCount > table.count)
       throw new RangeError('paragraph measurement line span is outside the query');
+    const flags = view.u16(record + recordLayout.flags);
+    const inkMeasured = (flags & textShaperAbi.engine.measurementFlags.inkBounds) !== 0;
+    const glyphStart = lineStart + lineCount;
     let firstBaseline = 0;
     let lastBaseline = 0;
+    const lines: ParagraphLineMetrics[] = [];
     for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
       const line = view.record(table, lineStart + lineIndex);
       if (view.u16(line + recordLayout.kind) !== kinds.line || view.u32(line + recordLayout.parentId) !== paragraphId) {
@@ -29,21 +50,52 @@ export function readTextEngineMeasurements(
       const baseline = view.f32(line + recordLayout.blockStart);
       if (lineIndex === 0) firstBaseline = baseline;
       lastBaseline = baseline;
+      const lineHeight = view.f32(line + recordLayout.blockExtent);
+      // The engine reports the line box's ascent; its descent is the remainder of the box, so the
+      // two are derived from one number instead of two that could disagree.
+      const ascent = view.f32(line + recordLayout.ascent);
+      // A measurement-only query leaves the line's glyph span zeroed; it is only meaningful
+      // alongside the per-glyph columns, which the layout reader validates before publishing.
+      const lineGlyphStart = view.u32(line + recordLayout.itemStart);
+      lines.push(
+        Object.freeze({
+          index: lineIndex,
+          textStart: view.u32(line + recordLayout.textStart),
+          textEnd: view.u32(line + recordLayout.textEnd),
+          glyphStart: lineGlyphStart === 0 ? 0 : lineGlyphStart - glyphStart,
+          glyphCount: view.u32(line + recordLayout.itemCount),
+          baseline,
+          advance: view.f32(line + recordLayout.inlineExtent),
+          ascent,
+          descent: lineHeight - ascent,
+          lineHeight,
+          inkBounds: inkBoundsOf(view, line, inkMeasured),
+        }),
+      );
     }
     if (measurements.has(paragraphId)) throw new TypeError('text engine returned duplicate paragraph measurements');
+    const contentHeight = view.f32(record + recordLayout.blockExtent);
+    const ascent = view.f32(record + recordLayout.ascent);
     measurements.set(
       paragraphId,
       Object.freeze({
         width: view.f32(record + recordLayout.inlineStart),
         height: view.f32(record + recordLayout.blockStart),
         contentWidth: view.f32(record + recordLayout.inlineExtent),
-        contentHeight: view.f32(record + recordLayout.blockExtent),
+        contentHeight,
         firstBaseline,
         lastBaseline,
-        overflowed: (view.u16(record + recordLayout.flags) & textShaperAbi.engine.measurementFlags.overflowed) !== 0,
+        // The paragraph's ascent is its box top to the first baseline; its descent is the last
+        // baseline to the bottom of the content it actually occupies.
+        ascent,
+        descent: contentHeight - lastBaseline,
+        lineHeight: contentHeight,
+        inkBounds: inkBoundsOf(view, record, inkMeasured),
+        overflowed: (flags & textShaperAbi.engine.measurementFlags.overflowed) !== 0,
         glyphCount: view.u32(record + recordLayout.parentId),
         lineCount,
         missingGlyphCount: view.u32(record + recordLayout.textStart),
+        lines: Object.freeze(lines),
       }),
     );
   }
@@ -83,6 +135,11 @@ export function readTextEngineLayouts(
     const glyphFontSizes = new Float32Array(glyphCount);
     const x = new Float32Array(glyphCount);
     const y = new Float32Array(glyphCount);
+    const glyphAdvances = new Float32Array(glyphCount);
+    const glyphInkX = new Float32Array(glyphCount);
+    const glyphInkY = new Float32Array(glyphCount);
+    const glyphInkWidths = new Float32Array(glyphCount);
+    const glyphInkHeights = new Float32Array(glyphCount);
     const glyphFlags = new Uint16Array(glyphCount);
     for (let glyphIndex = 0; glyphIndex < glyphCount; glyphIndex += 1) {
       const glyph = view.record(table, glyphStart + glyphIndex);
@@ -107,6 +164,11 @@ export function readTextEngineLayouts(
       glyphFontSizes[glyphIndex] = view.f32(glyph + recordLayout.inlineExtent);
       x[glyphIndex] = view.f32(glyph + recordLayout.inlineStart);
       y[glyphIndex] = view.f32(glyph + recordLayout.blockStart);
+      glyphAdvances[glyphIndex] = view.f32(glyph + recordLayout.inlineAdvance);
+      glyphInkX[glyphIndex] = view.f32(glyph + recordLayout.inkInlineStart);
+      glyphInkY[glyphIndex] = view.f32(glyph + recordLayout.inkBlockStart);
+      glyphInkWidths[glyphIndex] = view.f32(glyph + recordLayout.inkInlineExtent);
+      glyphInkHeights[glyphIndex] = view.f32(glyph + recordLayout.inkBlockExtent);
       glyphFlags[glyphIndex] = view.u16(glyph + recordLayout.flags);
     }
 
@@ -137,6 +199,36 @@ export function readTextEngineLayouts(
       lineAdvances[lineIndex] = view.f32(line + recordLayout.inlineExtent);
     }
 
+    // `glyphCount` and `lineCount` are the published authorities for indexing these columns
+    // (`ParagraphLayout`). This reader is their only producer, so the guarantee is checked here
+    // once rather than re-asserted by every consumer — which is exactly what the one real consumer
+    // of the previous shape had to hand-write over six of these arrays.
+    assertColumnLengths(glyphCount, [
+      glyphStableIds,
+      glyphFontSlots,
+      glyphIds,
+      clusters,
+      glyphFontSizes,
+      x,
+      y,
+      glyphAdvances,
+      glyphInkX,
+      glyphInkY,
+      glyphInkWidths,
+      glyphInkHeights,
+      glyphFlags,
+    ]);
+    assertColumnLengths(lineCount, [
+      lineTextStarts,
+      lineTextEnds,
+      lineGlyphStarts,
+      lineGlyphCounts,
+      lineBaselines,
+      lineAdvances,
+    ]);
+    if (measurement.lines.length !== lineCount) {
+      throw new RangeError('layout inspection line metrics disagree with its line count');
+    }
     layouts.set(
       paragraphId,
       Object.freeze({
@@ -149,6 +241,11 @@ export function readTextEngineLayouts(
         glyphFontSizes,
         x,
         y,
+        glyphAdvances,
+        glyphInkX,
+        glyphInkY,
+        glyphInkWidths,
+        glyphInkHeights,
         glyphFlags,
         lineTextStarts,
         lineTextEnds,
@@ -160,6 +257,12 @@ export function readTextEngineLayouts(
     );
   }
   return layouts;
+}
+
+function assertColumnLengths(count: number, columns: readonly ArrayLike<number>[]): void {
+  for (const column of columns) {
+    if (column.length !== count) throw new RangeError('layout inspection published a ragged column');
+  }
 }
 
 function checkedAdd(left: number, right: number, label: string): number {

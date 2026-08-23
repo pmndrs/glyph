@@ -16,7 +16,8 @@ pub(crate) const CLUSTER_ALLOWED_BREAK: u8 = 1 << 3;
 /// The cluster starts with U+0020 — a justifiable, shrinkable word space.
 pub(crate) const CLUSTER_SPACE: u8 = 1 << 4;
 
-const GLYPH_UNSAFE_TO_BREAK: u16 = 1;
+use super::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK as GLYPH_UNSAFE_TO_BREAK;
+
 const NO_SOURCE_RUN: u32 = u32::MAX;
 /// Cluster count per chunk summary (D-245).
 pub(crate) const LAYOUT_CHUNK: usize = 64;
