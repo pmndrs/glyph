@@ -1,7 +1,7 @@
 /**
  * Incremental text mutation, verified through to the GPU.
  *
- * Every lane this engine already tested -- `measureLayout`, `inspectLayout`, glyph ids, glyph
+ * Every lane this engine already tested -- `measure`, `layout`, glyph ids, glyph
  * origins, draw counts, `instanceCount` -- reads the ENGINE. The packed instanced attributes are
  * what the GPU actually samples, and nothing asserted them. An incremental edit that leaves one
  * record slot holding its pre-edit occupant therefore passes every engine-side check while

@@ -123,8 +123,8 @@ export function lanes(mounted) {
   });
   draws.sort((left, right) => left.start - right.start);
   const paragraphs = mounted.nodes.map((node) => {
-    const layout = node.inspectLayout();
-    const measured = node.measureLayout();
+    const layout = node.layout();
+    const measured = node.measure();
     return {
       glyphCount: measured?.glyphCount,
       glyphIds: [...(layout?.glyphIds ?? [])],
@@ -234,7 +234,7 @@ function identityPositions(scene, draw, where) {
 export function assertShaped(mounted, context, { minimumGlyphs = 1 } = {}) {
   for (const [index, node] of mounted.nodes.entries()) {
     assert.equal(node.error, undefined, `${context}: paragraph ${index} reported ${String(node.error?.message)}`);
-    const measured = node.measureLayout();
+    const measured = node.measure();
     assert.notEqual(measured, undefined, `${context}: paragraph ${index} lost its committed layout metrics`);
     assert.equal(measured.missingGlyphCount, 0, `${context}: paragraph ${index} produced .notdef glyphs`);
     assert.ok(

@@ -60,7 +60,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   initiallyEmpty.text = 'A';
   emptyScene.updateMatrixWorld(true);
   assert.equal(initiallyEmpty.error, undefined, 'an initially empty paragraph must accept its first text edit');
-  assert.equal(initiallyEmpty.measureLayout()?.glyphCount, 1);
+  assert.equal(initiallyEmpty.measure()?.glyphCount, 1);
   initiallyEmpty.dispose();
 
   const editedSpans = new Text({
@@ -122,13 +122,12 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(label.bound, true);
   assert.equal(label.textGroup, group);
   assert.equal(group.textCount, 1);
-  assert.equal(label.layout, undefined, 'rendering must not materialize layout readback');
   assert.equal(group.error, undefined);
   const firstDraws = group.children.filter((child) => child.isMesh);
   assert.ok(firstDraws.length > 0);
   assert.equal(firstDraws[0].geometry.instanceCount, 10, 'the GPU plan omits the non-rendering space glyph');
   assert.equal(firstDraws[0].renderOrder, 12);
-  const measurement = label.measureLayout();
+  const measurement = label.measure();
   assert.ok(measurement, 'layout measurement must be available through an explicit Rust query');
   assert.equal(measurement.width, measurement.contentWidth);
   assert.equal(measurement.height, measurement.contentHeight);
@@ -138,14 +137,13 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(measurement.glyphCount, 11, 'layout summary retains the non-rendering space glyph');
   assert.equal(measurement.lineCount, 1);
   assert.equal(measurement.missingGlyphCount, 0);
-  assert.equal(label.measureLayout(), measurement, 'an unchanged committed layout must reuse its queried measurement');
-  const inspection = label.inspectLayout();
+  assert.equal(label.measure(), measurement, 'an unchanged committed layout must reuse its queried measurement');
+  const inspection = label.layout();
   assert.ok(inspection, 'per-glyph layout must be available only through an explicit Rust inspection query');
   assert.equal(inspection.glyphIds.length, measurement.glyphCount);
   assert.equal(inspection.glyphStableIds.length, inspection.glyphIds.length);
   assert.equal(inspection.lineGlyphCounts.length, measurement.lineCount);
-  assert.equal(label.inspectLayout(), inspection, 'an unchanged committed layout must reuse its copied inspection');
-  assert.equal(label.layout, undefined, 'query data must not restore layout arrays to rendering');
+  assert.equal(label.layout(), inspection, 'an unchanged committed layout must reuse its copied inspection');
   assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
 
   const placements = label.snapshotGlyphs();
@@ -200,7 +198,6 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   label.text = 'Only the final desired value';
   label.text = 'Updated';
   scene.updateMatrixWorld();
-  assert.equal(label.layout, undefined);
   assert.ok(group.children.some((child) => child.isMesh));
   assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
   assert.equal(
@@ -208,8 +205,8 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     7,
     'compatible revisions must retain draws and resize live counts',
   );
-  assert.notEqual(label.measureLayout(), measurement, 'a semantic update must invalidate the measurement cache');
-  assert.notEqual(label.inspectLayout(), inspection, 'a semantic update must invalidate the inspection cache');
+  assert.notEqual(label.measure(), measurement, 'a semantic update must invalidate the measurement cache');
+  assert.notEqual(label.layout(), inspection, 'a semantic update must invalidate the inspection cache');
 
   scene.add(label);
   scene.updateMatrixWorld();
@@ -236,13 +233,13 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   const spaced = new Text({ font, text: 'Whisper', contentBox: { spaceBefore: 8, spaceAfter: 6 } });
   for (const paragraph of [plainShort, indented, spaced]) scene.add(paragraph);
   scene.updateMatrixWorld();
-  const plainMeasure = plainShort.measureLayout();
-  const indentedMeasure = indented.measureLayout();
-  const spacedMeasure = spaced.measureLayout();
+  const plainMeasure = plainShort.measure();
+  const indentedMeasure = indented.measure();
+  const spacedMeasure = spaced.measure();
   assert.equal(plainMeasure.lineCount, 1);
   assert.equal(indentedMeasure.lineCount, 1);
   assert.equal(indentedMeasure.contentWidth, plainMeasure.contentWidth + 30);
-  assert.equal(indented.inspectLayout().x[0], plainShort.inspectLayout().x[0] + 30);
+  assert.equal(indented.layout().x[0], plainShort.layout().x[0] + 30);
   assert.equal(spacedMeasure.firstBaseline, plainMeasure.firstBaseline + 8);
   assert.equal(spacedMeasure.contentHeight, plainMeasure.contentHeight + 8 + 6);
   for (const paragraph of [plainShort, indented, spaced]) {
@@ -268,9 +265,9 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   });
   for (const paragraph of [natural, filled, capped]) scene.add(paragraph);
   scene.updateMatrixWorld();
-  const naturalMeasure = natural.measureLayout();
-  const filledMeasure = filled.measureLayout();
-  const cappedMeasure = capped.measureLayout();
+  const naturalMeasure = natural.measure();
+  const filledMeasure = filled.measure();
+  const cappedMeasure = capped.measure();
   assert.equal(naturalMeasure.lineCount, 1);
   assert.ok(naturalMeasure.contentWidth < 300, 'auto last line keeps its natural advance');
   assert.equal(filledMeasure.contentWidth, 300, 'justified last line fills the exact box');
@@ -298,7 +295,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   });
   scene.add(reference);
   scene.updateMatrixWorld();
-  const referenceMeasure = reference.measureLayout();
+  const referenceMeasure = reference.measure();
   assert.ok(referenceMeasure.lineCount >= 4, 'the fixture text must wrap well past two lines at the column measure');
   const columnHeight = Math.ceil(referenceMeasure.contentHeight * 0.6);
   const twoColumns = new Text({
@@ -312,13 +309,13 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   });
   scene.add(twoColumns);
   scene.updateMatrixWorld();
-  const doubleMeasure = twoColumns.measureLayout();
+  const doubleMeasure = twoColumns.measure();
   assert.equal(doubleMeasure.overflowed, false, 'two columns at 60% height must hold the whole text');
   assert.ok(
     doubleMeasure.contentHeight <= columnHeight,
     'the columned block extent must stay inside the column height',
   );
-  const columnStarts = twoColumns.inspectLayout().x;
+  const columnStarts = twoColumns.layout().x;
   const secondColumnStart = columnMeasureWidth + 20;
   assert.ok(
     Array.from(columnStarts).some((x) => x >= secondColumnStart),
@@ -362,7 +359,7 @@ test('Three retries an unapplied Rust publication before requesting another engi
   let label;
   const material = defineTextMaterial((context) => {
     if (failMaterial) {
-      assert.throws(() => label.measureLayout(), /cannot reenter Three render-plan application/u);
+      assert.throws(() => label.measure(), /cannot reenter Three render-plan application/u);
       throw new Error('deliberate material realization failure');
     }
     return context.createDefaultMaterial();
@@ -555,13 +552,13 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.equal(transforms.array[1 * 16 + 12], 2);
   assert.equal(transforms.array[2 * 16 + 12], 5);
 
-  const initialLeftMeasurement = left.measureLayout();
-  const initialRightMeasurement = right.measureLayout();
+  const initialLeftMeasurement = left.measure();
+  const initialRightMeasurement = right.measure();
   assert.ok(initialLeftMeasurement);
   assert.ok(initialRightMeasurement);
   instrumented.reset();
   left.set({});
-  assert.equal(left.measureLayout(), initialLeftMeasurement, 'an empty update must preserve the cached measurement');
+  assert.equal(left.measure(), initialLeftMeasurement, 'an empty update must preserve the cached measurement');
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 0, 'an empty update and cached measurement must not cross into Rust');
 
@@ -612,11 +609,11 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
 
   instrumented.reset();
   left.contentBox = { width: { mode: 'exact', size: 100 }, wrap: 'word' };
-  const resizedMeasurement = left.measureLayout();
+  const resizedMeasurement = left.measure();
   assert.ok(resizedMeasurement, 'a pending mutation must produce its requested measurement');
   assert.notEqual(resizedMeasurement, initialLeftMeasurement);
   assert.deepEqual(
-    right.measureLayout(),
+    right.measure(),
     initialRightMeasurement,
     'one requested semantic publication must populate every retained paragraph',
   );
@@ -724,7 +721,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
 
   instrumented.reset();
   left.text = 'ABC';
-  const replacedMeasurement = left.measureLayout();
+  const replacedMeasurement = left.measure();
   assert.equal(replacedMeasurement?.glyphCount, 3);
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 1, 'text replacement and demanded measurement must share one text_update');
@@ -934,7 +931,7 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
   scene.add(label);
   scene.updateMatrixWorld();
   assert.equal(label.error, undefined);
-  const inspection = label.inspectLayout();
+  const inspection = label.layout();
   assert.ok(inspection);
   assert.equal(inspection.lineTextEnds[0], 3, 'the fixed width must preserve the unsafe-boundary fixture');
   assert.equal(inspection.clusters.at(-1), 3, 'the ellipsis is anchored at the truncation boundary');
@@ -1028,12 +1025,12 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
 });
 
 /**
- * Roadmap 11.17 layer 4: measureLayout under a geometry-only change routes to the
+ * Roadmap 11.17 layer 4: measure under a geometry-only change routes to the
  * paragraph-scoped synchronous engine query — no full session updates, no
  * publication flips, no revision burn — and the following ordinary frame adopts the
  * speculative work without a checkpoint rebuild.
  */
-test('repeated measureLayout under changing constraints stays on the paragraph query path', async () => {
+test('repeated measure under changing constraints stays on the paragraph query path', async () => {
   const abi = textShaperAbi;
   const registry = new FontRegistry();
   const instrumented = await createInstrumentedRuntime(registry);
@@ -1056,7 +1053,7 @@ test('repeated measureLayout under changing constraints stays on the paragraph q
   const widths = [90, 150, 90, 240];
   for (const width of widths) {
     label.set({ contentBox: { width: { mode: 'exact', size: width } } });
-    const measurement = label.measureLayout();
+    const measurement = label.measure();
     assert.ok(measurement, `width ${width} measures synchronously`);
     assert.ok(
       measurement.contentWidth <= width + 1e-3,
@@ -1080,7 +1077,7 @@ test('repeated measureLayout under changing constraints stays on the paragraph q
     0,
     'the committing frame proceeds from pre-measure revisions without a checkpoint rebuild',
   );
-  assert.equal(label.measureLayout()?.contentWidth <= 240 + 1e-3, true);
+  assert.equal(label.measure()?.contentWidth <= 240 + 1e-3, true);
   label.dispose();
 });
 
@@ -1115,7 +1112,7 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
     scene.updateMatrixWorld(true);
     assert.equal(text.error, undefined, `typing "${typed.slice(0, length)}" must publish`);
   }
-  const ligated = text.measureLayout();
+  const ligated = text.measure();
   assert.equal(ligated?.missingGlyphCount, 0, 'the ligature resolves to a real glyph');
 
   // The ligature genuinely absorbs graphemes: with `liga` off the same text needs more
@@ -1123,7 +1120,7 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
   text.style = { fontSize: 20, lineHeight: 1.25, features: [{ tag: 'liga', value: 0 }] };
   scene.updateMatrixWorld(true);
   assert.equal(text.error, undefined);
-  const unligated = text.measureLayout();
+  const unligated = text.measure();
   assert.ok(
     unligated !== undefined && ligated !== undefined && unligated.glyphCount > ligated.glyphCount,
     `disabling liga must add glyphs (ligated ${ligated?.glyphCount}, unligated ${unligated?.glyphCount})`,

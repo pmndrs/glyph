@@ -95,7 +95,7 @@ test('advance and ink extents are different numbers, and each agrees with the en
   const mounted = mount(font, 'Wavy');
   try {
     const placements = mounted.node.snapshotGlyphs();
-    const summary = mounted.node.measureLayout();
+    const summary = mounted.node.measure();
     const line = placements.lines[0];
 
     // The per-glyph advances must sum to the line advance the engine derived independently in f64.
@@ -184,7 +184,7 @@ test('a snapshot is internally consistent and restores without the caller sequen
   try {
     const placements = mounted.node.snapshotGlyphs();
     // The invariant the one real consumer used to hand-check over six public arrays.
-    assert.equal(placements.glyphs.length, mounted.node.measureLayout().glyphCount);
+    assert.equal(placements.glyphs.length, mounted.node.measure().glyphCount);
     for (const [index, glyph] of placements.glyphs.entries()) assert.equal(glyph.index, index);
     assert.equal(placements.space, 'paragraph');
 
@@ -260,7 +260,7 @@ test('glyph flags decode through exported names rather than remembered indices',
   const font = await loadFont();
   const mounted = mount(font, 'flags');
   try {
-    const inspection = mounted.node.inspectLayout();
+    const inspection = mounted.node.layout();
     assert.equal(inspection.glyphFlags.length, inspection.glyphCount);
     assert.equal(glyphFlags.produced, glyphFlags.unsafeToBreak | glyphFlags.unsafeToConcat);
     // The engine never sets a bit outside the set it publishes a name for, so a consumer testing

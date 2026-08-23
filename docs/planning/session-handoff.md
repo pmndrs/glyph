@@ -36,14 +36,14 @@ Codified in `.agents/skills/engine-call-contract/SKILL.md`. Two rules:
 
 Merging them was tried in this session and regressed the fast path from **0 engine crossings to 4** on a constraint sweep. `three-v1.test.mjs`, "repeated measure under changing constraints stays on the paragraph query path", is the test that caught it and is the guard against it happening again. Skia and Flutter separate the same way and for the same reason: `getRectsForRange` and `getBoxesForSelection` are on-demand rather than part of laying out.
 
-**Open naming decision.** The current names are backwards. Ours:
+**The naming is decided: rename it.** The current names are backwards. Ours:
 
 | ours | does | Skia's equivalent |
 | --- | --- | --- |
 | `measure(constraints)` | shaping and line breaking, returns metrics | `layout(width)` |
 | `layout()` | queries the finished result, emits and copies columns | `getRectsForRange()` |
 
-`measure` implies free and is where the work is; `layout` implies work and is a query over work already done. The leaning is to rename the working call **`layout`**, matching Skia, with the positioned columns and `caretAt`/`selectionRects` as queries over it. The counter-argument is that Yoga and uikit both name their hook `measure`, but that only means ours is *called from* a measure callback. **Not yet done. Decide before release; it is a rename across ~70 call sites.**
+`measure` implies free and is where the work is; `layout` implies work and is a query over work already done. **Decided: the working call becomes `layout(constraints)` and the positioned columns move to a second method (`glyphs()`), matching Skia's `layout()` then `getRectsForRange()`.** Both surfaces carry both verbs. That Yoga and uikit name their hook `measure` only means ours is *called from* a measure callback; it does not have to share the name. Roughly seventy call sites. **In flight.**
 
 ## What measurement guarantees
 
@@ -60,6 +60,14 @@ Compute-or-cached is inherent and not a wart. The first query pays shaping; it i
 - Every caller-reachable path to a frame rejection is closed at `set()` — span ranges, nesting, feature ranges, unpaired surrogates. What remains is our own invariant violations.
 - `FontLoader` names **two different classes** at the root and in `/three`. Four call sites use the first, nine the second. Rename `/three`'s to `ThreeFontLoader`. **Not done.**
 - A span carrying a `ThreeTextMaterial` puts a renderer type in the authoring vocabulary. The engine only ever sees the `materialId` `/three` resolves it to, and `programVariant` is a font-binding field, not the caller-facing slot. The clean shape is a span naming an abstract selector the renderer resolves through a registry. **Not done, and it is why the raw-offset span array cannot yet be withdrawn — that array is the only carrier with a material slot.**
+
+## Three API defects the renderer guide surfaced
+
+Found while writing `docs/guides/renderer-integration.md`; each is a place the API needs changing rather than documenting.
+
+1. **A technique schema mixes wire declarations with host-only metadata.** Buffers and binding order lower to wire records; `resources` and `glyphOrigin` never reach the wire. Nothing in the type says which is which, so an author has to already know. Make the boundary structural.
+2. **Identity is spread across five concepts** — technique strings, scoped wire ids, policy handles, program ids, and font-binding-owned program variants — with the relationships implicit. A branded compiled-registration object would state them.
+3. **The patch opcode named `retire` is not release authority.** Retirement records are. One word, two meanings, and an integrator cannot tell which they hold — the same defect as two classes both named `FontLoader`.
 
 ## Open work
 

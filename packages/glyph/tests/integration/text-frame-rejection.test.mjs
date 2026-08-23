@@ -172,23 +172,23 @@ test(
     scene.add(node);
     try {
       scene.updateMatrixWorld(true);
-      const settled = node.measureLayout();
+      const settled = node.measure();
       assert.ok(settled !== undefined, 'the paragraph inside the budget must commit');
 
       // Past the budget: no throw, and the committed layout is still the one that fit.
       node.set({ text: 'abcdefghijklmnopqrstuvwxyz' });
       assert.doesNotThrow(() => scene.updateMatrixWorld(true), 'a fixed budget must not break the traversal');
-      assert.deepEqual(node.measureLayout(), settled, 'the last complete revision must stay visible');
+      assert.deepEqual(node.measure(), settled, 'the last complete revision must stay visible');
       assert.equal(node.error, undefined, 'honouring the declared budget is not an error');
 
       // Repeated frames stay quiet and stay correct.
       for (let frame = 0; frame < 4; frame += 1) scene.updateMatrixWorld(true);
-      assert.deepEqual(node.measureLayout(), settled);
+      assert.deepEqual(node.measure(), settled);
 
       // Self-healing: the comparison is recomputed, never latched.
       node.set({ text: 'ab' });
       scene.updateMatrixWorld(true);
-      const recovered = node.measureLayout();
+      const recovered = node.measure();
       assert.ok(recovered !== undefined && recovered.glyphCount === 2, 'content back inside the budget must commit');
     } finally {
       node.dispose();

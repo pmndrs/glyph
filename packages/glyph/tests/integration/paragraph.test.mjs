@@ -59,7 +59,7 @@ test('Paragraph.measure agrees byte-for-byte with the Three.js Text measure rout
       text.contentBox = constraints ?? {};
       scene.updateMatrixWorld(true);
       if (text.error !== undefined) throw text.error;
-      const expected = text.measureLayout();
+      const expected = text.measure();
       assert.ok(expected !== undefined, 'the Text route must publish a committed measurement');
       assert.deepEqual(projectMeasurement(result), projectMeasurement(expected));
     }
@@ -69,7 +69,7 @@ test('Paragraph.measure agrees byte-for-byte with the Three.js Text measure rout
   }
 });
 
-test('measure() positioned columns agree byte-for-byte with the Three.js Text inspection route', async () => {
+test('layout() positioned columns agree byte-for-byte with the Three.js Text inspection route', async () => {
   await using boot = await bootstrap();
   const scene = new THREE.Scene();
   const box = { width: { mode: 'exact', size: 300 }, height: { mode: 'at-most', size: 200 } };
@@ -77,10 +77,10 @@ test('measure() positioned columns agree byte-for-byte with the Three.js Text in
   scene.add(text);
   try {
     const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
-    const result = paragraph.measure(box);
+    const result = paragraph.layout(box);
     scene.updateMatrixWorld(true);
     if (text.error !== undefined) throw text.error;
-    const expected = text.inspectLayout();
+    const expected = text.layout();
     assert.ok(expected !== undefined, 'the Text route must publish a committed layout inspection');
     assert.deepEqual(projectLayout(result), projectLayout(expected), 'positioned output must be identical');
     paragraph.dispose();
@@ -152,34 +152,35 @@ test('repeated probes answer from cache and leave authored state untouched', asy
   }
 });
 
-test('layoutRevision advances when the columns materialize and the output differs', async () => {
+test('layoutRevision advances exactly when positioned output differs', async () => {
   await using boot = await bootstrap();
   const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
   try {
-    assert.equal(paragraph.layoutRevision, 0, 'no positioned output yet');
+    assert.equal(paragraph.layoutRevision, 0, 'nothing queried yet');
 
-    // Metrics alone never materialize the columns, so the revision does not move. This is what a
-    // flexbox host does dozens of times per layout pass, and it must stay free.
+    // The measurement lane is paragraph-scoped and synchronous: a flexbox host probing
+    // widths dozens of times per layout pass must never move the revision.
     const probe = paragraph.measure({ width: { mode: 'at-most', size: 600 } });
     assert.ok(probe.contentWidth > 0);
     assert.equal(paragraph.layoutRevision, 0, 'reading sizes must not produce positioned output');
 
-    // Touching a column materializes it once, and the revision moves with it.
-    const wide = paragraph.measure({ width: { mode: 'at-most', size: 600 } });
-    const wideProjection = projectLayout(wide);
+    // Asking for the columns is the second query, and the revision moves with it.
+    const wide = paragraph.layout({ width: { mode: 'at-most', size: 600 } });
     assert.equal(paragraph.layoutRevision, 1, 'materializing the columns advances from zero');
-    projectLayout(wide);
-    assert.equal(paragraph.layoutRevision, 1, 'a second read of the same layout is already resolved');
+    const wideProjection = projectLayout(wide);
+
+    // Asking again at the same constraints is the cached object, so nothing moves.
+    assert.equal(paragraph.layout({ width: { mode: 'at-most', size: 600 } }), wide);
+    assert.equal(paragraph.layoutRevision, 1, 'a cached answer must not advance the revision');
 
     // A wider at-most box that fits the same lines produces identical positioned output.
-    const wider = paragraph.measure({ width: { mode: 'at-most', size: 900 } });
+    const wider = paragraph.layout({ width: { mode: 'at-most', size: 900 } });
     assert.deepEqual(projectLayout(wider), wideProjection);
     assert.equal(paragraph.layoutRevision, 1, 'equal positioned output must not advance the revision');
 
     // Narrowing until the text wraps changes the positioned output.
-    const narrow = paragraph.measure({ width: { mode: 'exact', size: 140 } });
-    projectLayout(narrow);
-    assert.equal(paragraph.layoutRevision, 2, 'changed positioned output advances the revision by exactly one');
+    const narrow = paragraph.layout({ width: { mode: 'exact', size: 140 } });
+    assert.equal(paragraph.layoutRevision, 2, 'changed positioned output advances by exactly one');
     assert.ok(narrow.lineCount > wide.lineCount, 'a narrower box wraps into more lines');
   } finally {
     paragraph.dispose();
@@ -296,10 +297,12 @@ test('measurement is complete and available before anything is rendered', async 
     }
 
     // Ink bounds are the visual extent, distinct from the advance extent: centring on
-    // contentWidth centres the pen, centring on inkBounds centres what you see.
-    assert.ok(m.inkBounds !== undefined, 'ink bounds must be measured before render');
-    assert.ok(Number.isFinite(m.inkBounds.x) && Number.isFinite(m.inkBounds.width));
-    assert.notEqual(m.inkBounds.width, m.contentWidth, 'ink and advance extents are different numbers');
+    // contentWidth centres the pen, centring on inkBounds centres what you see. Ink is a
+    // positioned quantity, so it comes from the second, positioned query.
+    const inspection = paragraph.layout({ width: { mode: 'at-most', size: 420 } });
+    assert.ok(inspection.inkBounds !== undefined, 'ink bounds must be measured before render');
+    assert.ok(Number.isFinite(inspection.inkBounds.x) && Number.isFinite(inspection.inkBounds.width));
+    assert.notEqual(inspection.inkBounds.width, m.contentWidth, 'ink and advance extents are different numbers');
 
     // The baseline is measured from the box top edge, which is what a flexbox baseline
     // alignment and a first-line cap alignment both need.
@@ -309,7 +312,7 @@ test('measurement is complete and available before anything is rendered', async 
     // Centring a paragraph in a box is arithmetic on these numbers alone -- no matrix involved,
     // because every value is paragraph-local.
     const boxWidth = 600;
-    const centredX = (boxWidth - m.inkBounds.width) / 2 - m.inkBounds.x;
+    const centredX = (boxWidth - inspection.inkBounds.width) / 2 - inspection.inkBounds.x;
     assert.ok(Number.isFinite(centredX));
   } finally {
     paragraph.dispose();

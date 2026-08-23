@@ -237,10 +237,10 @@ unconsumed publication first, so a caller had nothing to do that the next frame 
 
 ```ts
 const summary = label.measure();
-const layout = label.measure();
+const layout = label.layout();
 ```
 
-`measure()` requests an allocation-light `ParagraphLayoutSummary`. `measure()` additionally copies per-line
+`measure()` requests an allocation-light `ParagraphLayoutSummary`. `layout()` additionally copies per-line
 and per-glyph semantic arrays. Neither query is part of the ordinary render plan, and rendering never materializes layout
 arrays merely to draw.
 

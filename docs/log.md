@@ -42,7 +42,7 @@
   from `set()` beside `normalizedColumns` and `normalizeCapacity` instead of travelling to Rust (D-268), while
   cluster resolution stays silent and collapsed spans stay in the array. A `registerThreeRasterPlanProgram`
   call that arrives after a runtime has read the registry is refused by name rather than applying to nothing
-  (D-270), and `/three` re-exports the layout types `measure()` and `measure()` return.
+  (D-270), and `/three` re-exports the layout types `measure()` and `layout()` return.
 
   **Breaking**: `textShaperAbi.status` gains `styleRangeInvalid` (15), `styleSplitsCluster` (16),
   `styleNestingInvalid` (17), `styleRootInvalid` (18), and `fontMetricsMissing` (19); frames that previously

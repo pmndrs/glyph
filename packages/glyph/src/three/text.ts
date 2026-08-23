@@ -18,7 +18,6 @@ import type {
   GlyphBufferCapacity,
   ParagraphBaseProperties,
   ParagraphContentBox,
-  ParagraphProperties,
   ParagraphStyle,
 } from '../text-properties.js';
 import type { FontFeature } from '../font-feature.js';
@@ -112,7 +111,7 @@ export interface TextGroupOptions {
  * `'unbound'` and `'pending'` are distinguished because they need different responses: an unbound
  * paragraph is not in the scene graph and never will commit on its own, while a pending one commits
  * on the next world-matrix update. The previous surface collapsed both into `undefined` from
- * `measureLayout()`, and the only positive signal available was that `.error` was still unset.
+ * `measure()`, and the only positive signal available was that `.error` was still unset.
  */
 export type TextCommitState =
   | Readonly<{ status: 'unbound' }>
@@ -293,13 +292,28 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     this.#standaloneCapacity = normalizeCapacity(capacity);
     if (this.#textGroup === undefined) this.#binding?.setCapacity(this.#standaloneCapacity);
   }
-  /** Performs one explicit Rust query when this committed layout has not already been measured. */
-  measureLayout(): ParagraphLayoutSummary | undefined {
+  /**
+   * The committed measurement, or `undefined` when this paragraph has not published one yet.
+   *
+   * Sizes, baselines, ascent, descent, and the glyph and line counts. This takes the
+   * paragraph-scoped engine query: no publication flip, no per-glyph records, no array copies,
+   * so a scene that measures every frame stays on the cheap path.
+   *
+   * `undefined` means no committed layout, not a failure. `commitState()` is the positive signal.
+   */
+  measure(): ParagraphLayoutSummary | undefined {
     this.#assertActive();
     return this.#binding?.measurement(eraseTextTechnique(this));
   }
-  /** Copies the committed per-line and per-glyph Rust layout only when explicitly requested. */
-  inspectLayout(): ParagraphLayoutInspection | undefined {
+  /**
+   * The positioned columns of the committed layout, or `undefined` when none is committed.
+   *
+   * Separate from `measure()` because it is a separate engine query: `measure()` takes the
+   * paragraph-scoped measurement path with no publication flip, while this asks the engine to emit
+   * a record per glyph and copies those arrays out of Wasm. Reading a width should not pay for
+   * that, and a scene that measures every frame would.
+   */
+  layout(): ParagraphLayoutInspection | undefined {
     this.#assertActive();
     return this.#binding?.layoutInspection(eraseTextTechnique(this));
   }

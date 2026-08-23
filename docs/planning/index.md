@@ -11,6 +11,7 @@
 - [Raster technique and engine resource API](raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [Session handoff](session-handoff.md) — the decisions, corrections, and open questions from the API hardening session, including why measurement is two calls and what they should be named.
 - [Example renderer](example-renderer.md) — why a second engine consumer exists, what it proves about `/core`, and how it divides work with the TypeGPU shader subpath.
+- [Renderer integration guide](../guides/renderer-integration.md) — how to declare a technique schema, author and register a render policy, drive a session, consume all seven plan tables, and implement the retention and patch protocols.
 - [TypeGPU raster programs and text engine](typegpu-api.md) — complete direct TypeGPU API for typed technique shaders, programs, variants, caller-owned render passes, transforms, synchronization, and disposal.
 - [TypeGPU-first shader authority](typegpu-first-shader-authority.md) — exploratory package shape and falsifiable proof ladder for sharing complete raster kernels with direct WebGPU hosts, Three.js, and gpucat without changing core.
 - [Three material authority for text draws](three-material-authority.md) — **work in progress.** Fixes the Rust `material_id` route and shared-storage/draw-split contract while leaving the exact Three material-factory types for a later design pass.
