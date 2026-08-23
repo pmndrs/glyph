@@ -1,5 +1,5 @@
 import { type LoadedFont } from '@pmndrs/glyph';
-import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
+import { Text, TextGroup, TextSpan, useFont } from '@pmndrs/glyph/react';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -52,7 +52,8 @@ export function App() {
       <group name="world-text">
         {fonts.map(({ font, icon, technique }) => (
           <Activity key={technique} mode={activeTechnique === technique ? 'visible' : 'hidden'}>
-            {/* Text can be nested creating inner spans for rich text or to combine different fonts */}
+            {/* A TextSpan is an inline run: it inherits the paragraph's font, style, and paint unless it
+                overrides them, and carries no transform of its own because it is not an object in the scene. */}
             <Text
               contentBox={{
                 align: 'center',
@@ -66,9 +67,9 @@ export function App() {
               style={{ fontSize: 64, lineHeight: 1 }}
             >
               Hello world{' '}
-              <Text font={icon} paint={{ color: COLORS[technique] }}>
+              <TextSpan font={icon} paint={{ color: COLORS[technique] }}>
                 {WORLD_ICON}
-              </Text>
+              </TextSpan>
             </Text>
           </Activity>
         ))}
