@@ -1,13 +1,13 @@
-import type { GlyphPaintInput, ParagraphSpan } from '../formatted-text.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
-import type { ParagraphContentBox, ParagraphStyle } from '../text-properties.js';
+import type { GlyphPaintInput, ParagraphSpan } from './formatted-text.js';
+import type { AnyRasterTechnique } from './raster-technique.js';
+import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 import type {
   TextEngineConstraint,
   TextEngineDecoration,
   TextEngineFrameLimits,
   TextEngineRegion,
   TextEngineStyleValue,
-} from '../core.js';
+} from './core/frame-wire.js';
 
 /**
  * The single implementation of the paragraph-to-engine encodings shared by every host:

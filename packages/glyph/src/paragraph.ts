@@ -41,7 +41,7 @@ import {
   normalizedColumns,
   replacedContent,
   styledSpans,
-} from './internal/engine-encoding.js';
+} from './engine-encoding.js';
 
 const TEXT_CHANGE = 1 << 0;
 const STYLE_CHANGE = 1 << 1;
@@ -578,16 +578,6 @@ function acquireFonts<Technique extends AnyRasterTechnique>(
 
 function releaseFonts<Technique extends AnyRasterTechnique>(fonts: readonly LoadedFont<Technique>[]): void {
   for (const font of fonts) releaseFontSelection(font);
-}
-
-/** Font-stack membership by loaded-font identity, ignoring order. */
-function sameFonts(
-  previous: readonly LoadedFont<AnyRasterTechnique>[],
-  next: readonly LoadedFont<AnyRasterTechnique>[],
-): boolean {
-  if (previous.length !== next.length) return false;
-  const members = new Set(previous);
-  return next.every((font) => members.has(font));
 }
 
 /**
