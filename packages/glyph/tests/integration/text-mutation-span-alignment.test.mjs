@@ -228,19 +228,15 @@ test('a cluster-aligned span keeps its range, and what it retains cannot be muta
   });
 });
 
-test('an inverted authored range is not laundered into an empty span', { timeout }, async () => {
+test('an inverted authored range is rejected where the caller wrote it', { timeout }, async () => {
   // Resolution moves boundaries forward and clamps a well-formed range so it cannot invert. An
-  // ALREADY inverted range is a caller arithmetic error, and range validity has its own owner.
-  // Clamping it here would produce an empty span that the empty-span filter then discards, so the
-  // fault would vanish instead of being reported.
+  // ALREADY inverted range is a caller arithmetic error: there is no range the caller meant, so
+  // nothing can repair it. Clamping it would produce an empty span the empty-span filter discards
+  // and the fault would vanish; forwarding it produced a frame the engine refused every frame with
+  // a numeric status naming nothing. It throws from construction instead, where the stack points
+  // at the caller (D-268).
   const font = await fonts.load('inter');
-  const mounted = mount(font, [authored('abc', [styled(2, 1)])]);
-  try {
-    mounted.scene.updateMatrixWorld(true);
-    assert.notEqual(mounted.nodes[0].error, undefined, 'an inverted span must not publish silently');
-  } finally {
-    unmount(mounted);
-  }
+  assert.throws(() => mount(font, [authored('abc', [styled(2, 1)])]), /span 0 is inverted/);
 });
 
 test('an update that changes neither text nor spans re-resolves nothing', { timeout }, async () => {
