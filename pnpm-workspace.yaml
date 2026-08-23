@@ -2,4 +2,7 @@ packages:
   - apps/*
   - packages/*
 
+minimumReleaseAgeExclude:
+  - typegpu@0.12.3
+
 onlyBuiltDependencies: []
