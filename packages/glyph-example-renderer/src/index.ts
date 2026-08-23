@@ -5,6 +5,17 @@
  * be written against `/core` without reaching into package internals, this package
  * stops compiling. See `docs/planning/example-renderer.md`.
  */
-export type { ExampleDraw, ExampleDrawList, ExampleTableSnapshot } from './draw-list.js';
-export type { ExampleRendererDevice } from './device.js';
+export type { ExampleDraw, ExampleDrawList } from './draw-list.js';
+export { decodeDraw } from './draw-list.js';
+export { ExampleTextEngine, type ExampleFrameInput } from './engine.js';
+export type { RetainedTextEnginePublication } from '@pmndrs/glyph/core';
 export { readDrawList } from './plan-reader.js';
+export {
+  EXAMPLE_CAPABILITY_SET,
+  EXAMPLE_POLICY_HANDLE,
+  exampleQuadSchema,
+  exampleRenderPolicyBytes,
+  exampleSystemBuffers,
+} from './policy.js';
+export type { ExampleTableSnapshot } from './snapshot.js';
+export type { ExampleRendererDevice } from './device.js';

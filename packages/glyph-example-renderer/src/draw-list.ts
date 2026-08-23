@@ -1,11 +1,13 @@
-/**
- * Device-neutral structures copied out of one borrowed render-plan publication.
- *
- * Every field here is owned by the caller. That is the point of this package: a
- * `TextEnginePublication` is valid only until the next Wasm call, so a retained host
- * cannot hold the engine's bytes across a frame. Copying is currently the host's
- * problem, and this module is what that problem looks like in practice.
- */
+import {
+  textShaperAbi,
+  type TextEnginePatchRecord,
+  type TextEngineRenderPlanView,
+  type TextEngineRetirementRecord,
+} from '@pmndrs/glyph/core';
+
+import type { ExampleTableSnapshot } from './snapshot.js';
+
+const drawLayout = textShaperAbi.layouts.engineDraw;
 
 /** One draw the engine wants issued, decoded from the plan's `draws` table. */
 export interface ExampleDraw {
@@ -30,24 +32,50 @@ export interface ExampleDraw {
   readonly indirectOffset: number;
 }
 
-/** An owned copy of one plan table, kept opaque where this example does not decode it. */
-export interface ExampleTableSnapshot {
-  readonly count: number;
-  readonly stride: number;
-  /** Owned bytes. Never aliases the engine's Wasm memory. */
-  readonly records: Uint8Array;
-}
-
-/** One publication, copied into host-owned memory and safe to retain across frames. */
+/**
+ * One frame's render plan, safe to hold forever.
+ *
+ * Ownership comes from `TextEngineSession.retain`, which copies the whole encoded
+ * result once and brands it; every field here is either a decode of that copy or a
+ * view into it, and nothing aliases the engine's Wasm memory.
+ */
 export interface ExampleDrawList {
   readonly engineRevision: number;
   readonly planRevision: number;
   readonly publicationGeneration: number;
   readonly draws: readonly ExampleDraw[];
+  /** Dirty ranges: what changed on which retained buffer, not whole arrays. */
+  readonly patches: readonly TextEnginePatchRecord[];
+  /**
+   * Storage to release, each naming `(kind, id, generation)` and the acknowledged
+   * publication generation that makes release safe.
+   */
+  readonly retirements: readonly TextEngineRetirementRecord[];
   readonly resources: ExampleTableSnapshot;
   readonly buffers: ExampleTableSnapshot;
-  readonly patches: ExampleTableSnapshot;
   readonly primitives: ExampleTableSnapshot;
-  readonly retirements: ExampleTableSnapshot;
   readonly diagnostics: ExampleTableSnapshot;
+}
+
+/** Decode one row of the `draws` table. */
+export function decodeDraw(view: TextEngineRenderPlanView, offset: number): ExampleDraw {
+  return {
+    id: view.u32(offset + drawLayout.id),
+    programId: view.u32(offset + drawLayout.programId),
+    programVariant: view.u16(offset + drawLayout.programVariant),
+    flags: view.u16(offset + drawLayout.flags),
+    materialId: view.u32(offset + drawLayout.materialId),
+    clipId: view.u32(offset + drawLayout.clipId),
+    depthKey: view.u32(offset + drawLayout.depthKey),
+    transformId: view.u32(offset + drawLayout.transformId),
+    primitiveStart: view.u32(offset + drawLayout.primitiveStart),
+    primitiveCount: view.u32(offset + drawLayout.primitiveCount),
+    bufferStart: view.u32(offset + drawLayout.bufferStart),
+    bufferCount: view.u32(offset + drawLayout.bufferCount),
+    resourceStart: view.u32(offset + drawLayout.resourceStart),
+    resourceCount: view.u32(offset + drawLayout.resourceCount),
+    orderToken: view.u32(offset + drawLayout.orderToken),
+    indirectBufferId: view.u32(offset + drawLayout.indirectBufferId),
+    indirectOffset: view.u32(offset + drawLayout.indirectOffset),
+  };
 }

@@ -1,67 +1,66 @@
-import { TextEngineRenderPlanView, textShaperAbi, type TextEnginePublication } from '@pmndrs/glyph/core';
+import {
+  readTextEnginePatch,
+  readTextEngineRetirement,
+  retainedPublicationBrand,
+  TextEngineRenderPlanView,
+  type RetainedTextEnginePublication,
+} from '@pmndrs/glyph/core';
 
-import type { ExampleDraw, ExampleDrawList, ExampleTableSnapshot } from './draw-list.js';
-
-const drawLayout = textShaperAbi.layouts.engineDraw;
-
-/** Copies one table's records into host-owned bytes. */
-function snapshot(
-  view: TextEngineRenderPlanView,
-  name: 'resources' | 'buffers' | 'patches' | 'primitives' | 'retirements' | 'diagnostics',
-): ExampleTableSnapshot {
-  const table = view.table(name);
-  const byteLength = table.count * table.stride;
-  const records = byteLength === 0 ? new Uint8Array(0) : view.bytes(table.offset, byteLength).slice();
-  return { count: table.count, stride: table.stride, records };
-}
-
-function decodeDraw(view: TextEngineRenderPlanView, offset: number): ExampleDraw {
-  return {
-    id: view.u32(offset + drawLayout.id),
-    programId: view.u32(offset + drawLayout.programId),
-    programVariant: view.u16(offset + drawLayout.programVariant),
-    flags: view.u16(offset + drawLayout.flags),
-    materialId: view.u32(offset + drawLayout.materialId),
-    clipId: view.u32(offset + drawLayout.clipId),
-    depthKey: view.u32(offset + drawLayout.depthKey),
-    transformId: view.u32(offset + drawLayout.transformId),
-    primitiveStart: view.u32(offset + drawLayout.primitiveStart),
-    primitiveCount: view.u32(offset + drawLayout.primitiveCount),
-    bufferStart: view.u32(offset + drawLayout.bufferStart),
-    bufferCount: view.u32(offset + drawLayout.bufferCount),
-    resourceStart: view.u32(offset + drawLayout.resourceStart),
-    resourceCount: view.u32(offset + drawLayout.resourceCount),
-    orderToken: view.u32(offset + drawLayout.orderToken),
-    indirectBufferId: view.u32(offset + drawLayout.indirectBufferId),
-    indirectOffset: view.u32(offset + drawLayout.indirectOffset),
-  };
-}
+import { decodeDraw, type ExampleDrawList } from './draw-list.js';
+import type { ExampleTableSnapshot } from './snapshot.js';
 
 /**
- * Reads one borrowed publication into host-owned memory.
+ * Reads one retained publication into the host's draw-list structures.
  *
- * The engine's bytes expire at the next Wasm call, so a retained host must copy before
- * it does anything else. `readDrawList` is that copy, written once here so the cost and
- * the hazard are visible rather than folded into a renderer.
+ * The parameter demands `RetainedTextEnginePublication`, not a plain publication: a
+ * draw list is built to be held across frames, and a borrowed publication expires at
+ * the session's next call. The brand makes passing a live-but-doomed borrow a compile
+ * error instead of a latent read of freed memory.
  */
 export function readDrawList(
-  publication: TextEnginePublication,
+  publication: RetainedTextEnginePublication,
   view: TextEngineRenderPlanView = new TextEngineRenderPlanView(),
 ): ExampleDrawList {
+  // The brand is checked again at runtime because plain JavaScript callers bypass the types.
+  if (!(retainedPublicationBrand in publication)) {
+    throw new TypeError('readDrawList needs a retained publication: borrow expires, retain first');
+  }
   view.bind(publication);
   const draws = view.table('draws');
-  const decoded: ExampleDraw[] = [];
+  const decoded: ReturnType<typeof decodeDraw>[] = [];
   for (let index = 0; index < draws.count; index += 1) decoded.push(decodeDraw(view, view.record(draws, index)));
+  const patches = view.table('patches');
+  const patchRecords: ReturnType<typeof readTextEnginePatch>[] = [];
+  for (let index = 0; index < patches.count; index += 1) patchRecords.push(readTextEnginePatch(view, patches, index));
+  const retirements = view.table('retirements');
+  const retirementRecords: ReturnType<typeof readTextEngineRetirement>[] = [];
+  for (let index = 0; index < retirements.count; index += 1) {
+    retirementRecords.push(readTextEngineRetirement(view, retirements, index));
+  }
   return {
     engineRevision: publication.engineRevision,
     planRevision: publication.planRevision,
     publicationGeneration: publication.publicationGeneration,
     draws: decoded,
+    patches: patchRecords,
+    retirements: retirementRecords,
     resources: snapshot(view, 'resources'),
     buffers: snapshot(view, 'buffers'),
-    patches: snapshot(view, 'patches'),
     primitives: snapshot(view, 'primitives'),
-    retirements: snapshot(view, 'retirements'),
     diagnostics: snapshot(view, 'diagnostics'),
+  };
+}
+
+/** A window into the retained bytes — no second copy. */
+function snapshot(
+  view: TextEngineRenderPlanView,
+  name: 'resources' | 'buffers' | 'primitives' | 'diagnostics',
+): ExampleTableSnapshot {
+  const table = view.table(name);
+  const byteLength = table.count * table.stride;
+  return {
+    count: table.count,
+    stride: table.stride,
+    records: byteLength === 0 ? new Uint8Array(0) : view.bytes(table.offset, byteLength),
   };
 }

@@ -6,11 +6,13 @@ import {
   readTextEngineLayouts,
   readTextEngineMeasurements,
   TextEngineHost,
+  TextEnginePublicationExpiredError,
   TextEngineRenderPlanView,
   TextEngineStatusError,
   textRuntimeShaper,
   textShaperAbi,
   type FontBindingDescriptor,
+  type RetainedTextEnginePublication,
   type RuntimeShaper,
   type TextEngineFrameUpdate,
   type TextEnginePublication,
@@ -33,6 +35,17 @@ const session: TextEngineSession = host.createSession({
 declare const frame: TextEngineFrameUpdate;
 const request: Uint8Array = compileTextEngineFrameUpdate(frame);
 const publication: TextEnginePublication = session.update(request);
+
+// Retention protocol: borrows expire loudly, retained copies never do.
+declare const expiredError: TextEnginePublicationExpiredError;
+const generations: readonly [number, number] = [expiredError.consumedGeneration, expiredError.latestGeneration];
+void generations;
+const retainedPublication: RetainedTextEnginePublication = session.retain(publication);
+session.assertLive(publication);
+const live: boolean = session.isExpired(publication);
+const acknowledged: number = session.acknowledgedGeneration;
+void live;
+void acknowledged;
 
 const plan = new TextEngineRenderPlanView().bind(publication);
 const draws = plan.table('draws');

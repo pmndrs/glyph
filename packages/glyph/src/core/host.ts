@@ -1,5 +1,10 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
+import {
+  retainedPublicationBrand,
+  TextEnginePublicationExpiredError,
+  type RetainedTextEnginePublication,
+} from './retention.js';
 import { RenderWireIdentityRegistry } from './render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
@@ -12,8 +17,9 @@ export interface TextEngineSessionOptions {
 }
 
 /**
- * One borrowed A/B render-plan publication. Its bytes remain readable until the next call into the same Wasm module;
- * synchronous renderers must consume them before updating, reserving, disposing, or otherwise calling the shaper.
+ * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
+ * this session answers any later call; see `core/retention.ts` for the protocol —
+ * `assertLive` makes a stale borrow loud and `retain` copies what must survive.
  */
 export interface TextEnginePublication {
   readonly bytes: Uint8Array;
@@ -196,6 +202,12 @@ export class TextEngineSession {
   #resultCapacity: number;
   #textCapacity: number;
   #disposed = false;
+  /** Bumped before every call that can answer with new bytes; borrows from older epochs are dead. */
+  #epoch = 0;
+  /** The epoch each issued borrow was published under, keyed by publication identity. */
+  readonly #issued = new WeakMap<TextEnginePublication, number>();
+  #acknowledgedGeneration = 0;
+  #latestGeneration = 0;
 
   /** @internal Sessions are created through {@link TextEngineHost.createSession}. */
   constructor(
@@ -218,8 +230,76 @@ export class TextEngineSession {
     return this.#handle;
   }
 
+  /** The newest publication generation this host has acknowledged consuming. */
+  get acknowledgedGeneration(): number {
+    return this.#acknowledgedGeneration;
+  }
+
+  /**
+   * Whether a borrowed publication's bytes are gone. Two integer compares: the borrow
+   * expires when the session answers any later call (including failed attempts that
+   * reserve capacity), when Wasm memory has grown past its buffer, or on disposal.
+   */
+  isExpired(publication: TextEnginePublication): boolean {
+    if (this.#issued.get(publication) === undefined) {
+      throw new TypeError('publication was not issued by this text engine session');
+    }
+    return (
+      this.#disposed ||
+      this.#issued.get(publication) !== this.#epoch ||
+      publication.memoryBuffer !== this.#exports.memory.buffer
+    );
+  }
+
+  /**
+   * Throws {@link TextEnginePublicationExpiredError} instead of letting a stale borrow
+   * feed freed bytes to the host. Call it before decoding anything held across calls.
+   */
+  assertLive(publication: TextEnginePublication): void {
+    if (this.isExpired(publication)) {
+      throw new TextEnginePublicationExpiredError(publication.publicationGeneration, this.#latestGeneration);
+    }
+  }
+
+  /**
+   * Takes ownership with one contiguous copy of the whole encoded result — header,
+   * every plan table, and every patch payload — and acknowledges consumption, since
+   * taking the copy is taking what you need. Never expires; safe to hold across frames.
+   */
+  retain(publication: TextEnginePublication): RetainedTextEnginePublication {
+    this.assertLive(publication);
+    const bytes = publication.bytes.slice();
+    this.#acknowledge(publication.publicationGeneration);
+    return Object.freeze({
+      ...publication,
+      bytes,
+      memoryBuffer: bytes.buffer,
+      memoryGrew: false,
+      [retainedPublicationBrand]: true,
+    }) as RetainedTextEnginePublication;
+  }
+
+  /**
+   * Records that a borrowed publication has been consumed in place. The engine holds
+   * resource retirements until the acknowledged generation passes, so skipping this
+   * keeps retired GPU memory alive; going backwards at the wire is a revision conflict.
+   */
+  acknowledge(publication: TextEnginePublication): void {
+    this.assertLive(publication);
+    this.#acknowledge(publication.publicationGeneration);
+  }
+
+  #acknowledge(generation: number): void {
+    this.#acknowledgedGeneration = Math.max(this.#acknowledgedGeneration, generation);
+  }
+
+  #invalidate(): void {
+    this.#epoch += 1;
+  }
+
   reserve(requestCapacity: number, resultCapacity: number, textCapacity: number = this.#textCapacity): void {
     this.#assertActive();
+    this.#invalidate();
     requestCapacity = uint32(requestCapacity, 'request capacity');
     resultCapacity = uint32(resultCapacity, 'result capacity');
     textCapacity = uint32(textCapacity, 'text capacity');
@@ -234,6 +314,7 @@ export class TextEngineSession {
 
   update(request: Uint8Array): TextEnginePublication {
     this.#assertActive();
+    this.#invalidate();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
       throw new TypeError('text update request must be a nonempty Uint8Array');
     }
@@ -292,6 +373,7 @@ export class TextEngineSession {
    */
   measureParagraph(request: Uint8Array, paragraphId: number): TextEnginePublication {
     this.#assertActive();
+    this.#invalidate();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
       throw new TypeError('paragraph measure request must be a nonempty Uint8Array');
     }
@@ -353,7 +435,7 @@ export class TextEngineSession {
     }
     this.#requestCapacity = header.getUint32(layout.requestCapacity, true);
     this.#resultCapacity = header.getUint32(layout.resultCapacity, true);
-    return {
+    const publication: TextEnginePublication = {
       bytes: new Uint8Array(memoryBuffer, resultPointer, byteLength),
       memoryBuffer,
       memoryGrew: memoryBuffer !== initialMemoryBuffer,
@@ -370,10 +452,14 @@ export class TextEngineSession {
       patchCount: header.getUint32(layout.patchCount, true),
       drawCount: header.getUint32(layout.drawCount, true),
     };
+    this.#issued.set(publication, this.#epoch);
+    this.#latestGeneration = Math.max(this.#latestGeneration, publication.publicationGeneration);
+    return publication;
   }
 
   dispose(): void {
     if (this.#disposed) return;
+    this.#invalidate();
     requireStatus(this.#exports.disposeSession(this.#handle), 'dispose text session');
     this.#disposed = true;
     this.#onDispose();

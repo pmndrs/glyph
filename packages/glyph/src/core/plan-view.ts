@@ -137,3 +137,133 @@ function checkedProduct(left: number, right: number, label: string): number {
     throw new RangeError(`${label} byte length exceeds JavaScript's safe integer range`);
   return value;
 }
+
+/** One decoded row of the plan's `patches` table: a dirty range on one retained buffer. */
+export interface TextEnginePatchRecord {
+  readonly opcode: number;
+  readonly bufferId: number;
+  /** Storage is keyed by `(id, generation)`: a changed generation is new storage. */
+  readonly bufferGeneration: number;
+  readonly destinationOffset: number;
+  readonly byteLength: number;
+  /**
+   * Borrowed view of the payload region for `write` patches. It expires with the
+   * publication it came from — copy it, or retain the whole publication first.
+   */
+  readonly payload: Uint8Array | undefined;
+  readonly fillValue: number;
+  readonly sourceBufferId: number;
+  readonly sourceOffset: number;
+}
+
+/** One decoded row of the plan's `resources` table: an atlas or texture the host realizes. */
+export interface TextEngineResourceRecord {
+  readonly id: number;
+  readonly generation: number;
+  readonly techniqueId: number;
+  readonly referenceId: number;
+  readonly action: number;
+}
+
+/** One decoded row of the plan's `buffers` table: engine-owned storage the policy publishes into. */
+export interface TextEngineBufferRecord {
+  readonly id: number;
+  readonly generation: number;
+  readonly scalarType: number;
+  readonly vectorWidth: number;
+  readonly capacityRecords: number;
+  readonly byteLength: number;
+  readonly policyBufferId: number;
+}
+
+/**
+ * One decoded row of the plan's `retirements` table: the only signal to release
+ * engine storage. The engine defers reclamation until the acknowledged publication
+ * generation passes `afterPublicationGeneration`, so a host that acknowledges late
+ * keeps retired GPU memory alive and one that never acknowledges leaks it.
+ */
+export interface TextEngineRetirementRecord {
+  readonly kind: number;
+  readonly id: number;
+  readonly generation: number;
+  readonly afterPublicationGeneration: number;
+  readonly byteOffset: number;
+  readonly byteLength: number;
+}
+
+const patchLayout = textShaperAbi.layouts.enginePatch;
+const resourceLayout = textShaperAbi.layouts.engineResource;
+const bufferLayout = textShaperAbi.layouts.engineBuffer;
+const retirementLayout = textShaperAbi.layouts.engineRetirement;
+
+export function readTextEnginePatch(
+  view: TextEngineRenderPlanView,
+  table: RenderPlanTable,
+  index: number,
+): TextEnginePatchRecord {
+  const record = view.record(table, index);
+  const byteLength = view.u32(record + patchLayout.byteLength);
+  const opcode = view.u16(record + patchLayout.opcode);
+  return {
+    opcode,
+    bufferId: view.u32(record + patchLayout.bufferId),
+    bufferGeneration: view.u32(record + patchLayout.bufferGeneration),
+    destinationOffset: view.u32(record + patchLayout.destinationOffset),
+    byteLength,
+    payload:
+      opcode === textShaperAbi.engine.patchOpcodes.write && byteLength !== 0
+        ? view.bytes(view.u32(record + patchLayout.payloadOffset), byteLength)
+        : undefined,
+    fillValue: view.u32(record + patchLayout.fillValue),
+    sourceBufferId: view.u32(record + patchLayout.sourceBufferId),
+    sourceOffset: view.u32(record + patchLayout.sourceOffset),
+  };
+}
+
+export function readTextEngineResource(
+  view: TextEngineRenderPlanView,
+  table: RenderPlanTable,
+  index: number,
+): TextEngineResourceRecord {
+  const record = view.record(table, index);
+  return {
+    id: view.u32(record + resourceLayout.id),
+    generation: view.u32(record + resourceLayout.generation),
+    techniqueId: view.u32(record + resourceLayout.techniqueId),
+    referenceId: view.u32(record + resourceLayout.referenceId),
+    action: view.u16(record + resourceLayout.action),
+  };
+}
+
+export function readTextEngineBuffer(
+  view: TextEngineRenderPlanView,
+  table: RenderPlanTable,
+  index: number,
+): TextEngineBufferRecord {
+  const record = view.record(table, index);
+  return {
+    id: view.u32(record + bufferLayout.id),
+    generation: view.u32(record + bufferLayout.generation),
+    scalarType: view.u8(record + bufferLayout.scalarType),
+    vectorWidth: view.u8(record + bufferLayout.vectorWidth),
+    capacityRecords: view.u32(record + bufferLayout.capacityRecords),
+    byteLength: view.u32(record + bufferLayout.byteLength),
+    policyBufferId: view.u16(record + bufferLayout.policyBufferId),
+  };
+}
+
+export function readTextEngineRetirement(
+  view: TextEngineRenderPlanView,
+  table: RenderPlanTable,
+  index: number,
+): TextEngineRetirementRecord {
+  const record = view.record(table, index);
+  return {
+    kind: view.u16(record + retirementLayout.kind),
+    id: view.u32(record + retirementLayout.id),
+    generation: view.u32(record + retirementLayout.generation),
+    afterPublicationGeneration: view.u32(record + retirementLayout.afterPublicationGeneration),
+    byteOffset: view.u32(record + retirementLayout.byteOffset),
+    byteLength: view.u32(record + retirementLayout.byteLength),
+  };
+}

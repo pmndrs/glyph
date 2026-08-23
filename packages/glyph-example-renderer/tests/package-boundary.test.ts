@@ -4,20 +4,42 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
-const sourceFiles = ['device.ts', 'draw-list.ts', 'index.ts', 'plan-reader.ts'];
+const packageRoot = fileURLToPath(new URL('../', import.meta.url));
+
+async function packageSources(): Promise<readonly (readonly [string, string])[]> {
+  const directories = ['src', 'tests'];
+  const files: string[] = [];
+  for (const directory of directories) {
+    const entries = await readdir(join(packageRoot, directory), { recursive: true });
+    files.push(...entries.filter((entry) => entry.endsWith('.ts')).map((entry) => join(directory, entry)));
+  }
+  return Promise.all(files.map(async (file) => [file, await readFile(join(packageRoot, file), 'utf8')] as const));
+}
 
 describe('package boundary', () => {
-  test('reaches the engine only through published entry points', async () => {
-    const sources = await Promise.all(
-      sourceFiles.map((file) => readFile(new URL(`../src/${file}`, import.meta.url), 'utf8')),
-    );
-    for (const source of sources) {
-      // Internals and generated modules are off limits: a second renderer that needs them
-      // proves the published surface is insufficient, which is the whole point of this package.
-      expect(source).not.toMatch(/@pmndrs\/glyph\/(?:internal|generated)/);
-      // No scene-graph integration. This package must not depend on `/three` to reach the engine.
-      expect(source).not.toMatch(/@pmndrs\/glyph\/three/);
-      expect(source).not.toMatch(/from 'three/);
+  // Built from parts because this file's own source would otherwise contain the
+  // literals it forbids.
+  const threeImport = new RegExp(`from '${'three'}|from "${'three'}`);
+
+  test('reaches the engine only through the /core entry point', async () => {
+    for (const [file, source] of await packageSources()) {
+      // Internals, generated modules, and every other subpath are off limits — in src
+      // AND in tests. A second renderer that needs them proves the published surface
+      // is insufficient, which is the defect this package exists to catch. The one
+      // exception is the engine's Wasm artifact, a published entry point that carries
+      // no code surface.
+      expect(source, file).not.toMatch(/@pmndrs\/glyph\/(?!core\b|text-shaper\.wasm)/);
+      // No scene-graph integration and no renderer dependency.
+      expect(source, file).not.toMatch(threeImport);
+    }
+  });
+
+  test('imports nothing from the engine package by relative path either', async () => {
+    for (const [file, source] of await packageSources()) {
+      // Reaching dist or src of packages/glyph by relative path is the same defect as
+      // a private subpath import, just spelled differently.
+      expect(source, file).not.toMatch(/from '\.\.\/\.\.\/glyph\//);
+      expect(source, file).not.toMatch(/from '\.\.\/\.\.\/\.\.\/packages\/glyph\//);
     }
   });
 

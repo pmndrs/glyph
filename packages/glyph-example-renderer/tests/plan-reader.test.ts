@@ -1,10 +1,16 @@
-import { textShaperAbi, type TextEnginePublication } from '@pmndrs/glyph/core';
+import {
+  retainedPublicationBrand,
+  textShaperAbi,
+  type RetainedTextEnginePublication,
+  type TextEnginePublication,
+} from '@pmndrs/glyph/core';
 import { describe, expect, test } from 'vitest';
 
 import { readDrawList } from '../src/plan-reader.js';
 
 const result = textShaperAbi.layouts.engineResult;
 const draw = textShaperAbi.layouts.engineDraw;
+const patch = textShaperAbi.layouts.enginePatch;
 
 /** Every table the plan carries, so the ownership proof covers more than the draw table. */
 const TABLES = [
@@ -63,10 +69,13 @@ function publication(rows: number): TextEnginePublication {
     table.at = cursor;
     cursor += rows * table.record.size;
   }
-  const memoryBuffer = new ArrayBuffer(cursor);
+  // A payload region after every table, so write patches have bytes to point at.
+  const payloadBase = align(cursor, 4);
+  const total = payloadBase + rows * 4;
+  const memoryBuffer = new ArrayBuffer(total);
   const view = new DataView(memoryBuffer);
   const bytes = new Uint8Array(memoryBuffer);
-  view.setUint32(result.byteLength, cursor, true);
+  view.setUint32(result.byteLength, total, true);
   for (const table of placed) {
     view.setUint32(table.offset, table.at, true);
     view.setUint32(table.count, rows, true);
@@ -79,6 +88,18 @@ function publication(rows: number): TextEnginePublication {
     view.setUint32(record + draw.orderToken, 900 - index, true);
     view.setUint32(record + draw.indirectBufferId, 42, true);
     view.setUint16(record + draw.programVariant, 3, true);
+  }
+  // One write patch per row.
+  const patches = placed.find((entry) => entry.name === 'patches')!;
+  for (let index = 0; index < rows; index += 1) {
+    const record = patches.at + index * patch.size;
+    view.setUint16(record + patch.opcode, textShaperAbi.engine.patchOpcodes.write, true);
+    view.setUint32(record + patch.bufferId, 30 + index, true);
+    view.setUint32(record + patch.bufferGeneration, 8, true);
+    view.setUint32(record + patch.destinationOffset, 64 * index, true);
+    view.setUint32(record + patch.byteLength, 4, true);
+    view.setUint32(record + patch.payloadOffset, payloadBase + 4 * index, true);
+    bytes.fill(0x5a, payloadBase + 4 * index, payloadBase + 4 * index + 4);
   }
   return {
     bytes,
@@ -99,9 +120,25 @@ function publication(rows: number): TextEnginePublication {
   };
 }
 
+/**
+ * Simulates `TextEngineSession.retain` for a fixture: one contiguous owned copy carrying
+ * the retained brand — exactly what a real session hands back.
+ */
+function retainFixture(source: TextEnginePublication): RetainedTextEnginePublication {
+  const bytes = source.bytes.slice();
+  const retained: RetainedTextEnginePublication = {
+    ...source,
+    bytes,
+    memoryBuffer: bytes.buffer,
+    memoryGrew: false,
+    [retainedPublicationBrand]: true,
+  };
+  return Object.freeze(retained);
+}
+
 describe('render-plan reader', () => {
   test('decodes the draw table the engine published', () => {
-    const list = readDrawList(publication(2));
+    const list = readDrawList(retainFixture(publication(2)));
     expect(list.draws.map((entry) => entry.id)).toEqual([100, 101]);
     expect(list.draws.map((entry) => entry.orderToken)).toEqual([900, 899]);
     expect(list.draws[0]!.clipId).toBe(7);
@@ -110,13 +147,26 @@ describe('render-plan reader', () => {
     expect(list.planRevision).toBe(5);
   });
 
-  test('owns every byte it returns, so a host may retain it across a Wasm call', () => {
-    // A publication is valid only until the next Wasm call. A retained host that keeps a view into
-    // engine memory reads freed or reallocated bytes on the next frame, so the reader must copy.
-    // Every table is non-empty here: an empty one would satisfy these assertions vacuously.
+  test('surfaces dirty ranges as decoded patch records, not opaque bytes', () => {
+    const list = readDrawList(retainFixture(publication(2)));
+    expect(list.patches.map((record) => record.bufferId)).toEqual([30, 31]);
+    for (const [index, record] of list.patches.entries()) {
+      expect(record.opcode).toBe(textShaperAbi.engine.patchOpcodes.write);
+      expect(record.bufferGeneration).toBe(8);
+      expect(record.destinationOffset).toBe(64 * index);
+      expect(new Uint8Array(record.payload!.buffer, record.payload!.byteOffset, 4).every((byte) => byte === 0x5a)).toBe(
+        true,
+      );
+    }
+  });
+
+  test('owns every byte it returns, so a host may retain it across any Wasm call', () => {
+    // Ownership now happens once, in `TextEngineSession.retain`: one contiguous copy of
+    // the whole encoded result. The reader only carves views into that copy, so nothing
+    // aliases engine memory and no second copy is paid at read time.
     const source = publication(3);
-    const list = readDrawList(source);
-    const snapshots = [list.resources, list.buffers, list.patches, list.primitives, list.retirements, list.diagnostics];
+    const list = readDrawList(retainFixture(source));
+    const snapshots = [list.resources, list.buffers, list.primitives, list.diagnostics];
     for (const table of snapshots) {
       expect(table.count).toBe(3);
       expect(table.records.byteLength).toBe(3 * table.stride);
@@ -126,5 +176,13 @@ describe('render-plan reader', () => {
     new Uint8Array(source.memoryBuffer).fill(0xff);
     expect(list.draws[0]!.id).toBe(100);
     for (const table of snapshots) expect(table.records.every((byte) => byte === 0xa5)).toBe(true);
+  });
+
+  test('rejects borrowed publications: a draw list is built to outlive the next call', () => {
+    // The brand is the type-system boundary. A plain publication expires when the
+    // session answers its next call, so handing one to a retaining reader is a type
+    // error; at runtime the missing brand is still caught.
+    const fixture = publication(1) as unknown as RetainedTextEnginePublication;
+    expect(() => readDrawList(fixture)).toThrow();
   });
 });
