@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { renderPolicyBytes } from '../support/engine-abi.mjs';
-import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
+import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 

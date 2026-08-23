@@ -9,7 +9,7 @@ import test from 'node:test';
 
 import { bakeFont, bakeProject, NodeBakeError } from '@pmndrs/glyph/bake';
 import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
-import { validateBitmapArtifact } from '@pmndrs/glyph/bakers/bitmap/validate';
+import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 

@@ -7,7 +7,7 @@ import {
   schemaPolicyBuffers,
   textShaperAbi,
   u32Buffers,
-} from '@pmndrs/glyph/core';
+} from '../../dist/core.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 import { msdfSchema } from '@pmndrs/glyph/raster/msdf';
 import { slugSchema } from '@pmndrs/glyph/raster/slug';

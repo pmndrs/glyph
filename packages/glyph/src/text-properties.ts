@@ -5,7 +5,7 @@ import type { AnyRasterTechnique } from './raster-technique.js';
 
 export interface GlyphBufferCapacity {
   readonly size: number;
-  readonly policy: 'grow' | 'chunk' | 'fixed';
+  readonly policy: 'grow' | 'chunk';
 }
 
 /** A layout-system-neutral axis constraint. */

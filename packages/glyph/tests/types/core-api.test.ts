@@ -15,7 +15,7 @@ import {
   type TextEngineFrameUpdate,
   type TextEnginePublication,
   type TextEngineSession,
-} from '@pmndrs/glyph/core';
+} from '../../dist/core.js';
 
 // The renderer-neutral core: a runtime shaper hosts one engine, sessions publish plans.
 const shaper: Promise<RuntimeShaper> = createRuntimeShaper();
@@ -64,7 +64,7 @@ import {
   type PolicyCapabilitySet,
   type PolicyDescriptor,
   type PolicyProgram,
-} from '@pmndrs/glyph/core';
+} from '../../dist/core.js';
 
 const techniqueId: number = renderWireId('example.technique');
 void techniqueWireIds.decoration;

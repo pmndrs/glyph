@@ -38,8 +38,6 @@ export interface TextSpanFragment<Technique extends AnyRasterTechnique = never> 
   readonly properties: Omit<ParagraphSpan<Technique>, 'start' | 'end'>;
 }
 
-export type { IdentifiedSpanRange, SpanRange } from './internal/span-cascade.js';
-
 /**
  * The join rule `compose` below applies, re-exported for the React `<Text>` compiler.
  *

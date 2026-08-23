@@ -8,7 +8,7 @@ import {
   u32ToF32,
   type PolicyF32Value,
   type PolicyU32Value,
-} from '@pmndrs/glyph/core';
+} from '../../dist/core.js';
 
 // A program declares its named inputs once; every later reference is a handle,
 // never a number.

@@ -7,7 +7,7 @@ import { createRuntimeShaper } from '../../dist/shaper.js';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { fontBindingBytes, renderPolicyBytes, renderPolicyBytesFromPrograms } from '../support/engine-abi.mjs';
-import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
+import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
 const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
