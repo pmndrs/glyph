@@ -55,7 +55,7 @@ import {
   normalizedColumns,
   replacedContent,
   styledSpans,
-} from '../internal/engine-encoding.js';
+} from '../engine-encoding.js';
 import { textFrameError, type TextFrameSubject } from './frame-error.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import {
