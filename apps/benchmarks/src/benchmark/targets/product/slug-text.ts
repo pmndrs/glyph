@@ -175,7 +175,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
 function assertCommitted(line: Text<typeof slug>): void {
   const error = line.error;
   if (error !== undefined) throw error;
-  if (line.measureLayout() === undefined) throw new Error('Slug product Text did not commit layout metrics');
+  if (line.measure() === undefined) throw new Error('Slug product Text did not commit layout metrics');
 }
 
 async function renderSlugText(resources: SlugProductTargetResources): Promise<TargetRunOutput> {

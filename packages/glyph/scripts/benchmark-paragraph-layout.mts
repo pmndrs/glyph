@@ -93,7 +93,7 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
   const counter = createBenchmarkParagraph(font, text, 600);
   counter.group.updateMatrixWorld(true);
   if (counter.group.error !== undefined) throw counter.group.error;
-  const calibratedGlyphs = counter.paragraph.measureLayout()?.glyphCount;
+  const calibratedGlyphs = counter.paragraph.measure()?.glyphCount;
   disposeBenchmarkParagraph(counter);
   if (calibratedGlyphs === undefined) throw new Error('paragraph benchmark fixture did not publish a glyph count');
   const warm = name === 'cold' ? undefined : createBenchmarkParagraph(font, text, 600);

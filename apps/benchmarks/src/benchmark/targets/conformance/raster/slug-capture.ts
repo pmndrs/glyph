@@ -913,7 +913,7 @@ function pixelHasInk(bytes: Uint8Array, pixelIndex: number): boolean {
 function committedLayout(line: Text<typeof slug>): ParagraphLayout {
   const error = line.error;
   if (error !== undefined) throw error;
-  const layout = line.inspectLayout();
+  const layout = line.layout();
   if (layout === undefined) throw new Error('Slug conformance Text lost its committed layout');
   return layout;
 }

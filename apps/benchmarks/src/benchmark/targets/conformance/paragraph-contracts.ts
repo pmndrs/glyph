@@ -207,7 +207,7 @@ function runContracts(state: Extract<State, { readonly kind: 'ready' }>, signal:
     group.updateMatrixWorld(true);
     if (group.error !== undefined) throw group.error;
     const layouts = texts.map((text, index) => {
-      const layout = text.inspectLayout();
+      const layout = text.layout();
       const contract = expected[index];
       if (layout === undefined || contract === undefined)
         throw new Error('paragraph contract layout was not published');

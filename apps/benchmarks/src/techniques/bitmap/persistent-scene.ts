@@ -433,7 +433,7 @@ async function activateBitmapTextPersistentScene(
     if (activeText.error !== undefined) throw activeText.error;
     const readyAt = performance.now();
     const committedLayout = (): ParagraphLayoutSummary => {
-      const layout = activeText.measureLayout();
+      const layout = activeText.measure();
       if (layout === undefined) throw new Error('live bitmap Text lost its committed layout');
       return layout;
     };
