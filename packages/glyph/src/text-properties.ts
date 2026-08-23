@@ -56,6 +56,23 @@ export interface ParagraphContentBox {
   readonly columns?: { readonly count: number; readonly gap?: number };
 }
 
+/**
+ * The per-call part of a layout request: only what a layout host varies while probing one node.
+ *
+ * A Yoga- or flexbox-shaped host re-measures the same paragraph at many candidate boxes during a
+ * single layout pass. Everything else about how the text flows -- wrap policy, alignment, line
+ * caps, overflow, justification bounds, columns, indents, and block spacing -- is stable policy
+ * ([`ParagraphLayoutPolicy`]) owned by the paragraph itself and changed only through `update()`,
+ * so a host probe never re-states it.
+ */
+export interface ParagraphConstraints {
+  readonly width?: ParagraphAxisConstraint;
+  readonly height?: ParagraphAxisConstraint;
+}
+
+/** The stable half of [`ParagraphContentBox`]: flow policy that outlives any single measure probe. */
+export type ParagraphLayoutPolicy = Omit<ParagraphContentBox, 'width' | 'height'>;
+
 export interface ParagraphStyle {
   readonly fontSize?: number;
   readonly lineHeight?: number;

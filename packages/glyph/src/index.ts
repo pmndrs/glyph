@@ -40,12 +40,25 @@ export type {
   BaselineMetrics,
   FontSlotRecord,
   LayoutBox,
+  ParagraphIntrinsicWidths,
   ParagraphLayout,
   ParagraphLayoutInspection,
   ParagraphLayoutSummary,
   ParagraphLineMetrics,
   ParagraphMeasurement,
+  ParagraphMetrics,
 } from './layout.js';
+
+export type { ParagraphLayoutPolicy, ParagraphConstraints } from './text-properties.js';
+
+export type {
+  ParagraphLayoutResult,
+  ParagraphMeasureResult,
+  ParagraphOptions,
+  ParagraphQueryError,
+  ParagraphUpdate,
+} from './paragraph.js';
+export { Paragraph } from './paragraph.js';
 
 export type {
   GlyphAdoption,
