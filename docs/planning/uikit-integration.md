@@ -104,29 +104,26 @@ There is no `YogaAdapter` in `@pmndrs/glyph`, no Preact signal type in its API, 
 
 ## Minimum core API
 
-Third-party layout systems need only four paragraph operations:
+The paragraph surface ships on `@pmndrs/glyph/core`:
 
 ```ts
-interface Paragraph {
-  measure(constraints?: ParagraphConstraints): ParagraphMeasurement;
-  layout(constraints?: ParagraphConstraints): ParagraphLayout;
-  update(input: ParagraphInput): void;
-  dispose(): void;
-}
+import { Paragraph } from '@pmndrs/glyph/core';
+
+const paragraph = new Paragraph({ font, text, style?, paint?, policy? });
+
+paragraph.measure(constraints?): ParagraphMeasureResult;
+paragraph.layout(constraints?): ParagraphLayoutResult;
+paragraph.update(input: ParagraphUpdate): void;
+paragraph.dispose(): void;
 ```
 
-`measure` and `layout` accept the same neutral `unconstrained`, `at-most`, and `exactly` axis constraints. `measure` returns box size, content extents, baselines, and overflow without materializing per-glyph arrays. `layout` produces the final positioned arrays only when the host has an authoritative box or needs to draw.
+`Paragraph` owns one engine session on its runtime's shaper. `measure` and `layout` are synchronous, need no scene, renderer, or committed frame, and leave authored state untouched, so they are safe to call from inside a Yoga layout pass.
+
+Per-call constraints are split from stable policy. `ParagraphConstraints` carries only the axes (`width`, `height`) that a host varies while probing one node; wrap, alignment, `maxLines`, overflow, justification bounds, columns, and indents live in the paragraph's `policy` and change only through `update()`. A host probe never re-states the whole flow configuration.
+
+`measure` returns `{ ok: true, metrics }` where `metrics` adds intrinsic `minContentWidth`/`maxContentWidth` to the box size, content extents, baselines, and overflow -- derived in the same measurement pass, with no per-glyph arrays materialized. Engine rejection returns `{ ok: false, error }` carrying the raw engine status; boundary violations such as negative sizes throw at the call site as caller arithmetic errors. `layout` additionally materializes the positioned arrays and returns `layoutRevision`: a monotonic paragraph-scoped counter that advances exactly when positioned output changes (box extents, baselines, overflow flag, glyph/line counts, every per-glyph record in order, every per-line record in order; stable glyph ids excluded), decided by a 96-bit digest so equal output never advances it. A host gates readback with `paragraph.layoutRevision !== lastSeenRevision` instead of copying arrays to compare them.
 
 This separation matters for Yoga and other retained layout engines: they may measure a leaf repeatedly before resolving its final dimensions. Measurement must not allocate or copy the complete render output each time.
-
-The API does not expose `minWidth` or `minHeight` as uikit concepts. uikit can derive its current `CustomLayouting` values from measurements:
-
-- natural measurement: `paragraph.measure()`;
-- minimum-content width: the `contentWidth` from a zero-width, word-policy measurement;
-- constrained leaf measurement: `paragraph.measure(...)` using the supplied modes;
-- final positioned result: `paragraph.layout(...)` using the resolved content box.
-
-The exact normalization belongs to the uikit adapter because its current minimum-size behavior and point-scale rounding are uikit policies, not font-system invariants.
 
 ## Measurement feedback discipline
 
@@ -174,28 +171,25 @@ const customLayouting = computed(() => {
   const paragraph = paragraphSignal.value;
   if (paragraph == null) return undefined;
 
-  const natural = paragraph.measure(policy);
-  const minimum = paragraph.measure({
-    ...policy,
-    width: { mode: 'at-most', size: 0 },
-  });
-
+  const natural = paragraph.measure();
   return {
-    minWidth: minimum.contentWidth,
-    minHeight: natural.height,
+    minWidth: natural.metrics.minContentWidth,
+    minHeight: natural.metrics.height,
     measure(width, widthMode, height, heightMode) {
-      const metrics = paragraph.measure({
-        ...policy,
+      const result = paragraph.measure({
         width: mapAxis(width, widthMode),
         height: mapAxis(height, heightMode),
       });
-      return { width: metrics.width, height: metrics.height };
+      if (!result.ok) throw result.error;
+      return { width: result.metrics.width, height: result.metrics.height };
     },
   };
 });
 ```
 
-After Yoga updates uikit's existing size, padding, and border signals, a computed signal calls `paragraph.layout` with the final content width and height. This is the reactive equivalent of a final commit; uikit does not need a new imperative lifecycle.
+One measurement now answers everything: intrinsic `minContentWidth` rides the natural pass (the engine scans the cluster arena with the breaker's own wrap decisions), so uikit's old second full measure at zero width is gone. The exact normalization belongs to the uikit adapter because its current minimum-size behavior and point-scale rounding are uikit policies, not font-system invariants.
+
+After Yoga updates uikit's existing size, padding, and border signals, a computed signal calls `paragraph.layout` with the final content width and height and gates readback on `layoutRevision`. This is the reactive equivalent of a final commit; uikit does not need a new imperative lifecycle.
 
 The adapter must preserve these existing behaviors:
 
@@ -233,16 +227,18 @@ Delete the BMFont-specific `Font`, wrappers, positioned character entries, and M
 
 ## Paragraph-boundary fixture status
 
-The repository now carries a current-uikit-shaped fixture at the paragraph boundary. It deliberately implements only the reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it does not pretend to be the production uikit adapter.
+The repository carries a current-uikit-shaped fixture at the paragraph boundary, and it runs on the real framework-neutral `Paragraph` from `@pmndrs/glyph/core` -- no scene graph and no adapter. It deliberately implements only the reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it does not pretend to be the production uikit adapter.
 
 | Paragraph-boundary proof                        | Status | Evidence                                                                                                                                            |
 | ----------------------------------------------- | :----: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Intrinsic measurement and first baseline        |   ✅   | Exact `minWidth`, `minHeight`, and first-baseline values come from a prepared Inter paragraph.                                                      |
+| Intrinsic measurement and first baseline        |   ✅   | Exact `minWidth` (published intrinsic width), `minHeight`, and first-baseline values come from one natural measurement of a prepared Inter paragraph. |
 | Yoga mode translation                           |   ✅   | `Undefined`, `AtMost`, and `Exactly` cover ignored `NaN`, finite nonnegative constraints, and the definite-two-axis no-measure path.                |
-| Allocation-light repeated measurement           |   ✅   | Twenty-five measurements reuse paragraph analysis and never materialize positioned glyph arrays.                                                    |
+| Allocation-light repeated measurement           |   ✅   | Twenty-four constrained probes reuse the engine's retained speculative transaction (shaping fingerprint match) and never materialize positioned glyph arrays. |
 | Final content-box layout                        |   ✅   | Padding and border are removed from the resolved outer box before one final layout; host translation produces the exact centered-coordinate golden. |
 | Point-scale rounding and invalidation ownership |   ✅   | Upward rounding remains in the host fixture; text/shaping changes dirty measurement while paint/raster changes do not.                              |
 | Real-product execution                          |   ✅   | Vitest, Chromium 149, and the WebGPU-active Vitexec lane validate the same generated contract and portable hash.                                    |
+
+The fixture previously satisfied this contract through a hand-written adapter that mutated `Text.contentBox` and forced a scene-graph commit per probe; while it did, it proved the adapter rather than the contract. Regenerating the retained bidi contract through the real `Paragraph` produced byte-identical values everywhere except `customLayouting.minWidth`, which intentionally changed semantics: it is now the published single-pass intrinsic width instead of a degenerate zero-width flow extent.
 
 Renderer batching, clipping integration, React reconciliation, and cluster-aware interaction remain later integration gates. Closing this paragraph boundary does not claim those production-uikit migration stages are complete.
 

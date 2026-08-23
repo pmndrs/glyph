@@ -5,7 +5,7 @@ import type {
   ParagraphLayoutPolicy,
   ParagraphStyle,
 } from '@pmndrs/glyph';
-import { Paragraph } from '@pmndrs/glyph';
+import { Paragraph } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
