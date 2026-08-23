@@ -7,7 +7,8 @@ use crate::{
         ABI_VERSION, ENGINE_RESULT_ABI_VERSION, ENGINE_RESULT_BUFFER_COUNT,
         ENGINE_RESULT_BUFFERS_OFFSET, ENGINE_RESULT_BYTE_LENGTH, ENGINE_RESULT_CAPABILITY_SET,
         ENGINE_RESULT_DIAGNOSTIC_COUNT, ENGINE_RESULT_DIAGNOSTICS_OFFSET, ENGINE_RESULT_DRAW_COUNT,
-        ENGINE_RESULT_DRAWS_OFFSET, ENGINE_RESULT_ENGINE_REVISION, ENGINE_RESULT_FLAGS,
+        ENGINE_RESULT_DRAWS_OFFSET, ENGINE_RESULT_ENGINE_REVISION,
+        ENGINE_RESULT_FAULT_PARAGRAPH_ID, ENGINE_RESULT_FAULT_STYLE_ID, ENGINE_RESULT_FLAGS,
         ENGINE_RESULT_HEADER_ALIGNMENT, ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_OUTPUT_SLOT,
         ENGINE_RESULT_PATCH_COUNT, ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PLAN_REVISION,
         ENGINE_RESULT_POLICY_FINGERPRINT_HIGH, ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
@@ -26,6 +27,7 @@ use crate::{
         render_plan::RenderPlanView,
         render_plan_wire::{EncodedPlanLayout, encode_publication, encode_query},
         semantic_view::SemanticRecord,
+        state::FrameFault,
     },
     wire::write_u32,
 };
@@ -147,6 +149,7 @@ impl FrameTransport {
                 required_base_revision: commit.required_base_revision,
                 publication_generation: generation,
                 required_request_capacity: 0,
+                fault: FrameFault::default(),
                 required_result_capacity: 0,
                 policy_handle: staged.policy_handle,
                 capability_set: staged.capability_set,
@@ -175,6 +178,7 @@ impl FrameTransport {
             slot,
             HeaderValues {
                 status: 0,
+                fault: FrameFault::default(),
                 flags: 0,
                 session_id,
                 revision,
@@ -196,6 +200,7 @@ impl FrameTransport {
         session_id: u32,
         revision: SessionRevision,
         status: u32,
+        fault: FrameFault,
         required_request_capacity: u32,
         required_result_capacity: u32,
     ) -> usize {
@@ -204,6 +209,7 @@ impl FrameTransport {
             slot,
             HeaderValues {
                 status,
+                fault,
                 flags: 0,
                 session_id,
                 revision,
@@ -262,6 +268,12 @@ impl FrameTransport {
             ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
             values.required_result_capacity,
         );
+        write_u32(
+            bytes,
+            ENGINE_RESULT_FAULT_PARAGRAPH_ID,
+            values.fault.paragraph_id,
+        );
+        write_u32(bytes, ENGINE_RESULT_FAULT_STYLE_ID, values.fault.style_id);
         write_u32(bytes, ENGINE_RESULT_POLICY_HANDLE, values.policy_handle);
         write_u32(bytes, ENGINE_RESULT_CAPABILITY_SET, values.capability_set);
         write_u32(
@@ -327,6 +339,8 @@ impl FrameTransport {
 
 struct HeaderValues {
     status: u32,
+    /// Identifiers the status names, all zero for a success and for a status that names none.
+    fault: FrameFault,
     flags: u32,
     session_id: u32,
     revision: SessionRevision,
@@ -476,6 +490,7 @@ mod tests {
             3,
             SessionRevision { engine: 1, plan: 1 },
             STATUS_INVALID_REQUEST,
+            FrameFault::default(),
             512,
             0,
         );
