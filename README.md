@@ -127,9 +127,9 @@ const denseLabels = new TextGroup({
 - `chunk` retains bounded chunks as demand grows.
 - `grow` replaces full storage with a larger allocation.
 
-Both policies resize. There is no capping policy: a cap can only be checked after shaping, from inside the traversal that
-`measureLayout()` also routes through, so you could never ask how many glyphs the content needs without already having
-exceeded it.
+`grow` and `chunk` both resize; `fixed` rejects an update whose glyph requirement exceeds the declared size and
+keeps the last complete revision visible. The requirement is a text-length upper bound computed before shaping, so
+content can be sized against the cap rather than discovered past it.
 
 Custom materials are renderer-owned factories. Rust carries their numeric `materialId` through planning, while Three creates the actual material only when a draw needs it. Different materials may still share instance buffers.
 
