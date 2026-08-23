@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:759e0b0442b09b4654f5b0083925d4e6aebd5b20b55b1f85d9bfd4a6cc15a62c'
+source_digest: 'sha256:8df0e4f75722adf1e66e755cb8515d17794864e573d11b6f4f827bd7878a8510'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -112,6 +112,8 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                      |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                        |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                 |
+| `@pmndrs/glyph/core`         | Renderer-neutral engine host, frame wire, plan/layout-query views, technique schemas, policy-program DSL, and binding compiler.  |
+| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                 |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                 |
 
 The font-baker Rust source, direct-memory wrapper, schemas, tests, build pipeline, optimized Wasm, and generated ABI are
@@ -331,9 +333,9 @@ There are no instance-ignoring runtime ABI readers. Package builds isolate the d
 `artifact-baker` feature sets from kernel-only test targets and reject an optimized module missing any contract-declared
 artifact export, preventing Cargo's shared top-level artifact path from silently publishing a smaller test variant.
 
-The renderer-neutral core is `src/core.ts` (D-249): runtime shaper creation, the engine host and sessions, frame-wire
+The renderer-neutral core publishes as `@pmndrs/glyph/core` (D-249): runtime shaper creation, the engine host and sessions, frame-wire
 serialization, render-plan and layout views, font-binding compilation, the versioned ABI, and the policy-authoring
-toolkit. The four technique TSL node graphs are `src/tsl/` under Tsl-prefixed names, including the Slug shader tree that
+toolkit. The four technique TSL node graphs publish as `@pmndrs/glyph/tsl` under Tsl-prefixed names, including the Slug shader tree that
 previously lived in core internals. Three's first-party policy is authored with the same public toolkit in
 `three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any import from `internal/`
 or `generated/`, so the first-party integrations consume exactly the layering a third party would.
