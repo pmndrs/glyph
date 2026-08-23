@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { mtsdfBakerAbi as abi } from '../dist/mtsdf-baker-abi.js';
+import { mtsdfBakerAbi as abi } from '@pmndrs/glyph/mtsdf-baker-abi';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const manifest = 'rust/mtsdf-baker/Cargo.toml';

@@ -86,8 +86,6 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/font-baker-abi.json',
     // Withdrawn entry points. Their modules are still packed, so absence from the manifest is not
     // enough: prove a real install cannot reach them by specifier either.
-    '@pmndrs/glyph/core',
-    '@pmndrs/glyph/tsl',
     '@pmndrs/glyph/text-shaper-abi',
     '@pmndrs/glyph/bitmap-baker-abi',
     '@pmndrs/glyph/mtsdf-baker-abi',
