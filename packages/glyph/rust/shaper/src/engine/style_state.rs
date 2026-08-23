@@ -17,7 +17,7 @@ use crate::{
     valid_utf16_boundary,
 };
 
-use super::{EngineError, sort};
+use super::{EngineError, FrameFault, sort};
 
 const ROOT_REQUIRED_FIELDS: u32 =
     STYLE_FIELD_FONT_STACK | STYLE_FIELD_FONT_SIZE | STYLE_FIELD_RASTER_PIXEL_RATIO;
@@ -364,13 +364,18 @@ impl StyleArena {
         let text_length = u32::try_from(text.len()).map_err(|_| EngineError::InvalidRequest)?;
         let mut root_count = 0;
         for style in &self.records {
-            if style.text_end > text_length
+            let fault = FrameFault::style(style.style_id);
+            if style.text_start > style.text_end
+                || style.text_end > text_length
                 || !valid_utf16_boundary(text, style.text_start)
                 || !valid_utf16_boundary(text, style.text_end)
-                || style.field_mask & STYLE_FIELD_FONT_STACK != 0
-                    && !font_stack_exists(style.font_stack_handle)
             {
-                return Err(EngineError::InvalidRequest);
+                return Err(EngineError::StyleRangeInvalid(fault));
+            }
+            if style.field_mask & STYLE_FIELD_FONT_STACK != 0
+                && !font_stack_exists(style.font_stack_handle)
+            {
+                return Err(EngineError::StyleFontStackMissing(fault));
             }
             if style.root {
                 root_count += 1;
@@ -378,19 +383,19 @@ impl StyleArena {
                     || style.text_end != text_length
                     || style.field_mask & ROOT_REQUIRED_FIELDS != ROOT_REQUIRED_FIELDS
                 {
-                    return Err(EngineError::InvalidRequest);
+                    return Err(EngineError::StyleRootInvalid(fault));
                 }
             }
             for feature in self.features(*style) {
                 if !valid_utf16_boundary(text, feature.start)
                     || !valid_utf16_boundary(text, feature.end)
                 {
-                    return Err(EngineError::InvalidRequest);
+                    return Err(EngineError::StyleRangeInvalid(fault));
                 }
             }
         }
         if root_count != 1 {
-            return Err(EngineError::InvalidRequest);
+            return Err(EngineError::StyleRootInvalid(FrameFault::default()));
         }
 
         order_scratch.clear();
@@ -421,14 +426,16 @@ impl StyleArena {
         for &(_, position) in sort_pairs_pass.iter() {
             order_scratch.push(sort_pairs[position as usize].1 as usize);
         }
-        if order_scratch.windows(2).any(|pair| {
+        if let Some(pair) = order_scratch.windows(2).find(|pair| {
             let left = self.records[pair[0]];
             let right = self.records[pair[1]];
             left.text_start == right.text_start
                 && left.text_end == right.text_end
                 && left.cascade_order == right.cascade_order
         }) {
-            return Err(EngineError::InvalidRequest);
+            return Err(EngineError::StyleNestingInvalid(FrameFault::style(
+                self.records[pair[1]].style_id,
+            )));
         }
         nesting_scratch.clear();
         nesting_scratch
@@ -446,7 +453,9 @@ impl StyleArena {
                 .last()
                 .is_some_and(|end| style.text_end > *end)
             {
-                return Err(EngineError::InvalidRequest);
+                return Err(EngineError::StyleNestingInvalid(FrameFault::style(
+                    style.style_id,
+                )));
             }
             nesting_scratch.push(style.text_end);
         }
@@ -911,6 +920,96 @@ mod tests {
                 positioning: true,
             },
         );
+    }
+
+    /// Every caller-actionable style rejection reports its own status and names the style id the
+    /// REQUEST assigned, so a host maps the failure back to the record it authored instead of
+    /// reading one undifferentiated `InvalidRequest` for twenty distinct causes (D-267).
+    #[test]
+    fn each_caller_actionable_style_fault_reports_its_own_cause_and_names_its_style() {
+        let root = style(10, 0, 0, 8, ROOT_REQUIRED_FIELDS, true);
+        let validate = |records: alloc::vec::Vec<RetainedStyle>| {
+            StyleArena {
+                records,
+                languages: alloc::vec::Vec::new(),
+                features: alloc::vec::Vec::new(),
+            }
+            .validate(
+                &[0x61; 8],
+                |handle| handle == 7,
+                &mut Vec::new(),
+                &mut Vec::new(),
+                &mut Vec::new(),
+                &mut Vec::new(),
+            )
+        };
+
+        assert_eq!(
+            validate(vec![root, style(21, 1, 5, 3, 0, false)]),
+            Err(EngineError::StyleRangeInvalid(FrameFault::style(21))),
+            "an inverted range names the style that states it"
+        );
+        assert_eq!(
+            validate(vec![root, style(22, 1, 2, 9, 0, false)]),
+            Err(EngineError::StyleRangeInvalid(FrameFault::style(22))),
+            "a range past the end of the text names the style that states it"
+        );
+        assert_eq!(
+            validate(vec![
+                root,
+                style(23, 1, 0, 5, 0, false),
+                style(24, 2, 3, 8, 0, false),
+            ]),
+            Err(EngineError::StyleNestingInvalid(FrameFault::style(24))),
+            "partial overlap names the style that escapes its enclosing scope"
+        );
+        assert_eq!(
+            validate(vec![style(25, 0, 0, 6, ROOT_REQUIRED_FIELDS, true)]),
+            Err(EngineError::StyleRootInvalid(FrameFault::style(25))),
+            "a root that does not span the text names itself"
+        );
+        assert_eq!(
+            validate(vec![
+                root,
+                RetainedStyle {
+                    font_stack_handle: 99,
+                    ..style(26, 1, 2, 6, STYLE_FIELD_FONT_STACK, false)
+                },
+            ]),
+            Err(EngineError::StyleFontStackMissing(FrameFault::style(26))),
+            "an unregistered font stack names the style that selects it"
+        );
+        assert_eq!(
+            validate(vec![style(27, 1, 0, 8, 0, false)]),
+            Err(EngineError::StyleRootInvalid(FrameFault::default())),
+            "a missing root belongs to no single style, so it names none"
+        );
+
+        // A rejection raised before the paragraph is known picks it up from the paragraph loop, and
+        // an attribution the raising site already made is never overwritten.
+        assert_eq!(
+            EngineError::StyleRangeInvalid(FrameFault::style(21)).in_paragraph(4),
+            EngineError::StyleRangeInvalid(FrameFault {
+                paragraph_id: 4,
+                style_id: 21,
+            })
+        );
+        assert_eq!(
+            EngineError::StyleRangeInvalid(FrameFault {
+                paragraph_id: 2,
+                style_id: 21,
+            })
+            .in_paragraph(4)
+            .fault()
+            .paragraph_id,
+            2
+        );
+        assert_eq!(
+            EngineError::InvalidRequest.in_paragraph(4),
+            EngineError::InvalidRequest,
+            "an unclassified rejection names nothing, before or after attribution"
+        );
+        assert_eq!(EngineError::InvalidRequest.fault(), FrameFault::default());
     }
 
     fn resolved(style: ResolvedStyle) -> ResolvedStyleArena {

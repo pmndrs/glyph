@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use crate::{FontMetrics, unicode::UnicodeAnalysis};
 
 use super::{
-    EngineError,
+    EngineError, FrameFault,
     identity_index::{IdentityIndex, IdentityIndexError},
     shaping_state::{ShapeArena, ShapingRun},
     style_state::StyleSegment,
@@ -131,8 +131,11 @@ impl ClusterArena {
                 style_index += 1;
             }
             let style = styles.get(style_index).ok_or(EngineError::InvalidRequest)?;
+            // A resolved segment is the merge of every style covering the same run of text, so no
+            // single style id owns the boundary that lands inside this cluster. The paragraph the
+            // per-paragraph loop attaches is the whole attribution this cause carries.
             if style.text_start > start || style.text_end < end {
-                return Err(EngineError::InvalidRequest);
+                return Err(EngineError::StyleSplitsCluster(FrameFault::default()));
             }
             let hard_break = is_hard_break(text, start)?;
             let space = text.get(start as usize) == Some(&0x20);
@@ -276,7 +279,8 @@ impl ClusterArena {
             self.unsafe_before[cluster] = 0;
         }
         for shaped_run in shape.runs.iter().filter(|run| run.source_run == source_run) {
-            let metrics = metrics_for(shaped_run.font_handle).ok_or(EngineError::InvalidRequest)?;
+            let metrics = metrics_for(shaped_run.font_handle)
+                .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
             if metrics.units_per_em == 0 {
                 return Err(EngineError::InvalidRequest);
             }
@@ -306,7 +310,8 @@ impl ClusterArena {
             }
         }
         for shaped_run in shape.runs.iter().filter(|run| run.source_run == source_run) {
-            let metrics = metrics_for(shaped_run.font_handle).ok_or(EngineError::InvalidRequest)?;
+            let metrics = metrics_for(shaped_run.font_handle)
+                .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
             self.fill_glyphless_run_ownership(
                 runs,
                 *shaped_run,
@@ -751,7 +756,8 @@ impl ClusterArena {
             let source_index =
                 usize::try_from(shaped_run.source_run).map_err(|_| EngineError::InvalidRequest)?;
             let source = runs.get(source_index).ok_or(EngineError::InvalidRequest)?;
-            let metrics = metrics_for(shaped_run.font_handle).ok_or(EngineError::InvalidRequest)?;
+            let metrics = metrics_for(shaped_run.font_handle)
+                .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
             if metrics.units_per_em == 0 {
                 return Err(EngineError::InvalidRequest);
             }
@@ -793,7 +799,8 @@ impl ClusterArena {
             }
         }
         for shaped_run in &shape.runs {
-            let metrics = metrics_for(shaped_run.font_handle).ok_or(EngineError::InvalidRequest)?;
+            let metrics = metrics_for(shaped_run.font_handle)
+                .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
             self.fill_glyphless_run_ownership(
                 runs,
                 *shaped_run,
@@ -1191,6 +1198,85 @@ mod tests {
         );
         assert_eq!(clusters.flags[1], CLUSTER_SAFE_BEFORE | CLUSTER_SPACE);
         assert_eq!(clusters.flags[2], 0);
+    }
+
+    /// A style boundary interior to an extended grapheme cluster still rejects the frame -- one
+    /// style per cluster is not negotiable -- but it now reports its own status instead of the
+    /// undifferentiated `InvalidRequest` that also stood for every arena invariant (D-267). No
+    /// single style id owns a resolved segment boundary, so this cause names only the paragraph,
+    /// which the per-paragraph loop attaches.
+    #[test]
+    fn a_style_boundary_inside_a_cluster_reports_its_own_cause() {
+        let text: Vec<u16> = "a\u{301}b".encode_utf16().collect();
+        let mut unicode = UnicodeAnalysis::default();
+        unicode.analyze(&text).unwrap();
+        let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
+        // The first grapheme cluster spans [0, 2); these segments split it at 1.
+        let styles = [
+            StyleSegment {
+                text_start: 0,
+                text_end: 1,
+                style,
+            },
+            StyleSegment {
+                text_start: 1,
+                text_end: 3,
+                style: ResolvedStyle::test_typography(24.0, 0.0, 0.0),
+            },
+        ];
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end: 3,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 4,
+            bidi_level: 0,
+            style,
+        }];
+        let shape = ShapeArena {
+            runs: vec![ShapedRun {
+                source_run: 0,
+                binding_handle: 19,
+                font_handle: 9,
+                text_start: 0,
+                text_end: 3,
+                glyph_start: 0,
+                glyph_count: 3,
+            }],
+            glyph_ids: vec![1, 2, 3],
+            clusters: vec![0, 1, 2],
+            x_advances: vec![500; 3],
+            y_advances: vec![0; 3],
+            x_offsets: vec![0; 3],
+            y_offsets: vec![0; 3],
+            glyph_flags: vec![0; 3],
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let mut clusters = ClusterArena::default();
+        assert_eq!(
+            clusters.build(
+                ClusterBuildInput {
+                    text: &text,
+                    text_unit_ids: &[1, 2, 3],
+                    unicode: &unicode,
+                    styles: &styles,
+                    runs: &runs,
+                    shape: &shape,
+                },
+                metrics,
+            ),
+            Err(EngineError::StyleSplitsCluster(FrameFault::default()))
+        );
     }
 
     /// UAX #14 LB9 does not attach a combining mark to a preceding SPACE, while UAX #29 GB9 does,

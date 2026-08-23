@@ -14,7 +14,11 @@ import {
 } from '../core.js';
 import { threeRenderPolicyBytes, type ThreeTransformMode } from './render-policy.js';
 import type { ThreeTextMaterial } from './material.js';
-import { compiledThreeRasterPlanPrograms, type CompiledThreeRasterPlanProgram } from './plan-program-registry.js';
+import {
+  compiledThreeRasterPlanPrograms,
+  releaseThreeRasterPlanProgramSnapshot,
+  type CompiledThreeRasterPlanProgram,
+} from './plan-program-registry.js';
 
 const POLICY_HANDLE = 1;
 const MAX_U32 = 0xffff_ffff;
@@ -184,6 +188,7 @@ export class ThreeTextEngineCoordinator {
     this.#resources.clear();
     this.#stacks.clear();
     this.#materials.clear();
+    releaseThreeRasterPlanProgramSnapshot(this.host.wireIdentities);
     this.#disposed = true;
   }
 
