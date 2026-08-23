@@ -67,7 +67,7 @@ revisions.
 
 ## What exists now
 
-Three's `Text.measureLayout()` asks its owning batch to synchronize. When properties are pending, the measurement mask
+Three's `Text.measure()` asks its owning batch to synchronize. When properties are pending, the measurement mask
 rides the same full frame update, which is correct and avoids shaping twice. That update nevertheless prepares the
 session render plan and applies it before returning the measurement. When the batch is already committed, a cache miss
 sends an otherwise empty update, and Rust emits measurement records for every paragraph in the session.
@@ -234,7 +234,7 @@ sequenceDiagram
   participant Plan as Plan compiler + A/B transport
   participant GPU as Three/GPU state
 
-  App->>Three: measureLayout(paragraph A)
+  App->>Three: measure(paragraph A)
   Three->>Wasm: query A + pending properties
   Wasm->>Candidate: prepare A; reserve identities
   Candidate-->>Wasm: metrics + token + high-water marks
@@ -242,7 +242,7 @@ sequenceDiagram
   Three-->>App: copied frozen measurement
 
   opt another paragraph is measured before the frame
-    App->>Three: measureLayout(paragraph B)
+    App->>Three: measure(paragraph B)
     Three->>Wasm: query B + same transaction token
     Wasm->>Candidate: append B after reserved high-water marks
     Wasm-->>Three: copied B result + updated token
@@ -268,7 +268,7 @@ sequenceDiagram
 Paragraph data is locally retained, but glyph stable IDs and content revisions are allocated from session-global
 cursors. Multiple independent speculative transactions would reserve competing ranges, require rebasing prepared glyphs
 at commit, or introduce a second identity-allocation scheme. One transaction keeps a single linear reservation while
-still allowing `measureLayout()` calls for A, then B, to retain both paragraph results for the final frame.
+still allowing `measure()` calls for A, then B, to retain both paragraph results for the final frame.
 
 This keeps allocation deterministic and bounds existing paragraphs to their committed plus already-present pending
 high-water storage. The descriptor grows only by compact paragraph metadata. If evidence later requires concurrent
@@ -291,8 +291,8 @@ stateDiagram-v2
 
 The desired semantic split is:
 
-- `measureLayout()` with no pending change returns the frozen committed cache without crossing;
-- `measureLayout()` with a pending change prepares only that paragraph, returns its pending measurement synchronously,
+- `measure()` with no pending change returns the frozen committed cache without crossing;
+- `measure()` with a pending change prepares only that paragraph, returns its pending measurement synchronously,
   and adds it to the session's speculative token;
 - sequential measurements of other pending paragraphs extend that same transaction instead of invalidating earlier
   work;

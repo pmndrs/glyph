@@ -58,7 +58,7 @@ counters roll back on abort.
    need sibling fingerprints), preserve pending arenas and the identity high-water mark across sequential queries.
 3. **Candidate adoption** — the committing frame compares input fingerprints per paragraph before preparation and
    adopts the measure transaction's pending state and reserved identities on a hit.
-4. **Host fast path** — a core-host `measureParagraph` and a `Text.measureLayout` route that uses it when only
+4. **Host fast path** — a core-host `measureParagraph` and a `Text.measure` route that uses it when only
    geometry changed; the uikit integration document gains the fast-path guidance.
 5. **Evidence** — a measure-latency probe pinning the cost delta, roadmap 11.17 closure, and the decision-register
    row.
@@ -70,5 +70,5 @@ counters roll back on abort.
   revisions.
 - Layer 2 adds: sequential queries extend one transaction; abort and adopt leave identical observable state to
   cold preparation (same stable ids, same measurements).
-- Layer 4 adds: a Three-level test that repeated `measureLayout` under changing constraints performs no
+- Layer 4 adds: a Three-level test that repeated `measure` under changing constraints performs no
   publication flips and no checkpoint rebuilds.

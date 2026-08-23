@@ -189,7 +189,7 @@ latched, because it is retried from the retained publication on the next frame. 
 `registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-270), naming the
 technique instead of applying to nothing. `/three` also re-exports `ParagraphLayoutSummary`, `ParagraphLayoutInspection`,
 `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name what
-`Text.measureLayout()`, `Text.inspectLayout()`, and `ParagraphStyle.features` give it.
+`Text.measure()`, `Text.measure()`, and `ParagraphStyle.features` give it.
 
 One baked GLB may expose several raster techniques without repeating its input identity. `TextRuntime.loadFont()` and
 R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The
@@ -300,9 +300,9 @@ selected font binding—not a `Text` technique selector—carries the renderer p
 
 ## Semantic queries
 
-Ordinary rendering requests no layout readback. `Text.measureLayout()` explicitly requests aggregate measurements and
-counts; `Text.inspectLayout()` additionally copies line and glyph arrays. Query results are cached by committed revision.
-When the only pending change is the measured text's geometry, `measureLayout()` routes through the core host's
+Ordinary rendering requests no layout readback. `Text.measure()` explicitly requests aggregate measurements and
+counts; `Text.measure()` additionally copies line and glyph arrays. Query results are cached by committed revision.
+When the only pending change is the measured text's geometry, `measure()` routes through the core host's
 `session.measureParagraph` — the paragraph-scoped synchronous query below — so repeated measurement under changing
 constraints performs no publication flips and no revision burns, and the next ordinary frame adopts the speculative
 work. Any other pending change synchronizes the containing Rust session once and the following render traversal reuses
@@ -393,7 +393,7 @@ The foundation currently has:
   later cursor-convergence regressions;
 - the package JavaScript/integration gate passing through the single-path public exports;
 - exact retained Amiri bidi, policy, ellipsis, clipping, UIKit-layout, and CJK contracts exercised by the browser
-  `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `measureLayout()`, and `inspectLayout()`;
+  `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `measure()`, and `measure()`;
 - 32/32 pixel-exact public Bitmap WebGL2 frames against the independent CPU oracle, including resize and clipping, with
   zero differing channel bytes and pinned SHA-256 `a47930d3…15e893`;
 - source-font SHA-256, registered shaping hashes, and HarfRust/HarfBuzz oracle identities authenticated independently of

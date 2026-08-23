@@ -42,7 +42,7 @@
   from `set()` beside `normalizedColumns` and `normalizeCapacity` instead of travelling to Rust (D-268), while
   cluster resolution stays silent and collapsed spans stay in the array. A `registerThreeRasterPlanProgram`
   call that arrives after a runtime has read the registry is refused by name rather than applying to nothing
-  (D-270), and `/three` re-exports the layout types `measureLayout()` and `inspectLayout()` return.
+  (D-270), and `/three` re-exports the layout types `measure()` and `measure()` return.
 
   **Breaking**: `textShaperAbi.status` gains `styleRangeInvalid` (15), `styleSplitsCluster` (16),
   `styleNestingInvalid` (17), `styleRootInvalid` (18), and `fontMetricsMissing` (19); frames that previously
@@ -681,7 +681,7 @@
   calls. The packaged shaper is Cargo release + LTO + SIMD followed by Binaryen `-Oz`; adjacent `-O3`/`-O4` artifacts cost
   more bytes without a demonstrated speed gain. Production profiling hooks remain an explicit removal gate.
 
-- **Specified paragraph-scoped synchronous preparation without triple buffering** — Current `measureLayout()` either
+- **Specified paragraph-scoped synchronous preparation without triple buffering** — Current `measure()` either
   returns committed cache or drives a complete session update and plan. The reviewed follow-up design retains one
   speculative session transaction with paragraph-keyed pending states, linear identity reservation, explicit
   prepare/adopt/leave-committed modes, inactive-slot copied query results, host lease retention, and new-paragraph
@@ -789,7 +789,7 @@
 - **Separated semantic measurement from the render plan** — Activated the existing `semanticViewMask` for an explicit
   retained-Rust measurement query while ordinary rendering continues to request zero semantic records. The first view
   publishes one paragraph summary plus its line records in the immutable A/B sidecar; Three's command-buffer executor
-  ignores it. Public `Text.measureLayout()` caches the frozen result until a committed semantic update. Rust exact and
+  ignores it. Public `Text.measure()` caches the frozen result until a committed semantic update. Rust exact and
   at-most/overflow tests plus a compiled-Wasm Three lifecycle prove the query retains the existing mesh and does not
   restore the removed `Text.layout` arrays.
 
