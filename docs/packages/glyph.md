@@ -175,7 +175,8 @@ that span and its index in `Text.spans`.
 
 A rejected frame latches (D-269). Compilation stops, `.error` keeps the rejection, `onError` fires once, and the batch
 resumes only when what it would compile actually changes -- a `set()`, a paragraph added or removed, a material swap,
-`setCapacity`, or an explicit `retry()`. A frame the engine accepted whose GPU application failed is deliberately not
+or `setCapacity`. There is no public `retry()`: a rejection is an invariant this package broke, not a caller mistake, so
+there is nothing to retry. A frame the engine accepted whose GPU application failed is deliberately not
 latched, because it is retried from the retained publication on the next frame. The accepted path pays one boolean test.
 
 `registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-270), naming the
