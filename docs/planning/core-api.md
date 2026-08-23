@@ -114,7 +114,7 @@ have a policy program and material implementation for every selected technique; 
 Bitmap, MSDF, and Slug support.
 
 A loaded font retains its registered font, raster resource, and runtime until disposed. Live `Text` objects lease their
-fonts; disposing a leased font throws `FontLeaseError` instead of invalidating retained Rust state.
+fonts; disposing a leased font is a no-op that warns in development builds instead of invalidating retained Rust state (D-255).
 
 ## Paragraph input
 
