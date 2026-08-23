@@ -99,94 +99,54 @@ test('a collapsed span is kept and a cluster boundary still resolves in silence'
   });
 });
 
-test('a rejected frame names the span that caused it', { timeout }, async () => {
-  // Partially overlapping spans are type-legal, in range, and cluster-aligned, so they are the
-  // rejection a caller can still reach through the public API. The engine answers it with its own
-  // status, and `/three` resolves the paragraph handle and style id in the header back onto the
-  // objects the caller wrote.
-  await withParagraph('abcdefgh', [styled(0, 4), styled(2, 6)], (node, mounted) => {
-    mounted.scene.updateMatrixWorld(true);
-    const error = node.error;
-    assert.ok(error instanceof TextFrameError, `expected a TextFrameError, received ${String(error)}`);
-    assert.equal(error.rejection.cause, 'span-overlap');
-    assert.equal(error.status, textShaperAbi.status.styleNestingInvalid);
-    assert.equal(error.rejection.subject.kind, 'span');
-    assert.equal(error.rejection.subject.text, node, 'the subject must be the Text the caller holds');
-    assert.equal(error.rejection.subject.index, 1, 'the second span is the one that escapes the first');
-    assert.equal(error.rejection.subject.span, node.spans[1]);
-    assert.match(error.message, /spans\[1\] \(2, 6\)/);
-  });
-});
-
-test('a rejection latches until its input moves', { timeout }, async () => {
-  // The loop this closes: a rejected frame never reaches `markApplied()`, so `needsApply()` stays
-  // true and the identical frame is recompiled and rejected on every frame forever. The latch is
-  // keyed on the desired revision of every paragraph in render order, so only a real `set()` --
-  // not another frame, and not an unrelated repaint of the scene -- releases it.
-  await withParagraph('abcdefgh', [styled(0, 4)], (node, mounted) => {
-    // The batch is owned by the TextGroup that `mount` builds, so the group is where a rejection is
-    // reported; `Text.error` reads through to it.
-    const reports = [];
-    mounted.group.onError = (error) => reports.push(error);
-    assert.equal(node.error, undefined, 'the paragraph must start from an accepted frame');
-
-    node.set({ spans: [styled(0, 4), styled(2, 6)] });
-    mounted.scene.updateMatrixWorld(true);
-    assert.equal(reports.length, 1, 'the rejection must be reported once');
-    const first = node.error;
-    assert.ok(first instanceof TextFrameError);
-
-    for (let frame = 0; frame < 8; frame += 1) mounted.scene.updateMatrixWorld(true);
-    assert.equal(reports.length, 1, 'an unchanged frame must not be recompiled or re-reported');
-    assert.equal(node.error, first, 'the latched rejection must remain the observable state');
-
-    // A caller-invoked query must not read `undefined` off a latched batch as if the paragraph
-    // merely had no layout yet. It raises what the query raised before the latch existed.
-    assert.throws(() => node.measureLayout(), TextFrameError);
-    assert.throws(() => node.inspectLayout(), TextFrameError);
-
-    // An update that does not fix the overlap re-compiles once and latches again on the new input.
-    node.set({ paint: { color: '#00ff2f' } });
-    mounted.scene.updateMatrixWorld(true);
-    assert.equal(reports.length, 2, 'a changed input must be compiled again');
-    for (let frame = 0; frame < 4; frame += 1) mounted.scene.updateMatrixWorld(true);
-    assert.equal(reports.length, 2, 'and must latch again on the input it was rejected for');
-
-    // Correcting the input clears the latch and the error together.
-    node.set({ spans: [styled(0, 4)] });
-    mounted.scene.updateMatrixWorld(true);
-    assert.equal(reports.length, 2, 'an accepted frame reports nothing');
-    assert.equal(node.error, undefined, `the paragraph never recovered: ${String(node.error?.message)}`);
-  });
-});
-
-test('a standalone Text latches on its own binding', { timeout }, async () => {
-  // A Text with no TextGroup owns its own batch and its own `#error`, on a separate branch of
-  // `updateMatrixWorld`. The latch has to hold there too, or the loop simply moves.
+test('a partial overlap throws where the caller wrote it', { timeout }, async () => {
+  // This was the last rejection a caller could reach through the public API: partially overlapping
+  // spans are type-legal, in range, and cluster-aligned, so they compiled and the engine refused
+  // the whole frame with a status. A style scope is a stack, so the engine has no resolution for
+  // them -- but the caller does not learn that from a frame status, and the paragraph they wrote
+  // is what needs naming. Both spans and both indices are named here, with the caller on the stack.
   const font = await fonts.load('inter');
-  const scene = new THREE.Scene();
-  const node = new Text({ font, contentBox: box, paint, style: latin, text: 'abcdefgh' });
-  scene.add(node);
-  const reports = [];
-  node.onError = (error) => reports.push(error);
-  try {
-    scene.updateMatrixWorld(true);
-    assert.equal(node.error, undefined, 'the paragraph must start from an accepted frame');
-
-    node.set({ spans: [styled(0, 4), styled(2, 6)] });
-    scene.updateMatrixWorld(true);
-    const first = node.error;
-    assert.ok(first instanceof TextFrameError, `expected a TextFrameError, received ${String(first)}`);
-    assert.equal(reports.length, 1);
-
-    for (let frame = 0; frame < 8; frame += 1) scene.updateMatrixWorld(true);
-    assert.equal(reports.length, 1, 'an unchanged frame must not be recompiled or re-reported');
-    assert.equal(node.error, first, 'the latched rejection must remain the observable state');
-
-    node.set({ spans: [] });
-    scene.updateMatrixWorld(true);
-    assert.equal(node.error, undefined, `the paragraph never recovered: ${String(node.error?.message)}`);
-  } finally {
-    node.dispose();
-  }
+  assert.throws(
+    () =>
+      new Text({ font, contentBox: box, paint, style: latin, text: 'abcdefgh', spans: [styled(0, 4), styled(2, 6)] }),
+    (error) =>
+      error instanceof RangeError &&
+      /span 1 \[2, 6\) partially overlaps span 0/.test(error.message) &&
+      /must nest or be disjoint/.test(error.message),
+  );
 });
+
+test('an unpaired surrogate throws where the caller wrote it', { timeout }, async () => {
+  // A lone surrogate is not a character and shaping refuses the frame carrying one. It used to be
+  // handed to the engine deliberately; the offset is what a caller can act on.
+  const font = await fonts.load('inter');
+  assert.throws(
+    () => new Text({ font, contentBox: box, paint, style: latin, text: 'ab\ud800cd' }),
+    (error) => error instanceof RangeError && /text offset 2 is an unpaired high surrogate/.test(error.message),
+  );
+});
+
+test('a malformed feature range throws naming the span and the feature', { timeout }, async () => {
+  // Only the outer span range was validated, so a feature range inside it reached the engine and
+  // was refused there, naming neither.
+  const font = await fonts.load('inter');
+  assert.throws(
+    () =>
+      new Text({
+        font,
+        contentBox: box,
+        paint,
+        style: latin,
+        text: 'abcdefgh',
+        spans: [{ start: 0, end: 4, style: { features: [{ tag: 'liga', value: 1, start: 3, end: 1 }] } }],
+      }),
+    (error) => error instanceof RangeError && /span 0 feature 0 \(liga\) is inverted/.test(error.message),
+  );
+});
+
+// The two latch tests that stood here drove the latch through that same overlap, which is the only
+// way a caller could ever produce a frame rejection. With the boundary closed there is no public
+// path to one, so the latch can no longer be exercised from a `Text` at all -- which is the whole
+// point of closing it. The latch is retained as containment for a defect in this package: it stops
+// an invalid frame recompiling and failing silently at frame rate behind the last good picture.
+// Its remaining coverage is the Rust-side tests that produce each status directly.
