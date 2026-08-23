@@ -94,6 +94,71 @@ The layer is legitimate and a second renderer will need something. The objection
 | No anchoring | `anchorX`/`anchorY` on `ParagraphContentBox`. `contentBox.align` aligns lines within the box; nothing anchors the box, so `r3f-hello-world` hand-computes `position={[-width / 2, height / 2, 0]}` | troika and drei both ship it; drei defaults to `center`/`middle` |
 | No glyph extents | Per-glyph advance or bounds, then `caretAt(x, y)` and `selectionRects(start, end)` on top | troika, Skia, Flutter, and the DOM all ship a hit-test surface; we are the only surveyed API with none |
 
+## Measurement and positioning
+
+Reported from production use: an agent integrating this package "has a hell of a time getting text positioned correctly." The measure surface is the cause, and it is the same gap as the missing glyph extents — both are per-glyph and per-line geometry we compute and do not publish.
+
+`ParagraphLayoutSummary` is what `measureLayout()` returns and its own docstring says it "is suitable for positioning UI, telemetry, and missing-glyph admission checks." It carries `width`, `height`, `contentWidth`, `contentHeight`, `firstBaseline`, `lastBaseline`, `overflowed`, `glyphCount`, `lineCount`, `missingGlyphCount`. Measured against what positioning actually needs:
+
+| Needed | We publish | Elsewhere |
+| --- | --- | --- |
+| Ascent and descent | **Nothing.** Zero occurrences repo-wide in the public layout types. Without them a caller cannot align to a baseline, cap height, or x height | Skia `getLineMetrics()`, Flutter `computeLineMetrics()`, DOM `TextMetrics.fontBoundingBox*` |
+| Ink bounds | **Nothing.** `contentWidth`/`contentHeight` are advance-based, so a glyph overhanging its advance — italics, accents, swashes — centres visually wrong | troika publishes `blockBounds` AND `visibleBounds` explicitly; DOM publishes `actualBoundingBoxLeft/Right/Ascent/Descent` beside `width` |
+| Per-line metrics | `lineBaselines` and `lineAdvances` exist, but only on the heavy `ParagraphLayout`, never on the summary, and neither carries per-line height, ascent, or descent | Skia and Flutter both return full line metrics from the measure call |
+| An anchor | **Nothing.** `contentBox.align` aligns lines within the box; nothing anchors the box itself | troika and drei both ship `anchorX`/`anchorY`; drei defaults to `center`/`middle` |
+
+`width` and `height` additionally echo the authored box under `width: { mode: 'exact' }` — the common case — so the only load-bearing number is `contentWidth`, and it is the advance extent rather than the visual one.
+
+Compounding it, the order of operations is circular and undocumented: positioning needs measurements, measurements need a committed layout, the layout commits inside `updateMatrixWorld`, and `measureLayout()` returns `undefined` until then. There is no readiness signal, so a caller must force a commit by hand and check `error` to find out whether the answer is trustworthy. React has no clean hook point for that at all. This is the same defect as the missing readiness signal in the Reshape table, seen from the caller's side.
+
+Required:
+
+1. Publish ascent, descent, and line height on the measurement summary, per line and for the paragraph.
+2. Publish ink bounds beside the advance extents, named so the difference is unmissable. A caller centring text visually must not have to know which one they hold.
+3. Add `anchorX`/`anchorY` so the common case needs no arithmetic, and so the anchor is applied where the layout already knows the extents.
+4. Make the measure-then-position order non-circular: either a synchronous measure that does not require a committed frame, or a readiness signal that tells a caller when the answer is valid. Flutter's `TextPainter.layout()` followed by a synchronous `.size` is the precedent.
+5. Whatever the animation API exposes as per-glyph extents must be the same geometry, from the same source, in the same coordinate space as these paragraph and line metrics.
+
+### Third-party layout hosts: uikit and Yoga
+
+The same gap decides whether `pmndrs/glyph` can be the text solution for pmndrs/uikit. [uikit integration](uikit-integration.md) specifies the contract; this section records what is actually shipped against it.
+
+What is already sound. `ParagraphAxisConstraint` is `unconstrained | at-most | exact`, a one-to-one map onto Yoga's `Undefined | AtMost | Exactly`. `firstBaseline` is measured from the box top edge, which is Yoga's baseline-function convention. Milestone 11.17 made repeated measurement cheap by routing a geometry-only change to a paragraph-scoped synchronous query. The constraint vocabulary and the measurement cost are not the problem.
+
+What is missing. The `Paragraph` interface that [uikit integration](uikit-integration.md) calls the "Minimum core API" -- `measure(constraints)`, `layout(constraints)`, `update(input)`, `dispose()` -- does not exist in the package. There is no `Paragraph` type and no `ParagraphConstraints` type; `measureLayout()` takes no arguments. The paragraph-boundary fixture validates the contract through a hand-written adapter in the benchmarks application, which mutates the retained object and forces a scene-graph commit for every distinct constraint:
+
+```ts
+text.contentBox = value;
+group.updateMatrixWorld(true);
+if (group.error !== undefined) throw group.error;
+const measured = text.measureLayout();
+```
+
+That is what an integrator must write to answer one Yoga measure callback, and it is unsound in four ways that a retained layout engine makes worse rather than better:
+
+| Hazard | Why a Yoga host makes it worse |
+| --- | --- |
+| The commit runs inside the callback | Yoga invokes measure during its own layout pass. `updateMatrixWorld(true)` commits the whole `TextGroup`, including every other `Text` in it. A layout engine driving a scene-graph commit is a layering inversion and is re-entrant. |
+| A speculative probe mutates authored state | Yoga probes several candidate constraints before resolving one. The last probe is left behind on the object. The fixture needs a `JSON.stringify` memo key to survive it. |
+| Yoga may measure a node it never lays out | A frame was committed for it regardless. |
+| Errors arrive out of band | Failure surfaces on `group.error` rather than as a result of the measurement, and `undefined` still conflates unbound, uncommitted, and failed. |
+
+`ParagraphContentBox` additionally conflates per-call constraints (`width`, `height`) with stable policy (`wrap`, `align`, `maxLines`, `overflow`, `justify`, columns, indents). Yoga varies two fields per probe, so a host must re-send the entire policy object every call; that conflation is also why the fixture's memo key must stringify the whole object.
+
+One core, one shared gap, two consumer-specific edges. A framework-neutral `Paragraph` -- pure, synchronous, constraint-parameterized, requiring no scene, renderer, or committed frame -- serves both hosts. The three.js `Text` becomes a thin retained wrapper over it, which is also what removes the measure-then-position circularity above. The remaining differences are small and must not be allowed to cross:
+
+- Shared, and missing for both: ascent, descent, and line height per line and per paragraph; and a cluster-aware hit-test, caret, and selection surface. uikit's migration explicitly blocks on the latter because its current query path indexes one layout entry per JavaScript character.
+- Needed by a layout host only: minimum-content and maximum-content widths as first-class outputs. Today a host derives `minWidth` from a second full measurement at `{ mode: 'at-most', size: 0 }`, so every `CustomLayouting` recompute pays two measurements. Skia returns `getMinIntrinsicWidth` and `getMaxIntrinsicWidth`, and Flutter returns `minIntrinsicWidth` and `maxIntrinsicWidth`, from a single pass.
+- Needed by a positioning caller only: `anchorX`/`anchorY` and ink bounds. Neither may reach paragraph measurement. An anchor applied there would corrupt a host's box arithmetic, and CSS and flex layout are advance-based, so `contentWidth` is the correct extent for Yoga and the wrong one for visual centring. Both extents ship, named so they cannot be confused.
+
+Required, in addition to the five items above:
+
+6. Extract a framework-neutral `Paragraph` with `measure(constraints)` and `layout(constraints)` that need no scene, renderer, or committed frame, and that leave authored state untouched. Re-express the three.js `Text` as a retained wrapper over it.
+7. Separate per-call constraints from stable policy so a host varies only the axis constraints per probe.
+8. Publish minimum-content and maximum-content widths from a single measurement.
+9. Return failure from the measurement itself rather than through an out-of-band group error.
+10. Re-point the paragraph-boundary fixture at the real `Paragraph`. While it runs through an adapter that the package does not ship, the fixture proves the adapter, not the contract.
+
 ## The animation API
 
 ### What is wrong with the one we have
@@ -129,7 +194,7 @@ Keep the retained-GPU-buffer write path. That capability is genuinely ahead of e
 1. Un-publish the reconciler protocol. Same class as the two shipped defects and the worst remaining hole.
 2. The delete list, then the demotion of `/core` and `/tsl`.
 3. Fixes 1 through 3 — the frame-rejection identity, the rejection loop, and the `spans` validation timing — since those are what a caller actually hits.
-4. The animation API, replacing the origin trio.
+4. The animation API, replacing the origin trio, and the measurement and positioning surface with it -- they are the same geometry.
 5. The remaining fixes and reshapes.
 
 Each step must keep the packed-lane differential oracle green, and no step may regress the incremental fast path.
