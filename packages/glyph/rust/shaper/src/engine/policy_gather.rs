@@ -1081,6 +1081,7 @@ mod tests {
                 font_size: 16.0,
                 inline_origin: 500.0,
                 block_origin: 500.0,
+                ..SemanticGlyph::default()
             },
             SemanticGlyph {
                 stable_id: 1,
@@ -1091,6 +1092,7 @@ mod tests {
                 font_size: 16.0,
                 inline_origin: 12.5,
                 block_origin: -3.25,
+                ..SemanticGlyph::default()
             },
         ];
         let foreground = [0xff20_4080];

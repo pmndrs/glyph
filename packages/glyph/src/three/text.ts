@@ -41,7 +41,13 @@ import {
   type TextEngineStyleValue,
   type TextEngineTextMutation,
 } from '../core.js';
-import type { ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
+import type { LayoutBox, ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
+import {
+  createGlyphPlacements,
+  type GlyphApplication,
+  type GlyphCaret,
+  type GlyphPlacements,
+} from '../glyph-placement.js';
 import { textFrameError, type TextFrameSubject } from './frame-error.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
 import {
@@ -90,19 +96,19 @@ export interface TextGroupOptions {
   readonly pixelSnapping?: boolean;
 }
 
-export interface TextGlyphOriginSnapshot {
-  readonly layout: ParagraphLayoutInspection;
-  readonly shapedX: Float32Array;
-  readonly shapedY: Float32Array;
-  readonly displayedX: Float32Array;
-  readonly displayedY: Float32Array;
-}
-
-export interface TextGlyphOriginUpdate {
-  readonly layout: ParagraphLayoutInspection;
-  readonly x: Float32Array;
-  readonly y: Float32Array;
-}
+/**
+ * What the paragraph has published, as a value rather than as the absence of an error.
+ *
+ * `'unbound'` and `'pending'` are distinguished because they need different responses: an unbound
+ * paragraph is not in the scene graph and never will commit on its own, while a pending one commits
+ * on the next world-matrix update. The previous surface collapsed both into `undefined` from
+ * `measureLayout()`, and the only positive signal available was that `.error` was still unset.
+ */
+export type TextCommitState =
+  | Readonly<{ status: 'unbound' }>
+  | Readonly<{ status: 'pending' }>
+  | Readonly<{ status: 'committed'; revision: number }>
+  | Readonly<{ status: 'failed'; error: unknown }>;
 
 interface DesiredTextState<Technique extends AnyRasterTechnique> {
   readonly font: FontSelection<Technique>;
@@ -295,18 +301,74 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     this.#assertActive();
     return this.#binding?.layoutInspection(eraseTextTechnique(this));
   }
-  snapshotGlyphOrigins(): TextGlyphOriginSnapshot | undefined {
-    this.#assertActive();
-    return this.#binding?.glyphOriginSnapshot(eraseTextTechnique(this));
+  /**
+   * Has this paragraph published a layout, and did it succeed.
+   *
+   * This is the positive signal. A caller that needed to know a layout committed previously had to
+   * force `updateMatrixWorld(true)` and then infer success from `error` still being `undefined`.
+   */
+  commitState(): TextCommitState {
+    if (this.#disposed) return { status: 'unbound' };
+    const error = this.error;
+    if (error !== undefined) return { status: 'failed', error };
+    // A paragraph outside the scene graph will never commit on its own, which is a different
+    // answer from one that commits on the next world-matrix update. Parenthood, not the batch
+    // binding, is what separates them: binding happens during that update.
+    if (this.parent === null) return { status: 'unbound' };
+    if (this.#binding === undefined || this.#desiredRevision !== this.#appliedRevision) {
+      return { status: 'pending' };
+    }
+    return { status: 'committed', revision: this.#appliedRevision };
   }
-  setGlyphOrigins(update: TextGlyphOriginUpdate): void {
+
+  /**
+   * Copies this paragraph's glyphs into a structure that can be manipulated and applied back.
+   *
+   * Step one of **snapshot, manipulate, restore**. The snapshot retains no renderer or engine
+   * resource, states its own coordinate space, addresses glyphs, words, and lines directly, and
+   * names any glyph whose drawn position it could not read.
+   *
+   * Returns `undefined` when the paragraph has no committed layout, which `commitState()`
+   * distinguishes from being unbound.
+   */
+  snapshotGlyphs(): GlyphPlacements | undefined {
     this.#assertActive();
-    if (this.#binding === undefined) throw new Error('glyph origins require a bound Text');
-    this.#binding.setGlyphOrigins(eraseTextTechnique(this), update);
+    return this.#binding?.glyphPlacements(eraseTextTechnique(this));
   }
-  clearGlyphOriginOverrides(): void {
+
+  /**
+   * Writes a manipulated snapshot to the retained GPU buffer: no reshape, no CPU re-upload.
+   *
+   * Step two. Applies to every glyph or reports exactly which it did not reach — a partial write is
+   * a value the caller receives, never a silence. Throws when `placements` describes a layout this
+   * paragraph has since replaced, because the identities in it no longer address the same glyphs.
+   */
+  applyGlyphs(placements: GlyphPlacements): GlyphApplication {
+    this.#assertActive();
+    if (this.#binding === undefined) throw new Error('glyph placements require a bound Text');
+    return this.#binding.applyGlyphPlacements(eraseTextTechnique(this), placements);
+  }
+
+  /**
+   * Returns every glyph to where the layout put it, and hands authority back to the layout.
+   *
+   * Step three, and a first-class one. An override left pinned at its target outlives the motion
+   * that set it and shadows the next committed origins; the previous surface made a caller discover
+   * that by observing the corruption.
+   */
+  restoreGlyphs(): void {
     this.#assertActive();
     this.#binding?.clearGlyphOrigins(eraseTextTechnique(this));
+  }
+
+  /** Nearest cluster boundary to a paragraph-local point. `undefined` without a committed layout. */
+  caretAt(x: number, y: number): GlyphCaret | undefined {
+    return this.snapshotGlyphs()?.caretAt(x, y);
+  }
+
+  /** Line-clipped rectangles covering a UTF-16 range. `undefined` without a committed layout. */
+  selectionRects(start: number, end: number): readonly LayoutBox[] | undefined {
+    return this.snapshotGlyphs()?.selectionRects(start, end);
   }
 
   override updateMatrixWorld(force?: boolean): void {
@@ -674,20 +736,33 @@ class ThreeTextBatchBinding {
     this.synchronize(textShaperAbi.engine.semanticViewMasks.layoutInspection);
     return this.#layoutInspections.get(text);
   }
-  glyphOriginSnapshot(text: Text<AnyRasterTechnique>): TextGlyphOriginSnapshot | undefined {
+  glyphPlacements(text: Text<AnyRasterTechnique>): GlyphPlacements | undefined {
     const layout = this.layoutInspection(text);
     if (layout === undefined) return undefined;
-    return { layout, ...this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y) };
+    const drawn = this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
+    return createGlyphPlacements(layout, text.text, drawn.drawnX, drawn.drawnY, drawn.incomplete);
   }
-  setGlyphOrigins(text: Text<AnyRasterTechnique>, update: TextGlyphOriginUpdate): void {
+  applyGlyphPlacements(text: Text<AnyRasterTechnique>, placements: GlyphPlacements): GlyphApplication {
     const layout = this.layoutInspection(text);
-    if (layout === undefined || update.layout !== layout) {
-      throw new TypeError('glyph origins do not match the committed layout inspection');
+    if (layout === undefined || placements.layout !== layout) {
+      throw new TypeError('glyph placements do not match the committed layout inspection');
     }
-    if (update.x.length !== layout.glyphStableIds.length || update.y.length !== layout.glyphStableIds.length) {
-      throw new RangeError('glyph origin arrays do not match the inspected glyph count');
+    const glyphs = placements.glyphs;
+    if (glyphs.length !== layout.glyphCount) {
+      throw new RangeError('glyph placements do not match the inspected glyph count');
     }
-    this.#target.setGlyphOriginOverrides(layout.glyphStableIds, update.x, update.y);
+    const x = new Float32Array(glyphs.length);
+    const y = new Float32Array(glyphs.length);
+    for (let index = 0; index < glyphs.length; index += 1) {
+      x[index] = glyphs[index]!.x;
+      y[index] = glyphs[index]!.y;
+    }
+    const unapplied = this.#target.setGlyphOriginOverrides(layout.glyphStableIds, layout.x, layout.y, x, y);
+    return Object.freeze({
+      requested: glyphs.length,
+      applied: glyphs.length - unapplied.length,
+      unapplied: Object.freeze(unapplied),
+    });
   }
   clearGlyphOrigins(text: Text<AnyRasterTechnique>): void {
     const layout = this.#layoutInspections.get(text);

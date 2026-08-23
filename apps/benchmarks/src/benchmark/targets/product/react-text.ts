@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 
 import type { LoadedFont, ParagraphLayout } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text, useFont } from '@pmndrs/glyph/react';
+import { Text, TextSpan, useFont } from '@pmndrs/glyph/react';
 import type { LoadedFontRequest, ParagraphContentBox, Text as CoreText } from '@pmndrs/glyph/three';
 
 import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json' with { type: 'json' };
@@ -16,8 +16,9 @@ import { createConfiguredRenderer, disposeConfiguredRenderer } from '../../../re
 type BitmapTechnique = typeof bitmap;
 type BitmapTextObject = CoreText<BitmapTechnique>;
 
-/** Both the outer paragraph and its nested span bind one technique, so both elements share one instantiation. */
+/** The paragraph and its inline run bind one technique, so both elements share one instantiation. */
 const BitmapText = Text<BitmapTechnique>;
+const BitmapTextSpan = TextSpan<BitmapTechnique>;
 
 const FRAME_WIDTH = 384;
 const FRAME_HEIGHT = 128;
@@ -256,7 +257,7 @@ function CommittedText({
       contentBox: width === undefined ? NATURAL_CONTENT_BOX : exactContentBox(width),
     },
     TEXT_PREFIX,
-    React.createElement(BitmapText, { paint: { color: accent } }, TEXT_ACCENT),
+    React.createElement(BitmapTextSpan, { paint: { color: accent } }, TEXT_ACCENT),
     TEXT_SUFFIX,
   );
 }

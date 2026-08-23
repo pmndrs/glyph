@@ -224,9 +224,9 @@ interface TypeGpuParagraph<Technique extends AnyRasterTechnique, Variant> {
 
   set(properties: TypeGpuParagraphUpdate<Technique, Variant>): void;
   setTransform(columnMajorMatrix4: ArrayLike<number>): void;
-  snapshotGlyphs(): GlyphSnapshot;
-  setGlyphOrigins(update: GlyphOriginUpdate): void;
-  clearGlyphOriginOverrides(): void;
+  snapshotGlyphs(): GlyphPlacements | undefined;
+  applyGlyphs(placements: GlyphPlacements): GlyphApplication;
+  restoreGlyphs(): void;
   snapshotProperties(): TypeGpuParagraphSnapshot<Technique, Variant>;
   dispose(): void;
 }
