@@ -5,7 +5,7 @@ description: Proves the published core engine surface is sufficient for a second
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:31a285a4a1068726926a76f30734b33c61c0700a82483a6568ebf4f906567057'
+source_digest: 'sha256:4e5b76958b653abbcc70246739a3d52a8d4c11cc181ec805510668fc79d705a8'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
