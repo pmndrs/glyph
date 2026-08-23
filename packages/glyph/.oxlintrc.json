@@ -73,6 +73,26 @@
           }
         ]
       }
+    },
+    {
+      "files": ["src/typegpu/**", "src/typegpu.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "paths": ["three", "@react-three/fiber"],
+            "patterns": [
+              "three/src/*",
+              "three/addons/*",
+              "three/examples/*",
+              "**/internal/**",
+              "**/generated/**",
+              "three/tsl",
+              "three/webgpu"
+            ]
+          }
+        ]
+      }
     }
   ]
 }
