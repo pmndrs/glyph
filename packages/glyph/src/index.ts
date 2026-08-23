@@ -52,6 +52,7 @@ export type {
 export type { ParagraphLayoutPolicy, ParagraphConstraints } from './text-properties.js';
 
 export type {
+<<<<<<< HEAD
   ParagraphLayoutResult,
   ParagraphMeasureResult,
   ParagraphOptions,
@@ -73,6 +74,8 @@ export type {
 } from './glyph-placement.js';
 
 export type {
+=======
+>>>>>>> 61af100b (fix(glyph): export Paragraph from /core so the root entry keeps its bundle boundary)
   FontLoadDiagnostic,
   FontLoadOptions,
   FontLoaderOptions,
