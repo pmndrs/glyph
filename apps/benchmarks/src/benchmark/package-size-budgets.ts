@@ -39,6 +39,14 @@ export const packageSizeBudgets = {
     gzipBytes: 4_200,
     brotliBytes: 3_700,
   },
+  // The TypeGPU technique shader library is a sibling of `/tsl` with no scene
+  // integration; `typegpu` itself is an optional peer and stays outside the graph.
+  'typegpu-subpath-js': {
+    rawBytes: 30_000,
+    minifiedBytes: 16_000,
+    gzipBytes: 5_000,
+    brotliBytes: 4_400,
+  },
   'font-validator-js': {
     rawBytes: 741_000,
     minifiedBytes: 585_000,

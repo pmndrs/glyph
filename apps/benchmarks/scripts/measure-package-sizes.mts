@@ -48,7 +48,21 @@ const diagnosticCodeFragments = [
 ];
 
 function isTextPeerDependency(id: string): boolean {
-  return id === 'three' || id.startsWith('three/') || id === 'react' || id.startsWith('@react-three/fiber');
+  return (
+    id === 'three' ||
+    id.startsWith('three/') ||
+    id === 'react' ||
+    id.startsWith('@react-three/fiber') ||
+    // TypeGPU is the optional peer of the `/typegpu` shader subpath. It keys its identity
+    // to a single instance exactly as Three and React do, so the consumer-installed
+    // runtime stays outside what this package ships and outside its reviewed ceilings.
+    // `typed-binary` and `tinyest` are resolution internals reached only through TypeGPU.
+    id === 'typegpu' ||
+    id.startsWith('typegpu/') ||
+    id === 'typed-binary' ||
+    id === 'tinyest' ||
+    id.startsWith('tinyest')
+  );
 }
 
 async function bundle(
@@ -393,6 +407,26 @@ const tslSubpath = await measureJavaScript(
     excludedInitial: ['/packages/glyph/dist/react.js', '/packages/glyph/dist/three.js', '/packages/glyph/dist/three/'],
   },
 );
+const typegpuSubpath = await measureJavaScript(
+  'typegpu-subpath-js',
+  'TypeGPU technique shader JS',
+  new URL('../size-entries/text-typegpu.ts', import.meta.url),
+  false,
+  true,
+  true,
+  {
+    // The TypeGPU shader library must not pull the renderer integrations or React;
+    // the `typegpu` runtime itself is an optional peer and stays outside the graph.
+    expectedDynamic: [],
+    excludedInitial: [
+      '/packages/glyph/dist/react.js',
+      '/packages/glyph/dist/three.js',
+      '/packages/glyph/dist/tsl.js',
+      '/packages/glyph/dist/three/',
+      '/packages/glyph/dist/tsl/',
+    ],
+  },
+);
 const threeRuntime = await measureJavaScript(
   'three-runtime-js',
   'Three.js adapter JS',
@@ -441,6 +475,7 @@ const iconsSlug = await measureFontAsset(
 const entries: SizeEntry[] = [
   coreSubpath,
   tslSubpath,
+  typegpuSubpath,
   coreJavaScript,
   textShaperWasm,
   threeRuntime,
