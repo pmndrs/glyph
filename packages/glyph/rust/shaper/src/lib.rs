@@ -38,6 +38,15 @@ pub const STATUS_SESSION_MISSING: u32 = 11;
 pub const STATUS_REVISION_CONFLICT: u32 = 12;
 pub const STATUS_FONT_STACK_MISSING: u32 = 13;
 pub const STATUS_FONT_IN_USE: u32 = 14;
+// Caller-actionable frame rejections. Each names a fault a host can correct in the request it
+// authored, and each carries the offending paragraph -- and where one style owns the cause, that
+// style -- in the result header's fault fields. `STATUS_INVALID_REQUEST` keeps every remaining
+// cause and never names one.
+pub const STATUS_STYLE_RANGE_INVALID: u32 = 15;
+pub const STATUS_STYLE_SPLITS_CLUSTER: u32 = 16;
+pub const STATUS_STYLE_NESTING_INVALID: u32 = 17;
+pub const STATUS_STYLE_ROOT_INVALID: u32 = 18;
+pub const STATUS_FONT_METRICS_MISSING: u32 = 19;
 
 const MAX_CACHED_PLANS_PER_FONT: usize = 64;
 const DEFAULT_SHAPE_BUFFER_CAPACITY: usize = 32_768;

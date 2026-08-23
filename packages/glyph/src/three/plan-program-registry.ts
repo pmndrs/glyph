@@ -68,8 +68,21 @@ export interface CompiledThreeRasterPlanProgram {
 const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique, unknown>>();
 
 /**
+ * Runtimes that have already taken their snapshot of `programs`.
+ *
+ * A `TextRuntime`'s coordinator reads this registry exactly once, at construction, and nothing
+ * re-reads it afterwards. A technique registered after that snapshot is therefore invisible to
+ * every runtime already built, and the loss surfaces far away as a missing technique when a font
+ * using it is bound. The set is what lets a late registration be rejected AT the registration.
+ */
+const snapshots = new Set<RenderWireIdentityRegistry>();
+
+/**
  * Register declarative Rust packing policy plus cold font/resource and renderer realization code.
- * Registration must happen before the runtime-scoped Three coordinator is first created.
+ *
+ * Registration must happen before the first runtime-scoped Three coordinator is created -- that is,
+ * before the first `Text`, `TextGroup`, or `FontLoader` for a runtime. A later registration throws
+ * rather than silently applying to nothing.
  */
 export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Resource>(
   program: ThreeRasterPlanProgram<Technique, Resource>,
@@ -79,6 +92,15 @@ export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechni
   if (existing !== undefined && existing !== erased) {
     throw new TypeError(`a different Three raster plan program is already registered for "${program.technique.id}"`);
   }
+  // Re-registering the identical program is a no-op and stays legal, so a module evaluated twice
+  // does not become an error. Only a technique no existing runtime holds is rejected.
+  if (existing === undefined && snapshots.size !== 0) {
+    throw new Error(
+      `Three raster plan program "${program.technique.id}" was registered after ${snapshots.size} text runtime(s) ` +
+        'already read the registry, so no existing runtime can use it; register every technique before creating ' +
+        'the first Text, TextGroup, or FontLoader',
+    );
+  }
   programs.set(program.technique.id, erased);
 }
 
@@ -86,9 +108,21 @@ export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechni
 export function compiledThreeRasterPlanPrograms(
   identities: RenderWireIdentityRegistry,
 ): readonly CompiledThreeRasterPlanProgram[] {
+  snapshots.add(identities);
   return [...programs.values()]
     .sort((left, right) => left.technique.id.localeCompare(right.technique.id))
     .map((program) => compileProgram(program, identities));
+}
+
+/**
+ * @internal Forget a disposed runtime's snapshot.
+ *
+ * Once no runtime holds a snapshot there is nothing a late registration could miss, so registration
+ * is legal again. This is what keeps the module-global gate from leaking across a host that builds
+ * and tears down runtimes, tests included.
+ */
+export function releaseThreeRasterPlanProgramSnapshot(identities: RenderWireIdentityRegistry): void {
+  snapshots.delete(identities);
 }
 
 export interface ThreePolicyAbi {
