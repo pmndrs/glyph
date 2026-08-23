@@ -1,8 +1,13 @@
 import type {
+  AnyRasterTechnique,
+  Paragraph,
   ParagraphAxisConstraint,
-  ParagraphContentBox,
-  ParagraphLayout,
-  ParagraphMeasurement,
+  ParagraphConstraints,
+  ParagraphLayoutPolicy,
+  ParagraphLayoutInspection,
+  ParagraphLayoutResult,
+  ParagraphMeasureResult,
+  ParagraphUpdate,
 } from '@pmndrs/glyph';
 
 export const YogaMeasureMode = Object.freeze({ Undefined: 0, Exactly: 1, AtMost: 2 });
@@ -11,52 +16,52 @@ type YogaMeasureModeValue = (typeof YogaMeasureMode)[keyof typeof YogaMeasureMod
 type Inset = readonly [top: number, right: number, bottom: number, left: number];
 type Size = readonly [width: number, height: number];
 
-export interface UikitParagraphSubject<Input = unknown> {
-  measure(contentBox: ParagraphContentBox): ParagraphMeasurement;
-  layout(contentBox: ParagraphContentBox): ParagraphLayout;
-  update(input: Input): void;
-}
-
-export function createUikitLayoutFixture<Input>(
-  paragraph: UikitParagraphSubject<Input>,
-  policy: ParagraphContentBox = {},
+/**
+ * The current-uikit-shaped fixture over the real framework-neutral `Paragraph`.
+ *
+ * The host varies only axis constraints per probe -- stable flow policy lives in the
+ * paragraph and changes through `update()` -- exactly the split a retained layout engine
+ * needs. Measurement never materializes positioned arrays; the final resolved content box
+ * is the only call that does.
+ */
+export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
+  paragraph: Paragraph<Technique>,
+  policy: ParagraphLayoutPolicy = {},
 ) {
-  let currentPolicy = { ...policy };
+  let currentPolicy: ParagraphLayoutPolicy = { ...policy };
   let dirtyCount = 1;
   let paintRevision = 0;
   let rasterRevision = 0;
   const calls = { measure: 0, layout: 0 };
 
-  const measuredParagraph = {
-    measure(constraints: ParagraphContentBox = {}) {
-      calls.measure += 1;
-      return paragraph.measure(constraints);
-    },
-    layout(constraints: ParagraphContentBox = {}) {
-      calls.layout += 1;
-      return paragraph.layout(constraints);
-    },
-  };
+  function requireMetrics(result: ParagraphMeasureResult) {
+    if (!result.ok) throw new Error(`paragraph measurement failed: ${result.error.message}`);
+    return result.metrics;
+  }
+  function requireLayout(result: ParagraphLayoutResult) {
+    if (!result.ok) throw new Error(`paragraph layout failed: ${result.error.message}`);
+    return result.layout;
+  }
 
   function customLayouting() {
-    const natural = measuredParagraph.measure(currentPolicy);
-    const minimum = measuredParagraph.measure({
-      ...currentPolicy,
-      width: { mode: 'at-most', size: 0 },
-    });
+    calls.measure += 1;
+    const natural = requireMetrics(paragraph.measure());
     return {
-      minWidth: minimum.contentWidth,
+      // Intrinsic widths ride the natural measurement itself: no second query at zero width.
+      minWidth: natural.minContentWidth,
       minHeight: natural.height,
       firstBaseline: natural.firstBaseline,
       measure(width: number, widthMode: YogaMeasureModeValue, height: number, heightMode: YogaMeasureModeValue) {
-        const result = measuredParagraph.measure({
-          ...currentPolicy,
-          width: mapYogaAxis(width, widthMode, 'width'),
-          height: mapYogaAxis(height, heightMode, 'height'),
-        });
+        calls.measure += 1;
+        const metrics = requireMetrics(
+          paragraph.measure({
+            width: mapYogaAxis(width, widthMode, 'width'),
+            height: mapYogaAxis(height, heightMode, 'height'),
+          }),
+        );
         return {
-          width: roundUpToPointScale(result.width),
-          height: roundUpToPointScale(result.height),
+          width: roundUpToPointScale(metrics.width),
+          height: roundUpToPointScale(metrics.height),
         };
       },
     };
@@ -72,6 +77,12 @@ export function createUikitLayoutFixture<Input>(
     },
     get rasterRevision() {
       return rasterRevision;
+    },
+    get policy(): ParagraphLayoutPolicy {
+      return currentPolicy;
+    },
+    get paragraph(): Paragraph<Technique> {
+      return paragraph;
     },
     customLayouting,
     resolveYogaLeaf(width: number, widthMode: YogaMeasureModeValue, height: number, heightMode: YogaMeasureModeValue) {
@@ -90,7 +101,7 @@ export function createUikitLayoutFixture<Input>(
       border: Inset,
     ): {
       readonly contentBox: { readonly width: number; readonly height: number };
-      readonly layout: ParagraphLayout;
+      readonly layout: ParagraphLayoutInspection;
       readonly centeredX: Float32Array;
       readonly centeredY: Float32Array;
     } {
@@ -105,11 +116,14 @@ export function createUikitLayoutFixture<Input>(
         outerHeight - paddingTop - paddingBottom - borderTop - borderBottom,
         'height',
       );
-      const layout = measuredParagraph.layout({
-        ...currentPolicy,
+      calls.layout += 1;
+      const constraints: ParagraphConstraints = {
         width: { mode: 'exact', size: contentWidth },
         height: { mode: 'exact', size: contentHeight },
-      });
+      };
+      const result = paragraph.layout(constraints);
+      if (!result.ok) throw new Error(`resolved content-box layout failed: ${result.error.message}`);
+      const layout = result.layout;
       const contentLeft = -outerWidth / 2 + borderLeft + paddingLeft;
       const contentTop = outerHeight / 2 - borderTop - paddingTop;
       return {
@@ -119,12 +133,13 @@ export function createUikitLayoutFixture<Input>(
         centeredY: Float32Array.from(layout.y, (value) => contentTop - value),
       };
     },
-    updateParagraph(input: Input) {
+    updateParagraph(input: ParagraphUpdate<Technique>) {
       paragraph.update(input);
       dirtyCount += 1;
     },
-    updateShapingPolicy(policyUpdate: ParagraphContentBox) {
+    updateShapingPolicy(policyUpdate: ParagraphLayoutPolicy) {
       currentPolicy = { ...currentPolicy, ...policyUpdate };
+      paragraph.update({ policy: currentPolicy });
       dirtyCount += 1;
     },
     updatePaint() {

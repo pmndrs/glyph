@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
-import type { ParagraphStyle } from '@pmndrs/glyph';
+import { Paragraph, type ParagraphStyle } from '@pmndrs/glyph';
 
 import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts';
@@ -8,8 +8,8 @@ import {
   contentBox,
   createContractText,
   createParagraphContractRuntime,
+  policyOnly,
   preserveEquivalentLegacyNumbers,
-  textSubject,
   type LegacyConstraints,
 } from './support/paragraph-contract-runtime.mts';
 
@@ -103,12 +103,15 @@ try {
     style: { fontSize: 31, lineHeight: 1.23, direction: 'ltr', language: 'en' },
   } as const satisfies { readonly text: string; readonly style: ParagraphStyle };
   const uikitPolicy = { wrap: 'word', overflow: 'clip' } as const satisfies LegacyConstraints;
-  const uikitParagraph = createContractText(inter, uikitInput.text, uikitInput.style);
+  const uikitPolicyOnly = policyOnly(uikitPolicy);
+  const uikitParagraph = new Paragraph({
+    font: inter,
+    text: uikitInput.text,
+    style: uikitInput.style,
+    policy: uikitPolicyOnly,
+  });
   try {
-    const uikitFixture = createUikitLayoutFixture(
-      textSubject(uikitParagraph.group, uikitParagraph.text, uikitInput),
-      contentBox(uikitPolicy),
-    );
+    const uikitFixture = createUikitLayoutFixture(uikitParagraph, uikitPolicyOnly);
     const customLayouting = uikitFixture.customLayouting();
     const natural = customLayouting.measure(
       Number.NaN,

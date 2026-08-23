@@ -8,24 +8,22 @@ import {
 import {
   acquireFontSelectionForRuntime,
   assertFontSelectionForRuntime,
-  compileRenderPolicy,
-  compileTextEngineFrameUpdate,
   concreteFonts,
-  loadedFontBindingBytes,
-  readTextEngineLayouts,
-  readTextEngineMeasurements,
   releaseFontSelection,
-  textRuntimeShaper,
-  textShaperAbi,
+} from './loaded-font.js';
+import { loadedFontBindingBytes } from './core/font-binding.js';
+import {
   TextEngineHost,
   TextEngineStatusError,
-  type PolicyCapabilitySet,
-  type PolicyDescriptor,
-  type RuntimeShaper,
   type TextEnginePublication,
   type TextEngineSession,
-  type TextEngineStyleMutation,
-} from './core.js';
+} from './core/host.js';
+import { compileTextEngineFrameUpdate, type TextEngineStyleMutation } from './core/frame-wire.js';
+import { readTextEngineLayouts, readTextEngineMeasurements } from './core/layout-query-view.js';
+import { compileRenderPolicy, type PolicyCapabilitySet, type PolicyDescriptor } from './core/render-policy.js';
+import type { RuntimeShaper } from './shaper.js';
+import { textRuntimeShaper } from './text-runtime.js';
+import { textShaperAbi } from './generated/text-shaper-abi.js';
 import type { FontSelection, LoadedFont } from './loaded-font.js';
 import type { ParagraphLayoutInspection, ParagraphLayoutSummary, ParagraphMetrics } from './layout.js';
 import type { AnyRasterTechnique } from './raster-technique.js';

@@ -1,6 +1,13 @@
-import type { LoadedFont, ParagraphContentBox, ParagraphLayoutInspection, ParagraphStyle } from '@pmndrs/glyph';
+import type {
+  LoadedFont,
+  ParagraphContentBox,
+  ParagraphLayoutInspection,
+  ParagraphLayoutPolicy,
+  ParagraphStyle,
+} from '@pmndrs/glyph';
+import { Paragraph } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { FontLoader, Text, TextGroup, type TextUpdate } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import amiriFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
@@ -12,7 +19,7 @@ import type { BenchmarkTarget } from '../../contracts';
 import { exactValue } from '../../exact-value';
 import { paragraphCjkCoverageText } from '../../paragraph-contract-corpus';
 import { hashParagraphLayouts, paragraphLayoutBytes, paragraphLayoutContract } from '../../paragraph-layout-digest';
-import { createUikitLayoutFixture, YogaMeasureMode, type UikitParagraphSubject } from '../../uikit-layout-fixture';
+import { createUikitLayoutFixture, YogaMeasureMode } from '../../uikit-layout-fixture';
 
 type BitmapFont = LoadedFont<typeof bitmap>;
 
@@ -194,7 +201,7 @@ function runContracts(state: Extract<State, { readonly kind: 'ready' }>, signal:
     }
   }
 
-  let uikitText: Text<typeof bitmap> | undefined;
+  let uikitParagraph: Paragraph<typeof bitmap> | undefined;
   try {
     signal?.throwIfAborted();
     group.updateMatrixWorld(true);
@@ -208,15 +215,16 @@ function runContracts(state: Extract<State, { readonly kind: 'ready' }>, signal:
       return layout;
     });
 
-    uikitText = new Text({
+    // The uikit seam is exercised through the real framework-neutral Paragraph: no scene
+    // graph, no adapter. Identical retained goldens prove the Paragraph route agrees with
+    // the Text route the contract was generated through.
+    uikitParagraph = new Paragraph({
       font: state.inter,
       text: bidiContract.uikit.input.text,
       style: bidiContract.uikit.input.style,
-      contentBox: contentBox(bidiContract.uikit.policy),
+      policy: policy(bidiContract.uikit.policy),
     });
-    group.add(uikitText);
-    const subject = textSubject(group, uikitText, bidiContract.uikit.input);
-    const uikit = createUikitLayoutFixture(subject, contentBox(bidiContract.uikit.policy));
+    const uikit = createUikitLayoutFixture(uikitParagraph, policy(bidiContract.uikit.policy));
     const custom = uikit.customLayouting();
     assertObject(
       'uikit.customLayouting',
@@ -268,44 +276,18 @@ function runContracts(state: Extract<State, { readonly kind: 'ready' }>, signal:
       },
     };
   } finally {
-    uikitText?.dispose();
+    uikitParagraph?.dispose();
     for (const text of texts) text.dispose();
     group.dispose();
   }
 }
 
-function textSubject(
-  group: TextGroup,
-  text: Text<typeof bitmap>,
-  input: { readonly text: string; readonly style: ParagraphStyle },
-): UikitParagraphSubject<TextUpdate<typeof bitmap>> {
-  let key = '';
-  const apply = (value: ParagraphContentBox) => {
-    const next = JSON.stringify(value);
-    if (next !== key) {
-      key = next;
-      text.contentBox = value;
-      group.updateMatrixWorld(true);
-      if (group.error !== undefined) throw group.error;
-    }
-  };
+function policy(value: LegacyConstraints): ParagraphLayoutPolicy {
   return {
-    measure(value) {
-      apply(value);
-      const measured = text.measureLayout();
-      if (measured === undefined) throw new Error('uikit measurement was not published');
-      return measured;
-    },
-    layout(value) {
-      apply(value);
-      const layout = text.inspectLayout();
-      if (layout === undefined) throw new Error('uikit layout was not published');
-      return layout;
-    },
-    update(value) {
-      text.set({ ...input, ...value });
-      key = '';
-    },
+    ...(value.maxLines === undefined ? {} : { maxLines: value.maxLines }),
+    ...(value.wrap === undefined ? {} : { wrap: value.wrap }),
+    ...(value.align === undefined ? {} : { align: value.align }),
+    ...(value.overflow === undefined ? {} : { overflow: value.overflow }),
   };
 }
 
