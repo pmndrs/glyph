@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
-import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
+import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 test('production frame compiler preserves the established benchmark request bytes', async () => {
   const abi = textShaperAbi;

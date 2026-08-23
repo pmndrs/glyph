@@ -61,9 +61,10 @@ Published surface with no use case. Each row carries the evidence that justifies
 | `Text.retry()`, `TextGroup.retry()` | Zero uses. `synchronize()` already self-retries. Nothing a caller can do that the next frame does not. |
 | `capacity.policy: 'fixed'` | Zero uses. Throws from inside `synchronize()` inside `updateMatrixWorld()`, and `measureLayout()` routes through the same path, so a caller cannot ask how many glyphs the content needs before exceeding the cap. No safe usage exists. |
 | `FontLeaseError` | Exported, never thrown; used only to build a warning string behind a `DEV` guard, so the lease-leak warning does not exist in production. |
-| `createFontStack`, `FontLoadError`, `normalizeRasterCoverage`, `RasterCoverageError`, `MAX_RASTER_COVERAGE_*` | Zero uses anywhere, including tests. |
-| `./text-shaper-abi`, `./font-baker-abi`, `./bitmap-baker-abi`, `./mtsdf-baker-abi`, `./slug-baker-abi` | Zero external uses. They exist to publish struct offsets for pointer arithmetic. `textShaperAbi` already reaches its one legitimate consumer through `/core`. |
-| `./bakers/{bitmap,msdf,slug}/validate` | Zero uses outside the package. |
+| `normalizeRasterCoverage`, `RasterCoverageError`, `MAX_RASTER_COVERAGE_*` | Zero uses outside `internal/`, where the module stays. |
+| ~~`createFontStack`~~, ~~`FontLoadError`~~ | **Rejected on re-measurement (D-267).** The "zero uses anywhere, including tests" claim was wrong for both. `FontLoadError` is thrown from roughly forty sites in `loader.ts` and `text-runtime.ts` — surviving public API — and `loader.test.mjs` and `loader-fuzz-smoke.test.mjs` classify failures by its `code`; withdrawing it leaves a consumer unable to tell a load failure from any other `Error`, which is what Fix 1 below argues against. `createFontStack` is the only validating constructor of the exported `FontStack` interface (same-runtime membership, no duplicates) and builds the D-223 heterogeneous stack in `three-v1.test.mjs`; deleting the factory while keeping the interface leaves callers hand-rolling `{ fonts }` and reaching exactly the state the engine rejects. Both kept. |
+| `./text-shaper-abi`, `./font-baker-abi`, `./bitmap-baker-abi`, `./mtsdf-baker-abi`, `./slug-baker-abi` | Zero external uses. They exist to publish struct offsets for pointer arithmetic. `textShaperAbi` already reaches its one legitimate consumer through `/core`. The package's own tests and scripts import them and now do so by relative path; only the entry points are withdrawn. |
+| `./bakers/{bitmap,msdf,slug}/validate` | Zero uses outside the package; the package's own tests and scripts reach them by relative path. |
 
 ## Demote
 
@@ -233,8 +234,9 @@ Keep the retained-GPU-buffer write path. That capability is genuinely ahead of e
 
 ## Sequencing
 
-1. Un-publish the reconciler protocol. Same class as the two shipped defects and the worst remaining hole.
-2. The delete list, then the demotion of `/core` and `/tsl`.
+1. ✅ Un-publish the reconciler protocol. Same class as the two shipped defects and the worst remaining hole.
+2. ✅ The delete list, then the demotion of `/core` and `/tsl`. Landed as D-267, with two rows rejected on re-measurement
+   as noted in the Delete table.
 3. Fixes 1 through 3 — the frame-rejection identity, the rejection loop, and the `spans` validation timing — since those are what a caller actually hits.
 4. The animation API, replacing the origin trio, and the measurement and positioning surface with it -- they are the same geometry.
 5. The remaining fixes and reshapes.

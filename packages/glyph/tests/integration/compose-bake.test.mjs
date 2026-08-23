@@ -5,7 +5,7 @@ import test, { before } from 'node:test';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 import { parseGlb, validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
-import { validateBitmapArtifact } from '@pmndrs/glyph/bakers/bitmap/validate';
+import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
 
 import { BakeCompositionError, composeFontBake } from '../../dist/internal/compose-bake.js';

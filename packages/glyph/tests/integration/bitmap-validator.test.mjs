@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test, { before } from 'node:test';
 
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
-import { BitmapArtifactValidationError, validateBitmapArtifact } from '@pmndrs/glyph/bakers/bitmap/validate';
+import { BitmapArtifactValidationError, validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
 
 const GLB_MAGIC = 0x4654_6c67;

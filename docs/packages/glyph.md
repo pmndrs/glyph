@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:0a2721b3ff9c87c7a08d1ca5b3899c2c10f0ae887c37460202ee7254987842c8'
+source_digest: 'sha256:759e0b0442b09b4654f5b0083925d4e6aebd5b20b55b1f85d9bfd4a6cc15a62c'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -43,10 +43,10 @@ sources:
     title: Single-export Wasm host
   - id: core-api
     resource: ../../packages/glyph/src/core.ts
-    title: Public renderer-neutral core subpath
+    title: Renderer-neutral core layer
   - id: tsl-shaders
     resource: ../../packages/glyph/src/tsl.ts
-    title: Public technique shader library subpath
+    title: Technique shader library layer
   - id: three-api
     resource: ../../packages/glyph/src/three.ts
     title: Three.js public exports
@@ -104,8 +104,6 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 | Subpath                      | Purpose                                                                                                                          |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/glyph`              | Font/raster contracts, loading, fallback stacks, formatting helpers, paragraph inputs, layout-query values, and portable bakers. |
-| `@pmndrs/glyph/core`         | Renderer-neutral engine host, frame wire, plan/layout-query views, technique schemas, policy-program DSL, and binding compiler.  |
-| `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                 |
 | `@pmndrs/glyph/three`        | Three `FontLoader`, `Text`, `TextGroup`, material factories, and policy registration.                                            |
 | `@pmndrs/glyph/three/bitmap` | Compatibility alias re-exporting the renderer-neutral Bitmap raster module.                                                      |
 | `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                        |
@@ -114,8 +112,7 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                      |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                        |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                 |
-| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers and validators.                                                                                  |
-| `@pmndrs/glyph/*-abi`        | Typed ABI constants, one subpath per Wasm module, so a host imports only the contract it uses.                                   |
+| `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                 |
 
 The font-baker Rust source, direct-memory wrapper, schemas, tests, build pipeline, optimized Wasm, and generated ABI are
 owned by this package. There is no separately published font-baker package. The root entry has no static edge to the
@@ -334,12 +331,26 @@ There are no instance-ignoring runtime ABI readers. Package builds isolate the d
 `artifact-baker` feature sets from kernel-only test targets and reject an optimized module missing any contract-declared
 artifact export, preventing Cargo's shared top-level artifact path from silently publishing a smaller test variant.
 
-The renderer-neutral core publishes as `@pmndrs/glyph/core` (D-249): runtime shaper creation, the engine host and
-sessions, frame-wire serialization, render-plan and layout views, font-binding compilation, the versioned ABI, and the
-policy-authoring toolkit. The four technique TSL node graphs publish as `@pmndrs/glyph/tsl` under Tsl-prefixed names,
-including the Slug shader tree that previously lived in core internals. Three's first-party policy is authored with the
-same public toolkit in `three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any
-import from `internal/` or `generated/`, so the first-party integrations consume exactly the surface a third party gets.
+The renderer-neutral core is `src/core.ts` (D-249): runtime shaper creation, the engine host and sessions, frame-wire
+serialization, render-plan and layout views, font-binding compilation, the versioned ABI, and the policy-authoring
+toolkit. The four technique TSL node graphs are `src/tsl/` under Tsl-prefixed names, including the Slug shader tree that
+previously lived in core internals. Three's first-party policy is authored with the same public toolkit in
+`three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any import from `internal/`
+or `generated/`, so the first-party integrations consume exactly the layering a third party would.
+
+Neither layer is published as an npm subpath yet (D-267). Both had zero consumers: the only importers were the
+size-measurement entries that `export *` to weigh them, and `packages/glyph-example-raster` — the designated third-party
+integration proof — consumes three symbols from `/three` and none from core. `/core`'s contract is the Wasm ABI itself:
+caller-chosen raw `u32` handles where branded `FontHandle`/`RasterHandle` already exist, caller-supplied opaque byte
+blobs, a publication whose bytes are valid only until the next Wasm call, and a manual acquire/release refcount pair.
+Freezing that as semver-stable before one consumer has stressed it would fix the wrong shape. The TypeGPU backend ships
+against it first, and whatever that backend actually needs becomes the published `/core`. The modules stay built, packed,
+and size-gated in the meantime, so the layering keeps its evidence without carrying a compatibility promise.
+
+The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. The ABI subpaths existed to publish struct
+offsets for pointer arithmetic, which is an internal representation handed to a caller who then owns keeping it valid;
+`textShaperAbi` reaches its one legitimate consumer through core. The validator subpaths had no consumer outside this
+package. Both sets of modules remain, reached by relative path from the package's own tests and scripts.
 
 The renderer-neutral core owns the completed asynchronous Worker transfer contract: it copies opaque frame bytes once
 into a bounded worker-owned transferable pool, applies explicit backpressure, and requires root to transfer each retired

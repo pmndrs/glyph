@@ -3,7 +3,7 @@ import {
   validateMsdfArtifact,
   type MsdfArtifactValidationContext,
   type ValidatedMsdfArtifactV0,
-} from '@pmndrs/glyph/bakers/msdf/validate';
+} from '../../dist/bakers/msdf-validator.js';
 import {
   MSDF_KIND,
   msdf,
