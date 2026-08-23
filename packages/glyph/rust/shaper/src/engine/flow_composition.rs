@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use crate::FontMetrics;
 
 use super::{
-    EngineError,
+    EngineError, FrameFault,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
     flow_geometry::{FlowGeometryArena, InlineSlotArena},
     frame::{ALIGN_JUSTIFY, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRITING_HORIZONTAL_TB},
@@ -729,7 +729,8 @@ fn extents_for_cluster(
     } else {
         selected
     };
-    let metrics = metrics_for(font_handle).ok_or(EngineError::InvalidRequest)?;
+    let metrics =
+        metrics_for(font_handle).ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
     if metrics.units_per_em == 0 {
         return Err(EngineError::InvalidRequest);
     }

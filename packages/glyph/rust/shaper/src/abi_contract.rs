@@ -417,6 +417,11 @@ struct EngineResultHeader {
     retirement_count: u32,
     diagnostics_offset: u32,
     diagnostic_count: u32,
+    /// Paragraph a rejection is attributed to, or zero when the status names none. Occupies the
+    /// tail padding this 16-byte-aligned header already carried, so the header size is unchanged.
+    fault_paragraph_id: u32,
+    /// Style the rejection is attributed to, under the request's own `styleId`, or zero.
+    fault_style_id: u32,
 }
 
 #[repr(C)]
@@ -1692,6 +1697,16 @@ field_offset!(
     EngineResultHeader,
     diagnostic_count
 );
+field_offset!(
+    ENGINE_RESULT_FAULT_PARAGRAPH_ID,
+    EngineResultHeader,
+    fault_paragraph_id
+);
+field_offset!(
+    ENGINE_RESULT_FAULT_STYLE_ID,
+    EngineResultHeader,
+    fault_style_id
+);
 field_offset!(SEMANTIC_ID, SemanticRecord, id);
 field_offset!(SEMANTIC_KIND, SemanticRecord, kind);
 field_offset!(SEMANTIC_FLAGS, SemanticRecord, flags);
@@ -2206,7 +2221,9 @@ pub fn json() -> String {
                 "retirementsOffset": ENGINE_RESULT_RETIREMENTS_OFFSET,
                 "retirementCount": ENGINE_RESULT_RETIREMENT_COUNT,
                 "diagnosticsOffset": ENGINE_RESULT_DIAGNOSTICS_OFFSET,
-                "diagnosticCount": ENGINE_RESULT_DIAGNOSTIC_COUNT
+                "diagnosticCount": ENGINE_RESULT_DIAGNOSTIC_COUNT,
+                "faultParagraphId": ENGINE_RESULT_FAULT_PARAGRAPH_ID,
+                "faultStyleId": ENGINE_RESULT_FAULT_STYLE_ID
             },
             "engineSemanticView": {
                 "size": SEMANTIC_RECORD_SIZE,
@@ -2601,7 +2618,12 @@ pub fn json() -> String {
             "sessionMissing": 11,
             "revisionConflict": 12,
             "fontStackMissing": 13,
-            "fontInUse": 14
+            "fontInUse": 14,
+            "styleRangeInvalid": 15,
+            "styleSplitsCluster": 16,
+            "styleNestingInvalid": 17,
+            "styleRootInvalid": 18,
+            "fontMetricsMissing": 19
         }
     })
     .to_string()

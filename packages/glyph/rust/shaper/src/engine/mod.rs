@@ -55,4 +55,4 @@ mod style_state;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod wire;
 
-pub use state::{EngineError, TextEngine};
+pub use state::{EngineError, FrameFault, TextEngine};
