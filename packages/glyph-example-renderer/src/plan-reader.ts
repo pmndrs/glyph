@@ -32,6 +32,8 @@ function decodeDraw(view: TextEngineRenderPlanView, offset: number): ExampleDraw
     resourceStart: view.u32(offset + drawLayout.resourceStart),
     resourceCount: view.u32(offset + drawLayout.resourceCount),
     orderToken: view.u32(offset + drawLayout.orderToken),
+    indirectBufferId: view.u32(offset + drawLayout.indirectBufferId),
+    indirectOffset: view.u32(offset + drawLayout.indirectOffset),
   };
 }
 
