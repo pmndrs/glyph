@@ -1,14 +1,11 @@
 import type {
   AnyRasterTechnique,
-  Paragraph,
   ParagraphAxisConstraint,
   ParagraphConstraints,
-  ParagraphLayoutPolicy,
   ParagraphLayoutInspection,
-  ParagraphLayoutResult,
-  ParagraphMeasureResult,
-  ParagraphUpdate,
+  ParagraphLayoutPolicy,
 } from '@pmndrs/glyph';
+import type { Paragraph, ParagraphMeasureResult, ParagraphUpdate } from '@pmndrs/glyph/core';
 
 export const YogaMeasureMode = Object.freeze({ Undefined: 0, Exactly: 1, AtMost: 2 });
 
@@ -38,11 +35,6 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
     if (!result.ok) throw new Error(`paragraph measurement failed: ${result.error.message}`);
     return result.metrics;
   }
-  function requireLayout(result: ParagraphLayoutResult) {
-    if (!result.ok) throw new Error(`paragraph layout failed: ${result.error.message}`);
-    return result.layout;
-  }
-
   function customLayouting() {
     calls.measure += 1;
     const natural = requireMetrics(paragraph.measure());
