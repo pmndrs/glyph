@@ -327,7 +327,10 @@ function paragraphContractsValidation(values: readonly import('./contracts').Ben
       value.metrics?.bidiLayoutCount !== 2 ||
       value.metrics.policyLayoutCount !== 9 ||
       value.metrics.cjkLayoutCount !== 12 ||
-      value.metrics.uikitMeasurementCount !== 25 ||
+      // One natural measurement per customLayouting() plus twenty-five constrained
+      // probes: intrinsic widths ride the natural pass instead of a second zero-width
+      // query, which is exactly the saving the real Paragraph API exists for.
+      value.metrics.uikitMeasurementCount !== 24 ||
       value.metrics.uikitLayoutCount !== 1
     ) {
       throw new Error('Rust paragraph contracts did not execute the complete retained matrix');
