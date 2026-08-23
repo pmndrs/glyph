@@ -640,7 +640,7 @@ The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) record
 
 ### 8.3 runtime-and-validation checklist
 
-- [x] Ship optional `@pmndrs/glyph/raster/msdf` and `@pmndrs/glyph/bakers/msdf/validate` entries without importing baker Wasm from the renderer.
+- [x] Ship optional `@pmndrs/glyph/raster/msdf` and a validator entry without importing baker Wasm from the renderer. The `bakers/*/validate` subpaths were later withdrawn from `exports` for having no consumer outside the package; the modules still ship and the package's own tests reach them by relative path.
 - [x] Validate schema, Khronos core structure, reciprocal identity, fixed MTSDF constants, exact dense records, page bounds, embedded/external authentication, single-level linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and padded base-array residency before publication.
 - [x] Share pure KTX2 and dense-record rules across bitmap/MTSDF renderers and standalone validators while keeping Khronos/Ajv outside renderer graphs.
 - [x] Use one instanced resource/batch family for fill, opacity, bounded outline, and translated hard shadow; reject effects beyond the encoded distance range.

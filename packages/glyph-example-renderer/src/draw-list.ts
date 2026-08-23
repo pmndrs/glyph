@@ -26,6 +26,8 @@ export interface ExampleDraw {
   readonly resourceCount: number;
   /** Stable sort key for correct transparency order across every draw in a publication. */
   readonly orderToken: number;
+  readonly indirectBufferId: number;
+  readonly indirectOffset: number;
 }
 
 /** An owned copy of one plan table, kept opaque where this example does not decode it. */

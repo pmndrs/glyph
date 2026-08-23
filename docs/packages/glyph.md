@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:8df0e4f75722adf1e66e755cb8515d17794864e573d11b6f4f827bd7878a8510'
+source_digest: 'sha256:c7791089eceb04312b8d8bb752cf299b495bdf602f7a892ed290ae43ecd1441a'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -340,14 +340,7 @@ previously lived in core internals. Three's first-party policy is authored with 
 `three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any import from `internal/`
 or `generated/`, so the first-party integrations consume exactly the layering a third party would.
 
-Neither layer is published as an npm subpath yet (D-267). Both had zero consumers: the only importers were the
-size-measurement entries that `export *` to weigh them, and `packages/glyph-example-raster` — the designated third-party
-integration proof — consumes three symbols from `/three` and none from core. `/core`'s contract is the Wasm ABI itself:
-caller-chosen raw `u32` handles where branded `FontHandle`/`RasterHandle` already exist, caller-supplied opaque byte
-blobs, a publication whose bytes are valid only until the next Wasm call, and a manual acquire/release refcount pair.
-Freezing that as semver-stable before one consumer has stressed it would fix the wrong shape. The TypeGPU backend ships
-against it first, and whatever that backend actually needs becomes the published `/core`. The modules stay built, packed,
-and size-gated in the meantime, so the layering keeps its evidence without carrying a compatibility promise.
+Both layers publish as npm subpaths. They are how a renderer integrates without our `Object3D`s, and `@pmndrs/glyph/three` is itself built on `/core`, so the earlier finding that they had no consumers was wrong. `packages/glyph-example-renderer` is the standing proof that a second engine consumer can be written against `/core` alone. `/core`'s contract still has sharp edges -- caller-chosen raw `u32` handles where branded `FontHandle`/`RasterHandle` already exist, caller-supplied opaque byte blobs, a publication whose bytes are valid only until the next Wasm call, and a manual acquire/release refcount pair -- and those are tracked as hardening in the API surface audit rather than as a reason to withdraw the entry point.
 
 The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. The ABI subpaths existed to publish struct
 offsets for pointer arithmetic, which is an internal representation handed to a caller who then owns keeping it valid;
