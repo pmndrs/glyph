@@ -21,6 +21,7 @@ import type {
   ParagraphProperties,
   ParagraphStyle,
 } from '../text-properties.js';
+import type { FontFeature } from '../font-feature.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import {
@@ -804,7 +805,7 @@ class ThreeTextBatchBinding {
   /**
    * True while a rejected frame is latched.
    *
-   * Most causes are unreachable from the public API -- span offsets are validated at `set()` and every surviving boundary is snapped onto the cluster grid before it reaches the engine -- but adversarial review found four that are not. Disjoint-or-nested spans are deliberately forwarded; feature ranges inside a span are copied unchanged while only the outer range is checked; lone surrogates are explicitly left for the engine; and `capacity.policy: 'fixed'` rejects by caller request. The first three are gaps to close at the `set()` boundary, and until they are, a rejection is *usually* an invariant this package broke rather than always. The latch still exists so that one such defect is reported once instead of recompiling and failing silently at frame rate, and there is still no `retry()`: every reachable cause is corrected by a `set()`, which releases the latch on its own.
+   * Every cause the engine can refuse a frame for is now unreachable from the public API. Span offsets, partial overlaps, duplicate ranges, feature ranges inside a span, and unpaired surrogates are all rejected at `set()`, where the offending object can be named and the caller is still on the stack; every surviving boundary is snapped onto the cluster grid before it reaches the engine. The one refusal a caller can still provoke is `capacity.policy: 'fixed'`, which is caller-chosen behaviour -- they asked for rejection over growth -- and throws synchronously rather than producing a frame fault. A frame rejection is therefore an invariant this package broke, and the latch exists so that one such defect is reported once instead of recompiling and failing silently at frame rate behind the last good picture. There is no `retry()`: nothing a caller could do would change the outcome.
    */
   get latched(): boolean {
     return this.#rejection !== undefined;
@@ -1387,22 +1388,108 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
  * The argument array is returned by identity so the caller-side fast path in `normalizeDesired` is
  * unaffected: an unchanged `spans` identity skips this walk entirely.
  */
+/**
+ * Rejects, at the call site, every span shape the engine would refuse a whole frame for.
+ *
+ * The engine's rejections are meant to be invariants this package broke, not caller mistakes. Each
+ * check below closes a path a caller could otherwise reach: the offending value is named here, with
+ * the caller still on the stack, instead of surfacing a frame later as a status with no subject.
+ */
 function assertSpanRanges<Technique extends AnyRasterTechnique>(
   text: string,
   spans: readonly ParagraphSpan<Technique>[],
 ): readonly ParagraphSpan<Technique>[] {
+  assertPairedSurrogates(text);
   for (const [index, span] of spans.entries()) {
-    if (!Number.isSafeInteger(span.start) || !Number.isSafeInteger(span.end)) {
-      throw new RangeError(`span ${index} offsets must be integers, received (${span.start}, ${span.end})`);
-    }
-    if (span.start > span.end) {
-      throw new RangeError(`span ${index} is inverted: start ${span.start} is after end ${span.end}`);
-    }
-    if (span.start < 0 || span.end > text.length) {
-      throw new RangeError(`span ${index} covers [${span.start}, ${span.end}) outside text of length ${text.length}`);
-    }
+    assertRange(`span ${index}`, span.start, span.end, text.length);
+    assertFeatureRanges(`span ${index}`, span.style?.features, text.length);
   }
+  assertSpansNest(spans);
   return spans;
+}
+
+/**
+ * A feature range is optional and defaults to the span it rides, so only a stated one is checked.
+ * Before this, the outer span range was validated and the feature range inside it was copied
+ * through, so a malformed one was refused by the engine naming neither the span nor the feature.
+ */
+function assertFeatureRanges(subject: string, features: readonly FontFeature[] | undefined, length: number): void {
+  for (const [position, feature] of (features ?? []).entries()) {
+    if (feature.start === undefined && feature.end === undefined) continue;
+    assertRange(`${subject} feature ${position} (${feature.tag})`, feature.start ?? 0, feature.end ?? length, length);
+  }
+}
+
+function assertRange(subject: string, start: number, end: number, length: number): void {
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) {
+    throw new RangeError(`${subject} offsets must be integers, received (${start}, ${end})`);
+  }
+  if (start > end) throw new RangeError(`${subject} is inverted: start ${start} is after end ${end}`);
+  if (start < 0 || end > length) {
+    throw new RangeError(`${subject} covers [${start}, ${end}) outside text of length ${length}`);
+  }
+}
+
+/**
+ * A style scope is a stack, so two spans must nest or be disjoint; a partial overlap has no
+ * well-defined resolution and the engine refuses the frame for it (`style_state.rs`, `resolve`).
+ *
+ * Overlapping ranges are a natural way to author rich text, and refusing them is a real limitation
+ * rather than a virtue -- resolving them per cluster by cascade order would be the better surface.
+ * Until that exists, the refusal belongs here, where both offending spans can be named, rather than
+ * arriving as a frame status that identifies neither.
+ */
+function assertSpansNest<Technique extends AnyRasterTechnique>(spans: readonly ParagraphSpan<Technique>[]): void {
+  const order = spans
+    .map((span, index) => ({ span, index }))
+    .filter((entry) => entry.span.start !== entry.span.end)
+    .sort((left, right) => left.span.start - right.span.start || right.span.end - left.span.end);
+  const open: { end: number; index: number }[] = [];
+  for (const { span, index } of order) {
+    while (open.length !== 0 && span.start >= open[open.length - 1]!.end) open.pop();
+    const enclosing = open[open.length - 1];
+    if (enclosing !== undefined && span.end > enclosing.end) {
+      throw new RangeError(
+        `span ${index} [${span.start}, ${span.end}) partially overlaps span ${enclosing.index}: ` +
+          `spans must nest or be disjoint, so end it at or before ${enclosing.end}, or start it at or after it`,
+      );
+    }
+    open.push({ end: span.end, index });
+  }
+  const seen = new Map<string, number>();
+  for (const [index, span] of spans.entries()) {
+    if (span.start === span.end) continue;
+    // Cascade order is the authored array index, so an identical range at a different index is a
+    // legitimate re-statement; only a genuine duplicate of both is refused.
+    const key = `${span.start}:${span.end}`;
+    const first = seen.get(key);
+    if (first !== undefined) {
+      throw new RangeError(
+        `span ${index} duplicates span ${first}: two spans over [${span.start}, ${span.end}) cannot both be resolved`,
+      );
+    }
+    seen.set(key, index);
+  }
+}
+
+/**
+ * A lone surrogate is not a character, and shaping refuses the frame that carries one. It was
+ * deliberately left for the engine; naming the offset here is what a caller can act on.
+ */
+function assertPairedSurrogates(text: string): void {
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    if (unit < 0xd800 || unit > 0xdfff) continue;
+    const isHigh = unit <= 0xdbff;
+    const next = isHigh ? text.charCodeAt(index + 1) : Number.NaN;
+    if (isHigh && next >= 0xdc00 && next <= 0xdfff) {
+      index += 1;
+      continue;
+    }
+    throw new RangeError(
+      `text offset ${index} is an unpaired ${isHigh ? 'high' : 'low'} surrogate (0x${unit.toString(16)})`,
+    );
+  }
 }
 function selectedFonts<Technique extends AnyRasterTechnique>(
   state: DesiredTextState<Technique>,
