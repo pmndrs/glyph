@@ -12,9 +12,8 @@ const labels = new TextGroup({ compositing: 'independent', pixelSnapping: true }
 const compositing: 'ordered' | 'independent' = labels.compositing;
 labels.add(label);
 label.text = 'Updated';
-label.insertText(7, '!');
-label.deleteText(7, 8);
-label.replaceText(0, 7, 'Replaced');
+label.text = 'Updated!';
+label.spans = [{ start: 0, end: 7, paint: { color: '#00ff00' } }];
 label.setCapacity({ size: 64, policy: 'grow' });
 const measurement = label.measureLayout();
 void measurement?.contentWidth;

@@ -7,15 +7,22 @@
  * a frame is built, under one rule stated constructively rather than as a rejection:
  *
  *   A CLUSTER TAKES THE STYLE OF ITS BASE. Every boundary moves forward to the end of the cluster
- *   containing it, so the marks that attach to a base follow the base's style. The same rule applies
- *   to spans a caller authored and to spans the edit helpers rebased, because through the React
- *   surface those are the same act: a declarative caller re-authoring `text` and `spans` after an
- *   edit passes exactly what `replaceText` would have derived.
+ *   containing it, so the marks that attach to a base follow the base's style.
+ *
+ * The rule has exactly two entry points, and both are covered here:
+ *
+ *   1. The `spans` ARRAY, the one surface that carries raw offsets. Those numbers are the caller's
+ *      own arithmetic, and `alignSpansToClusters` -- the same function the library applies -- is
+ *      exported so a caller can ask for the answer instead of accepting it silently.
+ *   2. The TREE COMPILERS. `txt`/`span` and nested React `<Text>` compile a document that states no
+ *      offsets at all; each derives a boundary at a concatenation JOIN, and concatenation can fuse
+ *      the tail of one fragment with the head of the next into one cluster. Both resolve that join
+ *      themselves, against the text they just produced, so neither can emit a boundary the engine
+ *      would refuse and the array backstop has nothing left to discover.
  *
  * A span that loses every cluster it covered collapses to an empty range and is KEPT, so that
- * `Text.spans` still reports it, `setSpan`/`removeSpan` keep addressing the same span by index, and
- * no style disappears without a trace in the array. An empty span states nothing and is not
- * compiled into an engine style.
+ * `Text.spans` still reports it and no style disappears without a trace in the array. An empty span
+ * states nothing and is not compiled into an engine style.
  *
  * `text-mutation-known-defects.test.mjs` case 2 pins the one-character reproduction. This file
  * covers the surface around it, and closes with a seeded sequence asserting the property the whole
@@ -33,7 +40,7 @@ import { createElement } from 'react';
 
 import '../support/browser-globals.mjs';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { alignSpansToClusters } from '@pmndrs/glyph/three';
+import { alignSpansToClusters, span, txt } from '@pmndrs/glyph/three';
 import { Text as R3fText } from '@pmndrs/glyph/react';
 
 import { createFontCache, mount, seededRandom, timeout, unmount } from '../support/text-mutation-lanes.mjs';
@@ -71,16 +78,16 @@ const latin = { fontSize: 6, lineHeight: 1 };
 const styled = (start, end) => ({ start, end, paint: { color: '#ff2f00' } });
 const authored = (text, spans = []) => ({ properties: { contentBox: box, paint, spans, style: latin, text } });
 
-const offsets = (node) => node.spans.map((span) => [span.start, span.end]);
+const offsets = (node) => node.spans.map((entry) => [entry.start, entry.end]);
 const clusters = (text) => [...findGraphemeBoundaries(text)];
 
 /** Every span boundary is a cluster boundary. */
 function assertAligned(node, context) {
   const boundaries = new Set(findGraphemeBoundaries(node.text));
-  for (const [index, span] of node.spans.entries()) {
-    assert.ok(span.start <= span.end, `${context}: span ${index} inverted to [${span.start}, ${span.end})`);
-    assert.ok(boundaries.has(span.start), `${context}: span ${index} starts at ${span.start}, inside a cluster`);
-    assert.ok(boundaries.has(span.end), `${context}: span ${index} ends at ${span.end}, inside a cluster`);
+  for (const [index, entry] of node.spans.entries()) {
+    assert.ok(entry.start <= entry.end, `${context}: span ${index} inverted to [${entry.start}, ${entry.end})`);
+    assert.ok(boundaries.has(entry.start), `${context}: span ${index} starts at ${entry.start}, inside a cluster`);
+    assert.ok(boundaries.has(entry.end), `${context}: span ${index} ends at ${entry.end}, inside a cluster`);
   }
 }
 
@@ -125,7 +132,7 @@ test('alignSpansToClusters returns its argument by identity when nothing moves',
   const resolved = alignSpansToClusters(`a${ACUTE}bc`, split);
   assert.notEqual(resolved, split, 'a moved boundary must be observable by identity');
   assert.deepEqual(
-    resolved.map((span) => [span.start, span.end]),
+    resolved.map((entry) => [entry.start, entry.end]),
     [[0, 2]],
   );
   assert.equal(resolved[0].paint, split[0].paint, 'resolution must carry every other property through');
@@ -197,19 +204,19 @@ test('nested spans both resolve, and stay nested', { timeout }, async () => {
 });
 
 test('a cluster-aligned span keeps its range, and what it retains cannot be mutated', { timeout }, async () => {
-  const span = styled(0, 1);
-  await withParagraph('abc', [span], (node, mounted) => {
+  const authoredSpan = styled(0, 1);
+  await withParagraph('abc', [authoredSpan], (node, mounted) => {
     assert.deepEqual(offsets(node), [[0, 1]], 'an aligned authored span must keep its range');
-    node.replaceText(2, 3, 'z');
+    node.set({ text: 'abz', spans: [authoredSpan] });
     mounted.scene.updateMatrixWorld(true);
     assert.equal(node.text, 'abz');
-    assert.deepEqual(offsets(node), [[0, 1]], 'an edit that moves no boundary must not move the span either');
+    assert.deepEqual(offsets(node), [[0, 1]], 'a change that moves no boundary must not move the span either');
     assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error)}`);
 
     // The retained record is a frozen copy, not the caller's object. Handing the caller's own
     // mutable record back would let `spans[0].end = ...` change what the identity short-circuit
     // in `normalizeDesired` still trusts as resolved, reinstating a cluster-splitting span.
-    assert.notEqual(node.spans[0], span, 'a retained span must not alias the caller record');
+    assert.notEqual(node.spans[0], authoredSpan, 'a retained span must not alias the caller record');
     assert.throws(
       () => {
         node.spans[0].end = 3;
@@ -262,133 +269,90 @@ test('a span survives its text being cleared to empty, and the paragraph still p
   });
 });
 
-test('deleting the whole text through the edit helpers leaves nothing to style', { timeout }, async () => {
+test('clearing the text without restating spans leaves nothing to style', { timeout }, async () => {
   await withParagraph(`a${ACUTE}b`, [styled(0, 2)], (node, mounted) => {
-    node.deleteText(0, 3);
+    node.text = '';
     mounted.scene.updateMatrixWorld(true);
     assert.equal(node.text, '');
-    // The caller deleted the text the span addressed; that removal is the caller's own act, not the
-    // cluster resolution's, and it is the one case a span leaves the array.
+    // Replacement text carries its own formatting, so an update that states text without stating
+    // spans clears the ones it replaced. That removal is the caller's own act, not the cluster
+    // resolution's, and it is the one case a span leaves the array.
     assert.deepEqual(offsets(node), []);
     assert.equal(node.error, undefined, `an empty paragraph was rejected: ${String(node.error?.message)}`);
   });
 });
 
 /**
- * The three edit helpers, each moving an aligned span boundary into a cluster the edit created.
+ * One authored paragraph per fusion mechanism, each with a boundary one code unit inside a cluster.
  *
- * Every case starts cluster-aligned and legal, performs one legal call, and must end publishing.
- * `aligned` is what the boundaries must become under the base rule.
+ * These are the shapes a caller produces by re-authoring `text` and `spans` together: the string
+ * gains a scalar that fuses with its neighbour, and a range that was cluster-aligned against the
+ * previous string is no longer aligned against this one. Each must publish, with the fused cluster
+ * taking the style of its base. `aligned` is what the boundaries must become under that rule.
  */
-const REBASE_CASES = [
+const AUTHORED_CASES = [
   {
-    label: 'insertText fuses a mark onto the last cluster of a span',
-    text: 'abc',
+    label: 'a mark fused onto the last cluster a span held joins the span',
+    text: `a${ACUTE}bc`,
     spans: [styled(0, 1)],
-    edit: (node) => node.insertText(1, ACUTE),
-    result: `a${ACUTE}bc`,
     aligned: [[0, 2]],
   },
   {
-    label: 'insertText at the start of a span leaves an already-aligned boundary alone',
-    text: 'abc',
-    spans: [styled(1, 3)],
-    edit: (node) => node.insertText(1, ACUTE),
-    result: `a${ACUTE}bc`,
-    // The mark attaches to the unstyled base before the span, so the span shifts and does not grow.
+    label: 'a mark fused onto the base before a span leaves that span where it is',
+    text: `a${ACUTE}bc`,
+    // The mark attaches to the unstyled base before the span, so offset 2 is already a boundary.
+    spans: [styled(2, 4)],
     aligned: [[2, 4]],
   },
   {
-    label: 'replaceText substitutes a base with a mark, fusing it onto the span',
-    text: 'abc',
+    label: 'a surrogate pair beside a span boundary moves nothing',
+    text: `a${ASTRAL}bc`,
+    // Offset 1 is still a cluster boundary, so the pair stays outside the span rather than joining.
     spans: [styled(0, 1)],
-    edit: (node) => node.replaceText(1, 2, ACUTE),
-    result: `a${ACUTE}c`,
-    aligned: [[0, 2]],
-  },
-  {
-    label: 'deleteText removes the base between a span and a mark, fusing them',
-    text: `ax${ACUTE}b`,
-    spans: [styled(0, 1)],
-    edit: (node) => node.deleteText(1, 2),
-    result: `a${ACUTE}b`,
-    aligned: [[0, 2]],
-  },
-  {
-    label: 'a surrogate pair inserted at a span boundary moves it without splitting it',
-    text: 'abc',
-    spans: [styled(0, 1)],
-    edit: (node) => node.insertText(1, ASTRAL),
-    result: `a${ASTRAL}bc`,
-    // Offset 1 is still a cluster boundary, so nothing moves and the pair stays outside the span.
     aligned: [[0, 1]],
   },
   {
-    label: 'a regional indicator inserted beside another fuses the pair into the span',
-    text: `\u{1f1ef}z`,
+    label: 'a regional indicator pair joins the span holding its first half',
+    text: `${FLAG}z`,
     spans: [styled(0, 2)],
-    edit: (node) => node.insertText(2, '\u{1f1f5}'),
-    result: `${FLAG}z`,
-    // The two indicators fuse into one flag cluster whose base the span already held.
     aligned: [[0, 4]],
   },
   {
-    label: 'a ZWJ typed after a styled emoji pulls the next emoji into the same cluster',
-    text: '\u{1f468}\u{1f469}',
+    label: 'a ZWJ sequence joins the span holding its first emoji',
+    text: FAMILY,
     spans: [styled(0, 2)],
-    edit: (node) => node.insertText(2, '‍'),
-    result: '\u{1f468}‍\u{1f469}',
-    aligned: [[0, 5]],
+    aligned: [[0, 8]],
   },
   {
-    label: 'a virama typed after a styled consonant fuses the conjunct',
-    text: 'कष',
+    label: 'a Devanagari conjunct joins the span holding its first consonant',
+    text: CONJUNCT,
     spans: [styled(0, 1)],
-    edit: (node) => node.insertText(1, '्'),
-    result: CONJUNCT,
     aligned: [[0, 3]],
   },
   {
-    label: 'a trailing jamo joins the syllable whose lead the span holds',
-    text: '가',
+    label: 'a Hangul syllable joins the span holding its lead jamo',
+    text: JAMO,
     spans: [styled(0, 2)],
-    edit: (node) => node.insertText(2, 'ᆨ'),
-    result: JAMO,
     aligned: [[0, 3]],
   },
   {
-    label: 'an edit that merges two spans keeps them adjacent rather than overlapping',
-    text: 'axyb',
-    spans: [styled(0, 2), styled(2, 4)],
-    edit: (node) => node.replaceText(1, 3, ACUTE),
-    result: `a${ACUTE}b`,
-    // The first span's end moves forward onto the fused cluster; the second already sits on it, so
-    // the two meet at 2 instead of overlapping across it.
+    label: 'two spans meeting inside a fused cluster stay adjacent rather than overlapping',
+    text: `a${ACUTE}b`,
+    // The first span's end moves forward onto the fused cluster; the second's start moves with it,
+    // so the two still meet at one offset instead of overlapping across it.
+    spans: [styled(0, 1), styled(1, 3)],
     aligned: [
       [0, 2],
       [2, 3],
     ],
   },
   {
-    label: 'an edit that deletes the text between two spans leaves them adjacent',
-    text: 'abcd',
-    spans: [styled(0, 2), styled(2, 4)],
-    edit: (node) => node.deleteText(1, 3),
-    result: 'ad',
-    aligned: [
-      [0, 1],
-      [1, 2],
-    ],
-  },
-  {
-    label: 'a span whose last cluster is claimed by its neighbour collapses in place, and stays',
-    text: `ax${ACUTE}b`,
-    spans: [styled(0, 1), styled(1, 3)],
-    edit: (node) => node.deleteText(1, 2),
-    result: `a${ACUTE}b`,
-    // Deleting the base 'x' orphans its mark onto 'a', whose cluster the first span already held.
-    // The second span keeps no cluster of its own, so it is reported as empty rather than removed:
-    // the loss stays visible and `setSpan(1, ...)` still addresses the same span.
+    label: 'a span whose only cluster is claimed by its neighbour collapses in place, and stays',
+    text: `a${ACUTE}b`,
+    // The mark attaches to 'a', whose cluster the first span already holds. The second span keeps
+    // no cluster of its own, so it is reported as empty rather than removed: the loss stays visible
+    // and every later span keeps the index it always had.
+    spans: [styled(0, 1), styled(1, 2)],
     aligned: [
       [0, 2],
       [2, 2],
@@ -396,13 +360,11 @@ const REBASE_CASES = [
   },
 ];
 
-for (const { label, text, spans, edit, result, aligned } of REBASE_CASES) {
+for (const { label, text, spans, aligned } of AUTHORED_CASES) {
   test(label, { timeout }, async () => {
     await withParagraph(text, spans, (node, mounted) => {
-      assert.equal(node.error, undefined, `the starting paragraph was rejected: ${String(node.error)}`);
-      edit(node);
       mounted.scene.updateMatrixWorld(true);
-      assert.equal(node.text, result);
+      assert.equal(node.text, text);
       assert.deepEqual(offsets(node), aligned);
       assertAligned(node, label);
       assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
@@ -411,15 +373,14 @@ for (const { label, text, spans, edit, result, aligned } of REBASE_CASES) {
 }
 
 test('a collapsed span is still addressable by the index it always had', { timeout }, async () => {
-  await withParagraph(`ax${ACUTE}b`, [styled(0, 1), styled(1, 3)], (node, mounted) => {
-    node.deleteText(1, 2);
+  await withParagraph(`a${ACUTE}b`, [styled(0, 1), styled(1, 2)], (node, mounted) => {
     mounted.scene.updateMatrixWorld(true);
     assert.deepEqual(offsets(node), [
       [0, 2],
       [2, 2],
     ]);
     // The collapsed span is still index 1, so a caller repairing it does not address its neighbour.
-    node.setSpan(1, styled(2, 3));
+    node.spans = [styled(0, 1), styled(2, 3)];
     mounted.scene.updateMatrixWorld(true);
     assert.deepEqual(offsets(node), [
       [0, 2],
@@ -429,47 +390,88 @@ test('a collapsed span is still addressable by the index it always had', { timeo
   });
 });
 
-test('splitting a surrogate pair is still rejected as a range fault', { timeout }, async () => {
-  await withParagraph(`a${ASTRAL}b`, [styled(0, 1)], (node) => {
-    assert.throws(() => node.replaceText(2, 2, 'z'), RangeError);
-    assert.throws(() => node.deleteText(0, 2), RangeError);
-    assert.equal(node.text, `a${ASTRAL}b`, 'a rejected range must not have edited anything');
+test('a boundary inside a surrogate pair resolves like any other', { timeout }, async () => {
+  // A span offset addresses no scalar of its own, so an offset between the halves of a pair falls
+  // inside the cluster that pair forms and resolves to its end like any other interior offset.
+  // Nothing in the public surface takes an offset that could split a scalar any more, so there is
+  // no separate scalar-splitting fault left for a caller to trip over.
+  await withParagraph(`a${ASTRAL}b`, [styled(0, 2)], (node, mounted) => {
+    mounted.scene.updateMatrixWorld(true);
+    assert.deepEqual(offsets(node), [[0, 3]], 'the pair must join the span whole');
+    assertAligned(node, 'surrogate pair');
+    assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
   });
 });
 
-test('no seeded sequence of legal edits produces a paragraph the engine refuses', { timeout }, async () => {
-  // The property the whole design exists for. Splices land on any SCALAR boundary, so an edit can
-  // cut a cluster in half exactly as a caller's would, and the alphabet mixes bases, combining
-  // marks, joiners, regional indicators, and an astral scalar. Spaces are excluded: a space
-  // followed by a combining mark is a separate, pinned defect and would report a failure this test
-  // is not for.
-  const units = ['a', 'b', 'z', ACUTE, ASTRAL, '‍', '\u{1f1ef}', 'क', '्', 'ᄀ', 'ᅡ'];
-  for (const seed of [1, 7, 13, 29]) {
-    const random = seededRandom(seed);
-    await withParagraph('abz', [styled(0, 1), styled(1, 3)], (node, mounted) => {
-      for (let step = 0; step < 24; step += 1) {
-        const bounds = [...scalarOffsets(node.text)];
-        const start = bounds[Math.floor(random() * bounds.length)];
-        const reachable = bounds.filter((offset) => offset >= start);
-        const end = reachable[Math.floor(random() * reachable.length)];
-        let insert = '';
-        for (let count = Math.floor(random() * 3); count > 0; count -= 1) {
-          insert += units[Math.floor(random() * units.length)];
-        }
-        node.replaceText(start, end, insert);
-        mounted.scene.updateMatrixWorld(true);
-        const where = `seed ${seed} step ${step} -> ${JSON.stringify(node.text)} ${JSON.stringify(offsets(node))}`;
-        assertAligned(node, where);
-        assert.equal(node.error, undefined, `${where}: ${String(node.error?.message)}`);
-      }
-    });
+/**
+ * The tree compilers, which are the surface a caller cannot state an offset through at all.
+ *
+ * `txt`/`span` and nested React `<Text>` compile a document tree into `(text, spans)`, deriving
+ * every boundary at a concatenation JOIN. Concatenation can fuse the tail of one fragment with the
+ * head of the next into a single extended grapheme cluster, and the join then names an offset that
+ * is not a boundary of the text the compiler just produced -- a paragraph the engine refuses, out
+ * of a document that stated no numbers. Both compilers resolve their own joins, under one shared
+ * rule, so the array backstop has nothing left to discover.
+ */
+test('a txt fragment opening with a combining mark compiles onto its base cluster', { timeout }, async () => {
+  // 'a' is authored plain and the mark plus 'b' styled. Concatenation fuses 'a' with the mark, so
+  // the join at offset 1 is inside the resulting cluster and cannot be published as authored.
+  const literal = txt`a${span({ color: '#ff2f00' })`${ACUTE}b`}`;
+  assert.equal(literal.text, `a${ACUTE}b`);
+  assert.deepEqual(clusters(literal.text), [0, 2, 3], 'the base and the mark must have fused');
+  assert.deepEqual(
+    literal.spans.map((entry) => [entry.start, entry.end]),
+    [[2, 3]],
+    'the join must resolve onto the cluster its base owns, leaving the mark with the base style',
+  );
+  // The array backstop is what a caller applies to its OWN offsets. It must find nothing to move
+  // here, which is the whole claim: the compiler no longer emits a boundary for it to discover.
+  assert.equal(
+    alignSpansToClusters(literal.text, literal.spans),
+    literal.spans,
+    'a compiled literal must already be resolved when it reaches the backstop',
+  );
+
+  const font = await fonts.load('inter');
+  const mounted = mount(font, [{ properties: { contentBox: box, paint, style: latin, text: literal } }]);
+  try {
+    const node = mounted.nodes[0];
+    mounted.scene.updateMatrixWorld(true);
+    assert.deepEqual(offsets(node), [[2, 3]]);
+    assertAligned(node, 'txt fragment');
+    assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
+  } finally {
+    unmount(mounted);
   }
 });
 
-test('no seeded sequence of authored span updates produces one either', { timeout }, async () => {
-  // The declarative half of the same property: a React caller never calls `replaceText`, it re-
-  // authors `text` and `spans` together. Boundaries are drawn on scalar offsets, so every update
-  // here is a legal public call that can split a cluster.
+test('a nested span fragment resolves against the text it is embedded in', { timeout }, async () => {
+  // The join no inner pass could settle. The inner fragment is composed against its own cluster
+  // grid, where its leading mark stands alone; 'a' and that mark fuse only once the two fragments
+  // are concatenated, so the outer resolution is what owns this boundary.
+  const inner = span({ color: '#00ff2f' })`${ACUTE}b`;
+  const literal = txt`${span({ color: '#ff2f00' })`a${inner}`}c`;
+  assert.equal(literal.text, `a${ACUTE}bc`);
+  assert.deepEqual(clusters(literal.text), [0, 2, 3, 4]);
+  assert.deepEqual(
+    literal.spans.map((entry) => [entry.start, entry.end]),
+    [
+      // The outer span holds the fused cluster, because its base is the outer fragment's 'a'.
+      [0, 3],
+      [2, 3],
+    ],
+    'both joins must resolve, and the nesting must survive',
+  );
+  assert.equal(alignSpansToClusters(literal.text, literal.spans), literal.spans);
+});
+
+test('no seeded sequence of authored span updates produces a paragraph the engine refuses', { timeout }, async () => {
+  // The property the whole design exists for, over the surface that still exists: a caller re-
+  // authors `text` and `spans` together. Boundaries are drawn on scalar offsets, so an update can
+  // cut a cluster in half exactly as a text editor's would, and the alphabet mixes bases, combining
+  // marks, joiners, regional indicators, and an astral scalar. Spaces are excluded: a space
+  // followed by a combining mark is a separate, pinned defect and would report a failure this test
+  // is not for.
   const units = ['a', ACUTE, ASTRAL, FLAG, CONJUNCT, JAMO, '‍\u{1f469}'];
   for (const seed of [3, 11]) {
     const random = seededRandom(seed);
@@ -538,6 +540,48 @@ test('a nested React Text whose flattened span splits a cluster mounts and publi
     assert.ok(node !== undefined, 'the object must have been constructed and published');
     assert.equal(node.text, `a${ACUTE}bc`);
     assert.deepEqual(offsets(node), [[0, 2]], 'the flattened span must resolve onto the fused cluster');
+    assert.deepEqual(errors, [], 'nothing may reach onError for a resolvable span');
+    assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
+  } finally {
+    await renderer.unmount();
+  }
+});
+
+/**
+ * The same compiler defect as the `txt` case above, on the React tree.
+ *
+ * The caller writes 'a' plain and a nested `<Text>` whose own text opens with a combining mark. No
+ * offset appears anywhere in the document; `flattenText` derives the span's start at the join, and
+ * concatenation fuses 'a' with the mark. The nested element's style therefore begins after the
+ * fused cluster, which stays with the base its own child wrote.
+ */
+test('a nested React Text opening with a combining mark compiles onto its base cluster', { timeout }, async () => {
+  const { create } = (await import('@react-three/test-renderer/webgpu')).default;
+  const font = await fonts.load('inter');
+  const nodes = [];
+  const errors = [];
+  const renderer = await create(
+    createElement(
+      R3fText,
+      {
+        font,
+        style: latin,
+        contentBox: box,
+        paint,
+        onError: (error) => void errors.push(error),
+        ref: (node) => void (node !== undefined && nodes.push(node)),
+      },
+      'a',
+      createElement(R3fText, { paint: { color: '#ff2f00' } }, `${ACUTE}b`),
+    ),
+  );
+  try {
+    const node = nodes.at(-1);
+    assert.ok(node !== undefined, 'the object must have been constructed and published');
+    assert.equal(node.text, `a${ACUTE}b`);
+    assert.deepEqual(clusters(node.text), [0, 2, 3], 'the base and the mark must have fused');
+    assert.deepEqual(offsets(node), [[2, 3]], 'the flattened start must resolve past the fused cluster');
+    assertAligned(node, 'nested React Text');
     assert.deepEqual(errors, [], 'nothing may reach onError for a resolvable span');
     assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
   } finally {

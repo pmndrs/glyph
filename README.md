@@ -81,7 +81,8 @@ label.style = { ...label.style, letterSpacing: 0.5 };
 label.position.x += 1;
 ```
 
-For targeted changes, `insertText`, `deleteText`, and `replaceText` queue narrow UTF-16 edits for the next update.
+Assigning `text` queues the narrowest UTF-16 edit between the previous string and the new one, so an editor sends one
+narrow update per keystroke without describing the edit itself.
 `measureLayout()` returns a compact committed paragraph summary; `inspectLayout()` explicitly requests line and glyph details.
 
 ## Font Stacks - fallback fonts for missing glyphs
