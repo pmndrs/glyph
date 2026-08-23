@@ -177,7 +177,6 @@ interface TypeGpuParagraphBatch<
   add(properties: TypeGpuParagraphProperties<Technique, Variant>): TypeGpuParagraph<Technique, Variant>;
   has(paragraph: TypeGpuParagraph<Technique, Variant>): boolean;
   setCapacity(capacity: GlyphBufferCapacity): void;
-  retry(): void;
   encode(pass: GPURenderPassEncoder, frame: TypeGpuFrame): void;
   dispose(): void;
 }
@@ -471,5 +470,5 @@ complete until the proof demonstrates:
 - raw `root.unwrap()` interop works for a host that does not otherwise use TypeGPU;
 - Wayfare renders through the same programs while retaining its own entities, passes, transforms, and lifecycle;
 - `toTSL()` renders canonical Bitmap and Slug output through Three with inspected generated shaders and measured cost; and
-- disposal, fixed-capacity recovery, target staging failure, and device loss leave no stale buffers, bind groups, pipelines,
+- disposal, capacity growth, target staging failure, and device loss leave no stale buffers, bind groups, pipelines,
   listeners, or hidden work.

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { normalizeRasterCoverage, RasterCoverageError } from '@pmndrs/glyph';
+import { normalizeRasterCoverage, RasterCoverageError } from '../../dist/raster-coverage.js';
 import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/glyph/raster/bitmap';
 import { msdfDescriptor, msdfRasterKey } from '@pmndrs/glyph/raster/msdf';
 import { normalizeBitmapOptions } from '../../dist/internal/bitmap-contract.js';

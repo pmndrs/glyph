@@ -9,10 +9,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
-import { textShaperAbi as abi } from '@pmndrs/glyph/text-shaper-abi';
-import { validateBitmapArtifact } from '@pmndrs/glyph/bakers/bitmap/validate';
-import { validateMsdfArtifact } from '@pmndrs/glyph/bakers/msdf/validate';
-import { validateSlugArtifact } from '@pmndrs/glyph/bakers/slug/validate';
+import { textShaperAbi as abi } from '../dist/text-shaper-abi.js';
+import { validateBitmapArtifact } from '../dist/bakers/bitmap-validator.js';
+import { validateMsdfArtifact } from '../dist/bakers/msdf-validator.js';
+import { validateSlugArtifact } from '../dist/bakers/slug-validator.js';
 import { bitmapDescriptor } from '@pmndrs/glyph/raster/bitmap';
 import { msdfDescriptor } from '@pmndrs/glyph/raster/msdf';
 import { slugDescriptor } from '@pmndrs/glyph/raster/slug';

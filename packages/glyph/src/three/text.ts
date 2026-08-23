@@ -119,7 +119,43 @@ type PendingTextMutation = Readonly<{
   insert: string;
 }>;
 
+/**
+ * The reconciler protocol a batch binding drives a `Text` through.
+ *
+ * It hands out the pending mutation queue and clears it, so whoever holds it decides
+ * what the engine's text buffer becomes: one `markApplied` from outside publishes a
+ * paragraph whose buffer no longer matches the engine's. It is therefore module-private
+ * rather than public `Text` methods. `Text` grants the accessor from inside its own class
+ * body, the only scope its `#` state is reachable from, so nothing reaches the emitted
+ * declarations and no consumer can name or call it.
+ */
+interface TextReconciler {
+  runtime(text: Text<AnyRasterTechnique>): TextRuntime;
+  properties<Technique extends AnyRasterTechnique>(text: Text<Technique>): ParagraphProperties<Technique>;
+  needsApply(text: Text<AnyRasterTechnique>): boolean;
+  semanticChanges(text: Text<AnyRasterTechnique>): number;
+  textMutations(text: Text<AnyRasterTechnique>): readonly PendingTextMutation[];
+  markApplied(text: Text<AnyRasterTechnique>): void;
+  bind(text: Text<AnyRasterTechnique>, binding: ThreeTextBatchBinding, group: TextGroup | undefined): void;
+  unbindFrom(text: Text<AnyRasterTechnique>, binding: ThreeTextBatchBinding): void;
+}
+
+let reconciler!: TextReconciler;
+
 export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
+  static {
+    reconciler = {
+      runtime: (text) => text.#runtime,
+      properties: (text) => text.#coreProperties(),
+      needsApply: (text) => text.#desiredRevision !== text.#appliedRevision,
+      semanticChanges: (text) => text.#semanticChanges,
+      textMutations: (text) => text.#textMutations,
+      markApplied: (text) => text.#markApplied(),
+      bind: (text, binding, group) => text.#bind(binding, group),
+      unbindFrom: (text, binding) => text.#unbindFrom(binding),
+    };
+  }
+
   readonly #runtime: TextRuntime;
   #desired: DesiredTextState<Technique>;
   #leasedFonts: readonly LoadedFont<Technique>[];
@@ -239,10 +275,6 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     this.#standaloneCapacity = normalizeCapacity(capacity);
     if (this.#textGroup === undefined) this.#binding?.setCapacity(this.#standaloneCapacity);
   }
-  retry(): void {
-    this.#assertActive();
-    this.#binding?.retry();
-  }
   /** Performs one explicit Rust query when this committed layout has not already been measured. */
   measureLayout(): ParagraphLayoutSummary | undefined {
     this.#assertActive();
@@ -276,7 +308,9 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     if (boundary?.disposed) {
       this.#unbind();
     } else if (boundary !== undefined) {
-      boundary.bindText(eraseTextTechnique(this));
+      // The group publishes this text on its own traversal; validate now so an
+      // incompatible attachment fails at the paragraph rather than the batch.
+      validateText(eraseTextTechnique(this));
     } else if (this.parent !== null) {
       if (this.#binding === undefined || this.#textGroup !== undefined) {
         this.#unbind();
@@ -304,40 +338,28 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     this.#leasedFonts = [];
   }
 
-  coreProperties(): ParagraphProperties<Technique> {
+  #coreProperties(): ParagraphProperties<Technique> {
     return {
       ...this.#desired,
       order: this.renderOrder,
       ...(this.#desired.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: this.#desired.rasterPixelRatio }),
     };
   }
-  needsApply(): boolean {
-    return this.#desiredRevision !== this.#appliedRevision;
-  }
-  semanticChanges(): number {
-    return this.#semanticChanges;
-  }
-  textMutations(): readonly PendingTextMutation[] {
-    return this.#textMutations;
-  }
-  markApplied(): void {
+  #markApplied(): void {
     this.#appliedRevision = this.#desiredRevision;
     this.#semanticChanges = 0;
     this.#textMutations.length = 0;
   }
-  bind(binding: ThreeTextBatchBinding, group: TextGroup | undefined): void {
+  #bind(binding: ThreeTextBatchBinding, group: TextGroup | undefined): void {
     if (this.#binding !== binding) this.#unbind();
     this.#binding = binding;
     this.#textGroup = group;
     this.#appliedRevision = this.#desiredRevision;
   }
-  unbindFrom(binding: ThreeTextBatchBinding): void {
+  #unbindFrom(binding: ThreeTextBatchBinding): void {
     if (this.#binding !== binding) return;
     this.#binding = undefined;
     this.#textGroup = undefined;
-  }
-  get runtime(): TextRuntime {
-    return this.#runtime;
   }
   #unbind(): void {
     const binding = this.#binding;
@@ -414,10 +436,6 @@ export class TextGroup extends THREE.Object3D {
     this.#capacity = normalizeCapacity(capacity);
     this.#binding?.setCapacity(this.#capacity);
   }
-  retry(): void {
-    this.#assertActive();
-    this.#binding?.retry();
-  }
   override clone(_recursive?: boolean): never {
     throw new Error('TextGroup cannot be cloned');
   }
@@ -431,7 +449,7 @@ export class TextGroup extends THREE.Object3D {
       const texts = collectTextDescendants(this, this.#texts);
       if (texts.length !== 0) {
         try {
-          const runtime = texts[0]!.runtime;
+          const runtime = reconciler.runtime(texts[0]!);
           for (const text of texts) validateBinding(runtime, text);
           this.#binding ??= new ThreeTextBatchBinding(runtime, this.#capacity, this);
           this.#binding.reconcile(texts);
@@ -458,10 +476,6 @@ export class TextGroup extends THREE.Object3D {
     }
   }
 
-  bindText(text: Text<AnyRasterTechnique>): void {
-    if (this.#disposed) return;
-    validateText(text);
-  }
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -571,7 +585,7 @@ class ThreeTextBatchBinding {
     if (this.#removed.length !== 0) return false;
     const paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined || paragraph.created) return false;
-    const changes = text.semanticChanges();
+    const changes = reconciler.semanticChanges(text);
     if ((changes & ~GEOMETRY_CHANGE) !== 0) return false;
     if (changes === 0 && this.#measurements.has(text)) return true;
     // Every other paragraph must be quiescent so the frame this query speculates
@@ -581,7 +595,7 @@ class ThreeTextBatchBinding {
     );
     for (const [order, [entry, entryParagraph]] of ordered.entries()) {
       if (entryParagraph.order !== order || entryParagraph.created) return false;
-      if (entry !== text && (entry.semanticChanges() !== 0 || entry.needsApply())) return false;
+      if (entry !== text && (reconciler.semanticChanges(entry) !== 0 || reconciler.needsApply(entry))) return false;
     }
     this.#coordinator.assertFrameUpdateAllowed();
     let totalTextLength = 0;
@@ -590,7 +604,7 @@ class ThreeTextBatchBinding {
       totalTextLength += entry.text.length;
       maximumParagraphTextLength = Math.max(maximumParagraphTextLength, entry.text.length);
     }
-    const properties = text.coreProperties();
+    const properties = reconciler.properties(text);
     const content = properties.text as string;
     const geometry = compileEngineGeometry(paragraph, properties.contentBox, 0, content.length);
     const result = this.#session.measureParagraph(
@@ -665,9 +679,9 @@ class ThreeTextBatchBinding {
     );
     const changed = ordered.flatMap(([text, paragraph], order) => {
       const semanticChanges =
-        (paragraph.created ? ALL_SEMANTIC_CHANGES : text.semanticChanges()) |
+        (paragraph.created ? ALL_SEMANTIC_CHANGES : reconciler.semanticChanges(text)) |
         (this.#materialInvalidated ? STYLE_CHANGE : 0);
-      return semanticChanges !== 0 || text.needsApply() || paragraph.order !== order
+      return semanticChanges !== 0 || reconciler.needsApply(text) || paragraph.order !== order
         ? [{ text, paragraph, order, semanticChanges }]
         : [];
     });
@@ -698,10 +712,12 @@ class ThreeTextBatchBinding {
     try {
       for (const { text, paragraph, semanticChanges } of changed) {
         pendingChanges.set(paragraph, semanticChanges);
-        const properties = text.coreProperties();
+        const properties = reconciler.properties(text);
         const content = properties.text as string;
         if (semanticChanges & TEXT_CHANGE) {
-          const pending = paragraph.created ? [{ start: 0, deleteCount: 0, insert: content }] : text.textMutations();
+          const pending = paragraph.created
+            ? [{ start: 0, deleteCount: 0, insert: content }]
+            : reconciler.textMutations(text);
           for (const mutation of pending) {
             if (mutation.deleteCount === 0 && mutation.insert.length === 0) continue;
             textMutations.push({ paragraphId: paragraph.id, ...mutation });
@@ -794,7 +810,7 @@ class ThreeTextBatchBinding {
         if (semanticChanges & TEXT_CHANGE) paragraph.textLength = text.text.length;
         if (semanticChanges & GEOMETRY_CHANGE) paragraph.geometryRevision += 1;
         paragraph.created = false;
-        text.markApplied();
+        reconciler.markApplied(text);
         paragraph.order = order;
       }
       this.#materialInvalidated = false;
@@ -827,9 +843,6 @@ class ThreeTextBatchBinding {
     this.#session.reserve(this.#requestCapacity, this.#resultCapacity);
   }
   #ensureCapacity(required: number, requiredParagraphText: number): void {
-    if (required > this.#capacity.size && this.#capacity.policy === 'fixed') {
-      throw new RangeError(`text requires ${required} glyph slots but fixed capacity is ${this.#capacity.size}`);
-    }
     const target =
       this.#capacity.policy === 'chunk' ? Math.ceil(required / this.#capacity.size) * this.#capacity.size : required;
     const requestCapacity = Math.max(this.#requestCapacity, target * 32);
@@ -868,12 +881,12 @@ class ThreeTextBatchBinding {
     this.#textsByParagraph.delete(paragraph.id);
     this.#dirtyTransformIds.delete(paragraph.id);
     this.#removed.push(paragraph);
-    text.unbindFrom(this);
+    reconciler.unbindFrom(text, this);
   }
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    for (const text of this.#paragraphs.keys()) text.unbindFrom(this);
+    for (const text of this.#paragraphs.keys()) reconciler.unbindFrom(text, this);
     this.#target.dispose();
     this.#session.dispose();
     for (const paragraph of this.#paragraphs.values()) releaseStackLeases(paragraph.stackLeases);
@@ -906,7 +919,7 @@ class ThreeTextBatchBinding {
       };
       this.#paragraphs.set(text, paragraph);
       this.#textsByParagraph.set(id, text);
-      text.bind(this, group);
+      reconciler.bind(text, this, group);
     }
   }
 
@@ -1444,8 +1457,7 @@ function releaseFonts<Technique extends AnyRasterTechnique>(fonts: readonly Load
 function normalizeCapacity(value: GlyphBufferCapacity): GlyphBufferCapacity {
   if (!Number.isSafeInteger(value.size) || value.size <= 0)
     throw new RangeError('glyph capacity size must be positive');
-  if (value.policy !== 'grow' && value.policy !== 'chunk' && value.policy !== 'fixed')
-    throw new TypeError('glyph capacity policy is invalid');
+  if (value.policy !== 'grow' && value.policy !== 'chunk') throw new TypeError('glyph capacity policy is invalid');
   return Object.freeze({ size: value.size, policy: value.policy });
 }
 function normalizeCompositing(value: TextGroupOptions['compositing']): 'ordered' | 'independent' {
@@ -1535,10 +1547,11 @@ class TextTransformTracker {
   }
 }
 function validateText(text: Text<AnyRasterTechnique>): void {
-  validateBinding(text.runtime, text);
+  validateBinding(reconciler.runtime(text), text);
 }
 function validateBinding(runtime: TextRuntime, text: Text<AnyRasterTechnique>): void {
   if (text.disposed) throw new TypeError('disposed text cannot be attached');
-  if (text.runtime !== runtime) throw new TypeError('text belongs to another Three font-cache domain');
-  assertFontSelectionForRuntime(text.font, text.runtime);
+  const own = reconciler.runtime(text);
+  if (own !== runtime) throw new TypeError('text belongs to another Three font-cache domain');
+  assertFontSelectionForRuntime(text.font, own);
 }

@@ -26,14 +26,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./core": {
-      "types": "./dist/core.d.ts",
-      "import": "./dist/core.js"
-    },
-    "./tsl": {
-      "types": "./dist/tsl.d.ts",
-      "import": "./dist/tsl.js"
-    },
     "./three": {
       "types": "./dist/three.d.ts",
       "import": "./dist/three.js"
@@ -70,25 +62,13 @@
       "types": "./dist/bakers/bitmap.d.ts",
       "import": "./dist/bakers/bitmap.js"
     },
-    "./bakers/bitmap/validate": {
-      "types": "./dist/bakers/bitmap-validator.d.ts",
-      "import": "./dist/bakers/bitmap-validator.js"
-    },
     "./bakers/msdf": {
       "types": "./dist/bakers/msdf.d.ts",
       "import": "./dist/bakers/msdf.js"
     },
-    "./bakers/msdf/validate": {
-      "types": "./dist/bakers/msdf-validator.d.ts",
-      "import": "./dist/bakers/msdf-validator.js"
-    },
     "./bakers/slug": {
       "types": "./dist/bakers/slug.d.ts",
       "import": "./dist/bakers/slug.js"
-    },
-    "./bakers/slug/validate": {
-      "types": "./dist/bakers/slug-validator.d.ts",
-      "import": "./dist/bakers/slug-validator.js"
     },
     "./bake": {
       "types": "./dist/node/bake.d.ts",
@@ -99,30 +79,10 @@
       "import": "./dist/runtime-bake.js"
     },
     "./text-shaper.wasm": "./dist/text-shaper.wasm",
-    "./text-shaper-abi": {
-      "types": "./dist/text-shaper-abi.d.ts",
-      "import": "./dist/text-shaper-abi.js"
-    },
     "./bitmap-baker.wasm": "./dist/bitmap-baker.wasm",
-    "./bitmap-baker-abi": {
-      "types": "./dist/bitmap-baker-abi.d.ts",
-      "import": "./dist/bitmap-baker-abi.js"
-    },
     "./mtsdf-baker.wasm": "./dist/mtsdf-baker.wasm",
-    "./mtsdf-baker-abi": {
-      "types": "./dist/mtsdf-baker-abi.d.ts",
-      "import": "./dist/mtsdf-baker-abi.js"
-    },
     "./slug-baker.wasm": "./dist/slug-baker.wasm",
-    "./slug-baker-abi": {
-      "types": "./dist/slug-baker-abi.d.ts",
-      "import": "./dist/slug-baker-abi.js"
-    },
     "./font-baker.wasm": "./dist/font-baker.wasm",
-    "./font-baker-abi": {
-      "types": "./dist/font-baker-abi.d.ts",
-      "import": "./dist/font-baker-abi.js"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {

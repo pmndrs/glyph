@@ -23,16 +23,6 @@ export interface FontStack<Technique extends AnyRasterTechnique> {
 
 type TechniqueOfLoadedFont<Font> = Font extends LoadedFont<infer Technique> ? Technique : never;
 
-export class FontLeaseError extends Error {
-  readonly leaseCount: number;
-
-  constructor(leaseCount: number) {
-    super(`loaded font is retained by ${leaseCount} live paragraph lease${leaseCount === 1 ? '' : 's'}`);
-    this.name = 'FontLeaseError';
-    this.leaseCount = leaseCount;
-  }
-}
-
 interface LoadedFontState {
   readonly release: () => void;
   readonly disposeListeners: Set<() => void>;
@@ -111,7 +101,8 @@ function disposeLoadedFont(state: LoadedFontState, owner: 'font' | 'runtime'): v
   if (state.leases !== 0) {
     if (DEV) {
       console.warn(
-        `${new FontLeaseError(state.leases).message}; disposing anyway during ${owner} teardown. ` +
+        `loaded font is retained by ${state.leases} live paragraph lease${state.leases === 1 ? '' : 's'};` +
+          ` disposing anyway during ${owner} teardown. ` +
           'Dispose every Text that leased it first — a TextGroup does not dispose its children.',
       );
     }

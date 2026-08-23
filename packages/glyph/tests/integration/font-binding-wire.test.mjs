@@ -14,7 +14,7 @@ import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
 import { defineRasterResourceId } from '../../dist/raster-technique.js';
 import { techniqueProof } from '../../scripts/support/render-technique-proof.mjs';
-import { textShaperAbi } from '@pmndrs/glyph/text-shaper-abi';
+import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 

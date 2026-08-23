@@ -5,7 +5,7 @@ import test from 'node:test';
 import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { defineTextMaterial, Text } from '@pmndrs/glyph/three';
-import { bitmapShader, decorationShader, msdfShader, slugShader } from '@pmndrs/glyph/tsl';
+import { bitmapShader, decorationShader, msdfShader, slugShader } from '../../dist/tsl.js';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
