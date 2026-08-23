@@ -6,7 +6,7 @@ use crate::{
     STATUS_OK, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING, STATUS_RESULT_TOO_LARGE,
     STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT, STATUS_SESSION_MISSING, ShaperRegistry,
     engine::{
-        EngineError, TextEngine,
+        EngineError, FrameFault, TextEngine,
         font_binding_wire::parse_font_binding,
         frame::SessionRevision,
         frame_wire::parse_update_request,
@@ -538,7 +538,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
         ) {
             Ok(prepared) => prepared,
             Err(error) => {
-                return publish_failure(state, session_id, revision, engine_status(error), 0, 0);
+                return publish_engine_failure(state, session_id, revision, error);
             }
         };
         let plan = match state.engine.prepared_plan(prepared) {
@@ -549,6 +549,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
                     prepared,
                     revision,
                     engine_status(error),
+                    error.fault(),
                     0,
                     0,
                 );
@@ -562,6 +563,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
                     prepared,
                     revision,
                     engine_status(error),
+                    error.fault(),
                     0,
                     0,
                 );
@@ -570,7 +572,15 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
         let required_output = match publication_layout(plan, semantic_views) {
             Ok(layout) => layout.byte_length,
             Err(status) => {
-                return publish_prepared_failure(state, prepared, revision, status, 0, 0);
+                return publish_prepared_failure(
+                    state,
+                    prepared,
+                    revision,
+                    status,
+                    FrameFault::default(),
+                    0,
+                    0,
+                );
             }
         };
         if required_output > request.limits.max_output_bytes {
@@ -579,6 +589,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
                 prepared,
                 revision,
                 STATUS_RESULT_TOO_LARGE,
+                FrameFault::default(),
                 0,
                 required_output,
             );
@@ -588,7 +599,15 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
             return 0;
         };
         if let Err(status) = transport.ensure_publish_capacity(required_output) {
-            return publish_prepared_failure(state, prepared, revision, status, 0, required_output);
+            return publish_prepared_failure(
+                state,
+                prepared,
+                revision,
+                status,
+                FrameFault::default(),
+                0,
+                required_output,
+            );
         }
         let staged = match state
             .frames
@@ -602,6 +621,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
                     prepared,
                     revision,
                     STATUS_RESULT_TOO_LARGE,
+                    FrameFault::default(),
                     0,
                     required_output,
                 );
@@ -615,6 +635,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_update(
                     prepared,
                     revision,
                     engine_status(error),
+                    error.fault(),
                     0,
                     0,
                 );
@@ -667,14 +688,16 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
         ) {
             Ok(measured) => measured,
             Err(error) => {
-                return publish_failure(state, session_id, revision, engine_status(error), 0, 0);
+                return publish_engine_failure(state, session_id, revision, error);
             }
         };
         let staged = match state.engine.measured_semantic_views(measured) {
             Ok(semantic_views) => match query_layout(semantic_views) {
-                Ok(layout) if layout.byte_length > request.limits.max_output_bytes => {
-                    Err((STATUS_RESULT_TOO_LARGE, layout.byte_length))
-                }
+                Ok(layout) if layout.byte_length > request.limits.max_output_bytes => Err((
+                    STATUS_RESULT_TOO_LARGE,
+                    FrameFault::default(),
+                    layout.byte_length,
+                )),
                 Ok(layout) => state
                     .frames
                     .get_mut(&session_id)
@@ -683,23 +706,24 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
                         transport.ensure_publish_capacity(layout.byte_length)?;
                         transport.stage_query(session_id, revision, semantic_views)
                     })
-                    .map_err(|status| (status, layout.byte_length)),
-                Err(status) => Err((status, 0)),
+                    .map_err(|status| (status, FrameFault::default(), layout.byte_length)),
+                Err(status) => Err((status, FrameFault::default(), 0)),
             },
-            Err(error) => Err((engine_status(error), 0)),
+            Err(error) => Err((engine_status(error), error.fault(), 0)),
         };
         match staged {
             Ok(pointer) => u32::try_from(pointer).unwrap_or(0),
-            Err((status, required_result_capacity)) => {
+            Err((status, fault, required_result_capacity)) => {
                 // A query the caller only observes as failed must not leave an
                 // adoptable transaction behind; the reported watermark lets the
                 // host reserve and retry exactly like an update.
                 let _ = state.engine.abort_measure(measured);
-                publish_failure(
+                publish_attributed_failure(
                     state,
                     session_id,
                     revision,
                     status,
+                    fault,
                     0,
                     required_result_capacity,
                 )
@@ -797,13 +821,20 @@ fn engine_status(error: EngineError) -> u32 {
         EngineError::InvalidHandle => STATUS_INVALID_HANDLE,
         EngineError::HandleConflict => STATUS_POLICY_CONFLICT,
         EngineError::PolicyMissing => STATUS_POLICY_MISSING,
-        EngineError::FontStackMissing => STATUS_FONT_STACK_MISSING,
+        EngineError::FontStackMissing | EngineError::StyleFontStackMissing(_) => {
+            STATUS_FONT_STACK_MISSING
+        }
         EngineError::SessionConflict => STATUS_SESSION_CONFLICT,
         EngineError::SessionMissing => STATUS_SESSION_MISSING,
         EngineError::RevisionConflict => STATUS_REVISION_CONFLICT,
         EngineError::RevisionExhausted => STATUS_RESULT_TOO_LARGE,
         EngineError::InvalidRequest => STATUS_INVALID_REQUEST,
         EngineError::ResultTooLarge => STATUS_RESULT_TOO_LARGE,
+        EngineError::StyleRangeInvalid(_) => crate::STATUS_STYLE_RANGE_INVALID,
+        EngineError::StyleSplitsCluster(_) => crate::STATUS_STYLE_SPLITS_CLUSTER,
+        EngineError::StyleNestingInvalid(_) => crate::STATUS_STYLE_NESTING_INVALID,
+        EngineError::StyleRootInvalid(_) => crate::STATUS_STYLE_ROOT_INVALID,
+        EngineError::FontMetricsMissing(_) => crate::STATUS_FONT_METRICS_MISSING,
     }
 }
 
@@ -812,16 +843,18 @@ fn publish_prepared_failure(
     prepared: crate::engine::frame::PreparedUpdate,
     revision: SessionRevision,
     status: u32,
+    fault: FrameFault,
     required_request_capacity: u32,
     required_result_capacity: u32,
 ) -> u32 {
     let session_id = prepared.session_id();
     let _ = state.engine.abort_update(prepared);
-    publish_failure(
+    publish_attributed_failure(
         state,
         session_id,
         revision,
         status,
+        fault,
         required_request_capacity,
         required_result_capacity,
     )
@@ -835,6 +868,45 @@ fn publish_failure(
     required_request_capacity: u32,
     required_result_capacity: u32,
 ) -> u32 {
+    publish_attributed_failure(
+        state,
+        session_id,
+        revision,
+        status,
+        FrameFault::default(),
+        required_request_capacity,
+        required_result_capacity,
+    )
+}
+
+/// Publishes a rejection together with the paragraph and style it names, so the host reads the
+/// cause out of the header instead of inferring it from a bare status number.
+fn publish_engine_failure(
+    state: &mut WasmState,
+    session_id: u32,
+    revision: SessionRevision,
+    error: EngineError,
+) -> u32 {
+    publish_attributed_failure(
+        state,
+        session_id,
+        revision,
+        engine_status(error),
+        error.fault(),
+        0,
+        0,
+    )
+}
+
+fn publish_attributed_failure(
+    state: &mut WasmState,
+    session_id: u32,
+    revision: SessionRevision,
+    status: u32,
+    fault: FrameFault,
+    required_request_capacity: u32,
+    required_result_capacity: u32,
+) -> u32 {
     state
         .frames
         .get_mut(&session_id)
@@ -843,6 +915,7 @@ fn publish_failure(
                 session_id,
                 revision,
                 status,
+                fault,
                 required_request_capacity,
                 required_result_capacity,
             ))

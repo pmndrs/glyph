@@ -8,7 +8,14 @@ export type {
   TextInput,
   UnboundSpanTag,
 } from './formatted-text.js';
+export type { FontFeature, ResolvedFontFeature } from './font-feature.js';
 export type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
+export type {
+  ParagraphLayout,
+  ParagraphLayoutInspection,
+  ParagraphLayoutSummary,
+  ParagraphMeasurement,
+} from './layout.js';
 export type { GlyphBufferCapacity, ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 export { FontLoader } from './three/font-loader.js';
 export { defineTextMaterial } from './three/material.js';
@@ -24,6 +31,8 @@ export type {
   ThreeFontLoaderOptions as FontLoaderOptions,
   ThreeLoadedFontRequest as LoadedFontRequest,
 } from './three/font-loader.js';
+export { TextFrameError } from './three/frame-error.js';
+export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.js';
 export { Text, TextGroup } from './three/text.js';
 export type {
   StandaloneTextProperties,
