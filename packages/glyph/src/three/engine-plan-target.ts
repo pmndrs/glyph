@@ -61,6 +61,7 @@ interface OriginSegment {
 interface OriginRecord {
   readonly buffer: RetainedBuffer;
   readonly index: number;
+  /** The lane's value with the glyph at rest. Displacement from it is the technique-free bridge. */
   targetX: number;
   targetY: number;
 }
@@ -160,43 +161,79 @@ export class ThreeTextRenderPlanExecutor {
     });
   }
 
+  /**
+   * Reads the drawn origin of every glyph, naming the ones it could not read.
+   *
+   * `shapedX`/`shapedY` are supplied by the caller as the layout's own answer and are copied
+   * through untouched. `drawnX`/`drawnY` hold the retained record's value where one exists and the
+   * shaped origin where it does not — but every such glyph is listed in `incomplete`, so a reader
+   * can tell the two apart. The previous shape wrote the shaped value into the displayed array with
+   * no record of having done so, which put two coordinate spaces in one array.
+   */
+  /**
+   * Reads where each glyph is drawn, in paragraph glyph-origin space, and names what it could not read.
+   *
+   * The retained lane is NOT in glyph-origin space, and which space it is in is the technique's own
+   * business: Slug and MSDF pack the ink box's top-left corner, and Bitmap stores the origin plus the
+   * baked strike's raster bearing, which is a third space that no layout value can reconstruct. What
+   * every technique does share is that `targetX`/`targetY` is that same lane's value with the glyph
+   * at rest — the position the layout put it. So the displacement from rest, `value - target`, is in
+   * glyph-origin space for all of them, and adding it to the shaped origin converts without the
+   * executor knowing anything about the technique's packing at all.
+   */
   snapshotGlyphOrigins(
     stableIds: Uint32Array,
-    fallbackX: Float32Array,
-    fallbackY: Float32Array,
-  ): Readonly<{ shapedX: Float32Array; shapedY: Float32Array; displayedX: Float32Array; displayedY: Float32Array }> {
-    if (stableIds.length !== fallbackX.length || stableIds.length !== fallbackY.length) {
+    shapedX: Float32Array,
+    shapedY: Float32Array,
+  ): Readonly<{ drawnX: Float32Array; drawnY: Float32Array; incomplete: readonly number[] }> {
+    if (stableIds.length !== shapedX.length || stableIds.length !== shapedY.length) {
       throw new RangeError('glyph origin snapshot arrays must be parallel');
     }
     this.#ensureOriginRecords();
-    const shapedX = fallbackX.slice();
-    const shapedY = fallbackY.slice();
-    const displayedX = fallbackX.slice();
-    const displayedY = fallbackY.slice();
+    const drawnX = shapedX.slice();
+    const drawnY = shapedY.slice();
+    const incomplete: number[] = [];
     for (let index = 0; index < stableIds.length; index += 1) {
       const record = this.#originRecords.get(stableIds[index]!);
-      if (record === undefined || !(record.buffer.array instanceof Float32Array)) continue;
+      if (record === undefined || !(record.buffer.array instanceof Float32Array)) {
+        incomplete.push(index);
+        continue;
+      }
       const offset = record.index * record.buffer.vectorWidth;
-      shapedX[index] = record.targetX;
-      shapedY[index] = record.targetY;
-      displayedX[index] = record.buffer.array[offset]!;
-      displayedY[index] = record.buffer.array[offset + 1]!;
+      drawnX[index] = shapedX[index]! + (record.buffer.array[offset]! - record.targetX);
+      drawnY[index] = shapedY[index]! + (record.buffer.array[offset + 1]! - record.targetY);
     }
-    return { shapedX, shapedY, displayedX, displayedY };
+    return { drawnX, drawnY, incomplete };
   }
 
-  setGlyphOriginOverrides(stableIds: Uint32Array, x: Float32Array, y: Float32Array): void {
+  /**
+   * Patches the retained buffer and returns the indices it could not reach, never silently skipping.
+   *
+   * `shapedX`/`shapedY` are the layout's rest positions for the same glyphs; the displacement from
+   * them is what the record actually stores, under the reasoning on `snapshotGlyphOrigins`.
+   */
+  setGlyphOriginOverrides(
+    stableIds: Uint32Array,
+    shapedX: Float32Array,
+    shapedY: Float32Array,
+    x: Float32Array,
+    y: Float32Array,
+  ): readonly number[] {
     if (stableIds.length !== x.length || stableIds.length !== y.length) {
       throw new RangeError('glyph origin override arrays must be parallel');
     }
     this.#ensureOriginRecords();
     const touched = new Map<RetainedBuffer, readonly [number, number]>();
+    const unapplied: number[] = [];
     for (let index = 0; index < stableIds.length; index += 1) {
       const record = this.#originRecords.get(stableIds[index]!);
-      if (record === undefined || !(record.buffer.array instanceof Float32Array)) continue;
+      if (record === undefined || !(record.buffer.array instanceof Float32Array)) {
+        unapplied.push(index);
+        continue;
+      }
       const offset = record.index * record.buffer.vectorWidth;
-      record.buffer.array[offset] = x[index]!;
-      record.buffer.array[offset + 1] = y[index]!;
+      record.buffer.array[offset] = record.targetX + (x[index]! - shapedX[index]!);
+      record.buffer.array[offset + 1] = record.targetY + (y[index]! - shapedY[index]!);
       const range = touched.get(record.buffer);
       touched.set(record.buffer, [
         Math.min(range?.[0] ?? offset, offset),
@@ -204,6 +241,7 @@ export class ThreeTextRenderPlanExecutor {
       ]);
     }
     markOriginRanges(touched);
+    return unapplied;
   }
 
   clearGlyphOriginOverrides(stableIds: Uint32Array): void {
@@ -485,7 +523,7 @@ export class ThreeTextRenderPlanExecutor {
             : glyphOriginBuffer(this.#coordinator.resolveResource(resource.referenceId).technique);
         const origins = originDeclaration === undefined ? undefined : byPolicyId.get(originDeclaration.id);
         const stableIds = decoration ? undefined : byPolicyId.get(threeSystemBuffers.stableGlyphId.id);
-        if (origins !== undefined && stableIds !== undefined) {
+        if (originDeclaration !== undefined && origins !== undefined && stableIds !== undefined) {
           if (!(origins.array instanceof Float32Array) || !(stableIds.array instanceof Uint32Array)) {
             throw new TypeError('glyph-origin augmentation buffers have invalid scalar types');
           }

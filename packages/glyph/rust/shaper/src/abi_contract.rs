@@ -1719,6 +1719,16 @@ field_offset!(SEMANTIC_INLINE_START, SemanticRecord, inline_start);
 field_offset!(SEMANTIC_BLOCK_START, SemanticRecord, block_start);
 field_offset!(SEMANTIC_INLINE_EXTENT, SemanticRecord, inline_extent);
 field_offset!(SEMANTIC_BLOCK_EXTENT, SemanticRecord, block_extent);
+field_offset!(SEMANTIC_INLINE_ADVANCE, SemanticRecord, inline_advance);
+field_offset!(SEMANTIC_INK_INLINE_START, SemanticRecord, ink_inline_start);
+field_offset!(SEMANTIC_INK_BLOCK_START, SemanticRecord, ink_block_start);
+field_offset!(
+    SEMANTIC_INK_INLINE_EXTENT,
+    SemanticRecord,
+    ink_inline_extent
+);
+field_offset!(SEMANTIC_INK_BLOCK_EXTENT, SemanticRecord, ink_block_extent);
+field_offset!(SEMANTIC_ASCENT, SemanticRecord, ascent);
 field_offset!(RESOURCE_ID, ResourceRecord, id);
 field_offset!(RESOURCE_GENERATION, ResourceRecord, generation);
 field_offset!(RESOURCE_TECHNIQUE_ID, ResourceRecord, technique_id);
@@ -2239,7 +2249,13 @@ pub fn json() -> String {
                 "inlineStart": SEMANTIC_INLINE_START,
                 "blockStart": SEMANTIC_BLOCK_START,
                 "inlineExtent": SEMANTIC_INLINE_EXTENT,
-                "blockExtent": SEMANTIC_BLOCK_EXTENT
+                "blockExtent": SEMANTIC_BLOCK_EXTENT,
+                "inlineAdvance": SEMANTIC_INLINE_ADVANCE,
+                "inkInlineStart": SEMANTIC_INK_INLINE_START,
+                "inkBlockStart": SEMANTIC_INK_BLOCK_START,
+                "inkInlineExtent": SEMANTIC_INK_INLINE_EXTENT,
+                "inkBlockExtent": SEMANTIC_INK_BLOCK_EXTENT,
+                "ascent": SEMANTIC_ASCENT
             },
             "engineResource": {
                 "size": RESOURCE_RECORD_SIZE,
@@ -2557,7 +2573,13 @@ pub fn json() -> String {
                 "layoutInspection": SEMANTIC_VIEW_LAYOUT_INSPECTION
             },
             "measurementFlags": {
-                "overflowed": crate::engine::layout_query::MEASUREMENT_FLAG_OVERFLOWED
+                "overflowed": crate::engine::layout_query::MEASUREMENT_FLAG_OVERFLOWED,
+                "inkBounds": crate::engine::layout_query::MEASUREMENT_FLAG_INK_BOUNDS
+            },
+            "glyphFlags": {
+                "unsafeToBreak": crate::engine::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK,
+                "unsafeToConcat": crate::engine::shaping_state::GLYPH_FLAG_UNSAFE_TO_CONCAT,
+                "produced": crate::engine::shaping_state::GLYPH_FLAGS_PRODUCED
             },
             "semanticKinds": {
                 "line": SEMANTIC_LINE,

@@ -35,13 +35,29 @@ export { defineFont } from './font.js';
 
 export type { FontHandle, FontKey, FontSlot, LocalGlyphId, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
 
+export { glyphFlags } from './layout.js';
 export type {
+  BaselineMetrics,
   FontSlotRecord,
+  LayoutBox,
   ParagraphLayout,
   ParagraphLayoutInspection,
   ParagraphLayoutSummary,
+  ParagraphLineMetrics,
   ParagraphMeasurement,
 } from './layout.js';
+
+export type {
+  GlyphAdoption,
+  GlyphApplication,
+  GlyphCaret,
+  GlyphKey,
+  GlyphLine,
+  GlyphPlacement,
+  GlyphPlacements,
+  GlyphRun,
+  GlyphSpace,
+} from './glyph-placement.js';
 
 export type {
   FontLoadDiagnostic,

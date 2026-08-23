@@ -253,23 +253,24 @@ committed inputs before rethrowing.
 
 Their presentation transitions are now owned by the application. Merged v0 exported `captureBitmapGlyphPositions` and
 `createBitmapGlyphPositionTransition`, which packaged glyph identity matching and interpolation together for Bitmap only.
-Target-v1 exposes explicit Rust inspection and topology-guarded renderer presentation writes, so
-`techniques/shared/glyph-origin-transition.ts` owns the application policy once for all three techniques: it matches glyphs on
-font handle, glyph id, cluster, and occurrence index, interpolates toward the shaped origins rather than the current
-displayed ones, writes through `setGlyphOrigins`, clears the overrides when
-settled, and reports `matchedGlyphs` so the existing viewport telemetry keeps its meaning. Bitmap keeps its host-driven
+Target-v1 exposes the `GlyphPlacements` snapshot and its topology-guarded write, so
+`techniques/shared/glyph-origin-transition.ts` owns only the application policy, once for all three techniques: it calls
+`snapshotGlyphs()`, hands the previous snapshot to `adopt` — which recovers each glyph's drawn position by the identity
+the package owns rather than one the application reconstructs from six parallel arrays — interpolates toward the shaped
+origins rather than the current displayed ones, writes through `applyGlyphs`, calls `restoreGlyphs` when settled, and
+reports `matchedGlyphs` so the existing viewport telemetry keeps its meaning. Bitmap keeps its host-driven
 progress because its React viewport already animates the timeline; MTSDF and Slug, whose surfaces do not drive progress,
 advance the same smoothstep from their own frame clock and gain the transition they previously lacked.
 
 Whether a reflow may interpolate at all is decided once, in `glyphOriginPolicy`, and keyed to the kind of change rather
-than the technique. That identity keys a glyph on its UTF-16 source cluster, which survives a reflow but says nothing
-about visual order: under bidi, inserting one character reorders a whole run, so a typewriter reveal that kept matching
+than the technique. `GlyphKey` survives a reflow that moves glyphs and not one that reshapes them, and its cluster
+component says nothing about visual order: under bidi, inserting one character reorders a whole run, so a typewriter reveal that kept matching
 slid glyphs across their neighbours toward positions they never travelled through. A change to the source text — or to
 the fixture, script, or features that decide which glyphs the text shapes into — therefore snaps, clearing the overrides
 so the committed layout stays authoritative and reporting zero matches rather than a count it did not animate. Geometry
 and style changes leave the shaped run and its visual order intact, so font size, layout width, anchor, and device pixel
-ratio still interpolate. A snapping reflow also skips `captureGlyphOrigins` entirely, so it never allocates the per-glyph
-map it would not have read. All three viewports publish `data-presentation-transitioned` beside the matched and target
+ratio still interpolate. A snapping reflow also skips `captureGlyphOrigins` entirely, so it never builds the snapshot
+it would not have read. All three viewports publish `data-presentation-transitioned` beside the matched and target
 counts, and the bitmap viewport's host-driven timeline runs only when the scene reports that it transitioned.
 
 The live update itself is synchronous. `update` applies and shapes one generation in the caller's own turn, so an

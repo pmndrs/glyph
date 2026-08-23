@@ -45,6 +45,11 @@ export const textShaperAbi = {
     "frameFlags": {
       "compositingIndependent": 1
     },
+    "glyphFlags": {
+      "produced": 3,
+      "unsafeToBreak": 1,
+      "unsafeToConcat": 2
+    },
     "inlineAlignments": {
       "center": 2,
       "end": 3,
@@ -65,6 +70,7 @@ export const textShaperAbi = {
       "justify": 2
     },
     "measurementFlags": {
+      "inkBounds": 2,
       "overflowed": 1
     },
     "overflowModes": {
@@ -478,17 +484,23 @@ export const textShaperAbi = {
     },
     "engineSemanticView": {
       "alignment": 4,
+      "ascent": 64,
       "blockExtent": 40,
       "blockStart": 32,
       "flags": 6,
       "id": 0,
+      "inkBlockExtent": 60,
+      "inkBlockStart": 52,
+      "inkInlineExtent": 56,
+      "inkInlineStart": 48,
+      "inlineAdvance": 44,
       "inlineExtent": 36,
       "inlineStart": 28,
       "itemCount": 24,
       "itemStart": 20,
       "kind": 4,
       "parentId": 8,
-      "size": 44,
+      "size": 68,
       "textEnd": 16,
       "textStart": 12
     },

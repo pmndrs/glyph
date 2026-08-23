@@ -35,7 +35,7 @@ const BIDI_RLI: u8 = 20;
 const BIDI_FSI: u8 = 21;
 const BIDI_PDI: u8 = 22;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct SemanticGlyph {
     pub stable_id: u32,
     pub font_handle: u32,
@@ -45,6 +45,52 @@ pub(crate) struct SemanticGlyph {
     pub font_size: f32,
     pub inline_origin: f32,
     pub block_origin: f32,
+    /// Shaped advance for this glyph, already scaled to layout units. Positioning consumes the same
+    /// value to move the pen, so a caret or selection rectangle derived from it agrees with the pen
+    /// by construction rather than by a second derivation.
+    pub inline_advance: f32,
+    /// Ink box in positioned space. Zero-extent at the glyph origin when the font supplies no
+    /// outline for the id, which is the same condition that skips the render record below.
+    pub ink_inline_start: f32,
+    pub ink_block_start: f32,
+    pub ink_inline_extent: f32,
+    pub ink_block_extent: f32,
+}
+
+/// The ink box the render record and the semantic record must agree on, derived once per glyph.
+#[derive(Clone, Copy)]
+struct GlyphInkBox {
+    inline_start: f64,
+    block_start: f64,
+    inline_extent: f64,
+    block_extent: f64,
+}
+
+impl GlyphInkBox {
+    /// A glyph with no outline still occupies its origin. Reporting the degenerate box there keeps
+    /// every semantic glyph's ink box in one coordinate space instead of leaving a hole.
+    fn empty_at(origin_inline: f64, origin_block: f64) -> Self {
+        Self {
+            inline_start: origin_inline,
+            block_start: origin_block,
+            inline_extent: 0.0,
+            block_extent: 0.0,
+        }
+    }
+
+    fn from_extents(
+        extents: &FontGlyphExtents,
+        origin_inline: f64,
+        origin_block: f64,
+        scale: f64,
+    ) -> Self {
+        Self {
+            inline_start: origin_inline + f64::from(extents.x_min) * scale,
+            block_start: origin_block - f64::from(extents.y_max) * scale,
+            inline_extent: f64::from(extents.x_max - extents.x_min) * scale,
+            block_extent: f64::from(extents.y_max - extents.y_min) * scale,
+        }
+    }
 }
 
 /// One solid decoration line for a contiguous decorated visual run: underline,
@@ -576,6 +622,13 @@ impl PositionedGlyphArena {
                 let flags = stream_shape_flags[adjacency];
                 let origin_inline = cursor + x_offset;
                 let origin_block = baseline - y_offset - f64::from(style.baseline_shift);
+                let outline = extents_for(font_handle, glyph_id);
+                let ink = match outline.as_ref() {
+                    Some(extents) => {
+                        GlyphInkBox::from_extents(extents, origin_inline, origin_block, scale)
+                    }
+                    None => GlyphInkBox::empty_at(origin_inline, origin_block),
+                };
                 self.semantic_glyphs.push(SemanticGlyph {
                     stable_id,
                     font_handle,
@@ -585,14 +638,15 @@ impl PositionedGlyphArena {
                     font_size: style.font_size,
                     inline_origin: finite_f32(origin_inline)?,
                     block_origin: finite_f32(origin_block)?,
+                    inline_advance: nonnegative_f32(x_advance)?,
+                    ink_inline_start: finite_f32(ink.inline_start)?,
+                    ink_block_start: finite_f32(ink.block_start)?,
+                    ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
+                    ink_block_extent: nonnegative_f32(ink.block_extent)?,
                 });
-                if let Some(extents) = extents_for(font_handle, glyph_id) {
+                if outline.is_some() {
                     let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
                         .map_err(|_| EngineError::ResultTooLarge)?;
-                    let inline_start = origin_inline + f64::from(extents.x_min) * scale;
-                    let block_start = origin_block - f64::from(extents.y_max) * scale;
-                    let inline_extent = f64::from(extents.x_max - extents.x_min) * scale;
-                    let block_extent = f64::from(extents.y_max - extents.y_min) * scale;
                     self.push_glyph(
                         LayoutGlyph {
                             stable_id,
@@ -606,10 +660,10 @@ impl PositionedGlyphArena {
                             depth_key: 0,
                             font_size: style.font_size,
                             raster_pixel_ratio: style.raster_pixel_ratio,
-                            inline_start: finite_f32(inline_start)?,
-                            block_start: finite_f32(block_start)?,
-                            inline_extent: nonnegative_f32(inline_extent)?,
-                            block_extent: nonnegative_f32(block_extent)?,
+                            inline_start: finite_f32(ink.inline_start)?,
+                            block_start: finite_f32(ink.block_start)?,
+                            inline_extent: nonnegative_f32(ink.inline_extent)?,
+                            block_extent: nonnegative_f32(ink.block_extent)?,
                         },
                         style.foreground_rgba,
                         clusters.stable_ids[cluster],
@@ -938,6 +992,13 @@ impl PositionedGlyphArena {
                 .ok_or(EngineError::InvalidRequest)?;
             let origin_inline = cursor + x_offset;
             let origin_block = baseline - y_offset - f64::from(style.baseline_shift);
+            let outline = extents_for(font_handle, glyph_id);
+            let ink = match outline.as_ref() {
+                Some(extents) => {
+                    GlyphInkBox::from_extents(extents, origin_inline, origin_block, scale)
+                }
+                None => GlyphInkBox::empty_at(origin_inline, origin_block),
+            };
             self.semantic_glyphs.push(SemanticGlyph {
                 stable_id,
                 font_handle,
@@ -947,14 +1008,15 @@ impl PositionedGlyphArena {
                 font_size: style.font_size,
                 inline_origin: finite_f32(origin_inline)?,
                 block_origin: finite_f32(origin_block)?,
+                inline_advance: nonnegative_f32(x_advance)?,
+                ink_inline_start: finite_f32(ink.inline_start)?,
+                ink_block_start: finite_f32(ink.block_start)?,
+                ink_inline_extent: nonnegative_f32(ink.inline_extent)?,
+                ink_block_extent: nonnegative_f32(ink.block_extent)?,
             });
-            if let Some(extents) = extents_for(font_handle, glyph_id) {
+            if outline.is_some() {
                 let semantic_glyph_index = u32::try_from(self.semantic_glyphs.len() - 1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
-                let inline_start = origin_inline + f64::from(extents.x_min) * scale;
-                let block_start = origin_block - f64::from(extents.y_max) * scale;
-                let inline_extent = f64::from(extents.x_max - extents.x_min) * scale;
-                let block_extent = f64::from(extents.y_max - extents.y_min) * scale;
                 self.push_glyph(
                     LayoutGlyph {
                         stable_id,
@@ -968,10 +1030,10 @@ impl PositionedGlyphArena {
                         depth_key: 0,
                         font_size: style.font_size,
                         raster_pixel_ratio: style.raster_pixel_ratio,
-                        inline_start: finite_f32(inline_start)?,
-                        block_start: finite_f32(block_start)?,
-                        inline_extent: nonnegative_f32(inline_extent)?,
-                        block_extent: nonnegative_f32(block_extent)?,
+                        inline_start: finite_f32(ink.inline_start)?,
+                        block_start: finite_f32(ink.block_start)?,
+                        inline_extent: nonnegative_f32(ink.inline_extent)?,
+                        block_extent: nonnegative_f32(ink.block_extent)?,
                     },
                     style.foreground_rgba,
                     semantic_id,
@@ -2884,6 +2946,7 @@ mod tests {
                     font_size: 16.0,
                     inline_origin: stable_id as f32,
                     block_origin: 0.0,
+                    ..SemanticGlyph::default()
                 }));
             for field in &mut arena.semantic_f32 {
                 field.extend([1.0, 2.0, 3.0]);
