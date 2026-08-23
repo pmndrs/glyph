@@ -274,6 +274,25 @@ importers:
         specifier: 4.1.0
         version: 4.1.0(@types/node@24.13.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
 
+  packages/glyph-example-renderer:
+    dependencies:
+      '@pmndrs/glyph':
+        specifier: workspace:*
+        version: link:../glyph
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      oxfmt:
+        specifier: 0.35.0
+        version: 0.35.0
+      oxlint:
+        specifier: 1.75.0
+        version: 1.75.0
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@types/node@24.13.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
+
 packages:
 
   '@babel/code-frame@7.29.7':
