@@ -28,6 +28,7 @@
   `RangeError` for a span whose offsets are non-integer, negative, inverted, or past the end of the text,
   where the frame was previously rejected at synchronize time. `registerThreeRasterPlanProgram` throws for a
   new technique once any runtime has read the registry.
+
 - **The animation API is a snapshot you can hold, and the extents were already computed** —
   `snapshotGlyphOrigins`/`setGlyphOrigins`/`clearGlyphOriginOverrides` is replaced by
   `snapshotGlyphs`/`applyGlyphs`/`restoreGlyphs` over one `GlyphPlacements` structure that addresses
