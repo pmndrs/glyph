@@ -949,6 +949,7 @@ mod tests {
             Some(&[7.0]),
             &ClusterArena::default(),
             None,
+            crate::engine::cluster_state::IntrinsicWidths::default(),
             true,
         )
         .unwrap();
@@ -1031,6 +1032,7 @@ mod tests {
             Some(&[7.0]),
             &ClusterArena::default(),
             None,
+            crate::engine::cluster_state::IntrinsicWidths::default(),
             false,
         )
         .unwrap();

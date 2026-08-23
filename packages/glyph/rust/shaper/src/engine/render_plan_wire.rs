@@ -478,8 +478,18 @@ fn write_semantic(bytes: &mut [u8], at: usize, value: SemanticRecord) {
     );
     f32_at(bytes, at, SEMANTIC_INK_BLOCK_EXTENT, value.ink_block_extent);
     f32_at(bytes, at, SEMANTIC_ASCENT, value.ascent);
-    f32_at(bytes, at, SEMANTIC_MIN_CONTENT_WIDTH, value.min_content_width);
-    f32_at(bytes, at, SEMANTIC_MAX_CONTENT_WIDTH, value.max_content_width);
+    f32_at(
+        bytes,
+        at,
+        SEMANTIC_MIN_CONTENT_WIDTH,
+        value.min_content_width,
+    );
+    f32_at(
+        bytes,
+        at,
+        SEMANTIC_MAX_CONTENT_WIDTH,
+        value.max_content_width,
+    );
 }
 
 fn write_resource(bytes: &mut [u8], at: usize, value: ResourceRecord) {
@@ -664,6 +674,8 @@ mod tests {
             ink_inline_extent: 8.5,
             ink_block_extent: 9.5,
             ascent: 10.5,
+            min_content_width: 11.5,
+            max_content_width: 12.5,
         };
         let size = usize::try_from(SEMANTIC_RECORD_SIZE).unwrap();
         let mut bytes = vec![0_u8; size];
