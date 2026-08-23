@@ -27,8 +27,11 @@ export const packageSizeBudgets = {
   // The ceiling had no room for the cross-host gap: this host measures 231,670 raw and the Linux
   // runner measures 232,558, so CI failed on a 558-byte overage that is host difference rather than
   // growth. Raised to clear the foreign-host measurement with headroom.
+  // The measure/layout re-split priced +398 raw: the measurement lane answers from its own
+  // cache again instead of sharing the positioned one, so the fast path is two small maps
+  // rather than one lazy-resolution layer.
   'core-subpath-js': {
-    rawBytes: 299_500,
+    rawBytes: 300_000,
     minifiedBytes: 192_000,
     gzipBytes: 51_600,
     brotliBytes: 43_100,
@@ -104,7 +107,7 @@ export const packageSizeBudgets = {
   // Column flow (contentBox columns over ordered regions) added ~+1.7 KB raw of
   // geometry derivation and validation in the Three adapter.
   // The external-raster routing rode into the Three bundle too (+1,786 raw /
-  // +914 minified), then the 11.17 frame adoption and measureLayout host fast
+  // +914 minified), then the 11.17 frame adoption and measure host fast
   // path added +5,310 raw / +2,690 minified in the Three adapter.
   // These ceilings now price the PRODUCTION graph: the size harness defines
   // process.env.NODE_ENV="production" so development-only `if (DEV)` diagnostics fold

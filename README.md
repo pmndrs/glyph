@@ -95,7 +95,7 @@ label.position.x += 1;
 
 Assigning `text` queues the narrowest UTF-16 edit between the previous string and the new one, so an editor sends one
 narrow update per keystroke without describing the edit itself.
-`measureLayout()` returns a compact committed paragraph summary; `inspectLayout()` explicitly requests line and glyph
+`measure()` returns a compact committed paragraph summary; `layout()` explicitly requests line and glyph
 details. Both read a layout the scene has already committed.
 
 ## Measure before you render
@@ -112,7 +112,6 @@ const paragraph = new Paragraph({ font: inter, text: txt`Hello world`, policy: {
 const measured = paragraph.measure({ width: { mode: 'at-most', size: 360 } });
 
 measured.contentWidth; // advance extent
-measured.inkBounds; // visual extent — what actually looks centred
 measured.firstBaseline; // from the box top edge
 measured.ascent; // per paragraph; per line on measured.lines
 measured.minContentWidth; // longest unbreakable run, from the same pass
@@ -121,10 +120,11 @@ measured.minContentWidth; // longest unbreakable run, from the same pass
 Every value is paragraph-local: the origin is the box's top-left corner, positive X is right, positive Y is down.
 Scale and placement are yours to apply afterwards.
 
-Sizes are immediate. `inkBounds` and the per-glyph columns resolve the positioned query the first time you read one
-and stay resolved, so a host that probes many widths for sizes alone never pays to copy arrays it never touches. A
-measurement answers or throws: a constraint that is not finite and nonnegative throws from the call, naming the
-axis.
+`measure()` is one cheap engine query: sizes, baselines, counts, and intrinsic widths — no per-glyph records, no
+array copies. When you need the positioned output (`x`, `y`, `glyphIds`, ink boxes), call `layout()` for it; that is
+a second query because it is a second piece of work. A host that probes many widths for sizes alone never pays for
+arrays it never touches. A query answers or throws: a constraint that is not finite and nonnegative throws from the
+call, naming the axis.
 
 ## Font Stacks - fallback fonts for missing glyphs
 
