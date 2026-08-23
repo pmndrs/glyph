@@ -113,7 +113,7 @@ F9. **Re-export `ParagraphLayoutSummary` and `ParagraphLayoutInspection` from `/
 
 ## Goal and current state
 
-**Goal.** Every item in this document implemented, **and every open decision entry it depends on resolved**, landed as a GitHub Stack of pull requests, each one green in CI, each one adversarially reviewed by an external model with every review comment either addressed or answered, and the stack ready to merge. The pmndrs/uikit fork is documented here but is **not** part of this goal; only the package-side API it needs is.
+**Goal.** Every item in this document implemented, **every open decision entry it depends on resolved**, and **performance benchmarking we can trust across every core API path**, landed as a GitHub Stack of pull requests, each one green in CI, each one adversarially reviewed by an external model with every review comment either addressed or answered, and the stack ready to merge. The pmndrs/uikit fork is documented here but is **not** part of this goal; only the package-side API it needs is.
 
 Three `Proposed` decisions in [the register](decision-register.md) are in scope and must reach `Accepted` or be withdrawn with a reason:
 
@@ -162,6 +162,15 @@ Corrections this document has already absorbed, recorded so they are not re-deri
 Every runtime graph -- `three-runtime-js`, `bitmap-runtime-js`, `mtsdf-runtime-js`, `slug-runtime-js` -- grew by a near-identical ~30 KB raw across this stack. The semantic record widening from 44 to 68 bytes explains the shaper Wasm and the `/core` subpath, but it does not explain four independent graphs moving by the same amount; that shape points at a single shared module entering each graph.
 
 Reviewed ceilings were raised to the measured values so CI is not blocked on an unanswered question, and the raise is annotated as such in `apps/benchmarks/src/benchmark/package-size-budgets.ts`. Before release, find what entered the graph and either justify it or remove it. Do not treat the current ceilings as reviewed in the normal sense until that is answered.
+
+### Final phase: benchmarks we can trust
+
+The repository has many benchmarks and does not trust them. The complaint is subtle drift: numbers move between runs for reasons unrelated to the change under test, so nobody can say whether a change helped or hurt. A cleanup this size is worth little if its cost cannot be measured.
+
+Performance benchmarking moves onto **pmndrs/labs**, which exists to benchmark in environments that are not fully stable. The scope is the core API rather than the renderer: shaping, line breaking, layout and positioning, `Paragraph.measure` including lazy column materialization, the frame-wire compile, the render-plan read, the retention handoff, and font binding. Each path needs a stated unit of work and a stated regression threshold.
+
+The plan is `docs/planning/benchmark-trust.md`. It must answer how a run establishes that a difference is real rather than noise, what the baseline is and how it updates without laundering a regression into the record, how it survives shared CI runners, which existing benchmarks are replaced or deleted, and what it cannot tell us.
+
 
 ## Measurement and positioning
 
