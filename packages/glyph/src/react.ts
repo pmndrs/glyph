@@ -14,7 +14,7 @@ import {
   type Ref,
 } from 'react';
 
-import type { GlyphPaintInput } from './formatted-text.js';
+import { type GlyphPaintInput, resolveRangesToClusters } from './formatted-text.js';
 import type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
 import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
@@ -340,6 +340,16 @@ function techniqueKey(technique: AnyRasterTechnique): number {
   return techniqueId;
 }
 
+/**
+ * Compile one `<Text>` element tree into the `(text, spans)` pair the engine consumes.
+ *
+ * The tree states no offsets. Every boundary below is derived at a concatenation JOIN -- `start` is
+ * the length before a child's text is appended, `end` the length after -- and concatenation can
+ * fuse the tail of one child with the head of the next into a single extended grapheme cluster,
+ * naming an offset that is not a boundary of the text just produced. `resolveRangesToClusters`
+ * settles those joins against the finished text under the one rule `compose` uses on the
+ * `txt`/`span` tree: the fused cluster takes the style of its base, which is the earlier child's.
+ */
 function flattenText<Technique extends AnyRasterTechnique>(
   children: R3fTextChild<Technique> | undefined,
 ): FlattenedText<Technique> {
@@ -370,7 +380,8 @@ function flattenText<Technique extends AnyRasterTechnique>(
   };
 
   append(children ?? null, {});
-  return Object.freeze({ text: chunks.join(''), spans: Object.freeze(spans) });
+  const text = chunks.join('');
+  return Object.freeze({ text, spans: Object.freeze(resolveRangesToClusters(text, spans)) });
 }
 
 function inlineProperties<Technique extends AnyRasterTechnique>(

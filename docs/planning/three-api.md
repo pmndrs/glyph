@@ -148,21 +148,25 @@ One group traversal performs at most one mutating `pmndrs_glyph_engine_update` t
 layout query with pending mutations may perform that synchronization earlier; the following traversal observes the
 committed revision and does not repeat the semantic work.
 
-For editor-style changes, use UTF-16 ranges instead of rebuilding or diffing the paragraph in application code:
+Editor-style changes go through the same assignment. `label.text = next` states the string the paragraph now holds, and
+the adapter derives its smallest common-prefix/common-suffix replacement without allocating a second scan buffer, so an
+editor that keeps its own document sends one narrow UTF-16 edit per keystroke without describing the edit itself:
 
 ```ts
-label.insertText(cursor, 'a');
-label.deleteText(selectionStart, selectionEnd);
-label.replaceText(selectionStart, selectionEnd, pastedText);
+label.text = document.applyEdit(cursor, 'a');
+label.set({ text: document.value, spans: document.spans });
 ```
 
-These operations update the ordinary `text` value and queue narrow replacements for the same next-frame transaction.
-Multiple operations before traversal remain one Wasm call. Direct `label.text = next` remains the simple declarative API;
-the adapter derives its smallest common-prefix/common-suffix replacement without allocating a second scan buffer.
-Offsets match JavaScript and DOM selection APIs and cannot split a surrogate pair. Existing spans shift with edits;
-inserted text inherits a span only when inserted strictly inside it, so span-boundary affinity does not become hidden
-mutable state. Text inserted at a boundary that FUSES into the cluster beside it is the one exception, and it follows
-from the cluster rule below rather than from affinity: a combining mark has no style of its own to keep.
+Multiple assignments before traversal remain one Wasm call. An assignment cannot address the inside of a Unicode scalar,
+so the replacement it derives is scalar-aligned by construction rather than by a range check.
+
+`text` and `spans` are authored together: stating `text` without `spans` clears the ranges it replaced, because
+replacement text carries its own formatting and retaining the previous ranges would reinterpret them against unrelated
+text. An editor that owns styled ranges therefore states both, and rebases its own offsets in its own document model,
+where it knows what the edit meant. The library does not rebase ranges across a text change, and the offset-taking
+helpers that once did (`insertText`, `deleteText`, `replaceText`, `setSpan`, `removeSpan`) have been removed: they let a
+caller hand the engine an offset the tree API cannot express, and every one of them was reproducible with one
+assignment.
 
 ### Span offsets resolve to grapheme clusters
 
@@ -172,23 +176,41 @@ settles that before a frame is built, and settles it constructively rather than 
 > **A cluster takes the style of its base.** Every span boundary moves forward to the end of the cluster containing it,
 > so the marks that attach to a base follow the base's style.
 
-The rule is the same for spans you author and for spans `insertText`/`deleteText`/`replaceText` rebase, because through
-React those are one act. Nothing throws, and `text.spans` always reports the resolved offsets:
+The rule has two entry points and the same answer at both. Nothing throws, and `text.spans` always reports the resolved
+offsets.
+
+**Offsets you author** reach it through the `spans` array, the one surface that carries raw numbers:
 
 ```ts
 const label = new Text({ font, text: 'abc', spans: [{ start: 0, end: 1, paint }] });
-label.insertText(1, '\u0301'); // 'ábc'; 'a' and the mark are now one cluster spanning [0, 2)
+label.set({ text: 'ábc', spans: label.spans }); // 'a' and the mark are now one cluster spanning [0, 2)
 label.spans; // [{ start: 0, end: 2, paint }] -- the mark joined the style of its base
 ```
+
+**Boundaries the tree compilers derive** reach it at the concatenation join that created them. `txt`/`span` and nested
+React `<Text>` compile a document that states no offsets at all, deriving each boundary where two fragments meet.
+Concatenation can fuse the tail of one fragment with the head of the next into one cluster, and the join then names an
+offset the finished text has no boundary at. Both compilers resolve their own joins against the text they produced, so
+a document tree cannot compile to a paragraph the engine refuses:
+
+```ts
+txt`a${span({ color: '#ff0000' })`́b`}`;
+// text  'áb' -- the base and the mark fused into one cluster spanning [0, 2)
+// spans [{ start: 2, end: 3, ... }] -- the fused cluster keeps the style of its base, which is plain
+```
+
+The same document written as nested React elements compiles to the same pair. By the time either reaches
+`alignSpansToClusters`, there is nothing left for it to move.
 
 Forward is a policy, not arithmetic. Moving both boundaries backward preserves ordering and adjacency just as well;
 forward is chosen because backward would take style away from a base you styled and never edited, handing the cluster to
 a mark that attached to it. Both boundaries move the same way, so two spans meeting at one offset still meet.
 
-A span that keeps no cluster of its own becomes an empty range and stays in the array. Deleting the base between a
+A span that keeps no cluster of its own becomes an empty range and stays in the array. Removing the base between a
 styled letter and a mark leaves that mark on the previous cluster, and the span it came from reports `[2, 2)` rather
-than disappearing: the loss is visible, and `setSpan(index, ...)`/`removeSpan(index)` keep addressing the span they
-always did. An empty span states nothing and reaches no engine style.
+than disappearing: the loss is visible, and every later span keeps the index it always had, so reading `text.spans` back
+to compare it against what you authored lines up entry for entry. An empty span states nothing and reaches no engine
+style.
 
 Offsets outside the text are left exactly as given. Range validity is a separate rule with its own error, and clamping
 an out-of-range offset would turn an arithmetic mistake into a plausible-looking style.

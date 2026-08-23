@@ -234,40 +234,6 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     this.#semanticChanges |= changes;
   }
 
-  insertText(offset: number, value: string): void {
-    this.replaceText(offset, offset, value);
-  }
-
-  deleteText(start: number, end: number): void {
-    this.replaceText(start, end, '');
-  }
-
-  replaceText(start: number, end: number, value: string): void {
-    this.#assertActive();
-    assertTextRange(this.#desired.text, start, end);
-    if (typeof value !== 'string') throw new TypeError('replacement text must be a string');
-    if (start === end && value.length === 0) return;
-    const text = this.#desired.text.slice(0, start) + value + this.#desired.text.slice(end);
-    const spans = editSpans(this.#desired.spans, start, end, value.length);
-    this.set({ text, spans } as TextUpdate<Technique>);
-  }
-
-  setSpan(index: number, span: TextSpan<Technique>): void {
-    const spans = [...this.spans];
-    if (!Number.isSafeInteger(index) || index < 0 || index >= spans.length)
-      throw new RangeError('span index is outside the text');
-    spans[index] = span;
-    this.spans = spans;
-  }
-
-  removeSpan(index: number): void {
-    const spans = [...this.spans];
-    if (!Number.isSafeInteger(index) || index < 0 || index >= spans.length)
-      throw new RangeError('span index is outside the text');
-    spans.splice(index, 1);
-    this.spans = spans;
-  }
-
   setCapacity(capacity: GlyphBufferCapacity): void {
     this.#assertActive();
     this.#standaloneCapacity = normalizeCapacity(capacity);
@@ -1388,54 +1354,6 @@ function previousScalarStart(value: string, end: number): number {
   const unit = value.charCodeAt(last);
   const previous = value.charCodeAt(last - 1);
   return unit >= 0xdc00 && unit <= 0xdfff && last > 0 && previous >= 0xd800 && previous <= 0xdbff ? last - 1 : last;
-}
-
-function assertTextRange(text: string, start: number, end: number): void {
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || end > text.length) {
-    throw new RangeError('text edit range is outside the text');
-  }
-  if (splitsSurrogatePair(text, start) || splitsSurrogatePair(text, end)) {
-    throw new RangeError('text edit range must not split a Unicode scalar');
-  }
-}
-
-function splitsSurrogatePair(text: string, offset: number): boolean {
-  if (offset <= 0 || offset >= text.length) return false;
-  const previous = text.charCodeAt(offset - 1);
-  const next = text.charCodeAt(offset);
-  return previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff;
-}
-
-/**
- * Rebase spans across a text edit this class performed.
- *
- * This is arithmetic only. Rebasing can leave a boundary inside a cluster the edit itself created --
- * inserting a combining scalar at a span's end is the one-character case -- and resolving that is
- * `normalizeDesired`'s single responsibility, reached through the `set()` below. Doing it here as
- * well would segment the edited text twice for one answer.
- *
- * A span whose entire range is inside the replaced range is dropped, because the caller deleted the
- * text it addressed. That is a different act from the cluster resolution, which never drops a span.
- */
-function editSpans<Technique extends AnyRasterTechnique>(
-  spans: readonly TextSpan<Technique>[],
-  start: number,
-  end: number,
-  insertLength: number,
-): readonly TextSpan<Technique>[] {
-  const delta = insertLength - (end - start);
-  return spans.flatMap((span) => {
-    if (span.end <= start) return [span];
-    if (span.start >= end) return [{ ...span, start: span.start + delta, end: span.end + delta }];
-    const retainsLeft = span.start < start;
-    const retainsRight = span.end > end;
-    if (retainsLeft && retainsRight) return [{ ...span, end: span.end + delta }];
-    if (retainsLeft) return [{ ...span, end: start }];
-    if (retainsRight) {
-      return [{ ...span, start: start + insertLength, end: span.end + delta }];
-    }
-    return [];
-  });
 }
 
 function classifySemanticChanges<Technique extends AnyRasterTechnique>(update: TextUpdate<Technique>): number {

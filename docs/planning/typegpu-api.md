@@ -224,8 +224,6 @@ interface TypeGpuParagraph<Technique extends AnyRasterTechnique, Variant> {
   visible: boolean;
 
   set(properties: TypeGpuParagraphUpdate<Technique, Variant>): void;
-  setSpan(index: number, span: ParagraphSpan<Technique, Variant>): void;
-  removeSpan(index: number): void;
   setTransform(columnMajorMatrix4: ArrayLike<number>): void;
   snapshotGlyphs(): GlyphSnapshot;
   setGlyphOrigins(update: GlyphOriginUpdate): void;
@@ -248,6 +246,12 @@ interface TypeGpuParagraphSnapshot<Technique extends AnyRasterTechnique, Variant
   readonly visible: boolean;
 }
 ```
+
+There is no index-addressed span mutator. `set({ spans })` states the whole array, which is what a caller already holds:
+an index-addressed writer buys nothing a caller cannot express and reintroduces the class of defect the Three surface
+removed by dropping `setSpan`/`removeSpan` -- an offset handed straight to the engine without the surrounding document
+that would have shown what it meant. Span offsets resolve onto the extended grapheme cluster grid here exactly as they do
+on the Three surface (D-265).
 
 `setTransform()` copies exactly 16 finite column-major values into retained engine state. Transform and visibility changes
 dirty only the target's transform/visibility storage; they do not call core shaping. The program may repeat matrices per

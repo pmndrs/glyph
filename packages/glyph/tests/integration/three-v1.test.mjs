@@ -71,17 +71,30 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
       { start: 2, end: 4, paint: { color: '#00ff00' } },
     ],
   });
-  editedSpans.insertText(1, 'X');
-  editedSpans.insertText(3, 'Y');
+  // Text and its spans are authored together. A caller that changes the string states the ranges
+  // that string has, and `set` still derives the narrow engine edit from the two strings.
+  editedSpans.set({
+    text: 'AXBYCD',
+    spans: [
+      { start: 0, end: 3, paint: { color: '#ff0000' } },
+      { start: 4, end: 6, paint: { color: '#00ff00' } },
+    ],
+  });
   assert.deepEqual(
     editedSpans.spans.map(({ start, end }) => ({ start, end })),
     [
       { start: 0, end: 3 },
       { start: 4, end: 6 },
     ],
-    'insertion inside a span extends it while insertion at a boundary stays outside',
+    'authored ranges are stored as authored when every boundary is already a cluster boundary',
   );
-  editedSpans.deleteText(1, 4);
+  editedSpans.set({
+    text: 'ACD',
+    spans: [
+      { start: 0, end: 1, paint: { color: '#ff0000' } },
+      { start: 1, end: 3, paint: { color: '#00ff00' } },
+    ],
+  });
   assert.equal(editedSpans.text, 'ACD');
   assert.deepEqual(
     editedSpans.spans.map(({ start, end }) => ({ start, end })),
@@ -90,6 +103,10 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
       { start: 1, end: 3 },
     ],
   );
+  // Stating `text` without `spans` clears them: replacement text carries its own formatting, and
+  // retaining the previous ranges would reinterpret them against unrelated text.
+  editedSpans.text = 'ACD!';
+  assert.deepEqual(editedSpans.spans, []);
   editedSpans.dispose();
 
   const scene = new THREE.Scene();
@@ -521,12 +538,15 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 0, 'an empty update and cached measurement must not cross into Rust');
 
-  left.deleteText(1, 2);
+  // Assigning `text` is the whole editing surface. Each assignment states the string the paragraph
+  // now holds, and the narrowest scalar-aligned replacement between the two strings is what crosses
+  // into Rust -- a deletion, an insertion, and a substitution all derived the same way.
+  left.text = 'A';
   scene.updateMatrixWorld();
   assert.deepEqual(instrumented.latestTextMutations(), [{ start: 1, deleteCount: 1, insert: '' }]);
   assert.equal(left.text, 'A');
 
-  left.insertText(1, 'B');
+  left.text = 'AB';
   scene.updateMatrixWorld();
   assert.deepEqual(instrumented.latestTextMutations(), [{ start: 1, deleteCount: 0, insert: 'B' }]);
   assert.equal(left.text, 'AB');
@@ -539,20 +559,26 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
     'declarative assignment must serialize its smallest scalar-aligned replacement',
   );
 
-  left.replaceText(1, 2, 'Z');
-  left.deleteText(0, 1);
-  left.insertText(0, 'A');
+  left.text = 'AZ';
+  left.text = 'Z';
+  left.text = 'AZ';
   scene.updateMatrixWorld();
-  assert.deepEqual(instrumented.latestTextMutations(), [
-    { start: 1, deleteCount: 1, insert: 'Z' },
-    { start: 0, deleteCount: 1, insert: '' },
-    { start: 0, deleteCount: 0, insert: 'A' },
-  ]);
+  assert.deepEqual(
+    instrumented.latestTextMutations(),
+    [
+      { start: 1, deleteCount: 1, insert: 'Z' },
+      { start: 0, deleteCount: 1, insert: '' },
+      { start: 0, deleteCount: 0, insert: 'A' },
+    ],
+    'assignments between two publications must queue as separate narrow edits, not collapse',
+  );
   assert.equal(left.text, 'AZ');
 
-  left.replaceText(0, 2, '🌍');
-  assert.throws(() => left.insertText(1, '!'), /must not split a Unicode scalar/u);
+  // A whole-string assignment cannot address the inside of a scalar, so the replacement derived
+  // from it is scalar-aligned by construction rather than by a range check.
+  left.text = '🌍';
   scene.updateMatrixWorld();
+  assert.deepEqual(instrumented.latestTextMutations(), [{ start: 0, deleteCount: 2, insert: '🌍' }]);
   assert.equal(left.text, '🌍');
   left.text = 'AB';
   scene.updateMatrixWorld();

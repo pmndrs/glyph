@@ -1,4 +1,4 @@
-import { type ClusterAlignableRange, alignRangesToClusters, findGraphemeBoundaries } from './internal/graphemes.js';
+import { type ClusterAlignableRange, resolveRangesToClusters } from './internal/graphemes.js';
 import { statedProperties } from './internal/span-cascade.js';
 import type { FontSelection } from './loaded-font.js';
 import type { ParagraphStyle } from './text-properties.js';
@@ -41,6 +41,15 @@ export interface TextSpanFragment<Technique extends AnyRasterTechnique = never> 
 export type { IdentifiedSpanRange, SpanRange } from './internal/span-cascade.js';
 
 /**
+ * The join rule `compose` below applies, re-exported for the React `<Text>` compiler.
+ *
+ * `flattenText` is the second implementation of the same compiler and must resolve its joins by the
+ * same rule; it reaches that rule through this module because the adapter layers do not import from
+ * `internal/`. Neither compiler restates the rule, and neither is allowed to drift from the other.
+ */
+export { resolveRangesToClusters } from './internal/graphemes.js';
+
+/**
  * Resolve every span boundary onto the extended grapheme cluster grid of `text`.
  *
  * The engine resolves exactly one style per extended grapheme cluster and rejects a whole frame
@@ -48,6 +57,13 @@ export type { IdentifiedSpanRange, SpanRange } from './internal/span-cascade.js'
  * span. `Text` therefore resolves span offsets through this function before any of them reach the
  * engine, so the rule a caller sees is the constructive one -- a cluster takes the style of its
  * base -- rather than a deferred rejection.
+ *
+ * This is the backstop for the ONE surface that carries raw offsets: the untyped `spans` array,
+ * whose numbers are the caller's own arithmetic. It is no longer what discovers a split the
+ * package itself derived. `txt`/`span` and the React `<Text>` tree compile a document that states
+ * no offsets at all, and each resolves the boundaries it derives at its own concatenation joins
+ * (`resolveRangesToClusters`), so a compiled paragraph arrives here already on the cluster grid and
+ * this call finds nothing to move.
  *
  * It is exported because a caller that would rather detect the shift than accept it needs the same
  * answer the library will use. The argument array is returned by identity when nothing moves, so
@@ -66,8 +82,7 @@ export function alignSpansToClusters<Span extends ClusterAlignableRange>(
   text: string,
   spans: readonly Span[],
 ): readonly Span[] {
-  if (spans.length === 0 || !text.isWellFormed()) return spans;
-  return alignRangesToClusters(spans, findGraphemeBoundaries(text));
+  return resolveRangesToClusters(text, spans);
 }
 
 export type FormattedText<Technique extends AnyRasterTechnique> = TextLiteral<Technique> | TextLiteral<never>;
@@ -122,10 +137,20 @@ export function span<Technique extends AnyRasterTechnique>(
   }) as SpanTag<Technique>;
 }
 
+/**
+ * Compile one fragment tree into the `(text, spans)` pair the engine consumes.
+ *
+ * The tree states no offsets. Every boundary below is derived at a concatenation JOIN -- `start` is
+ * the length before a fragment's text is appended, `end` the length after -- and concatenation can
+ * fuse the tail of one fragment with the head of the next into a single extended grapheme cluster,
+ * naming an offset that is not a boundary of the text just produced. `resolveRangesToClusters`
+ * settles those joins against the finished text under the one rule `flattenText` uses on the React
+ * tree: the fused cluster takes the style of its base, which is the earlier fragment's.
+ */
 function compose<Technique extends AnyRasterTechnique>(
   strings: TemplateStringsArray,
   values: readonly TextTemplateValue<Technique>[],
-): { readonly text: string; readonly spans: ParagraphSpan<Technique>[] } {
+): { readonly text: string; readonly spans: readonly ParagraphSpan<Technique>[] } {
   let text = strings[0] ?? '';
   const spans: ParagraphSpan<Technique>[] = [];
   for (let index = 0; index < values.length; index += 1) {
@@ -145,7 +170,7 @@ function compose<Technique extends AnyRasterTechnique>(
     }
     text += strings[index + 1] ?? '';
   }
-  return { text, spans };
+  return { text, spans: resolveRangesToClusters(text, spans) };
 }
 
 function isFragment(value: unknown): value is TextLiteral<AnyRasterTechnique> | TextSpanFragment<AnyRasterTechnique> {
