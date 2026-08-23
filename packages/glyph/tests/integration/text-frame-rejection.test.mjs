@@ -14,10 +14,12 @@
  *      policies, so an inverted range -- pure caller arithmetic, unrepairable -- travelled all the
  *      way to Rust before failing, with a stack that named the render loop rather than the caller.
  *
- * This file pins the contract that replaced them: caller-actionable causes are separated from
- * internal invariant violations and carry the paragraph and style they name (D-267), a rejection
- * latches until its input actually moves (D-269), and a range a caller cannot have meant throws
- * from `set()` (D-268).
+ * This file pins the contract that replaced them. Every input a caller controls is refused at `set()`,
+ * where the offending object can be named and the caller is still on the stack, so a frame refusal
+ * is a defect in this package rather than a state to recover from: it is reported once and the batch
+ * stops compiling, instead of failing silently at frame rate. A fixed glyph budget is not a failure
+ * at all -- it is the policy doing what it was asked to do -- so it keeps the last complete revision
+ * visible, warns in development, and self-heals.
  */
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
@@ -25,8 +27,7 @@ import test, { after } from 'node:test';
 import '../support/browser-globals.mjs';
 import * as THREE from 'three/webgpu';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text, TextFrameError } from '@pmndrs/glyph/three';
-import { textShaperAbi } from '@pmndrs/glyph/core';
+import { Text } from '@pmndrs/glyph/three';
 
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 
@@ -150,3 +151,47 @@ test('a malformed feature range throws naming the span and the feature', { timeo
 // point of closing it. The latch is retained as containment for a defect in this package: it stops
 // an invalid frame recompiling and failing silently at frame rate behind the last good picture.
 // Its remaining coverage is the Rust-side tests that produce each status directly.
+
+test(
+  'a fixed budget that cannot hold the content keeps the last revision and does not break the frame',
+  { timeout },
+  async () => {
+    // `fixed` is a caller declaring a hard glyph budget, which is a real thing to want in a
+    // memory-constrained scene. Exceeding it used to throw a RangeError from inside
+    // `updateMatrixWorld`, taking out the whole scene traversal for something the caller asked for.
+    const font = await fonts.load('inter');
+    const scene = new THREE.Scene();
+    const node = new Text({
+      font,
+      contentBox: box,
+      paint,
+      style: latin,
+      text: 'abc',
+      capacity: { size: 8, policy: 'fixed' },
+    });
+    scene.add(node);
+    try {
+      scene.updateMatrixWorld(true);
+      const settled = node.measureLayout();
+      assert.ok(settled !== undefined, 'the paragraph inside the budget must commit');
+
+      // Past the budget: no throw, and the committed layout is still the one that fit.
+      node.set({ text: 'abcdefghijklmnopqrstuvwxyz' });
+      assert.doesNotThrow(() => scene.updateMatrixWorld(true), 'a fixed budget must not break the traversal');
+      assert.deepEqual(node.measureLayout(), settled, 'the last complete revision must stay visible');
+      assert.equal(node.error, undefined, 'honouring the declared budget is not an error');
+
+      // Repeated frames stay quiet and stay correct.
+      for (let frame = 0; frame < 4; frame += 1) scene.updateMatrixWorld(true);
+      assert.deepEqual(node.measureLayout(), settled);
+
+      // Self-healing: the comparison is recomputed, never latched.
+      node.set({ text: 'ab' });
+      scene.updateMatrixWorld(true);
+      const recovered = node.measureLayout();
+      assert.ok(recovered !== undefined && recovered.glyphCount === 2, 'content back inside the budget must commit');
+    } finally {
+      node.dispose();
+    }
+  },
+);

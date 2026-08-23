@@ -65,6 +65,9 @@ import {
 } from './engine-runtime.js';
 import type { ThreeTextMaterial } from './material.js';
 
+// The scoped import lint denies `/three` any reach into `internal/`, so the guard is written here as
+// the same ecosystem-standard comparison a bundler strips in a production build.
+const DEV = process.env.NODE_ENV !== 'production';
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const TEXT_CHANGE = 1 << 0;
 const STYLE_CHANGE = 1 << 1;
@@ -150,13 +153,6 @@ interface TextReconciler {
   needsApply(text: Text<AnyRasterTechnique>): boolean;
   semanticChanges(text: Text<AnyRasterTechnique>): number;
   textMutations(text: Text<AnyRasterTechnique>): readonly PendingTextMutation[];
-  /**
-   * Monotonic counter bumped by every `set()` that changes desired state. It is the batch's
-   * evidence that a rejected frame's input actually moved. `needsApply` cannot serve: a rejection
-   * never reaches `markApplied`, so it stays true forever and says nothing about whether the
-   * caller changed anything.
-   */
-  revision(text: Text<AnyRasterTechnique>): number;
   markApplied(text: Text<AnyRasterTechnique>): void;
   bind(text: Text<AnyRasterTechnique>, binding: ThreeTextBatchBinding, group: TextGroup | undefined): void;
   unbindFrom(text: Text<AnyRasterTechnique>, binding: ThreeTextBatchBinding): void;
@@ -172,7 +168,6 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
       needsApply: (text) => text.#desiredRevision !== text.#appliedRevision,
       semanticChanges: (text) => text.#semanticChanges,
       textMutations: (text) => text.#textMutations,
-      revision: (text) => text.#desiredRevision,
       markApplied: (text) => text.#markApplied(),
       bind: (text, binding, group) => text.#bind(binding, group),
       unbindFrom: (text, binding) => text.#unbindFrom(binding),
@@ -400,7 +395,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
         this.#binding.synchronize();
         // A latched batch published nothing this frame, so the rejection `.error` already holds is
         // still the current state. Clearing it here would erase the only signal a rejected frame has.
-        if (!this.#binding.latched) this.#error = undefined;
+        if (!this.#binding.failed) this.#error = undefined;
       } catch (error) {
         this.#error = error;
         this.onError?.(error);
@@ -541,7 +536,7 @@ export class TextGroup extends THREE.Object3D {
           this.#binding.synchronize();
           // A latched batch published nothing this frame, so the rejection `.error` already holds
           // is still the current state; clearing it would erase the only signal it has.
-          if (!this.#binding.latched) this.#error = undefined;
+          if (!this.#binding.failed) this.#error = undefined;
         } catch (error) {
           this.#error = error;
           this.onError?.(error);
@@ -550,7 +545,7 @@ export class TextGroup extends THREE.Object3D {
         this.#binding.reconcile([]);
         try {
           this.#binding.synchronize();
-          if (!this.#binding.latched) this.#error = undefined;
+          if (!this.#binding.failed) this.#error = undefined;
         } catch (error) {
           this.#error = error;
           this.onError?.(error);
@@ -571,24 +566,6 @@ export class TextGroup extends THREE.Object3D {
 }
 
 /** One paragraph of a rejected frame, in render order: what it was and which desired state it held. */
-interface LatchedParagraph {
-  readonly id: number;
-  readonly revision: number;
-}
-
-/**
- * A frame the batch refused to keep recompiling.
- *
- * A rejected frame never reaches `markApplied()`, so every text in it still reports `needsApply()`
- * and the identical frame would be recompiled and rejected on every subsequent `updateMatrixWorld`.
- * The latch records the exact input that was rejected; the batch stays silent until that input
- * moves, and then compiles once more.
- */
-interface LatchedRejection {
-  readonly error: unknown;
-  readonly frame: readonly LatchedParagraph[];
-}
-
 interface RetainedEngineParagraph {
   readonly id: number;
   textLength: number;
@@ -625,7 +602,8 @@ class ThreeTextBatchBinding {
   #textCapacity = 0;
   #capacity: GlyphBufferCapacity;
   #materialInvalidated = false;
-  #rejection: LatchedRejection | undefined;
+  #rejection: unknown;
+  #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #disposed = false;
 
   constructor(runtime: TextRuntime, capacity: GlyphBufferCapacity, group: TextGroup | undefined) {
@@ -800,35 +778,24 @@ class ThreeTextBatchBinding {
    * is what the query threw before the latch existed.
    */
   #assertNotLatched(): void {
-    if (this.#rejection !== undefined) throw this.#rejection.error;
+    if (this.#rejection !== undefined) throw this.#rejection;
   }
   /**
-   * True while a rejected frame is latched.
+   * True once a frame was refused, which means this package broke one of its own invariants.
    *
-   * Every cause the engine can refuse a frame for is now unreachable from the public API. Span offsets, partial overlaps, duplicate ranges, feature ranges inside a span, and unpaired surrogates are all rejected at `set()`, where the offending object can be named and the caller is still on the stack; every surviving boundary is snapped onto the cluster grid before it reaches the engine. The one refusal a caller can still provoke is `capacity.policy: 'fixed'`, which is caller-chosen behaviour -- they asked for rejection over growth -- and throws synchronously rather than producing a frame fault. A frame rejection is therefore an invariant this package broke, and the latch exists so that one such defect is reported once instead of recompiling and failing silently at frame rate behind the last good picture. There is no `retry()`: nothing a caller could do would change the outcome.
+   * Shaping, layout, and measurement cannot fail with the data they need, and every input a caller
+   * controls -- span ranges and nesting, feature ranges, surrogate pairing, cluster alignment -- is
+   * refused at `set()` before it reaches the engine. A refusal here is therefore a defect to report,
+   * not a condition to recover from, and there is deliberately nothing that clears it: the batch
+   * reports once and stops compiling instead of failing silently at frame rate behind the last good
+   * picture.
    */
-  get latched(): boolean {
+  /** What a fixed budget could not hold, while it cannot hold it. Cleared when the content fits again. */
+  get capacityExceeded(): { readonly required: number; readonly size: number } | undefined {
+    return this.#capacityExceeded;
+  }
+  get failed(): boolean {
     return this.#rejection !== undefined;
-  }
-  /**
-   * Whether the frame about to be compiled is byte-for-byte the one already rejected.
-   *
-   * Runs only while latched, so the accepted path pays one boolean test per frame. Every input a
-   * frame is compiled from is covered: the paragraph set and its render order, each paragraph's
-   * desired revision, pending removals, and a material swap. Capacity changes clear the latch at
-   * `setCapacity`, since a capacity rejection is the one cause a caller corrects without touching
-   * any `Text`.
-   */
-  #frameUnchangedSince(
-    rejection: LatchedRejection,
-    ordered: readonly (readonly [Text<AnyRasterTechnique>, RetainedEngineParagraph])[],
-  ): boolean {
-    if (this.#removed.length !== 0 || this.#materialInvalidated) return false;
-    if (rejection.frame.length !== ordered.length) return false;
-    return rejection.frame.every((latched, order) => {
-      const entry = ordered[order];
-      return entry !== undefined && entry[1].id === latched.id && reconciler.revision(entry[0]) === latched.revision;
-    });
   }
   synchronize(semanticViewMask = 0): void {
     if (this.#disposed) return;
@@ -838,16 +805,17 @@ class ThreeTextBatchBinding {
       ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
     );
     if (this.#rejection !== undefined) {
-      if (this.#frameUnchangedSince(this.#rejection, ordered)) {
-        // A latched paragraph must not freeze the scene around it. Transforms, visibility, and
-        // render order are applied to the last accepted publication and never enter the frame the
-        // engine refused, so withholding them would turn one rejected paragraph into a whole group
-        // that stops responding to the camera.
-        this.#target.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
-        this.#dirtyTransformIds.clear();
-        return;
-      }
-      this.#rejection = undefined;
+      // A rejection is a defect in this package, not a state to recover from: shaping and layout
+      // cannot fail once the data they need is present, and every input a caller controls is
+      // refused at `set()` before it reaches here. So there is nothing to try again for, and the
+      // batch stops compiling for good rather than deciding when the input has moved enough.
+      //
+      // Transforms still run. They are applied to the last accepted publication and never entered
+      // the frame the engine refused, so withholding them would turn one broken paragraph into a
+      // whole group that stops responding to the camera.
+      this.#target.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
+      this.#dirtyTransformIds.clear();
+      return;
     }
     const changed = ordered.flatMap(([text, paragraph], order) => {
       const semanticChanges =
@@ -930,6 +898,14 @@ class ThreeTextBatchBinding {
       for (const text of this.#paragraphs.keys()) {
         totalTextLength += text.text.length;
         maximumParagraphTextLength = Math.max(maximumParagraphTextLength, text.text.length);
+      }
+      if (!this.#withinFixedCapacity(totalTextLength)) {
+        // The caller asked for a hard cap, so honouring it is the correct outcome rather than a
+        // failure: keep the last complete revision, keep the scene running, and keep transforms
+        // live so the paragraph still follows the camera.
+        this.#target.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
+        this.#dirtyTransformIds.clear();
+        return;
       }
       this.#ensureCapacity(totalTextLength, maximumParagraphTextLength);
       const limits = engineLimits(
@@ -1014,10 +990,7 @@ class ThreeTextBatchBinding {
         // A committed frame whose GPU application failed is retried from `#lastPublication` on the
         // next frame, so latching it would suppress the retry that is meant to recover it. Only an
         // uncommitted frame -- one the engine or the compiler refused -- is latched.
-        this.#rejection = {
-          error: rejected,
-          frame: ordered.map(([text, paragraph]) => ({ id: paragraph.id, revision: reconciler.revision(text) })),
-        };
+        this.#rejection = rejected;
       }
       throw rejected;
     }
@@ -1042,18 +1015,41 @@ class ThreeTextBatchBinding {
     return { kind: 'paragraph', text };
   }
   setCapacity(value: GlyphBufferCapacity): void {
-    // Capacity is the one frame input no `Text` revision covers, so a capacity change drops the
-    // latch itself rather than being detected by `#frameUnchangedSince`.
-    this.#rejection = undefined;
     this.#capacity = value;
     this.#requestCapacity = Math.max(this.#requestCapacity, value.size * 32);
     this.#resultCapacity = Math.max(this.#resultCapacity, value.size * 160);
     this.#session.reserve(this.#requestCapacity, this.#resultCapacity);
   }
-  #ensureCapacity(required: number, requiredParagraphText: number): void {
-    if (required > this.#capacity.size && this.#capacity.policy === 'fixed') {
-      throw new RangeError(`text requires ${required} glyph slots but fixed capacity is ${this.#capacity.size}`);
+  /**
+   * Whether a fixed budget can hold what the paragraphs now need.
+   *
+   * `fixed` is a caller declaring a hard glyph budget, which is a real thing to want in a
+   * memory-constrained scene, so exceeding it is neither a defect nor an error: it is the policy
+   * doing what it was asked to do. The defined behaviour is that the update does not apply and the
+   * last complete revision stays on screen. The requirement is a text-length upper bound computed
+   * before shaping, so the answer never depends on work the budget was supposed to bound.
+   *
+   * It self-heals: shortening the text or raising the capacity clears it on the next frame, because
+   * the comparison is recomputed rather than latched.
+   */
+  #withinFixedCapacity(required: number): boolean {
+    if (this.#capacity.policy !== 'fixed' || required <= this.#capacity.size) {
+      this.#capacityExceeded = undefined;
+      return true;
     }
+    const exceeded = { required, size: this.#capacity.size };
+    const changed = this.#capacityExceeded?.required !== required || this.#capacityExceeded.size !== exceeded.size;
+    this.#capacityExceeded = exceeded;
+    if (changed && DEV) {
+      console.warn(
+        `[@pmndrs/glyph] fixed capacity ${exceeded.size} cannot hold ${required} glyph slots; the last complete ` +
+          `revision stays visible and this update is not applied. Raise the capacity, shorten the text, or use ` +
+          `the 'grow' or 'chunk' policy.`,
+      );
+    }
+    return false;
+  }
+  #ensureCapacity(required: number, requiredParagraphText: number): void {
     const target =
       this.#capacity.policy === 'chunk' ? Math.ceil(required / this.#capacity.size) * this.#capacity.size : required;
     const requestCapacity = Math.max(this.#requestCapacity, target * 32);
