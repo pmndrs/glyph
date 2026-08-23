@@ -109,7 +109,7 @@ export interface ParagraphLineMetrics extends BaselineMetrics {
  * per-glyph arrays and is suitable for positioning UI, telemetry, and missing-glyph admission
  * checks.
  */
-export interface ParagraphLayoutSummary extends ParagraphMeasurement {
+export interface ParagraphLayoutSummary extends ParagraphMeasurement, ParagraphIntrinsicWidths {
   /** Positioned glyphs retained by layout, including non-rendering glyphs such as spaces. */
   readonly glyphCount: number;
   readonly lineCount: number;
@@ -118,6 +118,27 @@ export interface ParagraphLayoutSummary extends ParagraphMeasurement {
   /** Exactly `lineCount` entries, in visual top-to-bottom order. */
   readonly lines: readonly ParagraphLineMetrics[];
 }
+
+/**
+ * Content-only inline extents published beside every paragraph measurement.
+ *
+ * Both widths are intrinsic: they do not depend on the constraints a host is currently
+ * probing, and they ride the same measurement pass that produced the rest of the summary
+ * -- no second query at zero width is required. `maxContentWidth` is the widest run between
+ * forced breaks under the constraint's wrap policy, trailing spaces trimmed the way line
+ * ends trim them. `minContentWidth` is the widest run that remains when soft breaks are
+ * also taken: after word spaces under `'word'` wrap, before every safe boundary under
+ * `'character'`, and the whole segment under `'none'`. Column splits, line caps, and
+ * overflow clipping do not participate, because those are box policies rather than
+ * content properties.
+ */
+export interface ParagraphIntrinsicWidths {
+  readonly minContentWidth: number;
+  readonly maxContentWidth: number;
+}
+
+/** A paragraph measurement plus the intrinsic widths carried by every `Paragraph.measure()` result. */
+export interface ParagraphMetrics extends ParagraphMeasurement, ParagraphIntrinsicWidths {}
 
 /**
  * Positioned glyph output in paragraph-local coordinates. The origin is the

@@ -1385,6 +1385,11 @@ fn append_paragraph_measurement(
         .first()
         .copied()
         .ok_or(EngineError::InvalidRequest)?;
+    // Intrinsic extents ride the same measurement pass: one scan over the cluster
+    // arena, mirroring the breaker's wrap decisions (see `ClusterArena::
+    // intrinsic_widths`), so hosts never re-measure at zero width to size a
+    // flex item.
+    let intrinsics = state.clusters.active().intrinsic_widths(constraint.wrap);
     let needs_intrinsic = visible_extents.consumed_clusters < cluster_count || has_ellipsis;
     if needs_intrinsic {
         state.prepare_intrinsic_flow_layout(
@@ -1488,6 +1493,7 @@ fn append_paragraph_measurement(
         positioned_matches_flow.then(|| positioned.semantic_line_inline_extents()),
         clusters,
         intrinsic_extents,
+        intrinsics,
         include_layout_inspection && positioned_matches_flow,
     )
 }

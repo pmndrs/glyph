@@ -1729,6 +1729,16 @@ field_offset!(
 );
 field_offset!(SEMANTIC_INK_BLOCK_EXTENT, SemanticRecord, ink_block_extent);
 field_offset!(SEMANTIC_ASCENT, SemanticRecord, ascent);
+field_offset!(
+    SEMANTIC_MIN_CONTENT_WIDTH,
+    SemanticRecord,
+    min_content_width
+);
+field_offset!(
+    SEMANTIC_MAX_CONTENT_WIDTH,
+    SemanticRecord,
+    max_content_width
+);
 field_offset!(RESOURCE_ID, ResourceRecord, id);
 field_offset!(RESOURCE_GENERATION, ResourceRecord, generation);
 field_offset!(RESOURCE_TECHNIQUE_ID, ResourceRecord, technique_id);
@@ -2255,7 +2265,9 @@ pub fn json() -> String {
                 "inkBlockStart": SEMANTIC_INK_BLOCK_START,
                 "inkInlineExtent": SEMANTIC_INK_INLINE_EXTENT,
                 "inkBlockExtent": SEMANTIC_INK_BLOCK_EXTENT,
-                "ascent": SEMANTIC_ASCENT
+                "ascent": SEMANTIC_ASCENT,
+                "minContentWidth": SEMANTIC_MIN_CONTENT_WIDTH,
+                "maxContentWidth": SEMANTIC_MAX_CONTENT_WIDTH
             },
             "engineResource": {
                 "size": RESOURCE_RECORD_SIZE,
