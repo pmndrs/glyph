@@ -41,13 +41,11 @@ test('the published contract is ESM-only', async () => {
   }
 
   // The typed ABI subpaths published struct offsets for pointer arithmetic and the validator subpaths
-  // published bake-time artifact checks; neither had a consumer outside this package. `/core` and `/tsl`
-  // stay unpublished until the TypeGPU backend proves what that layer actually needs (D-267). The modules
-  // are still built and packed — only the entry points are withdrawn, so a re-added name is a decision to
-  // make, not an accident to ship.
+  // published bake-time artifact checks; neither had a consumer outside this package. The modules are still built
+  // and packed — only the entry points are withdrawn, so a re-added name is a decision to make, not an
+  // accident to ship. `/core` and `/tsl` stay published: they are the engine-integration surface a custom
+  // renderer builds on, and `@pmndrs/glyph/three` is itself one of their consumers.
   for (const removed of [
-    './core',
-    './tsl',
     './text-shaper-abi',
     './bitmap-baker-abi',
     './mtsdf-baker-abi',

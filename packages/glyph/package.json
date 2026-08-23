@@ -26,6 +26,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js"
+    },
+    "./tsl": {
+      "types": "./dist/tsl.d.ts",
+      "import": "./dist/tsl.js"
+    },
     "./three": {
       "types": "./dist/three.d.ts",
       "import": "./dist/three.js"

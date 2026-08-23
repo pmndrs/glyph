@@ -176,13 +176,6 @@ Fonts without authored glyph names still report exact glyph IDs.
 
 ## Core API
 
-> **Not published yet.** The core layer is real and every Three primitive runs on it, but it ships no `@pmndrs/glyph/core`
-> or `@pmndrs/glyph/tsl` npm subpath. Its contract is the Wasm ABI itself — raw `u32` handles you choose, opaque byte
-> blobs you supply, a publication whose bytes expire at your next Wasm call, and a manual acquire/release pair — and no
-> consumer has stressed that shape yet. The TypeGPU backend is built against it first, and what that backend actually
-> needs becomes the published surface. Freezing it now would freeze the wrong thing (D-267). The code below is how the
-> layer works today and remains accurate; treat the import specifiers as illustrative rather than resolvable.
-
 Every Three primitive above is built on a renderer-neutral core with four moves: load a font into the Wasm shaper, describe text as one serialized frame, register a validated render policy, and consume the revisioned render plan each update publishes. The engine never calls back into JavaScript during shaping, layout, or packing — a renderer only encodes requests and reads fixed-record results.
 
 Load a font and own the engine lifecycle once:
@@ -325,7 +318,7 @@ A renderer integration has five responsibilities:
 
 Three is the maintained reference executor. `@pmndrs/glyph/three/bitmap`, `/msdf`, and `/slug` export each technique's raster contract; the Three runtime resolves the matching policy program and TSL material when a loaded font requests that technique. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
 
-The renderer-neutral host, frame wire, policy authoring toolkit, plan view, and technique shader library are a real layer with a real boundary — Three consumes only that layer, enforced by lint — but they are deliberately unpublished until the TypeGPU backend proves what the boundary should be (D-267). The [Core API](#core-api) section shows the four moves. A new engine integration can follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference.
+The renderer-neutral host, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/glyph/core`, and the technique shader library as `@pmndrs/glyph/tsl` — the [Core API](#core-api) section shows the four moves. A new engine integration can follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference; Three itself consumes only these public surfaces, enforced by lint. TypeGPU support will be built against the same contract.
 
 ## Develop
 
