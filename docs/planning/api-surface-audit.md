@@ -1,0 +1,135 @@
+---
+type: API Specification
+title: Public API surface audit and cleanup plan
+description: Findings from auditing every published entry point against Skia, Flutter, React Native, troika, Unity TextMeshPro, and Unreal Slate, with the cleanup and the animation API the findings require.
+documentation_type: explanation
+tags: [api, audit, cleanup, animation, ergonomics]
+status: draft
+sources:
+  - id: three-api
+    resource: three-api.md
+    title: Three.js text API
+  - id: core-api
+    resource: core-api.md
+    title: Core text API
+  - id: decision-register
+    resource: decision-register.md
+    title: Decision register
+generated:
+  by: anthropic-claude/opus-5
+  at: '2026-08-23T00:00:00Z'
+---
+
+# Public API surface audit and cleanup plan
+
+## Why this exists
+
+Two shipped defects had one shape: **an internal representation was published, and the caller was made responsible for keeping it valid.**
+
+- A span boundary that split a grapheme cluster reached the engine and rejected the whole paragraph frame with a numeric status naming nothing. The caller had authored no offsets at all; the tree compilers derived one at a concatenation join, and concatenation fuses clusters.
+- `insertText`/`deleteText`/`replaceText`/`setSpan`/`removeSpan` published the flattened offset array as a mutation API. They had zero callers outside their own tests, and `set()` already derived the identical incremental edit from a plain `text` assignment.
+
+Both are fixed. This document records everything the follow-up audit found that is the *same shape*, and the animation API the evidence says we should build instead of the one we have.
+
+The audit measured usage across `apps/*`, `packages/glyph-example-raster/*`, and `docs/*`, and compared every design decision against Skia (`skparagraph`), Flutter (`TextSpan`/`TextPainter`), React Native, troika-three-text, `@react-three/drei`, Unity TextMeshPro, Unreal Slate, the DOM/CSSOM, ProseMirror, and Lexical.
+
+## The rule this codifies
+
+> **A caller must never be handed a value they are responsible for keeping consistent with engine state, and must never be able to reach a state the engine will reject.**
+
+Every finding below is an instance of violating it.
+
+## What the industry comparison settled
+
+Findings worth keeping, because they answer questions that would otherwise be re-litigated.
+
+- **Flat sorted ranges are the right durable representation.** Skia stores `Block { TextRange fRange; TextStyle fStyle; }`; Flutter and React Native both flatten their trees to one immediately. `ParagraphSpan[]` is not the mistake. Publishing *mutation operations* on it was — no surveyed system does that. Skia's one incremental range API, `updateFontSize(from, to, size)`, is marked experimental and asserts the range covers the whole text.
+- **Our cluster resolution matches the normative rule.** Rounding a style boundary outward to the containing cluster is CSSOM View's normative behaviour and Skia's painting behaviour. troika's `colorRanges` has no cluster logic at all; ProseMirror, Lexical, and React Native split blindly; Unreal snaps clusters for the caret but **not** at style boundaries. Our previous behaviour — rejecting the whole frame — was harsher than every system surveyed.
+- **Our React tree is the strongest rich-text story in the three.js ecosystem.** drei's `Text` has no styled-run model; non-string children become scene children parked at the mesh origin. troika's `colorRanges` is colour-only in the published version.
+- **Nobody hands out offsets the caller must maintain.** The DOM adjusts every live `Range` on mutation; ProseMirror gives a `Mapping` per transaction; Lexical never issues a document offset. Unity invalidates everything on each regeneration and signals through an event; Unreal re-offsets run ranges itself but leaves highlight ranges to the caller to rebuild.
+- **Per-glyph write is where we are genuinely ahead.** `setGlyphOrigins` patches a retained GPU buffer with no CPU re-upload and no reshape. troika's route fights `sync()`, Skia's `RSXform` requires rebuilding the blob, Unreal has no per-glyph placement at all, Unity makes you mutate its arrays and re-snapshot manually. This capability is justified by GPU-resident retained batching and must be kept.
+- **Per-glyph read is where we are behind everyone.** We expose no glyph extents, so no caret, no selection rectangle, and no hit test can be built on top. troika ships `getCaretAtPoint`/`getSelectionRects`, Skia `getClosestGlyphClusterAt`, Flutter `getClosestGlyphInfoForOffset`, the DOM `Range.getClientRects()`. The only route to extents in this repo is decoding technique-specific packed records, which is the internal-representation leak again.
+
+## Delete
+
+Published surface with no use case. Each row carries the evidence that justifies removal.
+
+| Surface | Evidence |
+| --- | --- |
+| `Text.coreProperties`, `needsApply`, `semanticChanges`, `textMutations`, `markApplied`, `bind`, `unbindFrom`, `runtime`; `TextGroup.bindText` | The reconciler protocol, published. Zero external callers, zero doc mentions. Two take or return types the emitted `.d.ts` declares but does not export, so a caller can invoke them but cannot name them. `markApplied()` clears the mutation queue, so one call publishes a paragraph whose text buffer no longer matches the engine's. `textMutations()` hands out the exact `{start, deleteCount, insert}` records the deleted mutation API was removed for publishing. |
+| `SpanNestingError`, `SpanRange`, `IdentifiedSpanRange` | Exported straight out of `internal/span-cascade.ts`. `assertSpanNesting` and `resolveSpanCascade` have zero callers package-wide, so the error is never thrown. Its premise is also stale: `cascadeOrder` is assigned from array index and the engine resolves by `(root, cascade_order)`, so partial overlap is well defined as last-wins. The type asserts a constraint the engine does not impose. |
+| `Text.retry()`, `TextGroup.retry()` | Zero uses. `synchronize()` already self-retries. Nothing a caller can do that the next frame does not. |
+| `capacity.policy: 'fixed'` | Zero uses. Throws from inside `synchronize()` inside `updateMatrixWorld()`, and `measureLayout()` routes through the same path, so a caller cannot ask how many glyphs the content needs before exceeding the cap. No safe usage exists. |
+| `FontLeaseError` | Exported, never thrown; used only to build a warning string behind a `DEV` guard, so the lease-leak warning does not exist in production. |
+| `createFontStack`, `FontLoadError`, `normalizeRasterCoverage`, `RasterCoverageError`, `MAX_RASTER_COVERAGE_*` | Zero uses anywhere, including tests. |
+| `./text-shaper-abi`, `./font-baker-abi`, `./bitmap-baker-abi`, `./mtsdf-baker-abi`, `./slug-baker-abi` | Zero external uses. They exist to publish struct offsets for pointer arithmetic. `textShaperAbi` already reaches its one legitimate consumer through `/core`. |
+| `./bakers/{bitmap,msdf,slug}/validate` | Zero uses outside the package. |
+
+## Demote
+
+`/core` (96 symbols) and `/tsl` (22 symbols) have **no consumers**. The only importers are size-measurement entries that `export *` to weigh the subpath. `packages/glyph-example-raster`, the designated third-party integration proof, consumes three symbols from `/three` and none from `/core`.
+
+`/core`'s contract is the Wasm ABI: caller-chosen raw `u32` handles where the repo already has branded `FontHandle`/`RasterHandle` available, caller-supplied opaque byte blobs, a publication whose bytes are valid only until the next Wasm call, and a manual acquire/release refcount pair. The README teaches `plan.u8(patch + patchLayout.opcode)` as the supported idiom.
+
+The layer is legitimate and a second renderer will need something. The objection is to freezing it as a semver-stable npm subpath before a single consumer has stressed it. **Ship the TypeGPU backend against it first; whatever that backend actually needs is the real `/core`.** If it must stay published, the minimum is branded handles and a scoped lease object rather than two free functions.
+
+## Fix
+
+1. **Distinguish frame-rejection causes.** `EngineError::InvalidRequest` collapses more than twenty distinct failures — style splits a cluster, missing style index, missing run, missing font metrics, every arithmetic overflow — into `status 6`. It names no span, paragraph, or offset. Give the engine distinct variants for at least the caller-actionable cases, carry the offending paragraph and style id in the result header, and re-raise as a typed error from `/three` so a consumer never sees a bare integer. `textShaperAbi.status` is exported from `/core` but not `/three`, so a `/three` consumer cannot even map the number to a name without a second import.
+2. **Stop the per-frame rejection loop.** A permanently invalid frame is recompiled and rejected every frame forever, with the last good publication left on screen and no visual signal. `markApplied()` is only reached after a successful update, so `needsApply()` stays true. Latch after repeated identical rejections: stop recompiling, keep `.error`, report once. Reachable today with a type-legal inverted span.
+3. **Validate `spans` at `set()`, not at `synchronize()`.** The array carries four invariants enforced at three different times by three different policies: cluster alignment is silently repaired at `set()`, inverted ranges are forwarded and rejected every frame, collapsed ranges are silently dropped at `synchronize()`, and disjoint-or-nested is not enforced at all. Inverted and out-of-range spans are caller arithmetic errors and should throw from `set()` where the stack points at the caller, as `normalizedColumns` and `normalizeCapacity` already do. Cluster resolution stays silent — it is correct and matches CSSOM View.
+4. **Report partial application in the origin lane.** `setGlyphOriginOverrides` and `snapshotGlyphOrigins` both `continue` past a stable id with no record, so an animation frame writing two hundred origins may apply forty with no error and no count. `snapshotGlyphOrigins` additionally seeds `displayed` from the caller's shaped-space fallback, returning one `Float32Array` holding two coordinate spaces with nothing marking the boundary.
+5. **Guarantee the parallel-array invariant.** The one real consumer hand-wrote `assertParallelGlyphIdentity` over six public arrays. Construct `ParagraphLayoutInspection` behind a factory that cannot produce a ragged one, or make `glyphCount` the single authority and document every array as sliced to it.
+6. **Make late `registerThreeRasterPlanProgram` an error.** The registry is module-global and each `TextRuntime` snapshots it once at first coordinator creation, so a later registration is a legal call that silently does nothing and surfaces later as a missing technique. A doc comment is not enforcement.
+7. **Export the `glyphFlags` bit names or drop the field.** Sixteen bits whose meaning lives only in a planning document, which a consumer would have to find and then hardcode indices from.
+8. **Split the React inline props type.** `R3fTextChild` is typed as the full outer props, but `flattenText` honours only `font`, `style`, `paint`, `material`, and `children`. `contentBox`, `capacity`, `pixelSnapping`, `rasterPixelRatio`, `onError`, `ref`, and every `Object3D` prop are silently discarded, and a `ref` on a nested `Text` never fires. Flutter's split of `RichText` (box-level) from `TextSpan` (inline-level) is the precedent.
+9. **Re-export `ParagraphLayoutSummary` and `ParagraphLayoutInspection` from `/three`.** `Text.measureLayout()` and `inspectLayout()` return types a `/three` importer cannot name.
+
+## Reshape
+
+| Surface | To | Precedent |
+| --- | --- | --- |
+| `measureLayout()`, `inspectLayout()`, `snapshotGlyphOrigins()` returning `undefined` for "not bound to the scene graph" | Distinguish unbound (throw, as `setGlyphOrigins` already does) from "no layout yet", and add a readiness signal so callers stop writing `updateMatrixWorld(true); if (group.error) throw group.error` | troika `sync(cb)` with `syncstart`/`synccomplete`; Flutter `TextPainter.layout()` then `.size` |
+| `Text.error` / `onError` as the only signal | Add the positive signal. Today the only way to know a layout committed is that `.error` is still `undefined` | troika `onSync`, which is drei's sole seam onto it |
+| No anchoring | `anchorX`/`anchorY` on `ParagraphContentBox`. `contentBox.align` aligns lines within the box; nothing anchors the box, so `r3f-hello-world` hand-computes `position={[-width / 2, height / 2, 0]}` | troika and drei both ship it; drei defaults to `center`/`middle` |
+| No glyph extents | Per-glyph advance or bounds, then `caretAt(x, y)` and `selectionRects(start, end)` on top | troika, Skia, Flutter, and the DOM all ship a hit-test surface; we are the only surveyed API with none |
+
+## The animation API
+
+### What is wrong with the one we have
+
+`snapshotGlyphOrigins` / `setGlyphOrigins` / `clearGlyphOriginOverrides` has one real consumer, `apps/benchmarks/src/techniques/shared/glyph-origin-transition.ts`, and that consumer demonstrates every flaw:
+
+- **The identity we thread through is not the identity it needs.** It ignores `glyphStableIds` and builds its own `${fontHandle}:${glyphId}:${cluster}:${occurrence}` key, because the stable id does not survive the reflow it exists to animate across.
+- **It re-asserts invariants the API should carry**, hand-checking six public arrays for equal length and re-checking that the snapshot's `layout` is identical to the one it holds.
+- **It discovered a required call by trial.** `clearGlyphOriginOverrides()` is mandatory on settle or an override pinned at the target silently shadows the next committed origins.
+- **It cannot tell how much of its write landed**, because both write and read skip missing records silently.
+- **Two coordinate spaces arrive in one array** with no discriminant.
+
+### What to build instead
+
+Animation targets what *looks* like a unit on screen — a glyph, a word, a line — not a position in a string. The structure is ours to define and need not be derived from text offsets at all. The shape is an explicit cycle:
+
+> **snapshot → manipulate a structure we define → restore**
+
+Requirements the evidence sets:
+
+1. **Units people animate.** Glyph, word, and line, addressable directly. A caller wanting a per-word stagger should not derive word membership from clusters.
+2. **Extents, not just origins.** Per-glyph bounds are what makes caret placement, selection rectangles, hit testing, and scale-about-centre possible. Their absence is the single largest gap against every surveyed API, and it currently forces consumers to decode technique-specific packed records.
+3. **One coordinate space, stated in the type.** No silent substitution of a different space for a missing record.
+4. **An identity that survives reflow**, or an explicit statement that it does not, so a caller is not forced to invent its own key. The current stable id fails this and the only consumer proves it.
+5. **Total application or an explicit report.** A write either applies to every entry or says how many it applied and which it did not.
+6. **Restore as a first-class step**, not a call a caller learns to make by observing corruption.
+7. **No parallel-array invariants for the caller to maintain.** Whatever is handed out is internally consistent by construction.
+
+Keep the retained-GPU-buffer write path. That capability is genuinely ahead of every surveyed system and is the reason this API is worth having at all — the problem is its shape, not its existence.
+
+## Sequencing
+
+1. Un-publish the reconciler protocol. Same class as the two shipped defects and the worst remaining hole.
+2. The delete list, then the demotion of `/core` and `/tsl`.
+3. Fixes 1 through 3 — the frame-rejection identity, the rejection loop, and the `spans` validation timing — since those are what a caller actually hits.
+4. The animation API, replacing the origin trio.
+5. The remaining fixes and reshapes.
+
+Each step must keep the packed-lane differential oracle green, and no step may regress the incremental fast path.
