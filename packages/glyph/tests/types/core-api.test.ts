@@ -41,6 +41,7 @@ declare const expiredError: TextEnginePublicationExpiredError;
 const generations: readonly [number, number] = [expiredError.consumedGeneration, expiredError.latestGeneration];
 void generations;
 const retainedPublication: RetainedTextEnginePublication = session.retain(publication);
+void retainedPublication;
 session.assertLive(publication);
 const live: boolean = session.isExpired(publication);
 const acknowledged: number = session.acknowledgedGeneration;

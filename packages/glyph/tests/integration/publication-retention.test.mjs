@@ -84,7 +84,11 @@ test('a borrowed publication expires loudly at the next call, and retain() survi
       error.latestGeneration === 3,
     'a stale borrow must be loud, not silently re-read',
   );
-  assert.equal(owned.bytes.byteLength > 0 && owned.bytes[0] !== undefined, true, 'the retained copy outlives every slot');
+  assert.equal(
+    owned.bytes.byteLength > 0 && owned.bytes[0] !== undefined,
+    true,
+    'the retained copy outlives every slot',
+  );
 
   session.dispose();
 });
@@ -122,6 +126,9 @@ test('the engine verifies consumption: an acknowledged generation that goes back
     acknowledgedPublicationGeneration: 0,
     limits: LIMITS,
   });
-  assert.throws(() => session.update(replayed), (error) => error.status === 12);
+  assert.throws(
+    () => session.update(replayed),
+    (error) => error.status === 12,
+  );
   session.dispose();
 });
