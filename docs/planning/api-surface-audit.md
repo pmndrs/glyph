@@ -136,7 +136,7 @@ This section is the handoff. Keep it current as work lands, so anyone can resume
 | -- | Reshape: `commitState()` readiness signal, cluster-first `caretAt`/`selectionRects` | ✅ | #107 |
 | 4 | Non-circular measure ordering | 🚧 | folded into item 6 |
 | 6-10, 16 | Framework-neutral `Paragraph`, constraint/policy split, intrinsic widths, failure from the measure call, re-point the uikit fixture, paragraph-scoped revision | 🚧 | `feat/paragraph-api` |
-| 24 | `@pmndrs/glyph/typegpu` shader subpath | 🚧 | `feat/typegpu-subpath` |
+| 24 | `@pmndrs/glyph/typegpu` shader subpath | 🟡 Bitmap complete end to end; MSDF, Slug, and decoration not ported | `feat/typegpu-subpath` |
 | 11 | Retention and ownership protocol for the render plan | ⬜ | -- |
 | 12-15 | Host font path, published size delta, uikit parity gate, correct `uikit-integration.md` | ⬜ | -- |
 | 17-23 | Change notification, font readiness, measurement purity, constraint model, direction, baseline contract, revision primitive | ⬜ | -- |
@@ -144,6 +144,8 @@ This section is the handoff. Keep it current as work lands, so anyone can resume
 
 
 24. Publish `@pmndrs/glyph/typegpu`, a sibling of `/tsl`: the same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host without adopting our renderer. No scene integration and no engine driving, exactly as `/tsl` carries none. A TSL realization can be rendered to WGSL and GLSL in a browser probe and its final source extracted, rather than translated by inspection. An old pull request from TypeGPU's author carries a partial slug port; assume it needs reimplementation rather than resumption, but read it closely first, because it is authoritative on TypeGPU idiom. See [example renderer](example-renderer.md) for how this divides from the engine-consumer work.
+
+    Bitmap shipped first, end to end: typed schemas and vertex/fragment stages under `src/typegpu/`, the `./typegpu` subpath export, `typegpu` as an optional peer, and build-time embedding of the shader metadata so the published functions resolve without consumer-side tooling. Parity is pinned against the TSL realization's actual generated WGSL — extracted device-free at test time, not translated by eye — which surfaced two facts the port reproduces exactly: coverage pages are read as clamped nearest texels through `textureLoad` (data textures never filter), and pixel snapping multiplies reciprocals in the emitter's own order. MSDF, Slug, and decoration remain.
 
 Two findings that de-risk the list. `TextEngineSession.measureParagraph(request, paragraphId)` already exists, so item 6 is largely a JavaScript-side wrapper rather than a Rust change. And the render plan already models `clipId`, `depthKey`, `orderToken`, `materialId`, and `transformId` across seven tables, so item 11 is a contract over an existing surface rather than a new one.
 

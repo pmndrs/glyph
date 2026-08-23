@@ -46,12 +46,12 @@ Two separate deliverables, often confused:
 | Surface | Owns | Status |
 | --- | --- | --- |
 | `@pmndrs/glyph/tsl` | The technique shaders realized as three.js TSL node graphs | Published |
-| `@pmndrs/glyph/typegpu` | The same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host | **Not built.** An old pull request from TypeGPU's author carries a partial slug port. Its age means it likely needs reimplementation rather than resumption, but it is authoritative on TypeGPU idiom and should be read closely before starting |
+| `@pmndrs/glyph/typegpu` | The same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host | **Bitmap shipped.** The old pull request from TypeGPU's author was read as the reference idiom; the parity pin extracts both realizations' generated WGSL at test time |
 | `packages/glyph-example-renderer` | An engine consumer proving `/core` is sufficient | Stubbed, device seam only |
 
 `/typegpu` is a shader library and mirrors `/tsl` exactly: the technique realizations, no scene integration, no engine driving. Anyone using TypeGPU can import it without adopting our renderer. The example renderer is the opposite half — it drives the engine and knows nothing about shading — and it will consume `/typegpu` once that subpath exists. Keeping them apart is what stops the shader work from being trapped inside an example.
 
-When porting a shader, the TSL realization can be rendered to WGSL and GLSL in a browser probe and the final source extracted, rather than translated by inspection. The slug port on the open pull request shows how far that approach gets. It was written by TypeGPU's author, so its shader structure, buffer typing, and workarounds for `@typegpu/three` are the reference idiom even where the branch itself is too old to rebase.
+When porting a shader, the TSL realization is rendered to WGSL and GLSL in a device-free probe and the final source extracted, rather than translated by inspection — that extraction is what the Bitmap parity test pins, and it caught two facts inspection missed: data-texture coverage reads compile to exact clamped `textureLoad` fetches, never filtered samples, and the pixel-snapping chain multiplies reciprocals in Three's own emitted order. The slug port on the open pull request shows how far the approach gets. It was written by TypeGPU's author, so its shader structure, buffer typing, and workarounds for `@typegpu/three` are the reference idiom even where the branch itself is too old to rebase.
 
 ## Rules
 
