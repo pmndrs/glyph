@@ -55,9 +55,10 @@ export type ClusterAlignableRange = Readonly<{ start: number; end: number }>;
  * offset still meet afterwards; mixing directions would manufacture an overlap out of an adjacency.
  *
  * A range whose text is entirely claimed by an earlier cluster collapses to an empty range at that
- * boundary and is KEPT. Dropping it would shift every later index — the indices `setSpan` and
- * `removeSpan` address — and would delete a caller's style with nothing left in the array to show
- * for it.
+ * boundary and is KEPT. Dropping it would delete a caller's style with nothing left in the array to
+ * show for it, and would shift every later index out from under a caller reading `Text.spans` back
+ * to compare it against what it authored. An empty range states nothing and is not compiled into an
+ * engine style.
  *
  * Offsets outside `[0, textLength]` are left exactly as they are. Range validity is a separate
  * obligation with its own owner, and silently clamping an out-of-range offset would turn a caller's
@@ -87,6 +88,41 @@ export function alignRangesToClusters<Range extends ClusterAlignableRange>(
     aligned.push({ ...range, start, end });
   }
   return aligned ?? ranges;
+}
+
+/**
+ * Resolve every boundary in `ranges` onto the cluster grid of `text`, segmenting it once.
+ *
+ * This is the single implementation of D-265 — a cluster takes the style of its BASE — and every
+ * caller in the package reaches the rule through here rather than restating it:
+ *
+ * - `compose` (`txt`/`span`) and `flattenText` (React `<Text>`) are two implementations of ONE
+ *   compiler. The document a caller authors is a tree with no offsets in it; each compiler derives
+ *   a span boundary at a concatenation JOIN, taking `start` from the length before a fragment's
+ *   text is appended and `end` from the length after. Concatenation can fuse the tail of one
+ *   fragment with the head of the next into a single extended grapheme cluster — `txt` + a
+ *   fragment opening with a combining mark is the one-character case — and the join then names an
+ *   offset that is not a boundary of the text the compiler just produced. Resolving here, over the
+ *   finished text, moves each such join forward onto the cluster the earlier fragment's base owns,
+ *   so a tree can no longer compile to a paragraph the engine refuses.
+ * - `alignSpansToClusters` is the public backstop for the untyped `spans` array, where the offsets
+ *   are the caller's own arithmetic rather than anything the package derived.
+ *
+ * Resolving the WHOLE compiled array, once, is what makes nesting correct: a fragment composed on
+ * its own carries boundaries resolved against its own cluster grid, and embedding it shifts that
+ * grid at both edges. Two regional indicators are the case neither `left` nor `right` can settle
+ * alone — the combined grid holds a boundary interior to neither fragment.
+ *
+ * Text that is not well-formed UTF-16 has no cluster grid and is the engine's to reject; its
+ * ranges are returned untouched so the presence of a range cannot decide whether a lone surrogate
+ * is accepted. The argument array is returned by identity when no boundary moves.
+ */
+export function resolveRangesToClusters<Range extends ClusterAlignableRange>(
+  text: string,
+  ranges: readonly Range[],
+): readonly Range[] {
+  if (ranges.length === 0 || !text.isWellFormed()) return ranges;
+  return alignRangesToClusters(ranges, findGraphemeBoundaries(text));
 }
 
 /**
