@@ -18,7 +18,7 @@ import {
   type TslSlugInstanceNodes,
   type TslSlugPageResources,
   type TslSlugShaderOutput,
-} from '../../dist/tsl.js';
+} from '@pmndrs/glyph/tsl';
 
 // The four technique node graphs are one shader library, importable without the
 // Three integration so future renderer integrations reuse them.
