@@ -92,7 +92,6 @@ export function readTextEngineMeasurements(
         lineHeight: contentHeight,
         inkBounds: inkBoundsOf(view, record, inkMeasured),
         overflowed: (flags & textShaperAbi.engine.measurementFlags.overflowed) !== 0,
-        overflowed: (view.u16(record + recordLayout.flags) & textShaperAbi.engine.measurementFlags.overflowed) !== 0,
         minContentWidth: view.f32(record + recordLayout.minContentWidth),
         maxContentWidth: view.f32(record + recordLayout.maxContentWidth),
         glyphCount: view.u32(record + recordLayout.parentId),
