@@ -5,7 +5,13 @@ import type { AnyRasterTechnique } from './raster-technique.js';
 
 export interface GlyphBufferCapacity {
   readonly size: number;
-  readonly policy: 'grow' | 'chunk';
+  /**
+   * `grow` resizes to what the content needs, `chunk` resizes in multiples of `size`, and `fixed`
+   * rejects an update whose glyph requirement exceeds `size` and keeps the last complete revision
+   * visible. The requirement is a text-length upper bound computed before shaping, so a caller can
+   * size content against the cap rather than discovering it after the fact.
+   */
+  readonly policy: 'grow' | 'chunk' | 'fixed';
 }
 
 /** A layout-system-neutral axis constraint. */

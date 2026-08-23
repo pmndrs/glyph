@@ -843,6 +843,9 @@ class ThreeTextBatchBinding {
     this.#session.reserve(this.#requestCapacity, this.#resultCapacity);
   }
   #ensureCapacity(required: number, requiredParagraphText: number): void {
+    if (required > this.#capacity.size && this.#capacity.policy === 'fixed') {
+      throw new RangeError(`text requires ${required} glyph slots but fixed capacity is ${this.#capacity.size}`);
+    }
     const target =
       this.#capacity.policy === 'chunk' ? Math.ceil(required / this.#capacity.size) * this.#capacity.size : required;
     const requestCapacity = Math.max(this.#requestCapacity, target * 32);
@@ -1457,7 +1460,9 @@ function releaseFonts<Technique extends AnyRasterTechnique>(fonts: readonly Load
 function normalizeCapacity(value: GlyphBufferCapacity): GlyphBufferCapacity {
   if (!Number.isSafeInteger(value.size) || value.size <= 0)
     throw new RangeError('glyph capacity size must be positive');
-  if (value.policy !== 'grow' && value.policy !== 'chunk') throw new TypeError('glyph capacity policy is invalid');
+  if (value.policy !== 'grow' && value.policy !== 'chunk' && value.policy !== 'fixed') {
+    throw new TypeError('glyph capacity policy is invalid');
+  }
   return Object.freeze({ size: value.size, policy: value.policy });
 }
 function normalizeCompositing(value: TextGroupOptions['compositing']): 'ordered' | 'independent' {
