@@ -467,6 +467,12 @@ fn write_semantic(bytes: &mut [u8], at: usize, value: SemanticRecord) {
     f32_at(bytes, at, SEMANTIC_BLOCK_START, value.block_start);
     f32_at(bytes, at, SEMANTIC_INLINE_EXTENT, value.inline_extent);
     f32_at(bytes, at, SEMANTIC_BLOCK_EXTENT, value.block_extent);
+    f32_at(bytes, at, SEMANTIC_INLINE_ADVANCE, value.inline_advance);
+    f32_at(bytes, at, SEMANTIC_INK_INLINE_START, value.ink_inline_start);
+    f32_at(bytes, at, SEMANTIC_INK_BLOCK_START, value.ink_block_start);
+    f32_at(bytes, at, SEMANTIC_INK_INLINE_EXTENT, value.ink_inline_extent);
+    f32_at(bytes, at, SEMANTIC_INK_BLOCK_EXTENT, value.ink_block_extent);
+    f32_at(bytes, at, SEMANTIC_ASCENT, value.ascent);
 }
 
 fn write_resource(bytes: &mut [u8], at: usize, value: ResourceRecord) {
@@ -624,6 +630,47 @@ mod tests {
     use super::*;
     use crate::{engine::render_plan::*, wire::read_u32};
     use alloc::vec;
+
+    /// `write_semantic` names every field it serializes, so a field added to `SemanticRecord` and
+    /// forgotten there ships as a silent zero rather than as a compile error. Writing a record whose
+    /// every field is nonzero and demanding that no byte of the encoding stays zero turns that into
+    /// a failing test. Adding a field to the struct and to this fixture is enough; forgetting the
+    /// serializer is what fails.
+    #[test]
+    fn the_semantic_encoder_writes_every_field_of_the_record() {
+        let record = SemanticRecord {
+            id: 0x0101_0101,
+            kind: 0x0202,
+            flags: 0x0303,
+            parent_id: 0x0404_0404,
+            text_start: 0x0505_0505,
+            text_end: 0x0606_0606,
+            item_start: 0x0707_0707,
+            item_count: 0x0808_0808,
+            inline_start: 1.5,
+            block_start: 2.5,
+            inline_extent: 3.5,
+            block_extent: 4.5,
+            inline_advance: 5.5,
+            ink_inline_start: 6.5,
+            ink_block_start: 7.5,
+            ink_inline_extent: 8.5,
+            ink_block_extent: 9.5,
+            ascent: 10.5,
+        };
+        let size = usize::try_from(SEMANTIC_RECORD_SIZE).unwrap();
+        let mut bytes = vec![0_u8; size];
+        write_semantic(&mut bytes, 0, record);
+        // Every float above has a nonzero high byte and every integer has nonzero bytes throughout,
+        // so an all-zero 4-byte window can only be a field the encoder never wrote.
+        for offset in (0..size).step_by(4) {
+            assert!(
+                bytes[offset..offset + 4].iter().any(|byte| *byte != 0),
+                "semantic record bytes {offset}..{} were never written",
+                offset + 4,
+            );
+        }
+    }
 
     #[test]
     fn serializes_every_table_with_compiler_offsets_and_rebased_payloads() {

@@ -28,6 +28,29 @@ pub struct SemanticRecord {
     pub block_start: f32,
     pub inline_extent: f32,
     pub block_extent: f32,
+    /// Inline advance of one item's layout box. Populated for `SEMANTIC_GLYPH`, where it is the
+    /// shaped advance the pen moves by, which is neither the ink width nor the font size.
+    pub inline_advance: f32,
+    /// Ink box in the same positioned space as `inline_start`/`block_start`, in the block-axis
+    /// direction the record's own `block_start` uses.
+    ///
+    /// Populated for `SEMANTIC_GLYPH` (a glyph the font gives no outline for — a space, an unmapped
+    /// id — reports a zero-extent box at its own origin rather than a missing one), for
+    /// `SEMANTIC_LINE` (the union over the line's glyphs), and for
+    /// `SEMANTIC_PARAGRAPH_MEASUREMENT` (the union over the paragraph's glyphs, authoritative only
+    /// when `MEASUREMENT_FLAG_INK_BOUNDS` is set).
+    ///
+    /// This is deliberately NOT the advance box. A glyph may overhang its advance — italics,
+    /// accents, swashes — so a caller centring visually needs this box and a caller filling a flex
+    /// slot needs `inline_extent`. Both ship so neither has to be guessed at.
+    pub ink_inline_start: f32,
+    pub ink_block_start: f32,
+    pub ink_inline_extent: f32,
+    pub ink_block_extent: f32,
+    /// Distance from the top edge of the item's own box down to its baseline, half-leading
+    /// included. Populated for `SEMANTIC_LINE` and `SEMANTIC_PARAGRAPH_MEASUREMENT`; the matching
+    /// descent is `block_extent - ascent` exactly, and the box top is `block_start - ascent`.
+    pub ascent: f32,
 }
 
-const _: () = assert!(core::mem::size_of::<SemanticRecord>() == 44);
+const _: () = assert!(core::mem::size_of::<SemanticRecord>() == 68);
