@@ -105,6 +105,33 @@ One stale decision to reconcile: D-118 accepted a renderer-neutral `stageBatch(p
 | No anchoring | `anchorX`/`anchorY` on `ParagraphContentBox`. `contentBox.align` aligns lines within the box; nothing anchors the box, so `r3f-hello-world` hand-computes `position={[-width / 2, height / 2, 0]}` | troika and drei both ship it; drei defaults to `center`/`middle` |
 | No glyph extents | Per-glyph advance or bounds, then `caretAt(x, y)` and `selectionRects(start, end)` on top | troika, Skia, Flutter, and the DOM all ship a hit-test surface; we are the only surveyed API with none |
 
+## Goal and current state
+
+**Goal.** Every item in this document implemented, landed as a GitHub Stack of pull requests, each one green in CI, each one adversarially reviewed by an external model with every review comment either addressed or answered, and the stack ready to merge. The pmndrs/uikit fork is documented here but is **not** part of this goal; only the package-side API it needs is.
+
+This section is the handoff. Keep it current as work lands, so anyone can resume from it.
+
+| # | Item | State | Where |
+| --- | --- | :--: | --- |
+| -- | Un-publish the reconciler protocol, delete-list surgery | ✅ landed | `worktree-agent-a8f83a2041d346932` |
+| -- | Keep `/core` and `/tsl` published, correct the false "no consumers" finding | ✅ landed | same branch |
+| -- | `packages/glyph-example-renderer`, a second engine consumer on `/core` alone | ✅ stubbed, 4 tests green | same branch |
+| 1-3, 5 | Line and font metrics, ink bounds, per-line metrics on the summary, shared coordinate space with glyph extents | 🚧 in flight | animation-api agent |
+| 4 | Non-circular measure ordering, readiness signal | ⬜ not started | -- |
+| 6-7 | Framework-neutral `Paragraph`; split per-call constraints from stable policy | ⬜ not started | -- |
+| 8-10 | Intrinsic widths from one pass; failure returned from the measure call; re-point the uikit fixture | ⬜ not started | -- |
+| 11 | Retention and ownership protocol for the render plan | ⬜ not started | -- |
+| 12-15 | Host font path, published size delta, uikit parity gate, correct `uikit-integration.md` | ⬜ not started | -- |
+| 16-17 | Paragraph-scoped layout revision; change notification | ⬜ not started | -- |
+| 18-23 | Font readiness, measurement purity, constraint model, direction, baseline contract, revision primitive | ⬜ not started | -- |
+| 24 | `@pmndrs/glyph/typegpu` shader subpath | ⬜ not started | -- |
+
+24. Publish `@pmndrs/glyph/typegpu`, a sibling of `/tsl`: the same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host without adopting our renderer. No scene integration and no engine driving, exactly as `/tsl` carries none. A TSL realization can be rendered to WGSL and GLSL in a browser probe and its final source extracted, rather than translated by inspection. An old TypeGPU pull request carries a partial slug port; treat it as a reference to read, not a base to resume, and assume reimplementation. See [example renderer](example-renderer.md) for how this divides from the engine-consumer work.
+
+Two findings that de-risk the list. `TextEngineSession.measureParagraph(request, paragraphId)` already exists, so item 6 is largely a JavaScript-side wrapper rather than a Rust change. And the render plan already models `clipId`, `depthKey`, `orderToken`, `materialId`, and `transformId` across seven tables, so item 11 is a contract over an existing surface rather than a new one.
+
+Corrections this document has already absorbed, recorded so they are not re-derived: `/core` has consumers and stays published; ascent and descent exist per font on `FontMetrics` and are missing only from paragraph measurement; the revisions are published on `/core` and are missing only as paragraph-scoped state; `stageBatch` from D-118 was never implemented and was superseded; `FontLoadError` and `createFontStack` were wrongly listed for deletion; and the uikit shadow-adapter stage is not downstream of this cleanup.
+
 ## Measurement and positioning
 
 Reported from production use: an agent integrating this package "has a hell of a time getting text positioned correctly." The measure surface is the cause, and it is the same gap as the missing glyph extents — both are per-glyph and per-line geometry we compute and do not publish.

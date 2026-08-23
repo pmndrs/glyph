@@ -9,6 +9,7 @@
 - [Rust layout engine contract](rust-layout-engine.md) — authoritative engine ABI, render-plan policy, and publication boundary for custom renderers.
 - [Engine integration contract](engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
 - [Raster technique and engine resource API](raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
+- [Example renderer](example-renderer.md) — why a second engine consumer exists, what it proves about `/core`, and how it divides work with the TypeGPU shader subpath.
 - [TypeGPU raster programs and text engine](typegpu-api.md) — complete direct TypeGPU API for typed technique shaders, programs, variants, caller-owned render passes, transforms, synchronization, and disposal.
 - [TypeGPU-first shader authority](typegpu-first-shader-authority.md) — exploratory package shape and falsifiable proof ladder for sharing complete raster kernels with direct WebGPU hosts, Three.js, and gpucat without changing core.
 - [Three material authority for text draws](three-material-authority.md) — **work in progress.** Fixes the Rust `material_id` route and shared-storage/draw-split contract while leaving the exact Three material-factory types for a later design pass.
