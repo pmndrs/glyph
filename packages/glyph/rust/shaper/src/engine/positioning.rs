@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use crate::{FontGlyphExtents, FontMetrics, bidi::BidiAnalysis};
 
 use super::{
-    EngineError,
+    EngineError, FrameFault,
     cluster_state::{CLUSTER_HARD_BREAK, CLUSTER_SPACE, ClusterArena},
     flow_composition::{FlowFragment, FlowLayoutArena, FlowLine},
     frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
@@ -707,7 +707,8 @@ impl PositionedGlyphArena {
         let Some(run) = run.take() else {
             return Ok(());
         };
-        let metrics = metrics_for(run.font_handle).ok_or(EngineError::InvalidRequest)?;
+        let metrics = metrics_for(run.font_handle)
+            .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
         if metrics.units_per_em == 0 {
             return Err(EngineError::InvalidRequest);
         }
@@ -853,7 +854,8 @@ impl PositionedGlyphArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<f64, EngineError> {
-        let metrics = metrics_for(font_handle).ok_or(EngineError::InvalidRequest)?;
+        let metrics = metrics_for(font_handle)
+            .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
         if font_handle == 0 || metrics.units_per_em == 0 {
             return Err(EngineError::InvalidRequest);
         }

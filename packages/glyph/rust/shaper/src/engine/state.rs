@@ -32,6 +32,29 @@ use super::{
     },
 };
 
+/// What a rejected frame can name about its own cause.
+///
+/// Both identifiers are the ones the REQUEST used, so a host can map them straight back to the
+/// paragraph and style it authored. Zero means "not attributed": a rejection raised inside the
+/// per-paragraph pipeline learns its paragraph only when the paragraph loop attaches it, and not
+/// every cause names a style. Neither identifier is ever legitimately zero -- paragraph ids are
+/// allocated from one and the style compiler numbers the root style one -- so zero is free to mean
+/// absent without colliding with a real record.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FrameFault {
+    pub paragraph_id: u32,
+    pub style_id: u32,
+}
+
+impl FrameFault {
+    pub(crate) const fn style(style_id: u32) -> Self {
+        Self {
+            paragraph_id: 0,
+            style_id,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EngineError {
     InvalidHandle,
@@ -42,8 +65,66 @@ pub enum EngineError {
     SessionMissing,
     RevisionConflict,
     RevisionExhausted,
+    /// The request was rejected for a cause the engine does not classify further: a malformed
+    /// request encoding, or an arena invariant the caller cannot select through the public API.
+    /// Every cause a caller can act on has its own variant below; this one never names one.
     InvalidRequest,
     ResultTooLarge,
+    /// A style's `[start, end)` is inverted, reaches past the end of the paragraph's text, or lands
+    /// inside a UTF-16 surrogate pair.
+    StyleRangeInvalid(FrameFault),
+    /// A style boundary falls inside an extended grapheme cluster. The engine resolves exactly one
+    /// style per cluster, so it cannot honour the split.
+    StyleSplitsCluster(FrameFault),
+    /// Two styles partially overlap. Styles must be disjoint or fully nested.
+    StyleNestingInvalid(FrameFault),
+    /// The paragraph does not carry exactly one root style spanning its whole text with every
+    /// root-required field stated.
+    StyleRootInvalid(FrameFault),
+    /// A style names a font stack handle that is not registered.
+    StyleFontStackMissing(FrameFault),
+    /// A font referenced by the laid-out text has no registered metrics.
+    FontMetricsMissing(FrameFault),
+}
+
+impl EngineError {
+    /// Attaches the paragraph a rejection belongs to, when the rejection names one and the pipeline
+    /// stage that raised it could not know which paragraph it was working on.
+    pub(crate) fn in_paragraph(self, paragraph_id: u32) -> Self {
+        self.map_fault(|fault| FrameFault {
+            paragraph_id: if fault.paragraph_id == 0 {
+                paragraph_id
+            } else {
+                fault.paragraph_id
+            },
+            style_id: fault.style_id,
+        })
+    }
+
+    /// The identifiers this rejection names, all zero when it names none.
+    pub fn fault(self) -> FrameFault {
+        match self {
+            Self::StyleRangeInvalid(fault)
+            | Self::StyleSplitsCluster(fault)
+            | Self::StyleNestingInvalid(fault)
+            | Self::StyleRootInvalid(fault)
+            | Self::StyleFontStackMissing(fault)
+            | Self::FontMetricsMissing(fault) => fault,
+            _ => FrameFault::default(),
+        }
+    }
+
+    fn map_fault(self, attach: impl FnOnce(FrameFault) -> FrameFault) -> Self {
+        match self {
+            Self::StyleRangeInvalid(fault) => Self::StyleRangeInvalid(attach(fault)),
+            Self::StyleSplitsCluster(fault) => Self::StyleSplitsCluster(attach(fault)),
+            Self::StyleNestingInvalid(fault) => Self::StyleNestingInvalid(attach(fault)),
+            Self::StyleRootInvalid(fault) => Self::StyleRootInvalid(attach(fault)),
+            Self::StyleFontStackMissing(fault) => Self::StyleFontStackMissing(attach(fault)),
+            Self::FontMetricsMissing(fault) => Self::FontMetricsMissing(attach(fault)),
+            other => other,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -751,7 +832,7 @@ impl TextEngine {
         })();
         if let Err(error) = preparation {
             session.abort_pending();
-            return Err(error);
+            return Err(error.in_paragraph(paragraph_id));
         }
         session.speculative = Some(SpeculativeTransaction {
             revision: session.revision,
@@ -922,33 +1003,40 @@ impl TextEngine {
                     {
                         paragraph
                             .state
-                            .prepare_positioned(shaper, &mut next_content_revision)?;
+                            .prepare_positioned(shaper, &mut next_content_revision)
+                            .map_err(|error| error.in_paragraph(paragraph_id))?;
                     }
                     paragraph.state.speculative_positioned_changed()
                 } else if prefix_adopted {
-                    paragraph.state.prepare_geometry_and_layout(
-                        shaper.as_deref_mut(),
-                        font_stacks,
-                        font_bindings,
-                        geometry,
-                        request.limits,
-                        true,
-                        &mut next_glyph_id,
-                        &mut next_content_revision,
-                    )?
+                    paragraph
+                        .state
+                        .prepare_geometry_and_layout(
+                            shaper.as_deref_mut(),
+                            font_stacks,
+                            font_bindings,
+                            geometry,
+                            request.limits,
+                            true,
+                            &mut next_glyph_id,
+                            &mut next_content_revision,
+                        )
+                        .map_err(|error| error.in_paragraph(paragraph_id))?
                 } else {
-                    paragraph.state.prepare(
-                        shaper.as_deref_mut(),
-                        font_stacks,
-                        font_bindings,
-                        text,
-                        styles,
-                        geometry,
-                        request.limits,
-                        true,
-                        &mut next_glyph_id,
-                        &mut next_content_revision,
-                    )?
+                    paragraph
+                        .state
+                        .prepare(
+                            shaper.as_deref_mut(),
+                            font_stacks,
+                            font_bindings,
+                            text,
+                            styles,
+                            geometry,
+                            request.limits,
+                            true,
+                            &mut next_glyph_id,
+                            &mut next_content_revision,
+                        )
+                        .map_err(|error| error.in_paragraph(paragraph_id))?
                 };
             }
             if text_cursor != request.text_mutations.len()
@@ -1060,7 +1148,8 @@ impl TextEngine {
                             font_bindings,
                             request.limits,
                             include_layout_inspection,
-                        )?;
+                        )
+                        .map_err(|error| error.in_paragraph(paragraph_id))?;
                     }
                     Ok(())
                 })();
@@ -4803,9 +4892,14 @@ mod tests {
         missing_stack.style_mutations =
             parse_style_mutations(&missing_stack_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
                 .unwrap();
+        // A style naming an unregistered font stack is caller-actionable, so it reports its own
+        // status and names the paragraph and the style id the request assigned.
         assert_eq!(
             engine.prepare_update(missing_stack, 3),
-            Err(EngineError::InvalidRequest)
+            Err(EngineError::StyleFontStackMissing(FrameFault {
+                paragraph_id: 1,
+                style_id: 1,
+            }))
         );
         assert_eq!(engine.session_style_count(4), Ok(1));
     }

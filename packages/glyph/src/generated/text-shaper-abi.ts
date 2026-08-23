@@ -437,6 +437,8 @@ export const textShaperAbi = {
       "drawCount": 116,
       "drawsOffset": 112,
       "engineRevision": 20,
+      "faultParagraphId": 136,
+      "faultStyleId": 140,
       "flags": 12,
       "outputSlot": 36,
       "patchCount": 100,
@@ -769,6 +771,7 @@ export const textShaperAbi = {
   },
   "status": {
     "fontInUse": 14,
+    "fontMetricsMissing": 19,
     "fontMissing": 5,
     "fontStackMissing": 13,
     "handleConflict": 4,
@@ -782,7 +785,11 @@ export const textShaperAbi = {
     "resultTooLarge": 7,
     "revisionConflict": 12,
     "sessionConflict": 10,
-    "sessionMissing": 11
+    "sessionMissing": 11,
+    "styleNestingInvalid": 17,
+    "styleRangeInvalid": 15,
+    "styleRootInvalid": 18,
+    "styleSplitsCluster": 16
   },
   "version": 0,
   "versions": {
