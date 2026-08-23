@@ -60,9 +60,28 @@ Prefer resuming over relaunching. A relaunch throws away everything the agent le
 
 `--continue` resumes the most recent session in the directory; `--fork` branches instead of continuing.
 
-## Concurrency
+## The provider goes down, and that is the normal case
 
-Free and shared model tiers rate-limit. Runs launched two at a time completed; runs launched while several were already active stalled without erroring — the request simply never returns. Keep concurrent runs low, and when several are queued, stagger them rather than firing them together.
+The free tiers are under load test. `Upstream request failed: Endpoint is unavailable` and
+`Service Unavailable` are the steady state, not the exception — 43 of them in one night, twenty
+inside a single fifteen-minute window. They surface in `~/.local/share/opencode/log/opencode.log` as
+`level=ERROR message="stream error" ... AI_APICallError`.
+
+Concurrency is **not** the cause. There were no rate-limit or quota errors at all, and the failures
+cluster in time rather than by how many agents were running. Reducing concurrency does nothing for a
+503; retrying does. Do not conclude "rate limit" from a stalled agent without reading that log.
+
+Use the bundled launcher rather than calling `opencode run` directly:
+
+```bash
+node .agents/skills/opencode-agents/scripts/run-agent.mjs \
+  --brief brief.md --cwd <worktree> [--attempts 8]
+```
+
+It captures the session id from the first stream, and on a transient provider failure it waits with
+doubling backoff (5s, capped at two minutes) and **resumes that session** instead of restarting, so
+an outage costs waiting rather than work. A failure that is not a provider outage exits immediately
+rather than retrying a real defect. The full event trace is retained under `.cache/opencode-agents/`.
 
 ## Writing the brief
 
