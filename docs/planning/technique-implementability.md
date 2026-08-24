@@ -86,6 +86,28 @@ Today both halves cost once per engine, and for any engine that is not Three the
 
 Side-effect registration is the right mechanism and is not the problem anywhere in this document. The problem is registering portable behaviour in a renderer-scoped registry.
 
+### Trivial is the measurable bar, and the baker already meets it
+
+`glyph-example-raster` is 594 lines. The split says where the contract earns its keep and where it does not:
+
+| file | lines | |
+| --- | --- | --- |
+| `baker.ts` | 24 | the one side with an open contract |
+| `runtime-baker.ts` | 25 | |
+| `contract.ts` | 32 | |
+| `raster.ts` | 143 | technique definition |
+| `three.ts` | 168 | policy + `compileFont` + `createMaterial`, conflated |
+| `artifact.ts` | 192 | encode/decode the baked payload |
+
+A third-party baker costs **24 lines**, because `RasterBakerModule` asks for exactly what only the author can supply. That is the bar the consume side should meet, and it is evidence the open-contract shape works rather than an aspiration.
+
+Two things inflate the rest, and both are ours:
+
+- **The GLB writer is private.** `artifact.ts` hand-rolls container mechanics -- `GLB_MAGIC`, `encodeGlb`, `concatenate`, `align4`, manual `bufferViews` -- that this package already implements in `internal/compose-bake.ts` and its four validators and exports nowhere. An author defining a payload format should not re-derive chunk alignment.
+- **`three.ts` conflates three contracts.** After the split its portable half is authored once and consumed by `example-renderer` as well, instead of being Three-shaped code a second engine must rewrite.
+
+Export the container writer alongside the split, and re-measure `example-raster` afterwards. If a third-party technique is not close to its baker in size, the consume-side contract is still asking for the wrong things.
+
 ## Sequencing
 
 1. Extract `RasterPlanProgram` and `registerRasterPlanProgram` into `/core`, carrying `technique`, `policy`, and `compileFont` unchanged. Reduce `ThreeRasterPlanProgram` to `technique` plus `createMaterial`, and have the Three registry look the portable half up rather than own it.
