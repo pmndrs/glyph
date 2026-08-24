@@ -27,7 +27,7 @@ Two consequences follow:
 
 `PolicyProgram` contains no renderer objects, but **its numbers live in a host-specific namespace.** Three owns system buffers and publishes their ids through `threePolicyAbi`; the external raster declares and writes Three's transform buffer `15` (`three/render-policy.ts:27`, `glyph-example-raster/src/three.ts:33`). The non-Three example defines its own system buffer `20` and compiles its own policy and capabilities (`glyph-example-renderer/src/policy.ts:23`, `:59`). A Three-authored descriptor is therefore not consumable by another engine, and moving it to `/core` unchanged would export one host's numbering as if it were neutral.
 
-`compileFont` is likewise not portable as written: its parameter is the Three-owned `ThreePlanProgramFontCompiler`, and the fourth variant of `ThreeTextEngineResource` carries a `CompiledThreeRasterPlanProgram` that exposes `createMaterial(): NodeMaterial` (`three/plan-program-registry.ts:33`, `:48`, `three/engine-runtime.ts:52`). That union does contain renderer behaviour; renaming and moving it would drag Three into `/core`.
+In the starting design, `compileFont` was likewise not portable: its parameter was the Three-owned `ThreePlanProgramFontCompiler`, and the fourth variant of `ThreeTextEngineResource` carried a `CompiledThreeRasterPlanProgram` that exposed `createMaterial(): NodeMaterial` (`three/plan-program-registry.ts:33`, `:48`, `three/engine-runtime.ts:52`). That union did contain renderer behaviour; renaming and moving it would have dragged Three into `/core`. The implementation now keeps the core compiler result byte/resource-only and leaves the renderer association in `/three`.
 
 ## Design
 
@@ -54,18 +54,18 @@ The matrix, corrected:
 |  | Three engine | third-party engine |
 | --- | --- | --- |
 | first-party technique | covered | **unproven** |
-| third-party technique | `example-raster` | **unproven** |
+| third-party technique | `example-raster` | `glyph-example-renderer` acceptance test |
 
-`example-renderer` proves generic plan decoding and retention only: it never registers a font binding, publishes empty draw lists, and has no device implementation (`glyph-example-renderer/tests/example-engine.test.ts:38`, `:46`, `src/device.ts:1`). Both right-hand cells are open.
+`glyph-example-renderer` now proves the lower-right cell: its production source registers the portable binding, owns a concrete recording device/submission path, and asserts non-empty draws. The acceptance fixture uses the root loader and `/bake` only to obtain a real loaded font; the package boundary test narrows that exception to `tests/example-render.test.ts`.
 
 Done means `glyph-example-renderer` loads a font, registers a binding, realizes resources through a concrete device and submission path, and produces **non-empty draws** for `glyph-example-raster`'s technique -- composed from the portable half rather than re-authored.
 
 ## Sequencing
 
-1. Extract the technique schema and policy-body factory into `/core`; leave `PolicyProgram` assembly with each engine.
-2. Define the core compiled result; make `loadedFontBindingBytes` a projection over it so `paragraph.ts:689` and `engine-runtime.ts:201` share one path.
-3. Add `registerRasterPlanProgram` in `/core`, scoped to id lookup and binding composition, with the late-registration rules `plan-program-registry.ts:87-102` already proves.
-4. Extend the Three contract with resource realization; keep the resource-to-program association in `/three`.
-5. Build the acceptance case above in `example-renderer`, including its device and submission path.
+1. ✅ Extract the technique schema and policy-body factory into `/core`; leave `PolicyProgram` assembly with each engine.
+2. ✅ Define the core compiled result; make `loadedFontBindingBytes` a projection over it so `paragraph.ts:689` and `engine-runtime.ts:201` share one path.
+3. ✅ Add `registerRasterPlanProgram` in `/core`, scoped to id lookup and binding composition.
+4. ✅ Extend the Three contract with resource realization; keep the resource-to-program association in `/three`.
+5. ✅ Build the acceptance case above in `example-renderer`, including its device and submission path.
 
 Steps 1-4 are not done until step 5 draws.

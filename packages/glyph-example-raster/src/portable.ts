@@ -46,11 +46,13 @@ export const glyphExamplePlanProgram: RasterPlanProgram<typeof glyphExample, Gly
     const { inlineOrigin, blockOrigin, fontSize, color, transformIndex } = p.semantics;
     const { inset, red, green, blue, alpha } = p.binding;
     const two = constantF32(2);
-    const width = subtractF32(multiplyF32(fontSize, constantF32(0.65)), multiplyF32(multiplyF32(inset, fontSize), two));
-    const height = subtractF32(fontSize, multiplyF32(multiplyF32(inset, fontSize), two));
+    const insetPixels = multiplyF32(inset, fontSize);
+    const twiceInsetPixels = multiplyF32(insetPixels, two);
+    const width = subtractF32(multiplyF32(fontSize, constantF32(0.65)), twiceInsetPixels);
+    const height = subtractF32(fontSize, twiceInsetPixels);
     p.store(glyphExampleSchema.buffers.origin, [
-      addF32(inlineOrigin, multiplyF32(inset, fontSize)),
-      subtractF32(blockOrigin, multiplyF32(inset, fontSize)),
+      addF32(inlineOrigin, insetPixels),
+      subtractF32(blockOrigin, insetPixels),
     ]);
     p.store(glyphExampleSchema.buffers.size, [width, height]);
     p.store(glyphExampleSchema.buffers.color, [

@@ -5,7 +5,7 @@ description: Proves the published core engine surface is sufficient for a second
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:4e5b76958b653abbcc70246739a3d52a8d4c11cc181ec805510668fc79d705a8'
+source_digest: 'sha256:80555ddeb4828118bce2244604f5e0fe3d1e5df68ce9daab978973fddae4e0ce'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -53,8 +53,9 @@ surface turns the build red instead of turning into a planning argument. The bou
 file under `src/` *and* `tests/`, and rejects any `@pmndrs/glyph` subpath except `/core` and the
 published Wasm artifact.
 
-It authors its own technique schema and render policy with `/core`'s compilers (`src/policy.ts`), then
-runs the retention protocol on every frame in `ExampleTextEngine.render`: update for the borrow,
+It imports the portable example schema and plan from `@pmndrs/glyph-example-raster`, and authors its own host render
+policy with `/core`'s compilers (`src/policy.ts`). It then runs the retention protocol on every frame in
+`ExampleTextEngine.render`: update for the borrow,
 `assertLive` before decoding, `retain` for one contiguous host-owned copy that acknowledges the
 generation, and decoded views over owned bytes only — dirty patch ranges and retirements included.
 `readDrawList` demands the branded `RetainedTextEnginePublication`, so passing a live-but-doomed borrow

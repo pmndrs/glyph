@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:24f1a7f3a9fc12439b5c1b827b0257bfc7096ef4b0867a4f5362c0a4f1b06ddd'
+source_digest: 'sha256:0d5792f5070df5c9751d3598e16db5e973c76295bd61cfc173d6ba24f7843791'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -264,8 +264,10 @@ engine represents; balancing, exclusions, and contour flow remain post-v1.
 
 ## Renderer policy
 
-Each Three technique registers a static policy descriptor and a cold font compiler. Rust validates and interprets the
-compiled policy; it never invokes a JavaScript callback in shaping, layout, or packing.
+Each portable technique registers a schema, policy-body factory, and cold font compiler in `/core`. Three registers
+only the renderer half — resource realization and material creation — then assembles the complete Three `PolicyProgram`
+from the portable body. Rust validates and interprets the compiled policy; it never invokes a JavaScript callback in
+shaping, layout, or packing.
 
 The first-party policy can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits

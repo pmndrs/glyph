@@ -8,7 +8,6 @@ export type { ThreeTextMaterial, ThreeTextMaterialContext } from './three/materi
 export { registerThreeRasterPlanProgram, threePolicyAbi } from './three/plan-program-registry.js';
 export type {
   ThreePlanProgramBuffer,
-  ThreePlanProgramFontCompiler,
   ThreePlanProgramMaterialContext,
   ThreeRasterPlanProgram,
 } from './three/plan-program-registry.js';

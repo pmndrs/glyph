@@ -23,9 +23,10 @@ describe('package boundary', () => {
 
   test('reaches the engine only through the /core entry point', async () => {
     for (const [file, source] of await packageSources()) {
-      // Production code may use only core; the node-only bake import is confined to
-      // the acceptance test's temporary-font fixture.
-      if (file.startsWith('src/')) expect(source, file).not.toMatch(/@pmndrs\/glyph\/(?!core\b|text-shaper\.wasm)/);
+      // The node-only bake import is confined to the acceptance test's temporary-font fixture.
+      if (file !== 'tests/example-render.test.ts') {
+        expect(source, file).not.toMatch(/@pmndrs\/glyph\/(?!core\b|text-shaper\.wasm)/);
+      }
       // No scene-graph integration and no renderer dependency.
       expect(source, file).not.toMatch(threeImport);
     }

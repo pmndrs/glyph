@@ -4,13 +4,12 @@ import {
   compileFontBinding,
   emptyFontBindingTable,
   fontBindingResources,
-  type BindingResource,
   type FontBindingDescriptor,
   type FontBindingFieldTable,
 } from './font-binding.js';
 import type { CompiledPolicyProgramBody } from './policy-program.js';
 import type { PolicyBufferDeclaration, TechniqueSchema } from './technique-schema.js';
-import { RenderWireIdentityRegistry, type PolicyCapabilitySet, type PolicyProgram } from './render-policy.js';
+import { RenderWireIdentityRegistry, type PolicyCapabilitySet } from './render-policy.js';
 
 /** System buffers are owned by the engine and are deliberately absent from a technique schema. */
 export interface RasterPolicySystem {
@@ -23,12 +22,6 @@ export type RasterPolicyBodyFactory = (
   system: RasterPolicySystem,
   capabilities: PolicyCapabilitySet,
 ) => CompiledPolicyProgramBody;
-
-/** The data a renderer may retain for one logical raster resource. */
-export interface CompiledRasterResource<Resource = unknown> {
-  readonly key: RasterResourceId;
-  readonly value: Resource;
-}
 
 /** Portable output of cold font compilation; no renderer program or GPU object crosses this boundary. */
 export interface CompiledRasterFont<Resource = unknown> {
@@ -103,18 +96,3 @@ export function compileRasterFont(
   if (binding === undefined) throw new Error('raster plan font compiler produced no binding');
   return { binding, resources };
 }
-
-/** Validate a portable program's policy body against its declared physical schema. */
-export function compileRasterPolicyBody(
-  program: RasterPlanProgram<AnyRasterTechnique, unknown>,
-  system: RasterPolicySystem,
-  capabilities: PolicyCapabilitySet,
-): CompiledPolicyProgramBody {
-  const body = program.policyBody(system, capabilities);
-  if (!(body.inputs instanceof Array) || !(body.operations instanceof Array)) {
-    throw new TypeError('raster plan policy body must contain input and operation arrays');
-  }
-  return body;
-}
-
-export type { BindingResource, PolicyCapabilitySet, PolicyProgram };

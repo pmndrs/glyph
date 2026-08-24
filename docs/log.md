@@ -16,7 +16,7 @@
   `readTextEnginePatch` surfaces dirty ranges per `(bufferId, bufferGeneration)`; paragraph ids are
   caller-chosen handles, glyph identity rides the policy's stable-id lane, and engine storage is keyed
   by `(id, generation)` with retirement as the only release signal. `packages/glyph-example-renderer`
-  stopped being a defensive-copy stub: it authors its own technique schema and policy through `/core`,
+  stopped being a defensive-copy stub: it imports the portable technique plan, authors its own host policy through `/core`,
   drives real `TextEngineHost` frames over the published Wasm artifact, holds retained plans across
   slots and capacity growth, watches stale borrows die loudly, and records the finding that a
   `/core`-only host cannot register a shaping font at all (`RuntimeShaper.registerFont` needs

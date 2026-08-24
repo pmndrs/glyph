@@ -315,10 +315,12 @@ the required scope by passing `host.wireIdentities` to policy programs, font-bin
 `packages/glyph/src/three/engine-runtime.ts:237`)
 
 Use the same resolved technique ID and `programVariant` in the font binding. `compileFontBinding()` serializes the immutable
-glyph/strike/resource tables and their resource identities; `loadedFontBindingBytes()` is the supplied compiler for the
-three first-party techniques and throws for another technique. (`packages/glyph/src/core/font-binding.ts:39`,
-`packages/glyph/src/core/font-binding.ts:54`, `packages/glyph/src/core/font-binding.ts:333`) A custom technique therefore
-needs its own `FontBindingDescriptor` and `compileFontBinding()` call.
+glyph/strike/resource tables and their resource identities. A registered `RasterPlanProgram` owns this cold composition,
+and `compileRasterFont()` returns the binding bytes plus constrained portable resource payloads; the byte-only
+`loadedFontBindingBytes()` projection consults that registry before falling back to the three first-party techniques.
+(`packages/glyph/src/core/raster-plan-program.ts`, `packages/glyph/src/core/font-binding.ts:39`,
+`packages/glyph/src/core/font-binding.ts:54`) The engine still owns resource realization and material creation, so a
+Three adapter pairs the portable plan with `registerThreeRasterPlanProgram()` rather than copying the compiler.
 
 ### Font loading comes from the root entry
 

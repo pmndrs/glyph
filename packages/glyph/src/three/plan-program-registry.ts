@@ -8,7 +8,6 @@ import {
   resolveRasterPlanProgram,
   schemaPolicyBuffers,
   type CompiledRasterFont,
-  type RasterPlanProgramFontCompiler,
 } from '../core.js';
 import type { LoadedFont } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
@@ -29,12 +28,6 @@ export interface ThreePlanProgramMaterialContext<Resource> {
   readonly material: ThreeTextMaterial | undefined;
   transformPosition(position: Node<'vec3'>): Node<'vec3'>;
 }
-
-/** Compatibility alias for code that only needs the portable cold compiler shape. */
-export type ThreePlanProgramFontCompiler<
-  Technique extends AnyRasterTechnique,
-  Resource,
-> = RasterPlanProgramFontCompiler<Technique, Resource>;
 
 export interface ThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Resource = unknown> {
   readonly technique: Technique;
