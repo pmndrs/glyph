@@ -62,11 +62,12 @@ Apply these mappings only after checking the live catalog:
 | --- | --- | --- |
 | `0x`, `0x alpha`, `0xAlpha` | `oc-opencode/x-preview-f-free` | OpenCode explicit model; omit `reasoning_effort`. |
 | `opus` | `opus` | Claude; `reasoning_effort` may be `low`, `medium`, `high`, `xhigh`, or `max`. |
+| `fable` | `fable` | Explicit Claude pass-through accepted by the installed Claude CLI; pair it with `reasoning_effort: max` and do not auto-select it. |
 | `claude:<catalog-model>` | the suffix | Claude; validate the suffix against `models`. |
 | `codex:<catalog-model>` | the suffix | Codex; validate the suffix against `models`. |
 | `opencode:<provider>/<model>` | `oc-<provider>/<model>` | Validate the backend with `opencode models`; omit `reasoning_effort`. |
 
-`fable` is not advertised by `ai-cli models` in version `2.21.0`. Do not silently alias it to Opus or another provider. Report it as unavailable and ask for a catalog-supported name or an explicit provider/model that the installed OpenCode catalog exposes.
+`fable` is not advertised by `ai-cli models` in version `2.21.0`, but the installed Claude CLI explicitly documents `fable` and `claude-fable-5` model values, and `ai-cli` passes explicit non-OpenCode/non-Codex/non-Gemini names through to Claude. Treat `fable` as an explicit high-rigor intent: use the `fable` model with `reasoning_effort: max`, keep the request direct, never alias it to Opus, and verify it with the host Claude help/auth surface before launching.
 
 The `oc-` prefix is required by `ai-cli-mcp`; `opencode/x-preview-f-free` is the provider-native identifier, not the value passed to `ai-cli`. The router must translate it to `oc-opencode/x-preview-f-free`.
 
