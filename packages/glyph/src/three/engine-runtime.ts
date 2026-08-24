@@ -83,14 +83,19 @@ export class ThreeTextEngineCoordinator {
     options: ThreeTextEngineCoordinatorOptions = {},
   ) {
     this.host = new TextEngineHost(shaper);
-    const customTransformMode = typeof options.transformMode === 'string' ? options.transformMode : 'indexed';
-    const planPrograms = compiledThreeRasterPlanPrograms(this.host.wireIdentities, customTransformMode);
+    const transformMode = options.transformMode ?? 'indexed';
+    if (transformMode !== 'indexed' && transformMode !== 'direct') {
+      throw new TypeError(
+        `Three text engine transform mode must be "indexed" or "direct", not "${String(transformMode)}"`,
+      );
+    }
+    const planPrograms = compiledThreeRasterPlanPrograms(this.host.wireIdentities, transformMode);
     this.#planPrograms = new Map(planPrograms.map((program) => [program.technique.id, program]));
     this.host.registerPolicy(
       POLICY_HANDLE,
       threeRenderPolicyBytes(
         this.host.wireIdentities,
-        options.transformMode,
+        transformMode,
         planPrograms.map((program) => program.policy),
       ),
     );
@@ -187,9 +192,8 @@ export class ThreeTextEngineCoordinator {
     this.#fontDisposeObservers.clear();
     this.#fontResourceReferences.clear();
     for (const retained of this.#resources.values()) {
-      const resource = retained.owners.values().next().value;
-      if (resource !== undefined && 'program' in resource) {
-        resource?.program.releaseResource(resource.resource);
+      for (const resource of retained.owners.values()) {
+        if ('program' in resource) resource.program.releaseResource(resource.resource);
       }
     }
     this.#resources.clear();
@@ -276,10 +280,8 @@ export class ThreeTextEngineCoordinator {
       const retained = this.#resources.get(referenceId);
       const released = retained?.owners.get(font);
       retained?.owners.delete(font);
+      if (released !== undefined && 'program' in released) released.program.releaseResource(released.resource);
       if (retained?.owners.size === 0) {
-        if (released !== undefined && 'program' in released) {
-          released?.program.releaseResource(released.resource);
-        }
         this.#resources.delete(referenceId);
       }
     }

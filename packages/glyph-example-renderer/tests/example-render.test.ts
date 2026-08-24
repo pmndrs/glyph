@@ -214,3 +214,16 @@ test('realizes a supplied indexed geometry resource from the portable declaratio
     resourceName: 'glyphGeometry',
   });
 });
+
+test('does not retire a newer resource generation through a stale retirement', () => {
+  const device = new RecordingExampleRendererDevice();
+  device.createResource(42, 'glyphGeometry', glyphExampleIndexedQuadGeometry, 3);
+
+  device.retireResource(42, 2);
+  expect(device.resources.has(42)).toBe(true);
+  expect(device.retirements).toEqual([]);
+
+  device.retireResource(42, 3);
+  expect(device.resources.has(42)).toBe(false);
+  expect(device.retirements).toEqual([42]);
+});

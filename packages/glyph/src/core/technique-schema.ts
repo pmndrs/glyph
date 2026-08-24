@@ -23,6 +23,7 @@ export interface PolicyBufferDeclaration {
 export type PolicyBufferDeclarations = Readonly<Record<string, PolicyBufferDeclaration>>;
 
 const techniqueSchemaBrand: unique symbol = Symbol('glyph.technique-schema');
+const techniqueSchemaInstances = new WeakSet<object>();
 
 /**
  * Validate and freeze a named buffer set: nonzero unique ids, at least one lane
@@ -177,8 +178,7 @@ export function isTechniqueSchema(value: unknown): value is TechniqueSchema {
     value !== null &&
     !Array.isArray(value) &&
     Object.isFrozen(value) &&
-    Object.hasOwn(value, techniqueSchemaBrand) &&
-    (value as { [techniqueSchemaBrand]?: unknown })[techniqueSchemaBrand] === true
+    techniqueSchemaInstances.has(value)
   );
 }
 
@@ -262,8 +262,9 @@ export function defineTechniqueSchema<
     ...(render === undefined ? {} : { render }),
     ...(glyphOrigin === undefined ? {} : { glyphOrigin }),
   } as TechniqueSchema<Buffers, Binding>;
-  Object.defineProperty(schema, techniqueSchemaBrand, { value: true });
-  return Object.freeze(schema);
+  const frozen = Object.freeze(schema);
+  techniqueSchemaInstances.add(frozen);
+  return frozen;
 }
 
 /**

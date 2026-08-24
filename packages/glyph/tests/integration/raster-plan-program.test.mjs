@@ -129,6 +129,18 @@ test('registration rejects a schema-shaped prototype and retains an owned techni
   );
 });
 
+test('registration rejects a copied schema symbol brand', () => {
+  const id = 'test.core-raster-plan-forged-brand';
+  const schema = declaredSchema(id);
+  const symbol = Object.getOwnPropertySymbols(schema)[0];
+  const forged = Object.freeze({ ...schema, [symbol]: true });
+  assert.throws(
+    () =>
+      registerRasterPlanProgram({ technique: testTechnique(id), schema: forged, policyBody: body, compileFont() {} }),
+    (error) => error instanceof TypeError && error.message.includes('defineTechniqueSchema'),
+  );
+});
+
 test('registration snapshots callbacks before the source object can change', () => {
   const id = 'test.core-raster-plan-registration-snapshot';
   let compileCalls = 0;

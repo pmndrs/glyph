@@ -19,6 +19,8 @@ okf_version: '0.2'
 - [Renderer integration guide](guides/renderer-integration.md) — the working path for a custom engine: declare a
   technique schema, author and register a render policy, drive a session, consume all seven plan tables, and
   implement the retention and patch protocols.
+- [Technique implementation report](guides/technique-implementation-report.md) — worked portable plan, policy, raster,
+  and baker examples with ownership maps and the end-to-end draw flow.
 - [Merged v0 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [External gpucat integration fitness plan](planning/gpucat-integration.md) — source-validated proof plan for consuming the target v1 core without private imports or core changes.
 

@@ -47,11 +47,11 @@ export const exampleRendererShader: ExampleRendererShader = Object.freeze({
 export interface ExampleRendererDevice {
   readonly shader: ExampleRendererShader;
   /** Materialize one portable raster payload under its engine and schema identities. */
-  createResource(id: number, name: string, resource: unknown): void;
+  createResource(id: number, name: string, resource: unknown, generation?: number): void;
   /** Upload or update one plan buffer. `id` is the engine's buffer id. */
   writeBuffer(id: number, bytes: Uint8Array): void;
-  /** Release a resource the engine retired. */
-  retireResource(id: number): void;
+  /** Release a resource only when the retired generation still owns the id. */
+  retireResource(id: number, generation: number): void;
   /** Issue the publication's draws in `orderToken` order. */
   submit(drawList: ExampleDrawList): void;
 }
@@ -68,17 +68,20 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   readonly submissions: ExampleDrawList[] = [];
   readonly realizedDraws: ExampleRealizedDraw[] = [];
   readonly #resourceNames = new Map<number, string>();
+  readonly #resourceGenerations = new Map<number, number>();
   readonly #resourceIds = new Map<string, number>();
 
   constructor(shader: ExampleRendererShader = exampleRendererShader) {
     this.shader = shader;
   }
 
-  createResource(id: number, name: string, resource: unknown): void {
+  createResource(id: number, name: string, resource: unknown, generation = 1): void {
     if (!Number.isSafeInteger(id) || id < 1)
       throw new RangeError('example renderer resource ids must be positive integers');
     if (typeof name !== 'string' || name.length === 0)
       throw new TypeError('example renderer resource names are required');
+    if (!Number.isSafeInteger(generation) || generation < 1)
+      throw new RangeError('example renderer resource generations must be positive integers');
     const previousName = this.#resourceNames.get(id);
     if (previousName !== undefined && previousName !== name) {
       throw new Error(`example renderer resource id ${id} is already bound to "${previousName}"`);
@@ -90,6 +93,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.resources.set(id, resource);
     this.resourcesByName.set(name, resource);
     this.#resourceNames.set(id, name);
+    this.#resourceGenerations.set(id, generation);
     this.#resourceIds.set(name, id);
     if (this.shader.variant.geometryResource === name) {
       this.geometriesByName.set(name, realizeGeometry(this.shader.variant.geometry, name, resource));
@@ -103,7 +107,8 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     if (named !== undefined) this.buffersByName.set(named, copy);
   }
 
-  retireResource(id: number): void {
+  retireResource(id: number, generation: number): void {
+    if (this.#resourceGenerations.get(id) !== generation) return;
     const name = this.#resourceNames.get(id);
     this.resources.delete(id);
     if (name !== undefined) {
@@ -112,6 +117,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       if (this.#resourceIds.get(name) === id) this.#resourceIds.delete(name);
       this.#resourceNames.delete(id);
     }
+    this.#resourceGenerations.delete(id);
     this.retirements.push(id);
   }
 
@@ -129,9 +135,10 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   }
 
   private geometryForPrimitive(primitive: ExamplePrimitiveRecord): ExampleGeometry {
+    const instanceCount = instanceCountFor(primitive.recordCount);
     const declaration = this.shader.variant.geometry;
     if (declaration.kind === 'synthetic-quad') {
-      return syntheticQuadGeometry(primitive.recordCount);
+      return syntheticQuadGeometry(instanceCount);
     }
     const name = declaration.resource;
     if (name === undefined) throw new Error('example renderer supplied geometry needs a resource name');
@@ -140,9 +147,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     }
     const geometry = this.geometriesByName.get(name);
     if (geometry === undefined) throw new Error(`example renderer has no realized geometry resource "${name}"`);
-    return geometry.instancesSource === 'records'
-      ? Object.freeze({ ...geometry, instanceCount: primitive.recordCount })
-      : geometry;
+    return geometry.instancesSource === 'records' ? Object.freeze({ ...geometry, instanceCount }) : geometry;
   }
 }
 
@@ -164,9 +169,6 @@ export interface ExampleRealizedDraw {
 }
 
 function syntheticQuadGeometry(instanceCount: number): ExampleGeometry {
-  if (!Number.isSafeInteger(instanceCount) || instanceCount < 1) {
-    throw new RangeError('example renderer synthetic-quad draws need a positive record count');
-  }
   return Object.freeze({
     kind: 'synthetic-quad',
     indexed: true,
@@ -176,6 +178,13 @@ function syntheticQuadGeometry(instanceCount: number): ExampleGeometry {
     instanceCount,
     instancesSource: 'records',
   });
+}
+
+function instanceCountFor(recordCount: number): number {
+  if (!Number.isSafeInteger(recordCount) || recordCount < 1) {
+    throw new RangeError('example renderer draws need a positive record count');
+  }
+  return recordCount;
 }
 
 function realizeGeometry(declaration: TechniqueGeometryDeclaration, name: string, resource: unknown): ExampleGeometry {

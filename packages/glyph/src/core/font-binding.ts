@@ -52,7 +52,7 @@ export interface FontBindingDescriptor {
   readonly resourceU32: FontBindingFieldTable;
 }
 
-/** Compile one first-party loaded font into the Rust engine's field-major immutable binding. */
+/** Compile one loaded font's binding bytes; registered portable resources are dropped from this byte-only projection. */
 export function loadedFontBindingBytes(
   font: LoadedFont<AnyRasterTechnique>,
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),

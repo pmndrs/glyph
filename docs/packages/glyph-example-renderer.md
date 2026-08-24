@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a headless TypeGPU
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:2845e5a9bd986a16f2ed98bb16f1bbb39727a28cd7bd784d8018064ffebaf459'
+source_digest: 'sha256:3dff3e6d0c2fbbe9a859096da8b7f271d0bbdf5d2c68606cc5a699eed68a113b'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -29,7 +29,10 @@ sources:
   - id: boundary-tests
     resource: ../../packages/glyph-example-renderer/tests/package-boundary.test.ts
     title: Published-entry-point boundary proof
-  - id: engine-tests
+  - id: retention-tests
+    resource: ../../packages/glyph-example-renderer/tests/example-engine.test.ts
+    title: Retention protocol and capacity-growth proof
+  - id: acceptance-tests
     resource: ../../packages/glyph-example-renderer/tests/example-render.test.ts
     title: Real font, resource, geometry, and non-empty draw acceptance
   - id: reader-tests

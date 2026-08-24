@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:d7ded097133b153fe315e02781ff56f207b01c968dd877ae06809a10660461ab'
+source_digest: 'sha256:7e5291f4d68f67a3e9f9da831ebb3cd3cc0100af6285d82004589b64248ec32e'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -17,6 +17,9 @@ sources:
   - id: shader-contract
     resource: ../../packages/glyph-example-raster/src/shader-contract.ts
     title: Shared shader input contract
+  - id: portable-plan
+    resource: ../../packages/glyph-example-raster/src/portable.ts
+    title: Portable technique schema and registered plan program
   - id: geometry-fixture
     resource: ../../packages/glyph-example-raster/src/geometry-fixture.ts
     title: Portable GLB-like indexed geometry fixture

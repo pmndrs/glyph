@@ -61,6 +61,6 @@ When porting a shader, the TSL realization is rendered to WGSL and GLSL in a dev
 
 ## Rules
 
-- Import from `@pmndrs/glyph/core` and the technique's public `/typegpu` subpath. Never from `internal/`, `generated/`, or `/three`. The real-font acceptance fixture may additionally use the public root loader and `/bake` entry point to create its temporary font; the boundary test allowlists those exact specifiers and no broader file exemption.
+- Import from `@pmndrs/glyph/core` and the technique's public `/typegpu` subpath. Never from `internal/`, `generated/`, or `/three`. The engine driver uses a type-only root import for `LoadedFont` and `AnyRasterTechnique`; only the real-font acceptance fixture additionally uses the public root loader and `/bake` entry point to create its temporary font. The boundary test allowlists those exact imports and no runtime renderer import.
 - The engine package must never learn this package's name. A registration edit inside `packages/glyph` to make an integration work is the defect this package is here to catch.
 - Prefer making a gap visible over working around it. When the published surface is insufficient, the correct response is a failing test and an audit item, not a private import.

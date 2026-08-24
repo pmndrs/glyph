@@ -4,13 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
-const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
 
-await run(process.execPath, [
-  join(repositoryRoot, 'node_modules/typescript/bin/tsc'),
-  '-p',
-  join(packageRoot, 'tsconfig.build.json'),
-]);
+await run('pnpm', ['exec', 'tsc', '-p', join(packageRoot, 'tsconfig.build.json')]);
 
 const { default: typegpuPlugin } = await import('unplugin-typegpu/rollup');
 const plugin = typegpuPlugin();

@@ -2,6 +2,7 @@ import {
   compileTextEngineFrameUpdate,
   compileRasterFont,
   TextEngineHost,
+  textShaperAbi,
   type RetainedTextEnginePublication,
   type RuntimeShaper,
   type TextEngineFrameLimits,
@@ -131,7 +132,11 @@ export class ExampleTextEngine {
     for (const patch of list.patches) {
       if (patch.payload !== undefined) device?.writeBuffer(patch.bufferId, patch.payload);
     }
-    for (const retirement of list.retirements) device?.retireResource(retirement.id);
+    for (const retirement of list.retirements) {
+      if (retirement.kind === textShaperAbi.engine.retirementKinds.resource) {
+        device?.retireResource(retirement.id, retirement.generation);
+      }
+    }
     device?.submit(list);
     return list;
   }
