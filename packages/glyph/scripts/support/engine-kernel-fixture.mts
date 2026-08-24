@@ -44,7 +44,7 @@ function captureWorkload(
   const created = createBenchmarkParagraph(fixture, text, 600);
   created.group.updateMatrixWorld(true);
   if (created.group.error !== undefined) throw created.group.error;
-  const layout = created.paragraph.layout();
+  const layout = created.paragraph.glyphs();
   if (layout === undefined) throw new Error('paragraph benchmark fixture did not publish a layout');
   const glyphs = layout.glyphIds.length;
   const planeLeft = new Float32Array(glyphs);

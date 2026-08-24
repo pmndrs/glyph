@@ -184,7 +184,7 @@ export interface ParagraphLayout extends ParagraphMeasurement {
  * One positioned paragraph: the measurement view plus every per-glyph and per-line column,
  * with stable identities for directed augmentation.
  *
- * This is what `layout()` answers and what `Paragraph.layout(constraints)` copies out of Wasm.
+ * This is what `glyphs()` answers and what `Paragraph.glyphs(constraints)` copies out of Wasm.
  * It is a second query after `measure()`, not a bigger copy of it: asking for these columns
  * makes the engine emit a record per glyph, which a caller probing sizes never wants to pay
  * for. See `measure()` and `Text.measure()` for the split.

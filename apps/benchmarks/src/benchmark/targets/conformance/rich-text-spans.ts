@@ -332,7 +332,7 @@ function measureCase(
     if (failure !== undefined) {
       throw new Error(`${caseId} failed to publish: ${String(failure)}`, { cause: failure });
     }
-    const layout = text.layout();
+    const layout = text.glyphs();
     if (layout === undefined) throw new Error(`${caseId} has no layout`);
     return readEvidence(group, layout);
   } finally {

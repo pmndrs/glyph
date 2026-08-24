@@ -259,7 +259,7 @@ function checkSubject(subject, context) {
 
   // Dual derivation: the per-glyph inspection lane and the line-level measurement lane
   // are computed by different code paths and must agree on the glyph totals.
-  const inspected = node.layout();
+  const inspected = node.glyphs();
   assert.notEqual(inspected, undefined, `${context}: layout inspection went missing`);
   assert.equal(
     inspected.glyphCount,

@@ -24,7 +24,7 @@ export type {
   TextSpan,
   TextUpdate,
 } from './three/text.js';
-// `measure()`, `layout()`, and `snapshotGlyphs()` return these, so a `/three` importer
+// `measure()`, `glyphs()`, and `snapshotGlyphs()` return these, so a `/three` importer
 // has to be able to name them without reaching for a second subpath.
 export type { LayoutBox, ParagraphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
 export type { GlyphApplication, GlyphCaret, GlyphPlacements } from './glyph-placement.js';

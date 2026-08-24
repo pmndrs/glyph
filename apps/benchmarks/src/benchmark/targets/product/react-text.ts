@@ -335,7 +335,7 @@ function requiredCoreText(reference: React.RefObject<BitmapTextObject | null>): 
 }
 
 function requiredLayout(core: BitmapTextObject): ParagraphLayout {
-  const layout = core.layout();
+  const layout = core.glyphs();
   if (layout === undefined) throw new Error('React Text layout inspection is unavailable');
   return layout;
 }

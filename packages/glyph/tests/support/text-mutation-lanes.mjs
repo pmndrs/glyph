@@ -123,7 +123,7 @@ export function lanes(mounted) {
   });
   draws.sort((left, right) => left.start - right.start);
   const paragraphs = mounted.nodes.map((node) => {
-    const layout = node.layout();
+    const layout = node.glyphs();
     const measured = node.measure();
     return {
       glyphCount: measured?.glyphCount,

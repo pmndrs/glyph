@@ -313,7 +313,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
    * a record per glyph and copies those arrays out of Wasm. Reading a width should not pay for
    * that, and a scene that measures every frame would.
    */
-  layout(): ParagraphLayoutInspection | undefined {
+  glyphs(): ParagraphLayoutInspection | undefined {
     this.#assertActive();
     return this.#binding?.layoutInspection(eraseTextTechnique(this));
   }

@@ -302,7 +302,7 @@ async function disposeFlatMtsdfConformanceResources(resources: FlatMtsdfConforma
 }
 
 function committedLayout(line: Text<typeof mtsdf>): ParagraphLayout {
-  const layout = line.layout();
+  const layout = line.glyphs();
   if (layout === undefined) throw new Error('MTSDF conformance Text lost its committed layout');
   return layout;
 }

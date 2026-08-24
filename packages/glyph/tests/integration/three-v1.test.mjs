@@ -138,12 +138,12 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(measurement.lineCount, 1);
   assert.equal(measurement.missingGlyphCount, 0);
   assert.equal(label.measure(), measurement, 'an unchanged committed layout must reuse its queried measurement');
-  const inspection = label.layout();
+  const inspection = label.glyphs();
   assert.ok(inspection, 'per-glyph layout must be available only through an explicit Rust inspection query');
   assert.equal(inspection.glyphIds.length, measurement.glyphCount);
   assert.equal(inspection.glyphStableIds.length, inspection.glyphIds.length);
   assert.equal(inspection.lineGlyphCounts.length, measurement.lineCount);
-  assert.equal(label.layout(), inspection, 'an unchanged committed layout must reuse its copied inspection');
+  assert.equal(label.glyphs(), inspection, 'an unchanged committed layout must reuse its copied inspection');
   assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
 
   const placements = label.snapshotGlyphs();
@@ -206,7 +206,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     'compatible revisions must retain draws and resize live counts',
   );
   assert.notEqual(label.measure(), measurement, 'a semantic update must invalidate the measurement cache');
-  assert.notEqual(label.layout(), inspection, 'a semantic update must invalidate the inspection cache');
+  assert.notEqual(label.glyphs(), inspection, 'a semantic update must invalidate the inspection cache');
 
   scene.add(label);
   scene.updateMatrixWorld();
@@ -239,7 +239,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(plainMeasure.lineCount, 1);
   assert.equal(indentedMeasure.lineCount, 1);
   assert.equal(indentedMeasure.contentWidth, plainMeasure.contentWidth + 30);
-  assert.equal(indented.layout().x[0], plainShort.layout().x[0] + 30);
+  assert.equal(indented.glyphs().x[0], plainShort.glyphs().x[0] + 30);
   assert.equal(spacedMeasure.firstBaseline, plainMeasure.firstBaseline + 8);
   assert.equal(spacedMeasure.contentHeight, plainMeasure.contentHeight + 8 + 6);
   for (const paragraph of [plainShort, indented, spaced]) {
@@ -315,7 +315,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
     doubleMeasure.contentHeight <= columnHeight,
     'the columned block extent must stay inside the column height',
   );
-  const columnStarts = twoColumns.layout().x;
+  const columnStarts = twoColumns.glyphs().x;
   const secondColumnStart = columnMeasureWidth + 20;
   assert.ok(
     Array.from(columnStarts).some((x) => x >= secondColumnStart),
@@ -931,7 +931,7 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
   scene.add(label);
   scene.updateMatrixWorld();
   assert.equal(label.error, undefined);
-  const inspection = label.layout();
+  const inspection = label.glyphs();
   assert.ok(inspection);
   assert.equal(inspection.lineTextEnds[0], 3, 'the fixed width must preserve the unsafe-boundary fixture');
   assert.equal(inspection.clusters.at(-1), 3, 'the ellipsis is anchored at the truncation boundary');

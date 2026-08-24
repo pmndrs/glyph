@@ -61,7 +61,7 @@ export function createContractText(font: ContractFont, text: string, style: Para
       value.contentBox = contentBox(constraints);
       group.updateMatrixWorld(true);
       if (group.error !== undefined) throw group.error;
-      const layout = value.layout();
+      const layout = value.glyphs();
       if (layout === undefined) throw new Error('paragraph contract layout was not published');
       return layout;
     },

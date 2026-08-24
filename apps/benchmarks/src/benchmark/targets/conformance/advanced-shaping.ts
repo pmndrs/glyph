@@ -138,7 +138,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
                 cause: text.error,
               });
             }
-            const layout = text.layout();
+            const layout = text.glyphs();
             if (layout === undefined) throw new Error(`${definition.id}:${frame.tick} has no layout`);
             const rendered = renderedGlyphs(text);
             const draws = bitmapDraws(text);

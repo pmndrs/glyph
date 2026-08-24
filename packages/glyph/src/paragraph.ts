@@ -113,7 +113,7 @@ interface ResolvedParagraphState<Technique extends AnyRasterTechnique> {
 
 /**
  * A framework-neutral retained paragraph: synchronous `measure(constraints)` and
- * `layout(constraints)` that need no scene, no renderer, and no committed frame,
+ * `glyphs(constraints)` that need no scene, no renderer, and no committed frame,
  * and that leave authored state untouched.
  *
  * Each paragraph owns one engine session on its runtime's Wasm shaper and answers every
@@ -186,7 +186,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    * Monotonic paragraph-scoped revision of the positioned output.
    *
    * It starts at 0 (no positioned output yet) and advances by exactly one each time a
-   * successful `layout()` produces output whose content differs from the previous layout's.
+   * successful `glyphs()` produces output whose content differs from the previous positioned output.
    * "Positioned output" is everything a renderer or interaction layer consumes: the box and
    * content extents, both baselines, the overflow flag, glyph/line/missing-glyph counts, every
    * per-glyph record in order (glyph id, cluster, font slot, em size, x, y, flags), and every
@@ -216,7 +216,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    * Repeated measurement at equal constraints answers from cache with the identical object;
    * different constraints ride the engine's retained speculative transaction, so only geometry,
    * flow, and positioning re-run over the retained shaping. The positioned columns are a second
-   * call: see `layout()`.
+   * call: see `glyphs()`.
    *
    * A constraint that is not finite and nonnegative, or an impossible column policy, throws from
    * here — caller arithmetic, reported where it was written.
@@ -249,14 +249,14 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    * `layoutRevision` advances here, when positioned output actually differs, so a host gates
    * readback on it rather than copying arrays to compare them.
    */
-  layout(constraints?: ParagraphConstraints): ParagraphLayoutInspection {
+  glyphs(constraints?: ParagraphConstraints): ParagraphLayoutInspection {
     this.#assertActive();
     const resolved = resolveConstraints(constraints);
     const key = axisKey(resolved);
     const cached = this.#layouts.get(key);
     if (cached !== undefined) return cached;
     const { inspection } = this.#query(this.#fullBox(resolved), true);
-    if (inspection === undefined) throw new Error('paragraph layout query returned no layout inspection');
+    if (inspection === undefined) throw new Error('paragraph glyph query returned no layout inspection');
     const digest = layoutDigest(inspection);
     if (digest !== this.#lastLayoutDigest) {
       this.#lastLayoutDigest = digest;

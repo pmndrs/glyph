@@ -77,10 +77,10 @@ test('layout() positioned columns agree byte-for-byte with the Three.js Text ins
   scene.add(text);
   try {
     const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
-    const result = paragraph.layout(box);
+    const result = paragraph.glyphs(box);
     scene.updateMatrixWorld(true);
     if (text.error !== undefined) throw text.error;
-    const expected = text.layout();
+    const expected = text.glyphs();
     assert.ok(expected !== undefined, 'the Text route must publish a committed layout inspection');
     assert.deepEqual(projectLayout(result), projectLayout(expected), 'positioned output must be identical');
     paragraph.dispose();
@@ -165,21 +165,21 @@ test('layoutRevision advances exactly when positioned output differs', async () 
     assert.equal(paragraph.layoutRevision, 0, 'reading sizes must not produce positioned output');
 
     // Asking for the columns is the second query, and the revision moves with it.
-    const wide = paragraph.layout({ width: { mode: 'at-most', size: 600 } });
+    const wide = paragraph.glyphs({ width: { mode: 'at-most', size: 600 } });
     assert.equal(paragraph.layoutRevision, 1, 'materializing the columns advances from zero');
     const wideProjection = projectLayout(wide);
 
     // Asking again at the same constraints is the cached object, so nothing moves.
-    assert.equal(paragraph.layout({ width: { mode: 'at-most', size: 600 } }), wide);
+    assert.equal(paragraph.glyphs({ width: { mode: 'at-most', size: 600 } }), wide);
     assert.equal(paragraph.layoutRevision, 1, 'a cached answer must not advance the revision');
 
     // A wider at-most box that fits the same lines produces identical positioned output.
-    const wider = paragraph.layout({ width: { mode: 'at-most', size: 900 } });
+    const wider = paragraph.glyphs({ width: { mode: 'at-most', size: 900 } });
     assert.deepEqual(projectLayout(wider), wideProjection);
     assert.equal(paragraph.layoutRevision, 1, 'equal positioned output must not advance the revision');
 
     // Narrowing until the text wraps changes the positioned output.
-    const narrow = paragraph.layout({ width: { mode: 'exact', size: 140 } });
+    const narrow = paragraph.glyphs({ width: { mode: 'exact', size: 140 } });
     assert.equal(paragraph.layoutRevision, 2, 'changed positioned output advances by exactly one');
     assert.ok(narrow.lineCount > wide.lineCount, 'a narrower box wraps into more lines');
   } finally {
@@ -299,7 +299,7 @@ test('measurement is complete and available before anything is rendered', async 
     // Ink bounds are the visual extent, distinct from the advance extent: centring on
     // contentWidth centres the pen, centring on inkBounds centres what you see. Ink is a
     // positioned quantity, so it comes from the second, positioned query.
-    const inspection = paragraph.layout({ width: { mode: 'at-most', size: 420 } });
+    const inspection = paragraph.glyphs({ width: { mode: 'at-most', size: 420 } });
     assert.ok(inspection.inkBounds !== undefined, 'ink bounds must be measured before render');
     assert.ok(Number.isFinite(inspection.inkBounds.x) && Number.isFinite(inspection.inkBounds.width));
     assert.notEqual(inspection.inkBounds.width, m.contentWidth, 'ink and advance extents are different numbers');

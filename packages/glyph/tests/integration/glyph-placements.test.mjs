@@ -260,7 +260,7 @@ test('glyph flags decode through exported names rather than remembered indices',
   const font = await loadFont();
   const mounted = mount(font, 'flags');
   try {
-    const inspection = mounted.node.layout();
+    const inspection = mounted.node.glyphs();
     assert.equal(inspection.glyphFlags.length, inspection.glyphCount);
     assert.equal(glyphFlags.produced, glyphFlags.unsafeToBreak | glyphFlags.unsafeToConcat);
     // The engine never sets a bit outside the set it publishes a name for, so a consumer testing
