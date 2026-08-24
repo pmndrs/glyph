@@ -111,8 +111,8 @@ import { Paragraph } from '@pmndrs/glyph/core';
 
 const paragraph = new Paragraph({ font, text, style?, paint?, policy? });
 
-paragraph.layout(constraints?): ParagraphMeasureResult;
-paragraph.glyphs(constraints?): ParagraphLayoutResult;
+paragraph.layout(constraints?): ParagraphMetrics;
+paragraph.glyphs(constraints?): ParagraphLayoutInspection;
 paragraph.update(input: ParagraphUpdate): void;
 paragraph.dispose(): void;
 ```
@@ -146,7 +146,7 @@ Rounding up (never to-nearest) guarantees the committed box is at least as wide 
 ## The paragraph-scoped measure fast path (11.17)
 
 Repeated measurement is no longer a full frame transaction. When the only pending change on a `Text` is geometry (a
-`contentBox` update — exactly the Yoga measure-callback shape), `measure()` routes to the engine's
+`contentBox` update — exactly the Yoga measure-callback shape), `layout()` routes to the engine's
 paragraph-scoped synchronous query: validation and speculative preparation run for that paragraph alone, the answer is
 copied from the inactive result slot, and no publication flip, revision advance, or renderer-fence acknowledgment
 happens. The engine retains the speculative work as one transaction — sequential measures at different constraints

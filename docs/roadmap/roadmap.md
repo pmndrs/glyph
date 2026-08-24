@@ -436,7 +436,7 @@ Item 5.1 is closed; the positioned output and boundary-sensitive reshape evidenc
 
 ### 5.2 closure checklist
 
-- [x] `layout()` shares prepared analysis, broad shaping, and cached line plans with `measure()` while materializing paragraph-owned `fontHandles`, font slots, glyph IDs, UTF-16 clusters, font sizes, x/y positions, flags, and parallel line arrays only on demand.
+- [x] `glyphs()` shares prepared analysis, broad shaping, and cached line plans with `layout()` while materializing paragraph-owned `fontHandles`, font slots, glyph IDs, UTF-16 clusters, font sizes, x/y positions, flags, and parallel line arrays only on demand.
 - [x] Full layouts cache by complete normalized constraints; positioned line geometry caches independently by effective line policy, so identical hot layouts reuse one object and height-only box changes reuse the exact glyph arrays without another Wasm call. Every paragraph cache retains at most its 32 most recently used variants.
 - [x] Unsafe-to-concat line fragments become one `reshapeRanges` request per changed-width layout. Canonical 720 px and 360 px layouts batch exactly two and three line ranges respectively with full-run context and line BOT/EOT flags; the natural unbroken layout reuses the broad shape with zero reshapes.
 - [x] The canonical paragraph contract owns exact measurement values, 55-glyph IDs/clusters/flags, line text/glyph ranges, Float32 baselines/advances, and registry-independent byte-level hashes `bb15bbcc`, `4f111a3f`, and `e8c0e9d5` for natural, wide, and narrow layouts.

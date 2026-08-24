@@ -69,14 +69,6 @@ const PARAGRAPH_POLICY_HANDLE = 0x8000_0001;
 const PARAGRAPH_HANDLE_BASE = 0x8000_0000;
 
 /**
- * Why a query failed, returned by `layout()` and `glyphs()` instead of surfacing out of band.
- *
- * `status` is the raw text-engine status number (`textShaperAbi.status`) and `message` the
- * human-readable form. Boundary violations -- a negative constraint size, an impossible column
- * policy -- are caller arithmetic errors and throw synchronously instead; this record is
- * reserved for the engine rejecting otherwise legal input.
- */
-/**
  * A query answers, or this package is broken.
  *
  * Measurement and layout are synchronous and take no resource that could be missing: the font is

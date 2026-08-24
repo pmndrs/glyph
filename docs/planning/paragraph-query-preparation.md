@@ -268,7 +268,7 @@ sequenceDiagram
 Paragraph data is locally retained, but glyph stable IDs and content revisions are allocated from session-global
 cursors. Multiple independent speculative transactions would reserve competing ranges, require rebasing prepared glyphs
 at commit, or introduce a second identity-allocation scheme. One transaction keeps a single linear reservation while
-still allowing `measure()` calls for A, then B, to retain both paragraph results for the final frame.
+still allowing `layout()` calls for A, then B, to retain both paragraph results for the final frame.
 
 This keeps allocation deterministic and bounds existing paragraphs to their committed plus already-present pending
 high-water storage. The descriptor grows only by compact paragraph metadata. If evidence later requires concurrent
@@ -291,8 +291,8 @@ stateDiagram-v2
 
 The desired semantic split is:
 
-- `measure()` with no pending change returns the frozen committed cache without crossing;
-- `measure()` with a pending change prepares only that paragraph, returns its pending measurement synchronously,
+- `layout()` with no pending change returns the frozen committed cache without crossing;
+- `layout()` with a pending change prepares only that paragraph, returns its pending measurement synchronously,
   and adds it to the session's speculative token;
 - sequential measurements of other pending paragraphs extend that same transaction instead of invalidating earlier
   work;

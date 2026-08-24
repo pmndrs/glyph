@@ -126,7 +126,7 @@ Capacity policy controls the instance arena:
 | `chunk` | Use bounded chunks when the group exceeds the initial size. |
 
 There is no non-resizing policy. A capacity cap could only be enforced after shaping, from inside `synchronize()` inside
-`updateMatrixWorld()`, and `measure()` routes through the same path — so a caller could not ask how many glyphs the
+`updateMatrixWorld()`, and `layout()` routes through the same path — so a caller could not ask how many glyphs the
 content needs without already having exceeded the cap (D-267).
 
 The default group capacity is 4,096 glyphs with `chunk` policy. A standalone `Text` defaults to 256 glyphs with `grow`
