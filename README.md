@@ -10,6 +10,9 @@ The root is the vocabulary of text — fonts, authoring, layout and measurement 
 every consumer speaks it. `@pmndrs/glyph/three` and `@pmndrs/glyph/react` are integrations, and they publish only
 their own surface. `@pmndrs/glyph/core` is for implementing an integration: the render policy, the render plan, the
 frame wire and its handoff. It is additive to the root rather than parallel to it, so a custom renderer imports both.
+The [renderer integration guide](docs/guides/renderer-integration.md) walks that path end to end: declaring a
+technique schema, authoring and registering a policy, driving a session, reading all seven plan tables, and
+implementing the retention and patch protocols.
 
 The rule, if you are deciding where something belongs: **a type an application can encounter lives at the root; a
 thing only an integrator constructs lives in `/core`.** That is why `ParagraphMeasurement` is at the root and
