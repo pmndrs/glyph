@@ -99,11 +99,17 @@ export const packageSizeBudgets = {
   // away exactly as they do in a consumer's build, and asserts that none of their text
   // survives. Total teardown (D-255) cost +1,295 raw measured unstripped; guarding its
   // guidance left +468 of real production behaviour, which fits the existing ceiling.
+  // Cluster-correct span alignment (this layer) reads extended grapheme boundaries from
+  // `unicode-segmenter` rather than `Intl.Segmenter`, whose Unicode version follows the host ICU
+  // and can therefore place a boundary the engine's own Rust tables do not. That dependency is the
+  // whole of the +22,290 raw growth over main's 376,899: a deliberate correctness-over-size trade
+  // for agreeing with the engine's cluster grid, not drift. Re-priced with headroom, both hosts
+  // measuring an identical 399,189 raw.
   'three-runtime-js': {
-    rawBytes: 377_000,
-    minifiedBytes: 245_500,
-    gzipBytes: 63_300,
-    brotliBytes: 53_500,
+    rawBytes: 405_000,
+    minifiedBytes: 258_000,
+    gzipBytes: 68_500,
+    brotliBytes: 57_500,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
