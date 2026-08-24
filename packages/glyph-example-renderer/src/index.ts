@@ -13,9 +13,8 @@ export { readDrawList } from './plan-reader.js';
 export {
   EXAMPLE_CAPABILITY_SET,
   EXAMPLE_POLICY_HANDLE,
-  exampleQuadSchema,
   exampleRenderPolicyBytes,
   exampleSystemBuffers,
 } from './policy.js';
 export type { ExampleTableSnapshot } from './snapshot.js';
-export type { ExampleRendererDevice } from './device.js';
+export { RecordingExampleRendererDevice, type ExampleRendererDevice } from './device.js';

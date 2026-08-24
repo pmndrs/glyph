@@ -205,7 +205,11 @@ export class ThreeTextEngineCoordinator {
     } else {
       const compiled = program.compileFont(font, this.host.wireIdentities);
       for (const [key, resource] of compiled.resources) {
-        this.#retainResource(font, key, { technique: font.technique.id, resource, program });
+        this.#retainResource(font, key, {
+          technique: font.technique.id,
+          resource: program.realizeResource(resource),
+          program,
+        });
       }
       this.host.registerFontBinding(handle, font.font.handle, compiled.binding);
     }

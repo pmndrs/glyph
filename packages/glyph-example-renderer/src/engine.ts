@@ -1,5 +1,6 @@
 import {
   compileTextEngineFrameUpdate,
+  compileRasterFont,
   TextEngineHost,
   type RetainedTextEnginePublication,
   type RuntimeShaper,
@@ -9,11 +10,15 @@ import {
   type TextEngineSession,
   type TextEngineStyleMutation,
   type TextEngineTextMutation,
+  type TextEngineConstraint,
+  type TextEngineRegion,
 } from '@pmndrs/glyph/core';
+import type { AnyRasterTechnique, LoadedFont } from '@pmndrs/glyph';
 
 import type { ExampleDrawList } from './draw-list.js';
 import { readDrawList } from './plan-reader.js';
 import { EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes } from './policy.js';
+import type { ExampleRendererDevice } from './device.js';
 
 /** The frame limits this host runs under. The engine rejects zero limits outright. */
 const EXAMPLE_LIMITS: TextEngineFrameLimits = {
@@ -31,6 +36,8 @@ export interface ExampleFrameInput {
   readonly paragraphMutations?: readonly TextEngineParagraphMutation[];
   readonly textMutations?: readonly TextEngineTextMutation[];
   readonly styleMutations?: readonly TextEngineStyleMutation[];
+  readonly constraints?: readonly TextEngineConstraint[];
+  readonly regions?: readonly TextEngineRegion[];
 }
 
 /**
@@ -50,11 +57,27 @@ export interface ExampleFrameInput {
  */
 export class ExampleTextEngine {
   readonly #host: TextEngineHost;
+  readonly #device: ExampleRendererDevice | undefined;
+  #nextBindingHandle = 100;
   #session: TextEngineSession | undefined;
 
-  constructor(shaper: RuntimeShaper) {
+  constructor(shaper: RuntimeShaper, device?: ExampleRendererDevice) {
     this.#host = new TextEngineHost(shaper);
+    this.#device = device;
     this.#host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes());
+  }
+
+  /** Compile and register one loaded font through the portable raster program. */
+  registerFont(font: LoadedFont<AnyRasterTechnique>): number {
+    const compiled = compileRasterFont(font, this.#host.wireIdentities);
+    if (compiled === undefined)
+      throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
+    const bindingHandle = this.#nextBindingHandle++;
+    this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
+    for (const [key, resource] of compiled.resources) {
+      this.#device?.createResource(this.#host.wireIdentities.resolve(key), resource);
+    }
+    return bindingHandle;
   }
 
   /** The live session, for hosts that compose raw protocol steps themselves. */
@@ -88,12 +111,20 @@ export class ExampleTextEngine {
       ...(input.paragraphMutations === undefined ? {} : { paragraphMutations: input.paragraphMutations }),
       ...(input.textMutations === undefined ? {} : { textMutations: input.textMutations }),
       ...(input.styleMutations === undefined ? {} : { styleMutations: input.styleMutations }),
+      ...(input.constraints === undefined ? {} : { constraints: input.constraints }),
+      ...(input.regions === undefined ? {} : { regions: input.regions }),
     });
   }
 
   /** Runs one real frame and returns its plan, retained into host-owned memory. */
-  render(input: ExampleFrameInput): ExampleDrawList {
-    return readDrawList(this.#retainPublication(this.session.update(this.frameRequest(input))));
+  render(input: ExampleFrameInput, device: ExampleRendererDevice | undefined = this.#device): ExampleDrawList {
+    const list = readDrawList(this.#retainPublication(this.session.update(this.frameRequest(input))));
+    for (const patch of list.patches) {
+      if (patch.payload !== undefined) device?.writeBuffer(patch.bufferId, patch.payload);
+    }
+    for (const retirement of list.retirements) device?.retireResource(retirement.id);
+    device?.submit(list);
+    return list;
   }
 
   #latest: Pick<TextEnginePublication, 'engineRevision' | 'planRevision'> = {

@@ -5,6 +5,7 @@ import { msdf, msdfSchema, type MsdfData } from '../raster/msdf.js';
 import { slug, slugSchema, type SlugData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
 import { RenderWireIdentityRegistry, type TechniqueWireIds } from './render-policy.js';
+import { compileRasterFont } from './raster-plan-program.js';
 
 const MAX_U32 = 0xffff_ffff;
 const ABSENT_PAGE = 0xffff;
@@ -56,6 +57,8 @@ export function loadedFontBindingBytes(
   font: LoadedFont<AnyRasterTechnique>,
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
 ): Uint8Array {
+  const compiled = compileRasterFont(font, identities);
+  if (compiled !== undefined) return compiled.binding;
   const techniqueIds: TechniqueWireIds = {
     bitmap: identities.resolve(bitmap.id),
     msdf: identities.resolve(msdf.id),

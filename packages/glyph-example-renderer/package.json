@@ -19,7 +19,8 @@
     "check": "pnpm test && tsc -p tsconfig.json --noEmit && oxlint --deny-warnings . && oxfmt --check package.json src tests tsconfig.json tsconfig.build.json"
   },
   "dependencies": {
-    "@pmndrs/glyph": "workspace:*"
+    "@pmndrs/glyph": "workspace:*",
+    "@pmndrs/glyph-example-raster": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

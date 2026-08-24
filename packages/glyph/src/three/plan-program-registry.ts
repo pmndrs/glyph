@@ -2,18 +2,18 @@ import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/
 
 import { textShaperAbi } from '../core.js';
 import {
-  compileFontBinding,
-  emptyFontBindingTable,
-  fontBindingResources,
+  compileRasterFont,
+  createProgram,
   RenderWireIdentityRegistry,
-  type FontBindingDescriptor,
-  type FontBindingFieldTable,
-  type PolicyProgram,
+  resolveRasterPlanProgram,
+  schemaPolicyBuffers,
+  type CompiledRasterFont,
+  type RasterPlanProgramFontCompiler,
 } from '../core.js';
 import type { LoadedFont } from '../loaded-font.js';
-import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
+import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { ThreeTextMaterial } from './material.js';
-import { threeSystemBuffers } from './render-policy.js';
+import { threePolicyCapabilitySet, threeSystemBuffers } from './render-policy.js';
 
 export interface ThreePlanProgramBuffer {
   readonly scalarType: number;
@@ -30,60 +30,37 @@ export interface ThreePlanProgramMaterialContext<Resource> {
   transformPosition(position: Node<'vec3'>): Node<'vec3'>;
 }
 
-export interface ThreePlanProgramFontCompiler<Technique extends AnyRasterTechnique, Resource> {
-  readonly font: LoadedFont<Technique>;
-  readonly techniqueId: number;
-  readonly identities: RenderWireIdentityRegistry;
-  readonly emptyTable: (rows: number) => FontBindingFieldTable;
-  resources(keys: readonly RasterResourceId[]): ReturnType<typeof fontBindingResources>;
-  compile(descriptor: FontBindingDescriptor): Uint8Array;
-  retain(key: RasterResourceId, resource: Resource): void;
-}
+/** Compatibility alias for code that only needs the portable cold compiler shape. */
+export type ThreePlanProgramFontCompiler<
+  Technique extends AnyRasterTechnique,
+  Resource,
+> = RasterPlanProgramFontCompiler<Technique, Resource>;
 
-export interface ThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Resource> {
+export interface ThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Resource = unknown> {
   readonly technique: Technique;
-  /** Static validated policy bytecode descriptor. IDs are supplied by the renderer registry. */
-  readonly policy: Omit<PolicyProgram, 'techniqueId' | 'programId'>;
-  /** Cold font registration; never runs during frame shaping, layout, packing, or draw submission. */
-  compileFont(compiler: ThreePlanProgramFontCompiler<Technique, Resource>): void;
-  /**
-   * Renderer realization invoked only when a compatible retained material is absent.
-   * The callback receives borrowed plan-backed attributes and must not synchronously update or query text.
-   */
-  createMaterial(context: ThreePlanProgramMaterialContext<Resource>): NodeMaterial;
+  /** Convert a portable payload into data owned by the Three resource cache. */
+  readonly realizeResource?: (resource: Resource) => unknown;
+  /** Create a Three material from retained plan buffers and a realized resource. */
+  createMaterial(context: ThreePlanProgramMaterialContext<unknown>): NodeMaterial;
 }
 
 export interface CompiledThreeRasterPlanProgram {
   readonly technique: AnyRasterTechnique;
   readonly techniqueId: number;
   readonly programId: number;
-  readonly policy: PolicyProgram;
+  readonly policy: import('../core.js').PolicyProgram;
   compileFont(
     font: LoadedFont<AnyRasterTechnique>,
     identities: RenderWireIdentityRegistry,
-  ): Readonly<{ binding: Uint8Array; resources: ReadonlyMap<RasterResourceId, unknown> }>;
+  ): CompiledRasterFont<unknown>;
+  realizeResource(resource: unknown): unknown;
   createMaterial(context: ThreePlanProgramMaterialContext<unknown>): NodeMaterial;
 }
 
 const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique, unknown>>();
-
-/**
- * Runtimes that have already taken their snapshot of `programs`.
- *
- * A `TextRuntime`'s coordinator reads this registry exactly once, at construction, and nothing
- * re-reads it afterwards. A technique registered after that snapshot is therefore invisible to
- * every runtime already built, and the loss surfaces far away as a missing technique when a font
- * using it is bound. The set is what lets a late registration be rejected AT the registration.
- */
 const snapshots = new Set<RenderWireIdentityRegistry>();
 
-/**
- * Register declarative Rust packing policy plus cold font/resource and renderer realization code.
- *
- * Registration must happen before the first runtime-scoped Three coordinator is created -- that is,
- * before the first `Text`, `TextGroup`, or `FontLoader` for a runtime. A later registration throws
- * rather than silently applying to nothing.
- */
+/** Register only the renderer-specific resource and material half of a portable program. */
 export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Resource>(
   program: ThreeRasterPlanProgram<Technique, Resource>,
 ): void {
@@ -92,19 +69,16 @@ export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechni
   if (existing !== undefined && existing !== erased) {
     throw new TypeError(`a different Three raster plan program is already registered for "${program.technique.id}"`);
   }
-  // Re-registering the identical program is a no-op and stays legal, so a module evaluated twice
-  // does not become an error. Only a technique no existing runtime holds is rejected.
   if (existing === undefined && snapshots.size !== 0) {
     throw new Error(
       `Three raster plan program "${program.technique.id}" was registered after ${snapshots.size} text runtime(s) ` +
-        'already read the registry, so no existing runtime can use it; register every technique before creating ' +
-        'the first Text, TextGroup, or FontLoader',
+        'already read the registry; register every technique before creating the first Text, TextGroup, or FontLoader',
     );
   }
   programs.set(program.technique.id, erased);
 }
 
-/** @internal Compile the cold registry snapshot into one Rust policy and exact font compilers. */
+/** @internal Compile the cold registry snapshot into policy, binding, and material factories. */
 export function compiledThreeRasterPlanPrograms(
   identities: RenderWireIdentityRegistry,
 ): readonly CompiledThreeRasterPlanProgram[] {
@@ -114,13 +88,7 @@ export function compiledThreeRasterPlanPrograms(
     .map((program) => compileProgram(program, identities));
 }
 
-/**
- * @internal Forget a disposed runtime's snapshot.
- *
- * Once no runtime holds a snapshot there is nothing a late registration could miss, so registration
- * is legal again. This is what keeps the module-global gate from leaking across a host that builds
- * and tears down runtimes, tests included.
- */
+/** @internal Forget a disposed runtime's renderer snapshot. */
 export function releaseThreeRasterPlanProgramSnapshot(identities: RenderWireIdentityRegistry): void {
   snapshots.delete(identities);
 }
@@ -151,38 +119,38 @@ function compileProgram(
   program: ThreeRasterPlanProgram<AnyRasterTechnique, unknown>,
   identities: RenderWireIdentityRegistry,
 ): CompiledThreeRasterPlanProgram {
+  const portable = resolveRasterPlanProgram(program.technique.id);
+  if (portable === undefined)
+    throw new Error(`no portable raster plan program is registered for "${program.technique.id}"`);
   const techniqueId = identities.resolve(program.technique.id);
   const programId = identities.resolve(`${program.technique.id}/three-plan-program`);
+  const body = portable.policyBody(threeSystemBuffers, threePolicyCapabilitySet());
   return {
     technique: program.technique,
     techniqueId,
     programId,
-    policy: { ...program.policy, techniqueId, programId },
+    policy: createProgram(
+      techniqueId,
+      programId,
+      body,
+      [
+        ...schemaPolicyBuffers(portable.schema),
+        { id: threeSystemBuffers.stableGlyphId.id, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 },
+        { id: threeSystemBuffers.transformIndex.id, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 },
+      ],
+      'indexed',
+      'ordered',
+    ),
     compileFont(font, bindingIdentities) {
       if (font.technique.id !== program.technique.id) {
         throw new TypeError('Three raster plan program received an incompatible loaded font');
       }
-      let binding: Uint8Array | undefined;
-      const resources = new Map<RasterResourceId, unknown>();
-      program.compileFont({
-        font,
-        techniqueId,
-        identities: bindingIdentities,
-        emptyTable: emptyFontBindingTable,
-        resources: (keys) => fontBindingResources(keys, bindingIdentities),
-        compile(descriptor) {
-          if (binding !== undefined) throw new Error('Three raster plan font compiler produced more than one binding');
-          binding = compileFontBinding(descriptor);
-          return binding;
-        },
-        retain(key, resource) {
-          if (resources.has(key)) throw new TypeError(`Three raster plan font retained duplicate resource "${key}"`);
-          resources.set(key, resource);
-        },
-      });
-      if (binding === undefined) throw new Error('Three raster plan font compiler produced no binding');
-      return { binding, resources };
+      const compiled = compileRasterFont(font, bindingIdentities);
+      if (compiled === undefined)
+        throw new Error(`no portable raster plan program is registered for "${font.technique.id}"`);
+      return compiled;
     },
+    realizeResource: (resource) => program.realizeResource?.(resource) ?? resource,
     createMaterial: (context) => program.createMaterial(context),
   };
 }

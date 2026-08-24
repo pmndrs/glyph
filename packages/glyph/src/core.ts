@@ -70,6 +70,18 @@ export {
   type FontBindingFieldTable,
 } from './core/font-binding.js';
 export {
+  compileRasterFont,
+  compileRasterPolicyBody,
+  registerRasterPlanProgram,
+  resolveRasterPlanProgram,
+  type CompiledRasterFont,
+  type CompiledRasterResource,
+  type RasterPlanProgram,
+  type RasterPlanProgramFontCompiler,
+  type RasterPolicyBodyFactory,
+  type RasterPolicySystem,
+} from './core/raster-plan-program.js';
+export {
   compileRenderPolicy,
   createProgram,
   techniqueWireIds,

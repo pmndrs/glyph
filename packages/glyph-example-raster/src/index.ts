@@ -8,3 +8,4 @@ export {
   type GlyphExampleOptions,
 } from './contract.js';
 export { glyphExample, type GlyphExampleData } from './raster.js';
+export { glyphExamplePlanProgram, glyphExampleSchema } from './portable.js';

@@ -285,6 +285,9 @@ importers:
       '@pmndrs/glyph':
         specifier: workspace:*
         version: link:../glyph
+      '@pmndrs/glyph-example-raster':
+        specifier: workspace:*
+        version: link:../glyph-example-raster
     devDependencies:
       '@types/node':
         specifier: 24.13.3

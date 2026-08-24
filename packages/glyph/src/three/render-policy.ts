@@ -96,10 +96,10 @@ export function threeRenderPolicyBytes(
   if (new Set(programs.map((program) => program.techniqueId)).size !== programs.length) {
     throw new TypeError('first-party raster technique wire identities collide');
   }
-  return compileRenderPolicy({ capabilitySets: [threeCapabilitySet()], programs });
+  return compileRenderPolicy({ capabilitySets: [threePolicyCapabilitySet()], programs });
 }
 
-function threeCapabilitySet(): PolicyCapabilitySet {
+export function threePolicyCapabilitySet(): PolicyCapabilitySet {
   const flags = textShaperAbi.policy.capabilityFlags;
   return {
     id: 1,
