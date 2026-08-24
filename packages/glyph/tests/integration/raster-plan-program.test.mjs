@@ -84,6 +84,10 @@ test('registers and resolves one portable raster plan by technique id', () => {
     () => registerRasterPlanProgram({ ...program, schema: declaredSchema('test.core-raster-plan-other-id') }),
     (error) => error instanceof TypeError && error.message.includes('schema names technique'),
   );
+  assert.throws(
+    () => registerRasterPlanProgram({ ...program, policyBody: undefined }),
+    (error) => error instanceof TypeError && error.message.includes('needs policyBody and compileFont callbacks'),
+  );
 });
 
 test('rejects a portable compiler that retains a duplicate resource or omits its binding', () => {
@@ -242,6 +246,40 @@ test('retained payloads must match their declared reserved kind before any devic
     assert.throws(
       () => compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry()),
       (error) => error instanceof TypeError && error.message.includes(`"${name}"`),
+    );
+  }
+});
+
+test('retention rejects byte coercion before any reserved payload is copied', () => {
+  const cases = [
+    {
+      id: 'test.core-raster-plan-byte-type-buffer',
+      name: 'table',
+      schema: (id) => declaredSchema(id, { resources: { table: { kind: 'buffer' } } }),
+      payload: { kind: 'buffer', bytes: [1, 2, 3] },
+    },
+    {
+      id: 'test.core-raster-plan-byte-type-texture',
+      name: 'atlas',
+      schema: (id) => declaredSchema(id),
+      payload: { ...atlasPayload(), bytes: new ArrayBuffer(16) },
+    },
+    {
+      id: 'test.core-raster-plan-byte-type-geometry',
+      name: 'mesh',
+      schema: (id) => declaredSchema(id),
+      payload: { ...indexedQuadGeometry(), bytes: new Float32Array(19) },
+    },
+  ];
+  for (const entry of cases) {
+    const program = retentionProgram(entry.id, entry.schema(entry.id), (compiler) => {
+      compiler.retain(entry.name, `${entry.id}/resource`, entry.payload);
+      return [];
+    });
+    registerRasterPlanProgram(program);
+    assert.throws(
+      () => compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry()),
+      (error) => error instanceof TypeError && error.message.includes('Uint8Array bytes'),
     );
   }
 });

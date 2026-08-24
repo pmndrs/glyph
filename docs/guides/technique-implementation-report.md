@@ -216,7 +216,7 @@ interface CompiledRasterFont<Resource = unknown> {
 
 No `NodeMaterial`, GPU texture, Three program, or device object crosses this result. `loadedFontBindingBytes(font, identities)` is the byte-only projection used by both `Paragraph` and the Three runtime path, so custom techniques do not have two binding implementations.
 
-Reserved `buffer`, `texture`, and `geometry` payloads are copied and validated at the `retain` call before the compiled result is returned. The schema's required geometry resource and declared texture format are checked in the same cold path; technique-private payload kinds remain opaque to core and must define their own ownership contract.
+Reserved `buffer`, `texture`, `texture-array`, and `geometry` payloads are copied and validated at the `retain` call before the compiled result is returned. The schema's required geometry resource and declared texture format are checked in the same cold path; technique-private payload kinds remain opaque to core and must define their own ownership contract.
 
 ## 2. Implementing a policy
 

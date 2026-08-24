@@ -428,5 +428,9 @@ export const slugSchema: TechniqueSchema<
     tableStarts: { id: 6, scalar: 'u32', lanes: ['curveStart', 'headerStart', 'referenceStart', 'bandStart'] },
     bandCounts: { id: 7, scalar: 'u32', lanes: ['horizontalBands', 'verticalBands', 'unused2', 'unused3'] },
   },
-  resources: { curves: { kind: 'texture' }, headers: { kind: 'texture' }, references: { kind: 'texture' } },
+  resources: {
+    curves: { kind: 'texture-array' },
+    headers: { kind: 'texture-array' },
+    references: { kind: 'texture-array' },
+  },
 });

@@ -84,6 +84,9 @@ export function registerRasterPlanProgram<Technique extends AnyRasterTechnique, 
       `raster plan program "${program.technique.id}" schema names technique "${program.schema.technique}"`,
     );
   }
+  if (typeof program.policyBody !== 'function' || typeof program.compileFont !== 'function') {
+    throw new TypeError(`raster plan program "${program.technique.id}" needs policyBody and compileFont callbacks`);
+  }
   const erased = program as unknown as ErasedProgram;
   const existing = programs.get(program.technique.id);
   if (existing !== undefined && existing !== erased) {
@@ -141,7 +144,9 @@ export function compileRasterFont(
         declared.kind,
         name,
         resource,
-        declared.kind === 'texture' && 'format' in declared ? declared.format : undefined,
+        (declared.kind === 'texture' || declared.kind === 'texture-array') && 'format' in declared
+          ? declared.format
+          : undefined,
       );
       declaredResources.set(name, key);
       resources.set(key, normalized);

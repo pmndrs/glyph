@@ -120,6 +120,7 @@ export {
   type TechniqueSchema,
   type TechniqueSchemaDeclaration,
   type TechniqueTextureResourceDeclaration,
+  type TechniqueTextureArrayResourceDeclaration,
 } from './core/technique-schema.js';
 export {
   assertPortableResource,
@@ -136,6 +137,7 @@ export {
   type PortableInstances,
   type PortableResource,
   type PortableTexturePayload,
+  type PortableTextureArrayPayload,
   type PortableTopology,
   type PortableVertexAttribute,
 } from './core/portable-resources.js';

@@ -31,12 +31,22 @@ const techniqueSchemaBrand: unique symbol = Symbol('glyph.technique-schema');
  * here so they can never change a validated width afterwards.
  */
 export function definePolicyBuffers<const Buffers extends PolicyBufferDeclarations>(buffers: Buffers): Buffers {
+  if (!isNonArrayObject(buffers)) throw new TypeError('policy buffers need a declaration object');
   const seen = new Set<number>();
   const owned: Record<string, PolicyBufferDeclaration> = Object.create(null);
   for (const [name, buffer] of Object.entries(buffers)) {
+    const sourceLanes = isNonArrayObject(buffer) ? buffer.lanes : undefined;
+    if (!Array.isArray(sourceLanes)) {
+      throw new TypeError(`policy buffer "${name}" needs a declaration with named lanes`);
+    }
     const id = buffer.id;
     const scalar = buffer.scalar;
-    const lanes = [...buffer.lanes];
+    const lanes = sourceLanes.map((lane, index) => {
+      if (typeof lane !== 'string' || lane.length === 0) {
+        throw new TypeError(`policy buffer "${name}" lane ${index} needs a nonempty name`);
+      }
+      return lane;
+    });
     if (!Number.isSafeInteger(id) || id <= 0 || id > 0xffff) {
       throw new RangeError(`policy buffer "${name}" needs a nonzero u16 id`);
     }
@@ -70,6 +80,12 @@ export interface TechniqueTextureResourceDeclaration {
   readonly format?: string;
 }
 
+/** Immutable layered sample payload; retained payloads validate as `PortableTextureArrayPayload`. */
+export interface TechniqueTextureArrayResourceDeclaration {
+  readonly kind: 'texture-array';
+  readonly format?: string;
+}
+
 /** GLB-like geometry payload; retained payloads validate as `PortableGeometryPayload`. */
 export interface TechniqueGeometryResourceDeclaration {
   readonly kind: 'geometry';
@@ -89,6 +105,7 @@ export interface TechniqueOpaqueResourceDeclaration {
 export type TechniqueResourceDeclaration =
   | TechniqueBufferResourceDeclaration
   | TechniqueTextureResourceDeclaration
+  | TechniqueTextureArrayResourceDeclaration
   | TechniqueGeometryResourceDeclaration
   | TechniqueOpaqueResourceDeclaration;
 
@@ -182,32 +199,43 @@ export function defineTechniqueSchema<
   if (scope !== 'glyph' && scope !== 'strike' && scope !== 'resource') {
     throw new TypeError(`technique "${technique}" needs a glyph, strike, or resource binding scope`);
   }
-  const bindingF32 = declaration.binding.f32 === undefined ? undefined : Object.freeze([...declaration.binding.f32]);
-  const bindingU32 = declaration.binding.u32 === undefined ? undefined : Object.freeze([...declaration.binding.u32]);
+  const bindingDeclaration = declaration.binding;
+  if (!isNonArrayObject(bindingDeclaration)) throw new TypeError(`technique "${technique}" needs a binding object`);
+  const bindingF32 = copyBindingNames(bindingDeclaration.f32, technique, 'f32');
+  const bindingU32 = copyBindingNames(bindingDeclaration.u32, technique, 'u32');
   const names = [...(bindingF32 ?? []), ...(bindingU32 ?? [])];
   if (new Set(names).size !== names.length) {
     throw new TypeError(`technique "${technique}" repeats a binding field name`);
   }
   const buffers = definePolicyBuffers(declaration.buffers);
   let resources: Readonly<Record<string, TechniqueResourceDeclaration>> | undefined;
-  if (declaration.resources !== undefined) {
+  const resourceDeclarations = declaration.resources;
+  if (resourceDeclarations !== undefined) {
+    if (!isNonArrayObject(resourceDeclarations)) {
+      throw new TypeError(`technique "${technique}" resources need a declaration object`);
+    }
     const owned: Record<string, TechniqueResourceDeclaration> = Object.create(null);
-    for (const [name, resource] of Object.entries(declaration.resources)) {
+    for (const [name, resource] of Object.entries(resourceDeclarations)) {
       owned[name] = defineResourceDeclaration(resource, name, technique);
     }
     resources = Object.freeze(owned);
   }
   let render: TechniqueRenderDeclaration | undefined;
-  if (declaration.render !== undefined) {
-    if (typeof declaration.render !== 'object' || declaration.render === null || Array.isArray(declaration.render)) {
+  const renderDeclaration = declaration.render;
+  if (renderDeclaration !== undefined) {
+    if (typeof renderDeclaration !== 'object' || renderDeclaration === null || Array.isArray(renderDeclaration)) {
       throw new TypeError(`technique "${technique}" render declaration needs an object`);
     }
-    render = Object.freeze({ geometry: defineGeometryDeclaration(declaration.render.geometry, technique, resources) });
+    render = Object.freeze({ geometry: defineGeometryDeclaration(renderDeclaration.geometry, technique, resources) });
   }
   let glyphOrigin: { readonly buffer: string } | undefined;
-  if (declaration.glyphOrigin !== undefined) {
-    const origin: PolicyBufferDeclaration | undefined = Object.hasOwn(buffers, declaration.glyphOrigin.buffer)
-      ? buffers[declaration.glyphOrigin.buffer]
+  const glyphOriginDeclaration = declaration.glyphOrigin;
+  if (glyphOriginDeclaration !== undefined) {
+    if (!isNonArrayObject(glyphOriginDeclaration) || typeof glyphOriginDeclaration.buffer !== 'string') {
+      throw new TypeError(`technique "${technique}" glyphOrigin needs a buffer name`);
+    }
+    const origin: PolicyBufferDeclaration | undefined = Object.hasOwn(buffers, glyphOriginDeclaration.buffer)
+      ? buffers[glyphOriginDeclaration.buffer]
       : undefined;
     if (origin === undefined) {
       throw new TypeError(`technique "${technique}" points glyphOrigin at an undeclared buffer`);
@@ -215,7 +243,7 @@ export function defineTechniqueSchema<
     if (origin.scalar !== 'f32' || origin.lanes.length < 2) {
       throw new TypeError(`technique "${technique}" needs an f32 glyphOrigin buffer with two origin lanes`);
     }
-    glyphOrigin = Object.freeze({ buffer: declaration.glyphOrigin.buffer });
+    glyphOrigin = Object.freeze({ buffer: glyphOriginDeclaration.buffer });
   }
   const binding = Object.freeze({
     ...(bindingF32 === undefined ? {} : { f32: bindingF32 }),
@@ -307,6 +335,22 @@ function defineGeometryDeclaration(
     throw new TypeError(`technique "${technique}" geometry "${kind}" needs unit-square or em coordinates`);
   }
   return Object.freeze({ kind, resource, coordinates });
+}
+
+function copyBindingNames(value: unknown, technique: string, scalar: PolicyScalarKind): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new TypeError(`technique "${technique}" ${scalar} binding needs a name list`);
+  const names = value.map((name, index) => {
+    if (typeof name !== 'string' || name.length === 0) {
+      throw new TypeError(`technique "${technique}" ${scalar} binding name ${index} needs a nonempty string`);
+    }
+    return name;
+  });
+  return Object.freeze(names);
+}
+
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**

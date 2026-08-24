@@ -12,7 +12,7 @@ function mutate(geometry, patch) {
 }
 
 test('the reserved portable kinds and topologies are the frozen closed sets', () => {
-  assert.deepEqual([...portableResourceKinds], ['buffer', 'texture', 'geometry']);
+  assert.deepEqual([...portableResourceKinds], ['buffer', 'texture', 'texture-array', 'geometry']);
   assert.deepEqual([...portableTopologies], ['triangle-list', 'triangle-strip']);
 });
 
@@ -25,6 +25,14 @@ test('valid buffer, texture, and geometry payloads pass their reserved declared 
     width: 4,
     height: 4,
     bytes: new Uint8Array(16),
+  });
+  assertPortableResource('texture-array', 'pages', {
+    kind: 'texture-array',
+    format: 'r8unorm',
+    width: 4,
+    height: 4,
+    layers: 2,
+    bytes: new Uint8Array(32),
   });
   assertPortableResource('geometry', 'mesh', indexedQuadGeometry());
   assertPortableResource('geometry', 'mesh', instancedQuadGeometry());
@@ -53,6 +61,18 @@ test('texture payloads need a format and positive dimensions', () => {
   assert.throws(
     () => assertPortableResource('texture', 'page', { ...base(), format: '' }),
     (error) => error instanceof TypeError && error.message.includes('nonempty sample format'),
+  );
+  assert.throws(
+    () =>
+      assertPortableResource('texture-array', 'pages', {
+        kind: 'texture-array',
+        format: 'r8unorm',
+        width: 2,
+        height: 2,
+        layers: 0,
+        bytes: new Uint8Array(4),
+      }),
+    (error) => error instanceof RangeError && error.message.includes('positive integer layer count'),
   );
   for (const dimension of ['width', 'height']) {
     assert.throws(
@@ -188,6 +208,15 @@ test('geometry views and accessors must stay inside the immutable bytes', () => 
 
 test('geometry attributes need a position and consistent counts per rate', () => {
   const quad = indexedQuadGeometry();
+  assert.throws(
+    () =>
+      assertPortableResource(
+        'geometry',
+        'mesh',
+        mutate(quad, (g) => (g.attributes[1].semantic = 'position')),
+      ),
+    (error) => error instanceof TypeError && error.message.includes('repeats semantic "position"'),
+  );
   assert.throws(
     () =>
       assertPortableResource(
@@ -383,12 +412,14 @@ test('indices must be scalar integers and draw ranges must fit the addressed str
 
 test('normalizing a retained payload owns bytes and structural metadata', () => {
   const source = indexedQuadGeometry();
+  source.views[0].foreign = { mutable: true };
   const normalized = normalizePortableResource('geometry', 'mesh', source);
   source.bytes[0] = 255;
   source.accessors[0].count = 1;
   assert.notEqual(normalized.bytes, source.bytes);
   assert.equal(normalized.bytes[0], 0);
   assert.equal(normalized.accessors[0].count, 4);
+  assert.equal(normalized.views[0].foreign, undefined);
   assert(Object.isFrozen(normalized));
   assert(Object.isFrozen(normalized.accessors));
 });

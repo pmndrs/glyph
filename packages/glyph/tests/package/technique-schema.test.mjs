@@ -63,6 +63,25 @@ test('rejected declarations leave caller-owned input untouched', () => {
   assert.equal(Object.isFrozen(input.buffers.origin.lanes), false);
 });
 
+test('malformed schema containers fail with named call-time diagnostics', () => {
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), binding: null }),
+    (error) => error instanceof TypeError && error.message.includes('needs a binding object'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), buffers: null }),
+    (error) => error instanceof TypeError && error.message.includes('policy buffers need a declaration object'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: null }),
+    (error) => error instanceof TypeError && error.message.includes('resources need a declaration object'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), glyphOrigin: null }),
+    (error) => error instanceof TypeError && error.message.includes('glyphOrigin needs a buffer name'),
+  );
+});
+
 test('schemas own their data: caller accessors cannot change validated widths', () => {
   let reads = 0;
   const accessorInput = {
@@ -262,6 +281,11 @@ test('reserved resource kinds declare only their own fields; private kinds keep 
     defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } } })
       .resources.atlas,
     { kind: 'texture', format: 'rgba8unorm' },
+  );
+  assert.deepEqual(
+    defineTechniqueSchema({ ...declaration(), resources: { pages: { kind: 'texture-array', format: 'r8unorm' } } })
+      .resources.pages,
+    { kind: 'texture-array', format: 'r8unorm' },
   );
   assert.deepEqual(
     defineTechniqueSchema({ ...declaration(), resources: { tint: { kind: 'example-tint', format: 'u8x4' } } }).resources
