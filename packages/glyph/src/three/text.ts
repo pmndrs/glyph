@@ -792,7 +792,15 @@ class ThreeTextBatchBinding {
   /**
    * True while a rejected frame is latched.
    *
-   * Most causes are unreachable from the public API -- span offsets are validated at `set()` and every surviving boundary is snapped onto the cluster grid before it reaches the engine -- but adversarial review found four that are not. Disjoint-or-nested spans are deliberately forwarded; feature ranges inside a span are copied unchanged while only the outer range is checked; lone surrogates are explicitly left for the engine; and `capacity.policy: 'fixed'` rejects by caller request. The first three are gaps to close at the `set()` boundary, and until they are, a rejection is *usually* an invariant this package broke rather than always. The latch still exists so that one such defect is reported once instead of recompiling and failing silently at frame rate, and there is still no `retry()`: every reachable cause is corrected by a `set()`, which releases the latch on its own.
+   * Every cause the engine rejects a frame for is unreachable from the public API: span offsets,
+   * their mutual nesting, their feature ranges, and the text's UTF-16 well-formedness all throw
+   * from `set()` (D-269, D-278), and every surviving boundary is snapped onto the cluster grid
+   * before it reaches the engine. The one deliberate exception is `capacity.policy: 'fixed'`: the
+   * caller asked to reject over growth, so `#ensureCapacity` throws synchronously from inside the
+   * frame path and that rejection latches like any other until the input moves. A rejection is
+   * therefore either the failure the caller explicitly requested or an invariant this package
+   * broke; the latch reports it once instead of recompiling and failing silently at frame rate,
+   * and there is still no `retry()`.
    */
   get latched(): boolean {
     return this.#rejection !== undefined;
@@ -1600,10 +1608,17 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
   const formatted = typeof properties.text === 'string' ? undefined : (properties.text as FormattedText<Technique>);
   const text = formatted?.text ?? (properties.text as string);
   const stated = (formatted?.spans as readonly TextSpan<Technique>[]) ?? properties.spans ?? [];
+  // Root-style feature ranges are checked on their own gate rather than inside the span walk,
+  // because a `set({ style })` that restates neither text nor spans short-circuits below and would
+  // otherwise carry an unvalidated range straight to the engine. The gate is a shallow key compare
+  // against the retained copy, so styling an unchanged paragraph still walks nothing.
+  if (previous === undefined || styleRestated(previous.style, properties.style)) {
+    assertFeatureRanges('style', text, 0, text.length, properties.style);
+  }
   const resolved =
     previous !== undefined && previous.text === text && previous.spans === stated
       ? stated
-      : alignSpansToClusters(text, assertSpanRanges(text, stated));
+      : alignSpansToClusters(text, assertWellFormed(text, assertSpanRanges(text, stated)));
   // Each retained span is frozen, not just the array holding them. `Text.spans` hands these
   // objects to the caller, and the identity short-circuit above trusts that an unchanged array
   // still describes cluster-aligned ranges; a mutable span record would let `spans[0].end = 1`
@@ -1622,23 +1637,29 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
   });
 }
 /**
- * The two span invariants the caller owns, checked where the stack still points at the caller.
+ * Everything a span states about the text, checked where the stack still points at the caller.
  *
- * A span carries four invariants and they are NOT alike:
+ * A span carries several invariants and they are NOT alike:
  *
  * - INVERTED and OUT-OF-RANGE offsets are arithmetic errors. Nothing can repair them -- there is no
  *   range the caller meant -- and forwarding one only produced a rejected frame with a numeric
- *   status naming nothing, recompiled every frame. They throw here for the same reason
- *   `normalizedColumns` and `normalizeCapacity` throw here: `set()` is where the caller is.
+ *   status naming nothing. They throw here for the same reason `normalizedColumns` and
+ *   `normalizeCapacity` throw here: `set()` is where the caller is.
  * - CLUSTER ALIGNMENT is not an error at all. A boundary inside an extended grapheme cluster has a
  *   correct answer -- the cluster takes the style of its base, CSSOM View's normative rule -- so it
  *   resolves silently through `alignSpansToClusters` (D-265).
  * - COLLAPSED spans stay in the array and are dropped where styles are COMPILED (`styledSpans`).
  *   Dropping them here would renumber every later span behind the caller's back, and `Text.spans`
  *   would stop reporting a span the caller wrote.
- * - DISJOINT-OR-NESTED is not checked here. It is a relation over the whole array rather than one
- *   span's own arithmetic, and the engine already answers it exactly, now as a named rejection
- *   (`styleNestingInvalid`) that resolves back to the offending span.
+ * - DISJOINT-OR-NESTED is checked here (D-278). The engine answers it exactly -- as a named
+ *   rejection that resolves back to the offending span -- but answering it is not the point; the
+ *   rule says no caller can reach that rejection at all. Resolving instead of rejecting was
+ *   considered and refused: flattening a partial overlap into last-wins segments invents
+ *   segmentation boundaries the caller never authored, changes how many engine styles compile, and
+ *   leaves `Text.spans` holding ranges that no longer describe what renders -- a value the caller
+ *   must keep consistent with engine state, which is the one thing this surface may not hand out.
+ * - FEATURE RANGES are checked against the same bounds as the span itself (D-278). They are copied
+ *   to the engine unchanged, so an unvalidated one was a second way to reach `styleRangeInvalid`.
  *
  * The argument array is returned by identity so the caller-side fast path in `normalizeDesired` is
  * unaffected: an unchanged `spans` identity skips this walk entirely.
@@ -1657,8 +1678,122 @@ function assertSpanRanges<Technique extends AnyRasterTechnique>(
     if (span.start < 0 || span.end > text.length) {
       throw new RangeError(`span ${index} covers [${span.start}, ${span.end}) outside text of length ${text.length}`);
     }
+    assertFeatureRanges(`span ${index}`, text, span.start, span.end, span.style);
+  }
+  assertDisjointOrNested(spans);
+  return spans;
+}
+
+/**
+ * The engine's own containment walk, run on the authored array before a frame can carry it.
+ *
+ * Spans are ordered by `(start ascending, end descending)` and walked with a scope stack exactly as
+ * `rust/shaper/src/engine/style_state.rs`, `validate`, orders its retained styles: pop every scope
+ * the offset has left, then any span reaching past the innermost open scope partially overlaps it.
+ * Equal ranges nest by construction -- cascade order is the authored index, so the later span wins
+ * -- which is the resolution the engine itself applies.
+ */
+function assertDisjointOrNested<Technique extends AnyRasterTechnique>(
+  spans: readonly ParagraphSpan<Technique>[],
+): void {
+  const ordered = spans
+    .map((span, index) => ({ span, index }))
+    .sort((left, right) => left.span.start - right.span.start || right.span.end - left.span.end);
+  const open: { span: ParagraphSpan<Technique>; index: number }[] = [];
+  for (const entry of ordered) {
+    while (open.length !== 0 && open[open.length - 1]!.span.end <= entry.span.start) open.pop();
+    const enclosing = open[open.length - 1];
+    if (enclosing !== undefined && entry.span.end > enclosing.span.end) {
+      throw new RangeError(
+        `spans ${entry.index} (${entry.span.start}, ${entry.span.end}) and ${enclosing.index}` +
+          ` (${enclosing.span.start}, ${enclosing.span.end}) partially overlap:` +
+          ' spans must be disjoint or one contained in the other',
+      );
+    }
+    open.push(entry);
+  }
+}
+
+/**
+ * Feature ranges are validated resolved -- the defaults the compiler will apply are filled in
+ * first -- because those resolved numbers are exactly what the engine checks. The error names the
+ * owning span (or the root style), the feature, and its index, never a bare status.
+ */
+function assertFeatureRanges(
+  owner: string,
+  text: string,
+  defaultStart: number,
+  defaultEnd: number,
+  style: ParagraphStyle | undefined,
+): void {
+  const features = style?.features;
+  if (features === undefined) return;
+  for (const [index, feature] of features.entries()) {
+    const start = feature.start ?? defaultStart;
+    const end = feature.end ?? defaultEnd;
+    const label = `${owner} feature ${index} ("${feature.tag}")`;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) {
+      throw new RangeError(`${label} offsets must be integers, received (${start}, ${end})`);
+    }
+    if (start > end) {
+      throw new RangeError(`${label} is inverted: start ${start} is after end ${end}`);
+    }
+    if (start < 0 || end > text.length) {
+      throw new RangeError(`${label} covers [${start}, ${end}) outside text of length ${text.length}`);
+    }
+  }
+}
+
+/**
+ * Malformed UTF-16 has no cluster grid to resolve against and no scalar meaning for the shaper; it
+ * is rejected at the boundary rather than forwarded to the engine's own check (D-278). Resolving a
+ * lone surrogate to U+FFFD was considered and refused: silently substituting text the caller did
+ * not write trades a loud arithmetic-grade error for a quiet edit, and no surveyed pipeline the
+ * audit compares against promises that substitution. `isWellFormed()` answers natively; the offset
+ * scan runs only for the message.
+ */
+function assertWellFormed<Technique extends AnyRasterTechnique>(
+  text: string,
+  spans: readonly ParagraphSpan<Technique>[],
+): readonly ParagraphSpan<Technique>[] {
+  if (text.isWellFormed()) return spans;
+  let high = false;
+  for (let offset = 0; offset < text.length; offset += 1) {
+    const unit = text.charCodeAt(offset);
+    if (high) {
+      high = unit >= 0xdc00 && unit <= 0xdfff;
+      if (!high) {
+        throw new RangeError(
+          `paragraph text contains a lone high surrogate at code unit offset ${offset - 1};` +
+            ' replace it or encode the scalar as a surrogate pair',
+        );
+      }
+      continue;
+    }
+    if (unit >= 0xd800 && unit <= 0xdbff) high = true;
+    else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      throw new RangeError(
+        `paragraph text contains a lone low surrogate at code unit offset ${offset};` +
+          ' replace it or encode the scalar as a surrogate pair',
+      );
+    }
+  }
+  if (high) {
+    throw new RangeError(
+      `paragraph text contains a lone high surrogate at code unit offset ${text.length - 1};` +
+        ' replace it or encode the scalar as a surrogate pair',
+    );
   }
   return spans;
+}
+
+/** Whether a `set({ style })` restated the paragraph style, by shallow compare against the copy. */
+function styleRestated(previous: ParagraphStyle | undefined, stated: ParagraphStyle | undefined): boolean {
+  if (previous === undefined) return stated !== undefined && Object.keys(stated).length !== 0;
+  if (stated === undefined) return false;
+  const keys = Object.keys(stated);
+  if (keys.length !== Object.keys(previous).length) return true;
+  return keys.some((key) => previous[key] !== stated[key]);
 }
 function selectedFonts<Technique extends AnyRasterTechnique>(
   state: DesiredTextState<Technique>,
