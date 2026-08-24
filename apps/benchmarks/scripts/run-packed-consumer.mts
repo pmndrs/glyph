@@ -118,7 +118,7 @@ try {
 } finally {
   if (browser !== undefined) await browser.close();
   if (server !== undefined) await server.close();
-  await rm(consumerDirectory, { recursive: true, force: true });
+  await rm(consumerDirectory, { recursive: true, force: true, maxRetries: 3 });
 }
 
 async function packPackage(packagePath: string): Promise<void> {
