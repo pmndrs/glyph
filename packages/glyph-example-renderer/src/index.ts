@@ -5,12 +5,7 @@
  * be written against `/core` without reaching into package internals, this package
  * stops compiling. See `docs/planning/example-renderer.md`.
  */
-export type {
-  ExampleDraw,
-  ExampleDrawList,
-  ExamplePrimitiveRecord,
-  ExampleResourceRecord,
-} from './draw-list.js';
+export type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
 export { decodeDraw } from './draw-list.js';
 export { ExampleTextEngine, type ExampleFrameInput } from './engine.js';
 export type { RetainedTextEnginePublication } from '@pmndrs/glyph/core';

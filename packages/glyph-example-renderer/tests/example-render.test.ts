@@ -148,6 +148,7 @@ test('realizes a supplied indexed geometry resource from the portable declaratio
   };
   const device = new RecordingExampleRendererDevice(shader);
   device.createResource(42, 'glyphGeometry', glyphExampleIndexedQuadGeometry);
+  const techniqueWireId = 7;
 
   const drawList: ExampleDrawList = {
     engineRevision: 1,
@@ -156,7 +157,7 @@ test('realizes a supplied indexed geometry resource from the portable declaratio
     draws: [
       {
         id: 1,
-        programId: shader.variant.techniqueId,
+        programId: techniqueWireId,
         programVariant: 0,
         flags: 0,
         materialId: 1,
@@ -174,14 +175,12 @@ test('realizes a supplied indexed geometry resource from the portable declaratio
         indirectOffset: 0,
       },
     ],
-    resourceRecords: [
-      { id: 42, generation: 1, techniqueId: shader.variant.techniqueId, referenceId: 0, action: 0 },
-    ],
+    resourceRecords: [{ id: 42, generation: 1, techniqueId: techniqueWireId, referenceId: 0, action: 0 }],
     primitiveRecords: [
       {
         id: 1,
-        techniqueId: shader.variant.techniqueId,
-        programId: shader.variant.techniqueId,
+        techniqueId: techniqueWireId,
+        programId: techniqueWireId,
         programVariant: 0,
         kind: 0,
         recordCount: 5,

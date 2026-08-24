@@ -57,8 +57,10 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   }
 
   createResource(id: number, name: string, resource: unknown): void {
-    if (!Number.isSafeInteger(id) || id < 1) throw new RangeError('example renderer resource ids must be positive integers');
-    if (typeof name !== 'string' || name.length === 0) throw new TypeError('example renderer resource names are required');
+    if (!Number.isSafeInteger(id) || id < 1)
+      throw new RangeError('example renderer resource ids must be positive integers');
+    if (typeof name !== 'string' || name.length === 0)
+      throw new TypeError('example renderer resource names are required');
     const previousName = this.#resourceNames.get(id);
     if (previousName !== undefined && previousName !== name) {
       throw new Error(`example renderer resource id ${id} is already bound to "${previousName}"`);
@@ -158,18 +160,15 @@ function syntheticQuadGeometry(instanceCount: number): ExampleGeometry {
   });
 }
 
-function realizeGeometry(
-  declaration: TechniqueGeometryDeclaration,
-  name: string,
-  resource: unknown,
-): ExampleGeometry {
+function realizeGeometry(declaration: TechniqueGeometryDeclaration, name: string, resource: unknown): ExampleGeometry {
   if (declaration.kind === 'synthetic-quad') throw new Error('synthetic-quad geometry cannot name a resource');
   assertPortableResource('geometry', name, resource);
   const geometry = resource as PortableGeometryPayload;
   const position = geometry.attributes.find((attribute) => attribute.semantic === 'position');
   if (position === undefined) throw new Error(`example renderer geometry "${name}" has no position attribute`);
   const vertexAccessor = geometry.accessors[position.accessor];
-  if (vertexAccessor === undefined) throw new Error(`example renderer geometry "${name}" has an invalid position accessor`);
+  if (vertexAccessor === undefined)
+    throw new Error(`example renderer geometry "${name}" has an invalid position accessor`);
   const indexAccessor = geometry.indices === undefined ? undefined : geometry.accessors[geometry.indices.accessor];
   const streamCount = indexAccessor?.count ?? vertexAccessor.count;
   const indexStart = geometry.drawRange?.start ?? 0;
