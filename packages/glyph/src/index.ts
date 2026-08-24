@@ -50,6 +50,8 @@ export type {
 } from './layout.js';
 
 export type { ParagraphLayoutPolicy, ParagraphConstraints } from './text-properties.js';
+export { Paragraph } from './paragraph.js';
+export type { ParagraphOptions, ParagraphUpdate } from './paragraph.js';
 
 export type {
   GlyphAdoption,
