@@ -14,8 +14,8 @@ sources:
     resource: benchmark-trust.md
     title: Benchmarks we can trust
 generated:
-  by: anthropic/claude-opus-5
-  at: '2026-08-23T17:40:00Z'
+  by: openai-codex/gpt-5
+  at: '2026-08-24T03:12:27Z'
 ---
 
 # Session handoff
@@ -32,18 +32,18 @@ Codified in `.agents/skills/engine-call-contract/SKILL.md`. Two rules:
 
 ## Why measurement is two calls, and what they should be named
 
-**Do not merge them again.** `measure()` takes the paragraph-scoped engine query: synchronous, no publication flip, no revision advance, no checkpoint. Asking for positioned output makes the engine emit a record per glyph and per line and copies those arrays out of Wasm.
+**Do not merge them again.** `layout()` takes the paragraph-scoped engine query: synchronous, no publication flip, no revision advance, no checkpoint. `glyphs()` makes the engine emit a record per glyph and per line and copies those arrays out of Wasm.
 
-Merging them was tried in this session and regressed the fast path from **0 engine crossings to 4** on a constraint sweep. `three-v1.test.mjs`, "repeated measure under changing constraints stays on the paragraph query path", is the test that caught it and is the guard against it happening again. Skia and Flutter separate the same way and for the same reason: `getRectsForRange` and `getBoxesForSelection` are on-demand rather than part of laying out.
+Merging them was tried in this session and regressed the fast path from **0 engine crossings to 4** on a constraint sweep. `three-v1.test.mjs`, "repeated layout under changing constraints stays on the paragraph query path", is the test that caught it and is the guard against it happening again. Skia and Flutter separate the same way and for the same reason: `getRectsForRange` and `getBoxesForSelection` are on-demand rather than part of laying out.
 
-**The naming is decided: rename it.** The current names are backwards. Ours:
+**The naming is settled and shipped.** Ours:
 
 | ours | does | Skia's equivalent |
 | --- | --- | --- |
-| `measure(constraints)` | shaping and line breaking, returns metrics | `layout(width)` |
-| `layout()` | queries the finished result, emits and copies columns | `getRectsForRange()` |
+| `layout(constraints)` | shaping and line breaking, returns metrics | `layout(width)` |
+| `glyphs()` | queries the finished result, emits and copies columns | `getRectsForRange()` |
 
-`measure` implies free and is where the work is; `layout` implies work and is a query over work already done. **Decided: the working call becomes `layout(constraints)` and the positioned columns move to a second method (`glyphs()`), matching Skia's `layout()` then `getRectsForRange()`.** Both surfaces carry both verbs. That Yoga and uikit name their hook `measure` only means ours is *called from* a measure callback; it does not have to share the name. Roughly seventy call sites. **In flight.**
+The old `measure` name implied the working call was free, while the old `layout` name implied the positioned query did the layout work. The working call is now `layout(constraints)` and the positioned columns are `glyphs()`, matching Skia's `layout()` then `getRectsForRange()`. Both surfaces carry both verbs. That Yoga and uikit name their hook `measure` only means ours is *called from* a measure callback; it does not have to share the name.
 
 ## What measurement guarantees
 
@@ -51,7 +51,7 @@ Merging them was tried in this session and regressed the fast path from **0 engi
 
 Compute-or-cached is inherent and not a wart. The first query pays shaping; it is retained as a speculative transaction (`state.rs:188`) so a second query at a different constraint re-runs only geometry, flow, and positioning, and the next ordinary frame committing the same inputs adopts that work rather than redoing it.
 
-**Known gap.** `inkBounds` is absent from `measure()` because the ink union is knowable only after positioning. Advance-centring works from `measure()`; visual centring needs `layout()`. Closing this means computing the union during the measurement pass in Rust.
+**Known gap.** `inkBounds` is absent from `layout()` because the ink union is knowable only after positioning. Advance-centring works from `layout()`; visual centring needs `glyphs()`. Closing this means computing the union during the measurement pass in Rust.
 
 ## Corrections this session paid for
 
@@ -74,4 +74,4 @@ Found while writing `docs/guides/renderer-integration.md`; each is a place the A
 1. **Benchmarks as a gate**, per [benchmark-trust.md](benchmark-trust.md). Four decisions need a human: CI compares base and head in one job with no stored baseline; `blocks: 16` rather than the default 8; the anti-laundering rule forbids re-running to flip a verdict; and four existing "benchmarks" get deleted, most pointedly a test comparing two checked-in JSON files that measures nothing and passes forever. The premise was half wrong — the problem is not only noisy numbers, it is that **nothing was ever gated on them**.
 2. **A golden-path audit** for the Rust engine: that changes stay data-oriented and on the SIMD compute path rather than inventing a new way to do the same thing. Not designed yet.
 3. **Implementor documentation for writing a policy and consuming a plan.** There is none, and a renderer integrator needs it more than anything else in the docs.
-4. The `ThreeFontLoader` rename, the material selector, and the `measure`/`layout` naming above.
+4. The `ThreeFontLoader` rename, the material selector, and the `layout`/`glyphs` naming above.

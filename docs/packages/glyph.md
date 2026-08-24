@@ -72,8 +72,8 @@ sources:
     resource: ../planning/three-api.md
     title: Three.js text API reference
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-08-15T22:44:31Z'
+  by: openai-codex/gpt-5
+  at: '2026-08-24T03:12:27Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -189,7 +189,7 @@ latched, because it is retried from the retained publication on the next frame. 
 `registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-270), naming the
 technique instead of applying to nothing. `/three` also re-exports `ParagraphLayoutSummary`, `ParagraphLayoutInspection`,
 `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name what
-`Text.measure()`, `Text.layout()`, and `ParagraphStyle.features` give it.
+`Text.layout()`, `Text.glyphs()`, and `ParagraphStyle.features` give it.
 
 One baked GLB may expose several raster techniques without repeating its input identity. `TextRuntime.loadFont()` and
 R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The
@@ -300,9 +300,9 @@ selected font binding—not a `Text` technique selector—carries the renderer p
 
 ## Semantic queries
 
-Ordinary rendering requests no layout readback. `Text.measure()` explicitly requests aggregate measurements and
-counts; `Text.layout()` additionally copies line and glyph arrays. Query results are cached by committed revision.
-When the only pending change is the measured text's geometry, `measure()` routes through the core host's
+Ordinary rendering requests no layout readback. `Text.layout()` explicitly requests aggregate measurements and
+counts; `Text.glyphs()` additionally copies line and glyph arrays. Query results are cached by committed revision.
+When the only pending change is the laid-out text's geometry, `layout()` routes through the core host's
 `session.measureParagraph` — the paragraph-scoped synchronous query below — so repeated measurement under changing
 constraints performs no publication flips and no revision burns, and the next ordinary frame adopts the speculative
 work. Any other pending change synchronizes the containing Rust session once and the following render traversal reuses
@@ -393,7 +393,7 @@ The foundation currently has:
   later cursor-convergence regressions;
 - the package JavaScript/integration gate passing through the single-path public exports;
 - exact retained Amiri bidi, policy, ellipsis, clipping, UIKit-layout, and CJK contracts exercised by the browser
-  `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `measure()`, and `layout()`;
+  `paragraph-contracts` target through public `FontLoader`, `Text`, `TextGroup`, `layout()`, and `glyphs()`;
 - 32/32 pixel-exact public Bitmap WebGL2 frames against the independent CPU oracle, including resize and clipping, with
   zero differing channel bytes and pinned SHA-256 `a47930d3…15e893`;
 - source-font SHA-256, registered shaping hashes, and HarfRust/HarfBuzz oracle identities authenticated independently of

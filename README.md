@@ -95,7 +95,7 @@ label.position.x += 1;
 
 Assigning `text` queues the narrowest UTF-16 edit between the previous string and the new one, so an editor sends one
 narrow update per keystroke without describing the edit itself.
-`measure()` returns a compact committed paragraph summary; `layout()` explicitly requests line and glyph
+`layout()` returns a compact committed paragraph summary; `glyphs()` explicitly requests line and glyph
 details. Both read a layout the scene has already committed.
 
 ## Measure before you render
@@ -109,7 +109,7 @@ import { createTextRuntime, txt } from '@pmndrs/glyph';
 import { Paragraph } from '@pmndrs/glyph/core';
 
 const paragraph = new Paragraph({ font: inter, text: txt`Hello world`, policy: { wrap: 'word' } });
-const measured = paragraph.measure({ width: { mode: 'at-most', size: 360 } });
+const measured = paragraph.layout({ width: { mode: 'at-most', size: 360 } });
 
 measured.contentWidth; // advance extent
 measured.firstBaseline; // from the box top edge
@@ -120,8 +120,8 @@ measured.minContentWidth; // longest unbreakable run, from the same pass
 Every value is paragraph-local: the origin is the box's top-left corner, positive X is right, positive Y is down.
 Scale and placement are yours to apply afterwards.
 
-`measure()` is one cheap engine query: sizes, baselines, counts, and intrinsic widths — no per-glyph records, no
-array copies. When you need the positioned output (`x`, `y`, `glyphIds`, ink boxes), call `layout()` for it; that is
+`layout()` is one cheap engine query: sizes, baselines, counts, and intrinsic widths — no per-glyph records, no
+array copies. When you need the positioned output (`x`, `y`, `glyphIds`, ink boxes), call `glyphs()` for it; that is
 a second query because it is a second piece of work. A host that probes many widths for sizes alone never pays for
 arrays it never touches. A query answers or throws: a constraint that is not finite and nonnegative throws from the
 call, naming the axis.

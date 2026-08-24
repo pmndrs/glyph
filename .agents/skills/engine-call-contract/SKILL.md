@@ -13,7 +13,7 @@ An engine call is synchronous and takes no resource that could be missing: a fon
 text and spans are validated there, and constraints are checked by the call itself. Nothing is left to wait for and
 nothing is left for a caller to get wrong, **so there is no failure to hand back**.
 
-- **Return the answer.** `measure()` returns metrics. `layout()` returns the inspection. No `{ ok }` union, no
+- **Return the answer.** `layout()` returns metrics. `glyphs()` returns the inspection. No `{ ok }` union, no
   nullable, no out-of-band error to consult afterwards.
 - **Throw for input the language let them express but which has no meaning.** `{ mode: 'at-most', size: NaN }` is
   well-typed and means nothing; there is no width it could stand for, so there is nothing to return, clamp, or
