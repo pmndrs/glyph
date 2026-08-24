@@ -165,6 +165,13 @@ test('synthetic-quad declares no resource and no coordinate convention', () => {
   );
 });
 
+test('raw null render declarations produce a contract error', () => {
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), render: null }),
+    (error) => error instanceof TypeError && error.message.includes('render declaration needs an object'),
+  );
+});
+
 test('supplied geometry must name a declared geometry resource and state its coordinate convention', () => {
   assert.throws(
     () =>

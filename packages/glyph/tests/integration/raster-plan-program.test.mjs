@@ -114,6 +114,17 @@ test('rejects a portable compiler that repeats a declared name or retains an und
       error.message.includes(ATLAS_KEY),
   );
 
+  const prototypeId = 'test.core-raster-plan-prototype-name';
+  const prototypeProgram = retentionProgram(prototypeId, declaredSchema(), (compiler) => {
+    compiler.retain('constructor', ATLAS_KEY, atlasPayload());
+    return [];
+  });
+  registerRasterPlanProgram(prototypeProgram);
+  assert.throws(
+    () => compileRasterFont({ technique: prototypeProgram.technique }, new RenderWireIdentityRegistry()),
+    (error) => error instanceof TypeError && error.message.includes('undeclared resource name "constructor"'),
+  );
+
   const unnamedId = 'test.core-raster-plan-unnamed-resource';
   const unnamedProgram = retentionProgram(unnamedId, {}, (compiler) => {
     compiler.retain('', ATLAS_KEY, atlasPayload());
@@ -170,6 +181,38 @@ test('retained payloads must match their declared reserved kind before any devic
   }
 });
 
+test('retained texture formats and required geometry resources follow the schema contract', () => {
+  const formatId = 'test.core-raster-plan-format-contract';
+  const formatProgram = retentionProgram(
+    formatId,
+    { ...declaredSchema(), resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } } },
+    (compiler) => {
+      compiler.retain('atlas', ATLAS_KEY, atlasPayload());
+      return [ATLAS_KEY];
+    },
+  );
+  registerRasterPlanProgram(formatProgram);
+  assert.throws(
+    () => compileRasterFont({ technique: formatProgram.technique }, new RenderWireIdentityRegistry()),
+    (error) => error instanceof TypeError && error.message.includes('does not match declared format'),
+  );
+
+  const geometryId = 'test.core-raster-plan-required-geometry';
+  const geometryProgram = retentionProgram(
+    geometryId,
+    { ...declaredSchema(), render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } } },
+    (compiler) => {
+      compiler.retain('atlas', ATLAS_KEY, atlasPayload());
+      return [ATLAS_KEY];
+    },
+  );
+  registerRasterPlanProgram(geometryProgram);
+  assert.throws(
+    () => compileRasterFont({ technique: geometryProgram.technique }, new RenderWireIdentityRegistry()),
+    (error) => error instanceof Error && error.message.includes('did not retain declared geometry resource "mesh"'),
+  );
+});
+
 test('resource identity stays stable across independent compiler calls', () => {
   const id = 'test.core-raster-plan-stable-identity';
   const program = retentionProgram(id, declaredSchema(), (compiler) => {
@@ -180,7 +223,9 @@ test('resource identity stays stable across independent compiler calls', () => {
   });
   registerRasterPlanProgram(program);
   const first = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
-  const second = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
+  const secondIdentities = new RenderWireIdentityRegistry();
+  secondIdentities.resolve('test/other-technique');
+  const second = compileRasterFont({ technique: program.technique }, secondIdentities);
   assert.deepEqual(second.binding, first.binding);
   assert.deepEqual([...second.declaredResources], [...first.declaredResources]);
 });

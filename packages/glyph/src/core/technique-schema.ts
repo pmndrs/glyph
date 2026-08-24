@@ -127,7 +127,7 @@ export interface TechniqueSchemaDeclaration<
   readonly binding: Binding;
   readonly buffers: Buffers;
   readonly resources?: Readonly<Record<string, TechniqueResourceDeclaration>>;
-  /** The portable render contract: declared geometry and its resource linkage. */
+  /** The portable render contract: declared geometry and its resource linkage; absent means synthetic-quad. */
   readonly render?: TechniqueRenderDeclaration;
   /**
    * Opt-in glyph-origin metadata: names the declared f32 buffer whose first two
@@ -182,6 +182,9 @@ export function defineTechniqueSchema<
   }
   let render: TechniqueRenderDeclaration | undefined;
   if (declaration.render !== undefined) {
+    if (typeof declaration.render !== 'object' || declaration.render === null || Array.isArray(declaration.render)) {
+      throw new TypeError(`technique "${technique}" render declaration needs an object`);
+    }
     render = Object.freeze({ geometry: defineGeometryDeclaration(declaration.render.geometry, technique, resources) });
   }
   let glyphOrigin: { readonly buffer: string } | undefined;

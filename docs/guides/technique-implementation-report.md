@@ -105,7 +105,7 @@ export const exampleTechnique: RasterTechnique<
 });
 ```
 
-`RasterTechnique` has no resource generic. The decoded `Data` type carries the data needed by the portable compiler, while the resource payload type is inferred at `registerRasterPlanProgram` from the compiler's `retain(key, resource)` call shape.
+`RasterTechnique` has no resource generic. The decoded `Data` type carries the data needed by the portable compiler, while the resource payload type is inferred at `registerRasterPlanProgram` from the compiler's `retain(declaredName, key, resource)` call shape.
 
 ### Schema: one physical source of truth
 
@@ -122,6 +122,7 @@ export const exampleSchema = defineTechniqueSchema({
     color: { id: 3, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
   },
   resources: { glyphColors: { kind: 'studio-example-colors' } },
+  render: { geometry: { kind: 'synthetic-quad' } },
   glyphOrigin: { buffer: 'origin' },
 });
 ```
@@ -173,7 +174,7 @@ export const examplePlanProgram: RasterPlanProgram<typeof exampleTechnique, Exam
   compileFont(compiler) {
     const data = compiler.font.data;
     const { resources } = compiler.resources([data.resource]);
-    compiler.retain(data.resource, data);
+    compiler.retain('glyphColors', data.resource, data);
     compiler.compile({
       techniqueId: compiler.techniqueId,
       programVariant: 0,
@@ -209,6 +210,7 @@ The compiler produces a core result:
 interface CompiledRasterFont<Resource = unknown> {
   readonly binding: Uint8Array;
   readonly resources: ReadonlyMap<RasterResourceId, Resource>;
+  readonly declaredResources: ReadonlyMap<string, RasterResourceId>;
 }
 ```
 

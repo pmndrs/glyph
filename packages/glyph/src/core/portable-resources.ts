@@ -124,14 +124,57 @@ type PortableResourceKind = PortableResource['kind'];
  * opaque. Throws TypeError for structural violations and RangeError for numeric
  * ones, naming the resource and the offending part.
  */
-export function assertPortableResource(kind: string, name: string, payload: unknown): void {
+export function assertPortableResource(kind: string, name: string, payload: unknown, declaredFormat?: string): void {
   if (kind === 'buffer') return assertPortableBuffer(name, payload);
-  if (kind === 'texture') return assertPortableTexture(name, payload);
+  if (kind === 'texture') return assertPortableTexture(name, payload, declaredFormat);
   if (kind === 'geometry') return assertPortableGeometry(name, payload);
 }
 
+/** Validate and own a reserved payload before it enters a compiled font result. */
+export function normalizePortableResource(
+  kind: string,
+  name: string,
+  payload: unknown,
+  declaredFormat?: string,
+): unknown {
+  assertPortableResource(kind, name, payload, declaredFormat);
+  if (kind === 'buffer') {
+    const source = payload as PortableBufferPayload;
+    return Object.freeze({
+      kind,
+      bytes: new Uint8Array(source.bytes),
+      ...(source.stride === undefined ? {} : { stride: source.stride }),
+    });
+  }
+  if (kind === 'texture') {
+    const source = payload as PortableTexturePayload;
+    return Object.freeze({
+      kind,
+      format: source.format,
+      width: source.width,
+      height: source.height,
+      bytes: new Uint8Array(source.bytes),
+    });
+  }
+  if (kind === 'geometry') {
+    const source = payload as PortableGeometryPayload;
+    return Object.freeze({
+      kind,
+      topology: source.topology,
+      bytes: new Uint8Array(source.bytes),
+      views: Object.freeze(source.views.map((view) => Object.freeze({ ...view }))),
+      accessors: Object.freeze(source.accessors.map((accessor) => Object.freeze({ ...accessor }))),
+      attributes: Object.freeze(source.attributes.map((attribute) => Object.freeze({ ...attribute }))),
+      ...(source.indices === undefined ? {} : { indices: Object.freeze({ ...source.indices }) }),
+      ...(source.drawRange === undefined ? {} : { drawRange: Object.freeze({ ...source.drawRange }) }),
+      ...(source.instances === undefined ? {} : { instances: Object.freeze({ ...source.instances }) }),
+    });
+  }
+  return payload;
+}
+
 function assertPortableBuffer(name: string, payload: unknown): void {
-  if (!isPayload(payload, name, 'buffer')) return;
+  assertPayload(payload, name, 'buffer');
   if (!(payload.bytes instanceof Uint8Array)) throw new TypeError(`portable buffer "${name}" needs Uint8Array bytes`);
   const stride = payload.stride;
   if (stride !== undefined) {
@@ -146,10 +189,15 @@ function assertPortableBuffer(name: string, payload: unknown): void {
   }
 }
 
-function assertPortableTexture(name: string, payload: unknown): void {
-  if (!isPayload(payload, name, 'texture')) return;
+function assertPortableTexture(name: string, payload: unknown, declaredFormat: string | undefined): void {
+  assertPayload(payload, name, 'texture');
   if (typeof payload.format !== 'string' || payload.format.length === 0) {
     throw new TypeError(`portable texture "${name}" needs a nonempty sample format`);
+  }
+  if (declaredFormat !== undefined && payload.format !== declaredFormat) {
+    throw new TypeError(
+      `portable texture "${name}" format "${payload.format}" does not match declared format "${declaredFormat}"`,
+    );
   }
   for (const dimension of ['width', 'height'] as const) {
     if (!Number.isSafeInteger(payload[dimension]) || payload[dimension] < 1) {
@@ -160,19 +208,25 @@ function assertPortableTexture(name: string, payload: unknown): void {
 }
 
 function assertPortableGeometry(name: string, payload: unknown): void {
-  if (!isPayload(payload, name, 'geometry')) return;
+  assertPayload(payload, name, 'geometry');
   if (!isTopology(payload.topology)) {
     throw new TypeError(`portable geometry "${name}" needs a triangle-list or triangle-strip topology`);
   }
   if (!(payload.bytes instanceof Uint8Array)) throw new TypeError(`portable geometry "${name}" needs Uint8Array bytes`);
   assertGeometryViews(payload.views, payload.bytes.byteLength, name);
   const accessors = assertGeometryAccessors(payload.accessors, payload.views, name);
-  let indexCount: number | undefined;
-  if (payload.indices !== undefined) indexCount = assertGeometryIndices(payload.indices, accessors, name);
   const vertexCount = assertGeometryAttributes(payload.attributes, accessors, name);
-  if (payload.drawRange !== undefined) {
-    assertGeometryDrawRange(payload.drawRange, indexCount ?? vertexCount, name, indexCount !== undefined);
-  }
+  const indexCount =
+    payload.indices === undefined
+      ? undefined
+      : assertGeometryIndices(payload.indices, accessors, payload.bytes, payload.views, vertexCount, name);
+  assertGeometryDrawRange(
+    payload.drawRange ?? { start: 0, count: indexCount ?? vertexCount },
+    indexCount ?? vertexCount,
+    name,
+    indexCount !== undefined,
+    payload.topology,
+  );
   if (payload.instances !== undefined) assertGeometryInstances(payload.instances, name);
 }
 
@@ -217,8 +271,8 @@ function assertGeometryAccessors(
   }
   accessors.forEach((accessor, index) => {
     const label = `portable geometry "${name}" accessor ${index}`;
-    if (!isRecord(accessor)) throw new TypeError(`${label} needs an accessor object`);
-    if (!(accessor.componentType in componentSizes)) {
+    if (!isNonArrayObject(accessor)) throw new TypeError(`${label} needs an accessor object`);
+    if (!Object.hasOwn(componentSizes, accessor.componentType)) {
       throw new TypeError(`${label} needs an f32, u32, i16, u16, or u8 component type`);
     }
     if (!Number.isSafeInteger(accessor.components) || accessor.components < 1 || accessor.components > 4) {
@@ -254,7 +308,7 @@ function assertGeometryAttributes(
   let instanceElementCount: number | undefined;
   attributes.forEach((attribute, index) => {
     const label = `portable geometry "${name}" attribute ${index}`;
-    if (!isRecord(attribute)) throw new TypeError(`${label} needs an attribute object`);
+    if (!isNonArrayObject(attribute)) throw new TypeError(`${label} needs an attribute object`);
     if (typeof attribute.semantic !== 'string' || attribute.semantic.length === 0) {
       throw new TypeError(`${label} needs a nonempty semantic name`);
     }
@@ -297,24 +351,50 @@ function assertGeometryAttributes(
 function assertGeometryIndices(
   indices: PortableGeometryIndices,
   accessors: readonly PortableAccessor[],
+  bytes: Uint8Array,
+  views: readonly PortableBufferView[],
+  vertexCount: number,
   name: string,
 ): number {
   const label = `portable geometry "${name}" indices`;
-  if (!isRecord(indices)) throw new TypeError(`${label} need an indices object`);
+  if (!isNonArrayObject(indices)) throw new TypeError(`${label} need an indices object`);
   if (typeof indices.accessor !== 'number' || !Number.isSafeInteger(indices.accessor)) {
     throw new TypeError(`${label} need an accessor index`);
   }
   const accessor = accessors[indices.accessor];
   if (accessor === undefined) throw new RangeError(`${label} name an accessor outside the geometry`);
-  if (accessor.componentType === 'f32') throw new TypeError(`${label} need an integer component type`);
+  if (accessor.componentType !== 'u16' && accessor.componentType !== 'u32') {
+    throw new TypeError(`${label} need a u16 or u32 integer component type`);
+  }
   if (accessor.components !== 1) throw new RangeError(`${label} need scalar indices`);
   if (accessor.count < 1) throw new RangeError(`${label} need at least one index`);
+  const view = views[accessor.view]!;
+  const offset = view.offset + (accessor.offset ?? 0);
+  const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const stride = accessor.componentType === 'u16' ? 2 : 4;
+  for (let index = 0; index < accessor.count; index += 1) {
+    const value =
+      accessor.componentType === 'u16'
+        ? data.getUint16(offset + index * stride, true)
+        : data.getUint32(offset + index * stride, true);
+    if (value >= vertexCount) {
+      throw new RangeError(
+        `${label} value ${value} at index ${index} names vertex ${value} outside ${vertexCount} vertices`,
+      );
+    }
+  }
   return accessor.count;
 }
 
-function assertGeometryDrawRange(range: PortableDrawRange, limit: number, name: string, indexed: boolean): void {
+function assertGeometryDrawRange(
+  range: PortableDrawRange,
+  limit: number,
+  name: string,
+  indexed: boolean,
+  topology: PortableTopology,
+): void {
   const label = `portable geometry "${name}" ${indexed ? 'index' : 'vertex'} draw range`;
-  if (!isRecord(range)) throw new TypeError(`${label} needs a range object`);
+  if (!isNonArrayObject(range)) throw new TypeError(`${label} needs a range object`);
   for (const field of ['start', 'count'] as const) {
     const value = range[field];
     if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
@@ -326,10 +406,13 @@ function assertGeometryDrawRange(range: PortableDrawRange, limit: number, name: 
   if (!Number.isSafeInteger(end) || end > limit) {
     throw new RangeError(`${label} exceeds the ${limit} available ${indexed ? 'indices' : 'vertices'}`);
   }
+  if (range.count < 3 || (topology === 'triangle-list' && range.count % 3 !== 0)) {
+    throw new RangeError(`${label} count ${range.count} does not contain complete ${topology} primitives`);
+  }
 }
 
 function assertGeometryInstances(instances: PortableInstances, name: string): void {
-  if (!isRecord(instances)) throw new TypeError(`portable geometry \"${name}\" instances need an object`);
+  if (!isNonArrayObject(instances)) throw new TypeError(`portable geometry \"${name}\" instances need an object`);
   if (instances.source === 'records') return;
   if (instances.source === 'fixed') {
     if (!Number.isSafeInteger(instances.count) || instances.count < 1) {
@@ -350,20 +433,19 @@ function checkedSpan(count: number, components: number, size: number, label: str
   return span;
 }
 
-function isPayload<K extends PortableResourceKind>(
+function assertPayload<K extends PortableResourceKind>(
   value: unknown,
   name: string,
   kind: K,
-): value is Extract<PortableResource, { kind: K }> {
+): asserts value is Extract<PortableResource, { kind: K }> {
   if (typeof value !== 'object' || value === null) {
     throw new TypeError(`portable ${kind} resource "${name}" needs a payload object`);
   }
   if ((value as { kind?: unknown }).kind !== kind) {
     throw new TypeError(`portable ${kind} resource "${name}" declares the wrong payload kind`);
   }
-  return true;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

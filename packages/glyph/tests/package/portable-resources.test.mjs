@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { assertPortableResource, portableResourceKinds, portableTopologies } from '../../dist/core.js';
+import {
+  assertPortableResource,
+  normalizePortableResource,
+  portableResourceKinds,
+  portableTopologies,
+} from '../../dist/core.js';
 import { indexedQuadGeometry, instancedQuadGeometry } from '../support/portable-geometry.mjs';
 
 function mutate(geometry, patch) {
@@ -62,6 +67,10 @@ test('texture payloads need a format and positive dimensions', () => {
   assert.throws(
     () => assertPortableResource('texture', 'page', { ...base(), bytes: undefined }),
     (error) => error instanceof TypeError && error.message.includes('Uint8Array bytes'),
+  );
+  assert.throws(
+    () => assertPortableResource('texture', 'page', base(), 'r16float'),
+    (error) => error instanceof TypeError && error.message.includes('does not match declared format'),
   );
 });
 
@@ -244,8 +253,20 @@ test('indices must be scalar integers and draw ranges must fit the addressed str
         'mesh',
         mutate(quad, (g) => (g.accessors[2] = { ...g.accessors[2], componentType: 'f32', count: 3 })),
       ),
-    (error) => error instanceof TypeError && error.message.includes('indices need an integer component type'),
+    (error) => error instanceof TypeError && error.message.includes('indices need a u16 or u32 integer component type'),
   );
+  for (const componentType of ['i16', 'u8']) {
+    assert.throws(
+      () =>
+        assertPortableResource(
+          'geometry',
+          'mesh',
+          mutate(quad, (g) => (g.accessors[2] = { ...g.accessors[2], componentType })),
+        ),
+      (error) =>
+        error instanceof TypeError && error.message.includes('indices need a u16 or u32 integer component type'),
+    );
+  }
   assert.throws(
     () =>
       assertPortableResource(
@@ -264,8 +285,21 @@ test('indices must be scalar integers and draw ranges must fit the addressed str
       ),
     (error) => error instanceof RangeError && error.message.includes('indices name an accessor outside'),
   );
+  assert.throws(
+    () =>
+      assertPortableResource(
+        'geometry',
+        'mesh',
+        mutate(quad, (g) => {
+          const indexBytes = new Uint16Array(g.bytes.buffer, g.bytes.byteOffset + 64, 6);
+          indexBytes[0] = 4;
+        }),
+      ),
+    (error) => error instanceof RangeError && error.message.includes('outside 4 vertices'),
+  );
 
   const openQuad = mutate(quad, (g) => delete g.indices);
+  openQuad.topology = 'triangle-strip';
   assert.throws(
     () =>
       assertPortableResource(
@@ -295,20 +329,50 @@ test('indices must be scalar integers and draw ranges must fit the addressed str
       ),
     (error) => error instanceof RangeError && error.message.includes('cannot be empty'),
   );
+  assert.throws(
+    () =>
+      assertPortableResource(
+        'geometry',
+        'mesh',
+        mutate(quad, (g) => (g.drawRange = { start: 1, count: 5 })),
+      ),
+    (error) => error instanceof RangeError && error.message.includes('complete triangle-list primitives'),
+  );
+  assert.throws(
+    () =>
+      assertPortableResource(
+        'geometry',
+        'mesh',
+        mutate(openQuad, (g) => (g.drawRange = { start: 2, count: 2 })),
+      ),
+    (error) => error instanceof RangeError && error.message.includes('complete triangle-strip primitives'),
+  );
   assert.doesNotThrow(() =>
     assertPortableResource(
       'geometry',
       'mesh',
-      mutate(quad, (g) => (g.drawRange = { start: 1, count: 5 })),
+      mutate(quad, (g) => (g.drawRange = { start: 0, count: 6 })),
     ),
   );
   assert.doesNotThrow(() =>
     assertPortableResource(
       'geometry',
       'mesh',
-      mutate(openQuad, (g) => (g.drawRange = { start: 2, count: 2 })),
+      mutate(openQuad, (g) => (g.drawRange = { start: 0, count: 4 })),
     ),
   );
+});
+
+test('normalizing a retained payload owns bytes and structural metadata', () => {
+  const source = indexedQuadGeometry();
+  const normalized = normalizePortableResource('geometry', 'mesh', source);
+  source.bytes[0] = 255;
+  source.accessors[0].count = 1;
+  assert.notEqual(normalized.bytes, source.bytes);
+  assert.equal(normalized.bytes[0], 0);
+  assert.equal(normalized.accessors[0].count, 4);
+  assert(Object.isFrozen(normalized));
+  assert(Object.isFrozen(normalized.accessors));
 });
 
 test('instance addressing accepts record-driven counts or a positive fixed count', () => {

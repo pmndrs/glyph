@@ -7,7 +7,7 @@ import {
   type FontBindingDescriptor,
   type FontBindingFieldTable,
 } from './font-binding.js';
-import { assertPortableResource } from './portable-resources.js';
+import { normalizePortableResource } from './portable-resources.js';
 import type { CompiledPolicyProgramBody } from './policy-program.js';
 import type { PolicyBufferDeclaration, TechniqueSchema } from './technique-schema.js';
 import { RenderWireIdentityRegistry, type PolicyCapabilitySet } from './render-policy.js';
@@ -106,7 +106,11 @@ export function compileRasterFont(
       if (typeof name !== 'string' || name.length === 0) {
         throw new TypeError('raster plan font retained a resource without a declared name');
       }
-      const declared = program.schema.resources?.[name];
+      const declaredResourcesSchema = program.schema.resources;
+      const declared =
+        declaredResourcesSchema !== undefined && Object.hasOwn(declaredResourcesSchema, name)
+          ? declaredResourcesSchema[name]
+          : undefined;
       if (declared === undefined) {
         throw new TypeError(`raster plan font retained "${key}" under undeclared resource name "${name}"`);
       }
@@ -114,11 +118,20 @@ export function compileRasterFont(
         throw new TypeError(`raster plan font retained declared resource "${name}" more than once`);
       }
       if (resources.has(key)) throw new TypeError(`raster plan font retained duplicate resource "${key}"`);
-      assertPortableResource(declared.kind, name, resource);
+      const normalized = normalizePortableResource(
+        declared.kind,
+        name,
+        resource,
+        declared.kind === 'texture' && 'format' in declared ? declared.format : undefined,
+      );
       declaredResources.set(name, key);
-      resources.set(key, resource);
+      resources.set(key, normalized);
     },
   });
   if (binding === undefined) throw new Error('raster plan font compiler produced no binding');
+  const geometryResource = program.schema.render?.geometry.resource;
+  if (geometryResource !== undefined && !declaredResources.has(geometryResource)) {
+    throw new Error(`raster plan font did not retain declared geometry resource "${geometryResource}"`);
+  }
   return { binding, resources, declaredResources };
 }

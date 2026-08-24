@@ -123,6 +123,7 @@ export {
 } from './core/technique-schema.js';
 export {
   assertPortableResource,
+  normalizePortableResource,
   portableResourceKinds,
   portableTopologies,
   type PortableAccessor,

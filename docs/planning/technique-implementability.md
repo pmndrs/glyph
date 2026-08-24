@@ -130,18 +130,16 @@ Evolve the existing `TechniqueSchema` rather than creating a parallel metadata s
 - logical buffer bindings and lane types;
 - logical resource bindings and portable resource layouts;
 - geometry kind (`synthetic-quad`, `quad`, or supplied geometry) and its coordinate convention;
-- supplied geometry attributes, accessors, indices, topology, and instance rate when the primitive is `quad` or another supplied geometry kind;
-- the geometry resource binding, index count/range, and whether record count supplies the instance count;
-- instance addressing and transform inputs;
-- shader-visible outputs and required capabilities.
+- the logical geometry resource binding and the renderer-neutral geometry payload's attributes, accessors, indices, topology, draw range, and instance-rate metadata;
+- instance addressing and transform inputs.
 
 Technique-local buffer ids may remain in the wire schema, but shader and renderer-facing metadata refer to declared names. Host system ids remain outside the technique contract.
 
-Add validation for missing names, scalar/vector mismatches, unsupported geometry/resource combinations, absent shader variants, indexed/non-indexed draw-range mismatches, and invalid instance rates. Keep geometry kind disjoint from the wire primitive enum (`glyph`, `decoration`, and future engine command kinds); the wire primitive remains a record-span command, and geometry metadata is resolved from the portable technique/resource contract rather than added to the fixed wire record.
+Add validation for missing names, scalar/vector mismatches, unsupported geometry/resource combinations, absent shader variants, indexed/non-indexed draw-range mismatches, and invalid instance rates. Keep geometry kind disjoint from the wire primitive enum (`glyph`, `decoration`, and future engine command kinds); the wire primitive remains a record-span command, and geometry metadata is resolved from the portable technique/resource contract rather than added to the fixed wire record. Renderer-facing shader-visible outputs and required capabilities belong to the selected renderer variant descriptor in layer 2, not to the portable resource payload.
 
 ### 2. Make compiled resource data portable
 
-Replace unconstrained renderer payload assumptions with a constrained portable resource description. Preserve `CompiledRasterFont` as a core result of binding bytes plus retained portable resources. Geometry resources follow the same model as GLB geometry buffers: immutable bytes plus typed accessors and semantic attributes, never Three geometry objects. Define the resource union and its lifetime/identity rules before changing the Three context: buffers/textures are immutable payloads, geometry references a buffer view plus accessors/attributes/indices/topology, and resource ids remain stable across retention. Add an explicit declared-resource-name to retained-resource-id mapping (or an equivalent `retain(declaredName, key, payload)` compiler operation); reject a compiler result that retains a resource under a name absent from the schema. This is the link between schema metadata and `CompiledRasterFont.resources`, not a renderer-specific lookup.
+Replace unconstrained renderer payload assumptions with a constrained portable resource description. Preserve `CompiledRasterFont` as a core result of binding bytes plus retained portable resources. Geometry resources follow the same model as GLB geometry buffers: immutable bytes plus typed accessors and semantic attributes, never Three geometry objects. The schema names the logical geometry/resource binding; the per-font retained payload carries its buffer views, typed accessors, attributes, indices, topology, draw range, and instance addressing. Define the resource union and its lifetime/identity rules before changing the Three context: buffers/textures are immutable payloads, geometry references a buffer view plus accessors/attributes/indices/topology, and resource ids remain stable across retention. Add an explicit declared-resource-name to retained-resource-id mapping (or an equivalent `retain(declaredName, key, payload)` compiler operation); reject a compiler result that retains a resource under a name absent from the schema or omits the geometry resource named by the render contract. This is the link between schema metadata and `CompiledRasterFont.resources`, not a renderer-specific lookup.
 
 Do not add GPU objects, `NodeMaterial`, TypeGPU schemas, TSL nodes, or backend handles to this result.
 
