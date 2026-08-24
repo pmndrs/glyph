@@ -97,6 +97,39 @@ Side-effect registration is the right mechanism and is not the problem anywhere 
 
 Step 5 is the acceptance criterion. Steps 1-4 are not done until a technique the package does not know about completes the round trip on the portable path.
 
+### Third-party resources stay typed without module augmentation
+
+`ThreeTextEngineResource` is a closed union of three first-party members plus an escape hatch typed
+`resource: unknown` (`three/engine-runtime.ts:52-56`). A third party gets no type safety and cannot add
+a member, so the union does not survive being made extensible.
+
+It does not need augmentation. `RasterTechnique` already carries a phantom type map --
+`RasterTechniqueTypeMap<Options, Descriptor, Data>` -- and `Data` is already an open, third-party-defined
+type recovered generically through `RasterDataOf`. `Resource` rides the same rail:
+
+```ts
+interface RasterTechniqueTypeMap<Options, Descriptor, Data, Resource> {
+  readonly options: Options;
+  readonly descriptor: Descriptor;
+  readonly data: Data;
+  readonly resource: Resource;
+}
+export type RasterResourceOf<T extends AnyRasterTechnique> = RasterTechniqueTypesOf<T>['resource'];
+
+type RasterEngineResource<T extends AnyRasterTechnique = AnyRasterTechnique> =
+  Readonly<{ technique: T['id']; resource: RasterResourceOf<T> }>;
+```
+
+The three-member union collapses to one generic shape, and a third-party resource type is inferred at
+its `defineRasterTechnique` site and flows to every call site holding the technique.
+
+Prefer this to `declare module` augmentation. Augmentation is global and single-instance: two versions of
+a technique package collide in one interface map, the consumer must import the augmenting module purely
+for types, and a site generic over techniques cannot say which technique a resource belongs to.
+Parameterisation has none of those, and it is the erasure story this package already runs for `Data`.
+`unknown` remains correct only inside a deliberately erased registry interior, as
+`ThreeRasterPlanProgram<AnyRasterTechnique, unknown>` already does.
+
 ### Resources are data, not GPU objects
 
 `compileFont` returns a binding plus resources, and the resources look renderer-owned because
