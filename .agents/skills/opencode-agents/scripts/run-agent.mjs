@@ -7,7 +7,7 @@
 // session persists -- so the launcher resumes it by id with metered backoff instead of restarting.
 
 import { spawn } from 'node:child_process';
-import { mkdirSync, appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const args = process.argv.slice(2);
@@ -26,6 +26,8 @@ const maxAttempts = Number(flag('attempts', '6'));
 const resumeSession = flag('session');
 const baseMs = Number(flag('base', '30000'));
 const ceilingMs = Number(flag('ceiling', '300000'));
+const maxTraceBytes = Number(flag('max-trace-bytes', '4194304'));
+const retainedTraceFiles = Number(flag('retained-traces', '5'));
 
 if (briefPath === undefined) {
   console.error('usage: run-agent.mjs --brief <file> [--cwd <dir>] [--model <id>] [--attempts n]');
@@ -36,6 +38,29 @@ mkdirSync(traceDir, { recursive: true });
 const stamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
 const tracePath = join(traceDir, `${stamp}.jsonl`);
 const brief = readFileSync(briefPath, 'utf8');
+
+function appendRolled(path, chunk) {
+  const bytes = Buffer.byteLength(chunk);
+  let size = 0;
+  try {
+    size = statSync(path).size;
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  if (size > 0 && size + bytes > maxTraceBytes) {
+    for (let index = retainedTraceFiles - 1; index >= 1; index -= 1) {
+      const older = `${path}.${index}`;
+      const newer = `${path}.${index + 1}`;
+      try {
+        renameSync(older, newer);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }
+    renameSync(path, `${path}.1`);
+  }
+  appendFileSync(path, chunk);
+}
 
 /**
  * The provider failed, not the work: resume rather than restart.
@@ -60,11 +85,11 @@ function runOnce(sessionId) {
     let err = '';
     child.stdout.on('data', (chunk) => {
       out += chunk;
-      appendFileSync(tracePath, chunk);
+      appendRolled(tracePath, chunk);
     });
     child.stderr.on('data', (chunk) => {
       err += chunk;
-      appendFileSync(tracePath, chunk);
+      appendRolled(tracePath, chunk);
     });
     child.on('close', (code) => resolve({ code, out, err }));
   });
