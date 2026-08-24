@@ -330,6 +330,33 @@ flowchart LR
   plan --> render["Renderer resources, uploads, materials, and draws"]
 ```
 
+Who supplies each piece matters more than the order, because it decides what you write once and what
+you write again for every engine:
+
+```mermaid
+flowchart TD
+  baker["Baker<br/><i>RasterBakerModule</i>"] -->|"baked GLB: strikes, atlases, curves"| artifact["Font artifact"]
+  artifact --> technique
+  subgraph portable["Written once — works in every engine"]
+    technique["Technique<br/><i>decode, dispose, descriptor</i>"]
+    policy["Render policy<br/><i>numeric bytecode</i>"]
+    binding["Font binding<br/><i>Rust wire bytes</i>"]
+  end
+  technique --> policy --> plan["Render plan<br/><i>fixed-record data</i>"]
+  technique --> binding --> plan
+  subgraph engine["Written once per engine"]
+    gpu["Bind buffers and textures<br/><i>from the baked bytes</i>"]
+    material["Realize material"]
+  end
+  plan --> gpu --> draw["Draws"]
+  plan --> material --> draw
+```
+
+The policy and the font binding contain no renderer types — the policy is numbers, the binding is Rust wire
+bytes, and plan resources are handles into the baked payload. Only buffer/texture binding and material
+realization are engine-specific, because only those are engine objects. A technique is therefore authored
+once and consumed by any renderer that can execute the plan.
+
 The policy declares:
 
 - supported raster techniques and paint/compositing capabilities;
@@ -362,7 +389,7 @@ A renderer integration has five responsibilities:
 
 Three is the maintained reference executor. `@pmndrs/glyph/three/bitmap`, `/msdf`, and `/slug` export each technique's raster contract; the Three runtime resolves the matching policy program and TSL material when a loaded font requests that technique. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
 
-The renderer-neutral host, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/glyph/core`, and the technique shaders as `@pmndrs/glyph/tsl` and `@pmndrs/glyph/typegpu` — the [Core API](#core-api) section shows the four moves. A new engine integration can follow the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as its reference.
+The renderer-neutral host, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/glyph/core`, and the technique shaders as `@pmndrs/glyph/tsl` and `@pmndrs/glyph/typegpu` — the [Core API](#core-api) section shows the four moves. A new engine integration should start from the [renderer integration guide](docs/guides/renderer-integration.md), which walks all five responsibilities above with working code, then use the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as reference material.
 
 ## Technique shaders on their own
 
