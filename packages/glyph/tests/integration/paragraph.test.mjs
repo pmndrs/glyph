@@ -5,7 +5,7 @@ import test from 'node:test';
 import * as THREE from 'three/webgpu';
 
 import { createTextRuntime } from '@pmndrs/glyph';
-import { Paragraph } from '@pmndrs/glyph';
+import { Paragraph } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
 
