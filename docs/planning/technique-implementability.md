@@ -103,10 +103,10 @@ A third-party baker costs **24 lines**, because `RasterBakerModule` asks for exa
 
 Two things inflate the rest, and both are ours:
 
-- **The GLB writer is private.** `artifact.ts` hand-rolls container mechanics -- `GLB_MAGIC`, `encodeGlb`, `concatenate`, `align4`, manual `bufferViews` -- that this package already implements in `internal/compose-bake.ts` and its four validators and exports nowhere. An author defining a payload format should not re-derive chunk alignment.
+- **Container mechanics, owner undecided.** `artifact.ts` hand-rolls `GLB_MAGIC`, `encodeGlb`, `concatenate`, `align4`, and manual `bufferViews`, while this package implements the same thing in `internal/compose-bake.ts` and its four validators and exports none of it. Before proposing an export, settle what `BakeArtifact` actually requires: it carries raw `bytes` with no stated container, and first-party bakers write no GLB at all -- `compose-bake` wraps for them. So either `role: 'raster'` requires a container, in which case a third-party baker cannot produce one without private code and the writer must become reachable; or the role accepts arbitrary bytes, in which case `example-raster` chose GLB for realism and owns that choice, and exporting a writer would add public surface for one example -- the same pattern this audit deleted eight subpaths for. **Answer that before adding a seam.** If a seam is warranted it is baker-side and integrator-only, so it belongs beside the bake contract rather than at the root.
 - **`three.ts` conflates three contracts.** After the split its portable half is authored once and consumed by `example-renderer` as well, instead of being Three-shaped code a second engine must rewrite.
 
-Export the container writer alongside the split, and re-measure `example-raster` afterwards. If a third-party technique is not close to its baker in size, the consume-side contract is still asking for the wrong things.
+Re-measure `example-raster` after the split, and settle the container question above rather than assuming an export. If a third-party technique is not close to its baker in size, the consume-side contract is still asking for the wrong things.
 
 ## Sequencing
 
