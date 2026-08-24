@@ -22,6 +22,8 @@ export interface PolicyBufferDeclaration {
 
 export type PolicyBufferDeclarations = Readonly<Record<string, PolicyBufferDeclaration>>;
 
+const techniqueSchemaBrand: unique symbol = Symbol('glyph.technique-schema');
+
 /**
  * Validate and freeze a named buffer set: nonzero unique ids, at least one lane
  * each. The result is an owned, deeply frozen copy — caller input is never
@@ -30,7 +32,7 @@ export type PolicyBufferDeclarations = Readonly<Record<string, PolicyBufferDecla
  */
 export function definePolicyBuffers<const Buffers extends PolicyBufferDeclarations>(buffers: Buffers): Buffers {
   const seen = new Set<number>();
-  const owned: Record<string, PolicyBufferDeclaration> = {};
+  const owned: Record<string, PolicyBufferDeclaration> = Object.create(null);
   for (const [name, buffer] of Object.entries(buffers)) {
     const id = buffer.id;
     const scalar = buffer.scalar;
@@ -148,7 +150,18 @@ export interface TechniqueSchemaDeclaration<
 export interface TechniqueSchema<
   Buffers extends PolicyBufferDeclarations = PolicyBufferDeclarations,
   Binding extends TechniqueBindingDeclaration = TechniqueBindingDeclaration,
-> extends TechniqueSchemaDeclaration<Buffers, Binding> {}
+> extends TechniqueSchemaDeclaration<Buffers, Binding> {
+  readonly [techniqueSchemaBrand]: true;
+}
+
+export function isTechniqueSchema(value: unknown): value is TechniqueSchema {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (value as { [techniqueSchemaBrand]?: unknown })[techniqueSchemaBrand] === true
+  );
+}
 
 /** Validate and freeze one technique's authoritative schema. */
 export function defineTechniqueSchema<
@@ -159,8 +172,12 @@ export function defineTechniqueSchema<
   // owned data, then freeze and return the copy. Caller input is never mutated
   // or frozen — a rejected declaration leaves it exactly as passed — and only
   // the declared fields are carried, so no foreign reachable state survives.
+  if (typeof declaration !== 'object' || declaration === null || Array.isArray(declaration)) {
+    throw new TypeError('technique schemas need a declaration object');
+  }
   const technique = declaration.technique;
-  if (technique.length === 0) throw new TypeError('technique schemas need a wire identity');
+  if (typeof technique !== 'string' || technique.length === 0)
+    throw new TypeError('technique schemas need a wire identity');
   const scope = declaration.scope;
   if (scope !== 'glyph' && scope !== 'strike' && scope !== 'resource') {
     throw new TypeError(`technique "${technique}" needs a glyph, strike, or resource binding scope`);
@@ -174,7 +191,7 @@ export function defineTechniqueSchema<
   const buffers = definePolicyBuffers(declaration.buffers);
   let resources: Readonly<Record<string, TechniqueResourceDeclaration>> | undefined;
   if (declaration.resources !== undefined) {
-    const owned: Record<string, TechniqueResourceDeclaration> = {};
+    const owned: Record<string, TechniqueResourceDeclaration> = Object.create(null);
     for (const [name, resource] of Object.entries(declaration.resources)) {
       owned[name] = defineResourceDeclaration(resource, name, technique);
     }
@@ -189,7 +206,9 @@ export function defineTechniqueSchema<
   }
   let glyphOrigin: { readonly buffer: string } | undefined;
   if (declaration.glyphOrigin !== undefined) {
-    const origin: PolicyBufferDeclaration | undefined = buffers[declaration.glyphOrigin.buffer];
+    const origin: PolicyBufferDeclaration | undefined = Object.hasOwn(buffers, declaration.glyphOrigin.buffer)
+      ? buffers[declaration.glyphOrigin.buffer]
+      : undefined;
     if (origin === undefined) {
       throw new TypeError(`technique "${technique}" points glyphOrigin at an undeclared buffer`);
     }
@@ -203,7 +222,7 @@ export function defineTechniqueSchema<
     ...(bindingU32 === undefined ? {} : { u32: bindingU32 }),
     // The copies carry exactly the declared binding names read above.
   }) as Binding;
-  return Object.freeze({
+  const schema = {
     technique,
     scope,
     binding,
@@ -211,7 +230,9 @@ export function defineTechniqueSchema<
     ...(resources === undefined ? {} : { resources }),
     ...(render === undefined ? {} : { render }),
     ...(glyphOrigin === undefined ? {} : { glyphOrigin }),
-  });
+  } as TechniqueSchema<Buffers, Binding>;
+  Object.defineProperty(schema, techniqueSchemaBrand, { value: true });
+  return Object.freeze(schema);
 }
 
 /**
@@ -275,7 +296,7 @@ function defineGeometryDeclaration(
   if (typeof resource !== 'string' || resource.length === 0) {
     throw new TypeError(`technique "${technique}" geometry "${kind}" needs a declared geometry resource`);
   }
-  const declared = resources?.[resource];
+  const declared = resources !== undefined && Object.hasOwn(resources, resource) ? resources[resource] : undefined;
   if (declared === undefined) {
     throw new TypeError(`technique "${technique}" points its "${kind}" geometry at undeclared resource "${resource}"`);
   }

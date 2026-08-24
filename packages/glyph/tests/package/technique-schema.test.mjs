@@ -86,6 +86,27 @@ test('schemas own their data: caller accessors cannot change validated widths', 
   assert.equal(schemaPolicyBuffers(schema)[0].vectorWidth, 1);
 });
 
+test('schema lookups do not accept inherited prototype names', () => {
+  const buffers = Object.create(null);
+  buffers.origin = { id: 1, scalar: 'f32', lanes: ['x', 'y'] };
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), buffers, glyphOrigin: { buffer: '__proto__' } }),
+    (error) => error instanceof TypeError && error.message.includes('undeclared buffer'),
+  );
+
+  const resources = Object.create(null);
+  resources.atlas = { kind: 'texture' };
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources,
+        render: { geometry: { kind: 'quad', resource: '__proto__', coordinates: 'unit-square' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('undeclared resource "__proto__"'),
+  );
+});
+
 test('glyphOrigin metadata must name a declared f32 buffer with two origin lanes', () => {
   const valid = defineTechniqueSchema({ ...declaration(), glyphOrigin: { buffer: 'origin' } });
   assert.deepEqual(valid.glyphOrigin, { buffer: 'origin' });

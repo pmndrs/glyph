@@ -1,12 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  assertPortableResource,
-  normalizePortableResource,
-  portableResourceKinds,
-  portableTopologies,
-} from '../../dist/core.js';
+import { assertPortableResource, portableResourceKinds, portableTopologies } from '../../dist/core.js';
+import { normalizePortableResource } from '../../dist/core/portable-resources.js';
 import { indexedQuadGeometry, instancedQuadGeometry } from '../support/portable-geometry.mjs';
 
 function mutate(geometry, patch) {
@@ -83,6 +79,10 @@ test('retained payloads must declare the reserved payload kind of their resource
     () => assertPortableResource('geometry', 'mesh', null),
     (error) => error instanceof TypeError && error.message.includes('needs a payload object'),
   );
+  assert.throws(
+    () => assertPortableResource('geometry', 'mesh', []),
+    (error) => error instanceof TypeError && error.message.includes('needs a payload object'),
+  );
 });
 
 test('geometry views and accessors must stay inside the immutable bytes', () => {
@@ -101,9 +101,27 @@ test('geometry views and accessors must stay inside the immutable bytes', () => 
       assertPortableResource(
         'geometry',
         'mesh',
+        mutate(quad, (g) => (g.accessors[1].offset = 2)),
+      ),
+    (error) => error instanceof RangeError && error.message.includes('is not aligned to 4 bytes'),
+  );
+  assert.throws(
+    () =>
+      assertPortableResource(
+        'geometry',
+        'mesh',
         mutate(quad, (g) => (g.views[1].length = 13)),
       ),
     (error) => error instanceof RangeError && error.message.includes('buffer view 1 exceeds its 76 bytes'),
+  );
+  assert.throws(
+    () =>
+      assertPortableResource(
+        'geometry',
+        'mesh',
+        mutate(instancedQuadGeometry(), (g) => (g.instances = { source: 'fixed', count: 6 })),
+      ),
+    (error) => error instanceof RangeError && error.message.includes('exceeds 5 instance elements'),
   );
   assert.throws(
     () =>
@@ -407,6 +425,13 @@ test('instance addressing accepts record-driven counts or a positive fixed count
       'geometry',
       'mesh',
       mutate(quad, (g) => (g.instances = { source: 'fixed', count: 1 })),
+    ),
+  );
+  assert.doesNotThrow(() =>
+    assertPortableResource(
+      'geometry',
+      'mesh',
+      mutate(instancedQuadGeometry(), (g) => (g.instances = { source: 'fixed', count: 5 })),
     ),
   );
 });

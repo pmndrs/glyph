@@ -137,28 +137,34 @@ export function normalizePortableResource(
   payload: unknown,
   declaredFormat?: string,
 ): unknown {
-  assertPortableResource(kind, name, payload, declaredFormat);
   if (kind === 'buffer') {
+    assertPayload(payload, name, 'buffer');
     const source = payload as PortableBufferPayload;
-    return Object.freeze({
+    const owned = {
       kind,
       bytes: new Uint8Array(source.bytes),
       ...(source.stride === undefined ? {} : { stride: source.stride }),
-    });
+    };
+    assertPortableResource(kind, name, owned, declaredFormat);
+    return Object.freeze(owned);
   }
   if (kind === 'texture') {
+    assertPayload(payload, name, 'texture');
     const source = payload as PortableTexturePayload;
-    return Object.freeze({
+    const owned = {
       kind,
       format: source.format,
       width: source.width,
       height: source.height,
       bytes: new Uint8Array(source.bytes),
-    });
+    };
+    assertPortableResource(kind, name, owned, declaredFormat);
+    return Object.freeze(owned);
   }
   if (kind === 'geometry') {
+    assertPayload(payload, name, 'geometry');
     const source = payload as PortableGeometryPayload;
-    return Object.freeze({
+    const owned = {
       kind,
       topology: source.topology,
       bytes: new Uint8Array(source.bytes),
@@ -168,7 +174,9 @@ export function normalizePortableResource(
       ...(source.indices === undefined ? {} : { indices: Object.freeze({ ...source.indices }) }),
       ...(source.drawRange === undefined ? {} : { drawRange: Object.freeze({ ...source.drawRange }) }),
       ...(source.instances === undefined ? {} : { instances: Object.freeze({ ...source.instances }) }),
-    });
+    };
+    assertPortableResource(kind, name, owned, declaredFormat);
+    return Object.freeze(owned);
   }
   return payload;
 }
@@ -215,7 +223,7 @@ function assertPortableGeometry(name: string, payload: unknown): void {
   if (!(payload.bytes instanceof Uint8Array)) throw new TypeError(`portable geometry "${name}" needs Uint8Array bytes`);
   assertGeometryViews(payload.views, payload.bytes.byteLength, name);
   const accessors = assertGeometryAccessors(payload.accessors, payload.views, name);
-  const vertexCount = assertGeometryAttributes(payload.attributes, accessors, name);
+  const { vertexCount, instanceElementCount } = assertGeometryAttributes(payload.attributes, accessors, name);
   const indexCount =
     payload.indices === undefined
       ? undefined
@@ -227,7 +235,7 @@ function assertPortableGeometry(name: string, payload: unknown): void {
     indexCount !== undefined,
     payload.topology,
   );
-  if (payload.instances !== undefined) assertGeometryInstances(payload.instances, name);
+  if (payload.instances !== undefined) assertGeometryInstances(payload.instances, instanceElementCount, name);
 }
 
 function isTopology(value: unknown): value is PortableTopology {
@@ -287,6 +295,10 @@ function assertGeometryAccessors(
     const offset = accessor.offset ?? 0;
     if (!Number.isSafeInteger(offset) || offset < 0) throw new RangeError(`${label} needs a nonnegative byte offset`);
     const size = componentSizes[accessor.componentType];
+    const absoluteOffset = views[accessor.view]!.offset + offset;
+    if (absoluteOffset % size !== 0) {
+      throw new RangeError(`${label} absolute byte offset ${absoluteOffset} is not aligned to ${size} bytes`);
+    }
     const span = offset + checkedSpan(accessor.count, accessor.components, size, label);
     if (span > views[accessor.view]!.length) {
       throw new RangeError(`${label} reads past its buffer view (${span} of ${views[accessor.view]!.length} bytes)`);
@@ -299,7 +311,7 @@ function assertGeometryAttributes(
   attributes: readonly PortableVertexAttribute[],
   accessors: readonly PortableAccessor[],
   name: string,
-): number {
+): { vertexCount: number; instanceElementCount: number | undefined } {
   if (!isPortableList<PortableVertexAttribute>(attributes) || attributes.length === 0) {
     throw new TypeError(`portable geometry "${name}" needs at least one attribute`);
   }
@@ -345,7 +357,7 @@ function assertGeometryAttributes(
   if (instanceElementCount !== undefined && instanceElementCount < 1) {
     throw new RangeError(`portable geometry "${name}" needs at least one instance element`);
   }
-  return vertexCount;
+  return { vertexCount, instanceElementCount };
 }
 
 function assertGeometryIndices(
@@ -411,12 +423,21 @@ function assertGeometryDrawRange(
   }
 }
 
-function assertGeometryInstances(instances: PortableInstances, name: string): void {
+function assertGeometryInstances(
+  instances: PortableInstances,
+  instanceElementCount: number | undefined,
+  name: string,
+): void {
   if (!isNonArrayObject(instances)) throw new TypeError(`portable geometry \"${name}\" instances need an object`);
   if (instances.source === 'records') return;
   if (instances.source === 'fixed') {
     if (!Number.isSafeInteger(instances.count) || instances.count < 1) {
       throw new RangeError(`portable geometry "${name}" needs a positive fixed instance count`);
+    }
+    if (instanceElementCount !== undefined && instances.count > instanceElementCount) {
+      throw new RangeError(
+        `portable geometry "${name}" fixed instance count ${instances.count} exceeds ${instanceElementCount} instance elements`,
+      );
     }
     return;
   }
@@ -438,7 +459,7 @@ function assertPayload<K extends PortableResourceKind>(
   name: string,
   kind: K,
 ): asserts value is Extract<PortableResource, { kind: K }> {
-  if (typeof value !== 'object' || value === null) {
+  if (!isNonArrayObject(value)) {
     throw new TypeError(`portable ${kind} resource "${name}" needs a payload object`);
   }
   if ((value as { kind?: unknown }).kind !== kind) {

@@ -9,7 +9,7 @@ import {
 } from './font-binding.js';
 import { normalizePortableResource } from './portable-resources.js';
 import type { CompiledPolicyProgramBody } from './policy-program.js';
-import type { PolicyBufferDeclaration, TechniqueSchema } from './technique-schema.js';
+import { isTechniqueSchema, type PolicyBufferDeclaration, type TechniqueSchema } from './technique-schema.js';
 import { RenderWireIdentityRegistry, type PolicyCapabilitySet } from './render-policy.js';
 
 /** System buffers are owned by the engine and are deliberately absent from a technique schema. */
@@ -68,6 +68,22 @@ const programs = new Map<string, ErasedProgram>();
 export function registerRasterPlanProgram<Technique extends AnyRasterTechnique, Resource>(
   program: RasterPlanProgram<Technique, Resource>,
 ): void {
+  if (
+    typeof program !== 'object' ||
+    program === null ||
+    typeof program.technique?.id !== 'string' ||
+    program.technique.id.length === 0
+  ) {
+    throw new TypeError('raster plan programs need a technique with a string id');
+  }
+  if (!isTechniqueSchema(program.schema)) {
+    throw new TypeError(`raster plan program "${program.technique.id}" needs a schema from defineTechniqueSchema`);
+  }
+  if (program.schema.technique !== program.technique.id) {
+    throw new TypeError(
+      `raster plan program "${program.technique.id}" schema names technique "${program.schema.technique}"`,
+    );
+  }
   const erased = program as unknown as ErasedProgram;
   const existing = programs.get(program.technique.id);
   if (existing !== undefined && existing !== erased) {
@@ -100,11 +116,14 @@ export function compileRasterFont(
     compile(descriptor) {
       if (binding !== undefined) throw new Error('raster plan font compiler produced more than one binding');
       binding = compileFontBinding(descriptor);
-      return binding;
+      return new Uint8Array(binding);
     },
     retain(name, key, resource) {
       if (typeof name !== 'string' || name.length === 0) {
         throw new TypeError('raster plan font retained a resource without a declared name');
+      }
+      if (typeof key !== 'string' || key.length === 0) {
+        throw new TypeError(`raster plan font retained resource "${name}" without a nonempty key`);
       }
       const declaredResourcesSchema = program.schema.resources;
       const declared =
