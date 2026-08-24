@@ -106,8 +106,4 @@ export {
   type PolicyU32Value,
 } from './core/policy-program.js';
 export { textShaperAbi } from './generated/text-shaper-abi.js';
-export type {
-  ParagraphLayoutResult,
-  ParagraphMeasureResult,
-  ParagraphQueryError,
-} from './paragraph.js';
+export type { ParagraphLayoutResult, ParagraphMeasureResult, ParagraphQueryError } from './paragraph.js';

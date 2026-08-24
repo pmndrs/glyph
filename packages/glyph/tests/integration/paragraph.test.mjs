@@ -5,7 +5,7 @@ import test from 'node:test';
 import * as THREE from 'three/webgpu';
 
 import { createTextRuntime } from '@pmndrs/glyph';
-import { Paragraph } from '@pmndrs/glyph/core';
+import { Paragraph } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
 
@@ -235,6 +235,29 @@ function projectMeasurement(measurement) {
     missingGlyphCount: measurement.missingGlyphCount,
   };
 }
+
+test('authored nested state is snapshotted, so later caller mutation cannot change shaping input', async () => {
+  await using boot = await bootstrap();
+  const features = [{ tag: 'liga', value: 1 }];
+  const paragraph = new Paragraph({
+    font: boot.font,
+    text: TEXT,
+    style: { fontSize: 16, features },
+    policy: { justify: { threshold: 0.5 } },
+  });
+  try {
+    const before = projectMeasurement(paragraph.measure({}).metrics);
+    // The caller still owns the array it passed in and may legitimately reuse it. Mutating it must
+    // not reach the shaping input this paragraph was keyed on; a one-level freeze shared the array
+    // and its records, so this edit changed the engine input while the cache kept answering stale.
+    features[0].value = 0;
+    features.push({ tag: 'kern', value: 0 });
+    const after = projectMeasurement(paragraph.measure({}).metrics);
+    assert.deepEqual(after, before);
+  } finally {
+    paragraph.dispose();
+  }
+});
 
 function projectLayout(layout) {
   return {

@@ -523,6 +523,26 @@ function axisKey(constraints: ResolvedConstraints): string {
 }
 
 /**
+ * Copies an authored value and everything reachable from it, then freezes the copy.
+ *
+ * A one-level freeze leaves nested authored structure -- `style.features` and its records,
+ * `policy.justify`, `policy.columns`, per-span styles and paints -- shared with the caller, so
+ * mutating a record after `update()` changes the shaping input the cache was keyed on while the
+ * cache still answers from the value it stored. Freezing the caller's own objects in place would
+ * fix that by making their arrays immutable underneath them, which is a side effect on memory they
+ * own; copying first keeps the snapshot ours and their input untouched. Authored state is small and
+ * normalization already copies its top level.
+ */
+function frozenDeep<Value>(value: Value): Value {
+  if (value === null || typeof value !== 'object') return value;
+  if (ArrayBuffer.isView(value)) return value;
+  if (Array.isArray(value)) return Object.freeze(value.map((entry) => frozenDeep(entry))) as Value;
+  const copy: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) copy[key] = frozenDeep(nested);
+  return Object.freeze(copy) as Value;
+}
+
+/**
  * Cluster resolution runs whenever text or stated spans change identity, and each retained
  * span is frozen so the identity short-circuit against `previous.spans` cannot be undermined
  * by a mutated record. Mirrors the Three.js Text's desired-state normalization exactly.
@@ -539,14 +559,14 @@ function normalizeParagraphState<Technique extends AnyRasterTechnique>(
       ? stated
       : alignSpansToClusters(text, stated);
   const spans =
-    resolved === previous?.spans ? previous.spans : Object.freeze(resolved.map((span) => Object.freeze({ ...span })));
+    resolved === previous?.spans ? previous.spans : Object.freeze(resolved.map((span) => frozenDeep({ ...span })));
   return Object.freeze({
     font: properties.font,
     text,
     spans,
-    style: Object.freeze({ ...(properties.style ?? {}) }),
-    paint: Object.freeze({ ...(properties.paint ?? {}) }),
-    policy: Object.freeze({ ...(properties.policy ?? {}) }),
+    style: frozenDeep({ ...(properties.style ?? {}) }),
+    paint: frozenDeep({ ...(properties.paint ?? {}) }),
+    policy: frozenDeep({ ...(properties.policy ?? {}) }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
   });
 }
