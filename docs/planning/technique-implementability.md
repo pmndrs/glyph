@@ -97,6 +97,22 @@ Side-effect registration is the right mechanism and is not the problem anywhere 
 
 Step 5 is the acceptance criterion. Steps 1-4 are not done until a technique the package does not know about completes the round trip on the portable path.
 
+### Resources are data, not GPU objects
+
+`compileFont` returns a binding plus resources, and the resources look renderer-owned because
+`ThreeTextEngineResource` lives in `/three`. Its contents are not: every first-party variant is a
+baked data type from the technique module -- `BitmapStrikeData`, `MsdfData`, `SlugPageData`
+(`three/engine-runtime.ts:52-56`) -- and the third-party variant carries an opaque `resource` plus its
+program. No Three object appears in it. The GPU object is created later and elsewhere, from those
+bytes: `engine-plan-target.ts:910` builds `new THREE.DataArrayTexture(bytes, width, height, pages)`
+from the strike.
+
+So the boundary the split needs already exists and is only mislabelled. The baked payload carries the
+data; `compileFont` yields the binding and handles into that data; each engine binds those handles its
+own way -- a `DataArrayTexture` in Three, a `GPUTexture` in a WebGPU-native renderer. Rename
+`ThreeTextEngineResource` to `RasterEngineResource` and move it with the portable half; the texture
+and buffer caches stay in each renderer's plan target, which is where they already are.
+
 ## Risks
 
 - **Type erasure at the registry boundary.** The Three registry erases to `ThreeRasterPlanProgram<AnyRasterTechnique, unknown>`; the portable registry needs the same discipline with the generic surface preserved for the caller.
