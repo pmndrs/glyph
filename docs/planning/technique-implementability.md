@@ -92,10 +92,17 @@ Side-effect registration is the right mechanism and is not the problem anywhere 
 2. Make `loadedFontBindingBytes` resolve through the portable registry before its first-party branch, so `Paragraph` and the Three runtime agree.
 3. Register the three first-party plan programs portably, then delete the first-party fallback branch and the eager bitmap/msdf/slug imports from `core/font-binding.ts`.
 4. Add `registerRasterBaker` and kind-based discovery.
-5. Prove it: a technique defined entirely outside the package, baked, bound, and rendered **through `Paragraph`** rather than through `Text`. That is the assertion no current test makes.
+5. Prove it by closing the matrix: **`glyph-example-renderer` consumes `glyph-example-raster`.** The two existing proofs are disjoint and neither covers the claim. `example-raster` is a third-party technique that registers through `/three`, so it proves technique-on-Three; `example-renderer` is a third-party engine importing only `/core`, but it consumes no technique at all -- its sole reference to one is a comment reading "bitmap-style". The matrix is therefore:
+
+   |  | Three engine | third-party engine |
+   | --- | --- | --- |
+   | first-party technique | covered | `example-renderer` |
+   | third-party technique | `example-raster` | **nothing** |
+
+   The empty cell is the only one where neither side can be special-cased, so it is the only one that proves the portable half is portable. Every other cell passes today while `paragraph.ts:689` still has no registry lookup.
 6. Re-test `Paragraph` at the root entry once the eager technique imports are gone; the delivery gate rejecting the root pulling `raster/bitmap-technique.js` is what currently blocks it.
 
-Step 5 is the acceptance criterion. Steps 1-4 are not done until a technique the package does not know about completes the round trip on the portable path.
+Step 5 is the acceptance criterion. Steps 1-4 are not done until a technique the package does not know about completes the round trip inside an engine the package does not know about either.
 
 ### Third-party resources stay typed without module augmentation
 
