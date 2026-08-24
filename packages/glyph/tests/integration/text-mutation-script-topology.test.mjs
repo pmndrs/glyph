@@ -15,7 +15,7 @@
  *   - conjunct formation and splitting, where a single virama changes the glyph count of a cluster.
  *
  * `engine-sequence-property.test.mjs` already drives randomized edits over these same fixtures, and
- * never saw the defect, because its oracle is engine-only: it asks whether `measure` agrees
+ * never saw the defect, because its oracle is engine-only: it asks whether `layout` agrees
  * with `layout`. Both read the engine, and both were correct. This file points the
  * differential/packed-lane oracle -- construction from scratch, compared bit-for-bit including the
  * instanced attributes the GPU samples -- at the same fixture classes.
@@ -345,8 +345,8 @@ for (const shaping of CASES) {
         try {
           assertShaped(ligated, `${where} ligature precondition`);
           assertShaped(plain, `${where} ligature precondition`);
-          const ligatedGlyphs = ligated.nodes[0].measure().glyphCount;
-          const plainGlyphs = plain.nodes[0].measure().glyphCount;
+          const ligatedGlyphs = ligated.nodes[0].layout().glyphCount;
+          const plainGlyphs = plain.nodes[0].layout().glyphCount;
           assert.ok(
             ligatedGlyphs < text.length,
             `${where}: ${JSON.stringify(text)} shaped ${ligatedGlyphs} glyphs for ${text.length} scalars, so no ligature absorbed a cluster`,

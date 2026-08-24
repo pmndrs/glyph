@@ -111,7 +111,7 @@ export interface TextGroupOptions {
  * `'unbound'` and `'pending'` are distinguished because they need different responses: an unbound
  * paragraph is not in the scene graph and never will commit on its own, while a pending one commits
  * on the next world-matrix update. The previous surface collapsed both into `undefined` from
- * `measure()`, and the only positive signal available was that `.error` was still unset.
+ * `layout()`, and the only positive signal available was that `.error` was still unset.
  */
 export type TextCommitState =
   | Readonly<{ status: 'unbound' }>
@@ -301,14 +301,14 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
    *
    * `undefined` means no committed layout, not a failure. `commitState()` is the positive signal.
    */
-  measure(): ParagraphLayoutSummary | undefined {
+  layout(): ParagraphLayoutSummary | undefined {
     this.#assertActive();
     return this.#binding?.measurement(eraseTextTechnique(this));
   }
   /**
    * The positioned columns of the committed layout, or `undefined` when none is committed.
    *
-   * Separate from `measure()` because it is a separate engine query: `measure()` takes the
+   * Separate from `layout()` because it is a separate engine query: `layout()` takes the
    * paragraph-scoped measurement path with no publication flip, while this asks the engine to emit
    * a record per glyph and copies those arrays out of Wasm. Reading a width should not pay for
    * that, and a scene that measures every frame would.

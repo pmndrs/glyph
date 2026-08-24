@@ -33,7 +33,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
 
   function customLayouting() {
     calls.measure += 1;
-    const natural = paragraph.measure();
+    const natural = paragraph.layout();
     return {
       // Intrinsic widths ride the natural measurement itself: no second query at zero width.
       minWidth: natural.minContentWidth,
@@ -41,7 +41,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
       firstBaseline: natural.firstBaseline,
       measure(width: number, widthMode: YogaMeasureModeValue, height: number, heightMode: YogaMeasureModeValue) {
         calls.measure += 1;
-        const metrics = paragraph.measure({
+        const metrics = paragraph.layout({
           width: mapYogaAxis(width, widthMode, 'width'),
           height: mapYogaAxis(height, heightMode, 'height'),
         });

@@ -69,7 +69,7 @@ const PARAGRAPH_POLICY_HANDLE = 0x8000_0001;
 const PARAGRAPH_HANDLE_BASE = 0x8000_0000;
 
 /**
- * Why a query failed, returned by `measure()` and `layout()` instead of surfacing out of band.
+ * Why a query failed, returned by `layout()` and `glyphs()` instead of surfacing out of band.
  *
  * `status` is the raw text-engine status number (`textShaperAbi.status`) and `message` the
  * human-readable form. Boundary violations -- a negative constraint size, an impossible column
@@ -112,7 +112,7 @@ interface ResolvedParagraphState<Technique extends AnyRasterTechnique> {
 }
 
 /**
- * A framework-neutral retained paragraph: synchronous `measure(constraints)` and
+ * A framework-neutral retained paragraph: synchronous `layout(constraints)` and
  * `glyphs(constraints)` that need no scene, no renderer, and no committed frame,
  * and that leave authored state untouched.
  *
@@ -221,7 +221,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    * A constraint that is not finite and nonnegative, or an impossible column policy, throws from
    * here — caller arithmetic, reported where it was written.
    */
-  measure(constraints?: ParagraphConstraints): ParagraphMetrics {
+  layout(constraints?: ParagraphConstraints): ParagraphMetrics {
     this.#assertActive();
     const resolved = resolveConstraints(constraints);
     const key = axisKey(resolved);
@@ -236,7 +236,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    * The positioned columns for `constraints`: per-glyph ids, positions, advances, ink boxes, and
    * the per-line spans over them.
    *
-   * This is a second call because it is a second query, not a second copy. `measure()` asks the
+   * This is a second call because it is a second query, not a second copy. `layout()` asks the
    * engine for the measurement view, which is paragraph-scoped and synchronous: no publication
    * flip, no revision advance, no checkpoint. Asking for the positioned view makes the engine emit
    * a record per glyph and per line and copies those arrays out of Wasm. A flexbox host probing

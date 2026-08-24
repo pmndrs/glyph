@@ -114,7 +114,7 @@ test('2. an authored span kept across a text change stays aligned to clusters', 
   const mounted = mount(font, [authored('abc', latin, spans)]);
   try {
     const node = mounted.nodes[0];
-    assert.equal(node.measure().glyphCount, 3, 'the starting paragraph must publish');
+    assert.equal(node.layout().glyphCount, 3, 'the starting paragraph must publish');
     // Legal by the public contract: the caller re-authors the string with a mark inserted and
     // carries forward the range it already had. That fuses 'a' and the mark into one cluster
     // spanning [0, 2), leaving the authored boundary at 1 inside it.
@@ -132,7 +132,7 @@ test('2. an authored span kept across a text change stays aligned to clusters', 
       'the boundary must resolve onto the cluster whose base the span already held',
     );
     assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
-    assert.equal(node.measure().glyphCount, 3);
+    assert.equal(node.layout().glyphCount, 3);
   } finally {
     unmount(mounted);
   }
@@ -154,7 +154,7 @@ test('3. a break opportunity inside a grapheme cluster is ignored, not rejected'
   const mounted = mount(font, [authored(text, latin)]);
   try {
     assert.equal(mounted.nodes[0].error, undefined, `the paragraph was rejected: ${String(mounted.nodes[0].error)}`);
-    assert.equal(mounted.nodes[0].measure().glyphCount, 4);
+    assert.equal(mounted.nodes[0].layout().glyphCount, 4);
   } finally {
     unmount(mounted);
   }

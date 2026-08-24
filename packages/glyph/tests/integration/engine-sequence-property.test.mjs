@@ -249,12 +249,12 @@ function checkSubject(subject, context) {
   const { node } = subject;
   assert.equal(node.error, undefined, `${context}: paragraph reported ${String(node.error?.message)}`);
 
-  const measured = node.measure();
+  const measured = node.layout();
   assert.notEqual(measured, undefined, `${context}: committed layout metrics went missing`);
 
   // Re-measuring without an intervening mutation must answer identically. A retained
   // query that disagrees with itself is the observable form of desynchronized state.
-  const again = node.measure();
+  const again = node.layout();
   assert.equal(summarize(again), summarize(measured), `${context}: repeated measurement disagreed with itself`);
 
   // Dual derivation: the per-glyph inspection lane and the line-level measurement lane
@@ -320,13 +320,13 @@ async function runSequence({ seed, steps, paragraphs, fonts }) {
         subject.apply();
       }
 
-      // Measure queries between mutations open speculative transactions that the next
+      // Layout queries between mutations open speculative transactions that the next
       // publish either adopts or drops; interleaving them is the point of the harness.
       if (random() < 0.5) {
         for (const candidate of subjects) {
-          if (candidate.attached && candidate.node !== undefined) candidate.node.measure();
+          if (candidate.attached && candidate.node !== undefined) candidate.node.layout();
         }
-        journal.push('measure');
+        journal.push('layout');
       }
 
       sync(`step ${step}`);
@@ -410,7 +410,7 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
             wrap: 'word',
           };
         }
-        for (const node of nodes) node.measure();
+        for (const node of nodes) node.layout();
         scene.updateMatrixWorld(true);
         for (const [index, node] of nodes.entries()) {
           assert.equal(
@@ -418,7 +418,7 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
             undefined,
             `${shapingCase.id} tick ${tick} p${index}: ${String(node.error?.message)}`,
           );
-          const metrics = node.measure();
+          const metrics = node.layout();
           assert.notEqual(
             metrics,
             undefined,

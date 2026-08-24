@@ -682,7 +682,7 @@ function positionLiveLine(
 }
 
 function committedLayout(line: Text<typeof slug>): ParagraphLayoutSummary {
-  const layout = line.measure();
+  const layout = line.layout();
   if (layout === undefined) throw new Error('live Slug Text lost its committed layout');
   return layout;
 }

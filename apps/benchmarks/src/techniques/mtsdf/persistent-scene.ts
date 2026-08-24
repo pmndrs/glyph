@@ -676,7 +676,7 @@ function positionLiveLine(
 }
 
 function committedLayout(line: Text<typeof mtsdf>): ParagraphLayoutSummary {
-  const layout = line.measure();
+  const layout = line.layout();
   if (layout === undefined) throw new Error('live MSDF Text lost its committed layout');
   return layout;
 }

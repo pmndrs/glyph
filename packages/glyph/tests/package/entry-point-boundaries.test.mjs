@@ -13,7 +13,7 @@
  *   `./three`  the Three.js integration -- `Text`, `TextGroup`, `FontLoader`, materials.
  *
  * An integration may re-export a root name ONLY when that name appears in one of its own
- * signatures, because a caller should be able to name what `measure()` returns without
+ * signatures, because a caller should be able to name what `layout()` returns without
  * reaching for a second subpath. Re-exporting anything else duplicates the vocabulary and makes the
  * import site a coin toss.
  */

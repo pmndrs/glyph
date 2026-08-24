@@ -137,7 +137,7 @@ export interface ParagraphIntrinsicWidths {
   readonly maxContentWidth: number;
 }
 
-/** A paragraph measurement plus the intrinsic widths carried by every `Paragraph.measure()` result. */
+/** A paragraph measurement plus the intrinsic widths carried by every `Paragraph.layout()` result. */
 export interface ParagraphMetrics extends ParagraphMeasurement, ParagraphIntrinsicWidths {}
 
 /**
@@ -185,9 +185,9 @@ export interface ParagraphLayout extends ParagraphMeasurement {
  * with stable identities for directed augmentation.
  *
  * This is what `glyphs()` answers and what `Paragraph.glyphs(constraints)` copies out of Wasm.
- * It is a second query after `measure()`, not a bigger copy of it: asking for these columns
+ * It is a second query after `layout()`, not a bigger copy of it: asking for these columns
  * makes the engine emit a record per glyph, which a caller probing sizes never wants to pay
- * for. See `measure()` and `Text.measure()` for the split.
+ * for. See `layout()` and `Text.layout()` for the split.
  */
 export interface ParagraphLayoutInspection extends ParagraphLayout, ParagraphLayoutSummary, ParagraphIntrinsicWidths {
   readonly glyphStableIds: Uint32Array;

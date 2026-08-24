@@ -186,7 +186,7 @@ test('an authored empty span states nothing and never reaches the engine', { tim
       [0, 2],
     ]);
     assert.equal(node.error, undefined, `an empty span must not fail the frame: ${String(node.error?.message)}`);
-    assert.equal(node.measure().glyphCount, 3);
+    assert.equal(node.layout().glyphCount, 3);
   });
 });
 

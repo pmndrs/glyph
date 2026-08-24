@@ -15,7 +15,7 @@ label.text = 'Updated';
 label.text = 'Updated!';
 label.spans = [{ start: 0, end: 7, paint: { color: '#00ff00' } }];
 label.setCapacity({ size: 64, policy: 'grow' });
-const measurement = label.measure();
+const measurement = label.layout();
 void measurement?.contentWidth;
 labels.setCapacity({ size: 4_096, policy: 'chunk' });
 
