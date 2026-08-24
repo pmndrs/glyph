@@ -201,18 +201,19 @@ The same acceptance vocabulary must cover both:
 | Three reference engine | selected variant, named bindings, material, non-empty visible draw |
 | Example external engine | selected portable contract, resource realization, non-empty recorded draw |
 
-## Sequencing and stack
+## Sequencing and atomic commits
 
-Each layer must be green before the next is stacked. The implementation stack should be:
+This feature is one pull request: `feat/technique-implementability` on top of `feat/plan-retention`. The implementation may use temporary `feat/...` worktree branches for parallel agent work, but those branches are reviewed, collapsed, and integrated back into this one PR. They are not additional stacked PRs.
 
-1. `codex/technique-render-contract` — portable primitive, named binding, and resource metadata with negative tests.
-2. `codex/technique-resource-payloads` — constrained portable resource descriptions, geometry accessor/index semantics, and core compiler updates.
-3. `codex/technique-three-generic-path` — generic Three variant selection, named binding context, primitive realization, and material-helper support.
-4. `codex/technique-example-packages` — package split, explicit registration, portable example cleanup, Three/TSL implementation, and variant compatibility fixture.
-5. `codex/technique-example-engine` — renderer-neutral example-engine/device contract and acceptance coverage.
-6. `codex/technique-builtins-and-docs` — Bitmap/MSDF/Slug and decoration migration/coverage, old registry cleanup, package docs including `three-material-authority.md`, README, report, decision register/D-158 supersession, benchmark acceptance, and generated digests.
+Keep the integrated history atomic and green in dependency order:
 
-Use `gh stack` for every branch transition. Do not merge to `main`. If the base moves, rebase with `git rebase --onto <new-base> <old-base> <branch>`; never use `--skip`. Resolve generated `source_digest` conflicts only with `mise exec -- pnpm scripts run docs:update`.
+1. portable contract and constrained resource payloads, including geometry accessor/index semantics and negative tests;
+2. generic Three variant selection, named binding/material context, primitive realization, draw reuse, and decoration preservation;
+3. portable/Three example package split, registration entrypoints, and shader-variant compatibility fixture;
+4. renderer-neutral example device plus the real font/bake/non-empty-draw acceptance path;
+5. Bitmap/MSDF/Slug migration, docs/README/report/decision-register updates, benchmark proof, and generated digests.
+
+Each commit must pass its focused checks before the next commit is integrated; the final branch must pass every affected package check, `docs:check`, and the repository check. Use `gh stack` for the single PR branch and never merge to `main`. If the base moves, rebase with `git rebase --onto <new-base> <old-base> <branch>`; never use `--skip`. Resolve generated `source_digest` conflicts only with `mise exec -- pnpm scripts run docs:update`.
 
 ## Review gates before implementation
 
