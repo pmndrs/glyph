@@ -78,6 +78,14 @@ export interface ThreeTextEnginePlanOwner {
   readonly drawRoot: THREE.Object3D;
   readonly pixelSnapping: boolean;
   objectForTransform(transformId: number): THREE.Object3D;
+  /**
+   * The paragraph-local translation placing that paragraph's anchored box on its Text's origin.
+   *
+   * Optional because anchoring is a scene-level concern: an owner without anchors pays nothing, and
+   * an offset of zero must be reported as `undefined` so the transform stays byte-identical to the
+   * unanchored one.
+   */
+  anchorOffset?(transformId: number): Readonly<{ x: number; y: number }> | undefined;
   transformIds(): Iterable<number>;
   readonly renderOrderBase: number;
 }
@@ -99,6 +107,7 @@ export class ThreeTextRenderPlanExecutor {
   readonly #originRecords = new Map<number, OriginRecord>();
   readonly #rootInverse = new THREE.Matrix4();
   readonly #relativeTransform = new THREE.Matrix4();
+  readonly #anchorMatrix = new THREE.Matrix4();
   #transformAttribute = transformAttribute(1);
   #transformGeneration = 1;
   #draws: THREE.Mesh[] = [];
@@ -283,6 +292,12 @@ export class ThreeTextRenderPlanExecutor {
       const object = this.#owner.objectForTransform(transformId);
       if (!worldMatricesCurrent) object.updateWorldMatrix(true, false);
       this.#relativeTransform.multiplyMatrices(this.#rootInverse, object.matrixWorld);
+      // The anchor is a translation in the paragraph's own space, so it composes on the right: the
+      // box moves relative to the Text's transform, never the other way around.
+      const anchor = this.#owner.anchorOffset?.(transformId);
+      if (anchor !== undefined && (anchor.x !== 0 || anchor.y !== 0)) {
+        this.#relativeTransform.multiply(this.#anchorMatrix.makeTranslation(anchor.x, anchor.y, 0));
+      }
       const visible = visibleBelowRoot(object, this.#owner.drawRoot);
       let transformChanged = false;
       if (indexed) {

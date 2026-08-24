@@ -90,6 +90,8 @@ export type R3fTextProps<Technique extends AnyRasterTechnique> = Object3DProps &
   readonly paint?: GlyphPaintInput;
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
+  readonly anchorX?: TextAnchorX;
+  readonly anchorY?: TextAnchorY;
   readonly capacity?: StandaloneTextProperties<Technique>['capacity'];
   readonly pixelSnapping?: boolean;
   readonly onError?: ((error: unknown) => void) | undefined;
