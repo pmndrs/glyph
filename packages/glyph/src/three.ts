@@ -30,6 +30,8 @@ export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.j
 export { Text, TextGroup } from './three/text.js';
 export type {
   StandaloneTextProperties,
+  TextAnchorX,
+  TextAnchorY,
   TextCommitState,
   TextGroupOptions,
   TextProperties,

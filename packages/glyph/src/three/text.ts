@@ -63,6 +63,31 @@ const TEXT_CHANGE = 1 << 0;
 const STYLE_CHANGE = 1 << 1;
 const GEOMETRY_CHANGE = 1 << 2;
 const ALL_SEMANTIC_CHANGES = TEXT_CHANGE | STYLE_CHANGE | GEOMETRY_CHANGE;
+/**
+ * A placement-only change: it never reaches the engine, whose layout is identical either way.
+ *
+ * Unlike the three bits above it is deliberately excluded from `ALL_SEMANTIC_CHANGES`, so a newly
+ * created paragraph does not report it and no engine mutation is compiled for it. It exists only so
+ * `synchronize` notices the revision moved and re-runs the transform pass that applies the offset.
+ */
+const ANCHOR_CHANGE = 1 << 3;
+
+/**
+ * Where a paragraph sits on its own resolved box, along one axis.
+ *
+ * The vocabulary is what a three.js user already knows from troika and drei. A number is a fraction
+ * of the resolved size on that axis (`0.5` centres), which is also how a fractional or absolute
+ * nudge is expressed without arithmetic. These belong to the scene-graph `Text` only: they name a
+ * placement choice about a box this class owns, and a framework-neutral measurement or layout type
+ * must never carry them, because a layout host such as uikit owns box placement itself.
+ */
+export type TextAnchorX = 'left' | 'center' | 'right' | number;
+export type TextAnchorY = 'top' | 'middle' | 'bottom' | 'baseline' | number;
+
+interface TextAnchors {
+  readonly anchorX: TextAnchorX | undefined;
+  readonly anchorY: TextAnchorY | undefined;
+}
 
 export type TextSpan<Technique extends AnyRasterTechnique> = ParagraphSpan<Technique> &
   Readonly<{ material?: ThreeTextMaterial }>;
@@ -119,6 +144,8 @@ interface DesiredTextState<Technique extends AnyRasterTechnique> {
   readonly paint: GlyphPaintInput;
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
+  readonly anchorX?: TextAnchorX;
+  readonly anchorY?: TextAnchorY;
 }
 
 type PendingTextMutation = Readonly<{
@@ -140,6 +167,7 @@ type PendingTextMutation = Readonly<{
 interface TextReconciler {
   runtime(text: Text<AnyRasterTechnique>): TextRuntime;
   properties<Technique extends AnyRasterTechnique>(text: Text<Technique>): ParagraphProperties<Technique>;
+  anchors(text: Text<AnyRasterTechnique>): TextAnchors;
   needsApply(text: Text<AnyRasterTechnique>): boolean;
   semanticChanges(text: Text<AnyRasterTechnique>): number;
   textMutations(text: Text<AnyRasterTechnique>): readonly PendingTextMutation[];
@@ -162,6 +190,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     reconciler = {
       runtime: (text) => text.#runtime,
       properties: (text) => text.#coreProperties(),
+      anchors: (text) => ({ anchorX: text.#desired.anchorX, anchorY: text.#desired.anchorY }),
       needsApply: (text) => text.#desiredRevision !== text.#appliedRevision,
       semanticChanges: (text) => text.#semanticChanges,
       textMutations: (text) => text.#textMutations,
@@ -264,6 +293,18 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   }
   set material(value: ThreeTextMaterial | undefined) {
     this.set({ material: value } as TextUpdate<Technique>);
+  }
+  get anchorX(): TextAnchorX | undefined {
+    return this.#desired.anchorX;
+  }
+  set anchorX(value: TextAnchorX | undefined) {
+    this.set({ anchorX: value } as TextUpdate<Technique>);
+  }
+  get anchorY(): TextAnchorY | undefined {
+    return this.#desired.anchorY;
+  }
+  set anchorY(value: TextAnchorY | undefined) {
+    this.set({ anchorY: value } as TextUpdate<Technique>);
   }
 
   set(update: TextUpdate<Technique>): void {
@@ -648,6 +689,10 @@ class ThreeTextBatchBinding {
         if (text === undefined) throw new Error(`Three command buffer references unknown transform ${transformId}`);
         return text;
       },
+      anchorOffset(transformId) {
+        const text = owner.#textsByParagraph.get(transformId);
+        return text === undefined ? undefined : owner.#anchorOffsetFor(text);
+      },
       transformIds() {
         return owner.#textsByParagraph.keys();
       },
@@ -825,6 +870,12 @@ class ThreeTextBatchBinding {
   synchronize(semanticViewMask = 0): void {
     if (this.#disposed) return;
     this.#coordinator.assertFrameUpdateAllowed();
+    // An anchored paragraph on a non-exact axis needs measured extents. Rather than a query of its
+    // own, the measurement view rides along whenever this frame compiles anyway — the moment its
+    // old sizes went stale — and steady frames answer from the retained cache.
+    if (semanticViewMask === 0 && this.#anyAnchorNeedsMeasuredExtents()) {
+      semanticViewMask = textShaperAbi.engine.semanticViewMasks.measurement;
+    }
     if (this.#lastPublication !== undefined) this.retry();
     const ordered = [...this.#paragraphs.entries()].sort(
       ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
@@ -973,6 +1024,10 @@ class ThreeTextBatchBinding {
       this.#measurements.clear();
       this.#layoutInspections.clear();
       committed = true;
+      // Semantic views are retained before the plan is applied because the transform pass inside
+      // `apply` reads them: an anchored paragraph must place itself with the sizes this very frame
+      // resolved, not the cleared cache it would otherwise see.
+      this.#retainSemanticViews(publication, semanticViewMask);
       try {
         this.#target.apply(publication);
         this.#dirtyTransformIds.clear();
@@ -983,7 +1038,6 @@ class ThreeTextBatchBinding {
         throw error;
       }
       this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
-      this.#retainSemanticViews(publication, semanticViewMask);
     } catch (error) {
       const rejected = textFrameError(error, (fault) => this.#faultSubject(fault));
       if (!committed) {
@@ -1117,6 +1171,55 @@ class ThreeTextBatchBinding {
     const text = this.#paragraphs.keys().next().value;
     if (text === undefined) throw new Error('standalone text command buffer has no draw root');
     return text;
+  }
+
+  /**
+   * The paragraph-local translation that moves the box's anchor onto this Text's origin.
+   *
+   * Layout space is y-down from the box's top-left corner; the render space these draws live in is
+   * y-up, so the block-axis offsets are positive: `middle` lifts by half the height. An exact axis
+   * knows its size without any commit, so its answer never touches the measurement cache; a
+   * non-exact axis reads the cached summary and contributes nothing until one exists — which, for a
+   * scene-attached paragraph, lasts only until the first commit fills it.
+   */
+  readonly #anchorScratch: { x: number; y: number } = { x: 0, y: 0 };
+  #anchorOffsetFor(text: Text<AnyRasterTechnique>): Readonly<{ x: number; y: number }> {
+    const { anchorX, anchorY } = reconciler.anchors(text);
+    const offset = this.#anchorScratch;
+    offset.x = 0;
+    offset.y = 0;
+    if (anchorX === undefined && anchorY === undefined) return offset;
+    const contentBox = reconciler.properties(text).contentBox;
+    const measurement = this.#measurements.get(text);
+    const inlineSize =
+      contentBox?.width?.mode === 'exact' ? contentBox.width.size : (measurement?.width ?? 0);
+    const blockSize =
+      contentBox?.height?.mode === 'exact' ? contentBox.height.size : (measurement?.height ?? 0);
+    const baseline = measurement?.firstBaseline ?? 0;
+    if (typeof anchorX === 'number') offset.x = -inlineSize * anchorX;
+    else if (anchorX === 'center') offset.x = -inlineSize / 2;
+    else if (anchorX === 'right') offset.x = -inlineSize;
+    if (anchorY === 'baseline') offset.y = baseline;
+    else if (typeof anchorY === 'number') offset.y = blockSize * anchorY;
+    else if (anchorY === 'middle') offset.y = blockSize / 2;
+    else if (anchorY === 'bottom') offset.y = blockSize;
+    return offset;
+  }
+
+  /**
+   * Whether any retained paragraph anchors on an axis whose size only a measurement can name.
+   *
+   * This gates requesting the measurement semantic view. The view rides on frames that already
+   * commit — where the layout has changed and the old sizes are invalid anyway — and steady-state
+   * frames answer from the retained cache without crossing into Wasm.
+   */
+  #anyAnchorNeedsMeasuredExtents(): boolean {
+    for (const text of this.#paragraphs.keys()) {
+      const { anchorX, anchorY } = reconciler.anchors(text);
+      const contentBox = reconciler.properties(text).contentBox;
+      if (anchorNeedsMeasuredWidth(anchorX, contentBox) || anchorNeedsMeasuredHeight(anchorY, contentBox)) return true;
+    }
+    return false;
   }
 
   #renderOrderBase(): number {
@@ -1447,6 +1550,26 @@ function axis(value: ParagraphContentBox['width'] | undefined): {
   return { mode: value.mode, size: value.size };
 }
 
+/**
+ * An anchor needs a measured width when it names a placement that is not an edge and the inline
+ * constraint is not exact — an exact axis already knows its size. `'left'` and `0` place at the
+ * origin whatever the size is, so they never force a measurement; every other value scales with it.
+ */
+function anchorNeedsMeasuredWidth(anchor: TextAnchorX | undefined, contentBox: ParagraphContentBox): boolean {
+  if (contentBox?.width?.mode === 'exact') return false;
+  if (anchor === undefined || anchor === 'left') return false;
+  if (typeof anchor === 'number') return anchor !== 0;
+  return anchor === 'center' || anchor === 'right';
+}
+
+/** Same rule as the inline axis, plus `'baseline'`: an exact height still does not say where the first line's baseline is. */
+function anchorNeedsMeasuredHeight(anchor: TextAnchorY | undefined, contentBox: ParagraphContentBox): boolean {
+  if (anchor === 'baseline') return true;
+  if (anchor === undefined || anchor === 'top') return false;
+  if (typeof anchor === 'number') return anchor !== 0;
+  return anchor === 'middle' || anchor === 'bottom';
+}
+
 function engineLimits(
   paragraphCount: number,
   textLength: number,
@@ -1573,6 +1696,7 @@ function classifySemanticChanges<Technique extends AnyRasterTechnique>(update: T
     changes |= STYLE_CHANGE;
   }
   if (Object.hasOwn(update, 'contentBox')) changes |= GEOMETRY_CHANGE;
+  if (Object.hasOwn(update, 'anchorX') || Object.hasOwn(update, 'anchorY')) changes |= ANCHOR_CHANGE;
   return changes;
 }
 
@@ -1607,6 +1731,10 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
   // skip alignment and reinstate the split this resolution exists to prevent.
   const spans =
     resolved === previous?.spans ? previous.spans : Object.freeze(resolved.map((span) => Object.freeze({ ...span })));
+  // Anchors are validated here, like columns and capacity, so an impossible value fails at
+  // construction or set() while the stack still names the caller.
+  const anchorX = normalizeAnchorX(properties.anchorX);
+  const anchorY = normalizeAnchorY(properties.anchorY);
   return Object.freeze({
     font: properties.font,
     text,
@@ -1616,7 +1744,34 @@ function normalizeDesired<Technique extends AnyRasterTechnique>(
     paint: Object.freeze({ ...(properties.paint ?? {}) }),
     ...(properties.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: properties.rasterPixelRatio }),
     ...(properties.material === undefined ? {} : { material: properties.material }),
+    ...(anchorX === undefined ? {} : { anchorX }),
+    ...(anchorY === undefined ? {} : { anchorY }),
   });
+}
+
+const HORIZONTAL_ANCHORS: ReadonlySet<string> = new Set(['left', 'center', 'right']);
+const VERTICAL_ANCHORS: ReadonlySet<string> = new Set(['top', 'middle', 'bottom', 'baseline']);
+
+function normalizeAnchorAxis<Union extends string>(
+  value: Union | number | undefined,
+  named: ReadonlySet<string>,
+  axis: 'X' | 'Y',
+): Union | number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError(`anchor${axis} must be a finite number`);
+    return value;
+  }
+  if (named.has(value)) return value;
+  throw new TypeError(`anchor${axis} must be one of ${[...named].map((name) => `'${name}'`).join(', ')} or a number`);
+}
+
+function normalizeAnchorX(value: TextAnchorX | undefined): TextAnchorX | undefined {
+  return normalizeAnchorAxis(value, HORIZONTAL_ANCHORS, 'X') as TextAnchorX | undefined;
+}
+
+function normalizeAnchorY(value: TextAnchorY | undefined): TextAnchorY | undefined {
+  return normalizeAnchorAxis(value, VERTICAL_ANCHORS, 'Y') as TextAnchorY | undefined;
 }
 /**
  * The two span invariants the caller owns, checked where the stack still points at the caller.
