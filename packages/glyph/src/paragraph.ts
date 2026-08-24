@@ -76,19 +76,17 @@ const PARAGRAPH_HANDLE_BASE = 0x8000_0000;
  * policy -- are caller arithmetic errors and throw synchronously instead; this record is
  * reserved for the engine rejecting otherwise legal input.
  */
-export interface ParagraphQueryError {
-  readonly operation: 'measure' | 'layout';
-  readonly status: number;
-  readonly message: string;
-}
-
-export type ParagraphMeasureResult =
-  | { readonly ok: true; readonly metrics: ParagraphMetrics }
-  | { readonly ok: false; readonly error: ParagraphQueryError };
-
-export type ParagraphLayoutResult =
-  | { readonly ok: true; readonly layout: ParagraphLayoutInspection; readonly layoutRevision: number }
-  | { readonly ok: false; readonly error: ParagraphQueryError };
+/**
+ * A query answers, or this package is broken.
+ *
+ * Measurement and layout are synchronous and take no resource that could be missing: the font is
+ * required at construction, the text and spans are validated there, and a constraint that is not
+ * finite and nonnegative throws from the call itself. Nothing is left that a caller could get wrong
+ * and nothing is left to wait for, so there is no failure to hand back. These used to return a
+ * result union, which made every caller write `if (result.ok)` on every probe -- inside a flexbox
+ * measure callback, many times per layout -- to guard a branch that only means the engine broke its
+ * own invariant. That is a defect to report, not a state to handle, so it throws.
+ */
 
 export interface ParagraphOptions<Technique extends AnyRasterTechnique> {
   readonly font: FontSelection<Technique>;
@@ -144,8 +142,8 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
   #engineRevision = 0;
   #planRevision = 0;
   #acknowledgedGeneration = 0;
-  readonly #measurements = new Map<string, ParagraphMeasureResult>();
-  readonly #layouts = new Map<string, ParagraphLayoutResult>();
+  readonly #measurements = new Map<string, ParagraphMetrics>();
+  readonly #layouts = new Map<string, ParagraphLayoutInspection>();
   #lastLayoutDigest: string | undefined;
   #layoutRevision = 0;
   #disposed = false;
@@ -208,34 +206,25 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    * Synchronously measures the paragraph at `constraints`, without materializing per-glyph
    * arrays and without touching authored state.
    *
-   * Returns `{ ok: true, metrics }`, where `metrics` carries the constrained measurement plus
-   * intrinsic `minContentWidth`/`maxContentWidth`; the intrinsics are content-only and ride
-   * the same measurement pass. Repeated measurement at the same constraints answers from a
-   * cached result with no engine call; different constraints ride the engine's retained
+   * The returned metrics carry the constrained measurement plus intrinsic
+   * `minContentWidth`/`maxContentWidth`; the intrinsics are content-only and ride the same pass, so
+   * a host never pays a second query at zero width. Repeated measurement at the same constraints
+   * answers from cache with no engine call; different constraints ride the engine's retained
    * speculative transaction, so only geometry, flow, and positioning re-run over the retained
    * shaping. Equal inputs answer with the identical cached object.
    *
-   * Engine rejection resolves as `{ ok: false, error }`. Boundary violations -- nonfinite or
-   * negative sizes, an impossible column policy -- throw synchronously instead: they are caller
-   * arithmetic errors, not measurement outcomes.
+   * A constraint that is not finite and nonnegative, or an impossible column policy, throws from
+   * here -- caller arithmetic, reported where it was written.
    */
-  measure(constraints?: ParagraphConstraints): ParagraphMeasureResult {
+  measure(constraints?: ParagraphConstraints): ParagraphMetrics {
     this.#assertActive();
     const resolved = resolveConstraints(constraints);
     const key = axisKey(resolved);
     const cached = this.#measurements.get(key);
     if (cached !== undefined) return cached;
-    try {
-      // Intrinsic widths ride the same measurement record: the engine derives them from
-      // one cluster-arena scan mirroring the breaker's wrap decisions, so a host never
-      // pays a second query at zero width.
-      const { summary } = this.#query(this.#fullBox(resolved), false);
-      const result: ParagraphMeasureResult = Object.freeze({ ok: true, metrics: summary });
-      this.#measurements.set(key, result);
-      return result;
-    } catch (error) {
-      return { ok: false, error: queryFailure('measure', error) };
-    }
+    const { summary } = this.#query(this.#fullBox(resolved), false);
+    this.#measurements.set(key, summary);
+    return summary;
   }
 
   /**
@@ -243,35 +232,25 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    *
    * Like {@link Paragraph.measure}, this is synchronous, scene-free, and leaves authored state
    * untouched; it additionally materializes the per-line and per-glyph arrays out of Wasm. The
-   * returned `layoutRevision` advances exactly when the positioned output differs from the
-   * previous layout's (see the property's contract), so a layout host can gate array readback
-   * on `paragraph.layoutRevision !== lastSeenRevision` instead of copying arrays to compare them.
+   * `paragraph.layoutRevision` advances exactly when the positioned output differs from the
+   * previous layout's (see the property's contract), so a layout host gates array readback on
+   * `paragraph.layoutRevision !== lastSeenRevision` instead of copying arrays to compare them.
    */
-  layout(constraints?: ParagraphConstraints): ParagraphLayoutResult {
+  layout(constraints?: ParagraphConstraints): ParagraphLayoutInspection {
     this.#assertActive();
     const resolved = resolveConstraints(constraints);
     const key = axisKey(resolved);
     const cached = this.#layouts.get(key);
     if (cached !== undefined) return cached;
-    try {
-      const query = this.#query(this.#fullBox(resolved), true);
-      const inspection = query.inspection;
-      if (inspection === undefined) throw new Error('paragraph layout query returned no layout inspection');
-      const digest = layoutDigest(inspection);
-      if (digest !== this.#lastLayoutDigest) {
-        this.#lastLayoutDigest = digest;
-        this.#layoutRevision += 1;
-      }
-      const result: ParagraphLayoutResult = Object.freeze({
-        ok: true,
-        layout: inspection,
-        layoutRevision: this.#layoutRevision,
-      });
-      this.#layouts.set(key, result);
-      return result;
-    } catch (error) {
-      return { ok: false, error: queryFailure('layout', error) };
+    const { inspection } = this.#query(this.#fullBox(resolved), true);
+    if (inspection === undefined) throw new Error('paragraph layout query returned no layout inspection');
+    const digest = layoutDigest(inspection);
+    if (digest !== this.#lastLayoutDigest) {
+      this.#lastLayoutDigest = digest;
+      this.#layoutRevision += 1;
     }
+    this.#layouts.set(key, inspection);
+    return inspection;
   }
 
   /**
@@ -475,10 +454,6 @@ function flowBox(
   };
 }
 
-function queryFailure(operation: 'measure' | 'layout', error: unknown): ParagraphQueryError {
-  if (!(error instanceof TextEngineStatusError)) throw error;
-  return Object.freeze({ operation, status: error.status, message: error.message });
-}
 
 function classifyChanges<Technique extends AnyRasterTechnique>(update: ParagraphUpdate<Technique>): number {
   let changes = 0;

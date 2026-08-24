@@ -67,6 +67,11 @@ export { resolveRangesToClusters } from './internal/graphemes.js';
  * answer the library will use. The argument array is returned by identity when nothing moves, so
  * `alignSpansToClusters(text, spans) === spans` is the whole check.
  *
+ * Not published. Every span reaching the engine already passes through here -- `Text.set()` applies it to the
+ * `spans` array, and the tree compilers resolve the same way before a span is ever built -- so a caller who
+ * called it could not change the outcome. It stays exported from this module for the engine and for the test
+ * that pins its identity property.
+ *
  * ```ts
  * const resolved = alignSpansToClusters(text, spans);
  * if (resolved !== spans) reportToTheEditorThatItsOffsetsSplitACluster(resolved);

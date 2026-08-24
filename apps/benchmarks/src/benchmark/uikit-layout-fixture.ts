@@ -5,7 +5,7 @@ import type {
   ParagraphLayoutInspection,
   ParagraphLayoutPolicy,
 } from '@pmndrs/glyph';
-import type { Paragraph, ParagraphMeasureResult, ParagraphUpdate } from '@pmndrs/glyph/core';
+import type { Paragraph, ParagraphUpdate } from '@pmndrs/glyph/core';
 
 export const YogaMeasureMode = Object.freeze({ Undefined: 0, Exactly: 1, AtMost: 2 });
 
@@ -31,13 +31,9 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
   let rasterRevision = 0;
   const calls = { measure: 0, layout: 0 };
 
-  function requireMetrics(result: ParagraphMeasureResult) {
-    if (!result.ok) throw new Error(`paragraph measurement failed: ${result.error.message}`);
-    return result.metrics;
-  }
   function customLayouting() {
     calls.measure += 1;
-    const natural = requireMetrics(paragraph.measure());
+    const natural = paragraph.measure();
     return {
       // Intrinsic widths ride the natural measurement itself: no second query at zero width.
       minWidth: natural.minContentWidth,
@@ -45,12 +41,10 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
       firstBaseline: natural.firstBaseline,
       measure(width: number, widthMode: YogaMeasureModeValue, height: number, heightMode: YogaMeasureModeValue) {
         calls.measure += 1;
-        const metrics = requireMetrics(
-          paragraph.measure({
-            width: mapYogaAxis(width, widthMode, 'width'),
-            height: mapYogaAxis(height, heightMode, 'height'),
-          }),
-        );
+        const metrics = paragraph.measure({
+          width: mapYogaAxis(width, widthMode, 'width'),
+          height: mapYogaAxis(height, heightMode, 'height'),
+        });
         return {
           width: roundUpToPointScale(metrics.width),
           height: roundUpToPointScale(metrics.height),
@@ -113,9 +107,7 @@ export function createUikitLayoutFixture<Technique extends AnyRasterTechnique>(
         width: { mode: 'exact', size: contentWidth },
         height: { mode: 'exact', size: contentHeight },
       };
-      const result = paragraph.layout(constraints);
-      if (!result.ok) throw new Error(`resolved content-box layout failed: ${result.error.message}`);
-      const layout = result.layout;
+      const layout = paragraph.layout(constraints);
       const contentLeft = -outerWidth / 2 + borderLeft + paddingLeft;
       const contentTop = outerHeight / 2 - borderTop - paddingTop;
       return {

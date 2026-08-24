@@ -149,7 +149,7 @@ type PendingTextMutation = Readonly<{
  */
 interface TextReconciler {
   runtime(text: Text<AnyRasterTechnique>): TextRuntime;
-  properties<Technique extends AnyRasterTechnique>(text: Text<Technique>): ParagraphProperties<Technique>;
+  properties<Technique extends AnyRasterTechnique>(text: Text<Technique>): TextProperties<Technique>;
   needsApply(text: Text<AnyRasterTechnique>): boolean;
   semanticChanges(text: Text<AnyRasterTechnique>): number;
   textMutations(text: Text<AnyRasterTechnique>): readonly PendingTextMutation[];
@@ -414,7 +414,16 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     this.#leasedFonts = [];
   }
 
-  #coreProperties(): ParagraphProperties<Technique> {
+  /**
+   * The paragraph as this integration states it, materials included.
+   *
+   * It used to narrow to `ParagraphProperties`, the renderer-agnostic vocabulary, which silently
+   * dropped the two things only this integration has -- the paragraph's material and the material on
+   * each span -- and the compiler then cast them back to reach the values it had just discarded. A
+   * material is how Three.js renders a run; the engine only ever sees the `materialId` this module
+   * resolves it to, so the renderer-facing type belongs here rather than in the shared vocabulary.
+   */
+  #coreProperties(): TextProperties<Technique> {
     return {
       ...this.#desired,
       order: this.renderOrder,
@@ -1220,14 +1229,14 @@ class ThreeTextBatchBinding {
 function compileEngineStyles<Technique extends AnyRasterTechnique>(
   coordinator: ThreeTextEngineCoordinator,
   paragraphId: number,
-  properties: ParagraphProperties<Technique>,
+  properties: TextProperties<Technique>,
   groupMaterial: ThreeTextMaterial | undefined,
   leases: ThreeTextEngineStackLease[],
   materialLeases: ThreeTextMaterialLease[],
 ): TextEngineStyleMutation[] {
   const text = properties.text as string;
   const rootStack = acquireEngineStack(coordinator, properties.font, leases);
-  const rootMaterial = (properties as TextProperties<Technique>).material ?? groupMaterial;
+  const rootMaterial = properties.material ?? groupMaterial;
   const rootMaterialId = acquireEngineMaterial(coordinator, rootMaterial, materialLeases);
   const styles: TextEngineStyleMutation[] = [
     {
@@ -1248,7 +1257,7 @@ function compileEngineStyles<Technique extends AnyRasterTechnique>(
   ];
   for (const [index, span] of styledSpans(properties.spans).entries()) {
     const fontStackHandle = span.font === undefined ? undefined : acquireEngineStack(coordinator, span.font, leases);
-    const materialId = acquireEngineMaterial(coordinator, (span as TextSpan<Technique>).material, materialLeases);
+    const materialId = acquireEngineMaterial(coordinator, span.material, materialLeases);
     styles.push({
       opcode: 'upsert',
       paragraphId,

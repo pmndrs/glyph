@@ -56,13 +56,12 @@ test('Paragraph.measure agrees byte-for-byte with the Three.js Text measure rout
     const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
     for (const constraints of CONSTRAINTS) {
       const result = paragraph.measure(constraints);
-      assert.equal(result.ok, true);
       text.contentBox = constraints ?? {};
       scene.updateMatrixWorld(true);
       if (text.error !== undefined) throw text.error;
       const expected = text.measureLayout();
       assert.ok(expected !== undefined, 'the Text route must publish a committed measurement');
-      assert.deepEqual(projectMeasurement(result.metrics), projectMeasurement(expected));
+      assert.deepEqual(projectMeasurement(result), projectMeasurement(expected));
     }
     paragraph.dispose();
   } finally {
@@ -79,12 +78,11 @@ test('Paragraph.layout agrees byte-for-byte with the Three.js Text inspection ro
   try {
     const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
     const result = paragraph.layout(box);
-    assert.equal(result.ok, true);
     scene.updateMatrixWorld(true);
     if (text.error !== undefined) throw text.error;
     const expected = text.inspectLayout();
     assert.ok(expected !== undefined, 'the Text route must publish a committed layout inspection');
-    assert.deepEqual(projectLayout(result.layout), projectLayout(expected), 'positioned output must be identical');
+    assert.deepEqual(projectLayout(result), projectLayout(expected), 'positioned output must be identical');
     paragraph.dispose();
   } finally {
     text.dispose();
@@ -95,9 +93,7 @@ test('intrinsic widths ride one measurement and match independent content oracle
   await using boot = await bootstrap();
   const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
   try {
-    const result = paragraph.measure({ width: { mode: 'exact', size: 500 } });
-    assert.equal(result.ok, true);
-    const { metrics } = result;
+    const metrics = paragraph.measure({ width: { mode: 'exact', size: 500 } });
     assert.ok(metrics.minContentWidth > 0);
     assert.ok(metrics.minContentWidth <= metrics.maxContentWidth);
 
@@ -108,8 +104,7 @@ test('intrinsic widths ride one measurement and match independent content oracle
     for (const word of TEXT.split(' ')) {
       const probe = new Paragraph({ font: boot.font, text: word, style: { fontSize: 16 } });
       const probeResult = probe.measure();
-      assert.equal(probeResult.ok, true);
-      widestWord = Math.max(widestWord, probeResult.metrics.contentWidth);
+      widestWord = Math.max(widestWord, probeResult.contentWidth);
       probe.dispose();
     }
     assert.ok(
@@ -120,10 +115,9 @@ test('intrinsic widths ride one measurement and match independent content oracle
     // Oracle for maximum content: the unconstrained single-line extent.
     const whole = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
     const wholeResult = whole.measure();
-    assert.equal(wholeResult.ok, true);
     assert.ok(
-      Math.abs(metrics.maxContentWidth - wholeResult.metrics.contentWidth) < 0.5,
-      `${metrics.maxContentWidth} should equal the unconstrained extent ${wholeResult.metrics.contentWidth}`,
+      Math.abs(metrics.maxContentWidth - wholeResult.contentWidth) < 0.5,
+      `${metrics.maxContentWidth} should equal the unconstrained extent ${wholeResult.contentWidth}`,
     );
     whole.dispose();
   } finally {
@@ -147,13 +141,12 @@ test('repeated probes answer from cache and leave authored state untouched', asy
     assert.deepEqual(paragraph.policy, { overflow: 'clip' });
 
     const other = paragraph.measure({ width: { mode: 'exact', size: 200 } });
-    assert.equal(other.ok, true);
-    assert.ok(other.metrics.lineCount > first.metrics.lineCount, 'a narrower probe wraps into more lines');
+    assert.ok(other.lineCount > first.lineCount, 'a narrower probe wraps into more lines');
 
     // Authored state survives every probe; a fresh query at the original constraints still
     // answers identically to before the narrower one ran.
     const afterProbe = paragraph.measure({ width: { mode: 'at-most', size: 360 } });
-    assert.deepEqual(projectMeasurement(afterProbe.metrics), projectMeasurement(first.metrics));
+    assert.deepEqual(projectMeasurement(afterProbe), projectMeasurement(first));
   } finally {
     paragraph.dispose();
   }
@@ -166,27 +159,23 @@ test('layoutRevision advances exactly when positioned output changes', async () 
     assert.equal(paragraph.layoutRevision, 0, 'no positioned output yet');
 
     const wide = paragraph.layout({ width: { mode: 'at-most', size: 600 } });
-    assert.equal(wide.ok, true);
-    assert.equal(wide.layoutRevision, 1, 'first layout advances from zero');
-    const wideProjection = projectLayout(wide.layout);
+    assert.equal(paragraph.layoutRevision, 1, 'first layout advances from zero');
+    const wideProjection = projectLayout(wide);
 
     // A wider at-most box that fits the same lines produces identical positioned output.
     const wider = paragraph.layout({ width: { mode: 'at-most', size: 900 } });
-    assert.equal(wider.ok, true);
-    assert.equal(wider.layoutRevision, 1, 'equal positioned output must not advance the revision');
-    assert.deepEqual(projectLayout(wider.layout), wideProjection);
+    assert.equal(paragraph.layoutRevision, 1, 'equal positioned output must not advance the revision');
+    assert.deepEqual(projectLayout(wider), wideProjection);
 
     // Narrowing until the text wraps changes the positioned output.
     const narrow = paragraph.layout({ width: { mode: 'exact', size: 140 } });
-    assert.equal(narrow.ok, true);
-    assert.equal(narrow.layoutRevision, 2, 'changed positioned output advances the revision by exactly one');
-    assert.notDeepEqual(projectLayout(narrow.layout), wideProjection);
+    assert.equal(paragraph.layoutRevision, 2, 'changed positioned output advances the revision by exactly one');
+    assert.notDeepEqual(projectLayout(narrow), wideProjection);
 
     // A text edit that moves glyphs advances the revision again on the next layout.
     paragraph.update({ text: `${TEXT} and then some` });
     const edited = paragraph.layout({ width: { mode: 'exact', size: 140 } });
-    assert.equal(edited.ok, true);
-    assert.equal(edited.layoutRevision, 3, 'an edit that changes positioned output advances the revision');
+    assert.equal(paragraph.layoutRevision, 3, 'an edit that changes positioned output advances the revision');
 
     // Re-laying out unchanged state keeps the revision stable.
     const repeat = paragraph.layout({ width: { mode: 'exact', size: 140 } });
@@ -196,17 +185,15 @@ test('layoutRevision advances exactly when positioned output changes', async () 
   }
 });
 
-test('update invalidates cached measurements and failure surfaces from the measure call itself', async () => {
+test('update invalidates cached measurements, and meaningless input throws where it was written', async () => {
   await using boot = await bootstrap();
   const paragraph = new Paragraph({ font: boot.font, text: 'Hello', style: { fontSize: 16 } });
   try {
     const before = paragraph.measure({ width: { mode: 'exact', size: 400 } });
-    assert.equal(before.ok, true);
     paragraph.update({ text: `${TEXT}, now much longer than before` });
     const after = paragraph.measure({ width: { mode: 'exact', size: 400 } });
-    assert.equal(after.ok, true);
-    assert.notDeepEqual(projectMeasurement(after.metrics), projectMeasurement(before.metrics));
-    assert.ok(after.metrics.glyphCount > before.metrics.glyphCount);
+    assert.notDeepEqual(projectMeasurement(after), projectMeasurement(before));
+    assert.ok(after.glyphCount > before.glyphCount);
 
     // Boundary violations are caller arithmetic errors: they throw from the call site
     // rather than resolving as a failed measurement outcome.

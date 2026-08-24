@@ -6,6 +6,8 @@ Before writing or reviewing Rust, TypeScript, React, Wasm boundaries, or tests, 
 
 Use the repository-local `tsl` skill before implementing or reviewing Three.js Shading Language materials, compute work, post-processing, or GLSL-to-TSL migrations. Verify examples against the repository's installed Three.js version rather than relying on remembered APIs.
 
+Use the repository-local `engine-call-contract` skill before adding, moving, or removing anything on a published entry point, before giving an engine call an error path or a result type, and when deciding whether a failure belongs to the caller or to this package. It carries the two rules the API is built on: a call answers or throws where it was written, and a type an application can encounter lives at the root while a thing only an integrator constructs lives in `/core`.
+
 Use the vendored `typegpu` skill from TypeGPU's own maintainers before writing or reviewing TypeGPU shaders, buffers, bind groups, or pipelines, exactly as the `tsl` skill governs Three.js Shading Language work. It was installed with the upstream installer (`skills add software-mansion-labs/skills -s typegpu`) and targets TypeGPU 0.12, matching the pinned dependency. Its `references/` cover shaders, textures, types, pipelines, and the standard library.
 
 Use the repository-local `opencode-agents` skill before delegating implementation work to an opencode agent, and whenever a run looks stalled. A buffered log is not evidence of a stall, sessions resume after an interruption, and agent worktrees must live outside the repository or pnpm resolves the wrong workspace.

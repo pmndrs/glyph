@@ -207,9 +207,9 @@ function engineDecoration(
  * costing the paragraph. Style ids stay contiguous from the emitted order because the removal pass
  * that trims a shrunken style list counts on it.
  */
-export function styledSpans<Technique extends AnyRasterTechnique>(
-  spans: readonly ParagraphSpan<Technique>[] | undefined,
-): readonly ParagraphSpan<Technique>[] {
+export function styledSpans<Span extends ParagraphSpan<AnyRasterTechnique>>(
+  spans: readonly Span[] | undefined,
+): readonly Span[] {
   // Only a collapsed span is dropped. An INVERTED span is a caller arithmetic error whose owner
   // is range validation, so it is forwarded and rejected rather than filtered away -- swallowing
   // it here would make an impossible range publish as if it had been honoured.

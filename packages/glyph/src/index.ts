@@ -101,7 +101,7 @@ export type {
   TextSpanFragment,
   UnboundSpanTag,
 } from './formatted-text.js';
-export { alignSpansToClusters, span, txt } from './formatted-text.js';
+export { span, txt } from './formatted-text.js';
 
 export type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
 
