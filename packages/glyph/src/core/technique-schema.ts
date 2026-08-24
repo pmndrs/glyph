@@ -1,7 +1,8 @@
 /**
  * The single authority for a raster technique's physical shape. A schema declares —
  * once, colocated with the technique — the buffer ids, scalar kinds, and lane
- * meanings that its policy programs produce and its shader realizations consume.
+ * meanings that its policy programs produce and its shader realizations consume,
+ * plus the portable render contract: named resources and declared geometry.
  * Policy stores, binding compilers, plan executors, and shader interfaces all
  * derive from the declaration; none of them restate it.
  */
@@ -56,9 +57,63 @@ export interface TechniqueBindingDeclaration {
   readonly u32?: readonly string[];
 }
 
-export interface TechniqueResourceDeclaration {
-  readonly kind: string;
+/** Immutable byte payload; retained payloads validate as `PortableBufferPayload`. */
+export interface TechniqueBufferResourceDeclaration {
+  readonly kind: 'buffer';
+}
+
+/** Immutable sample payload; retained payloads validate as `PortableTexturePayload`. */
+export interface TechniqueTextureResourceDeclaration {
+  readonly kind: 'texture';
   readonly format?: string;
+}
+
+/** GLB-like geometry payload; retained payloads validate as `PortableGeometryPayload`. */
+export interface TechniqueGeometryResourceDeclaration {
+  readonly kind: 'geometry';
+}
+
+/** A technique-private resource kind whose retained payload stays opaque. */
+export interface TechniqueOpaqueResourceDeclaration {
+  readonly kind: string & {};
+  readonly format?: string;
+}
+
+/**
+ * One declared logical resource. The reserved kinds name the constrained
+ * portable payload vocabulary; every other kind is technique-private and
+ * carries only its identity and optional format.
+ */
+export type TechniqueResourceDeclaration =
+  | TechniqueBufferResourceDeclaration
+  | TechniqueTextureResourceDeclaration
+  | TechniqueGeometryResourceDeclaration
+  | TechniqueOpaqueResourceDeclaration;
+
+/**
+ * Portable geometry kinds, deliberately disjoint from the wire
+ * `enginePrimitive` command enum (`glyph`, `decoration`, …): a wire primitive
+ * is a record-span command, while this vocabulary says what geometry one draw
+ * realizes. `synthetic-quad` is the implicit generated unit quad and needs no
+ * resource; every other kind — `quad` today, technique kinds such as `hull`
+ * later — supplies an explicit geometry resource.
+ */
+export type TechniqueGeometryKind = 'synthetic-quad' | 'quad' | (string & {});
+
+/** The coordinate convention a supplied geometry's positions are authored in. */
+export type TechniqueGeometryCoordinates = 'unit-square' | 'em';
+
+export interface TechniqueGeometryDeclaration {
+  readonly kind: TechniqueGeometryKind;
+  /** The declared geometry resource realizing this geometry. */
+  readonly resource?: string;
+  /** Position convention; required for supplied geometry and meaningless for synthetic-quad. */
+  readonly coordinates?: TechniqueGeometryCoordinates;
+}
+
+export interface TechniqueRenderDeclaration {
+  /** The geometry this technique's draws realize. */
+  readonly geometry: TechniqueGeometryDeclaration;
 }
 
 export interface TechniqueSchemaDeclaration<
@@ -72,6 +127,8 @@ export interface TechniqueSchemaDeclaration<
   readonly binding: Binding;
   readonly buffers: Buffers;
   readonly resources?: Readonly<Record<string, TechniqueResourceDeclaration>>;
+  /** The portable render contract: declared geometry and its resource linkage. */
+  readonly render?: TechniqueRenderDeclaration;
   /**
    * Opt-in glyph-origin metadata: names the declared f32 buffer whose first two
    * lanes carry the glyph's position. Renderers that augment glyph origins
@@ -119,10 +176,13 @@ export function defineTechniqueSchema<
   if (declaration.resources !== undefined) {
     const owned: Record<string, TechniqueResourceDeclaration> = {};
     for (const [name, resource] of Object.entries(declaration.resources)) {
-      const format = resource.format;
-      owned[name] = Object.freeze({ kind: resource.kind, ...(format === undefined ? {} : { format }) });
+      owned[name] = defineResourceDeclaration(resource, name, technique);
     }
     resources = Object.freeze(owned);
+  }
+  let render: TechniqueRenderDeclaration | undefined;
+  if (declaration.render !== undefined) {
+    render = Object.freeze({ geometry: defineGeometryDeclaration(declaration.render.geometry, technique, resources) });
   }
   let glyphOrigin: { readonly buffer: string } | undefined;
   if (declaration.glyphOrigin !== undefined) {
@@ -146,8 +206,83 @@ export function defineTechniqueSchema<
     binding,
     buffers,
     ...(resources === undefined ? {} : { resources }),
+    ...(render === undefined ? {} : { render }),
     ...(glyphOrigin === undefined ? {} : { glyphOrigin }),
   });
+}
+
+/**
+ * Validate and freeze one resource declaration. Reserved portable kinds declare
+ * exactly their own fields so a typo cannot silently become metadata; private
+ * kinds keep the historical kind-plus-optional-format shape.
+ */
+function defineResourceDeclaration(
+  resource: TechniqueResourceDeclaration,
+  name: string,
+  technique: string,
+): TechniqueResourceDeclaration {
+  // Declared input is validated defensively so plain-JavaScript authors get a
+  // named diagnostic instead of an accessor failure.
+  const declared = resource as Partial<TechniqueResourceDeclaration> | undefined;
+  const kind = declared?.kind;
+  if (typeof kind !== 'string' || kind.length === 0) {
+    throw new TypeError(`technique "${technique}" resource "${name}" needs a nonempty resource kind`);
+  }
+  const keys = Object.keys(resource ?? {});
+  if (kind === 'buffer' || kind === 'geometry') {
+    if (keys.some((key) => key !== 'kind')) {
+      throw new TypeError(`technique "${technique}" ${kind} resource "${name}" declares only its kind`);
+    }
+    return Object.freeze({ kind });
+  }
+  const format = (declared as { format?: unknown }).format;
+  if (format !== undefined && (typeof format !== 'string' || format.length === 0)) {
+    throw new TypeError(`technique "${technique}" resource "${name}" needs a nonempty format`);
+  }
+  if (keys.some((key) => key !== 'kind' && key !== 'format')) {
+    throw new TypeError(`technique "${technique}" resource "${name}" declares only kind and format`);
+  }
+  return Object.freeze({ kind, ...(format === undefined ? {} : { format }) });
+}
+
+/**
+ * Validate and freeze the geometry declaration. `synthetic-quad` is the
+ * no-resource path; every supplied kind must name a declared geometry resource
+ * and state its coordinate convention.
+ */
+function defineGeometryDeclaration(
+  geometry: TechniqueGeometryDeclaration,
+  technique: string,
+  resources: Readonly<Record<string, TechniqueResourceDeclaration>> | undefined,
+): TechniqueGeometryDeclaration {
+  const kind = geometry?.kind;
+  if (typeof kind !== 'string' || kind.length === 0) {
+    throw new TypeError(`technique "${technique}" needs a nonempty render geometry kind`);
+  }
+  const resource = geometry.resource;
+  const coordinates = geometry.coordinates;
+  if (kind === 'synthetic-quad') {
+    if (resource !== undefined || coordinates !== undefined) {
+      throw new TypeError(
+        `technique "${technique}" synthetic-quad geometry declares no resource or coordinate convention`,
+      );
+    }
+    return Object.freeze({ kind });
+  }
+  if (typeof resource !== 'string' || resource.length === 0) {
+    throw new TypeError(`technique "${technique}" geometry "${kind}" needs a declared geometry resource`);
+  }
+  const declared = resources?.[resource];
+  if (declared === undefined) {
+    throw new TypeError(`technique "${technique}" points its "${kind}" geometry at undeclared resource "${resource}"`);
+  }
+  if (declared.kind !== 'geometry') {
+    throw new TypeError(`technique "${technique}" geometry resource "${resource}" needs the geometry resource kind`);
+  }
+  if (coordinates !== 'unit-square' && coordinates !== 'em') {
+    throw new TypeError(`technique "${technique}" geometry "${kind}" needs unit-square or em coordinates`);
+  }
+  return Object.freeze({ kind, resource, coordinates });
 }
 
 /**

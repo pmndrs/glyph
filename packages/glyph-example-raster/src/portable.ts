@@ -35,6 +35,7 @@ export const glyphExampleSchema: TechniqueSchema<
     color: { id: 3, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
   },
   resources: { glyphColors: { kind: 'glyph-example-colors' } },
+  render: { geometry: { kind: 'synthetic-quad' } },
   glyphOrigin: { buffer: 'origin' },
 });
 
@@ -70,7 +71,7 @@ export const glyphExamplePlanProgram: RasterPlanProgram<typeof glyphExample, Gly
   compileFont(compiler) {
     const data = compiler.font.data;
     const { resources } = compiler.resources([data.resource]);
-    compiler.retain(data.resource, data);
+    compiler.retain('glyphColors', data.resource, data);
     compiler.compile({
       techniqueId: compiler.techniqueId,
       programVariant: 0,

@@ -118,3 +118,155 @@ test('schemaPolicyBuffers derives exactly the hand-rolled wire buffer list', () 
     { id: 2, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 },
   ]);
 });
+
+function suppliedGeometryDeclaration(kind = 'quad') {
+  return {
+    ...declaration(),
+    resources: {
+      ...declaration().resources,
+      mesh: { kind: 'geometry' },
+    },
+    render: { geometry: { kind, resource: 'mesh', coordinates: 'unit-square' } },
+  };
+}
+
+test('the portable render contract freezes and accepts synthetic-quad and supplied geometry', () => {
+  const implicit = defineTechniqueSchema({
+    ...declaration(),
+    render: { geometry: { kind: 'synthetic-quad' } },
+  });
+  assert.ok(Object.isFrozen(implicit.render), 'render');
+  assert.ok(Object.isFrozen(implicit.render.geometry), 'geometry');
+  assert.deepEqual(implicit.render.geometry, { kind: 'synthetic-quad' });
+
+  const quad = defineTechniqueSchema(suppliedGeometryDeclaration());
+  assert.deepEqual(quad.render.geometry, { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' });
+  // Extensible supplied kinds such as hull follow the same declared-resource rule.
+  const hull = defineTechniqueSchema(suppliedGeometryDeclaration('hull'));
+  assert.equal(hull.render.geometry.kind, 'hull');
+});
+
+test('synthetic-quad declares no resource and no coordinate convention', () => {
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        render: { geometry: { kind: 'synthetic-quad', resource: 'atlas' } },
+      }),
+    TypeError,
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        render: { geometry: { kind: 'synthetic-quad', coordinates: 'unit-square' } },
+      }),
+    TypeError,
+  );
+});
+
+test('supplied geometry must name a declared geometry resource and state its coordinate convention', () => {
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { mesh: { kind: 'geometry' } },
+        render: { geometry: { kind: 'quad', coordinates: 'unit-square' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('needs a declared geometry resource'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        render: { geometry: { kind: 'quad', resource: 'missing', coordinates: 'unit-square' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('undeclared resource "missing"'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        render: { geometry: { kind: 'quad', resource: 'atlas', coordinates: 'unit-square' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('needs the geometry resource kind'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { mesh: { kind: 'geometry' } },
+        render: { geometry: { kind: 'quad', resource: 'mesh' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('unit-square or em coordinates'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { mesh: { kind: 'geometry' } },
+        render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'screen-pixels' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('unit-square or em coordinates'),
+  );
+  assert.doesNotThrow(() =>
+    defineTechniqueSchema({
+      ...declaration(),
+      resources: { mesh: { kind: 'geometry' } },
+      render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'em' } },
+    }),
+  );
+});
+
+test('reserved resource kinds declare only their own fields; private kinds keep kind plus optional format', () => {
+  assert.deepEqual(defineTechniqueSchema({ ...declaration(), resources: { raw: { kind: 'buffer' } } }).resources.raw, {
+    kind: 'buffer',
+  });
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { raw: { kind: 'buffer', format: 'r8unorm' } } }),
+    (error) => error instanceof TypeError && error.message.includes('buffer resource "raw" declares only its kind'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { mesh: { kind: 'geometry', format: 'vec2' } } }),
+    (error) => error instanceof TypeError && error.message.includes('geometry resource "mesh" declares only its kind'),
+  );
+  assert.deepEqual(
+    defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } } })
+      .resources.atlas,
+    { kind: 'texture', format: 'rgba8unorm' },
+  );
+  assert.deepEqual(
+    defineTechniqueSchema({ ...declaration(), resources: { tint: { kind: 'example-tint', format: 'u8x4' } } }).resources
+      .tint,
+    { kind: 'example-tint', format: 'u8x4' },
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: '' } } }),
+    (error) => error instanceof TypeError && error.message.includes('nonempty resource kind'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { atlas: { kind: 'texture', sampleFormat: 'rgba8unorm' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('declares only kind and format'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: 'texture', format: '' } } }),
+    (error) => error instanceof TypeError && error.message.includes('needs a nonempty format'),
+  );
+});
+
+test('declaring a render contract leaves wire buffer derivation and the generated primitive enum untouched', () => {
+  const withRender = defineTechniqueSchema(suppliedGeometryDeclaration());
+  const withoutRender = defineTechniqueSchema(declaration());
+  assert.deepEqual(schemaPolicyBuffers(withRender), schemaPolicyBuffers(withoutRender));
+  assert.deepEqual(textShaperAbi.engine.primitiveKinds, {
+    glyph: 1,
+    decoration: 2,
+    inlineObject: 3,
+    clip: 4,
+    policy: 5,
+  });
+});

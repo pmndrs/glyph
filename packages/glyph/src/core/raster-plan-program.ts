@@ -7,6 +7,7 @@ import {
   type FontBindingDescriptor,
   type FontBindingFieldTable,
 } from './font-binding.js';
+import { assertPortableResource } from './portable-resources.js';
 import type { CompiledPolicyProgramBody } from './policy-program.js';
 import type { PolicyBufferDeclaration, TechniqueSchema } from './technique-schema.js';
 import { RenderWireIdentityRegistry, type PolicyCapabilitySet } from './render-policy.js';
@@ -23,10 +24,16 @@ export type RasterPolicyBodyFactory = (
   capabilities: PolicyCapabilitySet,
 ) => CompiledPolicyProgramBody;
 
-/** Portable output of cold font compilation; no renderer program or GPU object crosses this boundary. */
+/**
+ * Portable output of cold font compilation: renderer-neutral binding bytes plus
+ * retained portable resources. No renderer program or GPU object crosses this
+ * boundary, and every retained resource is linked to its declared schema name.
+ */
 export interface CompiledRasterFont<Resource = unknown> {
   readonly binding: Uint8Array;
   readonly resources: ReadonlyMap<RasterResourceId, Resource>;
+  /** Each declared schema resource name mapped to the wire identity key carrying its payload. */
+  readonly declaredResources: ReadonlyMap<string, RasterResourceId>;
 }
 
 export interface RasterPlanProgramFontCompiler<Technique extends AnyRasterTechnique, Resource> {
@@ -36,7 +43,13 @@ export interface RasterPlanProgramFontCompiler<Technique extends AnyRasterTechni
   readonly emptyTable: (rows: number) => FontBindingFieldTable;
   readonly resources: (keys: readonly RasterResourceId[]) => ReturnType<typeof fontBindingResources>;
   readonly compile: (descriptor: FontBindingDescriptor) => Uint8Array;
-  readonly retain: (key: RasterResourceId, resource: Resource) => void;
+  /**
+   * Retain one immutable portable payload under a schema-declared resource name
+   * and its stable technique-authored key. Retaining an undeclared name,
+   * repeating a name or key, or breaking the declared payload contract rejects
+   * the compiled result.
+   */
+  readonly retain: (name: string, key: RasterResourceId, resource: Resource) => void;
 }
 
 /** Portable technique data shared by every engine that consumes a raster plan. */
@@ -77,6 +90,7 @@ export function compileRasterFont(
   if (program === undefined) return undefined;
   let binding: Uint8Array | undefined;
   const resources = new Map<RasterResourceId, unknown>();
+  const declaredResources = new Map<string, RasterResourceId>();
   program.compileFont({
     font,
     techniqueId: identities.resolve(font.technique.id),
@@ -88,11 +102,23 @@ export function compileRasterFont(
       binding = compileFontBinding(descriptor);
       return binding;
     },
-    retain(key, resource) {
+    retain(name, key, resource) {
+      if (typeof name !== 'string' || name.length === 0) {
+        throw new TypeError('raster plan font retained a resource without a declared name');
+      }
+      const declared = program.schema.resources?.[name];
+      if (declared === undefined) {
+        throw new TypeError(`raster plan font retained "${key}" under undeclared resource name "${name}"`);
+      }
+      if (declaredResources.has(name)) {
+        throw new TypeError(`raster plan font retained declared resource "${name}" more than once`);
+      }
       if (resources.has(key)) throw new TypeError(`raster plan font retained duplicate resource "${key}"`);
+      assertPortableResource(declared.kind, name, resource);
+      declaredResources.set(name, key);
       resources.set(key, resource);
     },
   });
   if (binding === undefined) throw new Error('raster plan font compiler produced no binding');
-  return { binding, resources };
+  return { binding, resources, declaredResources };
 }
