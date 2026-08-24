@@ -131,16 +131,22 @@ export type PortableResource =
   | PortableTextureArrayPayload
   | PortableGeometryPayload;
 
-type PortableResourceKind = PortableResource['kind'];
+export type PortableResourceKind = PortableResource['kind'];
 
 /**
  * Validate one caller-owned payload against its declared resource kind. This is
  * structural validation only; `retain` is the boundary that validates and copies reserved payloads.
  */
-export function assertPortableResource(kind: string, name: string, payload: unknown, declaredFormat?: string): void {
+export function assertPortableResource(
+  kind: PortableResourceKind,
+  name: string,
+  payload: unknown,
+  declaredFormat?: string,
+): void {
   if (kind === 'buffer') return assertPortableBuffer(name, payload);
   if (kind === 'texture' || kind === 'texture-array') return assertPortableTexture(kind, name, payload, declaredFormat);
   if (kind === 'geometry') return assertPortableGeometry(name, payload);
+  throw new TypeError(`portable resource kind "${kind}" is not reserved by the core contract`);
 }
 
 /** Validate a reserved payload and copy its portable bytes before compilation retains it. */
@@ -161,7 +167,7 @@ export function normalizePortableResource(
       bytes: new Uint8Array(bytes),
       ...(stride === undefined ? {} : { stride }),
     };
-    assertPortableResource(kind, name, owned, declaredFormat);
+    assertPortableResource(kind as PortableResourceKind, name, owned, declaredFormat);
     return Object.freeze(owned);
   }
   if (kind === 'texture' || kind === 'texture-array') {
@@ -181,7 +187,7 @@ export function normalizePortableResource(
       ...(layers === undefined ? {} : { layers }),
       bytes: new Uint8Array(bytes),
     };
-    assertPortableResource(kind, name, owned, declaredFormat);
+    assertPortableResource(kind as PortableResourceKind, name, owned, declaredFormat);
     return Object.freeze(owned);
   }
   if (kind === 'geometry') {
@@ -215,7 +221,7 @@ export function normalizePortableResource(
       ...(ownedDrawRange === undefined ? {} : { drawRange: ownedDrawRange }),
       ...(ownedInstances === undefined ? {} : { instances: ownedInstances }),
     };
-    assertPortableResource(kind, name, owned, declaredFormat);
+    assertPortableResource(kind as PortableResourceKind, name, owned, declaredFormat);
     return Object.freeze(owned);
   }
   return payload;

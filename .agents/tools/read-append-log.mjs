@@ -50,5 +50,12 @@ const lines = result.text.split('\n').filter(Boolean);
 const shown = lines.slice(-maxLines).join('\n');
 const encoded = Buffer.from(shown, 'utf8');
 const output = encoded.length > maxBytes ? encoded.subarray(encoded.length - maxBytes).toString('utf8') : shown;
+const truncated = lines.length > maxLines || encoded.length > maxBytes;
 if (output.length > 0) process.stdout.write(`${output}\n`);
-if (delta) writeFileSync(statePath, JSON.stringify({ identity: result.identity, offset: result.offset, size: result.size }));
+if (delta) {
+  if (truncated) {
+    console.error('output truncated; cursor was not advanced — rerun with larger --lines/--bytes to consume all records');
+  } else {
+    writeFileSync(statePath, JSON.stringify({ identity: result.identity, offset: result.offset, size: result.size }));
+  }
+}

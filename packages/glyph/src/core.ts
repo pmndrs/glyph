@@ -136,6 +136,7 @@ export {
   type PortableGeometryPayload,
   type PortableInstances,
   type PortableResource,
+  type PortableResourceKind,
   type PortableTexturePayload,
   type PortableTextureArrayPayload,
   type PortableTopology,

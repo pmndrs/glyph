@@ -29,12 +29,18 @@ export interface ThreePlanProgramMaterialContext<Resource> {
   transformPosition(position: Node<'vec3'>): Node<'vec3'>;
 }
 
-export interface ThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Resource = unknown> {
+export interface ThreeRasterPlanProgram<
+  Technique extends AnyRasterTechnique,
+  PortableResource = unknown,
+  RealizedResource = PortableResource,
+> {
   readonly technique: Technique;
   /** Convert a portable payload into data owned by the Three resource cache. */
-  readonly realizeResource?: (resource: Resource) => unknown;
+  readonly realizeResource?: (resource: PortableResource) => RealizedResource;
+  /** Release a realized resource when the last loaded font using it is disposed. */
+  readonly releaseResource?: (resource: RealizedResource) => void;
   /** Create a Three material from retained plan buffers and a realized resource. */
-  createMaterial(context: ThreePlanProgramMaterialContext<unknown>): NodeMaterial;
+  createMaterial(context: ThreePlanProgramMaterialContext<RealizedResource>): NodeMaterial;
 }
 
 export interface CompiledThreeRasterPlanProgram {
@@ -47,6 +53,7 @@ export interface CompiledThreeRasterPlanProgram {
     identities: RenderWireIdentityRegistry,
   ): CompiledRasterFont<unknown>;
   realizeResource(resource: unknown): unknown;
+  releaseResource(resource: unknown): void;
   createMaterial(context: ThreePlanProgramMaterialContext<unknown>): NodeMaterial;
 }
 
@@ -57,6 +64,9 @@ const snapshots = new Set<RenderWireIdentityRegistry>();
 export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Resource>(
   program: ThreeRasterPlanProgram<Technique, Resource>,
 ): void {
+  if (resolveRasterPlanProgram(program.technique.id) === undefined) {
+    throw new TypeError(`no portable raster plan program is registered for "${program.technique.id}"`);
+  }
   const erased = program as unknown as ThreeRasterPlanProgram<AnyRasterTechnique, unknown>;
   const existing = programs.get(program.technique.id);
   if (existing !== undefined && existing !== erased) {
@@ -74,11 +84,12 @@ export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechni
 /** @internal Compile the cold registry snapshot into policy, binding, and material factories. */
 export function compiledThreeRasterPlanPrograms(
   identities: RenderWireIdentityRegistry,
+  transformMode: 'indexed' | 'direct' = 'indexed',
 ): readonly CompiledThreeRasterPlanProgram[] {
   snapshots.add(identities);
   return [...programs.values()]
     .sort((left, right) => left.technique.id.localeCompare(right.technique.id))
-    .map((program) => compileProgram(program, identities));
+    .map((program) => compileProgram(program, identities, transformMode));
 }
 
 /** @internal Forget a disposed runtime's renderer snapshot. */
@@ -111,13 +122,15 @@ export const threePolicyAbi: ThreePolicyAbi = Object.freeze({
 function compileProgram(
   program: ThreeRasterPlanProgram<AnyRasterTechnique, unknown>,
   identities: RenderWireIdentityRegistry,
+  transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterPlanProgram {
   const portable = resolveRasterPlanProgram(program.technique.id);
   if (portable === undefined)
     throw new Error(`no portable raster plan program is registered for "${program.technique.id}"`);
   const techniqueId = identities.resolve(program.technique.id);
   const programId = identities.resolve(`${program.technique.id}/three-plan-program`);
-  const body = portable.policyBody(threeSystemBuffers, threePolicyCapabilitySet());
+  const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
+  const body = portable.policyBody(system, threePolicyCapabilitySet());
   return {
     technique: program.technique,
     techniqueId,
@@ -129,9 +142,11 @@ function compileProgram(
       [
         ...schemaPolicyBuffers(portable.schema),
         { id: threeSystemBuffers.stableGlyphId.id, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 },
-        { id: threeSystemBuffers.transformIndex.id, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 },
+        ...(transformMode === 'indexed'
+          ? [{ id: threeSystemBuffers.transformIndex.id, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 }]
+          : []),
       ],
-      'indexed',
+      transformMode,
       'ordered',
     ),
     compileFont(font, bindingIdentities) {
@@ -143,7 +158,9 @@ function compileProgram(
         throw new Error(`no portable raster plan program is registered for "${font.technique.id}"`);
       return compiled;
     },
-    realizeResource: (resource) => program.realizeResource?.(resource) ?? resource,
+    realizeResource: (resource) =>
+      program.realizeResource === undefined ? resource : program.realizeResource(resource),
+    releaseResource: (resource) => program.releaseResource?.(resource),
     createMaterial: (context) => program.createMaterial(context),
   };
 }

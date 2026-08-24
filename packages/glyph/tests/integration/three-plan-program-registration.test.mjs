@@ -21,22 +21,36 @@ import test from 'node:test';
 import '../support/browser-globals.mjs';
 import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
 import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
+import { defineTechniqueSchema, registerRasterPlanProgram } from '@pmndrs/glyph/core';
 
 import { shaperWasmUrl } from '../support/text-mutation-lanes.mjs';
 // The coordinator is what takes the snapshot, so the lifecycle is asserted against it directly
 // rather than through a mounted scene that would only reach it incidentally.
 import { threeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 
-const planProgram = (id) => ({
-  technique: { id },
-  policy: { programs: [] },
-  compileFont() {
-    throw new Error('unreachable: this program is never bound to a font');
-  },
-  createMaterial() {
-    throw new Error('unreachable: this program is never realized');
-  },
-});
+const portableIds = new Set();
+const planProgram = (id) => {
+  const technique = { id, kind: 'test', extension: 'TEST_raster', version: 0 };
+  if (!portableIds.has(id)) {
+    registerRasterPlanProgram({
+      technique,
+      schema: defineTechniqueSchema({ technique: id, scope: 'glyph', binding: {}, buffers: {} }),
+      policyBody: () => ({ inputs: [], operations: [], f32InputCount: 0, u32InputCount: 0 }),
+      compileFont() {},
+    });
+    portableIds.add(id);
+  }
+  return {
+    technique,
+    policy: { programs: [] },
+    compileFont() {
+      throw new Error('unreachable: this program is never bound to a font');
+    },
+    createMaterial() {
+      throw new Error('unreachable: this program is never realized');
+    },
+  };
+};
 
 test('a technique registered after a runtime exists is refused, not silently dropped', async () => {
   const runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });

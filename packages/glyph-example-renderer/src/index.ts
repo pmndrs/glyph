@@ -19,6 +19,7 @@ export {
 export type { ExampleTableSnapshot } from './snapshot.js';
 export {
   exampleRendererShader,
+  getExampleRendererShader,
   type ExampleGeometry,
   type ExampleRealizedDraw,
   RecordingExampleRendererDevice,

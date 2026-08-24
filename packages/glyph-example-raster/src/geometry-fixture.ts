@@ -38,5 +38,21 @@ const glyphExampleGeometry: PortableGeometryPayload = {
   instances: { source: 'records' },
 };
 
-assertPortableResource('geometry', 'glyphGeometry', glyphExampleGeometry);
-export const glyphExampleIndexedQuadGeometry: PortableGeometryPayload = Object.freeze(glyphExampleGeometry);
+const ownedGeometry: PortableGeometryPayload = {
+  ...glyphExampleGeometry,
+  bytes: new Uint8Array(glyphExampleGeometry.bytes),
+  views: Object.freeze(glyphExampleGeometry.views.map((view) => Object.freeze({ ...view }))),
+  accessors: Object.freeze(glyphExampleGeometry.accessors.map((accessor) => Object.freeze({ ...accessor }))),
+  attributes: Object.freeze(glyphExampleGeometry.attributes.map((attribute) => Object.freeze({ ...attribute }))),
+  ...(glyphExampleGeometry.indices === undefined
+    ? {}
+    : { indices: Object.freeze({ ...glyphExampleGeometry.indices }) }),
+  ...(glyphExampleGeometry.drawRange === undefined
+    ? {}
+    : { drawRange: Object.freeze({ ...glyphExampleGeometry.drawRange }) }),
+  ...(glyphExampleGeometry.instances === undefined
+    ? {}
+    : { instances: Object.freeze({ ...glyphExampleGeometry.instances }) }),
+};
+assertPortableResource('geometry', 'glyphGeometry', ownedGeometry);
+export const glyphExampleIndexedQuadGeometry: PortableGeometryPayload = Object.freeze(ownedGeometry);

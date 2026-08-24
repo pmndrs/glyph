@@ -97,6 +97,9 @@ export function registerRasterPlanProgram<Technique extends AnyRasterTechnique, 
   ) {
     throw new TypeError('raster plan programs need a technique with id, kind, extension, and nonnegative version');
   }
+  if (techniqueId.startsWith('pmndrs.')) {
+    throw new TypeError(`raster plan program id "${techniqueId}" is reserved for Glyph-owned techniques`);
+  }
   const schema = source.schema;
   const policyBody = source.policyBody;
   const compileFont = source.compileFont;
@@ -112,7 +115,9 @@ export function registerRasterPlanProgram<Technique extends AnyRasterTechnique, 
   const registered = registeredSources.get(program as unknown as object);
   if (registered !== undefined) {
     if (registered.technique.id !== techniqueId) {
-      throw new TypeError(`raster plan program source changed technique id from "${registered.technique.id}" to "${techniqueId}"`);
+      throw new TypeError(
+        `raster plan program source changed technique id from "${registered.technique.id}" to "${techniqueId}"`,
+      );
     }
     return;
   }

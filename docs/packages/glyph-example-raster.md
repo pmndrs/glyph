@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:cb3db3f177b6705b1479cc93d0d685978c70afd453781e0cc3311958ad3e73ee'
+source_digest: 'sha256:d7ded097133b153fe315e02781ff56f207b01c968dd877ae06809a10660461ab'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -17,6 +17,9 @@ sources:
   - id: shader-contract
     resource: ../../packages/glyph-example-raster/src/shader-contract.ts
     title: Shared shader input contract
+  - id: geometry-fixture
+    resource: ../../packages/glyph-example-raster/src/geometry-fixture.ts
+    title: Portable GLB-like indexed geometry fixture
   - id: typegpu
     resource: ../../packages/glyph-example-raster/src/typegpu.ts
     title: TypeGPU shader realization
@@ -73,6 +76,10 @@ into one font binding; the selected host binds those buffers to its shader. The 
 Focused tests cover deterministic bytes, public Node bake, standalone companion validation, external resource
 resolution, abort-before-decode, plus a compiled-Wasm public `Text` lifecycle that verifies Rust-packed sizes and colors
 and observes retained draw/geometry identity. No test reconstructs the removed TypeScript selector, storage, or writer.
+
+The package also exports a small immutable indexed geometry fixture. It follows the portable GLB-like contract—semantic
+position/UV attributes, typed accessors, indices, topology, draw range, and record-driven instance count—so an engine can
+choose supplied geometry without importing Three or learning the example's implementation details.
 
 The hardware-browser target uses the public source-font fallback, package runtime baker, the target-v1 `FontLoader`, public
 `Text` and `TextGroup`, warm matrix-lifecycle publication, TSL compilation, draw, asynchronous render-target readback, and

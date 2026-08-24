@@ -36,8 +36,11 @@ test('valid buffer, texture, and geometry payloads pass their reserved declared 
   });
   assertPortableResource('geometry', 'mesh', indexedQuadGeometry());
   assertPortableResource('geometry', 'mesh', instancedQuadGeometry());
-  // Technique-private kinds keep an opaque payload contract.
-  assertPortableResource('glyph-example-colors', 'tint', { anything: ['goes', true] });
+  // Technique-private kinds are opaque to normalization, not to the reserved validator.
+  assert.throws(
+    () => assertPortableResource('glyph-example-colors', 'tint', { anything: ['goes', true] }),
+    (error) => error instanceof TypeError && error.message.includes('not reserved'),
+  );
 });
 
 test('buffer payloads need byte arrays and whole record strides', () => {

@@ -100,6 +100,20 @@ test('registers and resolves one portable raster plan by technique id', () => {
   );
 });
 
+test('reserves Glyph-owned technique ids from portable extensions', () => {
+  const id = 'pmndrs.test-owned-technique';
+  assert.throws(
+    () =>
+      registerRasterPlanProgram({
+        technique: testTechnique(id),
+        schema: declaredSchema(id),
+        policyBody: body,
+        compileFont() {},
+      }),
+    (error) => error instanceof TypeError && error.message.includes('reserved for Glyph-owned techniques'),
+  );
+});
+
 test('registration rejects a schema-shaped prototype and retains an owned technique identity', () => {
   const id = 'test.core-raster-plan-schema-brand';
   const schema = declaredSchema(id);

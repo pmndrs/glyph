@@ -19,10 +19,28 @@ export interface ExampleRendererShader {
   readonly fragmentWgsl: string;
 }
 
+let resolvedExampleRendererShader: ExampleRendererShader | undefined;
+
+/** Resolve WGSL only when a device actually selects the TypeGPU realization. */
+export function getExampleRendererShader(): ExampleRendererShader {
+  if (resolvedExampleRendererShader === undefined) {
+    resolvedExampleRendererShader = Object.freeze({
+      variant: glyphExampleTypeGpuVariant,
+      vertexWgsl: tgpu.resolve([glyphExampleVertex]),
+      fragmentWgsl: tgpu.resolve([glyphExampleFragment]),
+    });
+  }
+  return resolvedExampleRendererShader;
+}
+
 export const exampleRendererShader: ExampleRendererShader = Object.freeze({
   variant: glyphExampleTypeGpuVariant,
-  vertexWgsl: tgpu.resolve([glyphExampleVertex]),
-  fragmentWgsl: tgpu.resolve([glyphExampleFragment]),
+  get vertexWgsl() {
+    return getExampleRendererShader().vertexWgsl;
+  },
+  get fragmentWgsl() {
+    return getExampleRendererShader().fragmentWgsl;
+  },
 });
 
 /** A narrow TypeGPU seam: the device owns resource, buffer, geometry, and submission work. */

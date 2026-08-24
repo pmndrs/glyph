@@ -83,7 +83,8 @@ export class ThreeTextEngineCoordinator {
     options: ThreeTextEngineCoordinatorOptions = {},
   ) {
     this.host = new TextEngineHost(shaper);
-    const planPrograms = compiledThreeRasterPlanPrograms(this.host.wireIdentities);
+    const customTransformMode = typeof options.transformMode === 'string' ? options.transformMode : 'indexed';
+    const planPrograms = compiledThreeRasterPlanPrograms(this.host.wireIdentities, customTransformMode);
     this.#planPrograms = new Map(planPrograms.map((program) => [program.technique.id, program]));
     this.host.registerPolicy(
       POLICY_HANDLE,
@@ -185,6 +186,12 @@ export class ThreeTextEngineCoordinator {
     for (const stopObserving of this.#fontDisposeObservers.values()) stopObserving();
     this.#fontDisposeObservers.clear();
     this.#fontResourceReferences.clear();
+    for (const retained of this.#resources.values()) {
+      const resource = retained.owners.values().next().value;
+      if (resource !== undefined && 'program' in resource) {
+        resource?.program.releaseResource(resource.resource);
+      }
+    }
     this.#resources.clear();
     this.#stacks.clear();
     this.#materials.clear();
@@ -267,8 +274,14 @@ export class ThreeTextEngineCoordinator {
   #releaseFontResources(font: LoadedFont<AnyRasterTechnique>): void {
     for (const referenceId of this.#fontResourceReferences.get(font) ?? []) {
       const retained = this.#resources.get(referenceId);
+      const released = retained?.owners.get(font);
       retained?.owners.delete(font);
-      if (retained?.owners.size === 0) this.#resources.delete(referenceId);
+      if (retained?.owners.size === 0) {
+        if (released !== undefined && 'program' in released) {
+          released?.program.releaseResource(released.resource);
+        }
+        this.#resources.delete(referenceId);
+      }
     }
     this.#fontResourceReferences.delete(font);
     this.#fontDisposeObservers.delete(font);

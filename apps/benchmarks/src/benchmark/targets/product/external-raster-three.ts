@@ -7,7 +7,7 @@ import {
 import { positionLocal, storage, uv } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
-import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
+import { glyphExamplePlanProgram, glyphExampleShaderContract } from '@pmndrs/glyph-example-raster';
 import { glyphExampleTslShader } from '@pmndrs/glyph-example-raster/tsl';
 
 /** The external consumer's Three implementation of the portable glyph-example plan. */
@@ -16,9 +16,21 @@ const externalGlyphExampleThreeProgram = {
   realizeResource: (resource: unknown) => resource,
   createMaterial(context: ThreePlanProgramMaterialContext<unknown>) {
     if (context.materialId !== 0) throw new TypeError('glyph-example does not implement custom text materials');
-    const origins = floatBuffer(context.buffers, 1, 2);
-    const sizes = floatBuffer(context.buffers, 2, 2);
-    const colors = floatBuffer(context.buffers, 3, 4);
+    const origins = floatBuffer(
+      context.buffers,
+      glyphExampleShaderContract.buffers.origin.id,
+      glyphExampleShaderContract.buffers.origin.vectorWidth,
+    );
+    const sizes = floatBuffer(
+      context.buffers,
+      glyphExampleShaderContract.buffers.size.id,
+      glyphExampleShaderContract.buffers.size.vectorWidth,
+    );
+    const colors = floatBuffer(
+      context.buffers,
+      glyphExampleShaderContract.buffers.color.id,
+      glyphExampleShaderContract.buffers.color.vectorWidth,
+    );
     const shader = glyphExampleTslShader({
       origin: storage(origins.attribute, 'vec2', origins.attribute.count).setPBO(true).element(context.instance),
       size: storage(sizes.attribute, 'vec2', sizes.attribute.count).setPBO(true).element(context.instance),

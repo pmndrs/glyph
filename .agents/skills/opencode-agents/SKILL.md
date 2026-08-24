@@ -98,8 +98,8 @@ Trace files are append-only and rotate at a bounded size. Inspect them with the 
 instead of loading a complete JSONL trace into context:
 
 ```bash
-node .agents/skills/opencode-agents/scripts/read-log.mjs <trace.jsonl> --delta
-node .agents/skills/opencode-agents/scripts/read-log.mjs <trace.jsonl> --lines 80 --bytes 12000
+node .agents/tools/read-append-log.mjs <trace.jsonl> --delta
+node .agents/tools/read-append-log.mjs <trace.jsonl> --lines 80 --bytes 12000
 ```
 
 `--delta` advances a cursor sidecar and prints only bytes appended since the last read; a rolled

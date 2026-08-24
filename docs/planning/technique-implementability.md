@@ -14,7 +14,9 @@ generated:
 
 ## Status and decision
 
-The first half of this plan is implemented on this branch. The remaining work is the renderer contract that makes the repository's example packages behave like an external third-party technique and engine.
+The portable contract and external TypeGPU example slices are implemented on this branch. The remaining work is the
+generic Three variant/material path, first-party Bitmap/MSDF/Slug migration, and the browser/benchmark evidence that makes
+the reference renderer obey the same external-consumer contract.
 
 The locked decision is:
 
@@ -33,13 +35,18 @@ The current branch also provides:
 - a renderer-neutral compiled font result containing binding bytes and resources;
 - core technique-id lookup and binding composition;
 - Three resource/program retention;
-- a non-Three example engine with a concrete recording device and non-empty draw acceptance.
+- a non-Three example engine with a concrete TypeGPU/WGSL recording device, supplied-geometry realization, and non-empty
+  draw acceptance.
 
 Those boundaries remain. The work below must not move Three policy numbers, Three materials, or shader-language types into `/core`.
 
 ## Source audit: the remaining holes
 
 ### The primitive is not universally a quad
+
+This branch closes the portable half of this hole. The implementation now carries explicit geometry declarations and a
+GLB-like indexed geometry payload alongside the existing synthetic-quad path; the remaining Three draw-reuse migration is
+still listed below.
 
 The current Three target creates a `unitQuad()` per draw at `packages/glyph/src/three/engine-plan-target.ts:567` and draws it with `InstancedBufferGeometry`. Per-glyph records are attached as `StorageInstancedBufferAttribute`s and `instanceCount` selects the records; the geometry is shared by the instances in that draw, not globally across meshes.
 
@@ -63,6 +70,9 @@ The context must consume logical names, not require a technique helper to hard-c
 The current built-in path explains why importing `/three` does not register Bitmap, MSDF, or Slug today. `ThreeTextEngineCoordinator` snapshots only the custom plan-program registry (`packages/glyph/src/three/engine-runtime.ts:81-95`); absent a custom entry, `#registerResources` handles the three first-party data shapes directly (`:220-238`) and `engine-plan-target.ts:773-787` dispatches to the built-in material functions by technique id. This is the existing raster path, not an unused or unsupported path. The generic migration should preserve it until each built-in is registered through the new contract, after which the `/three` convenience entrypoint may register all Glyph-owned variants while individual/manual registration remains available for extensions.
 
 ### Portable resources are too opaque for a generic renderer
+
+This branch closes the constrained core representation and validates resource identity, payload ownership, and geometry
+accessors before a device is touched. The first-party Three migration still has to consume those declarations generically.
 
 `CompiledRasterFont` currently carries a generic `Resource` parameter and the Three path uses a renderer-owned `realizeResource` callback. That is sufficient for reuse, but not for a renderer that knows only the declared contract.
 
@@ -169,13 +179,13 @@ First-party Bitmap, MSDF, and Slug paths should be migrated onto this path after
 
 Keep the portable files and baker in the root package. Add the example's `/typegpu` and `/tsl` shader subpaths, each retaining only shader functions plus a descriptor that names the logical inputs it consumes. The TSL subpath may expose a renderer-local `createMaterial(context)` helper, but it does not register itself or own the Three resource cache. Add a supplied-geometry fixture so the package proves that a technique may bring its own GLB-like vertex/index data. Include geometry identity and draw-range/index-count in the Three draw-reuse key; reapply indexed draw range on reuse rather than assuming every realized mesh is an `InstancedBufferGeometry` with only `instanceCount` to update. Resolve third-party `glyphOrigin` from the registered portable schema rather than a first-party literal schema map.
 
-Add a real `/typegpu` realization for the example and make the example renderer execute it through its concrete device/submission path. Keep a `/tsl` realization where the reference Three visible-pixel proof needs it, but keep it as shader code plus the same descriptor—not as a second raster package or a hidden Three adapter. Add a variant descriptor/compatibility fixture showing that TypeGPU, TSL, WGSL, and GLSL implementations consume the same contract. Adding another realization must require only a new shader subpath and renderer selection, never a plan/policy/resource-format rewrite.
+Add a real `/typegpu` realization for the example and make the example renderer execute it through its concrete device/submission path. **Implemented on this branch**, including named resource mapping, WGSL resolution, supplied indexed geometry, and non-empty submission coverage. Keep a `/tsl` realization where the reference Three visible-pixel proof needs it, but keep it as shader code plus the same descriptor—not as a second raster package or a hidden Three adapter. Add a variant descriptor/compatibility fixture showing that TypeGPU, TSL, WGSL, and GLSL implementations consume the same contract. Adding another realization must require only a new shader subpath and renderer selection, never a plan/policy/resource-format rewrite.
 
 The package-boundary test must prove that the root portable entrypoint and `/typegpu` can be imported without Three, while `/tsl` is an explicit opt-in and never auto-registers with Glyph. Enumerate the full source tree, including the portable registration module, rather than maintaining a hand-written file list. Add a production-bundle smoke test for the portable side-effect registration and the explicit Three registration call; source regexes alone do not prove that package `sideEffects` metadata is truthful.
 
 ### 5. Rework `glyph-example-renderer` as the external engine example
 
-Make this package the external TypeGPU engine example. It must not import Three or TSL, and it must not call a technique-specific material adapter. It imports the public `/core` contract and the example technique's `/typegpu` shader subpath, resolves the shader to WGSL, and drives a concrete headless device/submission path. A hardware TypeGPU/WebGPU device may replace the recording implementation without changing the portable contract.
+Make this package the external TypeGPU engine example. **Implemented on this branch.** It must not import Three or TSL, and it must not call a technique-specific material adapter. It imports the public `/core` contract and the example technique's `/typegpu` shader subpath, resolves the shader to WGSL, and drives a concrete headless device/submission path. A hardware TypeGPU/WebGPU device may replace the recording implementation without changing the portable contract.
 
 Update its policy and TypeGPU device to consume the same portable render contract:
 

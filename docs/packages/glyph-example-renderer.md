@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a headless TypeGPU
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:d56c64d6cc6deec13ac9b9b6dd97a8b2a7e038081ad8c6b4ae398d6eb4f24d87'
+source_digest: 'sha256:2845e5a9bd986a16f2ed98bb16f1bbb39727a28cd7bd784d8018064ffebaf459'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -30,8 +30,8 @@ sources:
     resource: ../../packages/glyph-example-renderer/tests/package-boundary.test.ts
     title: Published-entry-point boundary proof
   - id: engine-tests
-    resource: ../../packages/glyph-example-renderer/tests/example-engine.test.ts
-    title: Real-frame retention protocol proof
+    resource: ../../packages/glyph-example-renderer/tests/example-render.test.ts
+    title: Real font, resource, geometry, and non-empty draw acceptance
   - id: reader-tests
     resource: ../../packages/glyph-example-renderer/tests/plan-reader.test.ts
     title: Publication-lifetime, patch-range, and decode proof
@@ -42,8 +42,8 @@ generated:
 
 # Package reference: `@pmndrs/glyph-example-renderer`
 
-Status: Active consumer proof. It drives real engine frames through the item 11 retention protocol;
-shaping fonts remain unreachable from `/core` (audit item 12), so text frames are out of reach by design.
+Status: Active external-engine proof. It drives a real loaded font through the retention protocol, portable raster
+registration, resource realization, and a concrete submission seam without importing Three.js.
 
 This private workspace package is a consumer proof for `@pmndrs/glyph/core` and the example technique's `/typegpu`
 shader realization, the way
@@ -51,8 +51,8 @@ shader realization, the way
 published core and shader entry points — no `internal/`, no `generated/`, no `/three`, and no
 Three dependency — so a second renderer that cannot be written against the published
 surface turns the build red instead of turning into a planning argument. The boundary test scans every
-file under `src/` _and_ `tests/`, and rejects any `@pmndrs/glyph` subpath except `/core` and the
-published Wasm artifact.
+file under `src/` _and_ `tests/`; only the acceptance fixture may import the root loader and `/bake` to create its
+temporary font, while all other files remain limited to `/core` and the published Wasm artifact.
 
 It imports the portable example schema, plan, and `/typegpu` shader from `@pmndrs/glyph-example-raster`, and authors its own host render
 policy with `/core`'s compilers (`src/policy.ts`). It then runs the retention protocol on every frame in
@@ -63,8 +63,13 @@ generation, and decoded views over owned bytes only — dirty patch ranges and r
 is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: retained
 plans survive three frames plus capacity growth, stale borrows throw
 `TextEnginePublicationExpiredError`, a backwards acknowledgement is refused at the wire as a revision
-conflict, and registering a font stack without a shaping font fails cleanly with `fontMissing` — the
-recorded evidence for audit item 12.
+conflict. The acceptance test also loads a baked font through the public root loader, registers its portable binding and
+resource, resolves the example `/typegpu` shader to WGSL, realizes named resources, and asserts non-empty draws and one
+submission. A second test realizes supplied indexed GLB-like geometry and checks its index and instance counts.
+
+The package still does not make font loading part of `/core`: `createTextRuntime` remains a root API. The acceptance uses
+the root loader only to obtain a `LoadedFont`, then hands that value to the core-facing engine registration method. This
+keeps font acquisition and engine execution separate while proving that a non-Three host can render a real text frame.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides
 work with the technique-owned `/typegpu` shader subpath.

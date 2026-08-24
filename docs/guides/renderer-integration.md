@@ -117,11 +117,11 @@ export const quadSchema = defineTechniqueSchema({
 The declarations have different wire consequences:
 
 - `technique` is a stable string identity. The schema retains the string; registration later resolves it into the shared
-  nonzero `u32` wire namespace. (`packages/glyph/src/core/technique-schema.ts:68`,
+  nonzero `u32` wire namespace. (`packages/glyph/src/core/technique-schema.ts:142`,
   `packages/glyph/src/core/render-policy.ts:74`)
 - `scope` selects the font-binding row family used by every declared binding field: `glyph` indexes by glyph ID, `strike`
   by the selected physical strike, and `resource` by the selected resource. Semantic fields come from layout and are added
-  by the program builder rather than declared in `binding`. (`packages/glyph/src/core/technique-schema.ts:70`,
+  by the program builder rather than declared in `binding`. (`packages/glyph/src/core/technique-schema.ts:144`,
   `packages/glyph/rust/shaper/src/engine/policy_gather.rs:909`,
   `packages/glyph/rust/shaper/src/engine/policy_gather.rs:993`)
 - `binding.f32` and `binding.u32` are ordered field names. Their names are authoring-time safety; their zero-based positions
@@ -132,21 +132,21 @@ The declarations have different wire consequences:
 - Every buffer `id` is a nonzero `u16` unique within the program. `scalar` is the element representation, and the number of
   lane names becomes the wire vector width. The public schema admits `f32` and `u32`, with one to four lanes; lane names do
   not occupy wire bytes. `schemaPolicyBuffers()` lowers the declarations to policy buffer records.
-  (`packages/glyph/src/core/technique-schema.ts:12`, `packages/glyph/src/core/technique-schema.ts:14`,
-  `packages/glyph/src/core/technique-schema.ts:30`, `packages/glyph/src/core/technique-schema.ts:153`)
+  (`packages/glyph/src/core/technique-schema.ts:13`, `packages/glyph/src/core/technique-schema.ts:15`,
+  `packages/glyph/src/core/technique-schema.ts:33`, `packages/glyph/src/core/technique-schema.ts:363`)
 - `resources` describes the renderer-facing kind and optional format. It is frozen into the schema but does **not** produce
   a policy-wire record today. Actual resource identities, generations, kinds, and references enter through a font binding
-  and later appear in the plan's `resources` table. (`packages/glyph/src/core/technique-schema.ts:59`,
-  `packages/glyph/src/core/technique-schema.ts:118`, `packages/glyph/src/core/font-binding.ts:333`)
+  and later appear in the plan's `resources` table. (`packages/glyph/src/core/technique-schema.ts:148`,
+  `packages/glyph/src/core/technique-schema.ts:101`, `packages/glyph/src/core/font-binding.ts:305`)
 - `glyphOrigin` is also host metadata, not engine wire. It points animation or augmentation code at an `f32` buffer whose
   first two lanes contain the technique's rest-position value; the values need not share one coordinate space across
-  techniques. (`packages/glyph/src/core/technique-schema.ts:75`,
+  techniques. (`packages/glyph/src/core/technique-schema.ts:152`,
   `packages/glyph/src/three/engine-plan-target.ts:1174`)
 
 `definePolicyBuffers()` and `defineTechniqueSchema()` validate owned copies and freeze them. They reject invalid IDs,
 duplicate IDs or binding names, invalid scalar kinds, and invalid origin declarations at the call that authored them,
-rather than returning a failure object. (`packages/glyph/src/core/technique-schema.ts:24`,
-`packages/glyph/src/core/technique-schema.ts:96`) This follows the engine rule that a synchronous call either returns its
+rather than returning a failure object. (`packages/glyph/src/core/technique-schema.ts:33`,
+`packages/glyph/src/core/technique-schema.ts:186`) This follows the engine rule that a synchronous call either returns its
 answer or throws where the invalid input was written. (`.agents/skills/engine-call-contract/SKILL.md:8`)
 
 ## 3. Write the policy program
@@ -318,8 +318,8 @@ Use the same resolved technique ID and `programVariant` in the font binding. `co
 glyph/strike/resource tables and their resource identities. A registered `RasterPlanProgram` owns this cold composition,
 and `compileRasterFont()` returns the binding bytes plus constrained portable resource payloads; the byte-only
 `loadedFontBindingBytes()` projection consults that registry before falling back to the three first-party techniques.
-(`packages/glyph/src/core/raster-plan-program.ts`, `packages/glyph/src/core/font-binding.ts:39`,
-`packages/glyph/src/core/font-binding.ts:54`) The engine still owns resource realization and material creation, so a
+(`packages/glyph/src/core/raster-plan-program.ts`, `packages/glyph/src/core/font-binding.ts:40`,
+`packages/glyph/src/core/font-binding.ts:55`) The engine still owns resource realization and material creation, so a
 Three adapter pairs the portable plan with `registerThreeRasterPlanProgram()` rather than copying the compiler.
 
 ### Font loading comes from the root entry

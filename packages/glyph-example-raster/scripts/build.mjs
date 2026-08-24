@@ -19,6 +19,10 @@ const source = await readFile(typegpuOutput, 'utf8');
 if (source.includes('use gpu')) {
   const transformed = await plugin.transform.handler.call({}, source, typegpuOutput);
   if (transformed && typeof transformed.code === 'string') await writeFile(typegpuOutput, transformed.code);
+  const output = transformed?.code ?? source;
+  if (output.includes('use gpu') && !output.includes('__TYPEGPU_META__')) {
+    throw new Error('dist/typegpu.js contains untransformed TypeGPU directives without compiler metadata');
+  }
 }
 
 function run(command, args) {
