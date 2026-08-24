@@ -94,9 +94,9 @@ flowchart LR
   Paragraph --> Measure["measure constraints<br/>metrics only"]
   Measure --> Custom["uikit CustomLayouting"] --> Yoga
   Yoga --> ContentBox["resolved content-box signals"]
-  ContentBox --> Layout["Paragraph.layout"]
-  Paragraph --> Layout
-  Layout --> Batches["selected raster stageBatch transaction"]
+  ContentBox --> Glyphs["Paragraph.glyphs"]
+  Paragraph --> Glyphs
+  Glyphs --> Batches["selected raster stageBatch transaction"]
   Batches --> uikitRoot["uikit render groups"]
 ```
 
@@ -111,8 +111,8 @@ import { Paragraph } from '@pmndrs/glyph/core';
 
 const paragraph = new Paragraph({ font, text, style?, paint?, policy? });
 
-paragraph.measure(constraints?): ParagraphMeasureResult;
-paragraph.layout(constraints?): ParagraphLayoutResult;
+paragraph.layout(constraints?): ParagraphMeasureResult;
+paragraph.glyphs(constraints?): ParagraphLayoutResult;
 paragraph.update(input: ParagraphUpdate): void;
 paragraph.dispose(): void;
 ```
@@ -134,7 +134,7 @@ Measurements return f32-rounded extents. At knife-edge widths, re-laying-out at 
 The stable pattern for a Yoga measure callback:
 
 ```ts
-const measured = paragraph.measure(constraints);
+const measured = paragraph.layout(constraints);
 return {
   width: Math.ceil(measured.width * pointScale) / pointScale,
   height: Math.ceil(measured.height * pointScale) / pointScale,
@@ -171,12 +171,12 @@ const customLayouting = computed(() => {
   const paragraph = paragraphSignal.value;
   if (paragraph == null) return undefined;
 
-  const natural = paragraph.measure();
+  const natural = paragraph.layout();
   return {
     minWidth: natural.metrics.minContentWidth,
     minHeight: natural.metrics.height,
     measure(width, widthMode, height, heightMode) {
-      const result = paragraph.measure({
+      const result = paragraph.layout({
         width: mapAxis(width, widthMode),
         height: mapAxis(height, heightMode),
       });
@@ -211,11 +211,11 @@ Create a prepared paragraph beside the existing glyph layout. Feed it the same t
 
 ### 2. Replace measurement
 
-Use `Paragraph.measure` to populate the existing `CustomLayouting` object. Keep `FlexNode`, Yoga, point-scale rounding, size signals, and the old renderer unchanged. Differences become explicit compatibility decisions rather than hidden renderer changes.
+Use `Paragraph.layout` to populate the existing `CustomLayouting` object. Keep `FlexNode`, Yoga, point-scale rounding, size signals, and the old renderer unchanged. Differences become explicit compatibility decisions rather than hidden renderer changes.
 
 ### 3. Replace positioned layout and rendering
 
-Compute `Paragraph.layout` from the resolved content-box signals and send it to the selected raster module. Adapt raster batches into uikit's root grouping, ordering, clipping, and transform infrastructure. uikit should consume the low-level paragraph and raster APIs directly rather than embedding the standalone Three.js `Text` object.
+Compute `Paragraph.glyphs` from the resolved content-box signals and send it to the selected raster module. Adapt raster batches into uikit's root grouping, ordering, clipping, and transform infrastructure. uikit should consume the low-level paragraph and raster APIs directly rather than embedding the standalone Three.js `Text` object.
 
 ### 4. Replace interaction queries
 

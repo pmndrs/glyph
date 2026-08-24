@@ -341,7 +341,7 @@ Width changes reuse broad shaping where safe. JS recomputes line breaks and batc
 
 ### External layout handoff
 
-Retained layout systems own box resolution and provide content constraints; they never receive shaping rules and never measure from raster artifacts. A host-owned adapter uses the layout-system-neutral synchronous `Paragraph.measure` contract during box resolution and requests `Paragraph.layout` only for the authoritative box that needs positioned glyphs.
+Retained layout systems own box resolution and provide content constraints; they never receive shaping rules and never measure from raster artifacts. A host-owned adapter uses the layout-system-neutral synchronous `Paragraph.layout` contract during box resolution and requests `Paragraph.glyphs` only for the authoritative box that needs positioned glyphs.
 
 ```mermaid
 sequenceDiagram

@@ -67,7 +67,7 @@ revisions.
 
 ## What exists now
 
-Three's `Text.measure()` asks its owning batch to synchronize. When properties are pending, the measurement mask
+Three's `Text.layout()` asks its owning batch to synchronize. When properties are pending, the measurement mask
 rides the same full frame update, which is correct and avoids shaping twice. That update nevertheless prepares the
 session render plan and applies it before returning the measurement. When the batch is already committed, a cache miss
 sends an otherwise empty update, and Rust emits measurement records for every paragraph in the session.

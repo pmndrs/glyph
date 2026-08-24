@@ -236,11 +236,11 @@ unconsumed publication first, so a caller had nothing to do that the next frame 
 ## Query committed layout
 
 ```ts
-const summary = label.measure();
-const layout = label.layout();
+const summary = label.layout();
+const glyphs = label.glyphs();
 ```
 
-`measure()` requests an allocation-light `ParagraphLayoutSummary`. `layout()` additionally copies per-line
+`layout()` requests an allocation-light `ParagraphLayoutSummary`. `glyphs()` additionally copies per-line
 and per-glyph semantic arrays. Neither query is part of the ordinary render plan, and rendering never materializes layout
 arrays merely to draw.
 
