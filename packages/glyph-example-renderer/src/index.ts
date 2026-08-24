@@ -17,4 +17,9 @@ export {
   exampleSystemBuffers,
 } from './policy.js';
 export type { ExampleTableSnapshot } from './snapshot.js';
-export { RecordingExampleRendererDevice, type ExampleRendererDevice } from './device.js';
+export {
+  exampleRendererShader,
+  RecordingExampleRendererDevice,
+  type ExampleRendererDevice,
+  type ExampleRendererShader,
+} from './device.js';

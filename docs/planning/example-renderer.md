@@ -31,9 +31,9 @@ generated:
 
 A planning document is not able to prevent that. A package that stops compiling is. `glyph-example-renderer` is that package: if a second renderer cannot be written against the published surface without reaching into `internal/`, `generated/`, or `/three`, its boundary test fails and the build goes red.
 
-It is deliberately not a product. Its production source owns no scene graph or shader implementation, but it does own a
-small concrete device/submission seam so the acceptance test can prove resource realization and non-empty draws without
-depending on Three.
+It is deliberately not a product. Its production source owns no scene graph or technique shader implementation, but it
+does own a small concrete TypeGPU device/submission seam that consumes the example technique's `/typegpu` realization
+and proves resource realization and non-empty draws without depending on Three.
 
 ## What it proves today
 
@@ -41,20 +41,23 @@ The plan surface is richer than the audit first credited. One publication carrie
 
 What it proves about **ownership** is now the headline. Item 11's retention protocol landed on the session, and this package drives it against a real engine: real Wasm, the portable raster plan from `glyph-example-raster`, a host-owned policy assembled through `/core` (`src/policy.ts`), real frames through `TextEngineSession.update`, and a recording device/submission path (`src/device.ts`). The protocol steps run in order on every frame in `ExampleTextEngine.render` — update to get the borrow, `assertLive` as the cheap liveness gate, `retain` for one contiguous host-owned copy that acknowledges consumption, then decoding views over owned bytes only. The tests hold a retained plan across three frames plus a capacity growth, watch a stale borrow die loudly with `TextEnginePublicationExpiredError`, replay an older acknowledged generation at the wire and see the engine refuse it with a revision conflict, and decode dirty patch ranges out of the plan. The acceptance test additionally loads a baked font, registers its portable binding and resource, and asserts non-empty draws and one submission. The reader demands the `RetainedTextEnginePublication` brand in its parameter type, so handing it a live-but-doomed borrow is a compile error; the brand is checked again at runtime because plain JavaScript callers bypass the types. The old defensive per-table copy is gone: copying happens once, in `session.retain`.
 
-What the package also pinned down is the font gap. A `/core`-only host cannot register a shaping font: `RuntimeShaper.registerFont` requires loader-registered state, Rust refuses `registerFontBinding` with `fontMissing` without it, and `createTextRuntime` is exported only from the root entry point. Real *text* frames are therefore unreachable from the published surface, and the test asserts the clean rejection instead of reaching past the boundary. That is audit item 12's evidence, recorded where the next person will trip over it.
+What the package also pinned down is the font gap. A `/core`-only host cannot register a shaping font: `RuntimeShaper.registerFont` requires loader-registered state, Rust refuses `registerFontBinding` with `fontMissing` without it, and `createTextRuntime` is exported only from the root entry point. Real _text_ frames are therefore unreachable from the published surface, and the test asserts the clean rejection instead of reaching past the boundary. That is audit item 12's evidence, recorded where the next person will trip over it.
 
-| Surface | Owns | Status |
-| --- | --- | --- |
-| `@pmndrs/glyph/tsl` | The technique shaders realized as three.js TSL node graphs | Published |
-| `@pmndrs/glyph/typegpu` | The same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host | **Bitmap shipped.** The old pull request from TypeGPU's author was read as the reference idiom; the parity pin extracts both realizations' generated WGSL at test time |
-| `packages/glyph-example-renderer` | An engine consumer proving `/core` is sufficient | Implemented; recording device, resource realization, submission, and non-empty draws |
+| Surface                           | Owns                                                                                   | Status                                                                                                                                                                 |
+| --------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@pmndrs/glyph/tsl`               | The technique shaders realized as three.js TSL node graphs                             | Published                                                                                                                                                              |
+| `@pmndrs/glyph/typegpu`           | The same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host | **Bitmap shipped.** The old pull request from TypeGPU's author was read as the reference idiom; the parity pin extracts both realizations' generated WGSL at test time |
+| `packages/glyph-example-renderer` | A TypeGPU engine consumer proving `/core` and `/typegpu` are sufficient                | Implemented; shader resolution, resource realization, submission, and non-empty draws                                                                                  |
 
-`/typegpu` is a shader library and mirrors `/tsl` exactly: the technique realizations, no scene integration, no engine driving. Anyone using TypeGPU can import it without adopting our renderer. The example renderer is the opposite half — it drives the engine and knows nothing about shading — and it will consume `/typegpu` once that subpath exists. Keeping them apart is what stops the shader work from being trapped inside an example.
+The technique's `/typegpu` subpath is a shader library and mirrors `/tsl`: technique realization plus named-input metadata,
+without scene integration or renderer registration. Anyone using TypeGPU can import it without adopting our renderer. The
+example renderer is the concrete external consumer: it drives the engine, binds the selected shader, and submits draws.
+Keeping the shader artifact separate from the device is what lets another TypeGPU host reuse it.
 
 When porting a shader, the TSL realization is rendered to WGSL and GLSL in a device-free probe and the final source extracted, rather than translated by inspection — that extraction is what the Bitmap parity test pins, and it caught two facts inspection missed: data-texture coverage reads compile to exact clamped `textureLoad` fetches, never filtered samples, and the pixel-snapping chain multiplies reciprocals in Three's own emitted order. The slug port on the open pull request shows how far the approach gets. It was written by TypeGPU's author, so its shader structure, buffer typing, and workarounds for `@typegpu/three` are the reference idiom even where the branch itself is too old to rebase.
 
 ## Rules
 
-- Import from `@pmndrs/glyph/core`, and later `@pmndrs/glyph/typegpu`. Never from `internal/`, `generated/`, or `/three`.
+- Import from `@pmndrs/glyph/core` and the technique's public `/typegpu` subpath. Never from `internal/`, `generated/`, or `/three`.
 - The engine package must never learn this package's name. A registration edit inside `packages/glyph` to make an integration work is the defect this package is here to catch.
 - Prefer making a gap visible over working around it. When the published surface is insufficient, the correct response is a failing test and an audit item, not a private import.

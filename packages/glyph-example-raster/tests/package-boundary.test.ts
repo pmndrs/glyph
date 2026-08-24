@@ -4,17 +4,37 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
-const sourceFiles = ['artifact.ts', 'baker.ts', 'contract.ts', 'index.ts', 'raster.ts', 'runtime-baker.ts', 'three.ts'];
+const packageRoot = fileURLToPath(new URL('../', import.meta.url));
+
+async function sourceFiles(): Promise<readonly (readonly [string, string])[]> {
+  const entries = await readdir(join(packageRoot, 'src'), { recursive: true });
+  return Promise.all(
+    entries
+      .filter((entry) => entry.endsWith('.ts'))
+      .map(async (entry) => [entry, await readFile(join(packageRoot, 'src', entry), 'utf8')] as const),
+  );
+}
 
 describe('package boundary', () => {
-  test('uses only published core entry points and its own renderer dependency', async () => {
-    const sources = await Promise.all(
-      sourceFiles.map((file) => readFile(new URL(`../src/${file}`, import.meta.url), 'utf8')),
-    );
-    for (const source of sources) {
+  test('keeps the portable source tree renderer-free', async () => {
+    for (const [file, source] of await sourceFiles()) {
+      if (file === 'tsl.ts' || file === 'typegpu.ts') continue;
       expect(source).not.toMatch(/@pmndrs\/glyph\/internal|@pmndrs\/glyph\/raster\/(?:bitmap|mtsdf|slug)/);
       expect(source).not.toMatch(/@pmndrs\/glyph\/bakers\/(?:bitmap|msdf|slug)/);
+      expect(source).not.toMatch(/from ['"]three(?:\/|['"])/);
+      expect(source).not.toMatch(/from ['"]typegpu(?:\/|['"])/);
     }
+  });
+
+  test('keeps shader variants explicit and registration-free', async () => {
+    const sources = await sourceFiles();
+    const tsl = sources.find(([file]) => file === 'tsl.ts')?.[1];
+    expect(tsl).toBeDefined();
+    expect(tsl).not.toContain('registerThreeRasterPlanProgram');
+    expect(tsl).not.toContain('@pmndrs/glyph/three');
+    const typegpu = sources.find(([file]) => file === 'typegpu.ts')?.[1];
+    expect(typegpu).toBeDefined();
+    expect(typegpu).not.toMatch(/from ['"]three(?:\/|['"])/);
   });
 
   test('requires no registration edit or kind switch in core', async () => {

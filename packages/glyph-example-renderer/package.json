@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "@pmndrs/glyph": "workspace:*",
-    "@pmndrs/glyph-example-raster": "workspace:*"
+    "@pmndrs/glyph-example-raster": "workspace:*",
+    "typegpu": "0.12.3"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

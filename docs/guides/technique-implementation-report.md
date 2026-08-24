@@ -319,9 +319,7 @@ sequenceDiagram
 The resource id is a technique-owned identity, for example:
 
 ```ts
-const resource = defineRasterResourceId(
-  `studio.example/${font.shapingHash}/${raster.rasterKey}`,
-);
+const resource = defineRasterResourceId(`studio.example/${font.shapingHash}/${raster.rasterKey}`);
 ```
 
 At renderer realization time, the engine resolves that identity to its wire resource id and either uploads/materializes the retained payload or passes it to a renderer-specific resource factory. The example renderer demonstrates the seam with `ExampleRendererDevice`:
@@ -346,14 +344,13 @@ The baker is an offline or runtime artifact producer. It should emit the extensi
 ```ts
 import { defineRasterBaker, type RasterBakerModule } from '@pmndrs/glyph';
 
-const exampleBaker: RasterBakerModule<'STUDIO_example', ExampleOptions, ExampleDescriptor> =
-  defineRasterBaker({
-    kind: 'STUDIO_example',
-    extension: 'STUDIO_example',
-    version: 0,
-    descriptor: makeDescriptor,
-    bake: bakeExampleArtifact,
-  });
+const exampleBaker: RasterBakerModule<'STUDIO_example', ExampleOptions, ExampleDescriptor> = defineRasterBaker({
+  kind: 'STUDIO_example',
+  extension: 'STUDIO_example',
+  version: 0,
+  descriptor: makeDescriptor,
+  bake: bakeExampleArtifact,
+});
 
 export default exampleBaker;
 ```
@@ -442,18 +439,19 @@ flowchart TB
 
 ## Relevant repository entry points
 
-| Concern | Entry point |
-| --- | --- |
-| Portable technique contract | `packages/glyph/src/raster-technique.ts` |
-| Technique schema | `packages/glyph/src/core/technique-schema.ts` |
-| Policy DSL | `packages/glyph/src/core/policy-program.ts` |
-| Policy assembly | `packages/glyph/src/core/render-policy.ts` |
-| Portable plan registry/compiler | `packages/glyph/src/core/raster-plan-program.ts` |
-| Shared font binding projection | `packages/glyph/src/core/font-binding.ts` |
-| Three resource/material adapter | `packages/glyph/src/three/plan-program-registry.ts` |
-| Example portable technique | `packages/glyph-example-raster/src/portable.ts` |
-| Example Three adapter | `packages/glyph-example-raster/src/three.ts` |
-| Example non-Three device | `packages/glyph-example-renderer/src/device.ts` |
-| Baker API | `packages/glyph/src/bake.ts` |
-| Project discovery | `packages/glyph/src/discovery.ts` |
-| Acceptance path | `packages/glyph-example-renderer/tests/example-render.test.ts` |
+| Concern                         | Entry point                                                    |
+| ------------------------------- | -------------------------------------------------------------- |
+| Portable technique contract     | `packages/glyph/src/raster-technique.ts`                       |
+| Technique schema                | `packages/glyph/src/core/technique-schema.ts`                  |
+| Policy DSL                      | `packages/glyph/src/core/policy-program.ts`                    |
+| Policy assembly                 | `packages/glyph/src/core/render-policy.ts`                     |
+| Portable plan registry/compiler | `packages/glyph/src/core/raster-plan-program.ts`               |
+| Shared font binding projection  | `packages/glyph/src/core/font-binding.ts`                      |
+| Three resource/material adapter | `packages/glyph/src/three/plan-program-registry.ts`            |
+| Example portable technique      | `packages/glyph-example-raster/src/portable.ts`                |
+| Example TypeGPU shader          | `packages/glyph-example-raster/src/typegpu.ts`                 |
+| Example TSL shader              | `packages/glyph-example-raster/src/tsl.ts`                     |
+| Example TypeGPU device          | `packages/glyph-example-renderer/src/device.ts`                |
+| Baker API                       | `packages/glyph/src/bake.ts`                                   |
+| Project discovery               | `packages/glyph/src/discovery.ts`                              |
+| Acceptance path                 | `packages/glyph-example-renderer/tests/example-render.test.ts` |

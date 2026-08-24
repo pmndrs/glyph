@@ -1,9 +1,10 @@
 import { FontRegistry, type LoadedFont } from '@pmndrs/glyph';
 import { Text, TextGroup } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
-// The Three program registers itself on import: nothing in @pmndrs/glyph knows this package exists, so the proof must
-// pull in the third-party program exactly as an application would.
-import '@pmndrs/glyph-example-raster/three';
+import { registerExternalGlyphExampleThree } from './external-raster-three';
+
+// The consuming app owns the /three integration; the portable raster package and external core renderer remain neutral.
+registerExternalGlyphExampleThree();
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';

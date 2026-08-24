@@ -5,7 +5,9 @@
   "license": "MIT",
   "author": "Justin Walsh (https://github.com/thejustinwalsh)",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/portable.js"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -15,30 +17,45 @@
       "types": "./dist/baker.d.ts",
       "import": "./dist/baker.js"
     },
-    "./three": {
-      "types": "./dist/three.d.ts",
-      "import": "./dist/three.js"
+    "./typegpu": {
+      "types": "./dist/typegpu.d.ts",
+      "import": "./dist/typegpu.js"
+    },
+    "./tsl": {
+      "types": "./dist/tsl.d.ts",
+      "import": "./dist/tsl.js"
     },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node ./scripts/build.mjs",
     "test": "pnpm build && vitest run",
     "check": "pnpm test && tsc -p tsconfig.json --noEmit && oxlint --deny-warnings . && oxfmt --check package.json src tests tsconfig.json tsconfig.build.json"
   },
   "dependencies": {
-    "@pmndrs/glyph": "workspace:*",
-    "three": "0.185.1"
+    "@pmndrs/glyph": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
     "@types/three": "0.185.4",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
+    "three": "0.185.1",
+    "typegpu": "0.12.3",
+    "unplugin-typegpu": "0.12.2",
     "vitest": "4.1.0"
   },
   "peerDependencies": {
-    "three": ">=0.185.1 <0.186"
+    "three": ">=0.185.1",
+    "typegpu": ">=0.12.3 <0.13"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    },
+    "typegpu": {
+      "optional": true
+    }
   },
   "pmndrs": {
     "glyph": {

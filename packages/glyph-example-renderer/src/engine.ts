@@ -69,6 +69,12 @@ export class ExampleTextEngine {
 
   /** Compile and register one loaded font through the portable raster program. */
   registerFont(font: LoadedFont<AnyRasterTechnique>): number {
+    const shader = this.#device?.shader;
+    if (shader !== undefined && shader.variant.techniqueId !== font.technique.id) {
+      throw new TypeError(
+        `example renderer shader "${shader.variant.techniqueId}" cannot render "${font.technique.id}"`,
+      );
+    }
     const compiled = compileRasterFont(font, this.#host.wireIdentities);
     if (compiled === undefined)
       throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);

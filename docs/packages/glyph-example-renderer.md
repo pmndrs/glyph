@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-example-renderer'
-description: Proves the published core engine surface is sufficient for a second renderer by driving it without Three.js.
+description: Proves the published core engine surface through a concrete TypeGPU renderer without Three.js.
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:80555ddeb4828118bce2244604f5e0fe3d1e5df68ce9daab978973fddae4e0ce'
+source_digest: 'sha256:f7f952c1072cde8ad15f2c0fd3e67c2b83e8d9d423ad3eaa792550286cf11dc0'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -45,15 +45,16 @@ generated:
 Status: Active consumer proof. It drives real engine frames through the item 11 retention protocol;
 shaping fonts remain unreachable from `/core` (audit item 12), so text frames are out of reach by design.
 
-This private workspace package is a consumer proof for `@pmndrs/glyph/core`, the way
+This private workspace package is a consumer proof for `@pmndrs/glyph/core` and the example technique's `/typegpu`
+shader realization, the way
 `@pmndrs/glyph-example-raster` is a consumer proof for the raster and baker boundary. It imports the
-published core entry point and nothing else — no `internal/`, no `generated/`, no `/three`, and no
-renderer dependency of its own — so a second renderer that cannot be written against the published
+published core and shader entry points — no `internal/`, no `generated/`, no `/three`, and no
+Three dependency — so a second renderer that cannot be written against the published
 surface turns the build red instead of turning into a planning argument. The boundary test scans every
-file under `src/` *and* `tests/`, and rejects any `@pmndrs/glyph` subpath except `/core` and the
+file under `src/` _and_ `tests/`, and rejects any `@pmndrs/glyph` subpath except `/core` and the
 published Wasm artifact.
 
-It imports the portable example schema and plan from `@pmndrs/glyph-example-raster`, and authors its own host render
+It imports the portable example schema, plan, and `/typegpu` shader from `@pmndrs/glyph-example-raster`, and authors its own host render
 policy with `/core`'s compilers (`src/policy.ts`). It then runs the retention protocol on every frame in
 `ExampleTextEngine.render`: update for the borrow,
 `assertLive` before decoding, `retain` for one contiguous host-owned copy that acknowledges the
@@ -66,4 +67,4 @@ conflict, and registering a font stack without a shaping font fails cleanly with
 recorded evidence for audit item 12.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides
-work with the planned `@pmndrs/glyph/typegpu` shader subpath.
+work with the technique-owned `/typegpu` shader subpath.

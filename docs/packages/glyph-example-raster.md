@@ -1,19 +1,28 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-example-raster'
-description: Proves the published raster and baker extension boundary with a private diagnostic technique.
+description: Proves the portable raster boundary and ships matching TypeGPU and TSL shader realizations.
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:4e4649b29653100c0e491a6b30163bdc7abfa68952dc51e20b9a2dd3037eede0'
-tags: [package, raster, extension-proof, threejs, tsl]
+source_digest: 'sha256:7b04e4b36a82ea2648879a4c4fdc9418db2fb1ed1ff2f88e545c499c983f7d57'
+tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
     resource: ../../packages/glyph-example-raster/package.json
     title: Package manifest and static discovery mapping
   - id: runtime
     resource: ../../packages/glyph-example-raster/src/raster.ts
-    title: Public-contract decoder and retained Three.js adapter
+    title: Public-contract decoder and retained portable data
+  - id: shader-contract
+    resource: ../../packages/glyph-example-raster/src/shader-contract.ts
+    title: Shared shader input contract
+  - id: typegpu
+    resource: ../../packages/glyph-example-raster/src/typegpu.ts
+    title: TypeGPU shader realization
+  - id: tsl
+    resource: ../../packages/glyph-example-raster/src/tsl.ts
+    title: TSL shader realization
   - id: baker
     resource: ../../packages/glyph-example-raster/src/baker.ts
     title: Package-owned baker module
@@ -23,6 +32,9 @@ sources:
   - id: lifecycle-tests
     resource: ../../packages/glyph-example-raster/tests/glyph-example.test.ts
     title: Public bake, load, resolver, and lifecycle tests
+  - id: renderer-variant-tests
+    resource: ../../packages/glyph-example-raster/tests/renderer-variants.test.ts
+    title: Manual Three registration and shader variant test
   - id: browser-proof
     resource: ../../apps/benchmarks/vitexec/external-raster-proof.probe.ts
     title: Dual-backend product rendering probe
@@ -36,9 +48,10 @@ generated:
 Status: ✅ Milestone 10.4 external extension proof
 
 This private workspace package is a consumer proof, not a fourth recommended production raster. It imports only published
-`@pmndrs/glyph` entry points and its own pinned Three.js dependency. It owns the literal `glyphExample` kind, companion
+`@pmndrs/glyph` entry points and optional shader-language subpaths. It owns the literal `glyphExample` kind, companion
 extension and descriptor, deterministic baker, standalone-valid GLB framing, embedded or authenticated external RGBA glyph
-records, decoder validation, runtime baker, declarative Rust packing policy, TSL material, paragraph/local-run render-order
+records, decoder validation, runtime baker, declarative Rust packing policy, matching TypeGPU and TSL shader realizations,
+paragraph/local-run render-order
 inheritance, abort behavior, and disposal. Rust owns retained instance storage, dirty-range publication, and overflow handling.
 A source boundary test rejects imports from core internals or the Three first-party raster and baker subpaths.
 
@@ -51,11 +64,12 @@ resolvers; the embedded lane proves recursive `BufferView` rebasing through the 
 The package now supplies both halves of the Rust render-plan boundary separately. `glyphExample` is a portable
 `defineRasterTechnique` that owns identity, decoding, one shared resource, and disposal while importing no renderer or
 instance-packing contract.
-`@pmndrs/glyph-example-raster/three` registers a static policy program through public
-`registerThreeRasterPlanProgram`, so nothing in `@pmndrs/glyph` names this package. The policy describes the exact Rust
+The `/typegpu` and `/tsl` subpaths export shader functions and the same named-input descriptor; they do not register a
+renderer or own resource/material caches. A Three consumer imports `/tsl` and manually calls public
+`registerThreeRasterPlanProgram`, while the example renderer imports `/typegpu`. The policy describes the exact Rust
 inputs, buffers, scalar operations, and storage/draw keys. A cold compiler lowers validated glyph colors and inset data
-into one font binding; a renderer factory consumes the resulting buffers to construct the TSL material. The package no
-longer owns a `ParagraphBatchTarget`, target revision, slack planner, dirty-range upload loop, or mesh transaction.
+into one font binding; the selected host binds those buffers to its shader. The package no longer owns a
+`ParagraphBatchTarget`, target revision, slack planner, dirty-range upload loop, or mesh transaction.
 Focused tests cover deterministic bytes, public Node bake, standalone companion validation, external resource
 resolution, abort-before-decode, plus a compiled-Wasm public `Text` lifecycle that verifies Rust-packed sizes and colors
 and observes retained draw/geometry identity. No test reconstructs the removed TypeScript selector, storage, or writer.

@@ -110,6 +110,9 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
 
       expect(list.draws.length).toBeGreaterThan(0);
       expect(device.resources.size).toBeGreaterThan(0);
+      expect(device.shader.variant.language).toBe('typegpu');
+      expect(device.shader.vertexWgsl).toContain('glyphExampleVertex');
+      expect(device.shader.fragmentWgsl).toContain('glyphExampleFragment');
       expect(device.submissions).toHaveLength(1);
       expect(device.submissions[0]?.draws.length).toBeGreaterThan(0);
     } finally {

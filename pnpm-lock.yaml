@@ -11,6 +11,9 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
+      ai-cli-mcp:
+        specifier: 2.21.0
+        version: 2.21.0
       oxfmt:
         specifier: 0.35.0
         version: 0.35.0
@@ -260,9 +263,6 @@ importers:
       '@pmndrs/glyph':
         specifier: workspace:*
         version: link:../glyph
-      three:
-        specifier: 0.185.1
-        version: 0.185.1
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -276,6 +276,15 @@ importers:
       oxlint:
         specifier: 1.75.0
         version: 1.75.0
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
+      typegpu:
+        specifier: 0.12.3
+        version: 0.12.3
+      unplugin-typegpu:
+        specifier: 0.12.2
+        version: 0.12.2(rolldown@1.1.5)(typegpu@0.12.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       vitest:
         specifier: 4.1.0
         version: 4.1.0(@types/node@24.13.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
@@ -288,6 +297,9 @@ importers:
       '@pmndrs/glyph-example-raster':
         specifier: workspace:*
         version: link:../glyph-example-raster
+      typegpu:
+        specifier: 0.12.3
+        version: 0.12.3
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -1418,6 +1430,11 @@ packages:
   acorn@8.17.0:
     resolution: {integrity: sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==}
     engines: {node: '>=0.4.0'}
+    hasBin: true
+
+  ai-cli-mcp@2.21.0:
+    resolution: {integrity: sha512-w3W0xE8dPO0bKv/1JWkMsl4XllCaKT1GyZZ7arnMm/GBsDcgd/n5VYhOUBEHQ+nS0nPbUpz500cNbbuziqCewg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
   ajv-formats@2.1.1:
@@ -4173,6 +4190,14 @@ snapshots:
       acorn: 8.17.0
 
   acorn@8.17.0: {}
+
+  ai-cli-mcp@2.21.0:
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.30.0(zod@3.25.76)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
 
   ajv-formats@2.1.1(ajv@8.20.0):
     optionalDependencies:
