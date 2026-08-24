@@ -203,7 +203,7 @@ The same acceptance vocabulary must cover both:
 
 ## Sequencing and atomic commits
 
-This feature is one pull request: `feat/technique-implementability` on top of `feat/plan-retention`. The implementation may use temporary `feat/...` worktree branches for parallel agent work, but those branches are reviewed, collapsed, and integrated back into this one PR. They are not additional stacked PRs.
+This feature is one pull request: `feat/render-technique-hardening` on top of `feat/plan-retention`. The implementation may use temporary `feat/...` worktree branches for parallel agent work, but those branches are reviewed, collapsed, and integrated back into this one PR. They are not additional stacked PRs.
 
 Keep the integrated history atomic and green in dependency order:
 
