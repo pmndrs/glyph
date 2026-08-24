@@ -8,6 +8,10 @@ export {
   type GlyphExampleOptions,
 } from './contract.js';
 export { glyphExample, type GlyphExampleData } from './raster.js';
+export {
+  glyphExampleIndexedQuadGeometry,
+  glyphExampleSuppliedGeometryDeclaration,
+} from './geometry-fixture.js';
 export { glyphExamplePlanProgram, glyphExampleSchema } from './portable.js';
 export {
   glyphExampleShaderContract,

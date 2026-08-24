@@ -25,6 +25,7 @@ export const glyphExampleTslVariant: GlyphExampleShaderVariant = Object.freeze({
   geometry: glyphExampleShaderContract.geometry,
   buffers: glyphExampleShaderContract.buffers,
   resource: glyphExampleShaderContract.resource,
+  geometryResource: glyphExampleShaderContract.geometryResource,
 });
 
 export function glyphExampleTslShader(input: GlyphExampleTslShaderInput): GlyphExampleTslShaderOutput {

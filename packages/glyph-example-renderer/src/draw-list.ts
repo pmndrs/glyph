@@ -8,6 +8,27 @@ import {
 import type { ExampleTableSnapshot } from './snapshot.js';
 
 const drawLayout = textShaperAbi.layouts.engineDraw;
+const primitiveLayout = textShaperAbi.layouts.enginePrimitive;
+
+export interface ExampleResourceRecord {
+  readonly id: number;
+  readonly generation: number;
+  readonly techniqueId: number;
+  readonly referenceId: number;
+  readonly action: number;
+}
+
+export interface ExamplePrimitiveRecord {
+  readonly id: number;
+  readonly techniqueId: number;
+  readonly programId: number;
+  readonly programVariant: number;
+  readonly kind: number;
+  readonly recordCount: number;
+  readonly recordIndex: number;
+  readonly resourceId: number;
+  readonly resourceGeneration: number;
+}
 
 /** One draw the engine wants issued, decoded from the plan's `draws` table. */
 export interface ExampleDraw {
@@ -44,6 +65,8 @@ export interface ExampleDrawList {
   readonly planRevision: number;
   readonly publicationGeneration: number;
   readonly draws: readonly ExampleDraw[];
+  readonly resourceRecords: readonly ExampleResourceRecord[];
+  readonly primitiveRecords: readonly ExamplePrimitiveRecord[];
   /** Dirty ranges: what changed on which retained buffer, not whole arrays. */
   readonly patches: readonly TextEnginePatchRecord[];
   /**
@@ -77,5 +100,20 @@ export function decodeDraw(view: TextEngineRenderPlanView, offset: number): Exam
     orderToken: view.u32(offset + drawLayout.orderToken),
     indirectBufferId: view.u32(offset + drawLayout.indirectBufferId),
     indirectOffset: view.u32(offset + drawLayout.indirectOffset),
+  };
+}
+
+/** Decode one primitive row without assigning meaning to its wire kind. */
+export function decodePrimitive(view: TextEngineRenderPlanView, offset: number): ExamplePrimitiveRecord {
+  return {
+    id: view.u32(offset + primitiveLayout.id),
+    techniqueId: view.u32(offset + primitiveLayout.techniqueId),
+    programId: view.u32(offset + primitiveLayout.programId),
+    programVariant: view.u16(offset + primitiveLayout.programVariant),
+    kind: view.u16(offset + primitiveLayout.kind),
+    recordCount: view.u16(offset + primitiveLayout.recordCount),
+    recordIndex: view.u32(offset + primitiveLayout.recordIndex),
+    resourceId: view.u32(offset + primitiveLayout.resourceId),
+    resourceGeneration: view.u32(offset + primitiveLayout.resourceGeneration),
   };
 }

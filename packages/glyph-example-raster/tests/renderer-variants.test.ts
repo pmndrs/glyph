@@ -94,7 +94,7 @@ test('the TypeGPU realization matches the same contract and resolves to WGSL', (
   });
   expect(glyphExampleShaderContract).toMatchObject({
     techniqueId: glyphExamplePlanProgram.technique.id,
-    geometry: glyphExampleSchema.render?.geometry.kind,
+    geometry: glyphExampleSchema.render?.geometry,
     buffers: {
       origin: { id: glyphExampleSchema.buffers.origin.id, vectorWidth: glyphExampleSchema.buffers.origin.lanes.length },
       size: { id: glyphExampleSchema.buffers.size.id, vectorWidth: glyphExampleSchema.buffers.size.lanes.length },

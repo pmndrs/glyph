@@ -38,6 +38,7 @@ export const glyphExampleTypeGpuVariant: GlyphExampleShaderVariant = Object.free
   geometry: glyphExampleShaderContract.geometry,
   buffers: glyphExampleShaderContract.buffers,
   resource: glyphExampleShaderContract.resource,
+  geometryResource: glyphExampleShaderContract.geometryResource,
 });
 
 export const glyphExampleVertex: TgpuFn<

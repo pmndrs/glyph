@@ -8,8 +8,17 @@ import { textRuntimeShaper } from '@pmndrs/glyph/core';
 import { afterEach, expect, test } from 'vitest';
 
 import glyphExampleBaker from '@pmndrs/glyph-example-raster/baker';
-import { glyphExample } from '@pmndrs/glyph-example-raster';
-import { RecordingExampleRendererDevice } from '../src/device.js';
+import {
+  glyphExample,
+  glyphExampleIndexedQuadGeometry,
+  glyphExampleSuppliedGeometryDeclaration,
+} from '@pmndrs/glyph-example-raster';
+import {
+  exampleRendererShader,
+  RecordingExampleRendererDevice,
+  type ExampleDrawList,
+  type ExampleRendererShader,
+} from '../src/index.js';
 import { ExampleTextEngine } from '../src/engine.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
@@ -126,4 +135,83 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
   } finally {
     runtime.dispose();
   }
+});
+
+test('realizes a supplied indexed geometry resource from the portable declaration', () => {
+  const shader: ExampleRendererShader = {
+    ...exampleRendererShader,
+    variant: Object.freeze({
+      ...exampleRendererShader.variant,
+      geometry: glyphExampleSuppliedGeometryDeclaration,
+      geometryResource: glyphExampleSuppliedGeometryDeclaration.resource,
+    }),
+  };
+  const device = new RecordingExampleRendererDevice(shader);
+  device.createResource(42, 'glyphGeometry', glyphExampleIndexedQuadGeometry);
+
+  const drawList: ExampleDrawList = {
+    engineRevision: 1,
+    planRevision: 1,
+    publicationGeneration: 1,
+    draws: [
+      {
+        id: 1,
+        programId: shader.variant.techniqueId,
+        programVariant: 0,
+        flags: 0,
+        materialId: 1,
+        clipId: 0,
+        depthKey: 0,
+        transformId: 0,
+        primitiveStart: 0,
+        primitiveCount: 1,
+        bufferStart: 0,
+        bufferCount: 0,
+        resourceStart: 0,
+        resourceCount: 1,
+        orderToken: 0,
+        indirectBufferId: 0,
+        indirectOffset: 0,
+      },
+    ],
+    resourceRecords: [
+      { id: 42, generation: 1, techniqueId: shader.variant.techniqueId, referenceId: 0, action: 0 },
+    ],
+    primitiveRecords: [
+      {
+        id: 1,
+        techniqueId: shader.variant.techniqueId,
+        programId: shader.variant.techniqueId,
+        programVariant: 0,
+        kind: 0,
+        recordCount: 5,
+        recordIndex: 0,
+        resourceId: 42,
+        resourceGeneration: 1,
+      },
+    ],
+    patches: [],
+    retirements: [],
+    resources: { count: 0, stride: 0, records: new Uint8Array(0) },
+    buffers: { count: 0, stride: 0, records: new Uint8Array(0) },
+    primitives: { count: 0, stride: 0, records: new Uint8Array(0) },
+    diagnostics: { count: 0, stride: 0, records: new Uint8Array(0) },
+  };
+
+  expect(() =>
+    device.submit({
+      ...drawList,
+      primitiveRecords: [{ ...drawList.primitiveRecords[0]!, resourceId: 41 }],
+    }),
+  ).toThrow('does not reference geometry resource');
+  device.submit(drawList);
+  expect(device.realizedDraws).toHaveLength(1);
+  expect(device.realizedDraws[0]?.geometry).toMatchObject({
+    kind: 'supplied',
+    indexed: true,
+    vertexCount: 4,
+    indexCount: 6,
+    instanceCount: 5,
+    resourceName: 'glyphGeometry',
+  });
 });

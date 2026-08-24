@@ -80,8 +80,10 @@ export class ExampleTextEngine {
       throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
     const bindingHandle = this.#nextBindingHandle++;
     this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
-    for (const [key, resource] of compiled.resources) {
-      this.#device?.createResource(this.#host.wireIdentities.resolve(key), resource);
+    for (const [name, key] of compiled.declaredResources) {
+      const resource = compiled.resources.get(key);
+      if (resource === undefined) throw new Error(`compiled font omitted declared resource "${name}"`);
+      this.#device?.createResource(this.#host.wireIdentities.resolve(key), name, resource);
     }
     return bindingHandle;
   }
