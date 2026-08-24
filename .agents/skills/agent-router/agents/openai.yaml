@@ -1,0 +1,6 @@
+display_name: Agent Router
+short_description: Route resumable reviews and delegated work through pinned ai-cli-mcp models.
+default_prompt: >-
+  Use the pinned agent-router workflow. Query the live model catalog, choose an
+  explicit provider/model, run in an isolated worktree, preserve the PID and
+  session ID, and report authoritative results from wait or get_result.

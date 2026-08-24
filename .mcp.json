@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ai-cli": {
+      "command": "pnpm",
+      "args": ["exec", "ai-cli-mcp"],
+      "env": {
+        "MCP_CLAUDE_DEBUG": "false"
+      }
+    }
+  }
+}

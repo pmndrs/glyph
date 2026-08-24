@@ -10,9 +10,24 @@ Use the repository-local `engine-call-contract` skill before adding, moving, or 
 
 Use the vendored `typegpu` skill from TypeGPU's own maintainers before writing or reviewing TypeGPU shaders, buffers, bind groups, or pipelines, exactly as the `tsl` skill governs Three.js Shading Language work. It was installed with the upstream installer (`skills add software-mansion-labs/skills -s typegpu`) and targets TypeGPU 0.12, matching the pinned dependency. Its `references/` cover shaders, textures, types, pipelines, and the standard library.
 
-Use the repository-local `opencode-agents` skill before delegating implementation work to an opencode agent, and whenever a run looks stalled. A buffered log is not evidence of a stall, sessions resume after an interruption, and agent worktrees must live outside the repository or pnpm resolves the wrong workspace.
+Use the repository-local `agent-router` skill for every external-model review, delegated implementation, or research run. It routes through the pinned `ai-cli-mcp` server, preserves resumable sessions, and requires an isolated worktree for mutation-capable CLIs.
 
-Use the repository-local `claude-review` skill when invoking Claude Code for an adversarial or external-model review. Keep reviews read-only, stream visible progress, and retain the complete trace in the ignored repository cache instead of launching an opaque buffered subprocess.
+The local `ai-cli` command can diagnose the pinned package, catalog, and provider CLIs, but it is not proof that the MCP transport is loaded. After changing MCP configuration, reload the client and confirm the server's tools are present before calling the router healthy.
+
+Until the MCP tools are visible, `mise exec -- pnpm exec ai-cli ...` is the approved temporary fallback because it uses the pinned workspace package and preserves the same PID/session lifecycle. Mark those runs `transport: cli-fallback`, capture their PID and session ID, and never substitute an unpinned provider CLI or treat a successful fallback as MCP validation.
+
+Use the bounded append-only reader at `.agents/tools/read-append-log.mjs` for agent traces and rolling logs. Do not load `docs/log.md` or a full JSONL trace into context; query `docs/planning/decision-register.md` for settled decisions and read only the relevant bounded log slice.
+
+The reader is the required context-management tool for append-only output:
+
+```bash
+node .agents/tools/read-append-log.mjs <trace.jsonl> --delta
+node .agents/tools/read-append-log.mjs <trace.jsonl> --lines 80 --bytes 12000
+```
+
+`--delta` advances a cursor and handles a rolled or truncated file. A trace sample is diagnostic only; retrieve authoritative agent results through the provider/MCP result operation. For decisions, query the decision register and the relevant package concept instead of searching the whole chronology.
+
+Keep machine traces and OKF-visible knowledge separate. Raw JSONL traces and cursor state may live in ignored `.cache/` directories and may be byte-rolled. If a run is surfaced in an OKF bundle or `docs/log.md`, write a human-readable summary that preserves the reserved OKF log shape: exactly one H1 title, newest-first `## YYYY-MM-DD` sections, and flat prose entries. Never byte-roll, cursor-edit, or append raw trace records into an OKF `log.md`; validate the bundle after changing it.
 
 Use the repository-local `gh-stack` skill for every dependent branch or pull-request workflow. Create, adopt, navigate,
 rebase, push, submit, sync, link, and merge stacks through non-interactive `gh stack` commands; ordinary `git push`,
