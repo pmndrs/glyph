@@ -204,8 +204,8 @@ sources:
     resource: ../../apps/benchmarks/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-08-15T15:53:27Z'
+  by: openai-codex/gpt-5
+  at: '2026-08-24T03:12:27Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -245,7 +245,7 @@ The three live technique scenes moved to target-v1 next. `techniques/{bitmap,mts
 standalone `Text` — an implicit batch of one, deliberately left off `TextGroup` so the single-paragraph adapter path stays
 exercised and their `drawCount` stays directly comparable with merged v0 — from the `LoadedFont` that
 `workloads/font-assets` already produced, commit it by parenting and forcing `updateMatrixWorld`, and read `error` plus
-explicit `measure()` or `layout()` results instead of awaiting readiness. Flat merged-v0 properties become nested `contentBox`, `style`, and `paint`, with
+explicit `layout()` or `glyphs()` results instead of awaiting readiness. Flat merged-v0 properties become nested `contentBox`, `style`, and `paint`, with
 the paragraph measure expressed as an exact width constraint and the live colour as `#ffffff`, which resolves through the
 same transfer function as the numeric constant it replaces. Because a rejected generation would otherwise leave the failed
 candidate font leased and undisposable, each scene commits through one apply-or-roll-back step that restores the previously
