@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import {
   FontRegistry,
+  createTextRuntime,
   rasterBake,
   type RasterKey,
   type RasterResolverContext,
@@ -13,16 +14,30 @@ import {
   type Sha256Hex,
 } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
+import {
+  registerThreeRasterPlanProgram,
+  threePolicyAbi,
+  Text,
+  TextGroup,
+  type ThreePlanProgramBuffer,
+  type ThreePlanProgramMaterialContext,
+} from '@pmndrs/glyph/three';
+import { positionLocal, storage, uv } from 'three/tsl';
+import * as THREE from 'three/webgpu';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import glyphExampleBaker from '../src/baker.js';
+import { glyphExamplePlanProgram } from '../src/portable.js';
+import { glyphExampleTslShader } from '../src/tsl.js';
 import { GLYPH_EXAMPLE_KIND, glyphExample, glyphExampleDescriptor } from '../src/index.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const temporaryDirectories: string[] = [];
+const materials: THREE.NodeMaterial[] = [];
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+  for (const material of materials.splice(0)) material.dispose();
 });
 
 describe('public external raster proof', () => {
@@ -88,7 +103,119 @@ describe('public external raster proof', () => {
     );
     font.dispose();
   });
+
+  test('manually registers the TSL realization and preserves Three draw reuse', async () => {
+    registerThreeRasterPlanProgram(threeProgram);
+    const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
+    const core = baked.execution.outputs.find(({ role }) => role === 'font');
+    assert.ok(core);
+    const registry = new FontRegistry();
+    const runtime = await createTextRuntime({
+      registry,
+      wasm: await readFile(new URL('../../glyph/dist/text-shaper.wasm', import.meta.url)),
+    });
+    const font = await runtime.loadFont({
+      input: { baked: dataUrl(await readFile(core.file)) },
+      raster: { technique: glyphExample, options: { paletteSeed: 7 } },
+    });
+    const text = new Text({ font, text: 'PUBLIC RASTER', style: { fontSize: 48 } });
+    const group = new TextGroup({ renderOrder: 200 });
+    group.add(text);
+    const scene = new THREE.Scene();
+    scene.add(group);
+    scene.updateMatrixWorld();
+
+    try {
+      expect(group.error).toBeUndefined();
+      const draw = group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+      expect(draw).toBeDefined();
+      expect(draw?.renderOrder).toBe(200);
+      const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
+      expect(geometry.getAttribute('_pmndrsGlyph_1')).toBeDefined();
+      expect(geometry.getAttribute('_pmndrsGlyph_2')).toBeDefined();
+      expect(geometry.getAttribute('_pmndrsGlyph_3')).toBeDefined();
+      expect(geometry.getAttribute('_pmndrsGlyph_15')).toBeDefined();
+      expect(geometry.instanceCount).toBeGreaterThan(0);
+      const sizes = geometry.getAttribute('_pmndrsGlyph_2');
+      const expectedWidth = Math.max(48 * 0.05, 48 * 0.65 - font.data.inset * 48 * 2);
+      const expectedHeight = Math.max(48 * 0.05, 48 - font.data.inset * 48 * 2);
+      for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
+        expect(sizes.getX(instance)).toBeCloseTo(expectedWidth, 5);
+        expect(sizes.getY(instance)).toBeCloseTo(expectedHeight, 5);
+      }
+      const colors = geometry.getAttribute('_pmndrsGlyph_3');
+      for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
+        expect(
+          font.data.colors.some((_, offset) => glyphColorMatches(font.data.colors, offset, colors, instance)),
+        ).toBe(true);
+      }
+
+      text.text = 'PLUGIN UPDATE';
+      scene.updateMatrixWorld();
+      expect(group.error).toBeUndefined();
+      expect(group.children.find((child) => child instanceof THREE.Mesh)).toBe(draw);
+      expect(draw?.geometry).toBe(geometry);
+    } finally {
+      group.dispose();
+      text.dispose();
+      font.dispose();
+      runtime.dispose();
+    }
+  });
 });
+
+const threeProgram = {
+  technique: glyphExamplePlanProgram.technique,
+  realizeResource: (resource: unknown) => resource,
+  createMaterial(context: ThreePlanProgramMaterialContext<unknown>) {
+    const material = createThreeMaterial(context);
+    materials.push(material);
+    return material;
+  },
+};
+
+function createThreeMaterial(context: {
+  readonly resource: unknown;
+  readonly buffers: ReadonlyMap<number, ThreePlanProgramBuffer>;
+  readonly instance: THREE.Node<'uint'>;
+  readonly materialId: number;
+  transformPosition(position: THREE.Node<'vec3'>): THREE.Node<'vec3'>;
+}): THREE.MeshBasicNodeMaterial {
+  if (context.materialId !== 0) throw new TypeError('glyph-example supports only the default material');
+  const origin = floatBuffer(context.buffers, 1, 2);
+  const size = floatBuffer(context.buffers, 2, 2);
+  const color = floatBuffer(context.buffers, 3, 4);
+  const shader = glyphExampleTslShader({
+    origin: storage(origin.attribute, 'vec2', origin.attribute.count).setPBO(true).element(context.instance),
+    size: storage(size.attribute, 'vec2', size.attribute.count).setPBO(true).element(context.instance),
+    color: storage(color.attribute, 'vec4', color.attribute.count).setPBO(true).element(context.instance),
+    quadPosition: positionLocal,
+    quadUv: uv(),
+    transformPosition: context.transformPosition,
+  });
+  const material = new THREE.MeshBasicNodeMaterial({
+    depthTest: false,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    transparent: true,
+  });
+  material.positionNode = shader.position;
+  material.colorNode = shader.color;
+  material.opacityNode = shader.opacity;
+  return material;
+}
+
+function floatBuffer(buffers: ReadonlyMap<number, ThreePlanProgramBuffer>, id: number, vectorWidth: number) {
+  const buffer = buffers.get(id);
+  if (
+    buffer === undefined ||
+    buffer.scalarType !== threePolicyAbi.scalarTypes.f32 ||
+    buffer.vectorWidth !== vectorWidth
+  ) {
+    throw new TypeError(`glyph-example draw requires f32x${vectorWidth} policy buffer ${id}`);
+  }
+  return buffer;
+}
 
 /** The baked artifact advertises its own raster key, so the test never reimplements key derivation. */
 function rasterSelection(font: RegisteredFont): { readonly rasterKey: RasterKey; readonly kind: 'glyphExample' } {
@@ -109,4 +236,23 @@ async function bakeFixture(packaging: {
     font: { fontFaceIndex: 0 },
     rasters: [rasterBake(glyphExampleBaker, { packaging, options: { paletteSeed: 7 } })],
   });
+}
+
+function dataUrl(bytes: Uint8Array): string {
+  return `data:model/gltf-binary;base64,${Buffer.from(bytes).toString('base64')}`;
+}
+
+function glyphColorMatches(
+  records: Uint8Array,
+  offset: number,
+  attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  instance: number,
+): boolean {
+  if (offset % 4 !== 0 || offset > records.length - 4) return false;
+  return (
+    Math.abs(attribute.getX(instance) - records[offset]! / 255) < 1e-6 &&
+    Math.abs(attribute.getY(instance) - records[offset + 1]! / 255) < 1e-6 &&
+    Math.abs(attribute.getZ(instance) - records[offset + 2]! / 255) < 1e-6 &&
+    Math.abs(attribute.getW(instance) - records[offset + 3]! / 255) < 1e-6
+  );
 }

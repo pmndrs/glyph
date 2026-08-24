@@ -108,7 +108,7 @@ packages/glyph-example-raster/
   optional /tsl shader realization; neither subpath owns engine registration
 
 packages/glyph-example-renderer/
-  external TypeGPU/WebGPU engine proof
+  external TypeGPU-backed host proof; a hardware backend may replace its device
   imports the portable raster package, its /typegpu realization, and public Glyph core APIs
 
 packages/glyph/src/three/
@@ -118,7 +118,7 @@ packages/glyph/src/three/
 
 The exact published names may use subpath exports where optional peer dependencies remain genuinely optional, but the invariant is fixed: importing the root portable entrypoint must not install or execute renderer code. The `/typegpu` and `/tsl` shader subpaths are explicit opt-ins; they contain shader functions and compatibility metadata, not Three engine registration or material/resource lifecycle. The root package remains usable without either shader language. A TSL subpath may depend on the Three TSL peer because TSL is its implementation language, but that dependency must not leak into the portable root or the renderer-neutral plan/data modules.
 
-The example renderer is intentionally a concrete TypeGPU consumer, not a second opaque recorder that merely proves bytes exist. It exercises the same generic host responsibilities an external TypeGPU engine would own: select the technique's `/typegpu` realization, bind the named plan buffers and retained resources, realize synthetic or supplied geometry, create the pipeline, and submit the draw. A different engine can consume the portable package and choose the TypeGPU, TSL, WGSL, GLSL, or its own implementation.
+The example renderer is intentionally a concrete TypeGPU-backed host, not a second opaque recorder that merely proves bytes exist. It exercises the headless portion of the generic host responsibilities an external TypeGPU engine would own: select the technique's `/typegpu` realization, resolve it to WGSL, map named plan buffers and retained resources, realize the synthetic-quad draw description, and submit the draw list. Creating a hardware pipeline is a backend concern and is not needed for this acceptance; a different engine can consume the portable package and choose the TypeGPU, TSL, WGSL, GLSL, or its own implementation.
 
 Importing the portable technique registers its renderer-neutral plan program; this is safe for every engine and does not realize GPU resources. Mark the concrete portable registration module in the portable package's `sideEffects` list so a technique import cannot be tree-shaken away. Shader subpaths do not silently register a renderer implementation. The engine or application selects the shader realization it supports: the TypeGPU example consumes `/typegpu` directly, while a Three application supplies the `/tsl` realization to the public `@pmndrs/glyph/three` registration surface. Glyph's own `/three` convenience entrypoint may register Glyph-owned built-ins because Glyph owns that renderer integration. Registration occurs before the first engine snapshot, and duplicate registration is allowed only when the descriptor is identical. Unused techniques still avoid GPU/resource realization; consumers that need minimum bundle bytes can import only the individual shader subpaths.
 
@@ -175,13 +175,13 @@ The package-boundary test must prove that the root portable entrypoint and `/typ
 
 ### 5. Rework `glyph-example-renderer` as the external engine example
 
-Make this package the external TypeGPU engine example. It must not import Three or TSL, and it must not call a technique-specific material adapter. It imports the public `/core` contract and the example technique's `/typegpu` shader subpath, then drives a concrete TypeGPU/WebGPU device and submission path.
+Make this package the external TypeGPU engine example. It must not import Three or TSL, and it must not call a technique-specific material adapter. It imports the public `/core` contract and the example technique's `/typegpu` shader subpath, resolves the shader to WGSL, and drives a concrete headless device/submission path. A hardware TypeGPU/WebGPU device may replace the recording implementation without changing the portable contract.
 
 Update its policy and TypeGPU device to consume the same portable render contract:
 
 - resolve named buffers and resources rather than relying on example-only numeric knowledge;
 - validate the declared geometry kind while preserving the wire primitive kind;
-- bind the selected TypeGPU shader's named inputs to the plan buffers and retained resources;
+- map the selected TypeGPU shader's named inputs to the plan buffers and retained resources;
 - realize resource payloads and primitive geometry, then record and submit non-empty draws;
 - preserve its own policy system ids and capability set;
 - reject an unavailable variant or unsupported geometry explicitly.
@@ -241,7 +241,7 @@ Done means all of the following are true:
 - `quad` rendering can use technique-supplied GLB-like geometry buffers;
 - supplied geometry can arrive as portable GLB-like buffers with semantic attributes, typed accessors, optional indices, topology, and instance-rate metadata;
 - the contract has a language-neutral compatibility fixture proving that TypeGPU/TSL/WGSL/GLSL implementations do not change plan, policy, binding, resource, or retention formats;
-- `glyph-example-renderer` loads a font, binds the example `/typegpu` shader through a concrete device/submission path, and records/submits non-empty draws;
+- `glyph-example-renderer` loads a font, resolves and maps the example `/typegpu` shader through a concrete device/submission path, and records/submits non-empty draws;
 - the reference Three path produces non-empty visible draws;
 - `apps/benchmarks` runs the external raster proof through the public package exports, including the bundled visible-pixel path;
 - focused package checks, each affected package check, `docs:check`, and the repository check pass.

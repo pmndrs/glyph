@@ -32,8 +32,9 @@ generated:
 A planning document is not able to prevent that. A package that stops compiling is. `glyph-example-renderer` is that package: if a second renderer cannot be written against the published surface without reaching into `internal/`, `generated/`, or `/three`, its boundary test fails and the build goes red.
 
 It is deliberately not a product. Its production source owns no scene graph or technique shader implementation, but it
-does own a small concrete TypeGPU device/submission seam that consumes the example technique's `/typegpu` realization
-and proves resource realization and non-empty draws without depending on Three.
+does own a small concrete TypeGPU-backed host/submission seam that resolves the example technique's `/typegpu` realization,
+maps named buffers/resources, and proves resource realization and non-empty draws without depending on Three. It is a
+headless host proof; a browser or native backend can use the same seam to create a hardware pipeline later.
 
 ## What it proves today
 
@@ -47,11 +48,12 @@ What the package also pinned down is the font gap. A `/core`-only host cannot re
 | --------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/glyph/tsl`               | The technique shaders realized as three.js TSL node graphs                             | Published                                                                                                                                                              |
 | `@pmndrs/glyph/typegpu`           | The same technique shaders realized as TypeGPU functions, reusable by any TypeGPU host | **Bitmap shipped.** The old pull request from TypeGPU's author was read as the reference idiom; the parity pin extracts both realizations' generated WGSL at test time |
-| `packages/glyph-example-renderer` | A TypeGPU engine consumer proving `/core` and `/typegpu` are sufficient                | Implemented; shader resolution, resource realization, submission, and non-empty draws                                                                                  |
+| `packages/glyph-example-renderer` | A TypeGPU-backed host consumer proving `/core` and `/typegpu` are sufficient           | Implemented; WGSL resolution, named resource/buffer mapping, submission, and non-empty draws                                                                           |
 
 The technique's `/typegpu` subpath is a shader library and mirrors `/tsl`: technique realization plus named-input metadata,
 without scene integration or renderer registration. Anyone using TypeGPU can import it without adopting our renderer. The
-example renderer is the concrete external consumer: it drives the engine, binds the selected shader, and submits draws.
+example renderer is the concrete headless consumer: it resolves the shader to WGSL, maps the selected named inputs, and
+submits non-empty draw lists. A hardware backend can replace the recording device while reusing that contract.
 Keeping the shader artifact separate from the device is what lets another TypeGPU host reuse it.
 
 When porting a shader, the TSL realization is rendered to WGSL and GLSL in a device-free probe and the final source extracted, rather than translated by inspection — that extraction is what the Bitmap parity test pins, and it caught two facts inspection missed: data-texture coverage reads compile to exact clamped `textureLoad` fetches, never filtered samples, and the pixel-snapping chain multiplies reciprocals in Three's own emitted order. The slug port on the open pull request shows how far the approach gets. It was written by TypeGPU's author, so its shader structure, buffer typing, and workarounds for `@typegpu/three` are the reference idiom even where the branch itself is too old to rebase.

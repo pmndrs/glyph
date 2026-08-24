@@ -22,14 +22,14 @@ export type TypeGpuGlyphExampleVertexInput = d.InferGPU<typeof TypeGpuGlyphExamp
 export const TypeGpuGlyphExampleVertexOutput: d.WgslStruct<{
   position: d.Vec3f;
   color: d.Vec4f;
-  edgeDistance: d.F32;
-}> = d.struct({ position: d.vec3f, color: d.vec4f, edgeDistance: d.f32 });
+  quadUv: d.Vec2f;
+}> = d.struct({ position: d.vec3f, color: d.vec4f, quadUv: d.vec2f });
 export type TypeGpuGlyphExampleVertexOutput = d.InferGPU<typeof TypeGpuGlyphExampleVertexOutput>;
 
 export const TypeGpuGlyphExampleFragmentInput: d.WgslStruct<{
   color: d.Vec4f;
-  edgeDistance: d.F32;
-}> = d.struct({ color: d.vec4f, edgeDistance: d.f32 });
+  quadUv: d.Vec2f;
+}> = d.struct({ color: d.vec4f, quadUv: d.vec2f });
 export type TypeGpuGlyphExampleFragmentInput = d.InferGPU<typeof TypeGpuGlyphExampleFragmentInput>;
 
 export const glyphExampleTypeGpuVariant: GlyphExampleShaderVariant = Object.freeze({
@@ -54,8 +54,7 @@ export const glyphExampleVertex: TgpuFn<
     -(instance.origin.y + input.quadPosition.y * instance.size.y),
     0,
   );
-  const edgeDistance = stdMin(stdMin(input.quadUv.x, 1 - input.quadUv.x), stdMin(input.quadUv.y, 1 - input.quadUv.y));
-  return TypeGpuGlyphExampleVertexOutput({ position, color: instance.color, edgeDistance });
+  return TypeGpuGlyphExampleVertexOutput({ position, color: instance.color, quadUv: input.quadUv });
 });
 
 export const glyphExampleFragment: TgpuFn<(input: typeof TypeGpuGlyphExampleFragmentInput) => d.Vec4f> = tgpu.fn(
@@ -64,7 +63,8 @@ export const glyphExampleFragment: TgpuFn<(input: typeof TypeGpuGlyphExampleFrag
 )((input) => {
   'use gpu';
 
-  return d.vec4f(input.color.r, input.color.g, input.color.b, input.color.a * (1 - std.step(0.08, input.edgeDistance)));
+  const edgeDistance = stdMin(stdMin(input.quadUv.x, 1 - input.quadUv.x), stdMin(input.quadUv.y, 1 - input.quadUv.y));
+  return d.vec4f(input.color.r, input.color.g, input.color.b, input.color.a * (1 - std.step(0.08, edgeDistance)));
 });
 
 function stdMin(left: number, right: number): number {

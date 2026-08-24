@@ -9,3 +9,9 @@ export {
 } from './contract.js';
 export { glyphExample, type GlyphExampleData } from './raster.js';
 export { glyphExamplePlanProgram, glyphExampleSchema } from './portable.js';
+export {
+  glyphExampleShaderContract,
+  type GlyphExampleShaderBuffer,
+  type GlyphExampleShaderContract,
+  type GlyphExampleShaderVariant,
+} from './shader-contract.js';

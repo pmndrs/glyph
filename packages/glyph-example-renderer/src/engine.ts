@@ -123,7 +123,8 @@ export class ExampleTextEngine {
   }
 
   /** Runs one real frame and returns its plan, retained into host-owned memory. */
-  render(input: ExampleFrameInput, device: ExampleRendererDevice | undefined = this.#device): ExampleDrawList {
+  render(input: ExampleFrameInput): ExampleDrawList {
+    const device = this.#device;
     const list = readDrawList(this.#retainPublication(this.session.update(this.frameRequest(input))));
     for (const patch of list.patches) {
       if (patch.payload !== undefined) device?.writeBuffer(patch.bufferId, patch.payload);

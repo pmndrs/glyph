@@ -1,3 +1,6 @@
+import { glyphExample } from './raster.js';
+import { glyphExampleSchema } from './portable.js';
+
 export interface GlyphExampleShaderBuffer {
   readonly id: number;
   readonly scalar: 'f32';
@@ -5,26 +8,43 @@ export interface GlyphExampleShaderBuffer {
 }
 
 export interface GlyphExampleShaderContract {
-  readonly techniqueId: 'studio.glyph-example';
+  readonly techniqueId: typeof glyphExample.id;
   readonly geometry: 'synthetic-quad';
   readonly buffers: Readonly<{
     readonly origin: GlyphExampleShaderBuffer;
     readonly size: GlyphExampleShaderBuffer;
     readonly color: GlyphExampleShaderBuffer;
   }>;
-  readonly resource: 'glyphColors';
+  readonly resource: string;
 }
 
+function shaderBuffer(name: keyof typeof glyphExampleSchema.buffers): GlyphExampleShaderBuffer {
+  const buffer = glyphExampleSchema.buffers[name];
+  return Object.freeze({ id: buffer.id, scalar: buffer.scalar, vectorWidth: buffer.lanes.length });
+}
+
+const geometry = syntheticQuadGeometry();
+
+const resourceNames = Object.keys(glyphExampleSchema.resources ?? {});
+if (resourceNames.length !== 1) throw new TypeError('glyph-example shader contract requires one declared resource');
+
 export const glyphExampleShaderContract: GlyphExampleShaderContract = Object.freeze({
-  techniqueId: 'studio.glyph-example',
-  geometry: 'synthetic-quad',
+  techniqueId: glyphExample.id,
+  geometry,
   buffers: Object.freeze({
-    origin: Object.freeze({ id: 1, scalar: 'f32' as const, vectorWidth: 2 }),
-    size: Object.freeze({ id: 2, scalar: 'f32' as const, vectorWidth: 2 }),
-    color: Object.freeze({ id: 3, scalar: 'f32' as const, vectorWidth: 4 }),
+    origin: shaderBuffer('origin'),
+    size: shaderBuffer('size'),
+    color: shaderBuffer('color'),
   }),
-  resource: 'glyphColors' as const,
+  resource: resourceNames[0]!,
 });
+
+function syntheticQuadGeometry(): 'synthetic-quad' {
+  const geometry = glyphExampleSchema.render?.geometry.kind;
+  if (geometry !== 'synthetic-quad')
+    throw new TypeError('glyph-example shader contract requires synthetic-quad geometry');
+  return 'synthetic-quad';
+}
 
 export interface GlyphExampleShaderVariant {
   readonly language: 'typegpu' | 'tsl';

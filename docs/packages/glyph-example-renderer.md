@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-example-renderer'
-description: Proves the published core engine surface through a concrete TypeGPU renderer without Three.js.
+description: Proves the published core engine surface through a headless TypeGPU-backed host without Three.js.
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:f7f952c1072cde8ad15f2c0fd3e67c2b83e8d9d423ad3eaa792550286cf11dc0'
+source_digest: 'sha256:d56c64d6cc6deec13ac9b9b6dd97a8b2a7e038081ad8c6b4ae398d6eb4f24d87'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest

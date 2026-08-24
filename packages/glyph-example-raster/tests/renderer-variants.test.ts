@@ -5,7 +5,7 @@ import { afterAll, expect, test } from 'vitest';
 import { positionLocal, storage, uint, uv } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
-import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
+import { glyphExamplePlanProgram, glyphExampleSchema, glyphExampleShaderContract } from '@pmndrs/glyph-example-raster';
 import { glyphExampleTslShader, glyphExampleTslVariant } from '@pmndrs/glyph-example-raster/tsl';
 import {
   glyphExampleTypeGpuVariant,
@@ -92,6 +92,15 @@ test('the TypeGPU realization matches the same contract and resolves to WGSL', (
     buffers: glyphExampleTslVariant.buffers,
     resource: glyphExampleTslVariant.resource,
   });
+  expect(glyphExampleShaderContract).toMatchObject({
+    techniqueId: glyphExamplePlanProgram.technique.id,
+    geometry: glyphExampleSchema.render?.geometry.kind,
+    buffers: {
+      origin: { id: glyphExampleSchema.buffers.origin.id, vectorWidth: glyphExampleSchema.buffers.origin.lanes.length },
+      size: { id: glyphExampleSchema.buffers.size.id, vectorWidth: glyphExampleSchema.buffers.size.lanes.length },
+      color: { id: glyphExampleSchema.buffers.color.id, vectorWidth: glyphExampleSchema.buffers.color.lanes.length },
+    },
+  });
   expect(tgpu.resolve([glyphExampleVertex])).toContain('fn glyphExampleVertex(');
   expect(tgpu.resolve([glyphExampleFragment])).toContain('fn glyphExampleFragment(');
   const output = tgpu['~unstable'].simulate(() =>
@@ -104,11 +113,17 @@ test('the TypeGPU realization matches the same contract and resolves to WGSL', (
     ),
   ).value;
   expect([...output.position]).toEqual([17.5, -50, 0]);
-  expect(output.edgeDistance).toBe(0.25);
+  expect([...output.quadUv]).toEqual([0.25, 0.75]);
   const fragment = tgpu['~unstable'].simulate(() =>
-    glyphExampleFragment(TypeGpuGlyphExampleFragmentInput({ color: d.vec4f(1, 0.5, 0.25, 1), edgeDistance: 0.25 })),
+    glyphExampleFragment(
+      TypeGpuGlyphExampleFragmentInput({ color: d.vec4f(1, 0.5, 0.25, 1), quadUv: d.vec2f(0.25, 0.75) }),
+    ),
   ).value;
   expect([...fragment]).toEqual([1, 0.5, 0.25, 0]);
+  const corner = tgpu['~unstable'].simulate(() =>
+    glyphExampleFragment(TypeGpuGlyphExampleFragmentInput({ color: d.vec4f(1, 0.5, 0.25, 1), quadUv: d.vec2f(0, 0) })),
+  ).value;
+  expect([...corner]).toEqual([1, 0.5, 0.25, 1]);
 });
 
 afterAll(() => {

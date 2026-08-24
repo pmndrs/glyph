@@ -37,20 +37,27 @@ export interface ExampleRendererDevice {
 export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   readonly shader: ExampleRendererShader = exampleRendererShader;
   readonly resources: Map<number, unknown> = new Map();
+  readonly resourcesByName: Map<string, unknown> = new Map();
   readonly buffers: Map<number, Uint8Array> = new Map();
+  readonly buffersByName: Map<string, Uint8Array> = new Map();
   readonly retirements: number[] = [];
   readonly submissions: ExampleDrawList[] = [];
 
   createResource(id: number, resource: unknown): void {
     this.resources.set(id, resource);
+    this.resourcesByName.set(this.shader.variant.resource, resource);
   }
 
   writeBuffer(id: number, bytes: Uint8Array): void {
-    this.buffers.set(id, bytes.slice());
+    const named = Object.entries(this.shader.variant.buffers).find(([, buffer]) => buffer.id === id)?.[0];
+    const copy = bytes.slice();
+    this.buffers.set(id, copy);
+    if (named !== undefined) this.buffersByName.set(named, copy);
   }
 
   retireResource(id: number): void {
     this.resources.delete(id);
+    this.resourcesByName.delete(this.shader.variant.resource);
     this.retirements.push(id);
   }
 

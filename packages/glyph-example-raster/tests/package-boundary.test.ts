@@ -18,9 +18,9 @@ async function sourceFiles(): Promise<readonly (readonly [string, string])[]> {
 describe('package boundary', () => {
   test('keeps the portable source tree renderer-free', async () => {
     for (const [file, source] of await sourceFiles()) {
-      if (file === 'tsl.ts' || file === 'typegpu.ts') continue;
       expect(source).not.toMatch(/@pmndrs\/glyph\/internal|@pmndrs\/glyph\/raster\/(?:bitmap|mtsdf|slug)/);
       expect(source).not.toMatch(/@pmndrs\/glyph\/bakers\/(?:bitmap|msdf|slug)/);
+      if (file === 'tsl.ts' || file === 'typegpu.ts') continue;
       expect(source).not.toMatch(/from ['"]three(?:\/|['"])/);
       expect(source).not.toMatch(/from ['"]typegpu(?:\/|['"])/);
     }

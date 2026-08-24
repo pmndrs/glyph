@@ -110,6 +110,10 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
 
       expect(list.draws.length).toBeGreaterThan(0);
       expect(device.resources.size).toBeGreaterThan(0);
+      expect(device.resourcesByName.has('glyphColors')).toBe(true);
+      expect(device.buffersByName.has('origin')).toBe(true);
+      expect(device.buffersByName.has('size')).toBe(true);
+      expect(device.buffersByName.has('color')).toBe(true);
       expect(device.shader.variant.language).toBe('typegpu');
       expect(device.shader.vertexWgsl).toContain('glyphExampleVertex');
       expect(device.shader.fragmentWgsl).toContain('glyphExampleFragment');
