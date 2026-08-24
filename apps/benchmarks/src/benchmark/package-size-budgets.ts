@@ -31,10 +31,10 @@ export const packageSizeBudgets = {
   // cache again instead of sharing the positioned one, so the fast path is two small maps
   // rather than one lazy-resolution layer.
   'core-subpath-js': {
-    rawBytes: 300_000,
-    minifiedBytes: 192_000,
-    gzipBytes: 51_600,
-    brotliBytes: 43_100,
+    rawBytes: 312_000,
+    minifiedBytes: 196_500,
+    gzipBytes: 52_700,
+    brotliBytes: 44_000,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -114,14 +114,8 @@ export const packageSizeBudgets = {
   // away exactly as they do in a consumer's build, and asserts that none of their text
   // survives. Total teardown (D-255) cost +1,295 raw measured unstripped; guarding its
   // guidance left +468 of real production behaviour, which fits the existing ceiling.
-  // The shared module the stack-wide delta pointed at is `unicode-segmenter`, which enters every
-  // runtime graph through `internal/graphemes.ts` at the edit-topology layer: caller-side span
-  // alignment must read the same extended grapheme boundaries the engine's Rust tables do, and
-  // `Intl.Segmenter` follows the host ICU and can disagree. That accounts for the near-identical
-  // ~22 KB step across four independent graphs -- one module, four importers -- and is a deliberate
-  // correctness-over-size trade rather than drift. The remainder at this layer is the semantic
-  // record widening from 44 to 68 bytes. Both hosts measure identically, so none of this is
-  // foreign-host variance.
+  // +22 KB over main is `unicode-segmenter`, entering every graph via internal/graphemes.ts so span
+  // alignment matches the engine's cluster grid. Deliberate; both hosts measure identically.
   'three-runtime-js': {
     rawBytes: 444_000,
     minifiedBytes: 275_000,

@@ -235,13 +235,13 @@ test('authored nested state is snapshotted, so later caller mutation cannot chan
     policy: { justify: { threshold: 0.5 } },
   });
   try {
-    const before = projectMeasurement(paragraph.measure({}).metrics);
+    const before = projectMeasurement(paragraph.layout({}));
     // The caller still owns the array it passed in and may legitimately reuse it. Mutating it must
     // not reach the shaping input this paragraph was keyed on; a one-level freeze shared the array
     // and its records, so this edit changed the engine input while the cache kept answering stale.
     features[0].value = 0;
     features.push({ tag: 'kern', value: 0 });
-    const after = projectMeasurement(paragraph.measure({}).metrics);
+    const after = projectMeasurement(paragraph.layout({}));
     assert.deepEqual(after, before);
   } finally {
     paragraph.dispose();

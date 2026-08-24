@@ -501,17 +501,7 @@ function axisKey(constraints: ResolvedConstraints): string {
   return `${key(constraints.width)}|${key(constraints.height)}`;
 }
 
-/**
- * Copies an authored value and everything reachable from it, then freezes the copy.
- *
- * A one-level freeze leaves nested authored structure -- `style.features` and its records,
- * `policy.justify`, `policy.columns`, per-span styles and paints -- shared with the caller, so
- * mutating a record after `update()` changes the shaping input the cache was keyed on while the
- * cache still answers from the value it stored. Freezing the caller's own objects in place would
- * fix that by making their arrays immutable underneath them, which is a side effect on memory they
- * own; copying first keeps the snapshot ours and their input untouched. Authored state is small and
- * normalization already copies its top level.
- */
+/** Copies an authored value and freezes the copy, so a caller mutating what they passed cannot change cached shaping input. */
 function frozenDeep<Value>(value: Value): Value {
   if (value === null || typeof value !== 'object') return value;
   if (ArrayBuffer.isView(value)) return value;
