@@ -49,9 +49,7 @@ export function assertAutoresearchBaseline(value: unknown): asserts value is Aut
   }
 }
 
-export function assertAutoresearchDisabled(
-  baseline: AutoresearchBaseline,
-): asserts baseline is AutoresearchBaseline & {
+export function assertAutoresearchDisabled(baseline: AutoresearchBaseline): asserts baseline is AutoresearchBaseline & {
   readonly campaign: Extract<AutoresearchCampaign, { readonly state: 'disabled' }>;
 } {
   if (baseline.campaign.state !== 'disabled') {
