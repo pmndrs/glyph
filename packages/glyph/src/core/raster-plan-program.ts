@@ -70,7 +70,7 @@ export function registerRasterPlanProgram<Technique extends AnyRasterTechnique, 
   program: RasterPlanProgram<Technique, Resource>,
 ): void {
   if (typeof program !== 'object' || program === null) {
-    throw new TypeError('raster plan programs need a technique with a string id');
+    throw new TypeError('raster plan programs need a technique with id, kind, extension, and nonnegative version');
   }
   const source = program as unknown as Record<string, unknown>;
   const technique = source.technique;
@@ -78,8 +78,24 @@ export function registerRasterPlanProgram<Technique extends AnyRasterTechnique, 
     typeof technique === 'object' && technique !== null && !Array.isArray(technique)
       ? (technique as { id?: unknown }).id
       : undefined;
-  if (typeof techniqueId !== 'string' || techniqueId.length === 0) {
-    throw new TypeError('raster plan programs need a technique with a string id');
+  const techniqueRecord = technique as {
+    id?: unknown;
+    kind?: unknown;
+    extension?: unknown;
+    version?: unknown;
+  };
+  if (
+    typeof techniqueId !== 'string' ||
+    techniqueId.length === 0 ||
+    typeof techniqueRecord.kind !== 'string' ||
+    techniqueRecord.kind.length === 0 ||
+    typeof techniqueRecord.extension !== 'string' ||
+    techniqueRecord.extension.length === 0 ||
+    typeof techniqueRecord.version !== 'number' ||
+    !Number.isSafeInteger(techniqueRecord.version) ||
+    techniqueRecord.version < 0
+  ) {
+    throw new TypeError('raster plan programs need a technique with id, kind, extension, and nonnegative version');
   }
   const schema = source.schema;
   const policyBody = source.policyBody;
@@ -94,13 +110,23 @@ export function registerRasterPlanProgram<Technique extends AnyRasterTechnique, 
     throw new TypeError(`raster plan program "${techniqueId}" needs policyBody and compileFont callbacks`);
   }
   const registered = registeredSources.get(program as unknown as object);
-  if (registered !== undefined) return;
+  if (registered !== undefined) {
+    if (registered.technique.id !== techniqueId) {
+      throw new TypeError(`raster plan program source changed technique id from "${registered.technique.id}" to "${techniqueId}"`);
+    }
+    return;
+  }
   const existing = programs.get(techniqueId);
   if (existing !== undefined) {
     throw new TypeError(`a different raster plan program is already registered for "${techniqueId}"`);
   }
   const snapshot = Object.freeze({
-    technique: Object.freeze({ id: techniqueId }) as Technique,
+    technique: Object.freeze({
+      id: techniqueId,
+      kind: techniqueRecord.kind,
+      extension: techniqueRecord.extension,
+      version: techniqueRecord.version,
+    }) as Technique,
     schema,
     policyBody,
     compileFont,
@@ -124,14 +150,24 @@ export function compileRasterFont(
   let binding: Uint8Array | undefined;
   const resources = new Map<RasterResourceId, unknown>();
   const declaredResources = new Map<string, RasterResourceId>();
+  const techniqueId = identities.resolve(font.technique.id);
   let active = true;
   const assertActive = () => {
     if (!active) throw new Error('raster plan font compiler is no longer active');
   };
   const compiler = Object.freeze({
-    font,
-    techniqueId: identities.resolve(font.technique.id),
-    identities,
+    get font() {
+      assertActive();
+      return font;
+    },
+    get techniqueId() {
+      assertActive();
+      return techniqueId;
+    },
+    get identities() {
+      assertActive();
+      return identities;
+    },
     emptyTable(rows: number) {
       assertActive();
       return emptyFontBindingTable(rows);
@@ -148,6 +184,7 @@ export function compileRasterFont(
     },
     retain(name: string, key: RasterResourceId, resource: unknown) {
       assertActive();
+      if (binding !== undefined) throw new Error('raster plan font retained a resource after compile');
       if (typeof name !== 'string' || name.length === 0) {
         throw new TypeError('raster plan font retained a resource without a declared name');
       }
@@ -196,7 +233,8 @@ export function compileRasterFont(
 }
 
 function readonlyMap<Key, Value>(source: Map<Key, Value>): ReadonlyMap<Key, Value> {
-  return Object.freeze({
+  let view: ReadonlyMap<Key, Value>;
+  view = Object.freeze({
     get: source.get.bind(source),
     has: source.has.bind(source),
     get size() {
@@ -205,7 +243,10 @@ function readonlyMap<Key, Value>(source: Map<Key, Value>): ReadonlyMap<Key, Valu
     entries: source.entries.bind(source),
     keys: source.keys.bind(source),
     values: source.values.bind(source),
-    forEach: source.forEach.bind(source),
+    forEach(callback: (value: Value, key: Key, map: ReadonlyMap<Key, Value>) => void, thisArg?: unknown) {
+      source.forEach((value, key) => callback.call(thisArg, value, key, view));
+    },
     [Symbol.iterator]: source[Symbol.iterator].bind(source),
   });
+  return view;
 }

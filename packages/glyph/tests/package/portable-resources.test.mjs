@@ -97,6 +97,10 @@ test('texture payloads need a format and positive dimensions', () => {
     (error) => error instanceof TypeError && error.message.includes('Uint8Array bytes'),
   );
   assert.throws(
+    () => assertPortableResource('texture', 'page', { ...base(), bytes: new Uint8Array(0) }),
+    (error) => error instanceof RangeError && error.message.includes('bytes must be nonempty'),
+  );
+  assert.throws(
     () => assertPortableResource('texture', 'page', base(), 'r16float'),
     (error) => error instanceof TypeError && error.message.includes('does not match declared format'),
   );

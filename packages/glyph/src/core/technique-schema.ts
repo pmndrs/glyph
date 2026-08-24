@@ -176,6 +176,8 @@ export function isTechniqueSchema(value: unknown): value is TechniqueSchema {
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
+    Object.isFrozen(value) &&
+    Object.hasOwn(value, techniqueSchemaBrand) &&
     (value as { [techniqueSchemaBrand]?: unknown })[techniqueSchemaBrand] === true
   );
 }

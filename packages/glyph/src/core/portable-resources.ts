@@ -135,7 +135,7 @@ type PortableResourceKind = PortableResource['kind'];
 
 /**
  * Validate one caller-owned payload against its declared resource kind. This is
- * structural validation only; `retain` is the ownership boundary that copies it.
+ * structural validation only; `retain` is the boundary that validates and copies reserved payloads.
  */
 export function assertPortableResource(kind: string, name: string, payload: unknown, declaredFormat?: string): void {
   if (kind === 'buffer') return assertPortableBuffer(name, payload);
@@ -143,7 +143,7 @@ export function assertPortableResource(kind: string, name: string, payload: unkn
   if (kind === 'geometry') return assertPortableGeometry(name, payload);
 }
 
-/** Validate and own a reserved payload before it enters a compiled font result. */
+/** Validate a reserved payload and copy its portable bytes before compilation retains it. */
 export function normalizePortableResource(
   kind: string,
   name: string,
@@ -276,8 +276,9 @@ function copyGeometryDrawRange(range: PortableDrawRange, name: string): Portable
 
 function copyGeometryInstances(instances: PortableInstances, name: string): PortableInstances {
   if (!isNonArrayObject(instances)) throw new TypeError(`portable geometry "${name}" instances need an object`);
-  if (instances.source === 'records') return Object.freeze({ source: 'records' });
-  if (instances.source === 'fixed') return Object.freeze({ source: 'fixed', count: instances.count });
+  const source = instances.source;
+  if (source === 'records') return Object.freeze({ source });
+  if (source === 'fixed') return Object.freeze({ source, count: instances.count });
   throw new TypeError(`portable geometry "${name}" instances need a records or fixed source`);
 }
 
@@ -322,7 +323,8 @@ function assertPortableTexture(
     throw new RangeError(`portable texture-array "${name}" needs a positive integer layer count`);
   }
   if (!(payload.bytes instanceof Uint8Array)) throw new TypeError(`portable texture "${name}" needs Uint8Array bytes`);
-  if (kind === 'texture-array' && (payload.bytes.byteLength === 0 || payload.bytes.byteLength % layers! !== 0)) {
+  if (payload.bytes.byteLength === 0) throw new RangeError(`portable texture "${name}" bytes must be nonempty`);
+  if (kind === 'texture-array' && payload.bytes.byteLength % layers! !== 0) {
     throw new RangeError(`portable texture-array "${name}" bytes must contain a nonempty whole number of layers`);
   }
 }

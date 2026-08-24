@@ -14,6 +14,7 @@ const body = () => ({ inputs: [], operations: [], f32InputCount: 0, u32InputCoun
 const ATLAS_KEY = 'test/resource/atlas';
 const MESH_KEY = 'test/resource/mesh';
 const TINT_KEY = 'test/resource/tint';
+const testTechnique = (id) => ({ id, kind: 'test', extension: 'TEST_raster', version: 0 });
 
 function atlasPayload() {
   return { kind: 'texture', format: 'r8unorm', width: 4, height: 4, bytes: new Uint8Array(16) };
@@ -40,7 +41,7 @@ function declaredSchema(technique, overrides = {}) {
 /** A minimal portable program that compiles one binding and retains the declared resources. */
 function retentionProgram(id, schema, retain, onCompile) {
   return {
-    technique: { id },
+    technique: testTechnique(id),
     schema,
     policyBody: body,
     compileFont(compiler) {
@@ -66,13 +67,13 @@ function retentionProgram(id, schema, retain, onCompile) {
 }
 
 test('registers and resolves one portable raster plan by technique id', () => {
-  const technique = { id: 'test.core-raster-plan-resolution' };
+  const technique = testTechnique('test.core-raster-plan-resolution');
   const program = { technique, schema: declaredSchema(technique.id), policyBody: body, compileFont() {} };
 
   registerRasterPlanProgram(program);
   const resolved = resolveRasterPlanProgram(technique.id);
   assert.notEqual(resolved, program);
-  assert.equal(resolved.technique.id, technique.id);
+  assert.deepEqual(resolved.technique, testTechnique(technique.id));
   assert.equal(resolved.compileFont, program.compileFont);
   assert.doesNotThrow(() => registerRasterPlanProgram(program));
   assert.throws(
@@ -90,6 +91,27 @@ test('registers and resolves one portable raster plan by technique id', () => {
   assert.throws(
     () => registerRasterPlanProgram({ ...program, policyBody: undefined }),
     (error) => error instanceof TypeError && error.message.includes('needs policyBody and compileFont callbacks'),
+  );
+  program.technique = testTechnique('test.core-raster-plan-resolution-mutated');
+  program.schema = declaredSchema(program.technique.id);
+  assert.throws(
+    () => registerRasterPlanProgram(program),
+    (error) => error instanceof TypeError && error.message.includes('source changed technique id'),
+  );
+});
+
+test('registration rejects a schema-shaped prototype and retains an owned technique identity', () => {
+  const id = 'test.core-raster-plan-schema-brand';
+  const schema = declaredSchema(id);
+  const program = {
+    technique: testTechnique(id),
+    schema: Object.create(schema),
+    policyBody: body,
+    compileFont() {},
+  };
+  assert.throws(
+    () => registerRasterPlanProgram(program),
+    (error) => error instanceof TypeError && error.message.includes('defineTechniqueSchema'),
   );
 });
 
@@ -127,7 +149,7 @@ test('rejects a portable compiler that retains a duplicate resource or omits its
 
   const missingId = 'test.core-raster-plan-missing-binding';
   const missingProgram = {
-    technique: { id: missingId },
+    technique: testTechnique(missingId),
     schema: declaredSchema(missingId),
     policyBody: body,
     compileFont() {},
@@ -266,8 +288,32 @@ test('the compiler facade is revoked after compilation and result maps are read-
   const compiled = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
   assert.throws(() => escaped.emptyTable(1), /no longer active/);
   assert.throws(() => escaped.retain('tint', TINT_KEY, {}), /no longer active/);
+  assert.throws(() => escaped.font, /no longer active/);
+  assert.throws(() => escaped.techniqueId, /no longer active/);
+  assert.throws(() => escaped.identities, /no longer active/);
   assert.equal(typeof compiled.resources.set, 'undefined');
   assert.equal(typeof compiled.declaredResources.set, 'undefined');
+  compiled.resources.forEach((_value, _key, map) => assert.equal(typeof map.set, 'undefined'));
+  compiled.declaredResources.forEach((_value, _key, map) => assert.equal(typeof map.clear, 'undefined'));
+  assert.equal(compiled.resources.size, 1);
+  assert.equal(compiled.declaredResources.size, 1);
+});
+
+test('retention closes when a compiler publishes its binding', () => {
+  const id = 'test.core-raster-plan-retain-after-compile';
+  const program = retentionProgram(
+    id,
+    declaredSchema(id),
+    () => [],
+    (_compiled, compiler) => {
+      assert.throws(
+        () => compiler.retain('tint', TINT_KEY, {}),
+        (error) => error instanceof Error && error.message.includes('after compile'),
+      );
+    },
+  );
+  registerRasterPlanProgram(program);
+  assert.doesNotThrow(() => compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry()));
 });
 
 test('retention rejects malformed instance discriminants at the call site', () => {
