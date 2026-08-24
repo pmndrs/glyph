@@ -60,7 +60,7 @@ function retentionProgram(id, schema, retain, onCompile) {
         resourceF32: compiler.emptyTable(resources.length),
         resourceU32: compiler.emptyTable(resources.length),
       });
-      onCompile?.(compiled);
+      onCompile?.(compiled, compiler);
     },
   };
 }
@@ -70,7 +70,10 @@ test('registers and resolves one portable raster plan by technique id', () => {
   const program = { technique, schema: declaredSchema(technique.id), policyBody: body, compileFont() {} };
 
   registerRasterPlanProgram(program);
-  assert.equal(resolveRasterPlanProgram(technique.id), program);
+  const resolved = resolveRasterPlanProgram(technique.id);
+  assert.notEqual(resolved, program);
+  assert.equal(resolved.technique.id, technique.id);
+  assert.equal(resolved.compileFont, program.compileFont);
   assert.doesNotThrow(() => registerRasterPlanProgram(program));
   assert.throws(
     () => registerRasterPlanProgram({ ...program, policyBody: body }),
@@ -88,6 +91,25 @@ test('registers and resolves one portable raster plan by technique id', () => {
     () => registerRasterPlanProgram({ ...program, policyBody: undefined }),
     (error) => error instanceof TypeError && error.message.includes('needs policyBody and compileFont callbacks'),
   );
+});
+
+test('registration snapshots callbacks before the source object can change', () => {
+  const id = 'test.core-raster-plan-registration-snapshot';
+  let compileCalls = 0;
+  const program = retentionProgram(
+    id,
+    declaredSchema(id),
+    () => [],
+    () => {
+      compileCalls += 1;
+    },
+  );
+  registerRasterPlanProgram(program);
+  program.compileFont = () => {
+    throw new Error('mutated callback must not be used');
+  };
+  compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
+  assert.equal(compileCalls, 1);
 });
 
 test('rejects a portable compiler that retains a duplicate resource or omits its binding', () => {
@@ -230,6 +252,37 @@ test('compiled binding bytes stay owned after the compiler callback returns', ()
   const compiled = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
   escaped[0] = 255;
   assert.notEqual(compiled.binding[0], 255);
+});
+
+test('the compiler facade is revoked after compilation and result maps are read-only views', () => {
+  const id = 'test.core-raster-plan-compiler-lifetime';
+  let escaped;
+  const program = retentionProgram(id, declaredSchema(id), (compiler) => {
+    escaped = compiler;
+    compiler.retain('atlas', ATLAS_KEY, atlasPayload());
+    return [ATLAS_KEY];
+  });
+  registerRasterPlanProgram(program);
+  const compiled = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
+  assert.throws(() => escaped.emptyTable(1), /no longer active/);
+  assert.throws(() => escaped.retain('tint', TINT_KEY, {}), /no longer active/);
+  assert.equal(typeof compiled.resources.set, 'undefined');
+  assert.equal(typeof compiled.declaredResources.set, 'undefined');
+});
+
+test('retention rejects malformed instance discriminants at the call site', () => {
+  const id = 'test.core-raster-plan-invalid-instance-source';
+  const payload = instancedQuadGeometry();
+  payload.instances = { source: 'records-plus' };
+  const program = retentionProgram(id, declaredSchema(id), (compiler) => {
+    compiler.retain('mesh', MESH_KEY, payload);
+    return [MESH_KEY];
+  });
+  registerRasterPlanProgram(program);
+  assert.throws(
+    () => compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry()),
+    (error) => error instanceof TypeError && error.message.includes('records or fixed source'),
+  );
 });
 
 test('retained payloads must match their declared reserved kind before any device is touched', () => {

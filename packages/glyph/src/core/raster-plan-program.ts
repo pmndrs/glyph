@@ -63,36 +63,50 @@ export interface RasterPlanProgram<Technique extends AnyRasterTechnique, Resourc
 type ErasedProgram = RasterPlanProgram<AnyRasterTechnique, unknown>;
 
 const programs = new Map<string, ErasedProgram>();
+const registeredSources = new WeakMap<object, ErasedProgram>();
 
 /** Register one portable technique program by its technique id. */
 export function registerRasterPlanProgram<Technique extends AnyRasterTechnique, Resource>(
   program: RasterPlanProgram<Technique, Resource>,
 ): void {
-  if (
-    typeof program !== 'object' ||
-    program === null ||
-    typeof program.technique?.id !== 'string' ||
-    program.technique.id.length === 0
-  ) {
+  if (typeof program !== 'object' || program === null) {
     throw new TypeError('raster plan programs need a technique with a string id');
   }
-  if (!isTechniqueSchema(program.schema)) {
-    throw new TypeError(`raster plan program "${program.technique.id}" needs a schema from defineTechniqueSchema`);
+  const source = program as unknown as Record<string, unknown>;
+  const technique = source.technique;
+  const techniqueId =
+    typeof technique === 'object' && technique !== null && !Array.isArray(technique)
+      ? (technique as { id?: unknown }).id
+      : undefined;
+  if (typeof techniqueId !== 'string' || techniqueId.length === 0) {
+    throw new TypeError('raster plan programs need a technique with a string id');
   }
-  if (program.schema.technique !== program.technique.id) {
-    throw new TypeError(
-      `raster plan program "${program.technique.id}" schema names technique "${program.schema.technique}"`,
-    );
+  const schema = source.schema;
+  const policyBody = source.policyBody;
+  const compileFont = source.compileFont;
+  if (!isTechniqueSchema(schema)) {
+    throw new TypeError(`raster plan program "${techniqueId}" needs a schema from defineTechniqueSchema`);
   }
-  if (typeof program.policyBody !== 'function' || typeof program.compileFont !== 'function') {
-    throw new TypeError(`raster plan program "${program.technique.id}" needs policyBody and compileFont callbacks`);
+  if (schema.technique !== techniqueId) {
+    throw new TypeError(`raster plan program "${techniqueId}" schema names technique "${schema.technique}"`);
   }
-  const erased = program as unknown as ErasedProgram;
-  const existing = programs.get(program.technique.id);
-  if (existing !== undefined && existing !== erased) {
-    throw new TypeError(`a different raster plan program is already registered for "${program.technique.id}"`);
+  if (typeof policyBody !== 'function' || typeof compileFont !== 'function') {
+    throw new TypeError(`raster plan program "${techniqueId}" needs policyBody and compileFont callbacks`);
   }
-  programs.set(program.technique.id, erased);
+  const registered = registeredSources.get(program as unknown as object);
+  if (registered !== undefined) return;
+  const existing = programs.get(techniqueId);
+  if (existing !== undefined) {
+    throw new TypeError(`a different raster plan program is already registered for "${techniqueId}"`);
+  }
+  const snapshot = Object.freeze({
+    technique: Object.freeze({ id: techniqueId }) as Technique,
+    schema,
+    policyBody,
+    compileFont,
+  }) as unknown as ErasedProgram;
+  programs.set(techniqueId, snapshot);
+  registeredSources.set(source, snapshot);
 }
 
 /** Resolve the portable program associated with a technique id. */
@@ -110,18 +124,30 @@ export function compileRasterFont(
   let binding: Uint8Array | undefined;
   const resources = new Map<RasterResourceId, unknown>();
   const declaredResources = new Map<string, RasterResourceId>();
-  program.compileFont({
+  let active = true;
+  const assertActive = () => {
+    if (!active) throw new Error('raster plan font compiler is no longer active');
+  };
+  const compiler = Object.freeze({
     font,
     techniqueId: identities.resolve(font.technique.id),
     identities,
-    emptyTable: emptyFontBindingTable,
-    resources: (keys) => fontBindingResources(keys, identities),
-    compile(descriptor) {
+    emptyTable(rows: number) {
+      assertActive();
+      return emptyFontBindingTable(rows);
+    },
+    resources(keys: readonly RasterResourceId[]) {
+      assertActive();
+      return fontBindingResources(keys, identities);
+    },
+    compile(descriptor: FontBindingDescriptor) {
+      assertActive();
       if (binding !== undefined) throw new Error('raster plan font compiler produced more than one binding');
       binding = compileFontBinding(descriptor);
       return new Uint8Array(binding);
     },
-    retain(name, key, resource) {
+    retain(name: string, key: RasterResourceId, resource: unknown) {
+      assertActive();
       if (typeof name !== 'string' || name.length === 0) {
         throw new TypeError('raster plan font retained a resource without a declared name');
       }
@@ -152,10 +178,34 @@ export function compileRasterFont(
       resources.set(key, normalized);
     },
   });
+  try {
+    program.compileFont(compiler);
+  } finally {
+    active = false;
+  }
   if (binding === undefined) throw new Error('raster plan font compiler produced no binding');
   const geometryResource = program.schema.render?.geometry.resource;
   if (geometryResource !== undefined && !declaredResources.has(geometryResource)) {
     throw new Error(`raster plan font did not retain declared geometry resource "${geometryResource}"`);
   }
-  return { binding, resources, declaredResources };
+  return {
+    binding,
+    resources: readonlyMap(resources),
+    declaredResources: readonlyMap(declaredResources),
+  };
+}
+
+function readonlyMap<Key, Value>(source: Map<Key, Value>): ReadonlyMap<Key, Value> {
+  return Object.freeze({
+    get: source.get.bind(source),
+    has: source.has.bind(source),
+    get size() {
+      return source.size;
+    },
+    entries: source.entries.bind(source),
+    keys: source.keys.bind(source),
+    values: source.values.bind(source),
+    forEach: source.forEach.bind(source),
+    [Symbol.iterator]: source[Symbol.iterator].bind(source),
+  });
 }

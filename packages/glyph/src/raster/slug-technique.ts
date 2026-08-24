@@ -429,8 +429,8 @@ export const slugSchema: TechniqueSchema<
     bandCounts: { id: 7, scalar: 'u32', lanes: ['horizontalBands', 'verticalBands', 'unused2', 'unused3'] },
   },
   resources: {
-    curves: { kind: 'texture-array' },
-    headers: { kind: 'texture-array' },
-    references: { kind: 'texture-array' },
+    curves: { kind: 'texture' },
+    headers: { kind: 'texture' },
+    references: { kind: 'texture' },
   },
 });

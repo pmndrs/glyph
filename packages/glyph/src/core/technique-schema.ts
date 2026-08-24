@@ -231,11 +231,12 @@ export function defineTechniqueSchema<
   let glyphOrigin: { readonly buffer: string } | undefined;
   const glyphOriginDeclaration = declaration.glyphOrigin;
   if (glyphOriginDeclaration !== undefined) {
-    if (!isNonArrayObject(glyphOriginDeclaration) || typeof glyphOriginDeclaration.buffer !== 'string') {
+    const bufferName = isNonArrayObject(glyphOriginDeclaration) ? glyphOriginDeclaration.buffer : undefined;
+    if (typeof bufferName !== 'string') {
       throw new TypeError(`technique "${technique}" glyphOrigin needs a buffer name`);
     }
-    const origin: PolicyBufferDeclaration | undefined = Object.hasOwn(buffers, glyphOriginDeclaration.buffer)
-      ? buffers[glyphOriginDeclaration.buffer]
+    const origin: PolicyBufferDeclaration | undefined = Object.hasOwn(buffers, bufferName)
+      ? buffers[bufferName]
       : undefined;
     if (origin === undefined) {
       throw new TypeError(`technique "${technique}" points glyphOrigin at an undeclared buffer`);
@@ -243,7 +244,7 @@ export function defineTechniqueSchema<
     if (origin.scalar !== 'f32' || origin.lanes.length < 2) {
       throw new TypeError(`technique "${technique}" needs an f32 glyphOrigin buffer with two origin lanes`);
     }
-    glyphOrigin = Object.freeze({ buffer: glyphOriginDeclaration.buffer });
+    glyphOrigin = Object.freeze({ buffer: bufferName });
   }
   const binding = Object.freeze({
     ...(bindingF32 === undefined ? {} : { f32: bindingF32 }),

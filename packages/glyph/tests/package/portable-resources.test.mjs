@@ -74,6 +74,18 @@ test('texture payloads need a format and positive dimensions', () => {
       }),
     (error) => error instanceof RangeError && error.message.includes('positive integer layer count'),
   );
+  assert.throws(
+    () =>
+      assertPortableResource('texture-array', 'pages', {
+        kind: 'texture-array',
+        format: 'r8unorm',
+        width: 2,
+        height: 2,
+        layers: 3,
+        bytes: new Uint8Array(10),
+      }),
+    (error) => error instanceof RangeError && error.message.includes('whole number of layers'),
+  );
   for (const dimension of ['width', 'height']) {
     assert.throws(
       () => assertPortableResource('texture', 'page', { ...base(), [dimension]: 0 }),
@@ -142,6 +154,15 @@ test('geometry views and accessors must stay inside the immutable bytes', () => 
         mutate(instancedQuadGeometry(), (g) => (g.instances = { source: 'fixed', count: 6 })),
       ),
     (error) => error instanceof RangeError && error.message.includes('exceeds 5 instance elements'),
+  );
+  assert.throws(
+    () =>
+      normalizePortableResource(
+        'geometry',
+        'mesh',
+        mutate(instancedQuadGeometry(), (g) => (g.instances = { source: 'records-plus' })),
+      ),
+    (error) => error instanceof TypeError && error.message.includes('records or fixed source'),
   );
   assert.throws(
     () =>
