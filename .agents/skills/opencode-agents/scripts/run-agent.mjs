@@ -22,6 +22,8 @@ const model = flag('model', 'opencode/x-preview-f-free');
 const variant = flag('variant', 'high');
 const traceDir = flag('trace', join(cwd, '.cache', 'opencode-agents'));
 const maxAttempts = Number(flag('attempts', '6'));
+// Resume a session this launcher did not start, so an abandoned run keeps its context.
+const resumeSession = flag('session');
 const baseMs = Number(flag('base', '30000'));
 const ceilingMs = Number(flag('ceiling', '300000'));
 
@@ -35,8 +37,17 @@ const stamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
 const tracePath = join(traceDir, `${stamp}.jsonl`);
 const brief = readFileSync(briefPath, 'utf8');
 
-/** The provider is unavailable, not the work invalid: resume rather than restart. */
+/**
+ * The provider failed, not the work: resume rather than restart.
+ *
+ * The provider says so itself -- a stream error carries `"isRetryable":true` -- so that is the
+ * first thing checked. Pattern matching the message is the fallback, and it is a fallback because
+ * it was wrong once: `Provider finish_reason: network_error` matched none of these strings, so a
+ * retryable error was classified as a real defect and the run was abandoned on its first attempt.
+ */
 const isTransient = (text) =>
+  /"isRetryable"\s*:\s*true/i.test(text) ||
+  /ProviderResponseStreamError|finish_reason:\s*network_error/i.test(text) ||
   /Endpoint is unavailable|Service Unavailable|AI_APICallError|ECONNRESET|socket hang up|fetch failed/i.test(text);
 
 function runOnce(sessionId) {
@@ -83,7 +94,7 @@ function sessionFrom(text) {
   return /"sessionID":"(ses_[A-Za-z0-9]+)"/.exec(text)?.[1];
 }
 
-let sessionId;
+let sessionId = resumeSession;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   const { code, out, err } = await runOnce(sessionId);
   sessionId ??= sessionFrom(out);
