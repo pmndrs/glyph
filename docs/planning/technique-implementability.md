@@ -1,7 +1,7 @@
 ---
 type: API Specification
 title: Making a technique implementable end to end
-description: Closes the gap that lets a third party bake an artifact and then neither bind a font nor render it, by giving the raster side the behaviour contract the bake side already has.
+description: Separates the portable half of a technique's contract from the renderer half, so a technique is written once for every engine and a non-Three renderer can consume third-party techniques through the render policy and plan.
 documentation_type: explanation
 tags: [planning, public-api, techniques, bakers, extensibility]
 status: draft
@@ -14,99 +14,92 @@ generated:
 
 ## The defect
 
-The bake and raster sides are dependent twins across the artifact boundary. Only one is implementable.
+A technique must supply three things. Two are portable and one is not, and all three are registered through a Three-only door.
 
-`RasterBakerModule` (`packages/glyph/src/bake.ts:101-107`) carries behaviour:
+`ThreeRasterPlanProgram` (`packages/glyph/src/three/plan-program-registry.ts:44-53`):
 
-```ts
-interface RasterBakerModule<Kind, Options, Descriptor> {
-  readonly kind: Kind;
-  readonly extension: string;
-  readonly version: number;
-  descriptor(options: Options): Descriptor;
-  bake(request: RasterBakeRequest<Descriptor>): Promise<RasterBakeArtifact<Kind>>;
-}
-```
-
-A third party writes one, passes it to the bake call, and it bakes. Nothing resolves it by name, because the caller supplies the module.
-
-`RasterTechnique` (`packages/glyph/src/raster-technique.ts:30-42`) carries identity only -- `id`, `kind`, `extension`, `version`, and a phantom type map. It has no methods. A technique therefore cannot state how to consume what its twin produced, so every consumer has to know it by name:
-
-| site | shape | failure for a third party |
+| member | what it is | portable |
 | --- | --- | --- |
-| `core/font-binding.ts:55-74` | closed branch over bitmap/msdf/slug | `TypeError: no first-party font-binding compiler is registered for "<id>"` |
-| `three/engine-runtime.ts:217-234` | same shape again | `TypeError: no first-party Three resource resolver is registered for "<id>"` |
-| `three/engine-plan-target.ts:781` | `resolved.technique === bitmap.id` | bitmap-only branch |
+| `policy` | static validated policy bytecode descriptor | **yes** |
+| `compileFont(compiler)` | cold font registration, producing the Rust wire binding | **yes** |
+| `createMaterial(context)` | returns a `NodeMaterial` | no |
 
-Nothing is registered in any of them; the word describes a hard-coded `if`. So a third-party technique can bake a correct artifact and then do nothing with it. That contradicts what `/core` is for: the example-renderer package exists to prove a renderer can drive the engine itself.
+The portability is not a judgement call. `PolicyProgram` (`packages/glyph/src/core/render-policy.ts:34-48`) is entirely numbers -- technique and program ids, primitive kind, resource/semantic/storage/draw masks, input counts, capability bits -- and `core/render-policy.ts` imports only `textShaperAbi`. `compileFont`'s helpers (`compileFontBinding`, `emptyFontBindingTable`, `fontBindingResources`, `RenderWireIdentityRegistry`) are all imported from `../core.js` by the Three module that declares the interface. Only `createMaterial` names a renderer type.
 
-The pieces to *build* a binding are already public -- `compileFontBinding`, `schemaFieldTable`, `FontBindingDescriptor`, `fontBindingResources` are all exported from `/core` -- so an integrator can produce exactly the right bytes and find nowhere to put them.
-
-## What already works, and is the model
-
-`registerThreeRasterPlanProgram` (`packages/glyph/src/three/plan-program-registry.ts:87-102`) is a real registry with the hard parts solved:
-
-- keyed by `technique.id`;
-- re-registering the identical program is a no-op, so a module evaluated twice is not an error;
-- registering a *different* program for a taken id throws;
-- registering after any runtime has snapshotted the registry throws, naming how many runtimes already read it.
-
-That last rule is what makes lazy import-time registration safe rather than a silent no-op. Audit item F6 asks for exactly this, and **this stack already delivered it** in `680ae364` -- main still has the silent no-op F6 describes. F6 should be marked done rather than re-derived, and the same rule copied to any new registry.
-
-## Design
-
-Two seams, and they are not the same kind of thing. Keeping them separate is the whole design.
-
-### Seam 1 -- portable: the technique carries its own binding compiler
-
-The technique already owns the data shape (`BitmapData`, `BitmapStrikeData`) and the binding layout (`bitmapSchema.binding.f32` / `.u32`, `raster/bitmap-technique.ts:205-233`). Only the compiler that walks one into the other was split into `core/`. Put it back:
+The consequence is visible in the two call paths that consume a font binding:
 
 ```ts
-interface RasterTechnique</* ... */> {
-  readonly id: RasterTechniqueId;
-  readonly kind: string;
-  readonly extension: string;
-  readonly version: number;
-  /** Compile one baked artifact into the engine's field-major immutable binding. */
-  compileBinding(request: TechniqueBindingRequest<Data>): Uint8Array;
+// three/engine-runtime.ts:201 -- registry first, first-party fallback second
+const program = this.#planPrograms.get(font.technique.id);
+if (program === undefined) { this.#registerResources(font); loadedFontBindingBytes(font, ...) }
+else { const compiled = program.compileFont(...); /* binding + resources */ }
+
+// paragraph.ts:689 -- the portable path, no registry lookup at all
+this.host.registerFontBinding(handle, font.font.handle, loadedFontBindingBytes(font, ...));
+```
+
+`loadedFontBindingBytes` (`core/font-binding.ts:55-74`) is a closed branch over bitmap, msdf, and slug ending in `throw new TypeError('no first-party font-binding compiler is registered for "<id>"')`. So:
+
+- a third-party technique **works** through `Text`, because Three checks its registry first;
+- the same technique **throws** through `Paragraph`, the framework-neutral surface `/core` exists to provide;
+- a non-Three engine has no registration mechanism at all, so it can only ever use the three built-ins.
+
+`packages/glyph-example-raster` is cited as proof that an external technique integrates. It proves the Three half only: six imports from the root and one from `/three` purely to register. It is a custom technique plugged into Three, not a second engine, so it does not exercise the portable path it appears to validate.
+
+## The shape of the fix
+
+Split the contract along the line the types already draw.
+
+```ts
+// portable -- registered in /core, consumed by any engine
+interface RasterPlanProgram<Technique> {
+  readonly technique: Technique;
+  readonly policy: Omit<PolicyProgram, 'techniqueId' | 'programId'>;
+  compileFont(compiler: RasterPlanProgramFontCompiler<Technique>): void;
+}
+
+// renderer -- registered in /three, keyed to a technique id
+interface ThreeRasterPlanProgram<Technique, Resource> {
+  readonly technique: Technique;
+  createMaterial(context: ThreePlanProgramMaterialContext<Resource>): NodeMaterial;
 }
 ```
 
-`loadedFontBindingBytes` then resolves through `font.technique` -- which the call site already holds, only to compare ids -- instead of switching on identity.
+`registerRasterPlanProgram` moves to `/core` with the rules the existing Three registry already proves out (`plan-program-registry.ts:87-102`): keyed by `technique.id`, idempotent re-registration, a different program for a taken id throws, and registration after a runtime has snapshotted the registry throws while naming how many runtimes already read it. That last rule is what makes import-time registration safe rather than a silent no-op; **this stack already delivered it in `680ae364`, and main still has the silent `programs.set` it replaces.**
 
-**Why on the object rather than a registry here.** This seam is portable and has no renderer types, so it needs no discovery: every call site already has the technique instance in hand. Carrying the method on it has no order dependence, needs no `sideEffects` declaration to survive bundling, cannot be registered late, and tree-shakes naturally. A registry would add all four hazards to buy nothing.
+`loadedFontBindingBytes` resolves through the portable registry, then falls back to the first-party compilers. `paragraph.ts:689` and `three/engine-runtime.ts:201` then take the same path, and the portable surface stops being second-class.
 
-### Seam 2 -- renderer: the Three resource resolver stays in the registry
+### Why this is N + N x M, not N x M
 
-`three/engine-runtime.ts:217-234` and `engine-plan-target.ts:781` resolve renderer-owned resources -- `DataArrayTexture`, materials, buffers. That cannot move onto the portable technique without dragging Three into `/core`, which the entry-point rule forbids.
+The engine does not need per-technique knowledge to shape GPU buffers. The policy is declarative bytecode describing inputs, physical buffers, scalar operations, and batching keys; the plan carries the data. A renderer executes the policy generically -- that is what makes `TextEngineRenderPlanView` a usable integration surface at all.
 
-It belongs on `ThreeRasterPlanProgram`, which is already registered per technique through the mechanism above. Add the resource resolver to that interface and delete the second switch. A third-party technique then registers one Three program and is complete on the renderer side.
+So a technique costs:
 
-### Seam 3 -- bake: discovery, not registration
+- **once, for every engine**: the policy and the font binding, both portable by construction;
+- **once per engine**: material realization, which is irreducibly renderer-specific because a material *is* a renderer object.
 
-Bakers are already implementable and need no registry for the programmatic path, because the caller passes the module. What is missing is *discovery*: resolving a baker from a kind string when the caller did not name it (a CLI or manifest naming `"pmndrs.bitmap"`).
+Today both halves cost once per engine, and for any engine that is not Three the portable half is unobtainable. Fixing the scope of registration is what collapses N x M to N + N x M.
 
-Add `registerRasterBaker(module)` with the same three rules as the plan-program registry, and resolve by `kind` at discovery time. First-party bakers register from their own module, so `import '@pmndrs/glyph/bakers/bitmap'` is what makes bitmap discoverable -- nothing is discoverable that was not imported.
+### Bakers
 
-## Consequences
+`RasterBakerModule` (`bake.ts:101-107`) is already open: `kind`, `extension`, `version`, `descriptor(options)`, `bake(request)`, and the caller passes the module, so nothing resolves it by name. What is missing is *discovery* -- resolving a baker from a kind string a manifest or CLI names rather than one the caller holds. Add `registerRasterBaker` with the same rules and resolve by `kind`; first-party bakers register from their own modules, so importing the baker is what makes it discoverable.
 
-- A third-party technique is implementable end to end: bake, bind, render.
-- The two "no first-party X is registered" throws become honest -- a real registry lookup that misses, naming what to import.
-- Removing the switches removes the eager import of all three techniques from `core/font-binding`, which is what currently blocks `Paragraph` from the root entry (the delivery gate rejects the root pulling `raster/bitmap-technique.js`). That is a consequence, not the motivation.
-- A consumer shipping one technique stops paying for three.
+Side-effect registration is the right mechanism and is not the problem anywhere in this document. The problem is registering portable behaviour in a renderer-scoped registry.
 
 ## Sequencing
 
-1. Add `compileBinding` to `RasterTechnique`; move the three first-party compilers onto their technique objects; reduce `loadedFontBindingBytes` to a resolve-and-call. Keep `compileFontBinding` and `schemaFieldTable` exported -- they are what an implementor builds with.
-2. Add the resource resolver to `ThreeRasterPlanProgram`; delete the `engine-runtime` switch and the `engine-plan-target` bitmap branch.
-3. Add `registerRasterBaker` plus kind-based discovery; register the three first-party bakers from their own modules.
-4. Prove it: extend the example-renderer package with a technique defined entirely outside the package -- baked, bound, and rendered -- so "implementable end to end" is a test rather than a claim.
-5. Re-test `Paragraph` at the root entry once the eager technique imports are gone.
+1. Extract `RasterPlanProgram` and `registerRasterPlanProgram` into `/core`, carrying `technique`, `policy`, and `compileFont` unchanged. Reduce `ThreeRasterPlanProgram` to `technique` plus `createMaterial`, and have the Three registry look the portable half up rather than own it.
+2. Make `loadedFontBindingBytes` resolve through the portable registry before its first-party branch, so `Paragraph` and the Three runtime agree.
+3. Register the three first-party plan programs portably, then delete the first-party fallback branch and the eager bitmap/msdf/slug imports from `core/font-binding.ts`.
+4. Add `registerRasterBaker` and kind-based discovery.
+5. Prove it: a technique defined entirely outside the package, baked, bound, and rendered **through `Paragraph`** rather than through `Text`. That is the assertion no current test makes.
+6. Re-test `Paragraph` at the root entry once the eager technique imports are gone; the delivery gate rejecting the root pulling `raster/bitmap-technique.js` is what currently blocks it.
 
-Step 4 is the acceptance criterion. Steps 1-3 are not done until a technique the package does not know about completes the round trip.
+Step 5 is the acceptance criterion. Steps 1-4 are not done until a technique the package does not know about completes the round trip on the portable path.
 
 ## Risks
 
-- **Type erasure at the registry boundary.** The existing plan-program registry erases to `ThreeRasterPlanProgram<AnyRasterTechnique, unknown>`. The binding seam avoids this by staying on the object; the baker registry will need the same erase-at-the-boundary discipline, with the generic surface preserved for the caller.
-- **Late registration.** Already solved for plan programs and must be copied verbatim for bakers, including the idempotent re-registration allowance.
-- **Bundler side-effect elision.** Discovery through import means the package must declare its baker modules as having side effects, or a bundler may drop the registration. This is exactly why seam 1 does not use a registry.
+- **Type erasure at the registry boundary.** The Three registry erases to `ThreeRasterPlanProgram<AnyRasterTechnique, unknown>`; the portable registry needs the same discipline with the generic surface preserved for the caller.
+- **Two registries, one technique.** A technique registered portably but not for Three must fail with a message naming which registration is missing, not a generic missing-technique error. The current messages -- "no first-party font-binding compiler is registered", "no first-party Three resource resolver is registered" -- describe hard-coded branches rather than registry misses and must be rewritten either way.
+- **Bundler side-effect elision.** Discovery through import means the package must declare technique and baker modules as having side effects, or a bundler may drop the registration.
+- **Import cycles.** First-party techniques registering portably means `raster/*-technique.ts` gains a dependency on the `/core` registry. Verify no cycle results before moving the first-party registrations in step 3.
