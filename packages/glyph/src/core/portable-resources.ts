@@ -551,7 +551,7 @@ function assertGeometryInstances(
   instanceElementCount: number | undefined,
   name: string,
 ): void {
-  if (!isNonArrayObject(instances)) throw new TypeError(`portable geometry \"${name}\" instances need an object`);
+  if (!isNonArrayObject(instances)) throw new TypeError(`portable geometry "${name}" instances need an object`);
   if (instances.source === 'records') return;
   if (instances.source === 'fixed') {
     if (!Number.isSafeInteger(instances.count) || instances.count < 1) {
