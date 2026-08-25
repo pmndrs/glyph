@@ -1,0 +1,181 @@
+/*
+ * Ground and paper.
+ *
+ * Nothing here is pure. The ground keeps a little value in it because a true
+ * #000 reads as digital void rather than a photographed black, and the paper
+ * is backed off from the maximum with a faint blue cast so it reads as light
+ * rather than as a clipped channel. Specular highlights are allowed to reach
+ * true white on their own, through tone mapping, which is where white belongs.
+ */
+:root {
+  --ink: #07080b;
+  --ink-raised: #0f1218;
+  --paper: #e7ecf6;
+  --paper-dim: #97a1b4;
+  --paper-faint: #454d5d;
+  --rule: #1a1f28;
+
+  --measure: 68rem;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  margin: 0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.stage {
+  height: 100%;
+  position: relative;
+  width: 100%;
+}
+
+.stage canvas {
+  display: block;
+}
+
+/* The overlay never intercepts the pointer except on its own controls, so the
+   canvas keeps every drag and hover it would otherwise lose. */
+.overlay {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  inset: 0;
+  justify-content: flex-end;
+  padding: 0 1.5rem clamp(2.5rem, 12vh, 7rem);
+  pointer-events: none;
+  position: absolute;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.link {
+  align-items: center;
+  backdrop-filter: blur(6px);
+  background: color-mix(in oklab, var(--ink-raised) 72%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--paper-dim);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.8125rem;
+  gap: 0.5rem;
+  justify-content: center;
+  letter-spacing: 0.06em;
+  padding: 0.65rem 1.15rem;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+/* Square-ish so the two marks sit on the same optical footprint. */
+.link-icon {
+  padding: 0.65rem;
+  width: 2.75rem;
+}
+
+.link-cta {
+  color: var(--paper);
+  padding-inline: 1.35rem;
+}
+
+.mark {
+  display: block;
+  height: 1.05rem;
+  width: 1.05rem;
+}
+
+/* The npm mark is a solid tile with the letters knocked out, so the counter has
+   to be the page ground rather than white — otherwise it glows against black. */
+.mark-cut {
+  fill: var(--ink);
+}
+
+.mark-swap {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.mark-swap .mark {
+  animation: mark-in 220ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.is-copied {
+  border-color: color-mix(in oklab, var(--paper) 45%, transparent);
+  color: var(--paper);
+}
+
+@keyframes mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark-swap .mark {
+    animation: none;
+  }
+}
+
+.sr-only {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.link:hover,
+.link:focus-visible {
+  background: color-mix(in oklab, var(--ink-raised) 92%, transparent);
+  border-color: color-mix(in oklab, var(--paper) 28%, transparent);
+  color: var(--paper);
+}
+
+.link:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--paper) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* Shown when neither WebGPU nor WebGL2 is available. The links above it stay
+   reachable, so the page still does its job with no canvas at all. */
+.fallback {
+  align-items: center;
+  color: var(--paper-dim);
+  display: flex;
+  font-size: 0.875rem;
+  height: 100%;
+  justify-content: center;
+  width: 100%;
+}

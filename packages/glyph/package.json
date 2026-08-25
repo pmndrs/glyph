@@ -114,8 +114,8 @@
     "unicode-segmenter": "0.15.0"
   },
   "devDependencies": {
-    "@react-three/fiber": "10.0.0-alpha.3",
-    "@react-three/test-renderer": "10.0.0-alpha.3",
+    "@react-three/fiber": "10.0.0-alpha.4",
+    "@react-three/test-renderer": "10.0.0-alpha.4",
     "@types/node": "24.13.3",
     "@types/react": "19.2.14",
     "@types/three": "0.185.4",
