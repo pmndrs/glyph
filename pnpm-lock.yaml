@@ -35,6 +35,9 @@ importers:
       '@pmndrs/glyph-example-raster':
         specifier: workspace:*
         version: link:../../packages/glyph-example-raster
+      '@pmndrs/glyph-example-renderer':
+        specifier: workspace:*
+        version: link:../../packages/glyph-example-renderer
       '@react-three/fiber':
         specifier: 10.0.0-alpha.3
         version: 10.0.0-alpha.3(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
@@ -297,6 +300,9 @@ importers:
       '@pmndrs/glyph-example-raster':
         specifier: workspace:*
         version: link:../glyph-example-raster
+      '@webgpu/types':
+        specifier: 0.1.71
+        version: 0.1.71
       typegpu:
         specifier: 0.12.3
         version: 0.12.3
@@ -310,6 +316,9 @@ importers:
       oxlint:
         specifier: 1.75.0
         version: 1.75.0
+      unplugin-typegpu:
+        specifier: 0.12.2
+        version: 0.12.2(rolldown@1.1.5)(typegpu@0.12.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       vitest:
         specifier: 4.1.0
         version: 4.1.0(@types/node@24.13.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
