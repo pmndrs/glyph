@@ -231,9 +231,17 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         engine.render({ textMutations: [{ paragraphId: 1, start: 0, deleteCount: 1, insert: 'G' }] }),
       ).toThrow('injected submission failure');
       expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2]);
-      const recovered = engine.render({});
+      const recoveryRequest = engine.frameRequest({});
+      const requestView = new DataView(recoveryRequest.buffer, recoveryRequest.byteOffset, recoveryRequest.byteLength);
+      const requestLayout = textShaperAbi.layouts.engineUpdateRequest;
+      expect(requestView.getUint32(requestLayout.expectedEngineRevision, true)).toBe(3);
+      expect(requestView.getUint32(requestLayout.consumedPlanRevision, true)).toBe(2);
+      expect(requestView.getUint32(requestLayout.acknowledgedPublicationGeneration, true)).toBe(2);
+      const recovered = engine.render({
+        textMutations: [{ paragraphId: 1, start: 1, deleteCount: 1, insert: 'L' }],
+      });
       expect(recovered.publicationGeneration).toBe(4);
-      expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 3, 4]);
+      expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 4]);
       expect(bufferSnapshot(device.primary.buffers)).toEqual(bufferSnapshot(device.oracle.buffers));
       expect(device.oracle.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 3, 4]);
     } finally {

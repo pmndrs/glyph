@@ -116,6 +116,13 @@ const snapshotReferences = new Set<WeakRef<RenderWireIdentityRegistry>>();
 const snapshotFinalizer = new FinalizationRegistry<WeakRef<RenderWireIdentityRegistry>>((reference) => {
   snapshotReferences.delete(reference);
 });
+const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]>> = Object.freeze({
+  position: [3],
+  normal: [3],
+  tangent: [4],
+  uv: [2],
+  color: [3, 4],
+});
 
 /** Register only the renderer-specific resource and material half of a portable program. */
 export function registerThreeRasterPlanProgram<
@@ -216,6 +223,34 @@ export function compiledThreeRasterPlanPrograms(
   snapshotReferences.add(reference);
   snapshotFinalizer.register(identities, reference, reference);
   return compiled;
+}
+
+/** @internal Validate the retained payload whose attributes Three will claim. */
+export function assertThreeGeometryPayload(
+  program: CompiledThreeRasterPlanProgram,
+  resources: ReadonlyMap<string, PortableResource>,
+): void {
+  const geometry = program.variant.geometry;
+  if (geometry.kind === 'synthetic-quad' || geometry.resource === undefined) return;
+  const payload = resources.get(geometry.resource);
+  if (payload?.kind !== 'geometry') {
+    throw new TypeError(
+      `Three raster variant "${program.technique.id}/${program.variant.id}" needs geometry resource "${geometry.resource}"`,
+    );
+  }
+  for (const attribute of payload.attributes) {
+    const accessor = payload.accessors[attribute.accessor];
+    if (accessor === undefined) {
+      throw new TypeError(`portable geometry attribute "${attribute.semantic}" has no accessor`);
+    }
+    assertThreeAttributeWidth(
+      program.technique.id,
+      program.variant.id,
+      attribute.semantic,
+      accessor.components,
+      'payload',
+    );
+  }
 }
 
 /** @internal Forget a disposed runtime's renderer snapshot. */
@@ -333,22 +368,27 @@ function assertThreeGeometrySemantics(
       `Three raster variant "${techniqueId}/${variantId}" needs geometry resource "${geometry.resource}"`,
     );
   }
-  const widths: Readonly<Record<string, readonly number[]>> = {
-    position: [3],
-    normal: [3],
-    tangent: [4],
-    uv: [2],
-    color: [3, 4],
-  };
   for (const attribute of resource.attributes) {
-    const expected = widths[attribute.semantic];
-    if (expected !== undefined && !expected.includes(attribute.components)) {
-      throw new TypeError(
-        `Three raster variant "${techniqueId}/${variantId}" geometry attribute "${attribute.semantic}" ` +
-          `needs ${expected.join(' or ')} components; got ${attribute.components}`,
-      );
-    }
+    assertThreeAttributeWidth(techniqueId, variantId, attribute.semantic, attribute.components, 'declaration');
   }
+}
+
+function assertThreeAttributeWidth(
+  techniqueId: string,
+  variantId: string,
+  semantic: string,
+  components: number,
+  source: 'declaration' | 'payload',
+): void {
+  const expected = Object.hasOwn(THREE_RESERVED_ATTRIBUTE_WIDTHS, semantic)
+    ? THREE_RESERVED_ATTRIBUTE_WIDTHS[semantic]
+    : undefined;
+  if (expected === undefined || expected.includes(components)) return;
+  const subject = source === 'payload' ? 'geometry payload attribute' : 'geometry attribute';
+  throw new TypeError(
+    `Three raster variant "${techniqueId}/${variantId}" ${subject} "${semantic}" ` +
+      `needs ${expected.join(' or ')} components; got ${components}`,
+  );
 }
 
 function hasExactOwnKeys(value: object, expected: readonly string[]): boolean {

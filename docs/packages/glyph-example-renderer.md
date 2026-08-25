@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a headless TypeGPU
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:ab76591650e5b60f1c5d133f780a787c46aac779213c4744e17191e2422acfa5'
+source_digest: 'sha256:8ca884b4dfa4e6d36790430d7871be13e31957db276d3d8a57edae2e417a0569'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -62,9 +62,10 @@ policy with `/core`'s compilers (`src/policy.ts`). It then runs the retention pr
 `ExampleTextEngine.render`: update for the borrow,
 `assertLive` before decoding, `retain` for one contiguous host-owned copy, and decoded views over owned bytes only — dirty
 patch ranges and retirements included. The frame driver carries a separate device-accepted generation and plan revision;
-retaining bytes never advances that wire fence before `prepareSubmission(...).commit()` succeeds. A rejected publication
-remains owned for retry, and a throw-once acceptance test compares the recovered buffers byte-for-byte with a no-failure
-oracle.
+retaining bytes never advances that wire fence before `prepareSubmission(...).commit()` succeeds. The engine revision
+still advances when Wasm accepts the update, so a rejected device candidate is superseded by the next frame and the old
+consumed-plan fence forces a safe checkpoint instead of a retry latch. A throw-once acceptance test pins all three wire
+values and compares the recovered buffers byte-for-byte with an oracle that observed the rejected candidate.
 `readDrawList` demands the branded `RetainedTextEnginePublication`, so passing a live-but-doomed borrow
 is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: retained
 plans survive three frames plus capacity growth, stale borrows throw

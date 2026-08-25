@@ -50,10 +50,7 @@ const suppliedGeometrySchema = defineTechniqueSchema({
   resources: {
     mesh: {
       kind: 'geometry',
-      attributes: [
-        { semantic: 'position', componentType: 'f32', components: 3 },
-        { semantic: 'uv', componentType: 'f32', components: 2 },
-      ],
+      attributes: [{ semantic: 'uv', componentType: 'f32', components: 2 }],
     },
   },
   render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
@@ -112,7 +109,24 @@ test('records-sourced Three geometry retains supplied topology across instance-c
     },
     release: () => undefined,
   });
+  const invalidGeometry = indexedQuadGeometry();
+  invalidGeometry.accessors[0].components = 2;
+  const invalidFont = new LoadedFontImpl({
+    runtime: undefined,
+    font: registered,
+    technique: suppliedGeometryTechnique,
+    raster: undefined,
+    data: {
+      resource: defineRasterResourceId('test/three-invalid-supplied-geometry'),
+      geometry: invalidGeometry,
+    },
+    release: () => undefined,
+  });
   const coordinator = new ThreeTextEngineCoordinator(shaper);
+  assert.throws(
+    () => coordinator.acquireFontStack([invalidFont]),
+    /geometry payload attribute "position" needs 3 components; got 2/u,
+  );
   const stack = coordinator.acquireFontStack([font]);
   const session = coordinator.createSession({
     requestCapacity: 4_096,
@@ -347,6 +361,7 @@ test('records-sourced Three geometry retains supplied topology across instance-c
     target.dispose();
     session.dispose();
     stack.release();
+    invalidFont.dispose();
     font.dispose();
     coordinator.dispose();
     shaper.dispose();

@@ -275,6 +275,9 @@ Three consumer pairs the portable plan with a registered `{ technique, variant }
 before the first Three runtime snapshot; a second variant or a late registration throws at that call. The variant receives
 logical buffer/resource names; it does not provide policy or resource callbacks. Registration also authenticates its exact
 buffer shapes, resource formats, and geometry meaning—including a custom geometry name—against the portable schema.
+Three also reserves attribute widths: `position` and `normal` are three-component, `uv` is two-component, `tangent` is
+four-component, and `color` is three- or four-component. Variant registration validates declared attributes, and font
+registration validates every retained payload attribute before Three can claim those names.
 
 ### Font loading comes from the root entry
 
@@ -348,10 +351,12 @@ the next frame. (`packages/glyph/src/core/host.ts`, `.agents/skills/engine-call-
 exists because an earlier rejected-frame design kept recompiling the invalid frame every render tick instead of preserving
 the last accepted scene. (`docs/planning/session-handoff.md:28`)
 
-Use the last device-accepted publication's `engineRevision` and `planRevision` as the expectations for the next update.
-Carry its `publicationGeneration` as the acknowledgment; do not use `session.acknowledgedGeneration` when a retained
-publication is still awaiting device acceptance. Retention owns the bytes, while renderer commit proves that their patches
-and resources became live. Plan revision consumption and storage retirement acknowledgment remain distinct fences.
+Use the last engine-accepted publication's `engineRevision`, but the last device-accepted publication's `planRevision` and
+`publicationGeneration`, for the next update. Do not use `session.acknowledgedGeneration` when a retained publication is
+still awaiting device acceptance. Retention owns the bytes, while renderer commit proves that their patches and resources
+became live. If a rejected candidate is superseded, this split lets the engine publish a safe checkpoint from the last
+consumed plan instead of latching stale bytes. Plan revision consumption and storage retirement acknowledgment remain
+distinct fences.
 (`packages/glyph-example-renderer/src/engine.ts`, `docs/planning/decision-register.md:238`)
 
 ## 6. Read the plan
@@ -414,8 +419,8 @@ export function decodeDraws(publication: RetainedTextEnginePublication): Decoded
 ```
 
 The example renderer uses the same pattern, while requiring a retained publication because its draw list survives the
-call. (`packages/glyph-example-renderer/src/plan-reader.ts:12`,
-`packages/glyph-example-renderer/src/draw-list.ts:60`)
+call. (`packages/glyph-example-renderer/src/plan-reader.ts`,
+`packages/glyph-example-renderer/src/draw-list.ts`)
 
 ### The seven table layouts
 

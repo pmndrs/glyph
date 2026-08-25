@@ -63,20 +63,14 @@ export function loadedFontBindingBytes(
 ): Uint8Array {
   const compiled = compileRasterFont(font, identities);
   if (compiled !== undefined) return compiled.binding;
-  const techniqueIds = {
-    bitmap: identities.techniqueId(bitmap),
-    msdf: identities.techniqueId(msdf),
-    slug: identities.techniqueId(slug),
-    decoration: identities.techniqueId('pmndrs.decoration'),
-  };
   if (font.technique.id === bitmap.id && isBitmapData(font.data)) {
-    return compileBitmap(font.font.glyphCount, font.data, techniqueIds.bitmap, identities);
+    return compileBitmap(font.font.glyphCount, font.data, identities.techniqueId(bitmap), identities);
   }
   if (font.technique.id === msdf.id && isMsdfData(font.data)) {
-    return compileMsdf(font.font.glyphCount, font.data, techniqueIds.msdf, identities);
+    return compileMsdf(font.font.glyphCount, font.data, identities.techniqueId(msdf), identities);
   }
   if (font.technique.id === slug.id && isSlugData(font.data)) {
-    return compileSlug(font.font.glyphCount, font.data, techniqueIds.slug, identities);
+    return compileSlug(font.font.glyphCount, font.data, identities.techniqueId(slug), identities);
   }
   throw new TypeError(`no first-party font-binding compiler is registered for "${font.technique.id}"`);
 }

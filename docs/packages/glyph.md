@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:468632bda6cf738f663a2cb70904abd295b7e84a9266327628da6077e5079c35'
+source_digest: 'sha256:4f1873d9b7e0d4a35681d8eb64dac086594f36d9aefe081416f1b29d217d5849'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -271,9 +271,10 @@ Each portable technique registers a schema, policy-body factory, and cold font c
 only the renderer half — resource realization and material creation — then assembles the complete Three `PolicyProgram`
 from the portable body. Rust validates and interprets the compiled policy; it never invokes a JavaScript callback in
 shaping, layout, or packing. Cold resource selection receives explicit `(glyphIndex, strikeIndex)` coordinates; the
-compiler alone lowers them into the strike-major wire table. Three validates reserved supplied-geometry semantics when a
-variant registers, before any font or device exists, and material contexts retain the discriminated `PortableResource`
-union rather than erasing validated payloads to `unknown`.
+compiler alone lowers them into the strike-major wire table. Three validates declared reserved supplied-geometry
+semantics when a variant registers, then validates every retained payload attribute when a font is bound, before device
+realization. Material contexts retain the discriminated `PortableResource` union rather than erasing validated payloads
+to `unknown`.
 
 The first-party policy can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits

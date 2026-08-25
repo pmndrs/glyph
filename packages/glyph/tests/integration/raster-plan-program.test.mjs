@@ -51,8 +51,8 @@ function schemaFor(value) {
   });
 }
 
-function loaded(value) {
-  return { technique: value, font: { glyphCount: 2 }, data: {} };
+function loaded(value, glyphCount = 2) {
+  return { technique: value, font: { glyphCount }, data: {} };
 }
 
 function validCompile(compiler, colorBytes = new Uint8Array([1, 2, 3, 4])) {
@@ -192,19 +192,21 @@ test('resource selection receives explicit glyph and strike coordinates', () => 
     },
   });
   const identities = new RenderWireIdentityRegistry();
-  const compiled = compileRasterFont(loaded(value), identities);
+  const compiled = compileRasterFont(loaded(value, 3), identities);
 
   assert.deepEqual(calls, [
     [0, 0],
     [1, 0],
+    [2, 0],
     [0, 1],
     [1, 1],
+    [2, 1],
   ]);
   const resourceIds = bindingResourceIds(compiled.binding);
   const selected = bindingResourceIndices(compiled.binding);
   assert.deepEqual(
     selected.map((index) => resourceIds[index]),
-    Array.from({ length: 4 }, () => identities.resourceId(COLORS)),
+    Array.from({ length: 6 }, () => identities.resourceId(COLORS)),
   );
 });
 

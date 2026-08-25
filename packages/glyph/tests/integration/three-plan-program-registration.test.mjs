@@ -149,6 +149,17 @@ test('variant registration rejects incompatible capabilities before a runtime ex
     /geometry attribute "position" needs 3 components; got 2/,
   );
 
+  const inheritedSemanticName = planProgram('test-inherited-semantic-name', {
+    resources: {
+      mesh: {
+        kind: 'geometry',
+        attributes: [{ semantic: 'valueOf', componentType: 'f32', components: 2 }],
+      },
+    },
+    render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+  });
+  assert.doesNotThrow(() => registerThreeRasterPlanProgram(inheritedSemanticName));
+
   const customGeometryName = defineTechniqueGeometryKind('test-custom-shape');
   const wrongCustomGeometryName = planProgram('test-wrong-custom-geometry-name', {
     resources: {

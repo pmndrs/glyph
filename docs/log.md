@@ -4,11 +4,12 @@
 
 - **The external renderer now separates owned bytes from device acceptance** — A retained publication may advance the
   session's convenience counter before a device accepts its candidate, so the example host now carries its own accepted
-  generation and plan revision, retries the exact rejected publication, and advances the wire fence only after commit. A
-  throw-once test reaches byte-identical buffer state against a no-failure oracle. The same adversarial pass replaced
-  ambiguous resource rows with `(glyphIndex, strikeIndex)`, made Three snapshot tracking weak, preserved portable resource
-  types through material creation, validated Three's reserved supplied-geometry widths at registration, and corrected the
-  renderer guide and package-boundary proof.
+  generation and plan revision while advancing engine revision when Wasm accepts the update. A rejected device candidate
+  is superseded by the next frame, whose old consumed-plan fence requests a safe checkpoint instead of latching failed
+  bytes. A throw-once test pins the wire fields and reaches byte-identical buffer state against an oracle. The same
+  adversarial pass replaced ambiguous resource rows with `(glyphIndex, strikeIndex)`, made Three snapshot tracking weak,
+  preserved portable resource types through material creation, validates Three's reserved supplied-geometry widths on
+  both declarations and retained payloads, and corrected the renderer guide and package-boundary proof.
 
 - **Renderer failures no longer wait for input churn** — Three now validates and prepares a complete plan candidate before
   publication. A material or resource realization failure retains the engine-accepted publication and retries those exact
@@ -32,7 +33,7 @@
   of claiming a migration that did not happen. The browser proof enforces matching WebGPU and forced-WebGL2 frames and
   currently observes RGBA SHA-256 `0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`;
   the 101-sample Three lab retains one draw and geometry for equal 12-instance inputs at a 0.075 ms CPU-side median for
-  the generic path, and reviewed gzip sizes are 63,511 bytes for `/core`, 91,266 bytes for the complete Three
+  the generic path, and reviewed gzip sizes are 63,468 bytes for `/core`, 91,400 bytes for the complete Three
   integration, 3,940 bytes for the peer-externalized TSL technique graph, and 2,768 bytes for its TypeGPU sibling.
 
 ## 2026-08-23

@@ -18,6 +18,7 @@ import {
 import { threeRenderPolicyBytes, type ThreeTransformMode } from './render-policy.js';
 import type { ThreeTextMaterial } from './material.js';
 import {
+  assertThreeGeometryPayload,
   compiledThreeRasterPlanPrograms,
   releaseThreeRasterPlanProgramSnapshot,
   type CompiledThreeRasterPlanProgram,
@@ -263,6 +264,7 @@ export class ThreeTextEngineCoordinator {
         resourceReferences.set(name, this.host.wireIdentities.resourceId(key));
         resourceNames.set(key, name);
       }
+      assertThreeGeometryPayload(program, namedResources);
       const resources = readonlyMap(namedResources);
       const references = readonlyMap(resourceReferences);
       const next: PreparedResource[] = [];
