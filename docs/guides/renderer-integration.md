@@ -85,12 +85,12 @@ Start with one schema per raster technique and a separate buffer set for lanes o
 technique:
 
 ```ts
-import { definePolicyBuffers, defineTechniqueSchema } from '@pmndrs/glyph/core';
+import { definePolicyBuffers, defineTechniqueSchema, id } from '@pmndrs/glyph/core';
 import { quadTechnique } from 'example-quad-raster';
 
 export const rendererBuffers = definePolicyBuffers({
-  stableGlyphId: { id: 20, scalar: 'u32', lanes: ['stableGlyphId'] },
-  transformIndex: { id: 21, scalar: 'u32', lanes: ['transformIndex'] },
+  stableGlyphId: { id: id('buffer', 'my-renderer/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
+  transformIndex: { id: id('buffer', 'my-renderer/transform-index'), scalar: 'u32', lanes: ['transformIndex'] },
 });
 
 export const quadSchema = defineTechniqueSchema({
@@ -101,13 +101,14 @@ export const quadSchema = defineTechniqueSchema({
     u32: ['page'],
   },
   buffers: {
-    rect: { id: 1, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    color: { id: 2, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
-    atlas: { id: 3, scalar: 'f32', lanes: ['unused0', 'unused1', 'unused2', 'page'] },
+    rect: { id: id('buffer', 'example.quad/rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    color: { id: id('buffer', 'example.quad/color'), scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    atlas: { id: id('buffer', 'example.quad/atlas'), scalar: 'f32', lanes: ['unused0', 'unused1', 'unused2', 'page'] },
   },
   resources: {
     atlas: { kind: 'texture-array', format: 'rgba8unorm' },
   },
+  render: { resource: 'atlas', geometry: { kind: 'synthetic-quad' } },
   glyphOrigin: { buffer: 'rect' },
 });
 ```
@@ -234,11 +235,11 @@ Resolve every technique and resource string through the host's one registry:
 
 ```ts
 import { createTextRuntime } from '@pmndrs/glyph';
-import { compileRenderPolicy, createRasterPolicyProgram, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
+import { compileRenderPolicy, createRasterPolicyProgram, id, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
 
 const runtime = await createTextRuntime();
 const host = new TextEngineHost(textRuntimeShaper(runtime));
-const MY_RENDERER_POLICY_HANDLE = 23;
+const MY_RENDERER_POLICY_HANDLE = id('policy', 'my-renderer/default');
 const capabilitySet = rendererCapabilitySet();
 const policy = createRasterPolicyProgram(quadPlanProgram, {
   namespace: 'my-renderer',
@@ -267,7 +268,7 @@ the required scope by passing `host.wireIdentities` to policy programs, font-bin
 Use the same resolved technique ID and `programVariant` in the font binding. `compileFontBinding()` serializes the immutable
 glyph/strike/resource tables and their resource identities. A registered `RasterPlanProgram` owns this cold composition,
 and `compileRasterFont()` returns the binding bytes plus constrained portable resource payloads; the byte-only
-`loadedFontBindingBytes()` projection consults that registry before falling back to the three first-party techniques.
+`loadedFontBindingBytes()` projection consults that registry for every first- and third-party raster technique.
 (`packages/glyph/src/core/raster-plan-program.ts`, `packages/glyph/src/core/font-binding.ts`,
 `packages/glyph/src/core/font-binding.ts`) The engine still owns resource realization and material creation, so a
 Three consumer pairs the portable plan with a registered `{ technique, variant }` through
@@ -294,10 +295,13 @@ Create one `TextEngineSession` for each retained frame state. The capacities res
 result arenas, and optionally retained UTF-16 text storage:
 
 ```ts
-import { compileTextEngineFrameUpdate, type TextEngineFrameLimits } from '@pmndrs/glyph/core';
+import { compileTextEngineFrameUpdate, id, type TextEngineFrameLimits } from '@pmndrs/glyph/core';
+
+const SESSION_HANDLE = id('session', 'my-renderer/main-view');
+const POLICY_HANDLE = id('policy', 'my-renderer/default');
 
 const session = host.createSession({
-  handle: 29,
+  handle: SESSION_HANDLE,
   requestCapacity: 4 * 1024,
   resultCapacity: 128 * 1024,
 });
@@ -316,8 +320,7 @@ const limits: TextEngineFrameLimits = {
 
 const request = compileTextEngineFrameUpdate({
   sessionId: session.handle,
-  policyHandle: 23,
-  capabilitySet: 1,
+  policyHandle: POLICY_HANDLE,
   expectedEngineRevision: 0,
   consumedPlanRevision: 0,
   acknowledgedPublicationGeneration: acceptedPublicationGeneration,
@@ -328,15 +331,18 @@ const borrowed = session.update(request);
 session.assertLive(borrowed);
 const publication = session.retain(borrowed);
 const pending = prepareRendererSubmission(publication); // validate without changing live state
-pending.commit();
+await pending.commit();
 acceptedPublicationGeneration = publication.publicationGeneration;
 ```
 
 The frame update carries optimistic engine/plan revisions, the publication generation the renderer has consumed, the
-selected policy and capability set, hard per-frame limits, and optional paragraph, text, style, constraint, region,
+selected policy, hard per-frame limits, and optional paragraph, text, style, constraint, region,
 exclusion, inline-object, semantic-view, compositing, and policy-parameter sections.
 (`packages/glyph/src/core/frame-wire.ts`) `compileTextEngineFrameUpdate()` only serializes those sections; shaping,
 layout, policy execution, and packing remain in Rust. (`packages/glyph/src/core/frame-wire.ts`)
+
+Capability-set wire IDs are assigned from descriptor order by `compileRenderPolicy()`. Omit `capabilitySet` to select the
+first or only profile; only a renderer that deliberately publishes several profiles needs the low-level one-based selector.
 
 Session arena capacity and frame limits are different controls. If a serialized request exceeds the request arena,
 `update()` reserves more space. If a valid result reports a larger required result capacity, it grows the A/B result arenas
@@ -653,3 +659,51 @@ Upload only the write/fill/copy destination ranges marked by those patches. Pres
 including objects absent from a delta publication, until a matching retirement names the exact generation. The Three.js
 consumer follows this order: read resources, read buffers, apply patches, rebuild referenced draws, then apply retirements.
 (`packages/glyph/src/three/engine-plan-target.ts`)
+
+## 9. Prove the integration with a real device and retained text
+
+The example renderer is an executable reference, not the required shape of another renderer's public API. Its
+`TypeGpuExampleRendererDevice` validates through the deterministic recording oracle, realizes the technique's supplied
+geometry and policy buffers with TypeGPU, submits an indexed instanced WebGPU pass, and exposes offscreen RGBA readback.
+Its `ExampleText` façade demonstrates when application text is created, updated, rendered, and removed:
+
+```ts
+const adapter = await navigator.gpu.requestAdapter();
+if (adapter === null) throw new Error('WebGPU is unavailable');
+const gpuDevice = await adapter.requestDevice();
+const device = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
+const engine = new ExampleTextEngine(textRuntimeShaper(runtime), device);
+
+const binding = engine.registerFont(font);
+const stack = id('font-stack', 'my-renderer/body');
+engine.registerFontStack(stack, [binding]);
+engine.openSession(id('session', 'my-renderer/main-view'));
+
+const text = engine.createText({
+  fontStack: stack,
+  text: 'Portable TypeGPU',
+  fontSize: 64,
+  width: 768,
+  height: 192,
+});
+const initial = await text.render();
+const initialPixels = await device.readPixels();
+
+text.update({ text: 'Updated WebGPU', foregroundRgba: 0xff40_a0ff });
+const updated = await text.render();
+const updatedPixels = await device.readPixels();
+
+if (initial.draws.length === 0 || updated.draws.length === 0) throw new Error('expected glyph draws');
+if (!pixelsChanged(initialPixels, updatedPixels)) throw new Error('expected the text update to change pixels');
+
+await text.dispose();
+engine.dispose();
+device.dispose();
+gpuDevice.destroy();
+```
+
+`engine.registerFont()` performs the cold `compileRasterFont()` and resource-realization transaction described above.
+`text.render()` performs the frame compilation, retention, decode, and submission transaction. `text.update()` only
+changes desired state; shaping and GPU work happen on the next `render()`. `text.dispose()` publishes paragraph removal,
+and the accepted empty scene clears the target. The browser lab uses this exact path with runtime-baked Inter and requires
+non-empty pixels in both frames plus a nonzero pixel diff.
