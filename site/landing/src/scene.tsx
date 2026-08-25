@@ -109,12 +109,19 @@ export function Scene() {
 
       // Where the controls sit, in screen terms.
       //
-      // Below the line box, not the baseline: the descenders of g, y and p hang
-      // under the baseline, so anchoring there puts the buttons through the
-      // tails. Until Text publishes ink extents (#113) the clearance below the
-      // box is a dialled allowance in ems — the honest fudge.
-      const belowInk = summary.contentHeight / 2 + fontSize * live.markGap;
-      publishMarkBottom(0.5 + belowInk / Math.max(viewport.height, 1e-3));
+      // Measured from the baseline, not the line box. Playwrite's line box is
+      // enormous next to its ink — a script face carries huge ascent and
+      // descent metrics — so the box bottom lands well below the tails and
+      // pushes the controls off the frame. The baseline is exact; how far the
+      // descenders hang under it is the one unknown, and it stays a dial until
+      // Text can publish ink extents (#113).
+      const baseline = summary.contentHeight / 2 - summary.firstBaseline;
+      const inkBottom = baseline - fontSize * live.descent;
+      // The gap is in ems of the type, so it holds its optical weight as the
+      // mark scales with the viewport rather than becoming a hairline on a
+      // display and a chasm on a phone.
+      const gap = fontSize * live.markGap;
+      publishMarkBottom(0.5 - (inkBottom - gap) / Math.max(viewport.height, 1e-3));
     }
 
     elapsed.current += delta;
