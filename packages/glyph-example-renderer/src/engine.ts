@@ -90,6 +90,7 @@ export class ExampleTextEngine {
   #nextBindingOrdinal = 1;
   #nextTextOrdinal = 1;
   #session: TextEngineSession | undefined;
+  #rendering = false;
 
   constructor(shaper: RuntimeShaper, device?: ExampleRendererDevice) {
     this.#host = new TextEngineHost(shaper);
@@ -122,8 +123,13 @@ export class ExampleTextEngine {
       }
     }
     const pending = this.#device?.prepareResources(resources);
-    this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
-    pending?.commit();
+    try {
+      this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
+      pending?.commit();
+    } catch (error) {
+      pending?.discard();
+      throw error;
+    }
     this.#nextBindingOrdinal += 1;
     return bindingHandle;
   }
@@ -149,7 +155,12 @@ export class ExampleTextEngine {
     void this.session;
     const ordinal = this.#nextTextOrdinal;
     this.#nextTextOrdinal += 1;
-    return new ExampleText(exampleTextConstruction, this, ordinal, options);
+    return new ExampleText(
+      exampleTextConstruction,
+      (input, accepted) => this.#startRender(input, accepted),
+      ordinal,
+      options,
+    );
   }
 
   /** Serializes one frame request, carrying the acknowledged generation automatically. */
@@ -171,13 +182,33 @@ export class ExampleTextEngine {
   }
 
   /** Runs one real frame and returns its plan, retained into host-owned memory. */
-  render(input: ExampleFrameInput): ExampleDrawList {
+  render(input: ExampleFrameInput): Promise<ExampleDrawList> {
+    return this.#startRender(input);
+  }
+
+  #startRender(input: ExampleFrameInput, engineAccepted?: () => void): Promise<ExampleDrawList> {
+    if (this.#rendering) throw new Error('example engine already has a frame submission in progress');
+    this.#rendering = true;
+    return this.#render(input, engineAccepted).finally(() => {
+      this.#rendering = false;
+    });
+  }
+
+  async #render(input: ExampleFrameInput, engineAccepted?: () => void): Promise<ExampleDrawList> {
     const device = this.#device;
     const borrowed = this.session.update(this.frameRequest(input));
     this.#engineRevision = borrowed.engineRevision;
+    engineAccepted?.();
     const publication = this.#copyPublication(borrowed);
     const list = readDrawList(publication);
-    device?.prepareSubmission(list).commit();
+    const pending = device?.prepareSubmission(list);
+    try {
+      const accepted = await pending?.commit();
+      if (accepted === false) throw new Error('example renderer rejected a superseded frame submission');
+    } catch (error) {
+      pending?.discard();
+      throw error;
+    }
     this.#planRevision = list.planRevision;
     this.#acknowledgedPublicationGeneration = list.publicationGeneration;
     return list;
@@ -203,7 +234,7 @@ export class ExampleTextEngine {
 
 /** A small retained text façade that emits validated frame mutations only when its desired state changes. */
 export class ExampleText {
-  readonly #engine: ExampleTextEngine;
+  readonly #renderFrame: (input: ExampleFrameInput, engineAccepted: () => void) => Promise<ExampleDrawList>;
   readonly #paragraphId: ParagraphId;
   readonly #styleId: StyleId;
   readonly #flowThreadId: FlowThreadId;
@@ -219,12 +250,12 @@ export class ExampleText {
 
   constructor(
     construction: typeof exampleTextConstruction,
-    engine: ExampleTextEngine,
+    renderFrame: (input: ExampleFrameInput, engineAccepted: () => void) => Promise<ExampleDrawList>,
     ordinal: number,
     options: ExampleTextOptions,
   ) {
     if (construction !== exampleTextConstruction) throw new TypeError('create example text through its engine');
-    this.#engine = engine;
+    this.#renderFrame = renderFrame;
     this.#order = ordinal - 1;
     this.#transformIndex = ordinal;
     const namespace = `glyph-example-renderer/text/${ordinal}`;
@@ -251,52 +282,58 @@ export class ExampleText {
     this.#dirty = true;
   }
 
-  render(): ExampleDrawList {
+  render(): Promise<ExampleDrawList> {
     this.#assertLive();
-    if (!this.#dirty) return this.#engine.render({});
+    if (!this.#dirty) return this.#renderFrame({}, () => {});
     const state = this.#state;
-    const list = this.#engine.render({
-      ...(!this.#created
-        ? { paragraphMutations: [{ opcode: 'upsert' as const, paragraphId: this.#paragraphId, order: this.#order }] }
-        : {}),
-      textMutations: [
-        {
-          paragraphId: this.#paragraphId,
-          start: 0,
-          deleteCount: this.#publishedText.length,
-          insert: state.text,
-        },
-      ],
-      styleMutations: [
-        {
-          opcode: 'upsert',
-          paragraphId: this.#paragraphId,
-          styleId: this.#styleId,
-          cascadeOrder: 0,
-          start: 0,
-          end: state.text.length,
-          root: true,
-          value: {
-            fontStackHandle: state.fontStack,
-            fontSize: state.fontSize,
-            rasterPixelRatio: state.rasterPixelRatio,
-            foregroundRgba: state.foregroundRgba,
+    return this.#renderFrame(
+      {
+        ...(!this.#created
+          ? { paragraphMutations: [{ opcode: 'upsert' as const, paragraphId: this.#paragraphId, order: this.#order }] }
+          : {}),
+        textMutations: [
+          {
+            paragraphId: this.#paragraphId,
+            start: 0,
+            deleteCount: this.#publishedText.length,
+            insert: state.text,
           },
-        },
-      ],
-      constraints: [this.#constraint()],
-      regions: [this.#region()],
-    });
-    this.#created = true;
-    this.#publishedText = state.text;
-    this.#dirty = false;
-    return list;
+        ],
+        styleMutations: [
+          {
+            opcode: 'upsert',
+            paragraphId: this.#paragraphId,
+            styleId: this.#styleId,
+            cascadeOrder: 0,
+            start: 0,
+            end: state.text.length,
+            root: true,
+            value: {
+              fontStackHandle: state.fontStack,
+              fontSize: state.fontSize,
+              rasterPixelRatio: state.rasterPixelRatio,
+              foregroundRgba: state.foregroundRgba,
+            },
+          },
+        ],
+        constraints: [this.#constraint()],
+        regions: [this.#region()],
+      },
+      () => {
+        this.#created = true;
+        this.#publishedText = state.text;
+        this.#dirty = false;
+      },
+    );
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
     if (this.#disposed) return;
     if (this.#created) {
-      this.#engine.render({ paragraphMutations: [{ opcode: 'remove', paragraphId: this.#paragraphId }] });
+      await this.#renderFrame({ paragraphMutations: [{ opcode: 'remove', paragraphId: this.#paragraphId }] }, () => {
+        this.#disposed = true;
+      });
+      return;
     }
     this.#disposed = true;
   }

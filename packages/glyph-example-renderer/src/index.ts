@@ -16,7 +16,6 @@ export {
 } from './engine.js';
 export type { RetainedTextEnginePublication } from '@pmndrs/glyph/core';
 export { readDrawList } from './plan-reader.js';
-export { exampleRenderPolicyBytes, exampleSystemBuffers } from './policy.js';
 export type { ExampleTableSnapshot } from './snapshot.js';
 export {
   exampleRendererShader,

@@ -66,13 +66,18 @@ export interface ExampleRendererResourceInput {
 
 /** A fully validated resource batch that has not touched live device state. */
 export interface ExamplePendingResources {
-  /** Apply once without throwing; stale prepared batches are discarded rather than restored. */
+  /** Apply the validated batch once. */
   commit(): void;
+  /** Release an uncommitted batch. Safe to call more than once. */
+  discard(): void;
 }
 
 /** One fully validated publication whose commit only swaps prepared owned state. */
 export interface ExamplePendingSubmission {
-  commit(): void;
+  /** Publish once; false means a newer candidate already won. */
+  commit(): boolean | Promise<boolean>;
+  /** Release an uncommitted publication. Safe to call more than once. */
+  discard(): void;
 }
 
 /** Candidate recording state used by a concrete backend to stage work before publication. */
@@ -80,6 +85,7 @@ export interface RecordingPendingSubmission extends ExamplePendingSubmission {
   readonly realizedDraws: readonly ExampleRealizedDraw[];
   readonly buffersByName: ReadonlyMap<string, Uint8Array>;
   publish(beforeCommit: () => void): boolean;
+  publishAsync(beforeCommit: () => Promise<void>): Promise<boolean>;
 }
 
 type GlyphExampleRendererShader = ExampleRendererShader<typeof glyphExampleTypeGpuVariant>;
@@ -176,6 +182,9 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
         this.#replaceResourceState(state);
         if (entries.length !== 0) this.#resourceRevision += 1;
       },
+      discard: () => {
+        active = false;
+      },
     });
   }
 
@@ -202,11 +211,25 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
         this.#submissionRevision += 1;
         return true;
       };
+      const publishAsync = async (beforeCommit: () => Promise<void>): Promise<boolean> => {
+        if (!active) return false;
+        active = false;
+        if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision)
+          return false;
+        await beforeCommit();
+        this.submissions.push(drawList);
+        this.#submissionRevision += 1;
+        return true;
+      };
       return Object.freeze({
         realizedDraws: Object.freeze([...this.realizedDraws]),
         buffersByName: new Map(this.buffersByName),
         publish,
-        commit: () => void publish(() => {}),
+        publishAsync,
+        commit: () => publish(() => {}),
+        discard: () => {
+          active = false;
+        },
       });
     }
     const buffers = prepareBufferState(
@@ -253,11 +276,30 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       this.#submissionRevision += 1;
       return true;
     };
+    const publishAsync = async (beforeCommit: () => Promise<void>): Promise<boolean> => {
+      if (!active) return false;
+      active = false;
+      if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return false;
+      await beforeCommit();
+      replaceMap(this.#retainedBuffers, buffers.retained);
+      replaceMap(this.buffers, buffers.activeById);
+      replaceMap(this.buffersByName, buffers.activeByName);
+      replaceMap(this.#planResources, planResources.retained);
+      this.retirements.push(...planResources.retiredIds);
+      this.realizedDraws.splice(0, this.realizedDraws.length, ...realized);
+      this.submissions.push(drawList);
+      this.#submissionRevision += 1;
+      return true;
+    };
     return Object.freeze({
       realizedDraws: Object.freeze(realized),
       buffersByName: new Map(buffers.activeByName),
       publish,
-      commit: () => void publish(() => {}),
+      publishAsync,
+      commit: () => publish(() => {}),
+      discard: () => {
+        active = false;
+      },
     });
   }
 
