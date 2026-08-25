@@ -47,7 +47,9 @@ describe('a real engine driven through the published core surface', () => {
     const engine = new ExampleTextEngine(shaper);
     try {
       engine.openSession(SESSION_HANDLE);
-      const first = engine.render({});
+      const firstPending = engine.render({});
+      expect(() => engine.render({})).toThrow('submission in progress');
+      const first = await firstPending;
       expect(first.publicationGeneration).toBe(1);
       expect(first.draws).toEqual([]);
       expect(first.engineRevision).toBe(1);
@@ -55,18 +57,18 @@ describe('a real engine driven through the published core surface', () => {
       // The borrow behind frame 1 died the moment frame 2 was answered; the retained
       // plan did not. Two more frames also walk both A/B output slots.
       const session = engine.session;
-      const second = engine.render({});
+      const second = await engine.render({});
       expect(second.publicationGeneration).toBe(2);
       expect(second.engineRevision).toBe(2);
       expect(session.acknowledgedGeneration).toBe(2);
-      expect(engine.render({}).publicationGeneration).toBe(3);
+      expect((await engine.render({})).publicationGeneration).toBe(3);
       expect(first.patches).toEqual([]);
       expect(first.retirements).toEqual([]);
 
       // Capacity growth moves every Wasm arena; retained plans still read fine while
       // any borrow held across it is detected rather than silently re-read.
       session.reserve(4096, 8 * 1024 * 1024);
-      const afterGrowth = engine.render({});
+      const afterGrowth = await engine.render({});
       expect(afterGrowth.publicationGeneration).toBe(4);
       expect(afterGrowth.buffers.count).toBe(0);
     } finally {
@@ -109,8 +111,8 @@ describe('a real engine driven through the published core surface', () => {
     const engine = new ExampleTextEngine(shaper);
     try {
       engine.openSession(SESSION_HANDLE);
-      engine.render({});
-      engine.render({});
+      await engine.render({});
+      await engine.render({});
       expect(engine.session.acknowledgedGeneration).toBe(2);
 
       // A request that acknowledges an older generation than the engine has recorded
@@ -127,7 +129,7 @@ describe('a real engine driven through the published core surface', () => {
       expect(() => engine.session.update(replayed)).toThrowError(/status 12/);
 
       // The next honest frame carries the last accepted generation and publishes.
-      expect(engine.render({}).publicationGeneration).toBe(3);
+      expect((await engine.render({})).publicationGeneration).toBe(3);
     } finally {
       engine.dispose();
     }
@@ -143,7 +145,7 @@ describe('a real engine driven through the published core surface', () => {
       // with the engine's own status instead of silently accepting a dead handle.
       expect(() => engine.registerFontStack(STACK_HANDLE, [MISSING_BINDING_HANDLE])).toThrowError(/status 5/);
       // The policy itself registered fine: frames publish against it.
-      expect(engine.render({}).engineRevision).toBe(1);
+      expect((await engine.render({})).engineRevision).toBe(1);
     } finally {
       engine.dispose();
     }

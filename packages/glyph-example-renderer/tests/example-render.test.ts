@@ -47,6 +47,7 @@ const STYLE_ID = id('style', 'glyph-example-renderer-test/style');
 const FLOW_THREAD_ID = id('flow-thread', 'glyph-example-renderer-test/flow-thread');
 const REGION_ID = id('region', 'glyph-example-renderer-test/region');
 const TRANSFORM_INDEX = 1;
+const EXPECTED_RAW_AND_RETAINED_GLYPHS = 9;
 
 class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
   readonly primary = new RecordingExampleRendererDevice();
@@ -54,6 +55,7 @@ class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
   readonly shader = this.primary.shader;
   readonly #oracleGenerations = new Set<number>();
   failNextSubmission = false;
+  discardedResourceBatches = 0;
 
   get resources() {
     return this.primary.resources;
@@ -79,6 +81,11 @@ class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
         oracle.commit();
         primary.commit();
       },
+      discard: () => {
+        this.discardedResourceBatches += 1;
+        oracle.discard();
+        primary.discard();
+      },
     });
   }
 
@@ -97,6 +104,11 @@ class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
         oracle?.commit();
         primary.commit();
         this.#oracleGenerations.add(generation);
+        return true;
+      },
+      discard: () => {
+        oracle?.discard();
+        primary.discard();
       },
     });
   }
@@ -148,7 +160,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(binding).toBe(id('font-binding', 'glyph-example-renderer/1'));
       engine.registerFontStack(STACK_HANDLE, [binding]);
       engine.openSession(SESSION_HANDLE);
-      const list = engine.render({
+      const list = await engine.render({
         paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 0 }],
         textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: 'glyph' }],
         styleMutations: [
@@ -232,14 +244,14 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         expect(realized.resources.get('glyphGeometry')).toBeDefined();
       }
       const acceptedDraws = [...device.realizedDraws];
-      const noOp = engine.render({});
+      const noOp = await engine.render({});
       expect(noOp.draws).toEqual([]);
       expect(device.realizedDraws).toEqual(acceptedDraws);
 
       device.failNextSubmission = true;
-      expect(() =>
+      await expect(
         engine.render({ textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 1, insert: 'G' }] }),
-      ).toThrow('injected submission failure');
+      ).rejects.toThrow('injected submission failure');
       expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2]);
       const recoveryRequest = engine.frameRequest({});
       const requestView = new DataView(recoveryRequest.buffer, recoveryRequest.byteOffset, recoveryRequest.byteLength);
@@ -247,7 +259,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(requestView.getUint32(requestLayout.expectedEngineRevision, true)).toBe(3);
       expect(requestView.getUint32(requestLayout.consumedPlanRevision, true)).toBe(2);
       expect(requestView.getUint32(requestLayout.acknowledgedPublicationGeneration, true)).toBe(2);
-      const recovered = engine.render({
+      const recovered = await engine.render({
         textMutations: [{ paragraphId: PARAGRAPH_ID, start: 1, deleteCount: 1, insert: 'L' }],
       });
       expect(recovered.publicationGeneration).toBe(4);
@@ -259,12 +271,22 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         'fontSize',
       );
       const text = engine.createText({ fontStack: STACK_HANDLE, text: 'retained', fontSize: 42, width: 512 });
-      expect(text.render().draws.length).toBeGreaterThan(0);
+      expect((await text.render()).draws.length).toBeGreaterThan(0);
+      device.failNextSubmission = true;
+      text.update({ text: 'WXYZ' });
+      await expect(text.render()).rejects.toThrow('injected submission failure');
+      const recoveredText = await text.render();
+      expect(recoveredText.primitiveRecords.reduce((count, primitive) => count + primitive.recordCount, 0)).toBe(
+        EXPECTED_RAW_AND_RETAINED_GLYPHS,
+      );
       text.update({ text: 'updated', foregroundRgba: 0xff80_40ff });
-      expect(text.render().draws.length).toBeGreaterThan(0);
+      expect((await text.render()).draws.length).toBeGreaterThan(0);
       expect(text.text).toBe('updated');
-      text.dispose();
+      await text.dispose();
       expect(() => text.render()).toThrow('disposed');
+      engine.dispose();
+      expect(() => engine.registerFont(font)).toThrow('disposed');
+      expect(device.discardedResourceBatches).toBe(1);
     } finally {
       engine.dispose();
       font.dispose();
