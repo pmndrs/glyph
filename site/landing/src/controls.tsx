@@ -24,6 +24,7 @@ export interface LookValues {
   chorusGap: number;
   chorusWords: number;
   chorusRtl: number;
+  chorusRun: number;
   chorusLetter: number;
   chorusMaxSpace: number;
   chorusMinSpace: number;
@@ -70,6 +71,7 @@ export const LOOK: Readonly<LookValues> = Object.freeze({
   chorusGap: 26,
   chorusWords: 1600,
   chorusRtl: 0.12,
+  chorusRun: 1,
   chorusLetter: 0,
   chorusMaxSpace: 1.5,
   chorusMinSpace: 0.82,
@@ -138,6 +140,7 @@ const RANGES: Record<keyof LookValues, readonly [number, number, number]> = {
   chorusGap: [2, 60, 1],
   chorusWords: [200, 8000, 100],
   chorusRtl: [0, 0.6, 0.01],
+  chorusRun: [1, 40, 1],
   chorusLetter: [0, 0.4, 0.005],
   chorusMaxSpace: [1, 3, 0.01],
   chorusMinSpace: [0.4, 1, 0.01],
@@ -185,6 +188,7 @@ const GROUPS = {
     'chorusLetter',
     'chorusGap',
     'chorusRtl',
+    'chorusRun',
     'chorusWords',
   ],
   Light: [

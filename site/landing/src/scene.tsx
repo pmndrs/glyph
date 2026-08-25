@@ -146,25 +146,19 @@ export function Scene() {
         position={[Math.cos(live.rimAngle) * 6, Math.sin(live.rimAngle) * 6, -4]}
       />
 
-      {/* One batching and ordering boundary. The field is authored first so it
-          draws behind the mark, rather than depending on two implicit batches
-          happening to sort the way we want. Each Text still owns its own
-          material, so the mark keeps its lit node graph inside the group. */}
-      <TextGroup>
-        <Chorus />
+      <Chorus />
 
-        <Text
-          contentBox={{ align: 'center', width: { mode: 'exact', size: width }, wrap: 'none' }}
-          font={font}
-          material={hero}
-          paint={{ color: '#e7ecf6' }}
-          position={[-width / 2, lineBox / 2, 0]}
-          ref={mark}
-          style={{ fontSize }}
-        >
-          {WORDMARK}
-        </Text>
-      </TextGroup>
+      <Text
+        contentBox={{ align: 'center', width: { mode: 'exact', size: width }, wrap: 'none' }}
+        font={font}
+        material={hero}
+        paint={{ color: '#e7ecf6' }}
+        position={[-width / 2, lineBox / 2, 0]}
+        ref={mark}
+        style={{ fontSize }}
+      >
+        {WORDMARK}
+      </Text>
 
       {/*
         A studio, built rather than downloaded. drei's `preset="studio"` fetches a
