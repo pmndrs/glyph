@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:57ce289b25420f9b9b10fb1941a1487725202d1d916c37a1877770d3c4b39097'
+source_digest: 'sha256:468632bda6cf738f663a2cb70904abd295b7e84a9266327628da6077e5079c35'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -189,7 +189,8 @@ for unrelated input to move. New desired input supersedes an unpublished candida
 consumed plan revision (D-279).
 
 `registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-271), naming the
-technique instead of applying to nothing. `/three` also re-exports `ParagraphLayoutSummary`, `ParagraphLayoutInspection`,
+technique instead of applying to nothing. Snapshot tracking uses weak registry references, so an abandoned runtime cannot
+keep its identity registry alive or permanently poison later registration after collection. `/three` also re-exports `ParagraphLayoutSummary`, `ParagraphLayoutInspection`,
 `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name what
 `Text.layout()`, `Text.glyphs()`, and `ParagraphStyle.features` give it.
 
@@ -269,7 +270,10 @@ engine represents; balancing, exclusions, and contour flow remain post-v1.
 Each portable technique registers a schema, policy-body factory, and cold font compiler in `/core`. Three registers
 only the renderer half — resource realization and material creation — then assembles the complete Three `PolicyProgram`
 from the portable body. Rust validates and interprets the compiled policy; it never invokes a JavaScript callback in
-shaping, layout, or packing.
+shaping, layout, or packing. Cold resource selection receives explicit `(glyphIndex, strikeIndex)` coordinates; the
+compiler alone lowers them into the strike-major wire table. Three validates reserved supplied-geometry semantics when a
+variant registers, before any font or device exists, and material contexts retain the discriminated `PortableResource`
+union rather than erasing validated payloads to `unknown`.
 
 The first-party policy can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits
@@ -376,7 +380,7 @@ previously lived in core internals. Three's first-party policy is authored with 
 `three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any import from `internal/`
 or `generated/`, so the first-party integrations consume exactly the layering a third party would.
 
-Both layers publish as npm subpaths. They are how a renderer integrates without our `Object3D`s, and `@pmndrs/glyph/three` is itself built on `/core`, so the earlier finding that they had no consumers was wrong. `packages/glyph-example-renderer` is the standing proof that a second engine consumer can be written against `/core` alone, and it now drives real frames through the item 11 retention protocol: publications are borrowed by default but expire loudly (`isExpired`/`assertLive`), `retain` makes one contiguous host-owned copy branded in the type system, acknowledgement feeds the generation the engine already verifies at the wire, patches surface dirty ranges, and storage generations retire through `(kind, id, generation)` records (`core/retention.ts`). `/core`'s contract still has sharp edges -- caller-chosen raw `u32` handles where branded `FontHandle`/`RasterHandle` already exist, caller-supplied opaque byte blobs, no published path from host-owned bytes to a registered shaping font (audit item 12; the example renderer's real-frame test records the clean `fontMissing` rejection), and a manual acquire/release refcount pair -- and those are tracked as hardening in the API surface audit rather than as a reason to withdraw the entry point.
+Both layers publish as npm subpaths. They are how a renderer integrates without our `Object3D`s, and `@pmndrs/glyph/three` is itself built on `/core`, so the earlier finding that they had no consumers was wrong. `packages/glyph-example-renderer` is the standing proof that a second engine consumer can be written against `/core` alone, and it now drives real frames through the item 11 retention protocol: publications are borrowed by default but expire loudly (`isExpired`/`assertLive`), `retain` makes one contiguous host-owned copy branded in the type system, a renderer-owned fence advances only after device commit, patches surface dirty ranges, and storage generations retire through `(kind, id, generation)` records (`core/retention.ts`). `/core`'s contract still has sharp edges -- caller-chosen raw `u32` handles where branded `FontHandle`/`RasterHandle` already exist, caller-supplied opaque byte blobs, no published path from host-owned bytes to a registered shaping font (audit item 12; the example renderer's real-frame test records the clean `fontMissing` rejection), and a manual acquire/release refcount pair -- and those are tracked as hardening in the API surface audit rather than as a reason to withdraw the entry point.
 
 The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. The ABI subpaths existed to publish struct
 offsets for pointer arithmetic, which is an internal representation handed to a caller who then owns keeping it valid;

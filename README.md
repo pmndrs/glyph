@@ -319,7 +319,9 @@ function frame(edits) {
       textMutations: edits,
     }),
   );
-  plan.bind(next); // apply patches, draw, then acknowledge next frame
+  plan.bind(next);
+  applyPlanAndSubmit(plan); // returns only after the renderer commits the publication
+  session.acknowledge(next);
   previous = next;
 }
 ```

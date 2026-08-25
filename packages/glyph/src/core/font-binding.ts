@@ -4,7 +4,7 @@ import { bitmap, bitmapSchema, type BitmapData } from '../raster/bitmap-techniqu
 import { msdf, msdfSchema, type MsdfData } from '../raster/msdf.js';
 import { slug, slugSchema, type SlugData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
-import { RenderWireIdentityRegistry, type TechniqueWireIds } from './render-policy.js';
+import { RenderWireIdentityRegistry } from './render-policy.js';
 import { compileRasterFont } from './raster-plan-program.js';
 
 const MAX_U32 = 0xffff_ffff;
@@ -63,7 +63,7 @@ export function loadedFontBindingBytes(
 ): Uint8Array {
   const compiled = compileRasterFont(font, identities);
   if (compiled !== undefined) return compiled.binding;
-  const techniqueIds: TechniqueWireIds = {
+  const techniqueIds = {
     bitmap: identities.techniqueId(bitmap),
     msdf: identities.techniqueId(msdf),
     slug: identities.techniqueId(slug),

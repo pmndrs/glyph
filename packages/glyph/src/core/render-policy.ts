@@ -170,20 +170,6 @@ function rasterTechniqueIdentity(technique: AnyRasterTechnique | string): string
   return id;
 }
 
-export interface TechniqueWireIds {
-  readonly bitmap: RenderTechniqueId;
-  readonly msdf: RenderTechniqueId;
-  readonly slug: RenderTechniqueId;
-  readonly decoration: RenderTechniqueId;
-}
-
-export const techniqueWireIds: TechniqueWireIds = Object.freeze({
-  bitmap: techniqueId('pmndrs.bitmap'),
-  msdf: techniqueId('pmndrs.msdf'),
-  slug: techniqueId('pmndrs.slug'),
-  decoration: techniqueId('pmndrs.decoration'),
-});
-
 export type PolicyTransformMode = 'direct' | 'indexed';
 export type PolicyAllocationMode = 'ordered' | 'stable';
 

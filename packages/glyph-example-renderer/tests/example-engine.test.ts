@@ -123,7 +123,7 @@ describe('a real engine driven through the published core surface', () => {
       });
       expect(() => engine.session.update(replayed)).toThrowError(/status 12/);
 
-      // The next honest frame carries `session.acknowledgedGeneration` and publishes.
+      // The next honest frame carries the last accepted generation and publishes.
       expect(engine.render({}).publicationGeneration).toBe(3);
     } finally {
       engine.dispose();

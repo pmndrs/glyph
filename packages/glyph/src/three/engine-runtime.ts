@@ -65,7 +65,7 @@ export type ThreeTextEngineResource =
   | Readonly<{
       technique: string;
       resourceName: string;
-      resources: ReadonlyMap<string, unknown>;
+      resources: ReadonlyMap<string, PortableResource>;
       resourceReferences: ReadonlyMap<string, number>;
       program: CompiledThreeRasterPlanProgram;
     }>;
@@ -253,7 +253,7 @@ export class ThreeTextEngineCoordinator {
       prepared = this.#firstPartyResources(font);
     } else {
       const compiled = program.compileFont(font, this.host.wireIdentities);
-      const namedResources = new Map<string, unknown>();
+      const namedResources = new Map<string, PortableResource>();
       const resourceReferences = new Map<string, number>();
       const resourceNames = new Map<string, string>();
       for (const [name, key] of compiled.declaredResources) {

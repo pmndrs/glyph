@@ -51,7 +51,7 @@ const suppliedGeometrySchema = defineTechniqueSchema({
     mesh: {
       kind: 'geometry',
       attributes: [
-        { semantic: 'position', componentType: 'f32', components: 2 },
+        { semantic: 'position', componentType: 'f32', components: 3 },
         { semantic: 'uv', componentType: 'f32', components: 2 },
       ],
     },
@@ -222,6 +222,10 @@ test('records-sourced Three geometry retains supplied topology across instance-c
     assert.ok(retained);
     assert.equal(retained.geometry.instanceCount, 5);
     assert.equal(retained.geometry.index.count, 6);
+    assert.equal(retained.geometry.getAttribute('position').itemSize, 3);
+    retained.geometry.computeBoundingBox();
+    assert.deepEqual(retained.geometry.boundingBox?.min.toArray(), [0, 0, 0]);
+    assert.deepEqual(retained.geometry.boundingBox?.max.toArray(), [1, 1, 0]);
     assert.equal(suppliedGeometryMaterialCalls, 1);
 
     const shortened = session.update(

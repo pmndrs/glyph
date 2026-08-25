@@ -1,7 +1,7 @@
 /**
  * When a Three raster plan program may still be registered.
  *
- * The registry is one module-global `Map`, and a `TextRuntime`'s Three coordinator reads it exactly
+ * The registry is module-global, and a `TextRuntime`'s Three coordinator reads it exactly
  * once, at construction. Nothing re-reads it. A registration after that point was a perfectly legal
  * call that applied to nothing: the technique was in the map, invisible to every runtime already
  * built, and the loss surfaced far away and much later as a missing technique when a font using it
@@ -134,6 +134,20 @@ test('variant registration rejects incompatible capabilities before a runtime ex
   const extraGeometryField = planProgram('test-extra-geometry-field');
   extraGeometryField.variant.geometry = { kind: 'synthetic-quad', name: 'not-part-of-this-shape' };
   assert.throws(() => registerThreeRasterPlanProgram(extraGeometryField), /declares incompatible geometry/);
+
+  const wrongPositionWidth = planProgram('test-wrong-position-width', {
+    resources: {
+      mesh: {
+        kind: 'geometry',
+        attributes: [{ semantic: 'position', componentType: 'f32', components: 2 }],
+      },
+    },
+    render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+  });
+  assert.throws(
+    () => registerThreeRasterPlanProgram(wrongPositionWidth),
+    /geometry attribute "position" needs 3 components; got 2/,
+  );
 
   const customGeometryName = defineTechniqueGeometryKind('test-custom-shape');
   const wrongCustomGeometryName = planProgram('test-wrong-custom-geometry-name', {

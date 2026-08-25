@@ -2,16 +2,16 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { programId, techniqueWireIds } from '../../dist/core/render-policy.js';
+import { programId, techniqueId } from '../../dist/core/render-policy.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 
 const fixtureUrl = new URL('../fixtures/render-policy/hand-numbered-policy-bytes.json', import.meta.url);
 const THREE_PROGRAM_IDS = new Map([
-  [techniqueWireIds.bitmap, programId('pmndrs.bitmap', 'three')],
-  [techniqueWireIds.msdf, programId('pmndrs.msdf', 'three')],
-  [techniqueWireIds.slug, programId('pmndrs.slug', 'three')],
-  [techniqueWireIds.decoration, programId('pmndrs.decoration', 'three')],
+  [techniqueId('pmndrs.bitmap'), programId('pmndrs.bitmap', 'three')],
+  [techniqueId('pmndrs.msdf'), programId('pmndrs.msdf', 'three')],
+  [techniqueId('pmndrs.slug'), programId('pmndrs.slug', 'three')],
+  [techniqueId('pmndrs.decoration'), programId('pmndrs.decoration', 'three')],
 ]);
 
 /**

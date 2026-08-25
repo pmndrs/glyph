@@ -27,6 +27,10 @@ import {
   exampleRendererShader,
   RecordingExampleRendererDevice,
   type ExampleDrawList,
+  type ExamplePendingResources,
+  type ExamplePendingSubmission,
+  type ExampleRendererDevice,
+  type ExampleRendererResourceInput,
   type ExampleRendererShader,
 } from '../src/index.js';
 import { ExampleTextEngine } from '../src/engine.js';
@@ -34,6 +38,60 @@ import { ExampleTextEngine } from '../src/engine.js';
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const shaperWasm = new URL('../../glyph/dist/text-shaper.wasm', import.meta.url);
 const temporaryDirectories: string[] = [];
+
+class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
+  readonly primary = new RecordingExampleRendererDevice();
+  readonly oracle = new RecordingExampleRendererDevice();
+  readonly shader = this.primary.shader;
+  readonly #oracleGenerations = new Set<number>();
+  failNextSubmission = false;
+
+  get resources() {
+    return this.primary.resources;
+  }
+  get resourcesByName() {
+    return this.primary.resourcesByName;
+  }
+  get buffersByName() {
+    return this.primary.buffersByName;
+  }
+  get submissions() {
+    return this.primary.submissions;
+  }
+  get realizedDraws() {
+    return this.primary.realizedDraws;
+  }
+
+  prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources {
+    const primary = this.primary.prepareResources(resources);
+    const oracle = this.oracle.prepareResources(resources);
+    return Object.freeze({
+      commit() {
+        oracle.commit();
+        primary.commit();
+      },
+    });
+  }
+
+  prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission {
+    const generation = drawList.publicationGeneration;
+    const oracle = this.#oracleGenerations.has(generation) ? undefined : this.oracle.prepareSubmission(drawList);
+    if (this.failNextSubmission) {
+      this.failNextSubmission = false;
+      oracle?.commit();
+      this.#oracleGenerations.add(generation);
+      throw new Error('injected submission failure');
+    }
+    const primary = this.primary.prepareSubmission(drawList);
+    return Object.freeze({
+      commit: () => {
+        oracle?.commit();
+        primary.commit();
+        this.#oracleGenerations.add(generation);
+      },
+    });
+  }
+}
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
@@ -56,7 +114,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
   });
 
   const runtime = await createTextRuntime({ wasm: await readFile(shaperWasm) });
-  const device = new RecordingExampleRendererDevice();
+  const device = new ThrowOnceExampleRendererDevice();
   const engine = new ExampleTextEngine(textRuntimeShaper(runtime), device);
   try {
     const bytes = await readFile(output);
@@ -167,6 +225,17 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       const noOp = engine.render({});
       expect(noOp.draws).toEqual([]);
       expect(device.realizedDraws).toEqual(acceptedDraws);
+
+      device.failNextSubmission = true;
+      expect(() =>
+        engine.render({ textMutations: [{ paragraphId: 1, start: 0, deleteCount: 1, insert: 'G' }] }),
+      ).toThrow('injected submission failure');
+      expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2]);
+      const recovered = engine.render({});
+      expect(recovered.publicationGeneration).toBe(4);
+      expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 3, 4]);
+      expect(bufferSnapshot(device.primary.buffers)).toEqual(bufferSnapshot(device.oracle.buffers));
+      expect(device.oracle.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 3, 4]);
     } finally {
       engine.dispose();
       font.dispose();
@@ -214,7 +283,7 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
       glyphGeometry: {
         kind: 'geometry' as const,
         attributes: Object.freeze([
-          { semantic: 'position' as const, componentType: 'f32' as const, components: 2 as const },
+          { semantic: 'position' as const, componentType: 'f32' as const, components: 3 as const },
           { semantic: 'uv' as const, componentType: 'f32' as const, components: 2 as const },
         ]),
       },
@@ -529,6 +598,10 @@ function patch(
     sourceOffset: 0,
     ...overrides,
   };
+}
+
+function bufferSnapshot(buffers: ReadonlyMap<number, Uint8Array>): readonly (readonly [number, readonly number[]])[] {
+  return [...buffers].sort(([left], [right]) => left - right).map(([id, bytes]) => [id, Array.from(bytes)] as const);
 }
 
 function retirement(kind: number, id: number, generation: number): TextEngineRetirementRecord {

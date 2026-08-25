@@ -79,7 +79,7 @@ interface ThreePlanProgramMaterialContext {
   readonly variantId: string;
   readonly language: string;
   readonly namedBuffers: ReadonlyMap<string, ThreePlanProgramBuffer>;
-  readonly namedResources: ReadonlyMap<string, unknown>;
+  readonly namedResources: ReadonlyMap<string, PortableResource>;
   readonly outputTypes: Readonly<Record<string, string>>;
   readonly resourceName: string;
   readonly instance: Node<'uint'>;

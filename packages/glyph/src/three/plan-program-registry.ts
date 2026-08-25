@@ -10,6 +10,7 @@ import {
   type CompiledRasterFont,
   type PolicyBufferDeclarations,
   type PolicyScalarKind,
+  type PortableResource,
   type PortableTextureFormat,
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
@@ -38,7 +39,7 @@ export interface ThreePlanProgramMaterialContext {
   /** Buffers addressed by the schema's declared names, never host wire ids. */
   readonly namedBuffers: ReadonlyMap<string, ThreePlanProgramBuffer>;
   /** Retained resources addressed by the schema's declared names. */
-  readonly namedResources: ReadonlyMap<string, unknown>;
+  readonly namedResources: ReadonlyMap<string, PortableResource>;
   /** Named output types declared by the selected renderer implementation. */
   readonly outputTypes: Readonly<Record<string, string>>;
   /** Name of the resource referenced by this draw's wire resource record. */
@@ -110,7 +111,11 @@ export interface CompiledThreeRasterPlanProgram {
 
 const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
 const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
-const snapshots = new Map<RenderWireIdentityRegistry, number>();
+const snapshotsByRegistry = new WeakMap<RenderWireIdentityRegistry, WeakRef<RenderWireIdentityRegistry>[]>();
+const snapshotReferences = new Set<WeakRef<RenderWireIdentityRegistry>>();
+const snapshotFinalizer = new FinalizationRegistry<WeakRef<RenderWireIdentityRegistry>>((reference) => {
+  snapshotReferences.delete(reference);
+});
 
 /** Register only the renderer-specific resource and material half of a portable program. */
 export function registerThreeRasterPlanProgram<
@@ -163,6 +168,7 @@ export function registerThreeRasterPlanProgram<
   if (!sameGeometry(expectedGeometry, variant.geometry)) {
     throw new TypeError(`Three raster variant "${variantId}" declares incompatible geometry`);
   }
+  assertThreeGeometrySemantics(techniqueId, variantId, expectedGeometry, portable.schema);
   const buffers = normalizeBufferCapabilities(techniqueId, variantId, variant.buffers, portable.schema);
   const resources = normalizeResourceCapabilities(techniqueId, variantId, variant.resources, portable.schema);
   const outputs = normalizeOutputs(techniqueId, variantId, variant.outputs);
@@ -185,7 +191,7 @@ export function registerThreeRasterPlanProgram<
       `Three already selected raster variant "${existing.variant.id}" for technique "${techniqueId}"`,
     );
   }
-  const runtimeCount = [...snapshots.values()].reduce((sum, count) => sum + count, 0);
+  const runtimeCount = liveSnapshotCount();
   if (runtimeCount !== 0) {
     throw new Error(
       `Three raster variant "${techniqueId}/${variantId}" was registered after ${runtimeCount} text runtime(s) ` +
@@ -203,16 +209,33 @@ export function compiledThreeRasterPlanPrograms(
 ): readonly CompiledThreeRasterPlanProgram[] {
   const selected = [...programs.values()].sort((left, right) => left.technique.id.localeCompare(right.technique.id));
   const compiled = selected.map((program) => compileProgram(program, identities, transformMode));
-  snapshots.set(identities, (snapshots.get(identities) ?? 0) + 1);
+  const reference = new WeakRef(identities);
+  const references = snapshotsByRegistry.get(identities) ?? [];
+  references.push(reference);
+  snapshotsByRegistry.set(identities, references);
+  snapshotReferences.add(reference);
+  snapshotFinalizer.register(identities, reference, reference);
   return compiled;
 }
 
 /** @internal Forget a disposed runtime's renderer snapshot. */
 export function releaseThreeRasterPlanProgramSnapshot(identities: RenderWireIdentityRegistry): void {
-  const count = snapshots.get(identities);
-  if (count === undefined) return;
-  if (count === 1) snapshots.delete(identities);
-  else snapshots.set(identities, count - 1);
+  const references = snapshotsByRegistry.get(identities);
+  if (references === undefined) return;
+  const reference = references.pop();
+  if (reference === undefined) return;
+  snapshotFinalizer.unregister(reference);
+  snapshotReferences.delete(reference);
+  if (references.length === 0) snapshotsByRegistry.delete(identities);
+}
+
+function liveSnapshotCount(): number {
+  let count = 0;
+  for (const reference of snapshotReferences) {
+    if (reference.deref() === undefined) snapshotReferences.delete(reference);
+    else count += 1;
+  }
+  return count;
 }
 
 export interface ThreePolicyAbi {
@@ -295,6 +318,37 @@ function sameGeometry(left: TechniqueGeometryDeclaration, right: unknown): right
     candidate.resource === left.resource &&
     candidate.coordinates === left.coordinates
   );
+}
+
+function assertThreeGeometrySemantics(
+  techniqueId: string,
+  variantId: string,
+  geometry: TechniqueGeometryDeclaration,
+  schema: AnyTechniqueSchema,
+): void {
+  if (geometry.kind === 'synthetic-quad' || geometry.resource === undefined) return;
+  const resource = schema.resources?.[geometry.resource];
+  if (resource?.kind !== 'geometry') {
+    throw new TypeError(
+      `Three raster variant "${techniqueId}/${variantId}" needs geometry resource "${geometry.resource}"`,
+    );
+  }
+  const widths: Readonly<Record<string, readonly number[]>> = {
+    position: [3],
+    normal: [3],
+    tangent: [4],
+    uv: [2],
+    color: [3, 4],
+  };
+  for (const attribute of resource.attributes) {
+    const expected = widths[attribute.semantic];
+    if (expected !== undefined && !expected.includes(attribute.components)) {
+      throw new TypeError(
+        `Three raster variant "${techniqueId}/${variantId}" geometry attribute "${attribute.semantic}" ` +
+          `needs ${expected.join(' or ')} components; got ${attribute.components}`,
+      );
+    }
+  }
 }
 
 function hasExactOwnKeys(value: object, expected: readonly string[]): boolean {

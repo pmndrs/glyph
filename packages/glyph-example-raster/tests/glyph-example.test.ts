@@ -232,6 +232,10 @@ describe('public external raster proof', () => {
       expect(Array.from(geometry.index?.array ?? [])).toEqual([0, 1, 2, 2, 1, 3]);
       expect(geometry.drawRange).toEqual({ start: 0, count: 6 });
       expect(geometry.instanceCount).toBeGreaterThan(0);
+      expect(geometry.getAttribute('position').itemSize).toBe(3);
+      geometry.computeBoundingBox();
+      expect(geometry.boundingBox?.min.toArray()).toEqual([0, 0, 0]);
+      expect(geometry.boundingBox?.max.toArray()).toEqual([1, 1, 0]);
 
       text.text = 'QUAD STRIP';
       scene.updateMatrixWorld();
@@ -264,7 +268,7 @@ const suppliedGlyphExampleSchema = defineTechniqueSchema({
     glyphGeometry: {
       kind: 'geometry',
       attributes: [
-        { semantic: 'position', componentType: 'f32', components: 2 },
+        { semantic: 'position', componentType: 'f32', components: 3 },
         { semantic: 'uv', componentType: 'f32', components: 2 },
       ],
     },
@@ -427,14 +431,14 @@ function dataUrl(bytes: Uint8Array): string {
 }
 
 function triangleStripGeometry(source: PortableGeometryPayload): PortableGeometryPayload {
-  const bytes = new Uint8Array(72);
-  bytes.set(source.bytes.subarray(0, 64));
-  bytes.set(new Uint8Array(new Uint16Array([0, 1, 2, 3]).buffer), 64);
+  const bytes = new Uint8Array(88);
+  bytes.set(source.bytes.subarray(0, 80));
+  bytes.set(new Uint8Array(new Uint16Array([0, 1, 2, 3]).buffer), 80);
   return {
     kind: 'geometry',
     topology: 'triangle-strip',
     bytes,
-    views: [source.views[0]!, { offset: 64, length: 8 }],
+    views: [source.views[0]!, { offset: 80, length: 8 }],
     accessors: [source.accessors[0]!, source.accessors[1]!, { componentType: 'u16', components: 1, view: 1, count: 4 }],
     attributes: source.attributes,
     indices: { accessor: 2 },

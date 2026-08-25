@@ -42,7 +42,7 @@ function schemaFor(value) {
       mesh: {
         kind: 'geometry',
         attributes: [
-          { semantic: 'position', componentType: 'f32', components: 2 },
+          { semantic: 'position', componentType: 'f32', components: 3 },
           { semantic: 'uv', componentType: 'f32', components: 2 },
         ],
       },
@@ -170,6 +170,44 @@ test('font compilation owns binding metadata and normalizes retained payloads', 
   assert.equal(typeof compiled.declaredResources.clear, 'undefined');
 });
 
+test('resource selection receives explicit glyph and strike coordinates', () => {
+  const value = technique('test.plan-resource-coordinates');
+  const calls = [];
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
+      compiler.retain('mesh', MESH, indexedQuadGeometry());
+      return compiler.compile({
+        strikes: [12, 24],
+        resource(glyphIndex, strikeIndex) {
+          calls.push([glyphIndex, strikeIndex]);
+          return COLORS;
+        },
+        f32: { opacity: () => 0.5 },
+        u32: { page: () => 0 },
+      });
+    },
+  });
+  const identities = new RenderWireIdentityRegistry();
+  const compiled = compileRasterFont(loaded(value), identities);
+
+  assert.deepEqual(calls, [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+  ]);
+  const resourceIds = bindingResourceIds(compiled.binding);
+  const selected = bindingResourceIndices(compiled.binding);
+  assert.deepEqual(
+    selected.map((index) => resourceIds[index]),
+    Array.from({ length: 4 }, () => identities.resourceId(COLORS)),
+  );
+});
+
 test('authored resource identities remain stable across independent compiler calls', () => {
   const value = technique('test.plan-stable-resource-identity');
   let invocation = 0;
@@ -228,10 +266,10 @@ test('retention rejects undeclared, duplicate, missing, and wrong-kind resources
         const geometry = indexedQuadGeometry();
         compiler.retain('mesh', MESH, {
           ...geometry,
-          accessors: [{ ...geometry.accessors[0], components: 3 }, ...geometry.accessors.slice(1)],
+          accessors: [{ ...geometry.accessors[0], components: 2 }, ...geometry.accessors.slice(1)],
         });
       },
-      /vertex input "position" needs f32x2/,
+      /vertex input "position" needs f32x3/,
     ],
     [
       'test.plan-missing-resource',
@@ -427,4 +465,13 @@ function bindingResourceIds(bytes) {
   return Array.from({ length: view.getUint32(request.resourceCount, true) }, (_, index) =>
     view.getUint32(resourcesOffset + index * resource.size + resource.id, true),
   );
+}
+
+function bindingResourceIndices(bytes) {
+  const request = textShaperAbi.layouts.fontBindingRequest;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const glyphCount = view.getUint32(request.glyphCount, true);
+  const strikeCount = view.getUint32(request.strikeCount, true);
+  const offset = view.getUint32(request.resourceIndicesOffset, true);
+  return Array.from({ length: glyphCount * strikeCount }, (_, index) => view.getUint32(offset + index * 4, true));
 }

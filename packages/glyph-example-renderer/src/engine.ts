@@ -50,12 +50,12 @@ export interface ExampleFrameInput {
  * ```ts
  * const publication = session.update(request); // borrow, valid until the next call
  * session.assertLive(publication);             // cheap liveness gate before decoding
- * const owned = session.retain(publication);   // one contiguous copy; acknowledges it
+ * const owned = session.retain(publication);   // one contiguous owned copy
  * readDrawList(owned);                         // decode views over owned bytes only
  * ```
  *
- * Nothing here aliases Wasm memory after `render` returns, so the returned plan may be
- * held across any number of frames and Wasm calls.
+ * Device acceptance advances the wire-facing revisions and acknowledgment. A rejected
+ * submission remains owned for retry while the last accepted state stays authoritative.
  */
 export class ExampleTextEngine {
   readonly #host: TextEngineHost;
@@ -125,7 +125,7 @@ export class ExampleTextEngine {
       capabilitySet: EXAMPLE_CAPABILITY_SET,
       expectedEngineRevision: latest.engineRevision,
       consumedPlanRevision: latest.planRevision,
-      acknowledgedPublicationGeneration: session.acknowledgedGeneration,
+      acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
       limits: EXAMPLE_LIMITS,
       ...(input.paragraphMutations === undefined ? {} : { paragraphMutations: input.paragraphMutations }),
       ...(input.textMutations === undefined ? {} : { textMutations: input.textMutations }),
@@ -138,28 +138,45 @@ export class ExampleTextEngine {
   /** Runs one real frame and returns its plan, retained into host-owned memory. */
   render(input: ExampleFrameInput): ExampleDrawList {
     const device = this.#device;
-    const list = readDrawList(this.#retainPublication(this.session.update(this.frameRequest(input))));
-    device?.prepareSubmission(list).commit();
+    if (this.#pendingPublication !== undefined) {
+      device?.prepareSubmission(this.#pendingPublication).commit();
+      this.#acceptPublication(this.#pendingPublication);
+      this.#pendingPublication = undefined;
+    }
+    const list = readDrawList(this.#copyPublication(this.session.update(this.frameRequest(input))));
+    try {
+      device?.prepareSubmission(list).commit();
+    } catch (error) {
+      this.#pendingPublication = list;
+      throw error;
+    }
+    this.#acceptPublication(list);
     return list;
   }
 
+  #acknowledgedPublicationGeneration = 0;
   #latest: Pick<TextEnginePublication, 'engineRevision' | 'planRevision'> = {
     engineRevision: 0,
     planRevision: 0,
   };
+  #pendingPublication: ExampleDrawList | undefined;
 
-  /** The protocol steps between a raw borrow and an owned publication. */
-  #retainPublication(publication: TextEnginePublication): RetainedTextEnginePublication {
+  /** Copy a raw borrow before any device operation can invalidate Wasm memory. */
+  #copyPublication(publication: TextEnginePublication): RetainedTextEnginePublication {
     const session = this.session;
     session.assertLive(publication);
-    const owned = session.retain(publication);
-    this.#latest = { engineRevision: owned.engineRevision, planRevision: owned.planRevision };
-    return owned;
+    return session.retain(publication);
+  }
+
+  #acceptPublication(publication: ExampleDrawList): void {
+    this.#latest = { engineRevision: publication.engineRevision, planRevision: publication.planRevision };
+    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
   }
 
   dispose(): void {
     this.#session?.dispose();
     this.#session = undefined;
+    this.#pendingPublication = undefined;
     this.#host.dispose();
   }
 }

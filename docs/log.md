@@ -2,6 +2,14 @@
 
 ## 2026-08-25
 
+- **The external renderer now separates owned bytes from device acceptance** — A retained publication may advance the
+  session's convenience counter before a device accepts its candidate, so the example host now carries its own accepted
+  generation and plan revision, retries the exact rejected publication, and advances the wire fence only after commit. A
+  throw-once test reaches byte-identical buffer state against a no-failure oracle. The same adversarial pass replaced
+  ambiguous resource rows with `(glyphIndex, strikeIndex)`, made Three snapshot tracking weak, preserved portable resource
+  types through material creation, validated Three's reserved supplied-geometry widths at registration, and corrected the
+  renderer guide and package-boundary proof.
+
 - **Renderer failures no longer wait for input churn** — Three now validates and prepares a complete plan candidate before
   publication. A material or resource realization failure retains the engine-accepted publication and retries those exact
   owned bytes on the next frame without another Wasm call; the prior draw state remains live because the candidate never
@@ -23,8 +31,8 @@
   grouped Slug pages are not expressible as one declared name and one retained key; the docs now state that limit instead
   of claiming a migration that did not happen. The browser proof enforces matching WebGPU and forced-WebGL2 frames and
   currently observes RGBA SHA-256 `0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`;
-  the 101-sample Three lab retains one draw and geometry for equal 12-instance inputs at a 0.085 ms CPU-side median for
-  the generic path, and reviewed gzip sizes are 63,538 bytes for `/core`, 90,397 bytes for the complete Three
+  the 101-sample Three lab retains one draw and geometry for equal 12-instance inputs at a 0.075 ms CPU-side median for
+  the generic path, and reviewed gzip sizes are 63,511 bytes for `/core`, 91,266 bytes for the complete Three
   integration, 3,940 bytes for the peer-externalized TSL technique graph, and 2,768 bytes for its TypeGPU sibling.
 
 ## 2026-08-23
@@ -37,8 +45,9 @@
   publication the session never issued is rejected outright. `session.retain` makes one contiguous copy
   of the whole encoded result — header, tables, and patch payloads stay consistent by construction — and
   brands it `RetainedTextPublication`, so retaining APIs demand it in their types. Retaining or
-  `acknowledge()`ing advances `session.acknowledgedGeneration`, the value frame requests carry and the
-  engine already verified monotonically: retirements name the generation that makes release safe, so an
+  `acknowledge()`ing advances `session.acknowledgedGeneration`; in-place consumers may carry it in frame requests, while
+  transactional renderers carry their last device-accepted generation separately. The engine verifies that wire value
+  monotonically: retirements name the generation that makes release safe, so an
   unacknowledging host leaks retired GPU storage rather than reading freed memory.
   `readTextEnginePatch` surfaces dirty ranges per `(bufferId, bufferGeneration)`; paragraph ids are
   caller-chosen handles, glyph identity rides the policy's stable-id lane, and engine storage is keyed

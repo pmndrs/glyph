@@ -72,7 +72,8 @@ type BindingReaders<Names> = Names extends readonly string[]
 
 export type RasterFontBinding<Binding extends TechniqueBindingDeclaration> = {
   readonly strikes: readonly [number, ...number[]];
-  readonly resource: (row: number) => RasterResourceId | undefined;
+  /** Select the resource for one glyph and authored strike. */
+  readonly resource: (glyphIndex: number, strikeIndex: number) => RasterResourceId | undefined;
 } & (Binding['f32'] extends readonly string[]
   ? { readonly f32: BindingReaders<Binding['f32']> }
   : { readonly f32?: never }) &
@@ -391,8 +392,10 @@ function compileFont(
     glyphCount,
     strikes,
     resources,
-    resourceIndex(row) {
-      const key = resourceReader(row);
+    resourceIndex(strikeRow) {
+      const glyphIndex = strikeRow % glyphCount;
+      const strikeIndex = Math.floor(strikeRow / glyphCount);
+      const key = resourceReader(glyphIndex, strikeIndex);
       return key === undefined ? MISSING_RESOURCE : indexFor(key);
     },
     glyphF32: program.schema.scope === 'glyph' ? f32Table : emptyGlyph,

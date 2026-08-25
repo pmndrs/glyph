@@ -71,8 +71,8 @@ arbitrary memory, or mutate layout. (`packages/glyph/rust/shaper/src/engine/poli
 This is the modularity boundary. A new renderer authors another policy and plan consumer; it does not need another shaping
 or layout API. The first-party Three.js integration follows the same route: it imports the public core toolkit, declares
 its buffers, compiles programs for Bitmap, MTSDF, Slug, and decoration, and registers one policy.
-(`packages/glyph/src/three/render-policy.ts:1`, `packages/glyph/src/three/render-policy.ts:27`,
-`packages/glyph/src/three/render-policy.ts:74`)
+(`packages/glyph/src/three/render-policy.ts`, `packages/glyph/src/three/render-policy.ts`,
+`packages/glyph/src/three/render-policy.ts`)
 
 The separation was learned through a concrete boundary defect: `/core` was once judged to have no consumers and removed
 from the package exports even though `/three` already consumed it. The second example renderer now exists so a renderer
@@ -115,38 +115,38 @@ export const quadSchema = defineTechniqueSchema({
 The declarations have different wire consequences:
 
 - `technique` is a stable string identity. The schema retains the string; registration later resolves it into the shared
-  nonzero `u32` wire namespace. (`packages/glyph/src/core/technique-schema.ts:142`,
-  `packages/glyph/src/core/render-policy.ts:74`)
+  nonzero `u32` wire namespace. (`packages/glyph/src/core/technique-schema.ts`,
+  `packages/glyph/src/core/render-policy.ts`)
 - `scope` selects the font-binding row family used by every declared binding field: `glyph` indexes by glyph ID, `strike`
   by the selected physical strike, and `resource` by the selected resource. Semantic fields come from layout and are added
-  by the program builder rather than declared in `binding`. (`packages/glyph/src/core/technique-schema.ts:144`,
+  by the program builder rather than declared in `binding`. (`packages/glyph/src/core/technique-schema.ts`,
   `packages/glyph/rust/shaper/src/engine/policy_gather.rs:909`,
   `packages/glyph/rust/shaper/src/engine/policy_gather.rs:993`)
 - `binding.f32` and `binding.u32` are ordered field names. Their names are authoring-time safety; their zero-based positions
   become policy input field numbers. A font-binding compiler must emit its field-major tables in exactly the same order.
   `schemaFieldTable()` exists because a missing or misspelled reader previously meant a silently shifted column rather
-  than a compile error. (`packages/glyph/src/core/policy-program.ts:221`,
-  `packages/glyph/src/core/font-binding.ts:26`, `packages/glyph/src/core/font-binding.ts:333`)
+  than a compile error. (`packages/glyph/src/core/policy-program.ts`,
+  `packages/glyph/src/core/font-binding.ts`, `packages/glyph/src/core/font-binding.ts`)
 - Every buffer `id` is a nonzero `u16` unique within the program. `scalar` is the element representation, and the number of
   lane names becomes the wire vector width. The public schema admits `f32` and `u32`, with one to four lanes; lane names do
   not occupy wire bytes. `schemaPolicyBuffers()` lowers the declarations to policy buffer records.
-  (`packages/glyph/src/core/technique-schema.ts:13`, `packages/glyph/src/core/technique-schema.ts:15`,
-  `packages/glyph/src/core/technique-schema.ts:33`, `packages/glyph/src/core/technique-schema.ts:363`)
+  (`packages/glyph/src/core/technique-schema.ts`, `packages/glyph/src/core/technique-schema.ts`,
+  `packages/glyph/src/core/technique-schema.ts`, `packages/glyph/src/core/technique-schema.ts`)
 - `resources` describes the renderer-facing kind and optional format. It is frozen into the schema but does **not** produce
   a policy-wire record today. Actual resource identities, generations, kinds, and references enter through a font binding
-  and later appear in the plan's `resources` table. (`packages/glyph/src/core/technique-schema.ts:148`,
-  `packages/glyph/src/core/technique-schema.ts:101`, `packages/glyph/src/core/font-binding.ts:305`)
+  and later appear in the plan's `resources` table. (`packages/glyph/src/core/technique-schema.ts`,
+  `packages/glyph/src/core/technique-schema.ts`, `packages/glyph/src/core/font-binding.ts`)
   A schema used by `registerRasterPlanProgram()` must declare at least one resource because the current font-binding wire
   maps every raster record to a retained resource; resource-free engine primitives remain host-owned branches.
 - `glyphOrigin` is also host metadata, not engine wire. It points animation or augmentation code at an `f32` buffer whose
   first two lanes contain the technique's rest-position value; the values need not share one coordinate space across
-  techniques. (`packages/glyph/src/core/technique-schema.ts:152`,
-  `packages/glyph/src/three/engine-plan-target.ts:1174`)
+  techniques. (`packages/glyph/src/core/technique-schema.ts`,
+  `packages/glyph/src/three/engine-plan-target.ts`)
 
 `definePolicyBuffers()` and `defineTechniqueSchema()` validate owned copies and freeze them. They reject invalid IDs,
 duplicate IDs or binding names, invalid scalar kinds, and invalid origin declarations at the call that authored them,
-rather than returning a failure object. (`packages/glyph/src/core/technique-schema.ts:33`,
-`packages/glyph/src/core/technique-schema.ts:186`) This follows the engine rule that a synchronous call either returns its
+rather than returning a failure object. (`packages/glyph/src/core/technique-schema.ts`,
+`packages/glyph/src/core/technique-schema.ts`) This follows the engine rule that a synchronous call either returns its
 answer or throws where the invalid input was written. (`.agents/skills/engine-call-contract/SKILL.md:8`)
 
 ## 3. Write the policy program
@@ -195,13 +195,13 @@ lanes from the engine-owned declarations, so a technique cannot omit or renumber
 
 Do not move expression values between builders. A loaded value's input number is meaningful only in the builder that
 created it; without the authoring-session check, combining builders would silently read another field. Constants are the
-exception because they have no input provenance. (`packages/glyph/src/core/policy-program.ts:62`)
+exception because they have no input provenance. (`packages/glyph/src/core/policy-program.ts`)
 
 ### What runs per glyph and what happens per draw
 
 The builder exposes these semantic inputs for each produced glyph: inline and block origin, font size, linear RGBA color,
-optional inverse font size, transform index, and stable glyph ID. (`packages/glyph/src/core/policy-program.ts:135`,
-`packages/glyph/src/core/policy-program.ts:143`) The engine gathers the selected semantic, glyph, strike, and resource rows
+optional inverse font size, transform index, and stable glyph ID. (`packages/glyph/src/core/policy-program.ts`,
+`packages/glyph/src/core/policy-program.ts`) The engine gathers the selected semantic, glyph, strike, and resource rows
 for each glyph, then executes the straight-line program once per output record; the Wasm implementation may process four
 records at once, but scalar execution defines the same result. (`packages/glyph/rust/shaper/src/engine/policy_gather.rs:457`,
 `packages/glyph/rust/shaper/src/engine/policy.rs:1070`)
@@ -215,12 +215,12 @@ emits draw packets that reference spans of primitives, buffers, and resources. (
 - `transformMode: 'direct'` puts transform identity in the draw key. Records with different transforms split into
   different draws, and `draw.transformId` names the renderer object. `indexed` removes transform from the draw key,
   publishes `draw.transformId` as zero, and requires the policy/renderer pair to carry a per-record transform-index buffer.
-  (`packages/glyph/src/core/render-policy.ts:205`, `packages/glyph/src/core/render-policy.ts:227`,
+  (`packages/glyph/src/core/render-policy.ts`, `packages/glyph/src/core/render-policy.ts`,
   `packages/glyph/rust/shaper/src/engine/ordered_plan.rs:1073`,
   `packages/glyph/rust/shaper/src/engine/ordered_plan.rs:1128`)
 - `allocationMode: 'ordered'` makes physical records follow logical order. `stable` selects stable-indirect storage, where
   unchanged glyphs keep physical slots and an internal scalar `u32` order buffer maps logical instances to them. The
-  reserved order buffer has policy buffer ID `65535`. (`packages/glyph/src/core/render-policy.ts:222`,
+  reserved order buffer has policy buffer ID `65535`. (`packages/glyph/src/core/render-policy.ts`,
   `packages/glyph/rust/shaper/src/engine/render_plan.rs:10`)
 
 ## 4. Compile and register the policy
@@ -261,15 +261,15 @@ one runtime registry is the collision authority for identities that can meet in 
 independent Wasm runtimes do not share plans or handles. (`packages/glyph/src/core/render-policy.ts`,
 `packages/glyph/src/core/host.ts`) The Three.js coordinator demonstrates
 the required scope by passing `host.wireIdentities` to policy programs, font-binding compilers, and resource registration.
-(`packages/glyph/src/three/engine-runtime.ts:85`, `packages/glyph/src/three/engine-runtime.ts:195`,
-`packages/glyph/src/three/engine-runtime.ts:237`)
+(`packages/glyph/src/three/engine-runtime.ts`, `packages/glyph/src/three/engine-runtime.ts`,
+`packages/glyph/src/three/engine-runtime.ts`)
 
 Use the same resolved technique ID and `programVariant` in the font binding. `compileFontBinding()` serializes the immutable
 glyph/strike/resource tables and their resource identities. A registered `RasterPlanProgram` owns this cold composition,
 and `compileRasterFont()` returns the binding bytes plus constrained portable resource payloads; the byte-only
 `loadedFontBindingBytes()` projection consults that registry before falling back to the three first-party techniques.
-(`packages/glyph/src/core/raster-plan-program.ts`, `packages/glyph/src/core/font-binding.ts:40`,
-`packages/glyph/src/core/font-binding.ts:55`) The engine still owns resource realization and material creation, so a
+(`packages/glyph/src/core/raster-plan-program.ts`, `packages/glyph/src/core/font-binding.ts`,
+`packages/glyph/src/core/font-binding.ts`) The engine still owns resource realization and material creation, so a
 Three consumer pairs the portable plan with a registered `{ technique, variant }` through
 `registerThreeRasterPlanProgram()` rather than copying the compiler. Register exactly one chosen realization per technique
 before the first Three runtime snapshot; a second variant or a late registration throws at that call. The variant receives
@@ -280,8 +280,8 @@ buffer shapes, resource formats, and geometry meaning—including a custom geome
 
 A font cannot be loaded through `/core` alone. Create the `TextRuntime` and call `loadFont()` through `@pmndrs/glyph`, then
 use the `/core` bridge `textRuntimeShaper(runtime)` to construct the host. The runtime registers shaping data before it
-returns a loaded raster font. (`packages/glyph/src/index.ts:148`, `packages/glyph/src/text-runtime.ts:71`,
-`packages/glyph/src/text-runtime.ts:93`, `packages/glyph/src/text-runtime.ts:104`) This is by design: `/core` adds the
+returns a loaded raster font. (`packages/glyph/src/index.ts`, `packages/glyph/src/text-runtime.ts`,
+`packages/glyph/src/text-runtime.ts`, `packages/glyph/src/text-runtime.ts`) This is by design: `/core` adds the
 renderer integration surface to the root font and text vocabulary; it does not duplicate that vocabulary.
 (`.agents/skills/engine-call-contract/SKILL.md:63`)
 
@@ -298,6 +298,7 @@ const session = host.createSession({
   requestCapacity: 4 * 1024,
   resultCapacity: 128 * 1024,
 });
+let acceptedPublicationGeneration = 0;
 
 const limits: TextEngineFrameLimits = {
   maxParagraphs: 8,
@@ -316,47 +317,51 @@ const request = compileTextEngineFrameUpdate({
   capabilitySet: 1,
   expectedEngineRevision: 0,
   consumedPlanRevision: 0,
-  acknowledgedPublicationGeneration: session.acknowledgedGeneration,
+  acknowledgedPublicationGeneration: acceptedPublicationGeneration,
   limits,
 });
 
 const borrowed = session.update(request);
 session.assertLive(borrowed);
 const publication = session.retain(borrowed);
+const pending = prepareRendererSubmission(publication); // validate without changing live state
+pending.commit();
+acceptedPublicationGeneration = publication.publicationGeneration;
 ```
 
 The frame update carries optimistic engine/plan revisions, the publication generation the renderer has consumed, the
 selected policy and capability set, hard per-frame limits, and optional paragraph, text, style, constraint, region,
 exclusion, inline-object, semantic-view, compositing, and policy-parameter sections.
-(`packages/glyph/src/core/frame-wire.ts:175`) `compileTextEngineFrameUpdate()` only serializes those sections; shaping,
-layout, policy execution, and packing remain in Rust. (`packages/glyph/src/core/frame-wire.ts:195`)
+(`packages/glyph/src/core/frame-wire.ts`) `compileTextEngineFrameUpdate()` only serializes those sections; shaping,
+layout, policy execution, and packing remain in Rust. (`packages/glyph/src/core/frame-wire.ts`)
 
 Session arena capacity and frame limits are different controls. If a serialized request exceeds the request arena,
 `update()` reserves more space. If a valid result reports a larger required result capacity, it grows the A/B result arenas
-and retries once. (`packages/glyph/src/core/host.ts:315`) Frame limits are serialized into every request and bound the work
-and output the engine is allowed to accept. (`packages/glyph/src/core/frame-wire.ts:292`)
+and retries once. (`packages/glyph/src/core/host.ts`) Frame limits are serialized into every request and bound the work
+and output the engine is allowed to accept. (`packages/glyph/src/core/frame-wire.ts`)
 
 On success, `update()` returns a borrowed `TextEnginePublication`. Its header exposes the engine and plan revisions,
 required base revision, publication generation, A/B output slot, policy/capability identity, flags, and summary counts;
-`bytes` is the complete encoded plan. (`packages/glyph/src/core/host.ts:24`, `packages/glyph/src/core/host.ts:425`) On invalid
+`bytes` is the complete encoded plan. (`packages/glyph/src/core/host.ts`, `packages/glyph/src/core/host.ts`) On invalid
 input or an engine status, the call throws at `update()`; it does not return a result union or leave a recovery latch for
-the next frame. (`packages/glyph/src/core/host.ts:315`, `.agents/skills/engine-call-contract/SKILL.md:8`) The no-latch rule
+the next frame. (`packages/glyph/src/core/host.ts`, `.agents/skills/engine-call-contract/SKILL.md:8`) The no-latch rule
 exists because an earlier rejected-frame design kept recompiling the invalid frame every render tick instead of preserving
 the last accepted scene. (`docs/planning/session-handoff.md:28`)
 
-Use `publication.engineRevision` and `publication.planRevision` as the expectations for the next update. Carry
-`session.acknowledgedGeneration`; do not substitute `consumedPlanRevision`, because plan revision consumption and storage
-retirement acknowledgment are distinct fences. (`packages/glyph-example-renderer/src/engine.ts:76`,
-`docs/planning/decision-register.md:238`)
+Use the last device-accepted publication's `engineRevision` and `planRevision` as the expectations for the next update.
+Carry its `publicationGeneration` as the acknowledgment; do not use `session.acknowledgedGeneration` when a retained
+publication is still awaiting device acceptance. Retention owns the bytes, while renderer commit proves that their patches
+and resources became live. Plan revision consumption and storage retirement acknowledgment remain distinct fences.
+(`packages/glyph-example-renderer/src/engine.ts`, `docs/planning/decision-register.md:238`)
 
 ## 6. Read the plan
 
 Bind a live borrowed publication, or a retained publication, to `TextEngineRenderPlanView`. `bind()` verifies that the byte
 view belongs to the reported memory, validates the publication length, and validates all seven table spans. `table()`
 returns `{ offset, count, stride }`; `record()` range-checks an index; `u8`, `u16`, `u32`, `f32`, and `bytes` read within the
-publication in canonical little-endian order. (`packages/glyph/src/core/plan-view.ts:47`,
-`packages/glyph/src/core/plan-view.ts:54`, `packages/glyph/src/core/plan-view.ts:72`,
-`packages/glyph/src/core/plan-view.ts:88`)
+publication in canonical little-endian order. (`packages/glyph/src/core/plan-view.ts`,
+`packages/glyph/src/core/plan-view.ts`, `packages/glyph/src/core/plan-view.ts`,
+`packages/glyph/src/core/plan-view.ts`)
 
 The layout constants are public through `textShaperAbi`, so records without a convenience decoder remain readable without
 copying:
@@ -416,44 +421,44 @@ call. (`packages/glyph-example-renderer/src/plan-reader.ts:12`,
 
 Offsets below are relative to each record. All multibyte fields are little-endian. The public generated ABI is the offset
 authority; the Rust declarations provide the scalar types and exact strides.
-(`packages/glyph/src/generated/text-shaper-abi.ts:223`, `packages/glyph/rust/shaper/src/engine/render_plan.rs:171`)
+(`packages/glyph/src/generated/text-shaper-abi.ts`, `packages/glyph/rust/shaper/src/engine/render_plan.rs:171`)
 
 - `resources` — 40 bytes: `id@0:u32`, `generation@4:u32`, `techniqueId@8:u32`, `resourceKind@12:u16`,
   `action@14:u16`, `flags@16:u32`, `referenceId@20:u32`, `lowerBound@24:u32`, `upperBound@28:u32`,
   `auxiliary0@32:u32`, `auxiliary1@36:u32`. Realize or retain the renderer resource named by `referenceId`; key the plan
-  identity by `(id, generation)`. (`packages/glyph/src/generated/text-shaper-abi.ts:419`,
+  identity by `(id, generation)`. (`packages/glyph/src/generated/text-shaper-abi.ts`,
   `packages/glyph/rust/shaper/src/engine/render_plan.rs:32`)
 - `buffers` — 36 bytes: `id@0:u32`, `generation@4:u32`, `programId@8:u32`, `policyBufferId@12:u16`,
   `scalarType@14:u8`, `vectorWidth@15:u8`, `strategy@16:u16`, `flags@18:u16`, `liveRecords@20:u32`,
   `capacityRecords@24:u32`, `byteLength@28:u32`, `orderBufferId@32:u32`. Allocate renderer storage with the declared
   physical shape and use `policyBufferId` to bind it to the shader lane declared in the schema.
-  (`packages/glyph/src/generated/text-shaper-abi.ts:224`,
+  (`packages/glyph/src/generated/text-shaper-abi.ts`,
   `packages/glyph/rust/shaper/src/engine/render_plan.rs:48`)
 - `patches` — 36 bytes: `opcode@0:u16`, `flags@2:u16`, `bufferId@4:u32`, `bufferGeneration@8:u32`,
   `destinationOffset@12:u32`, `byteLength@16:u32`, `payloadOffset@20:u32`, `sourceBufferId@24:u32`,
   `sourceOffset@28:u32`, `fillValue@32:u32`. Apply the named write, fill, or copy to the exact destination generation.
-  Write payload offsets point inside the same publication. (`packages/glyph/src/generated/text-shaper-abi.ts:359`,
+  Write payload offsets point inside the same publication. (`packages/glyph/src/generated/text-shaper-abi.ts`,
   `packages/glyph/rust/shaper/src/engine/render_plan.rs:65`)
 - `primitives` — 64 bytes: `id@0:u32`, `kind@4:u16`, `flags@6:u16`, `techniqueId@8:u32`,
   `resourceId@12:u32`, `resourceGeneration@16:u32`, `programId@20:u32`, `programVariant@24:u16`,
   `recordCount@26:u16`, `bufferId@28:u32`, `recordIndex@32:u32`, `logicalOrder@36:u32`, `clipId@40:u32`,
   `semanticId@44:u32`, `inlineStart@48:f32`, `blockStart@52:f32`, `inlineExtent@56:f32`,
   `blockExtent@60:f32`. A primitive is a logical span over consecutive records, not a GPU object.
-  (`packages/glyph/src/generated/text-shaper-abi.ts:373`,
+  (`packages/glyph/src/generated/text-shaper-abi.ts`,
   `packages/glyph/rust/shaper/src/engine/render_plan.rs:81`)
 - `draws` — 64 bytes: `id@0:u32`, `programId@4:u32`, `programVariant@8:u16`, `flags@10:u16`,
   `materialId@12:u32`, `clipId@16:u32`, `depthKey@20:u32`, `transformId@24:u32`, `primitiveStart@28:u32`,
   `primitiveCount@32:u32`, `bufferStart@36:u32`, `bufferCount@40:u32`, `resourceStart@44:u32`,
   `resourceCount@48:u32`, `orderToken@52:u32`, `indirectBufferId@56:u32`, `indirectOffset@60:u32`. The three
-  `Start`/`Count` pairs are ranges in the corresponding tables. (`packages/glyph/src/generated/text-shaper-abi.ts:283`,
+  `Start`/`Count` pairs are ranges in the corresponding tables. (`packages/glyph/src/generated/text-shaper-abi.ts`,
   `packages/glyph/rust/shaper/src/engine/render_plan.rs:105`)
 - `retirements` — 24 bytes: `kind@0:u16`, `flags@2:u16`, `id@4:u32`, `generation@8:u32`,
   `afterPublicationGeneration@12:u32`, `byteOffset@16:u32`, `byteLength@20:u32`. This is the only release authority for
-  engine storage. (`packages/glyph/src/generated/text-shaper-abi.ts:474`,
+  engine storage. (`packages/glyph/src/generated/text-shaper-abi.ts`,
   `packages/glyph/rust/shaper/src/engine/render_plan.rs:131`)
 - `diagnostics` — 24 bytes: `code@0:u16`, `severity@2:u8`, `phase@3:u8`, `subjectId@4:u32`, `value0@8:u32`,
   `value1@12:u32`, `durationNanosLow@16:u32`, `durationNanosHigh@20:u32`. Treat these as plan telemetry; preserve unknown
-  codes rather than inventing rendering behavior from them. (`packages/glyph/src/generated/text-shaper-abi.ts:271`,
+  codes rather than inventing rendering behavior from them. (`packages/glyph/src/generated/text-shaper-abi.ts`,
   `packages/glyph/rust/shaper/src/engine/render_plan.rs:143`)
 
 ### Interpret draw identity at the renderer boundary
@@ -461,10 +466,10 @@ authority; the Rust declarations provide the scalar types and exact strides.
 - `programId` is the renderer program/pipeline identity derived by `createRasterPolicyProgram()` from the technique and
   renderer namespace. `programVariant` originates in the
   font binding and selects the `(capability set, technique, variant)` policy program; a renderer may use it for the matching
-  shader specialization. (`packages/glyph/src/core/render-policy.ts:205`,
-  `packages/glyph/src/core/font-binding.ts:39`, `packages/glyph/rust/shaper/src/engine/policy.rs:344`)
+  shader specialization. (`packages/glyph/src/core/render-policy.ts`,
+  `packages/glyph/src/core/font-binding.ts`, `packages/glyph/rust/shaper/src/engine/policy.rs:344`)
 - `materialId` is renderer-owned data resolved from authored style, never a callback or renderer object in the engine.
-  (`packages/glyph/src/core/frame-wire.ts:46`, `packages/glyph/rust/shaper/src/engine/render_plan.rs:112`)
+  (`packages/glyph/src/core/frame-wire.ts`, `packages/glyph/rust/shaper/src/engine/render_plan.rs:112`)
 - `clipId` names the clip shared by the packet. Map it to the renderer's scissor, stencil, clip stack, or equivalent.
   (`packages/glyph/rust/shaper/src/engine/render_plan.rs:114`)
 - `depthKey` is the caller-defined sortable depth bucket. Logical order remains authoritative within a bucket.
@@ -475,7 +480,7 @@ authority; the Rust declarations provide the scalar types and exact strides.
   `packages/glyph/rust/shaper/src/engine/plan_input.rs:27`)
 - `transformId` is the renderer-owned transform/object identity for direct mode. Zero means the transform is indexed per
   record through the policy buffer in indexed mode. (`packages/glyph/rust/shaper/src/engine/render_plan.rs:118`,
-  `packages/glyph/src/three/engine-plan-target.ts:649`)
+  `packages/glyph/src/three/engine-plan-target.ts`)
 
 ## 7. Retain the frame handoff correctly
 
@@ -490,27 +495,30 @@ The JavaScript ownership rule is deliberately stricter than physical slot arithm
 
 That includes another update, a measurement, a reserve or growth attempt, a failed call that reserved capacity, and
 session disposal. Some bytes may physically survive for another slot turn, but relying on that would make liveness depend
-on hidden arena state and eventually feed stale bytes to the GPU. (`packages/glyph/src/core/retention.ts:4`,
-`packages/glyph/src/core/host.ts:238`)
+on hidden arena state and eventually feed stale bytes to the GPU. (`packages/glyph/src/core/retention.ts`,
+`packages/glyph/src/core/host.ts`)
 
 Choose one handoff:
 
 - Consume the borrow synchronously: call `session.assertLive(publication)` before decoding, apply every needed table and
   payload before another session call, then call `session.acknowledge(publication)`.
 - Keep plan bytes or views: call `session.retain(publication)`. It makes one contiguous copy of the header, all tables, and
-  patch payloads; brands the result as `RetainedTextEnginePublication`; and acknowledges consumption. The retained copy
-  never expires. (`packages/glyph/src/core/host.ts:254`, `packages/glyph/src/core/host.ts:264`,
-  `packages/glyph/src/core/retention.ts:36`)
+  patch payloads and brands the result as `RetainedTextEnginePublication`. The retained copy never expires. Because
+  `retain()` also advances the session's convenience acknowledgment, a transactional renderer must keep its own
+  device-accepted generation and use that value on the wire until submission commits.
+  (`packages/glyph/src/core/host.ts`, `packages/glyph/src/core/retention.ts`)
 
 Use `session.isExpired()` when branching is useful and `session.assertLive()` when a stale read is a defect. Both also
-reject a publication issued by another session. (`packages/glyph/src/core/host.ts:238`,
-`packages/glyph/src/core/host.ts:254`)
+reject a publication issued by another session. (`packages/glyph/src/core/host.ts`,
+`packages/glyph/src/core/host.ts`)
 
 Acknowledgment is load-bearing, not bookkeeping. The engine delays retirements until the host has consumed the required
 publication generation; acknowledging late retains old GPU storage, never acknowledging leaks it, and sending a generation
-that goes backward is a revision conflict. `session.acknowledgedGeneration` is therefore copied into the next frame update.
-(`packages/glyph/src/core/plan-view.ts:179`, `packages/glyph/src/core/retention.ts:17`,
-`packages/glyph/src/core/frame-wire.ts:175`) This separate fence exists because “the host consumed plan revision N” does
+that goes backward is a revision conflict. A synchronous in-place consumer may copy `session.acknowledgedGeneration` into
+the next frame update after applying the publication. A renderer that retains before device submission must instead carry
+the last generation whose submission committed.
+(`packages/glyph/src/core/plan-view.ts`, `packages/glyph/src/core/retention.ts`,
+`packages/glyph/src/core/frame-wire.ts`) This separate fence exists because “the host consumed plan revision N” does
 not prove that storage associated with an earlier publication can be reused or released. Conflating the two would allow
 retirement while renderer work still depended on that storage. (`docs/planning/decision-register.md:235`)
 
@@ -518,13 +526,13 @@ retirement while renderer work still depended on that storage. (`docs/planning/d
 
 Key every physical buffer by `(bufferId, bufferGeneration)`. A changed generation is new storage even when the numeric ID
 is unchanged. Apply the `buffers` table first so allocations exist, then apply each patch to the exact generation it names.
-(`packages/glyph/src/core/plan-view.ts:141`, `packages/glyph/src/core/retention.ts:23`)
+(`packages/glyph/src/core/plan-view.ts`, `packages/glyph/src/core/retention.ts`)
 
 The patch opcodes are `allocateOrResize`, `write`, `fill`, `copy`, and `retire`. Buffer rows describe allocations; write,
 fill, and copy carry content deltas. A patch opcode named `retire` is **not** permission to destroy renderer storage. The
 first-party consumer ignores allocation/retire patch opcodes for content application and releases only from the
-`retirements` table. (`packages/glyph/src/generated/text-shaper-abi.ts:85`,
-`packages/glyph/src/three/engine-plan-target.ts:404`, `packages/glyph/src/three/engine-plan-target.ts:1127`)
+`retirements` table. (`packages/glyph/src/generated/text-shaper-abi.ts`,
+`packages/glyph/src/three/engine-plan-target.ts`, `packages/glyph/src/three/engine-plan-target.ts`)
 
 A CPU mirror suitable for staging GPU writes follows this shape:
 
@@ -639,4 +647,4 @@ export function applyBufferDeltas(
 Upload only the write/fill/copy destination ranges marked by those patches. Preserve buffers and resources across frames,
 including objects absent from a delta publication, until a matching retirement names the exact generation. The Three.js
 consumer follows this order: read resources, read buffers, apply patches, rebuild referenced draws, then apply retirements.
-(`packages/glyph/src/three/engine-plan-target.ts:134`)
+(`packages/glyph/src/three/engine-plan-target.ts`)

@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:b024ef6c0c87cc7c8d0b3cbe76f965867d99b201b9122f8d73f8f32a044241ec'
+source_digest: 'sha256:3ceafe9fa1e3e800b01ea66e95180ad82b8c12c4e69af3db55778ef6229dd59e'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -86,7 +86,7 @@ resolution, abort-before-decode, plus a compiled-Wasm public `Text` lifecycle th
 and observes retained draw/geometry identity. No test reconstructs the removed TypeScript selector, storage, or writer.
 
 The package also exports a small immutable indexed geometry fixture. It follows the portable GLB-like contract—semantic
-position/UV vertex attributes, typed accessors, indices, topology, and draw range—so an engine can choose supplied
+three-component position and two-component UV vertex attributes, typed accessors, indices, topology, and draw range—so an engine can choose supplied
 geometry without importing Three or learning the example's implementation details. The plan's primitive record span,
 not the geometry payload, supplies the draw's instance count.
 

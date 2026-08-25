@@ -2058,8 +2058,10 @@ function resolveDrawGeometry(resource: ThreeTextEngineResource | undefined): Dra
   if (resource === undefined || !('resources' in resource) || declaration.resource === undefined) {
     throw new Error(`supplied Three geometry "${declaration.kind}" has no named portable resource`);
   }
-  const payload = resource.resources.get(declaration.resource) as PortableGeometryPayload | undefined;
-  if (payload === undefined) throw new Error(`Three draw omits supplied geometry resource "${declaration.resource}"`);
+  const payload = resource.resources.get(declaration.resource);
+  if (payload?.kind !== 'geometry') {
+    throw new Error(`Three draw omits supplied geometry resource "${declaration.resource}"`);
+  }
   const referenceId =
     'resourceReferences' in resource ? resource.resourceReferences.get(declaration.resource) : undefined;
   if (referenceId === undefined) {

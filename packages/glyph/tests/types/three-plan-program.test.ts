@@ -1,10 +1,15 @@
-import { defineTechniqueSchema } from '../../src/core.js';
+import { defineTechniqueSchema, type PortableResource } from '../../src/core.js';
 import { defineRasterTechnique } from '../../src/raster-technique.js';
 import {
   registerThreeRasterPlanProgram,
+  type ThreePlanProgramMaterialContext,
   type ThreeRasterPlanProgram,
   type ThreeRasterPlanVariant,
 } from '../../src/three.js';
+
+declare const materialContext: ThreePlanProgramMaterialContext;
+const namedResource: PortableResource | undefined = materialContext.namedResources.get('atlas');
+void namedResource;
 
 const technique = defineRasterTechnique({
   id: 'probe.three-exact-schema',
@@ -31,7 +36,7 @@ const schema = defineTechniqueSchema({
     meta: { kind: 'buffer' },
     mesh: {
       kind: 'geometry',
-      attributes: [{ semantic: 'position', componentType: 'f32', components: 2 }],
+      attributes: [{ semantic: 'position', componentType: 'f32', components: 3 }],
     },
   },
   render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'em' } },
