@@ -1,10 +1,10 @@
 /**
- * Value noise, smooth and cheap, for camera drift.
+ * Value noise, smooth and cheap, for camera movement.
  *
- * Not a library: one dimension, two octaves and a cubic fade is everything a
- * slow camera move needs, and it keeps the page free of a dependency whose
- * whole surface would go unused. Deterministic from the seed, so the motion is
- * the same on every load and can be judged rather than merely watched.
+ * Not a library: one dimension, a few octaves and a cubic fade is everything a
+ * camera needs, and it keeps the page free of a dependency whose surface would
+ * go almost entirely unused. Deterministic from the seed, so the motion is the
+ * same on every load and can be judged rather than merely watched.
  */
 function hash(n: number): number {
   const x = Math.sin(n * 127.1) * 43_758.545_312;
@@ -23,7 +23,15 @@ function noise(x: number, seed: number): number {
   return (a + (b - a) * fade(f)) * 2 - 1;
 }
 
-/** Two octaves: a slow swing with a smaller wander riding on it. */
-export function drift(time: number, seed: number): number {
-  return noise(time, seed) * 0.72 + noise(time * 2.17, seed + 31) * 0.28;
+/**
+ * Weighted toward the faster octaves.
+ *
+ * A slow octave carrying most of the amplitude reads as floating — the frame
+ * wanders somewhere and stays there. Shake is the opposite shape: the camera
+ * never travels far, but it is never quite still either, so the weight belongs
+ * on the detail and the amplitude stays small. The octave ratios are irrational
+ * so the three never line up into a visible beat.
+ */
+export function shake(time: number, seed: number): number {
+  return noise(time, seed) * 0.3 + noise(time * 3.17, seed + 31) * 0.42 + noise(time * 7.41, seed + 67) * 0.28;
 }

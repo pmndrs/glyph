@@ -24,8 +24,10 @@ export interface LookValues {
   chorusBreak: number;
   chorusGap: number;
   chorusWords: number;
-  driftAmount: number;
-  driftSpeed: number;
+  shakeAim: number;
+  shakeDamping: number;
+  shakeAmount: number;
+  shakeSpeed: number;
   chorusRtl: number;
   chorusRun: number;
   chorusLetter: number;
@@ -70,19 +72,21 @@ export const LOOK: Readonly<LookValues> = Object.freeze({
   bloomRadius: 0.32,
   chorusDepth: 3.2,
   chorusDim: 0.16,
-  chorusJustify: 0,
+  chorusJustify: 1,
   chorusBreak: 1,
   chorusGap: 72,
   chorusWords: 1600,
-  driftAmount: 0.55,
-  driftSpeed: 0.035,
+  shakeAim: 0.035,
+  shakeDamping: 0.45,
+  shakeAmount: 0.13,
+  shakeSpeed: 0.058,
   chorusRtl: 0.12,
   chorusRun: 1,
-  chorusLetter: 0,
-  chorusMaxSpace: 1.5,
-  chorusMinSpace: 0.82,
+  chorusLetter: 0.045,
+  chorusMaxSpace: 1.35,
+  chorusMinSpace: 0.85,
   chorusLeading: 0.92,
-  chorusSize: 0.0128,
+  chorusSize: 0.0182,
   bloomStrength: 0.3,
   bloomThreshold: 0.92,
   curvature: 0.4,
@@ -146,8 +150,10 @@ const RANGES: Record<keyof LookValues, readonly [number, number, number]> = {
   chorusBreak: [0, 1, 1],
   chorusGap: [0, 220, 2],
   chorusWords: [200, 8000, 100],
-  driftAmount: [0, 3, 0.01],
-  driftSpeed: [0, 0.4, 0.001],
+  shakeAim: [0, 0.4, 0.001],
+  shakeDamping: [0.02, 2, 0.01],
+  shakeAmount: [0, 1.2, 0.005],
+  shakeSpeed: [0, 1, 0.005],
   chorusRtl: [0, 0.6, 0.01],
   chorusRun: [1, 40, 1],
   chorusLetter: [0, 0.4, 0.005],
@@ -214,7 +220,7 @@ const GROUPS = {
   Studio: ['studioKey', 'studioTop', 'studioSides', 'studioBack', 'envIntensity', 'envResolution'],
   Bloom: ['bloomStrength', 'bloomRadius', 'bloomThreshold'],
   Flare: ['flareSamples', 'flareSpacing', 'flareAttenuation', 'flareThreshold'],
-  Camera: ['driftAmount', 'driftSpeed'],
+  Camera: ['shakeAmount', 'shakeAim', 'shakeSpeed', 'shakeDamping'],
   Lens: ['exposure', 'aberrationPeak', 'aberrationFalloff'],
 } as const satisfies Record<string, readonly (keyof LookValues)[]>;
 
