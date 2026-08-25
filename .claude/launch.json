@@ -2,16 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dev",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@pmndrs/glyph-benchmarks", "run", "dev", "--port", "5273", "--strictPort"],
+      "name": "glyph-site",
+      "runtimeExecutable": "mise",
+      "runtimeArgs": ["exec", "--", "pnpm", "--filter", "@pmndrs/glyph-site", "dev", "--port", "5273", "--strictPort"],
       "port": 5273
-    },
-    {
-      "name": "r3f",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@pmndrs/glyph-r3f-hello-world", "run", "dev", "--port", "5274", "--strictPort"],
-      "port": 5274
     }
   ]
 }
