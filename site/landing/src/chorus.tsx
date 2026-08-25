@@ -1,12 +1,9 @@
 import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { slug } from '@pmndrs/glyph/three/slug';
 import { useThree } from '@react-three/fiber/webgpu';
 import { useMemo, useRef } from 'react';
-
-/** The strike the chorus renders at; must match site/scripts/bake-chorus.mts. */
-const STRIKE = 32;
 
 import { CHORUS_URLS } from './chorus-stack';
 import { RTL_WORDS, WORDS } from './chorus-words';
@@ -69,7 +66,9 @@ function stream(rtlShare: number, count: number, runLength: number): string {
       words.push(pick);
     }
   }
-  return words.join(' ');
+  // Word · word · word. The dot gives the eye a boundary it can trust when the
+  // scripts on either side of it are ones it cannot read.
+  return words.join(' \u00b7 ');
 }
 
 /** Which face will end up drawing this word, near enough to group by. */
@@ -111,13 +110,11 @@ function columnsFor(width: number): number {
   return 3;
 }
 
-// Bitmap, not MSDF: the chorus is small body copy at a fixed size, which is
-// exactly what a native strike is for. MSDF bakes a full-size atlas per face
-// regardless of glyph count, and twenty-one of those cost 448 MB of texture for
-// a few hundred glyphs.
-const REQUESTS = CHORUS_URLS.map(
-  (url) => ({ input: { baked: url }, raster: { technique: bitmap, options: { strikes: [STRIKE] } } }) as const,
-);
+// Slug: exact outlines rather than an atlas. MSDF bakes a full-size atlas per
+// face regardless of glyph count — twenty-two of those came to 448 MB of
+// texture for a few hundred glyphs — while Slug carries curve data, so the
+// cost scales with the glyphs actually baked rather than with the face count.
+const REQUESTS = CHORUS_URLS.map((url) => ({ input: { baked: url }, raster: { technique: slug } }) as const);
 
 for (const request of REQUESTS) useFont.preload(request);
 
@@ -134,7 +131,7 @@ export function Chorus() {
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const fonts = REQUESTS.map((request) => useFont(request));
 
-  const field = useRef<ThreeText<typeof bitmap>>(null);
+  const field = useRef<ThreeText<typeof slug>>(null);
 
   // A hole in a line of justified text is either a stretched space or a word
   // that failed to shape. The engine knows which, so ask it rather than guess.
@@ -165,7 +162,26 @@ export function Chorus() {
   const spread = 1 + depth / 6;
   const width = viewport.width * spread * 1.08;
   const height = viewport.height * spread * 1.2;
+
+  const columns = columnsFor(size.width);
+  const gap = (live.chorusGap * width) / Math.max(size.width, 1);
+
   const fontSize = width * live.chorusSize;
+
+  if (import.meta.env.DEV) {
+    const perCssPixel = width / Math.max(size.width, 1);
+    (globalThis as unknown as { __geom: unknown }).__geom = {
+      boxWidthWorld: +width.toFixed(2),
+      columnWidthCss: +((width - gap * (columns - 1)) / columns / perCssPixel).toFixed(1),
+      columns,
+      fontSizeCss: +(fontSize / perCssPixel).toFixed(1),
+      gapCss: +(gap / perCssPixel).toFixed(1),
+      gapWorld: +gap.toFixed(3),
+      screenWidthCss: size.width,
+      spread: +spread.toFixed(3),
+      viewportWorld: +viewport.width.toFixed(2),
+    };
+  }
 
   return (
     // `independent` lets Rust reorder compatible draws. The default is
@@ -185,10 +201,7 @@ export function Chorus() {
           // The gap is specified in screen pixels and converted, so a column
           // never closes up to a hairline just because the field sits deeper or
           // the viewport got narrow.
-          columns: {
-            count: columnsFor(size.width),
-            gap: Math.max(fontSize * 0.9, (live.chorusGap * width) / Math.max(size.width, 1)),
-          },
+          columns: { count: columns, gap },
           // Columns fill top to bottom and then move across, so the engine needs a
           // bounded height to know where one column ends.
           height: { mode: 'exact', size: height },
@@ -206,7 +219,14 @@ export function Chorus() {
           lastLine: 'auto',
           overflow: 'clip',
           width: { mode: 'exact', size: width },
-          wrap: 'word',
+          // 'word' cannot break inside a word, exactly as CSS cannot, so a word
+          // wider than the column runs straight through the gap into the next
+          // one. The benchmark's editorial workload never meets this because it
+          // sets Latin ipsum in half-width columns; a third-width column of
+          // Khmer, Lao and Tamil meets it constantly. 'character' is the
+          // engine's own answer, and for a decorative field a mid-word break
+          // costs nothing next to an overflow.
+          wrap: live.chorusBreak > 0.5 ? 'character' : 'word',
         }}
         font={stack}
         ref={field}

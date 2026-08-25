@@ -1,8 +1,8 @@
 {
   "faces": [
     {
-      "chars": " Gacdefghijklmnoprstyzíýăάήαγλμρυφабвгзиклнуфіữ",
-      "glyphs": 47,
+      "chars": " Gacdefghijklmnoprstyz·íýăάήαγλμρυφабвгзиклнуфіữ",
+      "glyphs": 48,
       "name": "latin",
       "points": [
         "U+0020",
@@ -27,6 +27,7 @@
         "U+0074",
         "U+0079",
         "U+007A",
+        "U+00B7",
         "U+00ED",
         "U+00FD",
         "U+0103",
@@ -182,17 +183,22 @@
       "points": ["U+120D", "U+12F0", "U+134A"]
     },
     {
-      "chars": "字形文글리자프",
-      "glyphs": 7,
-      "name": "cjk",
-      "points": ["U+5B57", "U+5F62", "U+6587", "U+AE00", "U+B9AC", "U+C790", "U+D504"]
+      "chars": "字形文",
+      "glyphs": 3,
+      "name": "japanese",
+      "points": ["U+5B57", "U+5F62", "U+6587"]
+    },
+    {
+      "chars": "글리자프",
+      "glyphs": 4,
+      "name": "korean",
+      "points": ["U+AE00", "U+B9AC", "U+C790", "U+D504"]
     }
   ],
   "generated": "site/scripts/bake-chorus.mts",
-  "strike": 32,
   "totals": {
-    "faces": 21,
-    "points": 160,
+    "faces": 22,
+    "points": 161,
     "words": 49
   }
 }
