@@ -74,7 +74,7 @@ export const LOOK: Readonly<LookValues> = Object.freeze({
   chorusDim: 0.16,
   chorusJustify: 1,
   chorusBreak: 1,
-  chorusGap: 72,
+  chorusGap: 110,
   chorusWords: 1600,
   shakeAim: 0.035,
   shakeDamping: 0.45,
