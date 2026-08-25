@@ -1,4 +1,4 @@
-import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
+import { Text, useFont } from '@pmndrs/glyph/react';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/three/slug';
