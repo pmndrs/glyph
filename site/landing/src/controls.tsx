@@ -24,6 +24,8 @@ export interface LookValues {
   chorusBreak: number;
   chorusGap: number;
   chorusWords: number;
+  driftAmount: number;
+  driftSpeed: number;
   chorusRtl: number;
   chorusRun: number;
   chorusLetter: number;
@@ -72,13 +74,15 @@ export const LOOK: Readonly<LookValues> = Object.freeze({
   chorusBreak: 1,
   chorusGap: 72,
   chorusWords: 1600,
+  driftAmount: 0.55,
+  driftSpeed: 0.035,
   chorusRtl: 0.12,
   chorusRun: 1,
   chorusLetter: 0,
   chorusMaxSpace: 1.5,
   chorusMinSpace: 0.82,
   chorusLeading: 0.92,
-  chorusSize: 0.0115,
+  chorusSize: 0.0128,
   bloomStrength: 0.3,
   bloomThreshold: 0.92,
   curvature: 0.4,
@@ -142,6 +146,8 @@ const RANGES: Record<keyof LookValues, readonly [number, number, number]> = {
   chorusBreak: [0, 1, 1],
   chorusGap: [0, 220, 2],
   chorusWords: [200, 8000, 100],
+  driftAmount: [0, 3, 0.01],
+  driftSpeed: [0, 0.4, 0.001],
   chorusRtl: [0, 0.6, 0.01],
   chorusRun: [1, 40, 1],
   chorusLetter: [0, 0.4, 0.005],
@@ -208,6 +214,7 @@ const GROUPS = {
   Studio: ['studioKey', 'studioTop', 'studioSides', 'studioBack', 'envIntensity', 'envResolution'],
   Bloom: ['bloomStrength', 'bloomRadius', 'bloomThreshold'],
   Flare: ['flareSamples', 'flareSpacing', 'flareAttenuation', 'flareThreshold'],
+  Camera: ['driftAmount', 'driftSpeed'],
   Lens: ['exposure', 'aberrationPeak', 'aberrationFalloff'],
 } as const satisfies Record<string, readonly (keyof LookValues)[]>;
 
