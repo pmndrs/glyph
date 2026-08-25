@@ -11,7 +11,7 @@ function fail(message) {
 }
 
 function parseArguments(argv) {
-  const options = { model: 'opus', effort: 'max' };
+  const options = { model: 'opus', effort: 'high' };
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -31,6 +31,9 @@ function parseArguments(argv) {
   if (!options.promptFile) fail('Missing required --prompt-file');
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(options.name)) {
     fail('--name must contain lowercase letters, digits, or hyphens');
+  }
+  if (!['low', 'medium', 'high', 'xhigh', 'max'].includes(options.effort)) {
+    fail('--effort must be low, medium, high, xhigh, or max');
   }
   return options;
 }
