@@ -58,7 +58,7 @@ flowchart LR
   Device --> Draw[Non-empty draws]
 ```
 
-The important boundary is between the portable plan and the renderer adapter. A plan describes the physical buffers and how semantic values become those buffers. The engine supplies its own wire identities, system lanes, capability set, allocation mode, and renderer realization.
+The important boundary is between the portable plan and the renderer integration. A plan describes the physical buffers and how semantic values become those buffers. The engine supplies its own wire identities, system lanes, capability set, allocation mode, and renderer realization.
 
 ## 1. Implementing a portable technique plan
 
@@ -229,7 +229,7 @@ Three owns its system lanes. In the current implementation the stable glyph id i
 ```ts
 import { createProgram, schemaPolicyBuffers } from '@pmndrs/glyph/core';
 
-// Supplied by the Three adapter; neither value belongs in the portable plan.
+// Supplied by the Three integration; neither value belongs in the portable plan.
 declare const threePolicyCapabilitySet: () => PolicyCapabilitySet;
 declare const threeSystemBuffers: RasterPolicySystem;
 
@@ -248,7 +248,7 @@ const policy = createProgram(
 );
 ```
 
-The actual public package adapts this through `registerThreeRasterPlanProgram({ technique, realizeResource, createMaterial })`. The Three registry resolves the portable program by technique id, creates the Three `PolicyProgram`, and keeps the resource-to-program association in `/three`.
+The actual public package adapts this through `registerThreeRasterPlanProgram({ technique, variant })`. The application selects one compatible Three realization by registering it before the first runtime snapshot; the registry resolves the portable program by technique id, creates the host-owned Three `PolicyProgram`, and keeps the resource-to-program association in `/three`. The selected variant's `createMaterial(context)` receives named policy buffers and named portable resources; it does not own policy assembly or resource retention.
 
 ### A non-Three policy assembly
 
@@ -334,6 +334,18 @@ interface ExampleRendererDevice {
 ```
 
 `RecordingExampleRendererDevice` is a concrete device for the acceptance path. A real WebGPU/WebGL/CPU renderer can implement the same four operations without changing the portable technique.
+
+### Executable evidence
+
+The example-renderer acceptance loads Inter, compiles the portable binding, realizes named resources and both generated
+and supplied geometry, submits a non-empty draw list, and verifies retained updates. The Three browser proof renders the
+same external technique on WebGPU and forced WebGL2 with RGBA SHA-256
+`0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`.
+
+`pnpm scripts run benchmark:render-technique-lab` compares the generic Three path with Bitmap through one public
+`TextRuntime`. On the reviewed Chromium run, generic realization measured 3.09 ms cold and 0.065/0.095 ms median/p95
+retained; Bitmap measured 3.20 ms cold and 0.055/0.065 ms retained. Both retained one draw and its geometry. These are
+host observations, not CI timing thresholds; draw count, instance count, and identity retention are enforced invariants.
 
 ## 4. Implementing a baker
 
@@ -433,7 +445,7 @@ flowchart TB
 - Put cold binding/resource composition in `compileFont`; call `retain()` for portable payloads only.
 - Register the portable plan with `registerRasterPlanProgram`.
 - In each engine, compose the body into that engine's `PolicyProgram` and add its own system buffers/capabilities.
-- Keep resource realization and material creation in the renderer adapter.
+- Keep resource realization and material creation in the renderer integration.
 - Define a baker with `defineRasterBaker`; use `rasterBake()` for direct plans or `pmndrs.glyph` discovery for project builds.
 - Prove the complete path with a real loaded font, binding registration, resource realization, submission, and non-empty draws.
 
@@ -447,7 +459,7 @@ flowchart TB
 | Policy assembly                 | `packages/glyph/src/core/render-policy.ts`                     |
 | Portable plan registry/compiler | `packages/glyph/src/core/raster-plan-program.ts`               |
 | Shared font binding projection  | `packages/glyph/src/core/font-binding.ts`                      |
-| Three resource/material adapter | `packages/glyph/src/three/plan-program-registry.ts`            |
+| Three resource/material path    | `packages/glyph/src/three/plan-program-registry.ts`            |
 | Example portable technique      | `packages/glyph-example-raster/src/portable.ts`                |
 | Example TypeGPU shader          | `packages/glyph-example-raster/src/typegpu.ts`                 |
 | Example TSL shader              | `packages/glyph-example-raster/src/tsl.ts`                     |

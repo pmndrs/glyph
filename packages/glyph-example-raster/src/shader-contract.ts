@@ -17,6 +17,8 @@ export interface GlyphExampleShaderContract {
     readonly size: GlyphExampleShaderBuffer;
     readonly color: GlyphExampleShaderBuffer;
   }>;
+  readonly resources: NonNullable<typeof glyphExampleSchema.resources>;
+  readonly outputs: Readonly<{ readonly position: 'vec3'; readonly color: 'vec3'; readonly opacity: 'float' }>;
   readonly resource: string;
   readonly geometryResource: string | undefined;
 }
@@ -39,6 +41,8 @@ export const glyphExampleShaderContract: GlyphExampleShaderContract = Object.fre
     size: shaderBuffer('size'),
     color: shaderBuffer('color'),
   }),
+  resources: glyphExampleSchema.resources!,
+  outputs: Object.freeze({ position: 'vec3', color: 'vec3', opacity: 'float' }),
   resource: resourceNames[0]!,
   geometryResource: geometry.resource,
 });
@@ -56,6 +60,8 @@ export interface GlyphExampleShaderVariant {
   readonly techniqueId: GlyphExampleShaderContract['techniqueId'];
   readonly geometry: typeof glyphExampleShaderContract.geometry;
   readonly buffers: typeof glyphExampleShaderContract.buffers;
+  readonly resources: typeof glyphExampleShaderContract.resources;
+  readonly outputs: typeof glyphExampleShaderContract.outputs;
   readonly resource: typeof glyphExampleShaderContract.resource;
   readonly geometryResource: typeof glyphExampleShaderContract.geometryResource;
 }

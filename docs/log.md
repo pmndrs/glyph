@@ -1,5 +1,21 @@
 # pmndrs/glyph documentation update log
 
+## 2026-08-24
+
+- **Raster plans now cross renderer boundaries as named portable data** — A technique registers one schema, policy-body
+  factory, binding compiler, and constrained immutable resource set; each host assigns its own system lanes and assembles
+  its own policy. The external example publishes independent TypeGPU and TSL shader subpaths, while its root remains
+  renderer-free and performs only portable registration. The example renderer loads a real font, registers the binding,
+  realizes generated and supplied indexed geometry through its own device, and submits non-empty draws. Three selects one
+  renderer variant per technique at registration, validates named buffer/resource/geometry capabilities before its first
+  runtime snapshot, preserves generic user materials and glyph-origin augmentation, and retains draw/geometry identity
+  across updates. Bitmap, MSDF, and Slug remain on their renderer-owned fallback because repeated strike atlases and
+  grouped Slug pages are not expressible as one declared name and one retained key; the docs now state that limit instead
+  of claiming a migration that did not happen. The browser proof matches on WebGPU and forced WebGL2 at RGBA SHA-256
+  `0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`; the 101-sample Three lab retains one draw and
+  geometry at 0.065 ms median for the generic path, and reviewed gzip sizes are 55,340 bytes for `/core` and 79,414 bytes
+  for the complete Three integration.
+
 ## 2026-08-23
 
 - **A retained host can now hold the render plan without holding a hazard** — item 11 of the API surface

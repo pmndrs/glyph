@@ -23,62 +23,66 @@ test('a Three consumer manually registers the example TSL realization', () => {
 
   const program = {
     technique: glyphExamplePlanProgram.technique,
-    realizeResource: (resource: unknown) => resource,
-    createMaterial(context: {
-      readonly buffers: ReadonlyMap<
-        number,
-        {
-          readonly scalarType: number;
-          readonly vectorWidth: number;
-          readonly attribute: THREE.StorageInstancedBufferAttribute;
+    variant: {
+      id: 'tsl',
+      language: 'tsl',
+      buffers: glyphExampleTslVariant.buffers,
+      resources: glyphExampleTslVariant.resources,
+      outputs: glyphExampleTslVariant.outputs,
+      geometry: glyphExampleTslVariant.geometry,
+      createMaterial(context: import('@pmndrs/glyph/three').ThreePlanProgramMaterialContext) {
+        if (context.materialId !== 0) throw new TypeError('glyph-example supports only the default material');
+        const origin = context.namedBuffers.get('origin');
+        const size = context.namedBuffers.get('size');
+        const color = context.namedBuffers.get('color');
+        if (
+          origin?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
+          origin.vectorWidth !== 2 ||
+          size?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
+          size.vectorWidth !== 2 ||
+          color?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
+          color.vectorWidth !== 4
+        ) {
+          throw new TypeError('glyph-example TSL registration received incompatible buffers');
         }
-      >;
-      readonly instance: THREE.Node<'uint'>;
-      readonly materialId: number;
-      transformPosition(position: THREE.Node<'vec3'>): THREE.Node<'vec3'>;
-    }) {
-      if (context.materialId !== 0) throw new TypeError('glyph-example supports only the default material');
-      const origin = context.buffers.get(1);
-      const size = context.buffers.get(2);
-      const color = context.buffers.get(3);
-      if (
-        origin?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
-        origin.vectorWidth !== 2 ||
-        size?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
-        size.vectorWidth !== 2 ||
-        color?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
-        color.vectorWidth !== 4
-      ) {
-        throw new TypeError('glyph-example TSL registration received incompatible buffers');
-      }
-      const shader = glyphExampleTslShader({
-        origin: storage(origin.attribute, 'vec2', origin.attribute.count).element(context.instance),
-        size: storage(size.attribute, 'vec2', size.attribute.count).element(context.instance),
-        color: storage(color.attribute, 'vec4', color.attribute.count).element(context.instance),
-        quadPosition: positionLocal,
-        quadUv: uv(),
-        transformPosition: context.transformPosition,
-      });
-      const material = new THREE.MeshBasicNodeMaterial({ transparent: true });
-      material.positionNode = shader.position;
-      material.colorNode = shader.color;
-      material.opacityNode = shader.opacity;
-      materials.push(material);
-      return material;
+        const shader = glyphExampleTslShader({
+          origin: storage(origin.attribute, 'vec2', origin.attribute.count).element(context.instance),
+          size: storage(size.attribute, 'vec2', size.attribute.count).element(context.instance),
+          color: storage(color.attribute, 'vec4', color.attribute.count).element(context.instance),
+          quadPosition: positionLocal,
+          quadUv: uv(),
+          transformPosition: context.transformPosition,
+        });
+        const material = new THREE.MeshBasicNodeMaterial({ transparent: true });
+        material.positionNode = shader.position;
+        material.colorNode = shader.color;
+        material.opacityNode = shader.opacity;
+        materials.push(material);
+        return material;
+      },
     },
   };
 
   registerThreeRasterPlanProgram(program);
   registerThreeRasterPlanProgram(program);
   const attribute = new THREE.StorageInstancedBufferAttribute(new Float32Array(4), 2);
-  const material = program.createMaterial({
-    buffers: new Map([
-      [1, { scalarType: threePolicyAbi.scalarTypes.f32, vectorWidth: 2, attribute }],
-      [2, { scalarType: threePolicyAbi.scalarTypes.f32, vectorWidth: 2, attribute }],
-      [3, { scalarType: threePolicyAbi.scalarTypes.f32, vectorWidth: 4, attribute }],
-    ]),
+  const namedBuffers = new Map([
+    ['origin', { scalarType: threePolicyAbi.scalarTypes.f32, vectorWidth: 2, attribute }],
+    ['size', { scalarType: threePolicyAbi.scalarTypes.f32, vectorWidth: 2, attribute }],
+    ['color', { scalarType: threePolicyAbi.scalarTypes.f32, vectorWidth: 4, attribute }],
+  ]);
+  const material = program.variant.createMaterial({
+    technique: glyphExamplePlanProgram.technique,
+    schema: glyphExamplePlanProgram.schema,
+    variantId: 'tsl',
+    language: 'tsl',
+    outputTypes: glyphExampleTslVariant.outputs,
+    namedBuffers,
+    namedResources: new Map(),
+    resourceName: 'glyphColors',
     instance: uint(0),
     materialId: 0,
+    material: undefined,
     transformPosition: (position) => position,
   });
   expect(material).toBeInstanceOf(THREE.MeshBasicNodeMaterial);

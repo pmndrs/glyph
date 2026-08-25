@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:51def4181372bf4d82049bc2a21fee00baa371bc851f28c49b139c26df2e3dd2'
+source_digest: 'sha256:7c855253419d46232a8a8d033a1b66a48160f5765ec14cc1febb700609f788ce'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -367,7 +367,12 @@ WebGPU and WebGL2. The external package's static policy and font binding run thr
 renderer factory receives only plan-selected buffers. Framebuffer differences prove caller-owned Group order through
 actual Three.js sorting, while the baseline toggles public `Text.visible` to prove one indexed instance can disappear
 without splitting the shared draw or rerunning layout. Two samples per backend reproduce the same RGBA SHA-256
-`817495c4afe3a8f88d2af85d972f43be88b9f834ed0268d0d0b2e3de86ba9d46`.
+`0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`.
+
+`benchmark:render-technique-lab` measures generic and first-party Three realization through one public runtime. The
+reviewed 101-sample Chromium run measured the external technique at 3.09 ms cold and 0.065/0.095 ms median/p95 retained,
+versus Bitmap at 3.20 ms cold and 0.055/0.065 ms retained. Both kept one non-empty draw and the same geometry through all
+updates; timing remains observational while draw, instance, and identity invariants fail the workflow.
 
 Timed playback compares each frame with the latest requested location rather than the last committed scene, so an in-flight preload receives exactly one request and cannot be superseded by a duplicate transition that skips workload-default initialization. Presentation captures Space at the window capture boundary to start or stop timed playback even while a button, switch, slider, select, or combobox owns focus; matching key-up activation is suppressed, while inputs, textareas, and editable text retain ordinary space entry. Arrow navigation remains disabled on interactive controls.
 

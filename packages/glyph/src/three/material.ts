@@ -1,6 +1,14 @@
 import type { Node, NodeMaterial } from 'three/webgpu';
 
+import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TslBitmapShaderOutput, TslMsdfShaderOutput, TslSlugShaderOutput } from '../tsl.js';
+
+export interface ThreeTextGenericMaterialContext {
+  readonly technique: AnyRasterTechnique;
+  readonly outputs: ReadonlyMap<string, Node>;
+  readonly position: Node<'vec3'>;
+  createDefaultMaterial(): NodeMaterial;
+}
 
 export type ThreeTextMaterialContext =
   | Readonly<{
@@ -21,7 +29,8 @@ export type ThreeTextMaterialContext =
       shader: TslSlugShaderOutput;
       position: Node<'vec3'>;
       createDefaultMaterial(): NodeMaterial;
-    }>;
+    }>
+  | Readonly<ThreeTextGenericMaterialContext>;
 
 export interface ThreeTextMaterial {
   create(context: ThreeTextMaterialContext): NodeMaterial;

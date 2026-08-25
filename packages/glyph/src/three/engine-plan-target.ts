@@ -7,7 +7,13 @@ import { bitmapSchema } from '../raster/bitmap-technique.js';
 import { msdfSchema } from '../raster/msdf.js';
 import { slugSchema } from '../raster/slug-technique.js';
 import type { PolicyBufferDeclaration, PolicyBufferDeclarations, TechniqueSchema } from '../core.js';
-import { TextEngineRenderPlanView, type RenderPlanTable, type TextEnginePublication } from '../core.js';
+import {
+  assertPortableResource,
+  TextEngineRenderPlanView,
+  type PortableGeometryPayload,
+  type RenderPlanTable,
+  type TextEnginePublication,
+} from '../core.js';
 import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
 import { msdf, type MsdfData } from '../raster/msdf.js';
 import { slug, type SlugPageData } from '../raster/slug-technique.js';
@@ -514,13 +520,13 @@ export class ThreeTextRenderPlanExecutor {
         const recordCount = plan.u16(primitive + primitiveLayout.recordCount);
         const addressing = recordAddressing(plan, draw, primitive, byPolicyId);
         const transform = this.#transformRealization(byPolicyId, transformId);
+        const resolvedResource =
+          resource === undefined ? undefined : this.#coordinator.resolveResource(resource.referenceId);
         const material = decoration
           ? this.#decorationMaterial(byPolicyId, transform, addressing)
           : this.#material(resource!, byPolicyId, materialId, transform, addressing);
         const originDeclaration =
-          decoration || resource === undefined
-            ? undefined
-            : glyphOriginBuffer(this.#coordinator.resolveResource(resource.referenceId).technique);
+          decoration || resource === undefined ? undefined : glyphOriginBuffer(resolvedResource!);
         const origins = originDeclaration === undefined ? undefined : byPolicyId.get(originDeclaration.id);
         const stableIds = decoration ? undefined : byPolicyId.get(threeSystemBuffers.stableGlyphId.id);
         if (originDeclaration !== undefined && origins !== undefined && stableIds !== undefined) {
@@ -544,14 +550,12 @@ export class ThreeTextRenderPlanExecutor {
           plan.u32(draw + drawLayout.depthKey),
           transform,
           this.#transformGeneration,
+          geometryKey(resolvedResource),
         );
 
         const reusable = previous.get(key)?.shift();
         if (reusable !== undefined) {
-          if (!(reusable.geometry instanceof THREE.InstancedBufferGeometry)) {
-            throw new TypeError('retained text draw lost its instanced geometry');
-          }
-          reusable.geometry.instanceCount = recordCount;
+          updateGeometryInstances(reusable.geometry, resolvedResource, recordCount);
           reusable.userData.pmndrsGlyphRunStart = recordIndex;
           reusable.userData.pmndrsGlyphTransformId = transformId;
           reusable.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
@@ -564,8 +568,7 @@ export class ThreeTextRenderPlanExecutor {
           continue;
         }
 
-        const geometry = unitQuad();
-        geometry.instanceCount = recordCount;
+        const geometry = realizeGeometry(resolvedResource, recordCount);
         for (const buffer of byPolicyId.values()) {
           geometry.setAttribute(`_pmndrsGlyph_${buffer.policyBufferId}`, buffer.attribute);
         }
@@ -796,7 +799,8 @@ export class ThreeTextRenderPlanExecutor {
     addressing: RecordAddressing,
   ): THREE.NodeMaterial {
     const required = [...buffers.values()];
-    const key = `external:${resource.id}:${resource.generation}:${materialId}:${required
+    const resourceReferences = [...new Set(resolved.resourceReferences.values())].sort((left, right) => left - right);
+    const key = `external:${resource.id}:${resource.generation}:${resourceReferences.join(',')}:${materialId}:${required
       .map((buffer) => `${buffer.policyBufferId}:${buffer.id}:${buffer.generation}`)
       .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
     const cached = this.#materials.get(key);
@@ -805,22 +809,26 @@ export class ThreeTextRenderPlanExecutor {
       ({ object }) => (object?.userData.pmndrsGlyphRunStart as number | undefined) ?? 0,
     );
     const instance = physicalInstance(TSL.instanceIndex.add(runStart), addressing);
-    const publicBuffers = new Map<number, ThreePlanProgramBuffer>(
-      [...buffers]
-        .filter(([id]) => id !== textShaperAbi.engine.internalBufferBindings.order)
-        .map(([id, buffer]) => [
-          id,
-          {
-            scalarType: buffer.scalarType,
-            vectorWidth: buffer.vectorWidth,
-            attribute: buffer.attribute,
-          },
-        ]),
-    );
+    const namedBuffers = new Map<string, ThreePlanProgramBuffer>();
+    for (const [name, declaration] of Object.entries(resolved.program.schema.buffers)) {
+      const source = buffers.get(declaration.id);
+      const buffer =
+        source === undefined
+          ? undefined
+          : { scalarType: source.scalarType, vectorWidth: source.vectorWidth, attribute: source.attribute };
+      if (buffer === undefined) throw new Error(`Three draw is missing declared policy buffer "${name}"`);
+      namedBuffers.set(name, buffer);
+    }
     const material = this.#ownMaterial(
       resolved.program.createMaterial({
-        resource: resolved.resource,
-        buffers: publicBuffers,
+        technique: resolved.program.technique,
+        schema: resolved.program.schema,
+        variantId: resolved.program.variant.id,
+        language: resolved.program.variant.language,
+        namedBuffers,
+        namedResources: resolved.resources,
+        outputTypes: resolved.program.variant.outputs,
+        resourceName: resolved.resourceName,
         instance,
         materialId,
         material: this.#coordinator.resolveMaterial(materialId),
@@ -1142,6 +1150,7 @@ export class ThreeTextRenderPlanExecutor {
       if (kind === kinds.resource) {
         const resource = this.#resources.get(id);
         if (resource?.generation !== generation) continue;
+        // The selected primary resource owns material lifetime; named siblings are immutable bundle dependencies.
         this.#disposeMaterials(
           (realization) =>
             realization.resourceId === resource.id && realization.resourceGeneration === resource.generation,
@@ -1179,8 +1188,8 @@ const techniqueSchemas: ReadonlyMap<string, TechniqueSchema> = new Map<string, T
 ]);
 
 /** Glyph-origin augmentation is schema-declared: no declaration, no augmentation. */
-function glyphOriginBuffer(technique: string): PolicyBufferDeclaration | undefined {
-  const schema = techniqueSchemas.get(technique);
+function glyphOriginBuffer(resource: ThreeTextEngineResource): PolicyBufferDeclaration | undefined {
+  const schema = 'program' in resource ? resource.program.schema : techniqueSchemas.get(resource.technique);
   if (schema?.glyphOrigin === undefined) return undefined;
   return schema.buffers[schema.glyphOrigin.buffer];
 }
@@ -1210,6 +1219,7 @@ function drawRealizationKey(
   depthKey: number,
   transform: TransformRealization,
   transformGeneration: number,
+  geometry: string,
 ): string {
   const bufferKey = [...buffers]
     .sort(([left], [right]) => left - right)
@@ -1220,7 +1230,7 @@ function drawRealizationKey(
       ? `direct:${transform.transformId}`
       : transformProgramKey(transform, transformGeneration);
   const resourceKey = resource === undefined ? 'decoration' : `${resource.id}:${resource.generation}`;
-  return `${programId}:${resourceKey}:${materialId}:${clipId}:${depthKey}:${transformKey}:${bufferKey}`;
+  return `${programId}:${resourceKey}:${materialId}:${clipId}:${depthKey}:${transformKey}:${geometry}:${bufferKey}`;
 }
 
 function recordAddressing(
@@ -1514,6 +1524,196 @@ function markOriginRanges(ranges: ReadonlyMap<RetainedBuffer, readonly [number, 
 function invalidatePboTexture(attribute: THREE.StorageInstancedBufferAttribute): void {
   const pbo = (attribute as THREE.StorageInstancedBufferAttribute & { pbo?: THREE.DataTexture }).pbo;
   if (pbo !== undefined) pbo.needsUpdate = true;
+}
+
+function geometryDeclaration(resource: ThreeTextEngineResource | undefined) {
+  return resource !== undefined && 'program' in resource
+    ? (resource.program.schema.render?.geometry ?? { kind: 'synthetic-quad' as const })
+    : { kind: 'synthetic-quad' as const };
+}
+
+function geometryKey(resource: ThreeTextEngineResource | undefined): string {
+  const declaration = geometryDeclaration(resource);
+  if (declaration.kind === 'synthetic-quad') return 'synthetic-quad';
+  const payload = suppliedGeometryPayload(resource, declaration);
+  const referenceId =
+    resource !== undefined && 'resourceReferences' in resource && declaration.resource !== undefined
+      ? resource.resourceReferences.get(declaration.resource)
+      : undefined;
+  if (referenceId === undefined) {
+    throw new Error(`supplied Three geometry "${declaration.kind}" has no retained resource identity`);
+  }
+  const range = geometryDrawRange(payload);
+  const indexCount = payload.indices === undefined ? 0 : payload.accessors[payload.indices.accessor]!.count;
+  const instances = payload.instances?.source ?? 'records';
+  const fixedCount = payload.instances?.source === 'fixed' ? payload.instances.count : 0;
+  return [
+    'supplied',
+    referenceId,
+    declaration.kind,
+    declaration.coordinates,
+    payload.topology,
+    indexCount,
+    range.start,
+    range.count,
+    instances,
+    fixedCount,
+  ].join(':');
+}
+
+function realizeGeometry(resource: ThreeTextEngineResource | undefined, recordCount: number): THREE.BufferGeometry {
+  const declaration = geometryDeclaration(resource);
+  if (declaration.kind === 'synthetic-quad') {
+    const geometry = unitQuad();
+    geometry.instanceCount = recordCount;
+    return geometry;
+  }
+  if (resource === undefined || !('resources' in resource) || declaration.resource === undefined) {
+    throw new Error(`supplied Three geometry "${declaration.kind}" has no named portable resource`);
+  }
+  const payload = resource.resources.get(declaration.resource);
+  if (payload === undefined) throw new Error(`Three draw omits supplied geometry resource "${declaration.resource}"`);
+  assertPortableResource('geometry', declaration.resource, payload);
+  const geometry = createGeometry(payload as PortableGeometryPayload);
+  updateGeometryInstances(geometry, resource, recordCount, payload as PortableGeometryPayload);
+  return geometry;
+}
+
+function updateGeometryInstances(
+  geometry: THREE.BufferGeometry,
+  resource: ThreeTextEngineResource | undefined,
+  recordCount: number,
+  suppliedPayload?: PortableGeometryPayload,
+): void {
+  const declaration = geometryDeclaration(resource);
+  if (declaration.kind === 'synthetic-quad') {
+    if (!(geometry instanceof THREE.InstancedBufferGeometry)) {
+      throw new TypeError('instanced text draw lost its instanced geometry');
+    }
+    geometry.instanceCount = recordCount;
+    return;
+  }
+  const payload = suppliedPayload ?? suppliedGeometryPayload(resource, declaration);
+  applyGeometryDrawState(geometry, payload);
+  const instanceCount = payload?.instances?.source === 'fixed' ? payload.instances.count : recordCount;
+  if (geometry instanceof THREE.InstancedBufferGeometry) {
+    geometry.instanceCount = instanceCount;
+    return;
+  }
+  if (instanceCount !== 1) {
+    throw new RangeError(`supplied non-instanced geometry cannot draw ${instanceCount} record instances`);
+  }
+}
+
+function suppliedGeometryPayload(
+  resource: ThreeTextEngineResource | undefined,
+  declaration: ReturnType<typeof geometryDeclaration>,
+): PortableGeometryPayload {
+  if (declaration.kind === 'synthetic-quad') {
+    throw new Error('synthetic Three geometry has no portable payload');
+  }
+  if (resource === undefined || !('resources' in resource) || declaration.resource === undefined) {
+    throw new Error(`supplied Three geometry "${declaration.kind}" has no named portable resource`);
+  }
+  const payload = resource.resources.get(declaration.resource);
+  if (payload === undefined) throw new Error(`Three draw omits supplied geometry resource "${declaration.resource}"`);
+  assertPortableResource('geometry', declaration.resource, payload);
+  return payload as PortableGeometryPayload;
+}
+
+function createGeometry(payload: PortableGeometryPayload): THREE.BufferGeometry {
+  const geometry = new THREE.InstancedBufferGeometry();
+  for (const attribute of payload.attributes) {
+    const accessor = payload.accessors[attribute.accessor];
+    if (accessor === undefined) throw new Error(`geometry attribute "${attribute.semantic}" has no accessor`);
+    const view = payload.views[accessor.view];
+    if (view === undefined) throw new Error(`geometry accessor ${attribute.accessor} has no buffer view`);
+    const array = typedGeometryArray(payload, accessor, view);
+    const bufferAttribute =
+      attribute.rate === 'instance'
+        ? new THREE.InstancedBufferAttribute(array, accessor.components)
+        : new THREE.BufferAttribute(array, accessor.components);
+    geometry.setAttribute(attribute.semantic, bufferAttribute);
+  }
+  let indices: Uint16Array | Uint32Array | undefined;
+  if (payload.indices !== undefined) {
+    const accessor = payload.accessors[payload.indices.accessor];
+    if (accessor === undefined) throw new Error('geometry index accessor is missing');
+    const view = payload.views[accessor.view];
+    if (view === undefined) throw new Error('geometry index buffer view is missing');
+    const array = typedGeometryArray(payload, accessor, view);
+    if (!(array instanceof Uint16Array) && !(array instanceof Uint32Array)) {
+      throw new TypeError('geometry indices require u16 or u32 storage');
+    }
+    indices = array;
+  }
+  const positionAttribute = payload.attributes.find((attribute) => attribute.semantic === 'position');
+  if (positionAttribute === undefined) throw new TypeError('portable geometry is missing its position attribute');
+  const positionAccessor = payload.accessors[positionAttribute.accessor];
+  if (positionAccessor === undefined) throw new Error('portable geometry position accessor is missing');
+  const range = geometryDrawRange(payload);
+  if (payload.topology === 'triangle-strip') {
+    geometry.setIndex(new THREE.BufferAttribute(triangleStripIndices(indices, positionAccessor.count, range), 1));
+  } else if (indices !== undefined) {
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  }
+  applyGeometryDrawState(geometry, payload);
+  return geometry;
+}
+
+function applyGeometryDrawState(geometry: THREE.BufferGeometry, payload: PortableGeometryPayload): void {
+  const range = geometryDrawRange(payload);
+  geometry.setDrawRange(payload.topology === 'triangle-strip' ? 0 : range.start, geometryDrawCount(payload));
+}
+
+function geometryDrawRange(payload: PortableGeometryPayload): Readonly<{ start: number; count: number }> {
+  if (payload.drawRange !== undefined) return payload.drawRange;
+  const position = payload.attributes.find((attribute) => attribute.semantic === 'position');
+  if (position === undefined) throw new TypeError('portable geometry is missing its position attribute');
+  const count =
+    payload.indices === undefined
+      ? payload.accessors[position.accessor]!.count
+      : payload.accessors[payload.indices.accessor]!.count;
+  return { start: 0, count };
+}
+
+function geometryDrawCount(payload: PortableGeometryPayload): number {
+  const count = geometryDrawRange(payload).count;
+  return payload.topology === 'triangle-strip' ? (count - 2) * 3 : count;
+}
+
+function triangleStripIndices(
+  source: Uint16Array | Uint32Array | undefined,
+  vertexCount: number,
+  range: Readonly<{ start: number; count: number }>,
+): Uint16Array | Uint32Array {
+  const triangles = new Array<number>((range.count - 2) * 3);
+  let maximum = 0;
+  for (let triangle = 0; triangle < range.count - 2; triangle += 1) {
+    const first = source?.[range.start + triangle] ?? range.start + triangle;
+    const second = source?.[range.start + triangle + 1] ?? range.start + triangle + 1;
+    const third = source?.[range.start + triangle + 2] ?? range.start + triangle + 2;
+    const offset = triangle * 3;
+    triangles[offset] = triangle % 2 === 0 ? first : second;
+    triangles[offset + 1] = triangle % 2 === 0 ? second : first;
+    triangles[offset + 2] = third;
+    maximum = Math.max(maximum, first, second, third);
+  }
+  return maximum < 0x1_0000 && vertexCount < 0x1_0000 ? new Uint16Array(triangles) : new Uint32Array(triangles);
+}
+
+function typedGeometryArray(
+  payload: PortableGeometryPayload,
+  accessor: PortableGeometryPayload['accessors'][number],
+  view: PortableGeometryPayload['views'][number],
+): Float32Array | Uint32Array | Uint16Array | Int16Array | Uint8Array {
+  const offset = payload.bytes.byteOffset + view.offset + (accessor.offset ?? 0);
+  const length = accessor.count * accessor.components;
+  if (accessor.componentType === 'f32') return new Float32Array(payload.bytes.buffer, offset, length);
+  if (accessor.componentType === 'u32') return new Uint32Array(payload.bytes.buffer, offset, length);
+  if (accessor.componentType === 'u16') return new Uint16Array(payload.bytes.buffer, offset, length);
+  if (accessor.componentType === 'i16') return new Int16Array(payload.bytes.buffer, offset, length);
+  return new Uint8Array(payload.bytes.buffer, offset, length);
 }
 
 function unitQuad(): THREE.InstancedBufferGeometry {

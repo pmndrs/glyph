@@ -85,10 +85,7 @@ Start with one schema per raster technique and a separate buffer set for lanes o
 technique:
 
 ```ts
-import {
-  definePolicyBuffers,
-  defineTechniqueSchema,
-} from '@pmndrs/glyph/core';
+import { definePolicyBuffers, defineTechniqueSchema } from '@pmndrs/glyph/core';
 
 export const rendererBuffers = definePolicyBuffers({
   stableGlyphId: { id: 20, scalar: 'u32', lanes: ['stableGlyphId'] },
@@ -295,10 +292,7 @@ Resolve every technique and resource string through the host's one registry:
 
 ```ts
 import { createTextRuntime } from '@pmndrs/glyph';
-import {
-  TextEngineHost,
-  textRuntimeShaper,
-} from '@pmndrs/glyph/core';
+import { TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
 
 const runtime = await createTextRuntime();
 const host = new TextEngineHost(textRuntimeShaper(runtime));
@@ -320,7 +314,10 @@ and `compileRasterFont()` returns the binding bytes plus constrained portable re
 `loadedFontBindingBytes()` projection consults that registry before falling back to the three first-party techniques.
 (`packages/glyph/src/core/raster-plan-program.ts`, `packages/glyph/src/core/font-binding.ts:40`,
 `packages/glyph/src/core/font-binding.ts:55`) The engine still owns resource realization and material creation, so a
-Three adapter pairs the portable plan with `registerThreeRasterPlanProgram()` rather than copying the compiler.
+Three consumer pairs the portable plan with a registered `{ technique, variant }` through
+`registerThreeRasterPlanProgram()` rather than copying the compiler. Register exactly one chosen realization per technique
+before the first Three runtime snapshot; a second variant or a late registration throws at that call. The variant receives
+logical buffer/resource names; it does not provide policy or resource callbacks.
 
 ### Font loading comes from the root entry
 
@@ -337,10 +334,7 @@ Create one `TextEngineSession` for each retained frame state. The capacities res
 result arenas, and optionally retained UTF-16 text storage:
 
 ```ts
-import {
-  compileTextEngineFrameUpdate,
-  type TextEngineFrameLimits,
-} from '@pmndrs/glyph/core';
+import { compileTextEngineFrameUpdate, type TextEngineFrameLimits } from '@pmndrs/glyph/core';
 
 const session = host.createSession({
   handle: 29,
@@ -411,11 +405,7 @@ The layout constants are public through `textShaperAbi`, so records without a co
 copying:
 
 ```ts
-import {
-  TextEngineRenderPlanView,
-  textShaperAbi,
-  type RetainedTextEnginePublication,
-} from '@pmndrs/glyph/core';
+import { TextEngineRenderPlanView, textShaperAbi, type RetainedTextEnginePublication } from '@pmndrs/glyph/core';
 
 interface DecodedDraw {
   readonly programId: number;

@@ -30,11 +30,13 @@ export const packageSizeBudgets = {
   // The measure/layout re-split priced +398 raw: the measurement lane answers from its own
   // cache again instead of sharing the positioned one, so the fast path is two small maps
   // rather than one lazy-resolution layer.
+  // Portable resources and external-engine contracts measure 331,162 raw / 209,470 minified /
+  // 55,340 gzip / 46,098 Brotli; the ceilings retain bounded review margin.
   'core-subpath-js': {
-    rawBytes: 312_000,
-    minifiedBytes: 196_500,
-    gzipBytes: 52_700,
-    brotliBytes: 44_000,
+    rawBytes: 340_000,
+    minifiedBytes: 216_000,
+    gzipBytes: 57_000,
+    brotliBytes: 47_000,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -116,11 +118,13 @@ export const packageSizeBudgets = {
   // guidance left +468 of real production behaviour, which fits the existing ceiling.
   // +22 KB over main is `unicode-segmenter`, entering every graph via internal/graphemes.ts so span
   // alignment matches the engine's cluster grid. Deliberate; both hosts measure identically.
+  // Named views and supplied geometry measure 489,056 raw / 301,172 minified /
+  // 79,414 gzip / 66,261 Brotli; the ceilings retain bounded review margin.
   'three-runtime-js': {
-    rawBytes: 444_000,
-    minifiedBytes: 275_000,
-    gzipBytes: 73_500,
-    brotliBytes: 62_000,
+    rawBytes: 490_000,
+    minifiedBytes: 304_000,
+    gzipBytes: 81_000,
+    brotliBytes: 68_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -158,23 +162,25 @@ export const packageSizeBudgets = {
     gzipBytes: 690_000,
     brotliBytes: 510_000,
   },
+  // Shared Three runtime graphs measure at most 470,712 raw / 289,704 minified /
+  // 77,339 gzip / 64,122 Brotli; one ceiling keeps technique drift visible.
   'bitmap-runtime-js': {
-    rawBytes: 430_000,
-    minifiedBytes: 267_000,
-    gzipBytes: 72_500,
-    brotliBytes: 60_500,
+    rawBytes: 480_000,
+    minifiedBytes: 296_000,
+    gzipBytes: 80_000,
+    brotliBytes: 67_000,
   },
   'mtsdf-runtime-js': {
-    rawBytes: 430_000,
-    minifiedBytes: 267_000,
-    gzipBytes: 72_500,
-    brotliBytes: 60_500,
+    rawBytes: 480_000,
+    minifiedBytes: 296_000,
+    gzipBytes: 80_000,
+    brotliBytes: 67_000,
   },
   'slug-runtime-js': {
-    rawBytes: 430_000,
-    minifiedBytes: 267_000,
-    gzipBytes: 72_500,
-    brotliBytes: 60_500,
+    rawBytes: 480_000,
+    minifiedBytes: 296_000,
+    gzipBytes: 80_000,
+    brotliBytes: 67_000,
   },
   'bitmap-baker-wasm': {
     rawBytes: 626_000,

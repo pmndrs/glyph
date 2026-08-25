@@ -6,11 +6,12 @@ import {
   registerRasterPlanProgram,
   subtractF32,
   techniqueProgram,
+  type PortableBufferPayload,
   type RasterPlanProgram,
   type TechniqueSchema,
 } from '@pmndrs/glyph/core';
 
-import { glyphExample, type GlyphExampleData } from './raster.js';
+import { glyphExample } from './raster.js';
 
 export const glyphExampleSchema: TechniqueSchema<
   {
@@ -34,12 +35,12 @@ export const glyphExampleSchema: TechniqueSchema<
     size: { id: 2, scalar: 'f32', lanes: ['widthX', 'heightY'] },
     color: { id: 3, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
   },
-  resources: { glyphColors: { kind: 'glyph-example-colors' } },
+  resources: { glyphColors: { kind: 'buffer' } },
   render: { geometry: { kind: 'synthetic-quad' } },
   glyphOrigin: { buffer: 'origin' },
 });
 
-export const glyphExamplePlanProgram: RasterPlanProgram<typeof glyphExample, GlyphExampleData> = {
+export const glyphExamplePlanProgram: RasterPlanProgram<typeof glyphExample, PortableBufferPayload> = {
   technique: glyphExample,
   schema: glyphExampleSchema,
   policyBody(system, _capabilities) {
@@ -71,7 +72,11 @@ export const glyphExamplePlanProgram: RasterPlanProgram<typeof glyphExample, Gly
   compileFont(compiler) {
     const data = compiler.font.data;
     const { resources } = compiler.resources([data.resource]);
-    compiler.retain('glyphColors', data.resource, data);
+    compiler.retain('glyphColors', data.resource, {
+      kind: 'buffer',
+      bytes: data.colors,
+      stride: 4,
+    });
     compiler.compile({
       techniqueId: compiler.techniqueId,
       programVariant: 0,

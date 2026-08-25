@@ -8,6 +8,10 @@ import {
   resolveRasterPlanProgram,
   schemaPolicyBuffers,
   type CompiledRasterFont,
+  type PolicyScalarKind,
+  type TechniqueGeometryDeclaration,
+  type TechniqueResourceDeclaration,
+  type TechniqueSchema,
 } from '../core.js';
 import type { LoadedFont } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
@@ -20,31 +24,59 @@ export interface ThreePlanProgramBuffer {
   readonly attribute: StorageInstancedBufferAttribute;
 }
 
-export interface ThreePlanProgramMaterialContext<Resource> {
-  readonly resource: Resource;
-  readonly buffers: ReadonlyMap<number, ThreePlanProgramBuffer>;
+export interface ThreePlanProgramMaterialContext {
+  /** Portable technique selected for this draw. */
+  readonly technique: AnyRasterTechnique;
+  /** The portable schema selected for this draw. */
+  readonly schema: TechniqueSchema;
+  /** The selected renderer variant's stable identity. */
+  readonly variantId: string;
+  /** Shader-language label for diagnostics and implementation selection. */
+  readonly language: string;
+  /** Buffers addressed by the schema's declared names, never host wire ids. */
+  readonly namedBuffers: ReadonlyMap<string, ThreePlanProgramBuffer>;
+  /** Retained resources addressed by the schema's declared names. */
+  readonly namedResources: ReadonlyMap<string, unknown>;
+  /** Named output types declared by the selected renderer implementation. */
+  readonly outputTypes: Readonly<Record<string, string>>;
+  /** Name of the resource referenced by this draw's wire resource record. */
+  readonly resourceName: string;
   readonly instance: Node<'uint'>;
   readonly materialId: number;
   readonly material: ThreeTextMaterial | undefined;
   transformPosition(position: Node<'vec3'>): Node<'vec3'>;
 }
 
-export interface ThreeRasterPlanProgram<
-  Technique extends AnyRasterTechnique,
-  PortableResource = unknown,
-  RealizedResource = PortableResource,
-> {
+export interface ThreeRasterPlanVariant {
+  /** Stable renderer-local id; packages may publish alternatives, but Three registers one per technique. */
+  readonly id: string;
+  /** Shader implementation language, for example `tsl`, `wgsl`, or `glsl`. */
+  readonly language: string;
+  /** Shader-visible named policy-buffer shapes consumed by this implementation. */
+  readonly buffers: Readonly<Record<string, ThreeRasterPlanBufferCapability>>;
+  /** Named portable resource kinds and formats consumed by this implementation. */
+  readonly resources: Readonly<Record<string, TechniqueResourceDeclaration>>;
+  /** Named shader outputs exposed to renderer-owned material composition. */
+  readonly outputs: Readonly<Record<string, string>>;
+  /** Geometry shape consumed by this implementation. */
+  readonly geometry: TechniqueGeometryDeclaration;
+  createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
+}
+
+export interface ThreeRasterPlanBufferCapability {
+  readonly scalar: PolicyScalarKind;
+  readonly vectorWidth: number;
+}
+
+export interface ThreeRasterPlanProgram<Technique extends AnyRasterTechnique> {
   readonly technique: Technique;
-  /** Convert a portable payload into data owned by the Three resource cache. */
-  readonly realizeResource?: (resource: PortableResource) => RealizedResource;
-  /** Release a realized resource when the last loaded font using it is disposed. */
-  readonly releaseResource?: (resource: RealizedResource) => void;
-  /** Create a Three material from retained plan buffers and a realized resource. */
-  createMaterial(context: ThreePlanProgramMaterialContext<RealizedResource>): NodeMaterial;
+  readonly variant: ThreeRasterPlanVariant;
 }
 
 export interface CompiledThreeRasterPlanProgram {
   readonly technique: AnyRasterTechnique;
+  readonly schema: TechniqueSchema;
+  readonly variant: ThreeRasterPlanVariant;
   readonly techniqueId: number;
   readonly programId: number;
   readonly policy: import('../core.js').PolicyProgram;
@@ -52,33 +84,90 @@ export interface CompiledThreeRasterPlanProgram {
     font: LoadedFont<AnyRasterTechnique>,
     identities: RenderWireIdentityRegistry,
   ): CompiledRasterFont<unknown>;
-  realizeResource(resource: unknown): unknown;
-  releaseResource(resource: unknown): void;
-  createMaterial(context: ThreePlanProgramMaterialContext<unknown>): NodeMaterial;
+  createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 
-const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique, unknown>>();
-const snapshots = new Set<RenderWireIdentityRegistry>();
+const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique>>();
+const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterTechnique>>();
+const snapshots = new Map<RenderWireIdentityRegistry, number>();
 
 /** Register only the renderer-specific resource and material half of a portable program. */
-export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Resource>(
-  program: ThreeRasterPlanProgram<Technique, Resource>,
+export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechnique>(
+  program: ThreeRasterPlanProgram<Technique>,
 ): void {
-  if (resolveRasterPlanProgram(program.technique.id) === undefined) {
-    throw new TypeError(`no portable raster plan program is registered for "${program.technique.id}"`);
+  if (typeof program !== 'object' || program === null || Array.isArray(program)) {
+    throw new TypeError('Three raster plan programs need a program object');
   }
-  const erased = program as unknown as ThreeRasterPlanProgram<AnyRasterTechnique, unknown>;
-  const existing = programs.get(program.technique.id);
-  if (existing !== undefined && existing !== erased) {
-    throw new TypeError(`a different Three raster plan program is already registered for "${program.technique.id}"`);
+  const source = program as ThreeRasterPlanProgram<Technique> & Record<string, unknown>;
+  const technique = source.technique;
+  const techniqueId =
+    typeof technique === 'object' && technique !== null && !Array.isArray(technique) ? technique.id : undefined;
+  if (typeof techniqueId !== 'string' || techniqueId.length === 0) {
+    throw new TypeError('Three raster plan programs need a technique with a nonempty id');
   }
-  if (existing === undefined && snapshots.size !== 0) {
-    throw new Error(
-      `Three raster plan program "${program.technique.id}" was registered after ${snapshots.size} text runtime(s) ` +
-        'already read the registry; register every technique before creating the first Text, TextGroup, or FontLoader',
+  const portable = resolveRasterPlanProgram(techniqueId);
+  if (portable === undefined) {
+    throw new TypeError(`no portable raster plan program is registered for "${techniqueId}"`);
+  }
+  const variant = source.variant;
+  if (typeof variant !== 'object' || variant === null || Array.isArray(variant)) {
+    throw new TypeError(`Three raster plan program "${techniqueId}" needs a variant descriptor`);
+  }
+  const variantId = variant.id;
+  if (typeof variantId !== 'string' || variantId.length === 0) {
+    throw new TypeError(`Three raster plan program "${techniqueId}" needs a nonempty variant id`);
+  }
+  const language = variant.language;
+  if (typeof language !== 'string' || language.length === 0) {
+    throw new TypeError(`Three raster plan variant "${variantId}" needs a language label`);
+  }
+  const createMaterial = variant.createMaterial;
+  if (typeof createMaterial !== 'function') {
+    throw new TypeError(`Three raster plan variant "${variantId}" needs createMaterial`);
+  }
+  const registered = registeredSources.get(program as object);
+  if (registered !== undefined) {
+    if (registered.technique.id !== techniqueId || registered.variant.id !== variantId) {
+      throw new TypeError(
+        `Three raster plan program source changed identity from "${registered.technique.id}/${registered.variant.id}" to "${techniqueId}/${variantId}"`,
+      );
+    }
+    return;
+  }
+  const expectedGeometry = portable.schema.render?.geometry ?? { kind: 'synthetic-quad' };
+  if (!sameGeometry(expectedGeometry, variant.geometry)) {
+    throw new TypeError(`Three raster variant "${variantId}" declares incompatible geometry`);
+  }
+  const buffers = normalizeBufferCapabilities(techniqueId, variantId, variant.buffers, portable.schema);
+  const resources = normalizeResourceCapabilities(techniqueId, variantId, variant.resources, portable.schema);
+  const outputs = normalizeOutputs(techniqueId, variantId, variant.outputs);
+  const snapshot = Object.freeze({
+    technique: portable.technique,
+    variant: Object.freeze({
+      id: variantId,
+      language,
+      buffers,
+      resources,
+      outputs,
+      geometry: expectedGeometry,
+      createMaterial,
+    }),
+  }) as ThreeRasterPlanProgram<AnyRasterTechnique>;
+  const existing = programs.get(techniqueId);
+  if (existing !== undefined) {
+    throw new TypeError(
+      `Three already selected raster variant "${existing.variant.id}" for technique "${techniqueId}"`,
     );
   }
-  programs.set(program.technique.id, erased);
+  const runtimeCount = [...snapshots.values()].reduce((sum, count) => sum + count, 0);
+  if (runtimeCount !== 0) {
+    throw new Error(
+      `Three raster variant "${techniqueId}/${variantId}" was registered after ${runtimeCount} text runtime(s) ` +
+        'already read the registry; register every technique before its first Text or TextGroup realization',
+    );
+  }
+  programs.set(techniqueId, snapshot);
+  registeredSources.set(program as object, snapshot);
 }
 
 /** @internal Compile the cold registry snapshot into policy, binding, and material factories. */
@@ -86,15 +175,18 @@ export function compiledThreeRasterPlanPrograms(
   identities: RenderWireIdentityRegistry,
   transformMode: 'indexed' | 'direct' = 'indexed',
 ): readonly CompiledThreeRasterPlanProgram[] {
-  snapshots.add(identities);
-  return [...programs.values()]
-    .sort((left, right) => left.technique.id.localeCompare(right.technique.id))
-    .map((program) => compileProgram(program, identities, transformMode));
+  const selected = [...programs.values()].sort((left, right) => left.technique.id.localeCompare(right.technique.id));
+  const compiled = selected.map((program) => compileProgram(program, identities, transformMode));
+  snapshots.set(identities, (snapshots.get(identities) ?? 0) + 1);
+  return compiled;
 }
 
 /** @internal Forget a disposed runtime's renderer snapshot. */
 export function releaseThreeRasterPlanProgramSnapshot(identities: RenderWireIdentityRegistry): void {
-  snapshots.delete(identities);
+  const count = snapshots.get(identities);
+  if (count === undefined) return;
+  if (count === 1) snapshots.delete(identities);
+  else snapshots.set(identities, count - 1);
 }
 
 export interface ThreePolicyAbi {
@@ -120,7 +212,7 @@ export const threePolicyAbi: ThreePolicyAbi = Object.freeze({
 });
 
 function compileProgram(
-  program: ThreeRasterPlanProgram<AnyRasterTechnique, unknown>,
+  program: ThreeRasterPlanProgram<AnyRasterTechnique>,
   identities: RenderWireIdentityRegistry,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterPlanProgram {
@@ -133,6 +225,8 @@ function compileProgram(
   const body = portable.policyBody(system, threePolicyCapabilitySet());
   return {
     technique: program.technique,
+    schema: portable.schema,
+    variant: program.variant,
     techniqueId,
     programId,
     policy: createProgram(
@@ -158,9 +252,109 @@ function compileProgram(
         throw new Error(`no portable raster plan program is registered for "${font.technique.id}"`);
       return compiled;
     },
-    realizeResource: (resource) =>
-      program.realizeResource === undefined ? resource : program.realizeResource(resource),
-    releaseResource: (resource) => program.releaseResource?.(resource),
-    createMaterial: (context) => program.createMaterial(context),
+    createMaterial: (context) => program.variant.createMaterial(context),
   };
+}
+
+function sameGeometry(left: TechniqueGeometryDeclaration, right: unknown): right is TechniqueGeometryDeclaration {
+  if (typeof right !== 'object' || right === null || Array.isArray(right)) return false;
+  const candidate = right as Partial<TechniqueGeometryDeclaration>;
+  return (
+    left.kind === candidate.kind && left.resource === candidate.resource && left.coordinates === candidate.coordinates
+  );
+}
+
+function normalizeBufferCapabilities(
+  techniqueId: string,
+  variantId: string,
+  value: unknown,
+  schema: TechniqueSchema,
+): Readonly<Record<string, ThreeRasterPlanBufferCapability>> {
+  if (!isNonArrayObject(value)) {
+    throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs named buffer capabilities`);
+  }
+  assertExactNames(value, Object.keys(schema.buffers), techniqueId, variantId, 'buffer');
+  const owned: Record<string, ThreeRasterPlanBufferCapability> = Object.create(null);
+  for (const [name, declaration] of Object.entries(schema.buffers)) {
+    const capability = value[name];
+    if (!isNonArrayObject(capability)) {
+      throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs buffer "${name}"`);
+    }
+    const scalar = capability.scalar;
+    const vectorWidth = capability.vectorWidth;
+    if (scalar !== declaration.scalar || vectorWidth !== declaration.lanes.length) {
+      throw new TypeError(
+        `Three raster variant "${techniqueId}/${variantId}" buffer "${name}" must consume ` +
+          `${declaration.scalar}x${declaration.lanes.length}`,
+      );
+    }
+    owned[name] = Object.freeze({ scalar: declaration.scalar, vectorWidth: declaration.lanes.length });
+  }
+  return Object.freeze(owned);
+}
+
+function normalizeResourceCapabilities(
+  techniqueId: string,
+  variantId: string,
+  value: unknown,
+  schema: TechniqueSchema,
+): Readonly<Record<string, TechniqueResourceDeclaration>> {
+  if (!isNonArrayObject(value)) {
+    throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs named resource capabilities`);
+  }
+  const declaredResources = schema.resources ?? {};
+  assertExactNames(value, Object.keys(declaredResources), techniqueId, variantId, 'resource');
+  const owned: Record<string, TechniqueResourceDeclaration> = Object.create(null);
+  for (const [name, declaration] of Object.entries(declaredResources)) {
+    const capability = value[name];
+    if (!isNonArrayObject(capability)) {
+      throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs resource "${name}"`);
+    }
+    const format = 'format' in declaration ? declaration.format : undefined;
+    const candidateFormat = capability.format;
+    if (capability.kind !== declaration.kind || candidateFormat !== format) {
+      throw new TypeError(
+        `Three raster variant "${techniqueId}/${variantId}" resource "${name}" must consume ` +
+          `${format === undefined ? declaration.kind : `${declaration.kind}:${format}`}`,
+      );
+    }
+    owned[name] = Object.freeze({ kind: declaration.kind, ...(format === undefined ? {} : { format }) });
+  }
+  return Object.freeze(owned);
+}
+
+function normalizeOutputs(techniqueId: string, variantId: string, value: unknown): Readonly<Record<string, string>> {
+  if (!isNonArrayObject(value) || Object.keys(value).length === 0) {
+    throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs named shader outputs`);
+  }
+  const owned: Record<string, string> = Object.create(null);
+  for (const [name, type] of Object.entries(value)) {
+    if (name.length === 0 || typeof type !== 'string' || type.length === 0) {
+      throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" has an invalid shader output`);
+    }
+    owned[name] = type;
+  }
+  return Object.freeze(owned);
+}
+
+function assertExactNames(
+  value: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+  techniqueId: string,
+  variantId: string,
+  label: string,
+): void {
+  const actual = Object.keys(value);
+  const missing = expected.find((name) => !Object.hasOwn(value, name));
+  if (missing !== undefined) {
+    throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" omits ${label} "${missing}"`);
+  }
+  const extra = actual.find((name) => !expected.includes(name));
+  if (extra !== undefined) {
+    throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" declares unknown ${label} "${extra}"`);
+  }
+}
+
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

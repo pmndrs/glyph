@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:7e5291f4d68f67a3e9f9da831ebb3cd3cc0100af6285d82004589b64248ec32e'
+source_digest: 'sha256:dab1c09f2ce20c22fcb9c296e5db70a4fccbec3130c095e88fd625d5686bb7b6'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -89,7 +89,7 @@ The hardware-browser target uses the public source-font fallback, package runtim
 complete disposal. WebGPU and forced WebGL2 each produced two deterministic samples with visible glyph frames, one draw,
 retained mesh and geometry identity, individual `Text.visible` behavior inside an indexed shared draw, caller-owned
 Group ordering, and the same RGBA SHA-256
-`817495c4afe3a8f88d2af85d972f43be88b9f834ed0268d0d0b2e3de86ba9d46`.
+`0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`.
 When the benchmark route supplies an exclusive execution context, the target borrows that renderer, restores render target,
 clear, viewport, scissor, and scissor-test state, and never creates or disposes a parallel renderer. Run the focused lane with
 `pnpm scripts run benchmark:external-raster`.

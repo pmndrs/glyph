@@ -4,12 +4,14 @@ export type { FontSelection, LoadedFont } from './loaded-font.js';
 export type { GlyphBufferCapacity, ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 export { FontLoader } from './three/font-loader.js';
 export { defineTextMaterial } from './three/material.js';
-export type { ThreeTextMaterial, ThreeTextMaterialContext } from './three/material.js';
+export type { ThreeTextGenericMaterialContext, ThreeTextMaterial, ThreeTextMaterialContext } from './three/material.js';
 export { registerThreeRasterPlanProgram, threePolicyAbi } from './three/plan-program-registry.js';
 export type {
   ThreePlanProgramBuffer,
   ThreePlanProgramMaterialContext,
+  ThreeRasterPlanBufferCapability,
   ThreeRasterPlanProgram,
+  ThreeRasterPlanVariant,
 } from './three/plan-program-registry.js';
 export type { ThreeFontLoaderOptions, ThreeLoadedFontRequest as LoadedFontRequest } from './three/font-loader.js';
 export { TextFrameError } from './three/frame-error.js';

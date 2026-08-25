@@ -110,6 +110,12 @@ export function textRuntimeShaper(runtime: TextRuntime): RuntimeShaper {
   return runtime._shaper();
 }
 
+/** @internal Observe renderer-owned teardown that must run before the runtime releases its shaper. */
+export function observeTextRuntimeDispose(runtime: TextRuntime, dispose: () => void): () => void {
+  if (!(runtime instanceof TextRuntimeImpl)) throw new TypeError('text runtime was not created by this package');
+  return runtime._observeDispose(dispose);
+}
+
 class TextRuntimeImpl implements TextRuntime {
   readonly registry: FontRegistry;
   readonly #shaper: RuntimeShaper;
@@ -117,6 +123,7 @@ class TextRuntimeImpl implements TextRuntime {
   readonly #sourceLoaders = new Map<RuntimeFontBake, Map<string, FontLoader>>();
   readonly #loaded = new Map<RegisteredFont, Map<AnyRasterTechnique, Map<string, LoadedFont<AnyRasterTechnique>>>>();
   readonly #pending = new Map<RegisteredFont, Map<AnyRasterTechnique, Map<string, PendingTechniqueLoad>>>();
+  readonly #disposeObservers = new Set<() => void>();
   #disposed = false;
 
   constructor(registry: FontRegistry, shaper: RuntimeShaper) {
@@ -204,6 +211,14 @@ class TextRuntimeImpl implements TextRuntime {
     const report = (stage: string, error: unknown): void => {
       if (DEV) console.warn(`text runtime teardown continued after ${stage} failed: ${String(error)}`);
     };
+    for (const dispose of [...this.#disposeObservers]) {
+      try {
+        dispose();
+      } catch (error) {
+        report('disposing a renderer integration', error);
+      }
+    }
+    this.#disposeObservers.clear();
     for (const techniques of this.#pending.values()) {
       for (const loads of techniques.values()) {
         for (const pending of loads.values()) {
@@ -427,6 +442,18 @@ class TextRuntimeImpl implements TextRuntime {
   _shaper(): RuntimeShaper {
     this.#assertActive();
     return this.#shaper;
+  }
+
+  _observeDispose(dispose: () => void): () => void {
+    this.#assertActive();
+    if (typeof dispose !== 'function') throw new TypeError('text runtime dispose observer must be a function');
+    this.#disposeObservers.add(dispose);
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      this.#disposeObservers.delete(dispose);
+    };
   }
 }
 

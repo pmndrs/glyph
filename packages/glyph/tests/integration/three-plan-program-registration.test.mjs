@@ -21,40 +21,108 @@ import test from 'node:test';
 import '../support/browser-globals.mjs';
 import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
 import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
-import { defineTechniqueSchema, registerRasterPlanProgram } from '@pmndrs/glyph/core';
+import {
+  defineTechniqueSchema,
+  registerRasterPlanProgram,
+  techniqueProgram,
+  textRuntimeShaper,
+} from '@pmndrs/glyph/core';
 
 import { shaperWasmUrl } from '../support/text-mutation-lanes.mjs';
 // The coordinator is what takes the snapshot, so the lifecycle is asserted against it directly
 // rather than through a mounted scene that would only reach it incidentally.
-import { threeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
+import { ThreeTextEngineCoordinator, threeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 
-const portableIds = new Set();
+const portablePrograms = new Map();
 const planProgram = (id) => {
-  const technique = { id, kind: 'test', extension: 'TEST_raster', version: 0 };
-  if (!portableIds.has(id)) {
+  let portable = portablePrograms.get(id);
+  if (portable === undefined) {
+    const technique = { id, kind: 'test', extension: 'TEST_raster', version: 0 };
+    const schema = defineTechniqueSchema({ technique: id, scope: 'glyph', binding: {}, buffers: {} });
+    portable = { technique, schema };
     registerRasterPlanProgram({
       technique,
-      schema: defineTechniqueSchema({ technique: id, scope: 'glyph', binding: {}, buffers: {} }),
-      policyBody: () => ({ inputs: [], operations: [], f32InputCount: 0, u32InputCount: 0 }),
+      schema,
+      policyBody(system) {
+        const program = techniqueProgram(schema);
+        program.store(system.stableGlyphId, [program.semantics.stableGlyphId]);
+        if (system.transformIndex !== undefined) {
+          program.store(system.transformIndex, [program.semantics.transformIndex]);
+        }
+        return program.compile();
+      },
       compileFont() {},
     });
-    portableIds.add(id);
+    portablePrograms.set(id, portable);
   }
   return {
-    technique,
-    policy: { programs: [] },
-    compileFont() {
-      throw new Error('unreachable: this program is never bound to a font');
-    },
-    createMaterial() {
-      throw new Error('unreachable: this program is never realized');
+    technique: portable.technique,
+    variant: {
+      id: 'test',
+      language: 'test',
+      buffers: {},
+      resources: {},
+      outputs: { position: 'vec3' },
+      geometry: { kind: 'synthetic-quad' },
+      createMaterial() {
+        throw new Error('unreachable: this program is never realized');
+      },
     },
   };
 };
 
+test('variant registration rejects incompatible capabilities before a runtime exists', () => {
+  const missingOutputs = planProgram('test-missing-outputs');
+  delete missingOutputs.variant.outputs;
+  assert.throws(() => registerThreeRasterPlanProgram(missingOutputs), /needs named shader outputs/);
+
+  const unknownBuffer = planProgram('test-unknown-buffer');
+  unknownBuffer.variant.buffers = { foreign: { scalar: 'f32', vectorWidth: 1 } };
+  assert.throws(() => registerThreeRasterPlanProgram(unknownBuffer), /unknown buffer "foreign"/);
+
+  const unknownResource = planProgram('test-unknown-resource');
+  unknownResource.variant.resources = { foreign: { kind: 'buffer' } };
+  assert.throws(() => registerThreeRasterPlanProgram(unknownResource), /unknown resource "foreign"/);
+
+  const wrongGeometry = planProgram('test-wrong-geometry');
+  wrongGeometry.variant.geometry = { kind: 'quad', resource: 'foreign', coordinates: 'unit-square' };
+  assert.throws(() => registerThreeRasterPlanProgram(wrongGeometry), /declares incompatible geometry/);
+
+  assert.throws(
+    () =>
+      registerThreeRasterPlanProgram({
+        ...planProgram('test-portable-registration-anchor'),
+        technique: { id: 'test-no-portable', kind: 'test', extension: 'TEST_raster', version: 0 },
+      }),
+    /no portable raster plan program is registered/,
+  );
+});
+
+test('registration selects one renderer variant per technique before runtime construction', async () => {
+  const primary = planProgram('test-variant-selection');
+  const unsupported = planProgram('test-portable-without-three').technique;
+  const secondary = {
+    technique: primary.technique,
+    variant: { ...primary.variant, id: 'second' },
+  };
+  registerThreeRasterPlanProgram(primary);
+  assert.throws(
+    () => registerThreeRasterPlanProgram(secondary),
+    /already selected raster variant "test" for technique "test-variant-selection"/,
+  );
+  const runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
+  const coordinator = new ThreeTextEngineCoordinator(textRuntimeShaper(runtime));
+  assert.throws(
+    () => coordinator.acquireFontStack([{ disposed: false, technique: unsupported, font: {} }]),
+    /no registered renderer variant for portable technique "test-portable-without-three"/,
+  );
+  coordinator.dispose();
+  runtime.dispose();
+});
+
 test('a technique registered after a runtime exists is refused, not silently dropped', async () => {
   const runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  const coordinator = threeTextEngineCoordinator(runtime);
+  threeTextEngineCoordinator(runtime);
 
   const late = planProgram('test-late-technique');
   assert.throws(
@@ -68,7 +136,7 @@ test('a technique registered after a runtime exists is refused, not silently dro
 
   // Once nothing holds a snapshot there is nothing a registration could miss, so it is legal again.
   // Without this, one disposed runtime would poison the module-global registry for the process.
-  coordinator.dispose();
+  runtime.dispose();
   assert.doesNotThrow(() => registerThreeRasterPlanProgram(late));
   // Re-registering the IDENTICAL program stays a no-op, so a module evaluated twice is not an error.
   assert.doesNotThrow(() => registerThreeRasterPlanProgram(late));
@@ -78,6 +146,4 @@ test('a technique registered after a runtime exists is refused, not silently dro
     TypeError,
     'two different programs must not claim one technique id',
   );
-
-  runtime.dispose();
 });

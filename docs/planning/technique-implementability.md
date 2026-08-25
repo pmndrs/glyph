@@ -14,9 +14,9 @@ generated:
 
 ## Status and decision
 
-The portable contract and external TypeGPU example slices are implemented on this branch. The remaining work is the
-generic Three variant/material path, first-party Bitmap/MSDF/Slug migration, and the browser/benchmark evidence that makes
-the reference renderer obey the same external-consumer contract.
+The portable contract, external TypeGPU example, and generic Three variant/material path are implemented on this branch.
+Bitmap, MSDF, and Slug keep their existing renderer-owned fallback until their resource multiplicity has a portable
+contract; the example, browser proof, and lab exercise the reusable path without pretending that gap is solved.
 
 The locked decision is:
 
@@ -74,7 +74,9 @@ The current built-in path explains why importing `/three` does not register Bitm
 This branch closes the constrained core representation and validates resource identity, payload ownership, and geometry
 accessors before a device is touched. The first-party Three migration still has to consume those declarations generically.
 
-`CompiledRasterFont` currently carries a generic `Resource` parameter and the Three path uses a renderer-owned `realizeResource` callback. That is sufficient for reuse, but not for a renderer that knows only the declared contract.
+`CompiledRasterFont` currently carries a generic `Resource` parameter and the old Three path used a renderer-owned
+`realizeResource` callback. The callback has been removed from the portable and Three program contracts; the remaining
+Three work is to route first-party shader/resource realizations through the same generic variant path.
 
 The portable resource payload must become self-describing enough for generic realization: buffer or texture class, element/sample format, dimensions or record layout, array-texture layer count where applicable, usage, and immutable bytes or geometry data. This is a small vocabulary derived from the resources the shipped techniques actually use; it is not a universal GPU object model. The reserved texture vocabulary includes both `texture` and `texture-array`; the latter is required by Bitmap and MSDF. Slug's page data is currently three independently shaped 2-D resources per page, so it remains `texture` until a grouped page payload is designed.
 
@@ -169,11 +171,11 @@ Refactor `packages/glyph/src/three/plan-program-registry.ts`, `engine-runtime.ts
 - invokes a renderer-local material helper when the selected implementation supplies one;
 - retains and disposes the result through the existing material/resource lifecycle.
 
-Define variant lifecycle explicitly. A renderer registers implementations before its first host/runtime snapshot; a snapshot freezes the compatible `(technique, variant, renderer)` descriptors for that runtime; later registration fails; disposing the runtime releases the snapshot but does not dispose package-owned descriptors. Selection is deterministic (preferred declared variant, then an explicitly requested fallback, otherwise a clear unsupported error), and every selected variant reports the geometry/resource capabilities it can consume. Shader-language variants never change the wire `programVariant`: all such variants share one policy program and compiled binding; the variant selects only the renderer-side shader realization. These rules preserve the current registry's freeze and release behavior while removing its per-technique resource/material callback shape.
+Define variant lifecycle explicitly. A renderer or application selects one implementation by registering it before the first host/runtime snapshot; a snapshot freezes that `(technique, variant, renderer)` descriptor for the runtime, a second variant for the same technique fails at registration, and disposing the runtime releases the snapshot without disposing package-owned descriptors. Every selected variant reports the geometry/resource capabilities it consumes. Shader-language variants never change the wire `programVariant`: all alternatives share one policy program and compiled binding, and choosing another language means registering that renderer-side realization instead. These rules preserve the registry's freeze and release behavior without inventing a second runtime preference API.
 
 The generic path must support `createMaterial(context)`. Resolve the portable plan independently of the Three variant: a portable program without a compatible Three implementation must fail with an explicit unsupported-variant diagnostic, not fall through to the first-party resource resolver. What disappears is the requirement that a portable technique register a Three-specific program containing policy interpretation, resource ownership, and an opaque callback contract.
 
-First-party Bitmap, MSDF, and Slug paths should be migrated onto this path after the example proves it. Their existing TSL shader logic remains authoritative during the migration.
+First-party Bitmap, MSDF, and Slug keep their renderer-owned fallback in this change. Bitmap needs repeated strike atlases and Slug needs grouped page resources; the one-name/one-key portable compiler cannot represent either honestly, and migrating MSDF alone would leave two execution paths without deleting the fallback. Their existing TSL shader logic remains authoritative until a grouped/repeated resource contract is designed and reviewed.
 
 ### 4. Reorganize and implement `glyph-example-raster`
 
@@ -223,7 +225,7 @@ Keep the integrated history atomic and green in dependency order:
 2. generic Three variant selection, named binding/material context, primitive realization, draw reuse, and decoration preservation;
 3. portable/Three example package split, registration entrypoints, and shader-variant compatibility fixture;
 4. renderer-neutral example device plus the real font/bake/non-empty-draw acceptance path;
-5. Bitmap/MSDF/Slug migration, docs/README/report/decision-register updates, benchmark proof, and generated digests.
+5. Bitmap/MSDF/Slug fallback equivalence, docs/README/report/decision-register updates, benchmark proof, and generated digests.
 
 Each commit must pass its focused checks before the next commit is integrated; the final branch must pass every affected package check, `docs:check`, and the repository check. Use `gh stack` for the single PR branch and never merge to `main`. If the base moves, rebase with `git rebase --onto <new-base> <old-base> <branch>`; never use `--skip`. Resolve generated `source_digest` conflicts only with `mise exec -- pnpm scripts run docs:update`.
 
@@ -254,6 +256,7 @@ Done means all of the following are true:
 - `glyph-example-renderer` loads a font, resolves and maps the example `/typegpu` shader through a concrete device/submission path, and records/submits non-empty draws;
 - the reference Three path produces non-empty visible draws;
 - `apps/benchmarks` runs the external raster proof through the public package exports, including the bundled visible-pixel path;
+- `apps/benchmarks` runs the named cold/retained Three lab and enforces non-empty draw and reuse invariants;
 - focused package checks, each affected package check, `docs:check`, and the repository check pass.
 
 ## Cost

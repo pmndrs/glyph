@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import {
   FontRegistry,
   createTextRuntime,
+  defineRasterResourceId,
+  defineRasterTechnique,
   rasterBake,
   type RasterKey,
   type RasterResolverContext,
@@ -15,12 +17,21 @@ import {
 } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import {
+  defineTechniqueSchema,
+  registerRasterPlanProgram,
+  type PortableBufferPayload,
+  type PortableGeometryPayload,
+  type RasterPlanProgram,
+} from '@pmndrs/glyph/core';
+import {
   registerThreeRasterPlanProgram,
+  defineTextMaterial,
   threePolicyAbi,
   Text,
   TextGroup,
   type ThreePlanProgramBuffer,
   type ThreePlanProgramMaterialContext,
+  type ThreeTextGenericMaterialContext,
 } from '@pmndrs/glyph/three';
 import { positionLocal, storage, uv } from 'three/tsl';
 import * as THREE from 'three/webgpu';
@@ -28,16 +39,26 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import glyphExampleBaker from '../src/baker.js';
 import { glyphExamplePlanProgram } from '../src/portable.js';
-import { glyphExampleTslShader } from '../src/tsl.js';
-import { GLYPH_EXAMPLE_KIND, glyphExample, glyphExampleDescriptor } from '../src/index.js';
+import { glyphExampleTslShader, glyphExampleTslVariant } from '../src/tsl.js';
+import {
+  GLYPH_EXAMPLE_KIND,
+  glyphExample,
+  glyphExampleDescriptor,
+  glyphExampleIndexedQuadGeometry,
+  type GlyphExampleData,
+} from '../src/index.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const temporaryDirectories: string[] = [];
 const materials: THREE.NodeMaterial[] = [];
+const genericMaterialContexts: ThreeTextGenericMaterialContext[] = [];
+const suppliedMaterialContexts: ThreePlanProgramMaterialContext[] = [];
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
   for (const material of materials.splice(0)) material.dispose();
+  genericMaterialContexts.splice(0);
+  suppliedMaterialContexts.splice(0);
 });
 
 describe('public external raster proof', () => {
@@ -118,7 +139,14 @@ describe('public external raster proof', () => {
       input: { baked: dataUrl(await readFile(core.file)) },
       raster: { technique: glyphExample, options: { paletteSeed: 7 } },
     });
-    const text = new Text({ font, text: 'PUBLIC RASTER', style: { fontSize: 48 } });
+    const material = defineTextMaterial((context) => {
+      if (typeof context.technique === 'string') throw new TypeError('expected a generic material context');
+      genericMaterialContexts.push(context);
+      const realized = context.createDefaultMaterial();
+      realized.depthTest = true;
+      return realized;
+    });
+    const text = new Text({ font, text: 'PUBLIC RASTER', style: { fontSize: 48 }, material });
     const group = new TextGroup({ renderOrder: 200 });
     group.add(text);
     const scene = new THREE.Scene();
@@ -130,6 +158,10 @@ describe('public external raster proof', () => {
       const draw = group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
       expect(draw).toBeDefined();
       expect(draw?.renderOrder).toBe(200);
+      expect((draw?.material as THREE.Material | undefined)?.depthTest).toBe(true);
+      expect(genericMaterialContexts).toHaveLength(1);
+      expect(genericMaterialContexts[0]?.technique.id).toBe(glyphExample.id);
+      expect([...genericMaterialContexts[0]!.outputs.keys()]).toEqual(['position', 'color', 'opacity']);
       const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
       expect(geometry.getAttribute('_pmndrsGlyph_1')).toBeDefined();
       expect(geometry.getAttribute('_pmndrsGlyph_2')).toBeDefined();
@@ -162,29 +194,157 @@ describe('public external raster proof', () => {
       runtime.dispose();
     }
   });
+
+  test('realizes and reuses supplied indexed triangle-strip geometry through Three', async () => {
+    registerThreeRasterPlanProgram(suppliedThreeProgram);
+    const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
+    const core = baked.execution.outputs.find(({ role }) => role === 'font');
+    assert.ok(core);
+    const registry = new FontRegistry();
+    const runtime = await createTextRuntime({
+      registry,
+      wasm: await readFile(new URL('../../glyph/dist/text-shaper.wasm', import.meta.url)),
+    });
+    const font = await runtime.loadFont({
+      input: { baked: dataUrl(await readFile(core.file)) },
+      raster: { technique: suppliedGlyphExample, options: { paletteSeed: 7 } },
+    });
+    const text = new Text({ font, text: 'STRIP QUAD', style: { fontSize: 48 } });
+    const group = new TextGroup();
+    group.add(text);
+    const scene = new THREE.Scene();
+    scene.add(group);
+    scene.updateMatrixWorld();
+
+    let materialDisposals = 0;
+    try {
+      expect(group.error).toBeUndefined();
+      const draw = group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+      expect(draw).toBeDefined();
+      const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
+      const drawMaterial = draw?.material;
+      assert.ok(drawMaterial && !Array.isArray(drawMaterial));
+      drawMaterial.addEventListener('dispose', () => (materialDisposals += 1));
+      expect(suppliedMaterialContexts).toHaveLength(1);
+      expect([...suppliedMaterialContexts[0]!.namedResources.keys()]).toEqual(['glyphColors', 'glyphGeometry']);
+      expect(suppliedMaterialContexts[0]!.resourceName).toBe('glyphColors');
+      expect(Array.from(geometry.index?.array ?? [])).toEqual([0, 1, 2, 2, 1, 3]);
+      expect(geometry.drawRange).toEqual({ start: 0, count: 6 });
+      expect(geometry.instanceCount).toBeGreaterThan(0);
+
+      text.text = 'QUAD STRIP';
+      scene.updateMatrixWorld();
+      expect(group.error).toBeUndefined();
+      expect(group.children.find((child) => child instanceof THREE.Mesh)).toBe(draw);
+      expect(draw?.geometry).toBe(geometry);
+      expect(geometry.drawRange).toEqual({ start: 0, count: 6 });
+    } finally {
+      group.dispose();
+      text.dispose();
+      font.dispose();
+      runtime.dispose();
+    }
+    expect(materialDisposals).toBe(1);
+  });
 });
 
-const threeProgram = {
-  technique: glyphExamplePlanProgram.technique,
-  realizeResource: (resource: unknown) => resource,
-  createMaterial(context: ThreePlanProgramMaterialContext<unknown>) {
-    const material = createThreeMaterial(context);
-    materials.push(material);
-    return material;
+const suppliedGlyphExample = defineRasterTechnique({
+  ...glyphExample,
+  id: 'studio.glyph-example-supplied',
+});
+
+const suppliedGlyphExampleSchema = defineTechniqueSchema({
+  technique: suppliedGlyphExample.id,
+  scope: glyphExamplePlanProgram.schema.scope,
+  binding: glyphExamplePlanProgram.schema.binding,
+  buffers: glyphExamplePlanProgram.schema.buffers,
+  resources: { glyphColors: { kind: 'buffer' }, glyphGeometry: { kind: 'geometry' } },
+  render: { geometry: { kind: 'quad', resource: 'glyphGeometry', coordinates: 'unit-square' } },
+  glyphOrigin: { buffer: 'origin' },
+});
+
+const stripGeometry = triangleStripGeometry(glyphExampleIndexedQuadGeometry);
+
+const suppliedPlanProgram: RasterPlanProgram<
+  typeof suppliedGlyphExample,
+  PortableBufferPayload | PortableGeometryPayload
+> = {
+  technique: suppliedGlyphExample,
+  schema: suppliedGlyphExampleSchema,
+  policyBody: glyphExamplePlanProgram.policyBody,
+  compileFont(compiler) {
+    const data: GlyphExampleData = compiler.font.data;
+    const geometryKey = defineRasterResourceId(`${data.resource}/strip-geometry`);
+    const { resources } = compiler.resources([data.resource, geometryKey]);
+    compiler.retain('glyphColors', data.resource, { kind: 'buffer', bytes: data.colors, stride: 4 });
+    compiler.retain('glyphGeometry', geometryKey, stripGeometry);
+    compiler.compile({
+      techniqueId: compiler.techniqueId,
+      programVariant: 0,
+      glyphCount: compiler.font.font.glyphCount,
+      strikes: [0],
+      resources,
+      resourceIndex: () => 0,
+      glyphF32: {
+        rows: data.glyphCount,
+        fields: [
+          () => data.inset,
+          (row) => data.colors[row * 4]! / 255,
+          (row) => data.colors[row * 4 + 1]! / 255,
+          (row) => data.colors[row * 4 + 2]! / 255,
+          (row) => data.colors[row * 4 + 3]! / 255,
+        ],
+      },
+      glyphU32: compiler.emptyTable(data.glyphCount),
+      strikeF32: compiler.emptyTable(data.glyphCount),
+      strikeU32: compiler.emptyTable(data.glyphCount),
+      resourceF32: compiler.emptyTable(resources.length),
+      resourceU32: compiler.emptyTable(resources.length),
+    });
   },
 };
 
-function createThreeMaterial(context: {
-  readonly resource: unknown;
-  readonly buffers: ReadonlyMap<number, ThreePlanProgramBuffer>;
-  readonly instance: THREE.Node<'uint'>;
-  readonly materialId: number;
-  transformPosition(position: THREE.Node<'vec3'>): THREE.Node<'vec3'>;
-}): THREE.MeshBasicNodeMaterial {
-  if (context.materialId !== 0) throw new TypeError('glyph-example supports only the default material');
-  const origin = floatBuffer(context.buffers, 1, 2);
-  const size = floatBuffer(context.buffers, 2, 2);
-  const color = floatBuffer(context.buffers, 3, 4);
+registerRasterPlanProgram(suppliedPlanProgram);
+
+const suppliedThreeProgram = {
+  technique: suppliedGlyphExample,
+  variant: {
+    id: 'tsl-strip',
+    language: 'tsl',
+    buffers: glyphExampleTslVariant.buffers,
+    resources: suppliedGlyphExampleSchema.resources!,
+    outputs: glyphExampleTslVariant.outputs,
+    geometry: suppliedGlyphExampleSchema.render!.geometry,
+    createMaterial(context: ThreePlanProgramMaterialContext) {
+      suppliedMaterialContexts.push(context);
+      const material = createThreeMaterial(context);
+      materials.push(material);
+      return material;
+    },
+  },
+};
+
+const threeProgram = {
+  technique: glyphExamplePlanProgram.technique,
+  variant: {
+    id: 'tsl',
+    language: 'tsl',
+    buffers: glyphExampleTslVariant.buffers,
+    resources: glyphExampleTslVariant.resources,
+    outputs: glyphExampleTslVariant.outputs,
+    geometry: glyphExampleTslVariant.geometry,
+    createMaterial(context: ThreePlanProgramMaterialContext) {
+      const material = createThreeMaterial(context);
+      materials.push(material);
+      return material;
+    },
+  },
+};
+
+function createThreeMaterial(context: ThreePlanProgramMaterialContext): THREE.NodeMaterial {
+  const origin = floatBuffer(context.namedBuffers, 'origin', 2);
+  const size = floatBuffer(context.namedBuffers, 'size', 2);
+  const color = floatBuffer(context.namedBuffers, 'color', 4);
   const shader = glyphExampleTslShader({
     origin: storage(origin.attribute, 'vec2', origin.attribute.count).setPBO(true).element(context.instance),
     size: storage(size.attribute, 'vec2', size.attribute.count).setPBO(true).element(context.instance),
@@ -193,26 +353,40 @@ function createThreeMaterial(context: {
     quadUv: uv(),
     transformPosition: context.transformPosition,
   });
-  const material = new THREE.MeshBasicNodeMaterial({
-    depthTest: false,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    transparent: true,
-  });
-  material.positionNode = shader.position;
-  material.colorNode = shader.color;
-  material.opacityNode = shader.opacity;
-  return material;
+  const createDefaultMaterial = () => {
+    const material = new THREE.MeshBasicNodeMaterial({
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      transparent: true,
+    });
+    material.positionNode = shader.position;
+    material.colorNode = shader.color;
+    material.opacityNode = shader.opacity;
+    return material;
+  };
+  return (
+    context.material?.create({
+      technique: context.technique,
+      outputs: new Map<string, THREE.Node>([
+        ['position', shader.position],
+        ['color', shader.color],
+        ['opacity', shader.opacity],
+      ]),
+      position: shader.position,
+      createDefaultMaterial,
+    }) ?? createDefaultMaterial()
+  );
 }
 
-function floatBuffer(buffers: ReadonlyMap<number, ThreePlanProgramBuffer>, id: number, vectorWidth: number) {
-  const buffer = buffers.get(id);
+function floatBuffer(buffers: ReadonlyMap<string, ThreePlanProgramBuffer>, name: string, vectorWidth: number) {
+  const buffer = buffers.get(name);
   if (
     buffer === undefined ||
     buffer.scalarType !== threePolicyAbi.scalarTypes.f32 ||
     buffer.vectorWidth !== vectorWidth
   ) {
-    throw new TypeError(`glyph-example draw requires f32x${vectorWidth} policy buffer ${id}`);
+    throw new TypeError(`glyph-example draw requires f32x${vectorWidth} policy buffer "${name}"`);
   }
   return buffer;
 }
@@ -240,6 +414,23 @@ async function bakeFixture(packaging: {
 
 function dataUrl(bytes: Uint8Array): string {
   return `data:model/gltf-binary;base64,${Buffer.from(bytes).toString('base64')}`;
+}
+
+function triangleStripGeometry(source: PortableGeometryPayload): PortableGeometryPayload {
+  const bytes = new Uint8Array(72);
+  bytes.set(source.bytes.subarray(0, 64));
+  bytes.set(new Uint8Array(new Uint16Array([0, 1, 2, 3]).buffer), 64);
+  return {
+    kind: 'geometry',
+    topology: 'triangle-strip',
+    bytes,
+    views: [source.views[0]!, { offset: 64, length: 8 }],
+    accessors: [source.accessors[0]!, source.accessors[1]!, { componentType: 'u16', components: 1, view: 1, count: 4 }],
+    attributes: source.attributes,
+    indices: { accessor: 2 },
+    drawRange: { start: 0, count: 4 },
+    instances: { source: 'records' },
+  };
 }
 
 function glyphColorMatches(
