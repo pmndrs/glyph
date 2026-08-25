@@ -121,7 +121,7 @@ export const exampleSchema = defineTechniqueSchema({
     size: { id: 2, scalar: 'f32', lanes: ['widthX', 'heightY'] },
     color: { id: 3, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
   },
-  resources: { glyphColors: { kind: 'studio-example-colors' } },
+  resources: { glyphColors: { kind: 'buffer' } },
   render: { geometry: { kind: 'synthetic-quad' } },
   glyphOrigin: { buffer: 'origin' },
 });
@@ -132,91 +132,69 @@ export const exampleSchema = defineTechniqueSchema({
 ### Portable policy body and font compiler
 
 ```ts
-import {
-  addF32,
-  constantF32,
-  multiplyF32,
-  registerRasterPlanProgram,
-  subtractF32,
-  techniqueProgram,
-  type RasterPlanProgram,
-} from '@pmndrs/glyph/core';
+import { f32, registerRasterPlanProgram, techniqueProgram, type RasterPlanProgram } from '@pmndrs/glyph/core';
 
-export const examplePlanProgram: RasterPlanProgram<typeof exampleTechnique, ExampleData> = {
-  technique: exampleTechnique,
-  schema: exampleSchema,
+export const examplePlanProgram: RasterPlanProgram<typeof exampleTechnique, typeof exampleSchema> =
+  registerRasterPlanProgram({
+    technique: exampleTechnique,
+    schema: exampleSchema,
+    programVariant: 0,
 
-  policyBody(system) {
-    const p = techniqueProgram(exampleSchema);
-    const { inlineOrigin, blockOrigin, fontSize, color, transformIndex } = p.semantics;
-    const { inset, red, green, blue, alpha } = p.binding;
-    const twiceInset = multiplyF32(multiplyF32(inset, fontSize), constantF32(2));
-
-    p.store(exampleSchema.buffers.origin, [
-      addF32(inlineOrigin, multiplyF32(inset, fontSize)),
-      subtractF32(blockOrigin, multiplyF32(inset, fontSize)),
-    ]);
-    p.store(exampleSchema.buffers.size, [
-      subtractF32(multiplyF32(fontSize, constantF32(0.65)), twiceInset),
-      subtractF32(fontSize, twiceInset),
-    ]);
-    p.store(exampleSchema.buffers.color, [
-      multiplyF32(color.red, red),
-      multiplyF32(color.green, green),
-      multiplyF32(color.blue, blue),
-      multiplyF32(color.alpha, alpha),
-    ]);
-    p.store(system.stableGlyphId, [p.semantics.stableGlyphId]);
-    if (system.transformIndex !== undefined) p.store(system.transformIndex, [transformIndex]);
-    return p.compile();
-  },
-
-  compileFont(compiler) {
-    const data = compiler.font.data;
-    const { resources } = compiler.resources([data.resource]);
-    compiler.retain('glyphColors', data.resource, data);
-    compiler.compile({
-      techniqueId: compiler.techniqueId,
-      programVariant: 0,
-      glyphCount: compiler.font.font.glyphCount,
-      strikes: [0],
-      resources,
-      resourceIndex: () => 0,
-      glyphF32: {
-        rows: data.glyphCount,
-        fields: [
-          () => data.inset,
-          (row) => data.colors[row * 4]! / 255,
-          (row) => data.colors[row * 4 + 1]! / 255,
-          (row) => data.colors[row * 4 + 2]! / 255,
-          (row) => data.colors[row * 4 + 3]! / 255,
+    policyBody(system, _capabilities) {
+      const p = techniqueProgram(exampleSchema, { system });
+      const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+      const { inset, red, green, blue, alpha } = p.binding;
+      const insetPixels = f32.mul(inset, fontSize);
+      const twiceInsetPixels = f32.mul(insetPixels, f32.const(2));
+      return p.compile({
+        origin: [f32.add(inlineOrigin, insetPixels), f32.sub(blockOrigin, insetPixels)],
+        size: [f32.sub(f32.mul(fontSize, f32.const(0.65)), twiceInsetPixels), f32.sub(fontSize, twiceInsetPixels)],
+        color: [
+          f32.mul(color.red, red),
+          f32.mul(color.green, green),
+          f32.mul(color.blue, blue),
+          f32.mul(color.alpha, alpha),
         ],
-      },
-      glyphU32: compiler.emptyTable(data.glyphCount),
-      strikeF32: compiler.emptyTable(data.glyphCount),
-      strikeU32: compiler.emptyTable(data.glyphCount),
-      resourceF32: compiler.emptyTable(resources.length),
-      resourceU32: compiler.emptyTable(resources.length),
-    });
-  },
-};
+      });
+    },
 
-registerRasterPlanProgram(examplePlanProgram);
+    compileFont(compiler) {
+      const data = compiler.font.data;
+      compiler.retain('glyphColors', data.resource, {
+        kind: 'buffer',
+        bytes: data.colors,
+        stride: 4,
+      });
+      return compiler.compile({
+        strikes: [0],
+        resource: () => data.resource,
+        f32: {
+          inset: () => data.inset,
+          red: (row) => data.colors[row * 4]! / 255,
+          green: (row) => data.colors[row * 4 + 1]! / 255,
+          blue: (row) => data.colors[row * 4 + 2]! / 255,
+          alpha: (row) => data.colors[row * 4 + 3]! / 255,
+        },
+      });
+    },
+  });
 ```
 
 The compiler produces a core result:
 
 ```ts
-interface CompiledRasterFont<Resource = unknown> {
+interface CompiledRasterFont {
   readonly binding: Uint8Array;
-  readonly resources: ReadonlyMap<RasterResourceId, Resource>;
+  readonly resources: ReadonlyMap<RasterResourceId, PortableResource>;
   readonly declaredResources: ReadonlyMap<string, RasterResourceId>;
 }
 ```
 
 No `NodeMaterial`, GPU texture, Three program, or device object crosses this result. `loadedFontBindingBytes(font, identities)` is the byte-only projection used by both `Paragraph` and the Three runtime path, so custom techniques do not have two binding implementations.
 
-Reserved `buffer`, `texture`, `texture-array`, and `geometry` payloads are copied and validated at the `retain` call before the compiled result is returned. The schema's required geometry resource and declared texture format are checked in the same cold path; technique-private payload kinds remain opaque to core and must define their own ownership contract.
+The closed `buffer`, `texture`, `texture-array`, and `geometry` payload union is copied and validated at the `retain` call before the compiled result is returned. The schema's required geometry resource and declared texture format are checked in the same cold path; an opaque technique-private payload cannot cross this boundary.
+
+A registered raster plan currently declares at least one resource. The font-binding wire assigns a retained resource to each raster record; resource-free decoration remains an engine-owned primitive rather than a `RasterPlanProgram`.
 
 ## 2. Implementing a policy
 
@@ -227,50 +205,48 @@ The portable plan returns a `CompiledPolicyProgramBody`, not a complete `PolicyP
 Three owns its system lanes. In the current implementation the stable glyph id is buffer `14` and the transform index is buffer `15`; those values are exposed through `threePolicyAbi`/`threeSystemBuffers`, not exported as portable technique constants.
 
 ```ts
-import { createProgram, schemaPolicyBuffers } from '@pmndrs/glyph/core';
+import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
+import { exampleTechnique, examplePlanProgram, exampleSchema } from 'studio-example-raster';
+import { exampleTslVariant } from 'studio-example-raster/tsl';
 
-// Supplied by the Three integration; neither value belongs in the portable plan.
-declare const threePolicyCapabilitySet: () => PolicyCapabilitySet;
-declare const threeSystemBuffers: RasterPolicySystem;
-
-const body = examplePlanProgram.policyBody(threeSystemBuffers, threePolicyCapabilitySet());
-const policy = createProgram(
-  techniqueId,
-  programId,
-  body,
-  [
-    ...schemaPolicyBuffers(examplePlanProgram.schema),
-    { id: threeSystemBuffers.stableGlyphId.id, scalar: scalarTypes.u32, vectorWidth: 1 },
-    { id: threeSystemBuffers.transformIndex.id, scalar: scalarTypes.u32, vectorWidth: 1 },
-  ],
-  'indexed',
-  'ordered',
-);
+registerThreeRasterPlanProgram({
+  technique: exampleTechnique,
+  schema: exampleSchema,
+  variant: {
+    ...exampleTslVariant,
+    createMaterial(context) {
+      return createExampleMaterial(context);
+    },
+  },
+});
 ```
 
-The actual public package adapts this through `registerThreeRasterPlanProgram({ technique, variant })`. The application selects one compatible Three realization by registering it before the first runtime snapshot; the registry resolves the portable program by technique id, creates the host-owned Three `PolicyProgram`, and keeps the resource-to-program association in `/three`. The selected variant's `createMaterial(context)` receives named policy buffers and named portable resources; it does not own policy assembly or resource retention.
+The actual public package adapts this through `registerThreeRasterPlanProgram({ technique, variant })`. The application selects one compatible Three realization by registering it before the first runtime snapshot; the registry resolves the portable program by technique id, authenticates the variant's exact named buffers, resource formats, outputs, and geometry meaning, creates the host-owned Three `PolicyProgram`, and keeps the resource-to-program association in `/three`. The selected variant's `createMaterial(context)` receives named policy buffers and named portable resources; it does not own policy assembly or resource retention.
 
 ### A non-Three policy assembly
 
 The example renderer deliberately uses different system numbers. Its stable glyph id is buffer `20`, and it creates its own capability set and `PolicyProgram`:
 
 ```ts
+const EXAMPLE_STABLE_GLYPH_BUFFER_ID = 20;
+const EXAMPLE_CAPABILITY_SET = 1;
+const EXAMPLE_RENDERER_PROGRAM_NAMESPACE = 'example-renderer';
+
 const exampleSystemBuffers = definePolicyBuffers({
   stableGlyphId: { id: 20, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 
-const body = examplePlanProgram.policyBody(exampleSystemBuffers, exampleCapabilitySet());
-const policy = compileRenderPolicy({
-  capabilitySets: [exampleCapabilitySet()],
+const capabilitySet = exampleCapabilitySet();
+const policyBytes = compileRenderPolicy({
+  capabilitySets: [capabilitySet],
   programs: [
-    createProgram(
-      renderWireId(examplePlanProgram.technique.id),
-      renderWireId(`${examplePlanProgram.technique.id}/example-plan-program`),
-      body,
-      [...schemaPolicyBuffers(examplePlanProgram.schema), { id: 20, scalar: scalarTypes.u32, vectorWidth: 1 }],
-      'direct',
-      'ordered',
-    ),
+    createRasterPolicyProgram(examplePlanProgram, {
+      namespace: EXAMPLE_RENDERER_PROGRAM_NAMESPACE,
+      system: exampleSystemBuffers,
+      capabilitySet,
+      transformMode: 'direct',
+      allocationMode: 'ordered',
+    }),
   ],
 });
 ```
@@ -326,20 +302,18 @@ At renderer realization time, the engine resolves that identity to its wire reso
 
 ```ts
 interface ExampleRendererDevice {
-  createResources(resources: readonly ExampleRendererResourceInput[]): { rollback(): void };
-  applyBufferPlan(
-    buffers: readonly TextEngineBufferRecord[],
-    patches: readonly TextEnginePatchRecord[],
-    retirements: readonly TextEngineRetirementRecord[],
-  ): void;
-  retireResource(id: number, generation: number): void;
-  submit(drawList: ExampleDrawList): void;
+  readonly shader: ExampleRendererShader;
+  prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources;
+  prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission;
 }
 ```
 
 `RecordingExampleRendererDevice` is a concrete device for the acceptance path. It keys buffers by `(id, generation)`,
-applies allocate/write/fill/copy deltas at their declared ranges, and releases only exact-generation retirements. A real
-WebGPU/WebGL/CPU renderer can implement the same seam without changing the portable technique.
+validates every resource, buffer, patch, primitive, and draw against the selected technique/program/variant, applies
+allocate/write/fill/copy deltas to candidate owned state, and releases only exact-generation retirements. `prepare*()`
+never mutates accepted device state; `commit()` publishes the complete candidate once. If font-binding registration or
+plan validation throws, the candidate is simply never committed—there is no rollback and no stale-state restoration. A
+real WebGPU/WebGL/CPU renderer can implement the same seam without changing the portable technique.
 
 ### Executable evidence
 
@@ -350,8 +324,8 @@ technique on WebGPU and forced WebGL2, rejects within- or cross-backend hash div
 `0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`.
 
 `pnpm scripts run benchmark:render-technique-lab` compares the generic Three path with Bitmap through one public
-`TextRuntime`. On the reviewed equal-12-instance Chromium run, generic host realization measured 3.13 ms cold and
-0.070/0.105 ms median/p95 retained; Bitmap measured 3.71 ms cold and 0.050/0.065 ms retained. Both retained one draw and
+`TextRuntime`. On the reviewed equal-12-instance Chromium run, generic host realization measured 4.38 ms cold and
+0.085/0.285 ms median/p95 retained; Bitmap measured 3.92 ms cold and 0.060/0.130 ms retained. Both retained one draw and
 its geometry. This lab measures CPU-side plan realization and publication, not renderer submission; timings are host
 observations, while equal nonzero instance count, draw count, and identity retention are enforced invariants.
 

@@ -10,6 +10,8 @@ import {
   resolveRasterPlanProgram,
   TextEngineHost,
   textRuntimeShaper,
+  type PortableGeometryPayload,
+  type PortableResource,
   type TextEngineSession,
   type TextEngineSessionOptions,
 } from '../core.js';
@@ -258,7 +260,7 @@ export class ThreeTextEngineCoordinator {
         const resource = compiled.resources.get(key);
         if (resource === undefined) throw new Error(`compiled font omitted declared resource "${name}"`);
         namedResources.set(name, resource);
-        resourceReferences.set(name, this.host.wireIdentities.resolve(key));
+        resourceReferences.set(name, this.host.wireIdentities.resourceId(key));
         resourceNames.set(key, name);
       }
       const resources = readonlyMap(namedResources);
@@ -316,34 +318,22 @@ export class ThreeTextEngineCoordinator {
   }
 
   #assertResourcesCompatible(resources: readonly PreparedResource[]): void {
-    const preparedTechniques = new Map<number, string>();
+    const prepared = new Map<number, ThreeTextEngineResource>();
     for (const { key, resource } of resources) {
-      const referenceId = this.host.wireIdentities.resolve(key);
-      const existing = this.#resources.get(referenceId)?.owners.values().next().value;
-      if (existing !== undefined && existing.technique !== resource.technique) {
-        throw new TypeError(`Three text resource ${referenceId} is registered for incompatible techniques`);
-      }
-      if (existing !== undefined && !sameResourceBundle(existing, resource)) {
-        throw new TypeError(`Three text resource ${referenceId} is registered with incompatible named resources`);
-      }
-      const preparedTechnique = preparedTechniques.get(referenceId);
-      if (preparedTechnique !== undefined && preparedTechnique !== resource.technique) {
-        throw new TypeError(`Three text resource ${referenceId} is registered for incompatible techniques`);
-      }
-      preparedTechniques.set(referenceId, resource.technique);
+      const referenceId = this.host.wireIdentities.idFor(key);
+      const registered = this.#resources.get(referenceId)?.owners.values().next().value;
+      if (registered !== undefined) assertEquivalentResource(referenceId, registered, resource);
+      const batched = prepared.get(referenceId);
+      if (batched !== undefined) assertEquivalentResource(referenceId, batched, resource);
+      prepared.set(referenceId, resource);
     }
   }
 
   #retainResource(font: LoadedFont<AnyRasterTechnique>, key: string, resource: ThreeTextEngineResource): void {
-    const referenceId = this.host.wireIdentities.resolve(key);
+    const referenceId = this.host.wireIdentities.idFor(key);
     let retained = this.#resources.get(referenceId);
     const existing = retained?.owners.values().next().value;
-    if (existing !== undefined && existing.technique !== resource.technique) {
-      throw new TypeError(`Three text resource ${referenceId} is registered for incompatible techniques`);
-    }
-    if (existing !== undefined && !sameResourceBundle(existing, resource)) {
-      throw new TypeError(`Three text resource ${referenceId} is registered with incompatible named resources`);
-    }
+    if (existing !== undefined) assertEquivalentResource(referenceId, existing, resource);
     if (retained === undefined) {
       retained = { owners: new Map() };
       this.#resources.set(referenceId, retained);
@@ -453,12 +443,168 @@ function readonlyMap<Key, Value>(source: Map<Key, Value>): ReadonlyMap<Key, Valu
 }
 
 function sameResourceBundle(left: ThreeTextEngineResource, right: ThreeTextEngineResource): boolean {
-  if (!('resourceReferences' in left) || !('resourceReferences' in right)) {
-    return !('resourceReferences' in left) && !('resourceReferences' in right);
+  if ('resourceReferences' in left) {
+    if (!('resourceReferences' in right)) return false;
+    return (
+      left.resourceName === right.resourceName &&
+      left.program === right.program &&
+      sameMap(left.resourceReferences, right.resourceReferences, Object.is) &&
+      sameMap(left.resources, right.resources, samePortableResource)
+    );
   }
-  if (left.resourceReferences.size !== right.resourceReferences.size) return false;
-  for (const [name, reference] of left.resourceReferences) {
-    if (right.resourceReferences.get(name) !== reference) return false;
+  if ('resourceReferences' in right) return false;
+  if ('strike' in left && 'strike' in right) return sameBitmapStrike(left.strike, right.strike);
+  if ('data' in left && 'data' in right) return sameMsdfData(left.data, right.data);
+  return 'page' in left && 'page' in right && sameSlugPage(left.page, right.page);
+}
+
+function assertEquivalentResource(
+  referenceId: number,
+  existing: ThreeTextEngineResource,
+  incoming: ThreeTextEngineResource,
+): void {
+  if (existing.technique !== incoming.technique) {
+    throw new TypeError(`Three text resource ${referenceId} is registered for incompatible techniques`);
+  }
+  if (!sameResourceBundle(existing, incoming)) {
+    throw new TypeError(`Three text resource ${referenceId} is registered with incompatible resource content`);
+  }
+}
+
+function sameMap<Key, Value>(
+  left: ReadonlyMap<Key, Value>,
+  right: ReadonlyMap<Key, Value>,
+  same: (left: Value, right: Value) => boolean,
+): boolean {
+  if (left.size !== right.size) return false;
+  for (const [key, value] of left) {
+    const other = right.get(key);
+    if (other === undefined || !same(value, other)) return false;
+  }
+  return true;
+}
+
+function sameBitmapStrike(left: BitmapStrikeData, right: BitmapStrikeData): boolean {
+  return (
+    left.ppem === right.ppem &&
+    left.planeUnitsPerEm === right.planeUnitsPerEm &&
+    sameBytes(left.records, right.records) &&
+    left.pages.length === right.pages.length &&
+    left.pages.every((page, index) => {
+      const other = right.pages[index]!;
+      return (
+        page.width === other.width &&
+        page.height === other.height &&
+        page.format === other.format &&
+        sameBytes(page.bytes, other.bytes)
+      );
+    })
+  );
+}
+
+function sameMsdfData(left: MsdfData, right: MsdfData): boolean {
+  return (
+    left.binding.width === right.binding.width &&
+    left.binding.height === right.binding.height &&
+    left.binding.layers === right.binding.layers &&
+    left.emSize === right.emSize &&
+    left.pixelRange === right.pixelRange &&
+    left.planeUnitsPerEm === right.planeUnitsPerEm &&
+    sameBytes(left.records, right.records) &&
+    (left.coverage === undefined || right.coverage === undefined
+      ? left.coverage === right.coverage
+      : sameBytes(left.coverage, right.coverage)) &&
+    left.pages.length === right.pages.length &&
+    left.pages.every((page, index) => {
+      const other = right.pages[index]!;
+      return (
+        page.width === other.width &&
+        page.height === other.height &&
+        page.format === other.format &&
+        sameBytes(page.bytes, other.bytes)
+      );
+    })
+  );
+}
+
+function sameSlugPage(left: SlugPageData, right: SlugPageData): boolean {
+  return (
+    left.curveWidth === right.curveWidth &&
+    left.curveHeight === right.curveHeight &&
+    sameBytes(left.curveBytes, right.curveBytes) &&
+    left.headerCount === right.headerCount &&
+    left.headerWidth === right.headerWidth &&
+    left.headerHeight === right.headerHeight &&
+    sameBytes(left.headerBytes, right.headerBytes) &&
+    left.referenceCount === right.referenceCount &&
+    left.referenceWidth === right.referenceWidth &&
+    left.referenceHeight === right.referenceHeight &&
+    sameBytes(left.referenceBytes, right.referenceBytes)
+  );
+}
+
+function samePortableResource(left: unknown, right: unknown): boolean {
+  if (!isPortableResource(left) || !isPortableResource(right) || left.kind !== right.kind) return false;
+  if (left.kind === 'buffer' && right.kind === 'buffer') {
+    return left.stride === right.stride && sameBytes(left.bytes, right.bytes);
+  }
+  if (left.kind === 'texture' && right.kind === 'texture') {
+    return (
+      left.format === right.format &&
+      left.width === right.width &&
+      left.height === right.height &&
+      sameBytes(left.bytes, right.bytes)
+    );
+  }
+  if (left.kind === 'texture-array' && right.kind === 'texture-array') {
+    return (
+      left.format === right.format &&
+      left.width === right.width &&
+      left.height === right.height &&
+      left.layers === right.layers &&
+      sameBytes(left.bytes, right.bytes)
+    );
+  }
+  return left.kind === 'geometry' && right.kind === 'geometry' && sameGeometry(left, right);
+}
+
+function isPortableResource(value: unknown): value is PortableResource {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const kind = (value as { readonly kind?: unknown }).kind;
+  return kind === 'buffer' || kind === 'texture' || kind === 'texture-array' || kind === 'geometry';
+}
+
+function sameGeometry(left: PortableGeometryPayload, right: PortableGeometryPayload): boolean {
+  return (
+    left.topology === right.topology &&
+    sameBytes(left.bytes, right.bytes) &&
+    sameRecords(left.views, right.views, ['offset', 'length']) &&
+    sameRecords(left.accessors, right.accessors, ['componentType', 'components', 'view', 'count', 'offset']) &&
+    sameRecords(left.attributes, right.attributes, ['semantic', 'accessor']) &&
+    sameOptionalRecord(left.indices, right.indices, ['accessor']) &&
+    sameOptionalRecord(left.drawRange, right.drawRange, ['start', 'count'])
+  );
+}
+
+function sameRecords(left: readonly object[], right: readonly object[], fields: readonly string[]): boolean {
+  return left.length === right.length && left.every((record, index) => sameRecord(record, right[index]!, fields));
+}
+
+function sameOptionalRecord(left: object | undefined, right: object | undefined, fields: readonly string[]): boolean {
+  return left === undefined || right === undefined ? left === right : sameRecord(left, right, fields);
+}
+
+function sameRecord(left: object, right: object, fields: readonly string[]): boolean {
+  const a = left as Record<string, unknown>;
+  const b = right as Record<string, unknown>;
+  return fields.every((field) => a[field] === b[field]);
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left === right) return true;
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
   }
   return true;
 }

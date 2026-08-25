@@ -1,3 +1,5 @@
+import './register.js';
+
 export {
   GLYPH_EXAMPLE_EXTENSION,
   GLYPH_EXAMPLE_FORMAT_VERSION,
@@ -9,7 +11,8 @@ export {
 } from './contract.js';
 export { glyphExample, type GlyphExampleData } from './raster.js';
 export { glyphExampleIndexedQuadGeometry, glyphExampleSuppliedGeometryDeclaration } from './geometry-fixture.js';
-export { glyphExamplePlanProgram, glyphExampleSchema } from './portable.js';
+export { glyphExamplePlanProgram } from './register.js';
+export { glyphExampleSchema } from './portable.js';
 export {
   glyphExampleShaderContract,
   type GlyphExampleShaderBuffer,

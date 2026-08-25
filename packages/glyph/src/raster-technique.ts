@@ -4,6 +4,7 @@ import type { JsonValue, RasterOptionsArgument, RegisteredRaster, RuntimeRasterB
 declare const rasterTechniqueIdBrand: unique symbol;
 declare const rasterResourceIdBrand: unique symbol;
 declare const rasterTechniqueTypes: unique symbol;
+const rasterTechniqueInstances = new WeakSet<object>();
 
 /** Stable public identity for one portable raster technique. */
 export type RasterTechniqueId = string & { readonly [rasterTechniqueIdBrand]: true };
@@ -96,7 +97,36 @@ export function defineRasterTechnique<
   technique: RasterTechniqueDefinition<Id, Kind, Options, Descriptor, Data>,
 ): RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data> {
   assertIdentifier(technique.id, 'raster technique ID');
-  return technique as RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data>;
+  assertIdentifier(technique.kind, 'raster technique kind');
+  assertIdentifier(technique.extension, 'raster technique extension');
+  if (!Number.isSafeInteger(technique.version) || technique.version < 0) {
+    throw new RangeError('raster technique version must be a nonnegative safe integer');
+  }
+  if (
+    typeof technique.descriptor !== 'function' ||
+    typeof technique.decode !== 'function' ||
+    typeof technique.dispose !== 'function' ||
+    (technique.runtimeBaker !== undefined && typeof technique.runtimeBaker !== 'function')
+  ) {
+    throw new TypeError('raster techniques need descriptor, decode, dispose, and optional runtimeBaker functions');
+  }
+  const defined = Object.freeze({
+    id: technique.id,
+    kind: technique.kind,
+    extension: technique.extension,
+    version: technique.version,
+    ...(technique.runtimeBaker === undefined ? {} : { runtimeBaker: technique.runtimeBaker }),
+    descriptor: technique.descriptor,
+    decode: technique.decode,
+    dispose: technique.dispose,
+  }) as RasterTechnique<RasterTechniqueId & Id, Kind, Options, Descriptor, Data>;
+  rasterTechniqueInstances.add(defined);
+  return defined;
+}
+
+/** @internal Authenticate the exact technique witness created by `defineRasterTechnique`. */
+export function isRasterTechnique(value: unknown): value is AnyRasterTechnique {
+  return typeof value === 'object' && value !== null && rasterTechniqueInstances.has(value);
 }
 
 /** Brand a stable resource identity produced by a portable technique. */

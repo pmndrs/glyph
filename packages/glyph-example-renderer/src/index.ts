@@ -20,11 +20,13 @@ export type { ExampleTableSnapshot } from './snapshot.js';
 export {
   exampleRendererShader,
   getExampleRendererShader,
+  type ExampleDrawBindings,
   type ExampleGeometry,
+  type ExamplePendingResources,
+  type ExamplePendingSubmission,
   type ExampleRealizedDraw,
   RecordingExampleRendererDevice,
   type ExampleRendererDevice,
   type ExampleRendererResourceInput,
-  type ExampleRendererResourceRegistration,
   type ExampleRendererShader,
 } from './device.js';

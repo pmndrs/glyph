@@ -410,7 +410,13 @@ export const slugSchema: TechniqueSchema<
       'horizontalBands',
       'verticalBands',
     ];
-  }
+  },
+  {
+    readonly curves: { readonly kind: 'texture'; readonly format: 'rgba16float' };
+    readonly headers: { readonly kind: 'texture'; readonly format: 'rgba32uint' };
+    readonly references: { readonly kind: 'texture'; readonly format: 'r32uint' };
+  },
+  'pmndrs.slug'
 > = defineTechniqueSchema({
   technique: 'pmndrs.slug',
   scope: 'glyph',
@@ -429,8 +435,8 @@ export const slugSchema: TechniqueSchema<
     bandCounts: { id: 7, scalar: 'u32', lanes: ['horizontalBands', 'verticalBands', 'unused2', 'unused3'] },
   },
   resources: {
-    curves: { kind: 'texture' },
-    headers: { kind: 'texture' },
-    references: { kind: 'texture' },
+    curves: { kind: 'texture', format: 'rgba16float' },
+    headers: { kind: 'texture', format: 'rgba32uint' },
+    references: { kind: 'texture', format: 'r32uint' },
   },
 });

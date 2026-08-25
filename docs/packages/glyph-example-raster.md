@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:dab1c09f2ce20c22fcb9c296e5db70a4fccbec3130c095e88fd625d5686bb7b6'
+source_digest: 'sha256:b024ef6c0c87cc7c8d0b3cbe76f965867d99b201b9122f8d73f8f32a044241ec'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -19,7 +19,10 @@ sources:
     title: Shared shader input contract
   - id: portable-plan
     resource: ../../packages/glyph-example-raster/src/portable.ts
-    title: Portable technique schema and registered plan program
+    title: Portable technique schema and plan definition
+  - id: registration
+    resource: ../../packages/glyph-example-raster/src/register.ts
+    title: Root-imported renderer-neutral plan registration
   - id: geometry-fixture
     resource: ../../packages/glyph-example-raster/src/geometry-fixture.ts
     title: Portable GLB-like indexed geometry fixture
@@ -69,7 +72,9 @@ resolvers; the embedded lane proves recursive `BufferView` rebasing through the 
 
 The package now supplies both halves of the Rust render-plan boundary separately. `glyphExample` is a portable
 `defineRasterTechnique` that owns identity, decoding, one shared resource, and disposal while importing no renderer or
-instance-packing contract.
+instance-packing contract. Importing the package root runs the renderer-neutral `registerRasterPlanProgram` call through a
+dedicated registration module. The manifest marks that module and its root facade as side-effectful so a production bundle
+keeps the registration; the portable definition and shader subpaths remain free of registration side effects.
 The `/typegpu` and `/tsl` subpaths export shader functions and the same named-input descriptor; they do not register a
 renderer or own resource/material caches. A Three consumer imports `/tsl` and manually calls public
 `registerThreeRasterPlanProgram`, while the example renderer imports `/typegpu`. The policy describes the exact Rust
@@ -81,8 +86,9 @@ resolution, abort-before-decode, plus a compiled-Wasm public `Text` lifecycle th
 and observes retained draw/geometry identity. No test reconstructs the removed TypeScript selector, storage, or writer.
 
 The package also exports a small immutable indexed geometry fixture. It follows the portable GLB-like contract—semantic
-position/UV attributes, typed accessors, indices, topology, draw range, and record-driven instance count—so an engine can
-choose supplied geometry without importing Three or learning the example's implementation details.
+position/UV vertex attributes, typed accessors, indices, topology, and draw range—so an engine can choose supplied
+geometry without importing Three or learning the example's implementation details. The plan's primitive record span,
+not the geometry payload, supplies the draw's instance count.
 
 The hardware-browser target uses the public source-font fallback, package runtime baker, the target-v1 `FontLoader`, public
 `Text` and `TextGroup`, warm matrix-lifecycle publication, TSL compilation, draw, asynchronous render-target readback, and

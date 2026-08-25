@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { assertPortableResource, portableResourceKinds, portableTopologies } from '../../dist/core.js';
 import { normalizePortableResource } from '../../dist/core/portable-resources.js';
-import { indexedQuadGeometry, instancedQuadGeometry } from '../support/portable-geometry.mjs';
+import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 
 function mutate(geometry, patch) {
   const next = structuredClone(geometry);
@@ -35,7 +35,6 @@ test('valid buffer, texture, and geometry payloads pass their reserved declared 
     bytes: new Uint8Array(32),
   });
   assertPortableResource('geometry', 'mesh', indexedQuadGeometry());
-  assertPortableResource('geometry', 'mesh', instancedQuadGeometry());
   // Technique-private kinds are opaque to normalization, not to the reserved validator.
   assert.throws(
     () => assertPortableResource('glyph-example-colors', 'tint', { anything: ['goes', true] }),
@@ -63,7 +62,7 @@ test('texture payloads need a format and positive dimensions', () => {
   const base = () => ({ kind: 'texture', format: 'rgba8unorm', width: 2, height: 2, bytes: new Uint8Array(16) });
   assert.throws(
     () => assertPortableResource('texture', 'page', { ...base(), format: '' }),
-    (error) => error instanceof TypeError && error.message.includes('nonempty sample format'),
+    (error) => error instanceof TypeError && error.message.includes('supported sample format'),
   );
   assert.throws(
     () =>
@@ -87,7 +86,7 @@ test('texture payloads need a format and positive dimensions', () => {
         layers: 3,
         bytes: new Uint8Array(10),
       }),
-    (error) => error instanceof RangeError && error.message.includes('whole number of layers'),
+    (error) => error instanceof RangeError && error.message.includes('needs exactly 12 bytes; got 10'),
   );
   for (const dimension of ['width', 'height']) {
     assert.throws(
@@ -101,11 +100,29 @@ test('texture payloads need a format and positive dimensions', () => {
   );
   assert.throws(
     () => assertPortableResource('texture', 'page', { ...base(), bytes: new Uint8Array(0) }),
-    (error) => error instanceof RangeError && error.message.includes('bytes must be nonempty'),
+    (error) => error instanceof RangeError && error.message.includes('needs exactly 16 bytes'),
+  );
+  assert.throws(
+    () => assertPortableResource('texture', 'page', { ...base(), bytes: new Uint8Array(15) }),
+    (error) => error instanceof RangeError && error.message.includes('needs exactly 16 bytes'),
   );
   assert.throws(
     () => assertPortableResource('texture', 'page', base(), 'r16float'),
     (error) => error instanceof TypeError && error.message.includes('does not match declared format'),
+  );
+});
+
+test('geometry semantic names cannot mutate renderer-owned attribute objects', () => {
+  const geometry = indexedQuadGeometry();
+  geometry.attributes[1].semantic = '__proto__';
+  assert.throws(
+    () => assertPortableResource('geometry', 'mesh', geometry),
+    (error) => error instanceof TypeError && error.message.includes('safe shader attribute name'),
+  );
+  geometry.attributes[1].semantic = 'constructor';
+  assert.throws(
+    () => assertPortableResource('geometry', 'mesh', geometry),
+    (error) => error instanceof TypeError && error.message.includes('safe shader attribute name'),
   );
 });
 
@@ -152,24 +169,6 @@ test('geometry views and accessors must stay inside the immutable bytes', () => 
         mutate(quad, (g) => (g.views[1].length = 13)),
       ),
     (error) => error instanceof RangeError && error.message.includes('buffer view 1 exceeds its 76 bytes'),
-  );
-  assert.throws(
-    () =>
-      assertPortableResource(
-        'geometry',
-        'mesh',
-        mutate(instancedQuadGeometry(), (g) => (g.instances = { source: 'fixed', count: 6 })),
-      ),
-    (error) => error instanceof RangeError && error.message.includes('exceeds 5 instance elements'),
-  );
-  assert.throws(
-    () =>
-      normalizePortableResource(
-        'geometry',
-        'mesh',
-        mutate(instancedQuadGeometry(), (g) => (g.instances = { source: 'records-plus' })),
-      ),
-    (error) => error instanceof TypeError && error.message.includes('records or fixed source'),
   );
   assert.throws(
     () =>
@@ -252,7 +251,7 @@ test('geometry attributes need a position and consistent counts per rate', () =>
         'mesh',
         mutate(quad, (g) => (g.attributes = [{ semantic: '', accessor: 0 }])),
       ),
-    (error) => error instanceof TypeError && error.message.includes('attribute 0 needs a nonempty semantic'),
+    (error) => error instanceof TypeError && error.message.includes('attribute 0 needs a safe shader attribute name'),
   );
   assert.throws(
     () =>
@@ -279,7 +278,7 @@ test('geometry attributes need a position and consistent counts per rate', () =>
         'mesh',
         mutate(quad, (g) => (g.attributes[1].rate = 'per-glyph')),
       ),
-    (error) => error instanceof TypeError && error.message.includes('attribute 1 needs a vertex or instance rate'),
+    (error) => error instanceof TypeError && error.message.includes('attribute 1 must be vertex-rate'),
   );
   assert.throws(
     () =>
@@ -288,7 +287,7 @@ test('geometry attributes need a position and consistent counts per rate', () =>
         'mesh',
         mutate(quad, (g) => (g.attributes[0].rate = 'instance')),
       ),
-    (error) => error instanceof TypeError && error.message.includes('position cannot use the instance rate'),
+    (error) => error instanceof TypeError && error.message.includes('attribute 0 must be vertex-rate'),
   );
   assert.throws(
     () =>
@@ -298,22 +297,7 @@ test('geometry attributes need a position and consistent counts per rate', () =>
         mutate(quad, (g) => (g.accessors[1].count = 3)),
       ),
     (error) =>
-      error instanceof RangeError && error.message.includes('disagrees with the other vertex-rate accessor counts (4)'),
-  );
-  const instanced = instancedQuadGeometry();
-  assert.throws(
-    () =>
-      assertPortableResource(
-        'geometry',
-        'mesh',
-        mutate(instanced, (g) => {
-          g.accessors.push({ componentType: 'u8', components: 1, view: 0, offset: 0, count: 7 });
-          g.attributes.push({ semantic: 'shade', accessor: 4, rate: 'instance' });
-        }),
-      ),
-    (error) =>
-      error instanceof RangeError &&
-      error.message.includes('disagrees with the other instance-rate accessor counts (5)'),
+      error instanceof RangeError && error.message.includes('disagrees with the other vertex accessor counts (4)'),
   );
 });
 
@@ -452,7 +436,7 @@ test('normalizing a retained payload owns bytes and structural metadata', () => 
   assert(Object.isFrozen(normalized.accessors));
 });
 
-test('instance addressing accepts record-driven counts or a positive fixed count', () => {
+test('instance count and per-record data remain plan-owned', () => {
   const quad = indexedQuadGeometry();
   assert.throws(
     () =>
@@ -461,7 +445,7 @@ test('instance addressing accepts record-driven counts or a positive fixed count
         'mesh',
         mutate(quad, (g) => (g.instances = { source: 'fixed', count: 0 })),
       ),
-    (error) => error instanceof RangeError && error.message.includes('positive fixed instance count'),
+    (error) => error instanceof TypeError && error.message.includes('instance count comes from plan records'),
   );
   assert.throws(
     () =>
@@ -470,27 +454,15 @@ test('instance addressing accepts record-driven counts or a positive fixed count
         'mesh',
         mutate(quad, (g) => (g.instances = { source: 'records-plus' })),
       ),
-    (error) => error instanceof TypeError && error.message.includes('records or fixed source'),
+    (error) => error instanceof TypeError && error.message.includes('instance count comes from plan records'),
   );
-  assert.doesNotThrow(() =>
-    assertPortableResource(
-      'geometry',
-      'mesh',
-      mutate(quad, (g) => (g.instances = { source: 'records' })),
-    ),
-  );
-  assert.doesNotThrow(() =>
-    assertPortableResource(
-      'geometry',
-      'mesh',
-      mutate(quad, (g) => (g.instances = { source: 'fixed', count: 1 })),
-    ),
-  );
-  assert.doesNotThrow(() =>
-    assertPortableResource(
-      'geometry',
-      'mesh',
-      mutate(instancedQuadGeometry(), (g) => (g.instances = { source: 'fixed', count: 5 })),
-    ),
+  assert.throws(
+    () =>
+      normalizePortableResource(
+        'geometry',
+        'mesh',
+        mutate(quad, (g) => (g.attributes[1].rate = 'instance')),
+      ),
+    (error) => error instanceof TypeError && error.message.includes('must be vertex-rate'),
   );
 });

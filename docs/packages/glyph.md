@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:809526bfa7451ca2e96b7998eea6202641c4d7101084af8f23a94ac9b5aad32c'
+source_digest: 'sha256:57ce289b25420f9b9b10fb1941a1487725202d1d916c37a1877770d3c4b39097'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -109,12 +109,12 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 | `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                        |
 | `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                        |
 | `@pmndrs/glyph/react`        | React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                              |
-| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                      |
+| `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                     |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                        |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                 |
 | `@pmndrs/glyph/core`         | Renderer-neutral engine host, frame wire, plan/layout-query views, technique schemas, policy-program DSL, and binding compiler.  |
 | `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                 |
-| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.           |
+| `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.          |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                 |
 
 The font-baker Rust source, direct-memory wrapper, schemas, tests, build pipeline, optimized Wasm, and generated ABI are
@@ -180,13 +180,15 @@ header size and every prior field offset are unchanged. `/three` re-raises them 
 a discriminated union over the cause plus a second union over the subject: the `Text` object and, where one span owns it,
 that span and its index in `Text.spans`.
 
-A rejected frame latches (D-269). Compilation stops, `.error` keeps the rejection, `onError` fires once, and the batch
-resumes only when what it would compile actually changes -- a `set()`, a paragraph added or removed, a material swap,
-or `setCapacity`. There is no public `retry()`: a rejection is an invariant this package broke, not a caller mistake, so
-there is nothing to retry. A frame the engine accepted whose GPU application failed is deliberately not
-latched, because it is retried from the retained publication on the next frame. The accepted path pays one boolean test.
+Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, `Paragraph`, policy assembly, or
+font registration; malformed data never waits for scene traversal to fail. A residual engine rejection therefore names an
+internal invariant defect through `TextFrameError` while the last committed draw state remains live. Renderer preparation is
+separate: if an engine-accepted publication cannot yet realize its resources or material, Three retains that exact
+publication and retries it on the next frame without another engine call. It neither restores an older snapshot nor waits
+for unrelated input to move. New desired input supersedes an unpublished candidate and requests a checkpoint from the last
+consumed plan revision (D-279).
 
-`registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-270), naming the
+`registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-271), naming the
 technique instead of applying to nothing. `/three` also re-exports `ParagraphLayoutSummary`, `ParagraphLayoutInspection`,
 `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name what
 `Text.layout()`, `Text.glyphs()`, and `ParagraphStyle.features` give it.

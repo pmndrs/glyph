@@ -161,6 +161,7 @@ export interface TextEngineResourceRecord {
   readonly id: number;
   readonly generation: number;
   readonly techniqueId: number;
+  readonly resourceKind: number;
   readonly referenceId: number;
   readonly action: number;
 }
@@ -169,6 +170,7 @@ export interface TextEngineResourceRecord {
 export interface TextEngineBufferRecord {
   readonly id: number;
   readonly generation: number;
+  readonly programId: number;
   readonly scalarType: number;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
@@ -230,6 +232,7 @@ export function readTextEngineResource(
     id: view.u32(record + resourceLayout.id),
     generation: view.u32(record + resourceLayout.generation),
     techniqueId: view.u32(record + resourceLayout.techniqueId),
+    resourceKind: view.u16(record + resourceLayout.resourceKind),
     referenceId: view.u32(record + resourceLayout.referenceId),
     action: view.u16(record + resourceLayout.action),
   };
@@ -244,6 +247,7 @@ export function readTextEngineBuffer(
   return {
     id: view.u32(record + bufferLayout.id),
     generation: view.u32(record + bufferLayout.generation),
+    programId: view.u32(record + bufferLayout.programId),
     scalarType: view.u8(record + bufferLayout.scalarType),
     vectorWidth: view.u8(record + bufferLayout.vectorWidth),
     capacityRecords: view.u32(record + bufferLayout.capacityRecords),

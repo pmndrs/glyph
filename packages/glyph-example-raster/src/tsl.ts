@@ -19,7 +19,7 @@ export interface GlyphExampleTslShaderOutput {
   readonly opacity: Node<'float'>;
 }
 
-export const glyphExampleTslVariant: GlyphExampleShaderVariant = Object.freeze({
+export const glyphExampleTslVariant: GlyphExampleShaderVariant<'tsl'> = Object.freeze({
   language: 'tsl',
   techniqueId: glyphExampleShaderContract.techniqueId,
   geometry: glyphExampleShaderContract.geometry,

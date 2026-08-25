@@ -86,6 +86,7 @@ technique:
 
 ```ts
 import { definePolicyBuffers, defineTechniqueSchema } from '@pmndrs/glyph/core';
+import { quadTechnique } from 'example-quad-raster';
 
 export const rendererBuffers = definePolicyBuffers({
   stableGlyphId: { id: 20, scalar: 'u32', lanes: ['stableGlyphId'] },
@@ -93,7 +94,7 @@ export const rendererBuffers = definePolicyBuffers({
 });
 
 export const quadSchema = defineTechniqueSchema({
-  technique: 'example.quad',
+  technique: quadTechnique.id,
   scope: 'glyph',
   binding: {
     f32: ['bearingX', 'bearingY', 'width', 'height'],
@@ -135,6 +136,8 @@ The declarations have different wire consequences:
   a policy-wire record today. Actual resource identities, generations, kinds, and references enter through a font binding
   and later appear in the plan's `resources` table. (`packages/glyph/src/core/technique-schema.ts:148`,
   `packages/glyph/src/core/technique-schema.ts:101`, `packages/glyph/src/core/font-binding.ts:305`)
+  A schema used by `registerRasterPlanProgram()` must declare at least one resource because the current font-binding wire
+  maps every raster record to a retained resource; resource-free engine primitives remain host-owned branches.
 - `glyphOrigin` is also host metadata, not engine wire. It points animation or augmentation code at an `f32` buffer whose
   first two lanes contain the technique's rest-position value; the values need not share one coordinate space across
   techniques. (`packages/glyph/src/core/technique-schema.ts:152`,
@@ -148,107 +151,47 @@ answer or throws where the invalid input was written. (`.agents/skills/engine-ca
 
 ## 3. Write the policy program
 
-`techniqueProgram(schema)` is the typed route: it calls `policyProgram()` with the schema's scope and ordered binding
-names, then exposes named semantic and binding values. Use `policyProgram()` directly when no `TechniqueSchema` owns the
-inputs. Both builders lower an expression graph into the same forward-only operation records and allocate up to 32
-registers. (`packages/glyph/src/core/policy-program.ts:5`, `packages/glyph/src/core/policy-program.ts:192`,
-`packages/glyph/src/core/policy-program.ts:208`)
+`techniqueProgram(schema, { system })` is the typed route. It exposes named semantic and binding values, requires the
+engine-owned system lanes, and compiles exactly one value tuple for every schema buffer. Use `policyProgram()` directly
+only when no `TechniqueSchema` owns the inputs. Both builders lower an expression graph into the same forward-only
+operation records and allocate up to 32 registers. (`packages/glyph/src/core/policy-program.ts`)
 
 This program computes a screen-space ink rectangle. `bearingX`, `bearingY`, `width`, and `height` are normalized font
 binding values; `inlineOrigin`, `blockOrigin`, and `fontSize` are per-glyph semantic values. The page is converted from
 `u32` because this example's shader expects it in the fourth lane of an `f32` vector:
 
 ```ts
-import {
-  addF32,
-  compileRenderPolicy,
-  constantF32,
-  createProgram,
-  multiplyF32,
-  RenderWireIdentityRegistry,
-  schemaPolicyBuffers,
-  subtractF32,
-  techniqueProgram,
-  textShaperAbi,
-  u32ToF32,
-  type PolicyBuffer,
-  type PolicyTransformMode,
-} from '@pmndrs/glyph/core';
+import { f32, registerRasterPlanProgram, techniqueProgram, u32 } from '@pmndrs/glyph/core';
 
-export function quadPolicyBytes(
-  identities: RenderWireIdentityRegistry,
-  transformMode: PolicyTransformMode = 'indexed',
-): Uint8Array {
-  const p = techniqueProgram(quadSchema);
-  const { inlineOrigin, blockOrigin, fontSize, color, stableGlyphId, transformIndex } = p.semantics;
-  const { bearingX, bearingY, width, height, page } = p.binding;
-  const zero = constantF32(0);
-
-  p.store(quadSchema.buffers.rect, [
-    addF32(inlineOrigin, multiplyF32(bearingX, fontSize)),
-    subtractF32(blockOrigin, multiplyF32(bearingY, fontSize)),
-    multiplyF32(width, fontSize),
-    multiplyF32(height, fontSize),
-  ]);
-  p.store(quadSchema.buffers.color, [color.red, color.green, color.blue, color.alpha]);
-  p.store(quadSchema.buffers.atlas, [zero, zero, zero, u32ToF32(page)]);
-  p.store(rendererBuffers.stableGlyphId, [stableGlyphId]);
-  if (transformMode === 'indexed') p.store(rendererBuffers.transformIndex, [transformIndex]);
-
-  const systemBuffers: PolicyBuffer[] = [
-    {
-      id: rendererBuffers.stableGlyphId.id,
-      scalar: textShaperAbi.policy.scalarTypes.u32,
-      vectorWidth: 1,
-    },
-    ...(transformMode === 'indexed'
-      ? [
-          {
-            id: rendererBuffers.transformIndex.id,
-            scalar: textShaperAbi.policy.scalarTypes.u32,
-            vectorWidth: 1,
-          },
-        ]
-      : []),
-  ];
-
-  const flags = textShaperAbi.policy.capabilityFlags;
-  return compileRenderPolicy({
-    capabilitySets: [
-      {
-        id: 1,
-        flags: flags.storageBuffers | flags.aliasVec4 | flags.orderedDirect,
-        maxBufferBytes: 16 * 1024 * 1024,
-        updateAlignment: 4,
-        coalesceGapBytes: 128,
-        rangeCallPenaltyBytes: 256,
-        maxBuffersPerDraw: 8,
-        maxResourcesPerDraw: 4,
-        maxIndirectDraws: 0,
-        fragmentationBudget: 8,
-        wholeBufferThresholdBasisPoints: 7_500,
-      },
-    ],
-    programs: [
-      createProgram(
-        identities.resolve(quadSchema.technique),
-        1,
-        p.compile(),
-        [...schemaPolicyBuffers(quadSchema), ...systemBuffers],
-        transformMode,
-        'ordered',
-      ),
-    ],
-  });
-}
+export const quadPlanProgram = registerRasterPlanProgram({
+  technique: quadTechnique,
+  schema: quadSchema,
+  policyBody(system, _capabilities) {
+    const p = techniqueProgram(quadSchema, { system });
+    const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+    const { bearingX, bearingY, width, height, page } = p.binding;
+    const zero = f32.const(0);
+    return p.compile({
+      rect: [
+        f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
+        f32.sub(blockOrigin, f32.mul(bearingY, fontSize)),
+        f32.mul(width, fontSize),
+        f32.mul(height, fontSize),
+      ],
+      color: [color.red, color.green, color.blue, color.alpha],
+      atlas: [zero, zero, zero, u32.toF32(page)],
+    });
+  },
+  compileFont(compiler) {
+    return compileQuadFont(compiler);
+  },
+});
 ```
 
-The arithmetic combinators are typed expressions: `constantF32()` rejects non-finite numbers; `addF32()`,
-`subtractF32()`, and `multiplyF32()` accept only `f32` values; `u32ToF32()` is the explicit numeric conversion. A store
-checks the declared scalar kind and lane count before compilation. (`packages/glyph/src/core/policy-program.ts:82`,
-`packages/glyph/src/core/policy-program.ts:94`, `packages/glyph/src/core/policy-program.ts:106`,
-`packages/glyph/src/core/policy-program.ts:118`, `packages/glyph/src/core/policy-program.ts:123`,
-`packages/glyph/src/core/policy-program.ts:270`)
+The typed expression namespaces make scalar intent visible: `f32.const()` rejects non-finite numbers; `f32.add()`,
+`f32.sub()`, and `f32.mul()` accept only `f32` values; `u32.toF32()` is the explicit numeric conversion. `compile()` checks
+every declared buffer, scalar kind, and lane count. It also writes the required stable-glyph and optional transform system
+lanes from the engine-owned declarations, so a technique cannot omit or renumber them. (`packages/glyph/src/core/policy-program.ts`)
 
 Do not move expression values between builders. A loaded value's input number is meaningful only in the builder that
 created it; without the authoring-session check, combining builders would silently read another field. Constants are the
@@ -267,7 +210,7 @@ The policy program does not run once per draw. After records exist, the planner 
 emits draw packets that reference spans of primitives, buffers, and resources. (`packages/glyph/rust/shaper/src/engine/ordered_plan.rs:1060`,
 `packages/glyph/rust/shaper/src/engine/ordered_plan.rs:1106`)
 
-`createProgram()` also chooses two independent modes:
+`createRasterPolicyProgram()` also chooses two independent modes:
 
 - `transformMode: 'direct'` puts transform identity in the draw key. Records with different transforms split into
   different draws, and `draw.transformId` names the renderer object. `indexed` removes transform from the draw key,
@@ -282,28 +225,41 @@ emits draw packets that reference spans of primitives, buffers, and resources. (
 
 ## 4. Compile and register the policy
 
-`p.compile()` produces the program's input and operation records. `createProgram()` adds technique/program identity,
-physical buffer schemas, transform batching, and allocation strategy. `compileRenderPolicy()` serializes capability sets,
-programs, buffers, operations, and inputs into the little-endian registration block accepted by `TextEngineHost`.
-(`packages/glyph/src/core/policy-program.ts:297`, `packages/glyph/src/core/render-policy.ts:205`,
-`packages/glyph/src/core/render-policy.ts:264`)
+`p.compile()` produces a renderer-neutral policy body. The host then calls `createRasterPolicyProgram()` to add its own
+program namespace, wire identities, system buffers, capability set, transform mode, and allocation mode.
+`compileRenderPolicy()` serializes the result into the little-endian registration block accepted by `TextEngineHost`.
+(`packages/glyph/src/core/raster-plan-program.ts`, `packages/glyph/src/core/render-policy.ts`)
 
 Resolve every technique and resource string through the host's one registry:
 
 ```ts
 import { createTextRuntime } from '@pmndrs/glyph';
-import { TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
+import { compileRenderPolicy, createRasterPolicyProgram, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
 
 const runtime = await createTextRuntime();
 const host = new TextEngineHost(textRuntimeShaper(runtime));
-host.registerPolicy(23, quadPolicyBytes(host.wireIdentities));
+const MY_RENDERER_POLICY_HANDLE = 23;
+const capabilitySet = rendererCapabilitySet();
+const policy = createRasterPolicyProgram(quadPlanProgram, {
+  namespace: 'my-renderer',
+  system: rendererBuffers,
+  capabilitySet,
+  transformMode: 'indexed',
+  allocationMode: 'ordered',
+  identityRegistry: host.wireIdentities,
+});
+host.registerPolicy(
+  MY_RENDERER_POLICY_HANDLE,
+  compileRenderPolicy({ capabilitySets: [capabilitySet], programs: [policy] }),
+);
 ```
 
 `renderWireId()` is deterministic UTF-8 FNV-1a, but hashing alone cannot prove that two strings did not collide.
-`RenderWireIdentityRegistry.resolve()` records every string lowered in this host and rejects a collision. The registry is
-runtime-scoped because only identities that can meet in one policy/font/resource wire namespace need a shared proof; two
-independent Wasm runtimes do not share plans or handles. (`packages/glyph/src/core/render-policy.ts:74`,
-`packages/glyph/src/core/render-policy.ts:83`, `packages/glyph/src/core/host.ts:92`) The Three.js coordinator demonstrates
+`RenderWireIdentityRegistry.techniqueId()`, `.programId()`, and `.resourceId()` record every canonical string lowered in
+this host and reject a collision. Pure helpers with the same names are available when values only need to be compared, but
+one runtime registry is the collision authority for identities that can meet in policy, font, and resource wire data. Two
+independent Wasm runtimes do not share plans or handles. (`packages/glyph/src/core/render-policy.ts`,
+`packages/glyph/src/core/host.ts`) The Three.js coordinator demonstrates
 the required scope by passing `host.wireIdentities` to policy programs, font-binding compilers, and resource registration.
 (`packages/glyph/src/three/engine-runtime.ts:85`, `packages/glyph/src/three/engine-runtime.ts:195`,
 `packages/glyph/src/three/engine-runtime.ts:237`)
@@ -317,7 +273,8 @@ and `compileRasterFont()` returns the binding bytes plus constrained portable re
 Three consumer pairs the portable plan with a registered `{ technique, variant }` through
 `registerThreeRasterPlanProgram()` rather than copying the compiler. Register exactly one chosen realization per technique
 before the first Three runtime snapshot; a second variant or a late registration throws at that call. The variant receives
-logical buffer/resource names; it does not provide policy or resource callbacks.
+logical buffer/resource names; it does not provide policy or resource callbacks. Registration also authenticates its exact
+buffer shapes, resource formats, and geometry meaning—including a custom geometry name—against the portable schema.
 
 ### Font loading comes from the root entry
 
@@ -501,7 +458,8 @@ authority; the Rust declarations provide the scalar types and exact strides.
 
 ### Interpret draw identity at the renderer boundary
 
-- `programId` is the renderer program/pipeline identity supplied to `createProgram()`. `programVariant` originates in the
+- `programId` is the renderer program/pipeline identity derived by `createRasterPolicyProgram()` from the technique and
+  renderer namespace. `programVariant` originates in the
   font binding and selects the `(capability set, technique, variant)` policy program; a renderer may use it for the matching
   shader specialization. (`packages/glyph/src/core/render-policy.ts:205`,
   `packages/glyph/src/core/font-binding.ts:39`, `packages/glyph/rust/shaper/src/engine/policy.rs:344`)

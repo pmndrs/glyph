@@ -15,7 +15,27 @@ import {
   TypeGpuGlyphExampleVertexInput,
 } from '@pmndrs/glyph-example-raster/typegpu';
 
+import { glyphExampleRendererLanguageFixtures } from './renderer-language-fixture.js';
+
 const materials: THREE.NodeMaterial[] = [];
+
+test('renderer languages share one exact portable shader contract', () => {
+  expect(glyphExampleRendererLanguageFixtures.map((variant) => variant.language)).toEqual([
+    'typegpu',
+    'tsl',
+    'wgsl',
+    'glsl',
+  ]);
+  for (const variant of glyphExampleRendererLanguageFixtures) {
+    expect(variant.techniqueId).toBe(glyphExampleShaderContract.techniqueId);
+    expect(variant.geometry).toBe(glyphExampleShaderContract.geometry);
+    expect(variant.buffers).toBe(glyphExampleShaderContract.buffers);
+    expect(variant.resources).toBe(glyphExampleShaderContract.resources);
+    expect(variant.outputs).toBe(glyphExampleShaderContract.outputs);
+    expect(variant.resource).toBe(glyphExampleShaderContract.resource);
+    expect(variant.geometryResource).toBe(glyphExampleShaderContract.geometryResource);
+  }
+});
 
 test('a Three consumer manually registers the example TSL realization', () => {
   expect(glyphExampleTslVariant.language).toBe('tsl');
@@ -23,6 +43,7 @@ test('a Three consumer manually registers the example TSL realization', () => {
 
   const program = {
     technique: glyphExamplePlanProgram.technique,
+    schema: glyphExamplePlanProgram.schema,
     variant: {
       id: 'tsl',
       language: 'tsl',

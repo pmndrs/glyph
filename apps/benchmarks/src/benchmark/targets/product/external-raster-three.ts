@@ -13,6 +13,7 @@ import { glyphExampleTslShader, glyphExampleTslVariant } from '@pmndrs/glyph-exa
 /** The external consumer's Three implementation of the portable glyph-example plan. */
 const externalGlyphExampleThreeProgram = {
   technique: glyphExamplePlanProgram.technique,
+  schema: glyphExamplePlanProgram.schema,
   variant: {
     id: 'tsl',
     language: 'tsl',

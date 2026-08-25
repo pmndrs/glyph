@@ -15,6 +15,7 @@ export interface ExampleResourceRecord {
   readonly id: number;
   readonly generation: number;
   readonly techniqueId: number;
+  readonly resourceKind: number;
   readonly referenceId: number;
   readonly action: number;
 }

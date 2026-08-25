@@ -10,11 +10,15 @@ bytes.set(new Uint8Array(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]).buffer), 0);
 bytes.set(new Uint8Array(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]).buffer), 32);
 bytes.set(new Uint8Array(new Uint16Array([0, 1, 2, 0, 2, 3]).buffer), 64);
 
-export const glyphExampleSuppliedGeometryDeclaration: TechniqueGeometryDeclaration = Object.freeze({
+export const glyphExampleSuppliedGeometryDeclaration: Readonly<{
+  kind: 'quad';
+  resource: 'glyphGeometry';
+  coordinates: 'unit-square';
+}> = Object.freeze({
   kind: 'quad',
   resource: 'glyphGeometry',
   coordinates: 'unit-square',
-});
+} satisfies TechniqueGeometryDeclaration<'glyphGeometry'>);
 
 const glyphExampleGeometry: PortableGeometryPayload = {
   kind: 'geometry',
@@ -35,7 +39,6 @@ const glyphExampleGeometry: PortableGeometryPayload = {
   ],
   indices: { accessor: 2 },
   drawRange: { start: 0, count: 6 },
-  instances: { source: 'records' },
 };
 
 const ownedGeometry: PortableGeometryPayload = {
@@ -50,9 +53,6 @@ const ownedGeometry: PortableGeometryPayload = {
   ...(glyphExampleGeometry.drawRange === undefined
     ? {}
     : { drawRange: Object.freeze({ ...glyphExampleGeometry.drawRange }) }),
-  ...(glyphExampleGeometry.instances === undefined
-    ? {}
-    : { instances: Object.freeze({ ...glyphExampleGeometry.instances }) }),
 };
 assertPortableResource('geometry', 'glyphGeometry', ownedGeometry);
 export const glyphExampleIndexedQuadGeometry: PortableGeometryPayload = Object.freeze(ownedGeometry);

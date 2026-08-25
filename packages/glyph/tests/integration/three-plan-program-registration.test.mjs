@@ -19,13 +19,16 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import '../support/browser-globals.mjs';
-import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
+import { createTextRuntime, defineRasterTechnique, FontRegistry } from '@pmndrs/glyph';
 import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
 import {
+  defineTechniqueGeometryKind,
   defineTechniqueSchema,
+  f32,
   registerRasterPlanProgram,
   techniqueProgram,
   textRuntimeShaper,
+  u32,
 } from '@pmndrs/glyph/core';
 
 import { shaperWasmUrl } from '../support/text-mutation-lanes.mjs';
@@ -34,36 +37,73 @@ import { shaperWasmUrl } from '../support/text-mutation-lanes.mjs';
 import { ThreeTextEngineCoordinator, threeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 
 const portablePrograms = new Map();
-const planProgram = (id) => {
+const planProgram = (id, declaration = {}) => {
   let portable = portablePrograms.get(id);
   if (portable === undefined) {
-    const technique = { id, kind: 'test', extension: 'TEST_raster', version: 0 };
-    const schema = defineTechniqueSchema({ technique: id, scope: 'glyph', binding: {}, buffers: {} });
+    const technique = defineRasterTechnique({
+      id,
+      kind: 'test',
+      extension: 'TEST_raster',
+      version: 0,
+      descriptor: () => ({}),
+      async decode() {
+        return {};
+      },
+      dispose() {},
+    });
+    const schema = defineTechniqueSchema({
+      technique: id,
+      scope: 'glyph',
+      binding: {},
+      buffers: {},
+      resources: { payload: { kind: 'buffer' } },
+      ...declaration,
+    });
     portable = { technique, schema };
     registerRasterPlanProgram({
       technique,
       schema,
       policyBody(system) {
-        const program = techniqueProgram(schema);
-        program.store(system.stableGlyphId, [program.semantics.stableGlyphId]);
-        if (system.transformIndex !== undefined) {
-          program.store(system.transformIndex, [program.semantics.transformIndex]);
-        }
-        return program.compile();
+        const program = techniqueProgram(schema, { system });
+        return program.compile(
+          Object.fromEntries(
+            Object.entries(schema.buffers).map(([name, buffer]) => [
+              name,
+              Array.from({ length: buffer.lanes.length }, () =>
+                buffer.scalar === 'f32' ? f32.const(0) : u32.const(0),
+              ),
+            ]),
+          ),
+        );
       },
       compileFont() {},
     });
     portablePrograms.set(id, portable);
   }
+  const buffers = Object.fromEntries(
+    Object.entries(portable.schema.buffers).map(([name, buffer]) => [
+      name,
+      { scalar: buffer.scalar, vectorWidth: buffer.lanes.length },
+    ]),
+  );
+  const resources = Object.fromEntries(
+    Object.entries(portable.schema.resources).map(([name, resource]) => [
+      name,
+      resource.kind === 'texture' || resource.kind === 'texture-array'
+        ? { kind: resource.kind, format: resource.format }
+        : { kind: resource.kind },
+    ]),
+  );
   return {
     technique: portable.technique,
+    schema: portable.schema,
     variant: {
       id: 'test',
       language: 'test',
-      buffers: {},
-      resources: {},
+      buffers,
+      resources,
       outputs: { position: 'vec3' },
-      geometry: { kind: 'synthetic-quad' },
+      geometry: structuredClone(portable.schema.render.geometry),
       createMaterial() {
         throw new Error('unreachable: this program is never realized');
       },
@@ -81,12 +121,67 @@ test('variant registration rejects incompatible capabilities before a runtime ex
   assert.throws(() => registerThreeRasterPlanProgram(unknownBuffer), /unknown buffer "foreign"/);
 
   const unknownResource = planProgram('test-unknown-resource');
-  unknownResource.variant.resources = { foreign: { kind: 'buffer' } };
+  unknownResource.variant.resources = {
+    ...unknownResource.variant.resources,
+    foreign: { kind: 'buffer' },
+  };
   assert.throws(() => registerThreeRasterPlanProgram(unknownResource), /unknown resource "foreign"/);
 
   const wrongGeometry = planProgram('test-wrong-geometry');
   wrongGeometry.variant.geometry = { kind: 'quad', resource: 'foreign', coordinates: 'unit-square' };
   assert.throws(() => registerThreeRasterPlanProgram(wrongGeometry), /declares incompatible geometry/);
+
+  const extraGeometryField = planProgram('test-extra-geometry-field');
+  extraGeometryField.variant.geometry = { kind: 'synthetic-quad', name: 'not-part-of-this-shape' };
+  assert.throws(() => registerThreeRasterPlanProgram(extraGeometryField), /declares incompatible geometry/);
+
+  const customGeometryName = defineTechniqueGeometryKind('test-custom-shape');
+  const wrongCustomGeometryName = planProgram('test-wrong-custom-geometry-name', {
+    resources: {
+      mesh: {
+        kind: 'geometry',
+        attributes: [{ semantic: 'position', componentType: 'f32', components: 2 }],
+      },
+    },
+    render: {
+      geometry: { kind: 'custom', name: customGeometryName, resource: 'mesh', coordinates: 'em' },
+    },
+  });
+  wrongCustomGeometryName.variant.geometry.name = defineTechniqueGeometryKind('test-other-custom-shape');
+  assert.throws(() => registerThreeRasterPlanProgram(wrongCustomGeometryName), /declares incompatible geometry/);
+
+  const wrongScalar = planProgram('test-wrong-scalar', {
+    buffers: { rect: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
+  });
+  wrongScalar.variant.buffers.rect.scalar = 'u32';
+  assert.throws(() => registerThreeRasterPlanProgram(wrongScalar), /buffer "rect" must consume f32x2/);
+
+  const missingBuffer = planProgram('test-missing-buffer', {
+    buffers: { rect: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
+  });
+  delete missingBuffer.variant.buffers.rect;
+  assert.throws(() => registerThreeRasterPlanProgram(missingBuffer), /omits buffer "rect"/);
+
+  const wrongFormat = planProgram('test-wrong-format', {
+    resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } },
+  });
+  wrongFormat.variant.resources.atlas.format = 'r8unorm';
+  assert.throws(() => registerThreeRasterPlanProgram(wrongFormat), /resource "atlas" must consume texture:rgba8unorm/);
+
+  const missingResource = planProgram('test-missing-resource', {
+    resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } },
+  });
+  delete missingResource.variant.resources.atlas;
+  assert.throws(() => registerThreeRasterPlanProgram(missingResource), /omits resource "atlas"/);
+
+  const witnessed = planProgram('test-wrong-schema-witness');
+  witnessed.schema = defineTechniqueSchema({
+    technique: witnessed.technique.id,
+    scope: 'glyph',
+    binding: {},
+    buffers: {},
+  });
+  assert.throws(() => registerThreeRasterPlanProgram(witnessed), /needs its registered portable schema/);
 
   assert.throws(
     () =>
@@ -103,6 +198,7 @@ test('registration selects one renderer variant per technique before runtime con
   const unsupported = planProgram('test-portable-without-three').technique;
   const secondary = {
     technique: primary.technique,
+    schema: primary.schema,
     variant: { ...primary.variant, id: 'second' },
   };
   registerThreeRasterPlanProgram(primary);
@@ -146,4 +242,61 @@ test('a technique registered after a runtime exists is refused, not silently dro
     TypeError,
     'two different programs must not claim one technique id',
   );
+});
+
+test('runtime construction rejects a portable body compiled for different system lanes', async () => {
+  const technique = defineRasterTechnique({
+    id: 'test-wrong-system-lanes',
+    kind: 'test',
+    extension: 'TEST_raster',
+    version: 0,
+    descriptor: () => ({}),
+    async decode() {
+      return {};
+    },
+    dispose() {},
+  });
+  const schema = defineTechniqueSchema({
+    technique: technique.id,
+    scope: 'glyph',
+    binding: {},
+    buffers: {},
+    resources: { payload: { kind: 'buffer' } },
+  });
+  const portable = registerRasterPlanProgram({
+    technique,
+    schema,
+    policyBody() {
+      const authoring = techniqueProgram(schema, {
+        system: {
+          stableGlyphId: { id: 14, scalar: 'u32', lanes: ['stableGlyphId'] },
+          transformIndex: { id: 13, scalar: 'u32', lanes: ['transformIndex'] },
+        },
+      });
+      return authoring.compile({});
+    },
+    compileFont() {},
+  });
+  registerThreeRasterPlanProgram({
+    technique: portable.technique,
+    schema: portable.schema,
+    variant: {
+      id: 'test',
+      language: 'test',
+      buffers: {},
+      resources: { payload: { kind: 'buffer' } },
+      outputs: { position: 'vec3' },
+      geometry: portable.schema.render.geometry,
+      createMaterial() {
+        throw new Error('unreachable: this program is never realized');
+      },
+    },
+  });
+
+  const runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
+  assert.throws(
+    () => new ThreeTextEngineCoordinator(textRuntimeShaper(runtime)),
+    /policy body does not use the requested system buffers/,
+  );
+  runtime.dispose();
 });

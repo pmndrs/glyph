@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { TextEngineHost } from '../../dist/core/host.js';
-import { techniqueWireIds } from '../../dist/core/render-policy.js';
+import { programId, techniqueWireIds } from '../../dist/core/render-policy.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
@@ -83,10 +83,16 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
     techniqueWireIds.slug,
     techniqueWireIds.decoration,
   ];
+  const expectedPrograms = [
+    programId('pmndrs.bitmap', 'three'),
+    programId('pmndrs.msdf', 'three'),
+    programId('pmndrs.slug', 'three'),
+    programId('pmndrs.decoration', 'three'),
+  ];
   for (const [index, techniqueId] of expectedTechniques.entries()) {
     const offset = programsOffset + index * program.size;
     assert.equal(view.getUint32(offset + program.techniqueId, true), techniqueId);
-    assert.equal(view.getUint32(offset + program.programId, true), index + 1);
+    assert.equal(view.getUint32(offset + program.programId, true), expectedPrograms[index]);
     assert.ok(view.getUint32(offset + program.drawKeyMask, true) & abi.policy.batchFields.material);
     assert.equal(view.getUint32(offset + program.storageKeyMask, true) & abi.policy.batchFields.material, 0);
     const expectedKind =

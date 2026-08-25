@@ -3,15 +3,17 @@ import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/
 import { textShaperAbi } from '../core.js';
 import {
   compileRasterFont,
-  createProgram,
+  createRasterPolicyProgram,
   RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
-  schemaPolicyBuffers,
+  type AnyTechniqueSchema,
   type CompiledRasterFont,
+  type PolicyBufferDeclarations,
   type PolicyScalarKind,
+  type PortableTextureFormat,
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
-  type TechniqueSchema,
+  type TechniqueResourceDeclarations,
 } from '../core.js';
 import type { LoadedFont } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
@@ -28,7 +30,7 @@ export interface ThreePlanProgramMaterialContext {
   /** Portable technique selected for this draw. */
   readonly technique: AnyRasterTechnique;
   /** The portable schema selected for this draw. */
-  readonly schema: TechniqueSchema;
+  readonly schema: AnyTechniqueSchema;
   /** The selected renderer variant's stable identity. */
   readonly variantId: string;
   /** Shader-language label for diagnostics and implementation selection. */
@@ -47,58 +49,78 @@ export interface ThreePlanProgramMaterialContext {
   transformPosition(position: Node<'vec3'>): Node<'vec3'>;
 }
 
-export interface ThreeRasterPlanVariant {
+export interface ThreeRasterPlanBufferCapability<
+  Scalar extends PolicyScalarKind = PolicyScalarKind,
+  VectorWidth extends number = number,
+> {
+  readonly scalar: Scalar;
+  readonly vectorWidth: VectorWidth;
+}
+
+export type ThreeRasterPlanBufferCapabilities<Buffers extends PolicyBufferDeclarations> = {
+  readonly [Name in keyof Buffers]: ThreeRasterPlanBufferCapability<
+    Buffers[Name]['scalar'],
+    Buffers[Name]['lanes']['length']
+  >;
+};
+
+export type ThreeRasterPlanResourceCapability<Declaration> = Declaration extends TechniqueResourceDeclaration
+  ? Declaration extends { readonly format: PortableTextureFormat }
+    ? { readonly kind: Declaration['kind']; readonly format: Declaration['format'] }
+    : { readonly kind: Declaration['kind']; readonly format?: never }
+  : never;
+
+export type ThreeRasterPlanResourceCapabilities<Resources extends TechniqueResourceDeclarations> = {
+  readonly [Name in keyof Resources]: ThreeRasterPlanResourceCapability<Resources[Name]>;
+};
+
+/** Renderer-selected shader realization, derived from the exact portable schema witness. */
+export interface ThreeRasterPlanVariant<Schema extends AnyTechniqueSchema = AnyTechniqueSchema> {
   /** Stable renderer-local id; packages may publish alternatives, but Three registers one per technique. */
   readonly id: string;
   /** Shader implementation language, for example `tsl`, `wgsl`, or `glsl`. */
   readonly language: string;
   /** Shader-visible named policy-buffer shapes consumed by this implementation. */
-  readonly buffers: Readonly<Record<string, ThreeRasterPlanBufferCapability>>;
+  readonly buffers: ThreeRasterPlanBufferCapabilities<Schema['buffers']>;
   /** Named portable resource kinds and formats consumed by this implementation. */
-  readonly resources: Readonly<Record<string, TechniqueResourceDeclaration>>;
+  readonly resources: ThreeRasterPlanResourceCapabilities<Schema['resources']>;
   /** Named shader outputs exposed to renderer-owned material composition. */
   readonly outputs: Readonly<Record<string, string>>;
   /** Geometry shape consumed by this implementation. */
-  readonly geometry: TechniqueGeometryDeclaration;
+  readonly geometry: Schema['render']['geometry'];
   createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 
-export interface ThreeRasterPlanBufferCapability {
-  readonly scalar: PolicyScalarKind;
-  readonly vectorWidth: number;
-}
-
-export interface ThreeRasterPlanProgram<Technique extends AnyRasterTechnique> {
+export interface ThreeRasterPlanProgram<Technique extends AnyRasterTechnique, Schema extends AnyTechniqueSchema> {
   readonly technique: Technique;
-  readonly variant: ThreeRasterPlanVariant;
+  readonly schema: Schema & { readonly technique: Technique['id'] };
+  readonly variant: NoInfer<ThreeRasterPlanVariant<Schema>>;
 }
 
 export interface CompiledThreeRasterPlanProgram {
   readonly technique: AnyRasterTechnique;
-  readonly schema: TechniqueSchema;
+  readonly schema: AnyTechniqueSchema;
   readonly variant: ThreeRasterPlanVariant;
   readonly techniqueId: number;
   readonly programId: number;
   readonly policy: import('../core.js').PolicyProgram;
-  compileFont(
-    font: LoadedFont<AnyRasterTechnique>,
-    identities: RenderWireIdentityRegistry,
-  ): CompiledRasterFont<unknown>;
+  compileFont(font: LoadedFont<AnyRasterTechnique>, identities: RenderWireIdentityRegistry): CompiledRasterFont;
   createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 
-const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique>>();
-const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterTechnique>>();
+const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
+const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
 const snapshots = new Map<RenderWireIdentityRegistry, number>();
 
 /** Register only the renderer-specific resource and material half of a portable program. */
-export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechnique>(
-  program: ThreeRasterPlanProgram<Technique>,
-): void {
+export function registerThreeRasterPlanProgram<
+  const Technique extends AnyRasterTechnique,
+  const Schema extends AnyTechniqueSchema,
+>(program: ThreeRasterPlanProgram<Technique, Schema>): void {
   if (typeof program !== 'object' || program === null || Array.isArray(program)) {
     throw new TypeError('Three raster plan programs need a program object');
   }
-  const source = program as ThreeRasterPlanProgram<Technique> & Record<string, unknown>;
+  const source = program as ThreeRasterPlanProgram<Technique, Schema> & Record<string, unknown>;
   const technique = source.technique;
   const techniqueId =
     typeof technique === 'object' && technique !== null && !Array.isArray(technique) ? technique.id : undefined;
@@ -108,6 +130,9 @@ export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechni
   const portable = resolveRasterPlanProgram(techniqueId);
   if (portable === undefined) {
     throw new TypeError(`no portable raster plan program is registered for "${techniqueId}"`);
+  }
+  if (source.schema !== portable.schema) {
+    throw new TypeError(`Three raster plan program "${techniqueId}" needs its registered portable schema`);
   }
   const variant = source.variant;
   if (typeof variant !== 'object' || variant === null || Array.isArray(variant)) {
@@ -143,6 +168,7 @@ export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechni
   const outputs = normalizeOutputs(techniqueId, variantId, variant.outputs);
   const snapshot = Object.freeze({
     technique: portable.technique,
+    schema: portable.schema,
     variant: Object.freeze({
       id: variantId,
       language,
@@ -152,7 +178,7 @@ export function registerThreeRasterPlanProgram<Technique extends AnyRasterTechni
       geometry: expectedGeometry,
       createMaterial,
     }),
-  }) as ThreeRasterPlanProgram<AnyRasterTechnique>;
+  }) as ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>;
   const existing = programs.get(techniqueId);
   if (existing !== undefined) {
     throw new TypeError(
@@ -212,37 +238,29 @@ export const threePolicyAbi: ThreePolicyAbi = Object.freeze({
 });
 
 function compileProgram(
-  program: ThreeRasterPlanProgram<AnyRasterTechnique>,
+  program: ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>,
   identities: RenderWireIdentityRegistry,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterPlanProgram {
   const portable = resolveRasterPlanProgram(program.technique.id);
   if (portable === undefined)
     throw new Error(`no portable raster plan program is registered for "${program.technique.id}"`);
-  const techniqueId = identities.resolve(program.technique.id);
-  const programId = identities.resolve(`${program.technique.id}/three-plan-program`);
   const system = transformMode === 'indexed' ? threeSystemBuffers : { stableGlyphId: threeSystemBuffers.stableGlyphId };
-  const body = portable.policyBody(system, threePolicyCapabilitySet());
+  const policy = createRasterPolicyProgram(portable, {
+    namespace: 'three',
+    system,
+    capabilitySet: threePolicyCapabilitySet(),
+    transformMode,
+    allocationMode: 'ordered',
+    identityRegistry: identities,
+  });
   return {
     technique: program.technique,
     schema: portable.schema,
     variant: program.variant,
-    techniqueId,
-    programId,
-    policy: createProgram(
-      techniqueId,
-      programId,
-      body,
-      [
-        ...schemaPolicyBuffers(portable.schema),
-        { id: threeSystemBuffers.stableGlyphId.id, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 },
-        ...(transformMode === 'indexed'
-          ? [{ id: threeSystemBuffers.transformIndex.id, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 }]
-          : []),
-      ],
-      transformMode,
-      'ordered',
-    ),
+    techniqueId: policy.techniqueId,
+    programId: policy.programId,
+    policy,
     compileFont(font, bindingIdentities) {
       if (font.technique.id !== program.technique.id) {
         throw new TypeError('Three raster plan program received an incompatible loaded font');
@@ -258,17 +276,37 @@ function compileProgram(
 
 function sameGeometry(left: TechniqueGeometryDeclaration, right: unknown): right is TechniqueGeometryDeclaration {
   if (typeof right !== 'object' || right === null || Array.isArray(right)) return false;
-  const candidate = right as Partial<TechniqueGeometryDeclaration>;
+  const candidate = right as Record<PropertyKey, unknown>;
+  if (left.kind === 'synthetic-quad') {
+    return hasExactOwnKeys(candidate, ['kind']) && candidate.kind === left.kind;
+  }
+  if (left.kind === 'custom') {
+    return (
+      hasExactOwnKeys(candidate, ['kind', 'name', 'resource', 'coordinates']) &&
+      candidate.kind === left.kind &&
+      candidate.name === left.name &&
+      candidate.resource === left.resource &&
+      candidate.coordinates === left.coordinates
+    );
+  }
   return (
-    left.kind === candidate.kind && left.resource === candidate.resource && left.coordinates === candidate.coordinates
+    hasExactOwnKeys(candidate, ['kind', 'resource', 'coordinates']) &&
+    candidate.kind === left.kind &&
+    candidate.resource === left.resource &&
+    candidate.coordinates === left.coordinates
   );
+}
+
+function hasExactOwnKeys(value: object, expected: readonly string[]): boolean {
+  const keys = Reflect.ownKeys(value);
+  return keys.length === expected.length && expected.every((key) => Object.hasOwn(value, key));
 }
 
 function normalizeBufferCapabilities(
   techniqueId: string,
   variantId: string,
   value: unknown,
-  schema: TechniqueSchema,
+  schema: AnyTechniqueSchema,
 ): Readonly<Record<string, ThreeRasterPlanBufferCapability>> {
   if (!isNonArrayObject(value)) {
     throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs named buffer capabilities`);
@@ -297,7 +335,7 @@ function normalizeResourceCapabilities(
   techniqueId: string,
   variantId: string,
   value: unknown,
-  schema: TechniqueSchema,
+  schema: AnyTechniqueSchema,
 ): Readonly<Record<string, TechniqueResourceDeclaration>> {
   if (!isNonArrayObject(value)) {
     throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs named resource capabilities`);
@@ -318,7 +356,15 @@ function normalizeResourceCapabilities(
           `${format === undefined ? declaration.kind : `${declaration.kind}:${format}`}`,
       );
     }
-    owned[name] = Object.freeze({ kind: declaration.kind, ...(format === undefined ? {} : { format }) });
+    owned[name] =
+      declaration.kind === 'buffer'
+        ? Object.freeze({ kind: declaration.kind })
+        : declaration.kind === 'geometry'
+          ? Object.freeze({
+              kind: declaration.kind,
+              attributes: Object.freeze(declaration.attributes.map((attribute) => Object.freeze({ ...attribute }))),
+            })
+          : Object.freeze({ kind: declaration.kind, format: declaration.format });
   }
   return Object.freeze(owned);
 }

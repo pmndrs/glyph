@@ -1,106 +1,98 @@
 import {
-  addF32,
-  constantF32,
   defineTechniqueSchema,
-  multiplyF32,
-  registerRasterPlanProgram,
-  subtractF32,
+  f32,
   techniqueProgram,
-  type PortableBufferPayload,
   type RasterPlanProgram,
   type TechniqueSchema,
 } from '@pmndrs/glyph/core';
 
 import { glyphExample } from './raster.js';
 
+const GLYPH_EXAMPLE_ORIGIN_BUFFER_ID = 1;
+const GLYPH_EXAMPLE_SIZE_BUFFER_ID = 2;
+const GLYPH_EXAMPLE_COLOR_BUFFER_ID = 3;
+
 export const glyphExampleSchema: TechniqueSchema<
   {
-    readonly origin: { readonly id: 1; readonly scalar: 'f32'; readonly lanes: readonly ['left', 'top'] };
-    readonly size: { readonly id: 2; readonly scalar: 'f32'; readonly lanes: readonly ['widthX', 'heightY'] };
+    readonly origin: {
+      readonly id: typeof GLYPH_EXAMPLE_ORIGIN_BUFFER_ID;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['left', 'top'];
+    };
+    readonly size: {
+      readonly id: typeof GLYPH_EXAMPLE_SIZE_BUFFER_ID;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['widthX', 'heightY'];
+    };
     readonly color: {
-      readonly id: 3;
+      readonly id: typeof GLYPH_EXAMPLE_COLOR_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
     };
   },
   {
     readonly f32: readonly ['inset', 'red', 'green', 'blue', 'alpha'];
-  }
+  },
+  { readonly glyphColors: { readonly kind: 'buffer' } },
+  typeof glyphExample.id
 > = defineTechniqueSchema({
   technique: glyphExample.id,
   scope: 'glyph',
   binding: { f32: ['inset', 'red', 'green', 'blue', 'alpha'] },
   buffers: {
-    origin: { id: 1, scalar: 'f32', lanes: ['left', 'top'] },
-    size: { id: 2, scalar: 'f32', lanes: ['widthX', 'heightY'] },
-    color: { id: 3, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    origin: { id: GLYPH_EXAMPLE_ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top'] },
+    size: { id: GLYPH_EXAMPLE_SIZE_BUFFER_ID, scalar: 'f32', lanes: ['widthX', 'heightY'] },
+    color: { id: GLYPH_EXAMPLE_COLOR_BUFFER_ID, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
   },
   resources: { glyphColors: { kind: 'buffer' } },
   render: { geometry: { kind: 'synthetic-quad' } },
   glyphOrigin: { buffer: 'origin' },
 });
 
-export const glyphExamplePlanProgram: RasterPlanProgram<typeof glyphExample, PortableBufferPayload> = {
+const GLYPH_EXAMPLE_PROGRAM_VARIANT = 0;
+
+export const glyphExamplePlanProgramDefinition: RasterPlanProgram<typeof glyphExample, typeof glyphExampleSchema> = {
   technique: glyphExample,
   schema: glyphExampleSchema,
+  programVariant: GLYPH_EXAMPLE_PROGRAM_VARIANT,
   policyBody(system, _capabilities) {
-    const p = techniqueProgram(glyphExampleSchema);
-    const { inlineOrigin, blockOrigin, fontSize, color, transformIndex } = p.semantics;
+    const p = techniqueProgram(glyphExampleSchema, { system });
+    const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
     const { inset, red, green, blue, alpha } = p.binding;
-    const two = constantF32(2);
-    const insetPixels = multiplyF32(inset, fontSize);
-    const twiceInsetPixels = multiplyF32(insetPixels, two);
-    const width = subtractF32(multiplyF32(fontSize, constantF32(0.65)), twiceInsetPixels);
-    const height = subtractF32(fontSize, twiceInsetPixels);
-    p.store(glyphExampleSchema.buffers.origin, [
-      addF32(inlineOrigin, insetPixels),
-      subtractF32(blockOrigin, insetPixels),
-    ]);
-    p.store(glyphExampleSchema.buffers.size, [width, height]);
-    p.store(glyphExampleSchema.buffers.color, [
-      multiplyF32(color.red, red),
-      multiplyF32(color.green, green),
-      multiplyF32(color.blue, blue),
-      multiplyF32(color.alpha, alpha),
-    ]);
-    p.store({ id: system.stableGlyphId.id, scalar: 'u32', lanes: system.stableGlyphId.lanes }, [
-      p.semantics.stableGlyphId,
-    ]);
-    if (system.transformIndex !== undefined) p.store(system.transformIndex, [transformIndex]);
-    return p.compile();
+    // The authored inset trims both edges, so width and height lose twice its pixel value.
+    const two = f32.const(2);
+    const insetPixels = f32.mul(inset, fontSize);
+    const twiceInsetPixels = f32.mul(insetPixels, two);
+    const width = f32.sub(f32.mul(fontSize, f32.const(0.65)), twiceInsetPixels);
+    const height = f32.sub(fontSize, twiceInsetPixels);
+    return p.compile({
+      origin: [f32.add(inlineOrigin, insetPixels), f32.sub(blockOrigin, insetPixels)],
+      size: [width, height],
+      color: [
+        f32.mul(color.red, red),
+        f32.mul(color.green, green),
+        f32.mul(color.blue, blue),
+        f32.mul(color.alpha, alpha),
+      ],
+    });
   },
   compileFont(compiler) {
     const data = compiler.font.data;
-    const { resources } = compiler.resources([data.resource]);
     compiler.retain('glyphColors', data.resource, {
       kind: 'buffer',
       bytes: data.colors,
       stride: 4,
     });
-    compiler.compile({
-      techniqueId: compiler.techniqueId,
-      programVariant: 0,
-      glyphCount: compiler.font.font.glyphCount,
+    return compiler.compile({
       strikes: [0],
-      resources,
-      resourceIndex: () => 0,
-      glyphF32: {
-        rows: data.glyphCount,
-        fields: [
-          () => data.inset,
-          (row) => data.colors[row * 4]! / 255,
-          (row) => data.colors[row * 4 + 1]! / 255,
-          (row) => data.colors[row * 4 + 2]! / 255,
-          (row) => data.colors[row * 4 + 3]! / 255,
-        ],
+      resource: () => data.resource,
+      f32: {
+        inset: () => data.inset,
+        red: (row) => data.colors[row * 4]! / 255,
+        green: (row) => data.colors[row * 4 + 1]! / 255,
+        blue: (row) => data.colors[row * 4 + 2]! / 255,
+        alpha: (row) => data.colors[row * 4 + 3]! / 255,
       },
-      glyphU32: compiler.emptyTable(data.glyphCount),
-      strikeF32: compiler.emptyTable(data.glyphCount),
-      strikeU32: compiler.emptyTable(data.glyphCount),
-      resourceF32: compiler.emptyTable(resources.length),
-      resourceU32: compiler.emptyTable(resources.length),
     });
   },
 };
-
-registerRasterPlanProgram(glyphExamplePlanProgram);

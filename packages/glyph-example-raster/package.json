@@ -6,7 +6,8 @@
   "author": "Justin Walsh (https://github.com/thejustinwalsh)",
   "type": "module",
   "sideEffects": [
-    "./dist/portable.js"
+    "./dist/index.js",
+    "./dist/register.js"
   ],
   "exports": {
     ".": {
@@ -29,7 +30,8 @@
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
-    "test": "pnpm build && vitest run",
+    "test:bundle": "node ./scripts/bundle-registration-smoke.mjs",
+    "test": "pnpm build && pnpm test:bundle && vitest run",
     "check": "pnpm test && tsc -p tsconfig.json --noEmit && oxlint --deny-warnings . && oxfmt --check package.json src tests tsconfig.json tsconfig.build.json"
   },
   "dependencies": {

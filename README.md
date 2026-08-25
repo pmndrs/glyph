@@ -18,7 +18,9 @@ The repository's `glyph-example-raster` and `glyph-example-renderer` packages ar
 boundary. The raster package publishes renderer-neutral data plus explicit `/typegpu` and `/tsl` shader artifacts; the
 renderer package consumes `/core` and `/typegpu` without Three.js and realizes named resources, synthetic or supplied
 geometry, and non-empty draws. Three-specific material and registration code belongs in `@pmndrs/glyph/three` or in the
-consumer's Three integration, never in the portable raster entrypoint.
+consumer's Three integration, never in the portable raster entrypoint. Importing a technique root registers only its
+portable plan; shader subpaths carry no renderer registration, so each engine or application explicitly selects the
+variant it supports.
 
 The rule, if you are deciding where something belongs: **a type an application can encounter lives at the root; a
 thing only an integrator constructs lives in `/core`.** That is why `ParagraphMeasurement` is at the root and

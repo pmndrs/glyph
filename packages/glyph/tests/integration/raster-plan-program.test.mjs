@@ -1,474 +1,430 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { defineRasterResourceId, defineRasterTechnique } from '../../dist/index.js';
 import {
   compileRasterFont,
   defineTechniqueSchema,
   registerRasterPlanProgram,
   resolveRasterPlanProgram,
+  textShaperAbi,
 } from '../../dist/core.js';
 import { RenderWireIdentityRegistry } from '../../dist/core/render-policy.js';
-import { indexedQuadGeometry, instancedQuadGeometry } from '../support/portable-geometry.mjs';
+import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 
+const COLORS = defineRasterResourceId('test/colors');
+const MESH = defineRasterResourceId('test/mesh');
+const OTHER = defineRasterResourceId('test/other');
 const body = () => ({ inputs: [], operations: [], f32InputCount: 0, u32InputCount: 0 });
-const ATLAS_KEY = 'test/resource/atlas';
-const MESH_KEY = 'test/resource/mesh';
-const TINT_KEY = 'test/resource/tint';
-const testTechnique = (id) => ({ id, kind: 'test', extension: 'TEST_raster', version: 0 });
 
-function atlasPayload() {
-  return { kind: 'texture', format: 'r8unorm', width: 4, height: 4, bytes: new Uint8Array(16) };
-}
-
-function declaredSchema(technique, overrides = {}) {
-  const defaults = {
-    resources: {
-      atlas: { kind: 'texture' },
-      mesh: { kind: 'geometry' },
-      tint: { kind: 'example-tint' },
+function technique(id) {
+  return defineRasterTechnique({
+    id,
+    kind: 'test',
+    extension: 'TEST_raster',
+    version: 0,
+    descriptor: () => ({}),
+    async decode() {
+      return {};
     },
-  };
-  return defineTechniqueSchema({
-    technique,
-    scope: 'resource',
-    binding: {},
-    buffers: {},
-    ...overrides,
-    resources: overrides.resources ?? defaults.resources,
+    dispose() {},
   });
 }
 
-/** A minimal portable program that compiles one binding and retains the declared resources. */
-function retentionProgram(id, schema, retain, onCompile) {
-  return {
-    technique: testTechnique(id),
-    schema,
-    policyBody: body,
-    compileFont(compiler) {
-      const keys = retain(compiler);
-      const { resources } = compiler.resources(keys);
-      const compiled = compiler.compile({
-        techniqueId: compiler.techniqueId,
-        programVariant: 0,
-        glyphCount: 1,
-        strikes: [0],
-        resources,
-        resourceIndex: () => 0,
-        glyphF32: compiler.emptyTable(1),
-        glyphU32: compiler.emptyTable(1),
-        strikeF32: compiler.emptyTable(1),
-        strikeU32: compiler.emptyTable(1),
-        resourceF32: compiler.emptyTable(resources.length),
-        resourceU32: compiler.emptyTable(resources.length),
-      });
-      onCompile?.(compiled, compiler);
+function schemaFor(value) {
+  return defineTechniqueSchema({
+    technique: value.id,
+    scope: 'glyph',
+    binding: { f32: ['opacity'], u32: ['page'] },
+    buffers: {},
+    resources: {
+      colors: { kind: 'buffer' },
+      mesh: {
+        kind: 'geometry',
+        attributes: [
+          { semantic: 'position', componentType: 'f32', components: 2 },
+          { semantic: 'uv', componentType: 'f32', components: 2 },
+        ],
+      },
     },
-  };
+    render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+  });
 }
 
-test('registers and resolves one portable raster plan by technique id', () => {
-  const technique = testTechnique('test.core-raster-plan-resolution');
-  const program = { technique, schema: declaredSchema(technique.id), policyBody: body, compileFont() {} };
+function loaded(value) {
+  return { technique: value, font: { glyphCount: 2 }, data: {} };
+}
 
-  registerRasterPlanProgram(program);
-  const resolved = resolveRasterPlanProgram(technique.id);
-  assert.notEqual(resolved, program);
-  assert.deepEqual(resolved.technique, testTechnique(technique.id));
-  assert.equal(resolved.compileFont, program.compileFont);
-  assert.doesNotThrow(() => registerRasterPlanProgram(program));
+function validCompile(compiler, colorBytes = new Uint8Array([1, 2, 3, 4])) {
+  compiler.retain('colors', COLORS, { kind: 'buffer', bytes: colorBytes, stride: 4 });
+  compiler.retain('mesh', MESH, indexedQuadGeometry());
+  return compiler.compile({
+    strikes: [0],
+    resource: () => COLORS,
+    f32: { opacity: () => 0.5 },
+    u32: { page: () => 0 },
+  });
+}
+
+test('registration preserves authenticated technique and schema witnesses', () => {
+  const value = technique('test.plan-registration');
+  const schema = schemaFor(value);
+  const source = { technique: value, schema, policyBody: body, compileFont: validCompile };
+  const registered = registerRasterPlanProgram(source);
+
+  assert.equal(registered.technique, value);
+  assert.equal(registered.schema, schema);
+  assert.equal(resolveRasterPlanProgram(value.id), registered);
+  assert.equal(registerRasterPlanProgram(source), registered);
+  assert.throws(() => registerRasterPlanProgram({ ...source }), /different raster plan program/);
   assert.throws(
-    () => registerRasterPlanProgram({ ...program, policyBody: body }),
-    (error) => error instanceof TypeError && error.message.includes(technique.id),
-  );
-  assert.throws(
-    () => registerRasterPlanProgram({ ...program, schema: { ...program.schema } }),
-    (error) => error instanceof TypeError && error.message.includes('defineTechniqueSchema'),
-  );
-  assert.throws(
-    () => registerRasterPlanProgram({ ...program, schema: declaredSchema('test.core-raster-plan-other-id') }),
-    (error) => error instanceof TypeError && error.message.includes('schema names technique'),
-  );
-  assert.throws(
-    () => registerRasterPlanProgram({ ...program, policyBody: undefined }),
-    (error) => error instanceof TypeError && error.message.includes('needs policyBody and compileFont callbacks'),
-  );
-  program.technique = testTechnique('test.core-raster-plan-resolution-mutated');
-  program.schema = declaredSchema(program.technique.id);
-  assert.throws(
-    () => registerRasterPlanProgram(program),
-    (error) => error instanceof TypeError && error.message.includes('source changed technique id'),
+    () => registerRasterPlanProgram({ ...source, schema: { ...schema } }),
+    /needs a schema from defineTechniqueSchema/,
   );
 });
 
-test('reserves Glyph-owned technique ids from portable extensions', () => {
-  const id = 'pmndrs.test-owned-technique';
+test('registration rejects structural techniques and reserved Glyph identities', () => {
+  const structural = { id: 'test.structural', kind: 'test', extension: 'TEST_raster', version: 0 };
   assert.throws(
     () =>
       registerRasterPlanProgram({
-        technique: testTechnique(id),
-        schema: declaredSchema(id),
+        technique: structural,
+        schema: defineTechniqueSchema({ technique: structural.id, scope: 'glyph', binding: {}, buffers: {} }),
         policyBody: body,
         compileFont() {},
       }),
-    (error) => error instanceof TypeError && error.message.includes('reserved for Glyph-owned techniques'),
+    /need a technique/,
   );
-});
 
-test('registration rejects a schema-shaped prototype and retains an owned technique identity', () => {
-  const id = 'test.core-raster-plan-schema-brand';
-  const schema = declaredSchema(id);
-  const program = {
-    technique: testTechnique(id),
-    schema: Object.create(schema),
-    policyBody: body,
-    compileFont() {},
-  };
-  assert.throws(
-    () => registerRasterPlanProgram(program),
-    (error) => error instanceof TypeError && error.message.includes('defineTechniqueSchema'),
-  );
-});
-
-test('registration rejects a copied schema symbol brand', () => {
-  const id = 'test.core-raster-plan-forged-brand';
-  const schema = declaredSchema(id);
-  const symbol = Object.getOwnPropertySymbols(schema)[0];
-  const forged = Object.freeze({ ...schema, [symbol]: true });
+  const reserved = technique('pmndrs.test-plan');
   assert.throws(
     () =>
-      registerRasterPlanProgram({ technique: testTechnique(id), schema: forged, policyBody: body, compileFont() {} }),
-    (error) => error instanceof TypeError && error.message.includes('defineTechniqueSchema'),
+      registerRasterPlanProgram({
+        technique: reserved,
+        schema: schemaFor(reserved),
+        policyBody: body,
+        compileFont: validCompile,
+      }),
+    /reserved for Glyph-owned techniques/,
   );
 });
 
-test('registration snapshots callbacks before the source object can change', () => {
-  const id = 'test.core-raster-plan-registration-snapshot';
-  let compileCalls = 0;
-  const program = retentionProgram(
-    id,
-    declaredSchema(id),
-    () => [],
-    () => {
-      compileCalls += 1;
-    },
-  );
-  registerRasterPlanProgram(program);
-  program.compileFont = () => {
-    throw new Error('mutated callback must not be used');
-  };
-  compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
-  assert.equal(compileCalls, 1);
-});
-
-test('rejects a portable compiler that retains a duplicate resource or omits its binding', () => {
-  const duplicateId = 'test.core-raster-plan-duplicate-resource';
-  const duplicateProgram = retentionProgram(duplicateId, declaredSchema(duplicateId), (compiler) => {
-    compiler.retain('atlas', ATLAS_KEY, atlasPayload());
-    compiler.retain('mesh', ATLAS_KEY, indexedQuadGeometry());
-    return [ATLAS_KEY];
+test('registration rejects a resource-free schema before it can become an unusable font compiler', () => {
+  const value = technique('test.plan-resource-free');
+  const schema = defineTechniqueSchema({
+    technique: value.id,
+    scope: 'glyph',
+    binding: {},
+    buffers: {},
   });
-  registerRasterPlanProgram(duplicateProgram);
   assert.throws(
-    () => compileRasterFont({ technique: duplicateProgram.technique }, new RenderWireIdentityRegistry()),
-    (error) => error instanceof TypeError && error.message.includes('duplicate resource'),
+    () =>
+      registerRasterPlanProgram({
+        technique: value,
+        schema,
+        policyBody: body,
+        compileFont() {},
+      }),
+    /needs at least one declared resource/,
   );
+});
 
-  const missingId = 'test.core-raster-plan-missing-binding';
-  const missingProgram = {
-    technique: testTechnique(missingId),
-    schema: declaredSchema(missingId),
+test('the same string ID cannot substitute a different technique data witness', () => {
+  const first = technique('test.plan-witness');
+  const second = technique('test.plan-witness');
+  registerRasterPlanProgram({
+    technique: first,
+    schema: schemaFor(first),
     policyBody: body,
-    compileFont() {},
-  };
-  registerRasterPlanProgram(missingProgram);
+    compileFont: validCompile,
+  });
   assert.throws(
-    () => compileRasterFont({ technique: missingProgram.technique }, new RenderWireIdentityRegistry()),
-    (error) => error instanceof Error && error.message.includes('no binding'),
+    () => compileRasterFont(loaded(second), new RenderWireIdentityRegistry()),
+    /does not match the registered program/,
   );
 });
 
-test('rejects a portable compiler that repeats a declared name or retains an undeclared name', () => {
-  const repeatId = 'test.core-raster-plan-duplicate-name';
-  const repeatProgram = retentionProgram(repeatId, declaredSchema(repeatId), (compiler) => {
-    compiler.retain('atlas', ATLAS_KEY, atlasPayload());
-    compiler.retain('atlas', MESH_KEY, indexedQuadGeometry());
-    return [ATLAS_KEY];
+test('font compilation owns binding metadata and normalizes retained payloads', () => {
+  const value = technique('test.plan-compile');
+  const sourceBytes = new Uint8Array([1, 2, 3, 4]);
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont: (compiler) => validCompile(compiler, sourceBytes),
   });
-  registerRasterPlanProgram(repeatProgram);
-  assert.throws(
-    () => compileRasterFont({ technique: repeatProgram.technique }, new RenderWireIdentityRegistry()),
-    (error) =>
-      error instanceof TypeError && error.message.includes(`retained declared resource "atlas" more than once`),
-  );
+  const compiled = compileRasterFont(loaded(value), new RenderWireIdentityRegistry());
+  sourceBytes[0] = 255;
 
-  const undeclaredId = 'test.core-raster-plan-undeclared-name';
-  const undeclaredProgram = retentionProgram(undeclaredId, declaredSchema(undeclaredId), (compiler) => {
-    compiler.retain('ghost', ATLAS_KEY, atlasPayload());
-    return [];
-  });
-  registerRasterPlanProgram(undeclaredProgram);
-  assert.throws(
-    () => compileRasterFont({ technique: undeclaredProgram.technique }, new RenderWireIdentityRegistry()),
-    (error) =>
-      error instanceof TypeError &&
-      error.message.includes('undeclared resource name "ghost"') &&
-      error.message.includes(ATLAS_KEY),
-  );
-
-  const prototypeId = 'test.core-raster-plan-prototype-name';
-  const prototypeProgram = retentionProgram(prototypeId, declaredSchema(prototypeId), (compiler) => {
-    compiler.retain('constructor', ATLAS_KEY, atlasPayload());
-    return [];
-  });
-  registerRasterPlanProgram(prototypeProgram);
-  assert.throws(
-    () => compileRasterFont({ technique: prototypeProgram.technique }, new RenderWireIdentityRegistry()),
-    (error) => error instanceof TypeError && error.message.includes('undeclared resource name "constructor"'),
-  );
-
-  const unnamedId = 'test.core-raster-plan-unnamed-resource';
-  const unnamedProgram = retentionProgram(unnamedId, declaredSchema(unnamedId), (compiler) => {
-    compiler.retain('', ATLAS_KEY, atlasPayload());
-    return [];
-  });
-  registerRasterPlanProgram(unnamedProgram);
-  assert.throws(
-    () => compileRasterFont({ technique: unnamedProgram.technique }, new RenderWireIdentityRegistry()),
-    (error) => error instanceof TypeError && error.message.includes('without a declared name'),
-  );
-});
-
-test('links every retained payload to its declared schema name and validates it against the reserved kinds', () => {
-  const id = 'test.core-raster-plan-declared-resources';
-  let tintPayload;
-  const program = retentionProgram(id, declaredSchema(id), (compiler) => {
-    tintPayload = { rows: 4 };
-    compiler.retain('atlas', ATLAS_KEY, atlasPayload());
-    compiler.retain('mesh', MESH_KEY, instancedQuadGeometry());
-    compiler.retain('tint', TINT_KEY, tintPayload);
-    return [ATLAS_KEY, MESH_KEY, TINT_KEY];
-  });
-  registerRasterPlanProgram(program);
-  const compiled = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
+  assert.ok(compiled.binding.byteLength > 0);
+  assert.equal(compiled.resources.get(COLORS).bytes[0], 1);
+  assert.equal(compiled.resources.get(MESH).kind, 'geometry');
   assert.deepEqual(
     [...compiled.declaredResources],
     [
-      ['atlas', ATLAS_KEY],
-      ['mesh', MESH_KEY],
-      ['tint', TINT_KEY],
+      ['colors', COLORS],
+      ['mesh', MESH],
     ],
   );
-  assert.deepEqual(compiled.resources.get(ATLAS_KEY), atlasPayload());
-  assert.equal(compiled.resources.get(MESH_KEY).topology, 'triangle-list');
-  // Technique-private kinds keep their opaque payloads.
-  assert.equal(compiled.resources.get(TINT_KEY), tintPayload);
-});
-
-test('normalizes a payload from one owned snapshot before validating it', () => {
-  const id = 'test.core-raster-plan-normalizer-snapshot';
-  const source = indexedQuadGeometry();
-  const honestAccessors = source.accessors;
-  let reads = 0;
-  Object.defineProperty(source, 'accessors', {
-    get() {
-      reads += 1;
-      return reads === 1 ? honestAccessors : [{ ...honestAccessors[0], count: 1 }];
-    },
-  });
-  const program = retentionProgram(id, declaredSchema(id), (compiler) => {
-    compiler.retain('mesh', MESH_KEY, source);
-    return [MESH_KEY];
-  });
-  registerRasterPlanProgram(program);
-  const compiled = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
-  assert.equal(reads, 1);
-  assert.equal(compiled.resources.get(MESH_KEY).accessors[0].count, 4);
-});
-
-test('compiled binding bytes stay owned after the compiler callback returns', () => {
-  const id = 'test.core-raster-plan-binding-ownership';
-  let escaped;
-  const program = retentionProgram(
-    id,
-    declaredSchema(id),
-    () => [],
-    (value) => {
-      escaped = value;
-    },
-  );
-  registerRasterPlanProgram(program);
-  const compiled = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
-  escaped[0] = 255;
-  assert.notEqual(compiled.binding[0], 255);
-});
-
-test('the compiler facade is revoked after compilation and result maps are read-only views', () => {
-  const id = 'test.core-raster-plan-compiler-lifetime';
-  let escaped;
-  const program = retentionProgram(id, declaredSchema(id), (compiler) => {
-    escaped = compiler;
-    compiler.retain('atlas', ATLAS_KEY, atlasPayload());
-    return [ATLAS_KEY];
-  });
-  registerRasterPlanProgram(program);
-  const compiled = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
-  assert.throws(() => escaped.emptyTable(1), /no longer active/);
-  assert.throws(() => escaped.retain('tint', TINT_KEY, {}), /no longer active/);
-  assert.throws(() => escaped.font, /no longer active/);
-  assert.throws(() => escaped.techniqueId, /no longer active/);
-  assert.throws(() => escaped.identities, /no longer active/);
   assert.equal(typeof compiled.resources.set, 'undefined');
-  assert.equal(typeof compiled.declaredResources.set, 'undefined');
-  compiled.resources.forEach((_value, _key, map) => assert.equal(typeof map.set, 'undefined'));
-  compiled.declaredResources.forEach((_value, _key, map) => assert.equal(typeof map.clear, 'undefined'));
-  assert.equal(compiled.resources.size, 1);
-  assert.equal(compiled.declaredResources.size, 1);
+  assert.equal(typeof compiled.declaredResources.clear, 'undefined');
 });
 
-test('retention closes when a compiler publishes its binding', () => {
-  const id = 'test.core-raster-plan-retain-after-compile';
-  const program = retentionProgram(
-    id,
-    declaredSchema(id),
-    () => [],
-    (_compiled, compiler) => {
-      assert.throws(
-        () => compiler.retain('tint', TINT_KEY, {}),
-        (error) => error instanceof Error && error.message.includes('after compile'),
-      );
+test('authored resource identities remain stable across independent compiler calls', () => {
+  const value = technique('test.plan-stable-resource-identity');
+  let invocation = 0;
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      invocation += 1;
+      return validCompile(compiler, new Uint8Array([invocation, 2, 3, 4]));
     },
-  );
-  registerRasterPlanProgram(program);
-  assert.doesNotThrow(() => compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry()));
-});
-
-test('retention rejects malformed instance discriminants at the call site', () => {
-  const id = 'test.core-raster-plan-invalid-instance-source';
-  const payload = instancedQuadGeometry();
-  payload.instances = { source: 'records-plus' };
-  const program = retentionProgram(id, declaredSchema(id), (compiler) => {
-    compiler.retain('mesh', MESH_KEY, payload);
-    return [MESH_KEY];
   });
-  registerRasterPlanProgram(program);
-  assert.throws(
-    () => compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry()),
-    (error) => error instanceof TypeError && error.message.includes('records or fixed source'),
-  );
+  const identities = new RenderWireIdentityRegistry();
+  const first = compileRasterFont(loaded(value), identities);
+  const second = compileRasterFont(loaded(value), identities);
+
+  assert.equal(first.declaredResources.get('colors'), COLORS);
+  assert.equal(second.declaredResources.get('colors'), COLORS);
+  assert.deepEqual(bindingResourceIds(first.binding), bindingResourceIds(second.binding));
+  assert.ok(bindingResourceIds(first.binding).includes(identities.resourceId(COLORS)));
+  assert.equal(first.resources.get(COLORS).bytes[0], 1);
+  assert.equal(second.resources.get(COLORS).bytes[0], 2);
 });
 
-test('retained payloads must match their declared reserved kind before any device is touched', () => {
-  for (const [name, payload] of [
-    ['atlas', indexedQuadGeometry()],
-    ['mesh', atlasPayload()],
-  ]) {
-    const id = `test.core-raster-plan-kind-mismatch-${name}`;
-    const program = retentionProgram(id, declaredSchema(id), (compiler) => {
-      compiler.retain(name, ATLAS_KEY, payload);
-      return [];
-    });
-    registerRasterPlanProgram(program);
-    assert.throws(
-      () => compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry()),
-      (error) => error instanceof TypeError && error.message.includes(`"${name}"`),
-    );
-  }
-});
-
-test('retention rejects byte coercion before any reserved payload is copied', () => {
+test('retention rejects undeclared, duplicate, missing, and wrong-kind resources', () => {
   const cases = [
-    {
-      id: 'test.core-raster-plan-byte-type-buffer',
-      name: 'table',
-      schema: (id) => declaredSchema(id, { resources: { table: { kind: 'buffer' } } }),
-      payload: { kind: 'buffer', bytes: [1, 2, 3] },
-    },
-    {
-      id: 'test.core-raster-plan-byte-type-texture',
-      name: 'atlas',
-      schema: (id) => declaredSchema(id),
-      payload: { ...atlasPayload(), bytes: new ArrayBuffer(16) },
-    },
-    {
-      id: 'test.core-raster-plan-byte-type-geometry',
-      name: 'mesh',
-      schema: (id) => declaredSchema(id),
-      payload: { ...indexedQuadGeometry(), bytes: new Float32Array(19) },
-    },
+    [
+      'test.plan-undeclared',
+      (compiler) => compiler.retain('foreign', OTHER, { kind: 'buffer', bytes: new Uint8Array(4) }),
+      /undeclared resource name "foreign"/,
+    ],
+    [
+      'test.plan-duplicate-name',
+      (compiler) => {
+        compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
+        compiler.retain('colors', OTHER, { kind: 'buffer', bytes: new Uint8Array(4) });
+      },
+      /more than once/,
+    ],
+    [
+      'test.plan-duplicate-key',
+      (compiler) => {
+        compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
+        compiler.retain('mesh', COLORS, indexedQuadGeometry());
+      },
+      /duplicate resource/,
+    ],
+    [
+      'test.plan-wrong-kind',
+      (compiler) => compiler.retain('mesh', MESH, { kind: 'buffer', bytes: new Uint8Array(4) }),
+      /wrong payload kind/,
+    ],
+    [
+      'test.plan-wrong-vertex-input',
+      (compiler) => {
+        const geometry = indexedQuadGeometry();
+        compiler.retain('mesh', MESH, {
+          ...geometry,
+          accessors: [{ ...geometry.accessors[0], components: 3 }, ...geometry.accessors.slice(1)],
+        });
+      },
+      /vertex input "position" needs f32x2/,
+    ],
+    [
+      'test.plan-missing-resource',
+      (compiler) => {
+        compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
+        return compiler.compile({
+          strikes: [0],
+          resource: () => COLORS,
+          f32: { opacity: () => 1 },
+          u32: { page: () => 0 },
+        });
+      },
+      /did not retain declared resource "mesh"/,
+    ],
   ];
-  for (const entry of cases) {
-    const program = retentionProgram(entry.id, entry.schema(entry.id), (compiler) => {
-      compiler.retain(entry.name, `${entry.id}/resource`, entry.payload);
-      return [];
+
+  for (const [id, act, expected] of cases) {
+    const value = technique(id);
+    registerRasterPlanProgram({
+      technique: value,
+      schema: schemaFor(value),
+      policyBody: body,
+      compileFont(compiler) {
+        const result = act(compiler);
+        return result ?? validCompile(compiler);
+      },
     });
-    registerRasterPlanProgram(program);
-    assert.throws(
-      () => compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry()),
-      (error) => error instanceof TypeError && error.message.includes('Uint8Array bytes'),
-    );
+    assert.throws(() => compileRasterFont(loaded(value), new RenderWireIdentityRegistry()), expected);
   }
 });
 
-test('retained resource keys are validated at the retention call', () => {
-  const id = 'test.core-raster-plan-invalid-key';
-  const program = retentionProgram(id, declaredSchema(id), (compiler) => {
-    compiler.retain('atlas', {}, atlasPayload());
-    return [];
-  });
-  registerRasterPlanProgram(program);
-  assert.throws(
-    () => compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry()),
-    (error) => error instanceof TypeError && error.message.includes('without a nonempty key'),
-  );
-});
-
-test('retained texture formats and required geometry resources follow the schema contract', () => {
-  const formatId = 'test.core-raster-plan-format-contract';
-  const formatProgram = retentionProgram(
-    formatId,
-    declaredSchema(formatId, { resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } } }),
-    (compiler) => {
-      compiler.retain('atlas', ATLAS_KEY, atlasPayload());
-      return [ATLAS_KEY];
+test('binding readers and selected resources reject at compiler.compile', () => {
+  const missingReader = technique('test.plan-missing-reader');
+  registerRasterPlanProgram({
+    technique: missingReader,
+    schema: schemaFor(missingReader),
+    policyBody: body,
+    compileFont(compiler) {
+      compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
+      compiler.retain('mesh', MESH, indexedQuadGeometry());
+      return compiler.compile({ strikes: [0], resource: () => COLORS, f32: {}, u32: { page: () => 0 } });
     },
-  );
-  registerRasterPlanProgram(formatProgram);
-  assert.throws(
-    () => compileRasterFont({ technique: formatProgram.technique }, new RenderWireIdentityRegistry()),
-    (error) => error instanceof TypeError && error.message.includes('does not match declared format'),
-  );
-
-  const geometryId = 'test.core-raster-plan-required-geometry';
-  const geometryProgram = retentionProgram(
-    geometryId,
-    declaredSchema(geometryId, {
-      render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
-    }),
-    (compiler) => {
-      compiler.retain('atlas', ATLAS_KEY, atlasPayload());
-      return [ATLAS_KEY];
-    },
-  );
-  registerRasterPlanProgram(geometryProgram);
-  assert.throws(
-    () => compileRasterFont({ technique: geometryProgram.technique }, new RenderWireIdentityRegistry()),
-    (error) => error instanceof Error && error.message.includes('did not retain declared geometry resource "mesh"'),
-  );
-});
-
-test('resource identity stays stable across independent compiler calls', () => {
-  const id = 'test.core-raster-plan-stable-identity';
-  const program = retentionProgram(id, declaredSchema(id), (compiler) => {
-    compiler.retain('atlas', ATLAS_KEY, atlasPayload());
-    compiler.retain('mesh', MESH_KEY, indexedQuadGeometry());
-    compiler.retain('tint', TINT_KEY, {});
-    return [ATLAS_KEY, MESH_KEY, TINT_KEY];
   });
-  registerRasterPlanProgram(program);
-  const first = compileRasterFont({ technique: program.technique }, new RenderWireIdentityRegistry());
-  const secondIdentities = new RenderWireIdentityRegistry();
-  secondIdentities.resolve('test/other-technique');
-  const second = compileRasterFont({ technique: program.technique }, secondIdentities);
-  assert.deepEqual(second.binding, first.binding);
-  assert.deepEqual([...second.declaredResources], [...first.declaredResources]);
+  assert.throws(
+    () => compileRasterFont(loaded(missingReader), new RenderWireIdentityRegistry()),
+    /needs f32 reader "opacity"/,
+  );
+
+  const unknownResource = technique('test.plan-unknown-selected-resource');
+  registerRasterPlanProgram({
+    technique: unknownResource,
+    schema: schemaFor(unknownResource),
+    policyBody: body,
+    compileFont(compiler) {
+      compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
+      compiler.retain('mesh', MESH, indexedQuadGeometry());
+      return compiler.compile({
+        strikes: [0],
+        resource: () => OTHER,
+        f32: { opacity: () => 1 },
+        u32: { page: () => 0 },
+      });
+    },
+  });
+  assert.throws(
+    () => compileRasterFont(loaded(unknownResource), new RenderWireIdentityRegistry()),
+    /unknown raster resource/,
+  );
 });
+
+test('binding compilation snapshots reader accessors before serialization', () => {
+  const value = technique('test.plan-reader-snapshot');
+  let resourceReads = 0;
+  let opacityReads = 0;
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) });
+      compiler.retain('mesh', MESH, indexedQuadGeometry());
+      const binding = {
+        strikes: [0],
+        get resource() {
+          resourceReads += 1;
+          return resourceReads === 1 ? () => COLORS : undefined;
+        },
+        f32: {
+          get opacity() {
+            opacityReads += 1;
+            return opacityReads === 1 ? () => 0.5 : undefined;
+          },
+        },
+        u32: { page: () => 0 },
+      };
+      return compiler.compile(binding);
+    },
+  });
+
+  assert.doesNotThrow(() => compileRasterFont(loaded(value), new RenderWireIdentityRegistry()));
+  assert.equal(resourceReads, 1);
+  assert.equal(opacityReads, 1);
+});
+
+test('a caught compiler input failure is terminal for that callback', () => {
+  const value = technique('test.plan-latched-failure');
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      try {
+        compiler.retain('foreign', OTHER, { kind: 'buffer', bytes: new Uint8Array(4) });
+      } catch {}
+      try {
+        validCompile(compiler);
+      } catch {}
+      return {};
+    },
+  });
+  assert.throws(
+    () => compileRasterFont(loaded(value), new RenderWireIdentityRegistry()),
+    /undeclared resource name "foreign"/,
+  );
+});
+
+test('compileFont must synchronously return this compiler invocation result', () => {
+  const asynchronous = technique('test.plan-async');
+  registerRasterPlanProgram({
+    technique: asynchronous,
+    schema: schemaFor(asynchronous),
+    policyBody: body,
+    async compileFont(compiler) {
+      return validCompile(compiler);
+    },
+  });
+  assert.throws(
+    () => compileRasterFont(loaded(asynchronous), new RenderWireIdentityRegistry()),
+    /must return synchronously/,
+  );
+
+  const counterfeit = technique('test.plan-counterfeit');
+  registerRasterPlanProgram({
+    technique: counterfeit,
+    schema: schemaFor(counterfeit),
+    policyBody: body,
+    compileFont(compiler) {
+      validCompile(compiler);
+      return { binding: new Uint8Array(), resources: new Map(), declaredResources: new Map() };
+    },
+  });
+  assert.throws(
+    () => compileRasterFont(loaded(counterfeit), new RenderWireIdentityRegistry()),
+    /must return the result of compiler.compile/,
+  );
+});
+
+test('the compiler is revoked after its callback returns', () => {
+  const value = technique('test.plan-revoked');
+  let escaped;
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      escaped = compiler;
+      return validCompile(compiler);
+    },
+  });
+  compileRasterFont(loaded(value), new RenderWireIdentityRegistry());
+  assert.throws(() => escaped.font, /no longer active/);
+  assert.throws(
+    () => escaped.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array(4) }),
+    /no longer active/,
+  );
+  assert.throws(
+    () =>
+      escaped.compile({
+        strikes: [0],
+        resource: () => COLORS,
+        f32: { opacity: () => 1 },
+        u32: { page: () => 0 },
+      }),
+    /no longer active/,
+  );
+});
+
+function bindingResourceIds(bytes) {
+  const request = textShaperAbi.layouts.fontBindingRequest;
+  const resource = textShaperAbi.layouts.fontBindingResource;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const resourcesOffset = view.getUint32(request.resourcesOffset, true);
+  return Array.from({ length: view.getUint32(request.resourceCount, true) }, (_, index) =>
+    view.getUint32(resourcesOffset + index * resource.size + resource.id, true),
+  );
+}

@@ -12,10 +12,10 @@ import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
  * digest drift means the compiled wire records changed and must be re-justified.
  */
 const GOLDEN = new Map([
-  ['direct/ordered', 'd8c0dc43246ec9b75a0ba38ee7d75bfd4ce38667f8f1a4a2b39fe46f6aa66964'],
-  ['direct/stable', '19bcd518b14608b123533eaebee66b5b6e8e509432f28b8f21d4aa16c68788c5'],
-  ['indexed/ordered', '2da9a64cffb939c3020dcece3368010713835e7573a29674aa2e2c9c18e717a0'],
-  ['indexed/stable', '9bada50f28f087b5f55df8ae502be6a059a144b0b6cb6c4f1e3bae57055fd088'],
+  ['direct/ordered', '1e2d8a634ec167701b297bdb4b078a69829796399ece317a143c3f1e566b50f6'],
+  ['direct/stable', 'c200e06ab9532f36978508647d9563d8277c09eb875b9432b31ff4636db02971'],
+  ['indexed/ordered', 'c4867a1e5a5384751112266e116d04bea9905e8689b92b14dfecc142eb94fabf'],
+  ['indexed/stable', '11c6f5ba4dc9ad637481a3ed8b4c1aa05c0f3396422a8b7ba39079e9aba31fb6'],
 ]);
 
 test('the Three render policy compiles to its golden bytes for every variant', () => {

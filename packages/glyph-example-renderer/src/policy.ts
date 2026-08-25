@@ -6,38 +6,46 @@
  */
 import {
   compileRenderPolicy,
-  createProgram,
+  createRasterPolicyProgram,
   definePolicyBuffers,
-  renderWireId,
-  schemaPolicyBuffers,
+  RenderWireIdentityRegistry,
   textShaperAbi,
 } from '@pmndrs/glyph/core';
-import { glyphExamplePlanProgram, glyphExampleSchema } from '@pmndrs/glyph-example-raster';
+import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
+
+const EXAMPLE_STABLE_GLYPH_BUFFER_ID = 20;
 
 /** The policy's own system lane: glyph identity that survives reflow within a paragraph. */
 export const exampleSystemBuffers: {
-  readonly stableGlyphId: { readonly id: 20; readonly scalar: 'u32'; readonly lanes: readonly ['stableGlyphId'] };
+  readonly stableGlyphId: {
+    readonly id: typeof EXAMPLE_STABLE_GLYPH_BUFFER_ID;
+    readonly scalar: 'u32';
+    readonly lanes: readonly ['stableGlyphId'];
+  };
 } = definePolicyBuffers({
-  stableGlyphId: { id: 20, scalar: 'u32', lanes: ['stableGlyphId'] },
+  stableGlyphId: { id: EXAMPLE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 
 export const EXAMPLE_CAPABILITY_SET = 1;
 export const EXAMPLE_POLICY_HANDLE = 23;
+export const EXAMPLE_RENDERER_PROGRAM_NAMESPACE = 'example-renderer';
 
 /** Assemble the portable glyph-example body with this engine's own policy numbers. */
-export function exampleRenderPolicyBytes(): Uint8Array {
-  const p = glyphExamplePlanProgram.policyBody(exampleSystemBuffers, exampleCapabilitySet());
+export function exampleRenderPolicyBytes(
+  identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
+): Uint8Array {
+  const capabilitySet = exampleCapabilitySet();
   return compileRenderPolicy({
-    capabilitySets: [exampleCapabilitySet()],
+    capabilitySets: [capabilitySet],
     programs: [
-      createProgram(
-        renderWireId(glyphExamplePlanProgram.technique.id),
-        1,
-        p,
-        [...schemaPolicyBuffers(glyphExampleSchema), stableGlyphIdBuffer()],
-        'direct',
-        'ordered',
-      ),
+      createRasterPolicyProgram(glyphExamplePlanProgram, {
+        namespace: EXAMPLE_RENDERER_PROGRAM_NAMESPACE,
+        system: exampleSystemBuffers,
+        capabilitySet,
+        transformMode: 'direct',
+        allocationMode: 'ordered',
+        identityRegistry: identities,
+      }),
     ],
   });
 }
@@ -59,13 +67,5 @@ function exampleCapabilitySet() {
     maxIndirectDraws: 0,
     fragmentationBudget: 8,
     wholeBufferThresholdBasisPoints: 7_500,
-  };
-}
-
-function stableGlyphIdBuffer() {
-  return {
-    id: exampleSystemBuffers.stableGlyphId.id,
-    scalar: textShaperAbi.policy.scalarTypes.u32,
-    vectorWidth: 1,
   };
 }

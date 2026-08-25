@@ -249,7 +249,9 @@ export const msdfSchema: TechniqueSchema<
       'uvMaxY',
     ];
     readonly u32: readonly ['page'];
-  }
+  },
+  { readonly atlas: { readonly kind: 'texture-array'; readonly format: 'rgba8unorm' } },
+  'pmndrs.msdf'
 > = defineTechniqueSchema({
   technique: 'pmndrs.msdf',
   scope: 'glyph',

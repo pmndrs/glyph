@@ -18,10 +18,10 @@ import {
 import { bakeFont } from '@pmndrs/glyph/bake';
 import {
   defineTechniqueSchema,
+  f32,
   registerRasterPlanProgram,
-  type PortableBufferPayload,
+  techniqueProgram,
   type PortableGeometryPayload,
-  type RasterPlanProgram,
 } from '@pmndrs/glyph/core';
 import {
   registerThreeRasterPlanProgram,
@@ -38,7 +38,8 @@ import * as THREE from 'three/webgpu';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import glyphExampleBaker from '../src/baker.js';
-import { glyphExamplePlanProgram } from '../src/portable.js';
+import { glyphExampleSchema } from '../src/portable.js';
+import { glyphExamplePlanProgram } from '../src/register.js';
 import { glyphExampleTslShader, glyphExampleTslVariant } from '../src/tsl.js';
 import {
   GLYPH_EXAMPLE_KIND,
@@ -255,59 +256,67 @@ const suppliedGlyphExample = defineRasterTechnique({
 
 const suppliedGlyphExampleSchema = defineTechniqueSchema({
   technique: suppliedGlyphExample.id,
-  scope: glyphExamplePlanProgram.schema.scope,
-  binding: glyphExamplePlanProgram.schema.binding,
-  buffers: glyphExamplePlanProgram.schema.buffers,
-  resources: { glyphColors: { kind: 'buffer' }, glyphGeometry: { kind: 'geometry' } },
+  scope: glyphExampleSchema.scope,
+  binding: glyphExampleSchema.binding,
+  buffers: glyphExampleSchema.buffers,
+  resources: {
+    glyphColors: { kind: 'buffer' },
+    glyphGeometry: {
+      kind: 'geometry',
+      attributes: [
+        { semantic: 'position', componentType: 'f32', components: 2 },
+        { semantic: 'uv', componentType: 'f32', components: 2 },
+      ],
+    },
+  },
   render: { geometry: { kind: 'quad', resource: 'glyphGeometry', coordinates: 'unit-square' } },
   glyphOrigin: { buffer: 'origin' },
 });
 
 const stripGeometry = triangleStripGeometry(glyphExampleIndexedQuadGeometry);
 
-const suppliedPlanProgram: RasterPlanProgram<
-  typeof suppliedGlyphExample,
-  PortableBufferPayload | PortableGeometryPayload
-> = {
+registerRasterPlanProgram({
   technique: suppliedGlyphExample,
   schema: suppliedGlyphExampleSchema,
-  policyBody: glyphExamplePlanProgram.policyBody,
+  policyBody(system) {
+    const p = techniqueProgram(suppliedGlyphExampleSchema, { system });
+    const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+    const { inset, red, green, blue, alpha } = p.binding;
+    const insetPixels = f32.mul(inset, fontSize);
+    const twiceInsetPixels = f32.mul(insetPixels, f32.const(2));
+    return p.compile({
+      origin: [f32.add(inlineOrigin, insetPixels), f32.sub(blockOrigin, insetPixels)],
+      size: [f32.sub(f32.mul(fontSize, f32.const(0.65)), twiceInsetPixels), f32.sub(fontSize, twiceInsetPixels)],
+      color: [
+        f32.mul(color.red, red),
+        f32.mul(color.green, green),
+        f32.mul(color.blue, blue),
+        f32.mul(color.alpha, alpha),
+      ],
+    });
+  },
   compileFont(compiler) {
     const data: GlyphExampleData = compiler.font.data;
     const geometryKey = defineRasterResourceId(`${data.resource}/strip-geometry`);
-    const { resources } = compiler.resources([data.resource, geometryKey]);
     compiler.retain('glyphColors', data.resource, { kind: 'buffer', bytes: data.colors, stride: 4 });
     compiler.retain('glyphGeometry', geometryKey, stripGeometry);
-    compiler.compile({
-      techniqueId: compiler.techniqueId,
-      programVariant: 0,
-      glyphCount: compiler.font.font.glyphCount,
+    return compiler.compile({
       strikes: [0],
-      resources,
-      resourceIndex: () => 0,
-      glyphF32: {
-        rows: data.glyphCount,
-        fields: [
-          () => data.inset,
-          (row) => data.colors[row * 4]! / 255,
-          (row) => data.colors[row * 4 + 1]! / 255,
-          (row) => data.colors[row * 4 + 2]! / 255,
-          (row) => data.colors[row * 4 + 3]! / 255,
-        ],
+      resource: () => data.resource,
+      f32: {
+        inset: () => data.inset,
+        red: (row) => data.colors[row * 4]! / 255,
+        green: (row) => data.colors[row * 4 + 1]! / 255,
+        blue: (row) => data.colors[row * 4 + 2]! / 255,
+        alpha: (row) => data.colors[row * 4 + 3]! / 255,
       },
-      glyphU32: compiler.emptyTable(data.glyphCount),
-      strikeF32: compiler.emptyTable(data.glyphCount),
-      strikeU32: compiler.emptyTable(data.glyphCount),
-      resourceF32: compiler.emptyTable(resources.length),
-      resourceU32: compiler.emptyTable(resources.length),
     });
   },
-};
-
-registerRasterPlanProgram(suppliedPlanProgram);
+});
 
 const suppliedThreeProgram = {
   technique: suppliedGlyphExample,
+  schema: suppliedGlyphExampleSchema,
   variant: {
     id: 'tsl-strip',
     language: 'tsl',
@@ -326,6 +335,7 @@ const suppliedThreeProgram = {
 
 const threeProgram = {
   technique: glyphExamplePlanProgram.technique,
+  schema: glyphExamplePlanProgram.schema,
   variant: {
     id: 'tsl',
     language: 'tsl',
@@ -429,7 +439,6 @@ function triangleStripGeometry(source: PortableGeometryPayload): PortableGeometr
     attributes: source.attributes,
     indices: { accessor: 2 },
     drawRange: { start: 0, count: 4 },
-    instances: { source: 'records' },
   };
 }
 

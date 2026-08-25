@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a headless TypeGPU
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:90ab7ce3414519f25d5e2a9f2a20dece802955c732535c6abb72330cb2f4c465'
+source_digest: 'sha256:dbe7f56d95f151f67b6a16dceea3673aa7324bf4673e6a927866ebc81633804c'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -16,7 +16,7 @@ sources:
     title: Retention-protocol frame driver
   - id: policy
     resource: ../../packages/glyph-example-renderer/src/policy.ts
-    title: Host-authored technique schema and render policy
+    title: Host-authored system lanes and render policy
   - id: plan-reader
     resource: ../../packages/glyph-example-renderer/src/plan-reader.ts
     title: Retained-publication reader and draw decoder
@@ -66,11 +66,14 @@ generation, and decoded views over owned bytes only — dirty patch ranges and r
 is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: retained
 plans survive three frames plus capacity growth, stale borrows throw
 `TextEnginePublicationExpiredError`, a backwards acknowledgement is refused at the wire as a revision
-conflict. The recording device applies the complete generation-aware buffer protocol transactionally: allocation, offset
-write, u32 fill, copy, replacement generation, and exact retirement all have direct negative coverage. Font resources are
-staged atomically and rolled back if host binding registration fails. The acceptance test also loads a baked font through the public root loader, registers its portable binding and
-resource, resolves the example `/typegpu` shader to WGSL, realizes named resources, and asserts non-empty draws and one
-submission. A second test realizes supplied indexed GLB-like geometry and checks its index and instance counts.
+conflict. The recording device validates the complete resource, buffer, patch, primitive, draw, and retirement publication
+against the selected technique/program/variant before it can mutate accepted state. Allocation, offset write, u32 fill,
+copy, replacement generation, and exact retirement all have direct negative coverage. Font resources and frame submissions
+use prepare/commit handles: if host binding registration or plan validation throws, the prepared candidate remains
+unpublished instead of restoring an older snapshot. The acceptance test also loads a baked font through the public root
+loader, registers its portable binding and resource, resolves the example `/typegpu` shader to WGSL, realizes named
+resources, and asserts non-empty draws and one submission. A second test realizes supplied indexed GLB-like geometry and
+checks its index count while the primitive record span supplies the instance count.
 
 The package still does not make font loading part of `/core`: `createTextRuntime` remains a root API. The acceptance uses
 the root loader only to obtain a `LoadedFont`, then hands that value to the core-facing engine registration method. This

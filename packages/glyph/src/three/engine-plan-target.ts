@@ -6,7 +6,7 @@ import { decorationSchema, threeSystemBuffers } from './render-policy.js';
 import { bitmapSchema } from '../raster/bitmap-technique.js';
 import { msdfSchema } from '../raster/msdf.js';
 import { slugSchema } from '../raster/slug-technique.js';
-import type { PolicyBufferDeclaration, PolicyBufferDeclarations, TechniqueSchema } from '../core.js';
+import type { AnyTechniqueSchema, PolicyBufferDeclaration, PolicyBufferDeclarations } from '../core.js';
 import {
   TextEngineRenderPlanView,
   type PortableGeometryPayload,
@@ -23,10 +23,13 @@ import type { ThreeTextMaterialContext } from './material.js';
 import type { ThreePlanProgramBuffer } from './plan-program-registry.js';
 
 type ScalarArray = Float32Array | Uint32Array | Uint16Array;
+const MAX_RESOURCE_KIND = 32;
+const MAX_POLICY_BUFFER_VECTOR_WIDTH = 4;
 
 interface RetainedBuffer {
   readonly id: number;
   readonly generation: number;
+  readonly programId: number;
   readonly policyBufferId: number;
   readonly scalarType: number;
   readonly vectorWidth: number;
@@ -39,6 +42,7 @@ interface RetainedResource {
   readonly id: number;
   readonly generation: number;
   readonly techniqueId: number;
+  readonly resourceKind: number;
   readonly referenceId: number;
 }
 
@@ -85,13 +89,100 @@ type DrawGeometry =
 
 interface ReusedDrawUpdate {
   readonly mesh: THREE.Mesh;
-  readonly geometry: DrawGeometry;
   readonly recordCount: number;
   readonly recordIndex: number;
   readonly transformId: number;
   readonly primitiveKind: 'decoration' | 'glyph';
   readonly matrixAutoUpdate: boolean;
   readonly renderOrder: number;
+}
+
+type StagedBufferOperation =
+  | Readonly<{
+      kind: 'write';
+      buffer: RetainedBuffer;
+      destinationOffset: number;
+      payload: Uint8Array;
+    }>
+  | Readonly<{
+      kind: 'fill';
+      buffer: RetainedBuffer;
+      destinationOffset: number;
+      byteLength: number;
+      value: number;
+    }>
+  | Readonly<{
+      kind: 'copy';
+      buffer: RetainedBuffer;
+      destinationOffset: number;
+      source: RetainedBuffer;
+      sourceOffset: number;
+      byteLength: number;
+    }>
+  | Readonly<{
+      kind: 'restore-origin';
+      buffer: RetainedBuffer;
+      scalarOffset: number;
+      x: number;
+      y: number;
+    }>;
+
+interface StagedBufferUpload {
+  readonly buffer: RetainedBuffer;
+  start: number;
+  end: number;
+}
+
+interface StagedBufferMutations {
+  readonly operations: readonly StagedBufferOperation[];
+  readonly uploads: readonly StagedBufferUpload[];
+}
+
+interface PreparedTransformUpdate {
+  readonly mesh: THREE.Mesh;
+  readonly matrix: THREE.Matrix4;
+  readonly visible: boolean;
+}
+
+interface PreparedTransforms {
+  readonly contents: Float32Array;
+  readonly start: number;
+  readonly end: number;
+  readonly direct: readonly PreparedTransformUpdate[];
+}
+
+interface PreparedDrawReplacement {
+  readonly changed: boolean;
+  readonly root: THREE.Object3D;
+  readonly draws: THREE.Mesh[];
+  readonly keys: string[];
+  readonly originSegments: OriginSegment[];
+  readonly reused: ReadonlySet<THREE.Mesh>;
+  readonly reusedUpdates: readonly ReusedDrawUpdate[];
+  readonly activeTransformIndices: ReadonlySet<number>;
+  readonly directDrawsByTransform: ReadonlyMap<number, THREE.Mesh[]>;
+}
+
+interface PreparationContext {
+  readonly buffers: Map<number, RetainedBuffer>;
+  readonly resources: Map<number, RetainedResource>;
+  readonly bitmapTextures: Map<number, THREE.DataArrayTexture>;
+  readonly msdfAtlases: Map<number, THREE.DataArrayTexture>;
+  readonly slugPages: Map<number, RetainedSlugPage>;
+  readonly materials: Map<string, MaterialRealization>;
+  readonly newMaterials: Set<THREE.NodeMaterial>;
+  readonly newTextures: Set<THREE.Texture | RetainedSlugPage>;
+  transformAttribute: THREE.StorageInstancedBufferAttribute;
+  transformGeneration: number;
+}
+
+interface PreparedPublication {
+  readonly context: PreparationContext;
+  readonly bufferMutations: StagedBufferMutations;
+  readonly draws: PreparedDrawReplacement;
+  readonly transforms: PreparedTransforms;
+  readonly retiredMaterials: readonly THREE.NodeMaterial[];
+  readonly retiredTextures: readonly (THREE.Texture | RetainedSlugPage)[];
 }
 
 const syntheticQuadGeometry: DrawGeometry = Object.freeze({ kind: 'synthetic-quad', key: 'synthetic-quad' });
@@ -109,12 +200,12 @@ export class ThreeTextRenderPlanExecutor {
   readonly #coordinator: ThreeTextEngineCoordinator;
   readonly #owner: ThreeTextEnginePlanOwner;
   readonly #view = new TextEngineRenderPlanView();
-  readonly #buffers = new Map<number, RetainedBuffer>();
-  readonly #resources = new Map<number, RetainedResource>();
-  readonly #bitmapTextures = new Map<number, THREE.DataArrayTexture>();
-  readonly #msdfAtlases = new Map<number, THREE.DataArrayTexture>();
-  readonly #slugPages = new Map<number, RetainedSlugPage>();
-  readonly #materials = new Map<string, MaterialRealization>();
+  #buffers = new Map<number, RetainedBuffer>();
+  #resources = new Map<number, RetainedResource>();
+  #bitmapTextures = new Map<number, THREE.DataArrayTexture>();
+  #msdfAtlases = new Map<number, THREE.DataArrayTexture>();
+  #slugPages = new Map<number, RetainedSlugPage>();
+  #materials = new Map<string, MaterialRealization>();
   readonly #ownedMaterials = new WeakSet<THREE.NodeMaterial>();
   readonly #activeTransformIndices = new Set<number>();
   readonly #directDrawsByTransform = new Map<number, THREE.Mesh[]>();
@@ -126,6 +217,7 @@ export class ThreeTextRenderPlanExecutor {
   #draws: THREE.Mesh[] = [];
   #drawKeys: string[] = [];
   #originSegments: OriginSegment[] = [];
+  #preparation: PreparationContext | undefined;
   #disposed = false;
 
   constructor(coordinator: ThreeTextEngineCoordinator, owner: ThreeTextEnginePlanOwner) {
@@ -153,45 +245,14 @@ export class ThreeTextRenderPlanExecutor {
     return bytes;
   }
 
-  apply(publication: TextEnginePublication): void {
+  apply(publication: TextEnginePublication): unknown | undefined {
     if (this.#disposed) throw new Error('Three text-engine plan target has been disposed');
-    this.#coordinator.applyPlan(() => {
-      this.#restoreOriginTargets();
-      const plan = this.#view.bind(publication);
-      const resources = plan.table('resources');
-      const buffers = plan.table('buffers');
-      const patches = plan.table('patches');
-      const primitives = plan.table('primitives');
-      const draws = plan.table('draws');
-      const retirements = plan.table('retirements');
-      if (resources.count !== 0) this.#readResources(plan, resources);
-      if (buffers.count !== 0) this.#readBuffers(plan, buffers);
-      this.#applyPatches(plan, patches);
-      if (
-        resources.count !== 0 ||
-        buffers.count !== 0 ||
-        primitives.count !== 0 ||
-        draws.count !== 0 ||
-        retirements.count !== 0
-      ) {
-        this.#replaceDraws(plan, draws, primitives, buffers, resources);
-      }
-      this.syncTransforms();
-      for (const draw of this.#draws) draw.updateMatrixWorld(false);
-      this.#applyRetirements(plan, retirements);
-      this.#originRecords.clear();
+    return this.#coordinator.applyPlan(() => {
+      const prepared = this.#prepare(publication);
+      return this.#commit(prepared);
     });
   }
 
-  /**
-   * Reads the drawn origin of every glyph, naming the ones it could not read.
-   *
-   * `shapedX`/`shapedY` are supplied by the caller as the layout's own answer and are copied
-   * through untouched. `drawnX`/`drawnY` hold the retained record's value where one exists and the
-   * shaped origin where it does not — but every such glyph is listed in `incomplete`, so a reader
-   * can tell the two apart. The previous shape wrote the shaped value into the displayed array with
-   * no record of having done so, which put two coordinate spaces in one array.
-   */
   /**
    * Reads where each glyph is drawn, in paragraph glyph-origin space, and names what it could not read.
    *
@@ -241,7 +302,12 @@ export class ThreeTextRenderPlanExecutor {
     x: Float32Array,
     y: Float32Array,
   ): readonly number[] {
-    if (stableIds.length !== x.length || stableIds.length !== y.length) {
+    if (
+      stableIds.length !== shapedX.length ||
+      stableIds.length !== shapedY.length ||
+      stableIds.length !== x.length ||
+      stableIds.length !== y.length
+    ) {
       throw new RangeError('glyph origin override arrays must be parallel');
     }
     this.#ensureOriginRecords();
@@ -369,22 +435,169 @@ export class ThreeTextRenderPlanExecutor {
     this.#originSegments = [];
   }
 
-  #readResources(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
+  #prepare(publication: TextEnginePublication): PreparedPublication {
+    const plan = this.#view.bind(publication);
+    const resources = plan.table('resources');
+    const buffers = plan.table('buffers');
+    const patches = plan.table('patches');
+    const primitives = plan.table('primitives');
+    const draws = plan.table('draws');
+    const retirements = plan.table('retirements');
+    const replacesDraws =
+      resources.count !== 0 ||
+      buffers.count !== 0 ||
+      primitives.count !== 0 ||
+      draws.count !== 0 ||
+      retirements.count !== 0;
+    const context: PreparationContext = {
+      buffers: replacesDraws ? new Map(this.#buffers) : this.#buffers,
+      resources: replacesDraws ? new Map(this.#resources) : this.#resources,
+      bitmapTextures: replacesDraws ? new Map(this.#bitmapTextures) : this.#bitmapTextures,
+      msdfAtlases: replacesDraws ? new Map(this.#msdfAtlases) : this.#msdfAtlases,
+      slugPages: replacesDraws ? new Map(this.#slugPages) : this.#slugPages,
+      materials: replacesDraws ? new Map(this.#materials) : this.#materials,
+      newMaterials: new Set(),
+      newTextures: new Set(),
+      transformAttribute: this.#transformAttribute,
+      transformGeneration: this.#transformGeneration,
+    };
+    let preparedDraws: PreparedDrawReplacement | undefined;
+    this.#preparation = context;
+    try {
+      if (resources.count !== 0) this.#readResources(plan, resources, context.resources);
+      if (buffers.count !== 0) this.#readBuffers(plan, buffers, context.buffers);
+      preparedDraws = replacesDraws
+        ? this.#prepareDraws(plan, draws, primitives, buffers, resources)
+        : {
+            changed: false,
+            root: this.#owner.drawRoot,
+            draws: this.#draws,
+            keys: this.#drawKeys,
+            originSegments: this.#originSegments,
+            reused: new Set(),
+            reusedUpdates: [],
+            activeTransformIndices: this.#activeTransformIndices,
+            directDrawsByTransform: this.#directDrawsByTransform,
+          };
+      this.#applyRetirementsToCandidate(plan, retirements, context);
+      if (preparedDraws.changed) this.#assertDrawResourcesRetained(preparedDraws, context.materials);
+      const transforms = this.#prepareTransforms(preparedDraws);
+      const retainedMaterials = preparedDraws.changed
+        ? new Set([...context.materials.values()].map(({ material }) => material))
+        : undefined;
+      const retiredMaterials =
+        retainedMaterials === undefined
+          ? []
+          : [
+              ...new Set([...[...this.#materials.values()].map(({ material }) => material), ...context.newMaterials]),
+            ].filter((material) => !retainedMaterials.has(material));
+      const retiredTextures = preparedDraws.changed ? this.#retiredTextures(context) : [];
+      const bufferMutations = this.#stageBufferMutations(plan, patches, context.buffers);
+      for (const { buffer } of bufferMutations.uploads) validateDetachedUpload(buffer);
+      return { context, bufferMutations, draws: preparedDraws, transforms, retiredMaterials, retiredTextures };
+    } catch (error) {
+      this.#discardPreparation(context, preparedDraws);
+      throw error;
+    } finally {
+      this.#preparation = undefined;
+    }
+  }
+
+  #commit(prepared: PreparedPublication): unknown | undefined {
+    let failure: unknown;
+    const attempt = (operation: () => void): void => {
+      try {
+        operation();
+      } catch (error) {
+        failure ??= error;
+      }
+    };
+    commitBufferMutations(prepared.bufferMutations);
+    commitTransforms(prepared.context.transformAttribute, prepared.transforms);
+    if (prepared.draws.changed) {
+      for (const update of prepared.draws.reusedUpdates) applyReusedDrawUpdate(update);
+    }
+    for (const update of prepared.transforms.direct) applyTransformUpdate(update);
+    if (prepared.draws.changed) {
+      for (const mesh of prepared.draws.draws) {
+        if (mesh.parent !== prepared.draws.root) attempt(() => prepared.draws.root.add(mesh));
+      }
+      for (const mesh of this.#draws) {
+        if (prepared.draws.reused.has(mesh)) continue;
+        attempt(() => mesh.removeFromParent());
+        attempt(() => mesh.geometry.dispose());
+      }
+    }
+    this.#buffers = prepared.context.buffers;
+    this.#resources = prepared.context.resources;
+    this.#bitmapTextures = prepared.context.bitmapTextures;
+    this.#msdfAtlases = prepared.context.msdfAtlases;
+    this.#slugPages = prepared.context.slugPages;
+    this.#materials = prepared.context.materials;
+    this.#transformAttribute = prepared.context.transformAttribute;
+    this.#transformGeneration = prepared.context.transformGeneration;
+    if (prepared.draws.changed) {
+      this.#draws = prepared.draws.draws;
+      this.#drawKeys = prepared.draws.keys;
+      this.#originSegments = prepared.draws.originSegments;
+      this.#activeTransformIndices.clear();
+      for (const id of prepared.draws.activeTransformIndices) this.#activeTransformIndices.add(id);
+      this.#directDrawsByTransform.clear();
+      for (const [id, meshes] of prepared.draws.directDrawsByTransform) {
+        this.#directDrawsByTransform.set(id, meshes);
+      }
+    }
+    for (const material of prepared.context.newMaterials) this.#ownedMaterials.add(material);
+    for (const material of prepared.retiredMaterials) attempt(() => material.dispose());
+    for (const texture of prepared.retiredTextures) attempt(() => texture.dispose());
+    for (const draw of this.#draws) attempt(() => draw.updateMatrixWorld(false));
+    this.#originRecords.clear();
+    return failure;
+  }
+
+  #readResources(
+    plan: TextEngineRenderPlanView,
+    table: RenderPlanTable,
+    resources: Map<number, RetainedResource>,
+  ): void {
     const layout = textShaperAbi.layouts.engineResource;
+    const actions = textShaperAbi.engine.resourceActions;
     for (let index = 0; index < table.count; index += 1) {
       const record = plan.record(table, index);
+      const action = plan.u16(record + layout.action);
+      if (action !== actions.create && action !== actions.update && action !== actions.retain) {
+        throw new Error(`text-engine resource has unsupported action ${action}`);
+      }
       const resource: RetainedResource = {
         id: plan.u32(record + layout.id),
         generation: plan.u32(record + layout.generation),
         techniqueId: plan.u32(record + layout.techniqueId),
+        resourceKind: plan.u16(record + layout.resourceKind),
         referenceId: plan.u32(record + layout.referenceId),
       };
-      this.#coordinator.resolveResource(resource.referenceId);
-      this.#resources.set(resource.id, resource);
+      if (resource.id === 0 || resource.generation === 0 || resource.referenceId === 0) {
+        throw new Error('text-engine resources require nonzero identities and generations');
+      }
+      if (resource.resourceKind === 0 || resource.resourceKind > MAX_RESOURCE_KIND) {
+        throw new RangeError(`text-engine resource ${resource.id}:${resource.generation} has an invalid kind`);
+      }
+      const resolved = this.#coordinator.resolveResource(resource.referenceId);
+      const techniqueId = this.#coordinator.host.wireIdentities.techniqueId(resolved.technique);
+      if (resource.techniqueId !== techniqueId) {
+        throw new Error(`resource ${resource.id}:${resource.generation} contradicts its registered technique`);
+      }
+      const existing = resources.get(resource.id);
+      if (existing !== undefined && resource.generation < existing.generation) {
+        throw new Error(`resource ${resource.id} rejects stale generation ${resource.generation}`);
+      }
+      if (existing?.generation === resource.generation && !sameRetainedResource(existing, resource)) {
+        throw new Error(`resource ${resource.id}:${resource.generation} changed without a generation advance`);
+      }
+      resources.set(resource.id, resource);
     }
   }
 
-  #readBuffers(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
+  #readBuffers(plan: TextEngineRenderPlanView, table: RenderPlanTable, buffers: Map<number, RetainedBuffer>): void {
     const layout = textShaperAbi.layouts.engineBuffer;
     for (let index = 0; index < table.count; index += 1) {
       const record = plan.record(table, index);
@@ -394,13 +607,34 @@ export class ThreeTextRenderPlanExecutor {
       const vectorWidth = plan.u8(record + layout.vectorWidth);
       const capacityRecords = plan.u32(record + layout.capacityRecords);
       const byteLength = plan.u32(record + layout.byteLength);
-      const existing = this.#buffers.get(id);
+      const programId = plan.u32(record + layout.programId);
+      const policyBufferId = plan.u16(record + layout.policyBufferId);
+      const existing = buffers.get(id);
+      if (id === 0 || generation === 0 || programId === 0 || policyBufferId === 0) {
+        throw new Error('text-engine buffers require nonzero identities and generations');
+      }
+      if (existing !== undefined && generation < existing.generation) {
+        throw new Error(`buffer ${id} rejects stale generation ${generation}`);
+      }
       if (
-        existing?.generation === generation &&
-        existing.scalarType === scalarType &&
-        existing.vectorWidth === vectorWidth &&
-        existing.array.byteLength === byteLength
+        vectorWidth === 0 ||
+        vectorWidth > MAX_POLICY_BUFFER_VECTOR_WIDTH ||
+        capacityRecords === 0 ||
+        byteLength === 0
       ) {
+        throw new RangeError(`buffer ${id}:${generation} has an invalid physical shape`);
+      }
+      if (existing?.generation === generation) {
+        if (
+          existing.programId !== programId ||
+          existing.policyBufferId !== policyBufferId ||
+          existing.scalarType !== scalarType ||
+          existing.vectorWidth !== vectorWidth ||
+          existing.capacityRecords !== capacityRecords ||
+          existing.array.byteLength !== byteLength
+        ) {
+          throw new Error(`buffer ${id}:${generation} changed without a generation advance`);
+        }
         continue;
       }
       const array = scalarArray(scalarType, byteLength);
@@ -410,10 +644,11 @@ export class ThreeTextRenderPlanExecutor {
       const attribute = new THREE.StorageInstancedBufferAttribute(array, vectorWidth);
       attribute.setUsage(THREE.DynamicDrawUsage);
       attribute.needsUpdate = true;
-      this.#buffers.set(id, {
+      buffers.set(id, {
         id,
         generation,
-        policyBufferId: plan.u16(record + layout.policyBufferId),
+        programId,
+        policyBufferId,
         scalarType,
         vectorWidth,
         capacityRecords,
@@ -423,56 +658,111 @@ export class ThreeTextRenderPlanExecutor {
     }
   }
 
-  #applyPatches(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
+  #stageBufferMutations(
+    plan: TextEngineRenderPlanView,
+    table: RenderPlanTable,
+    buffers: ReadonlyMap<number, RetainedBuffer>,
+  ): StagedBufferMutations {
     const layout = textShaperAbi.layouts.enginePatch;
     const opcodes = textShaperAbi.engine.patchOpcodes;
+    const operations: StagedBufferOperation[] = [];
+    const staged = new Map<RetainedBuffer, StagedBufferUpload>();
+    const mutable = (buffer: RetainedBuffer): StagedBufferUpload => {
+      let upload = staged.get(buffer);
+      if (upload !== undefined) return upload;
+      validateDetachedUpload(buffer);
+      upload = { buffer, start: buffer.array.byteLength, end: 0 };
+      staged.set(buffer, upload);
+      return upload;
+    };
+    for (const origin of this.#originRecords.values()) {
+      const buffer = buffers.get(origin.buffer.id);
+      if (buffer !== origin.buffer || !(buffer.array instanceof Float32Array)) continue;
+      const offset = origin.index * buffer.vectorWidth;
+      assertByteRange(
+        offset * Float32Array.BYTES_PER_ELEMENT,
+        2 * Float32Array.BYTES_PER_ELEMENT,
+        buffer.array.byteLength,
+        'glyph origin record exceeds its retained buffer',
+      );
+      operations.push({
+        kind: 'restore-origin',
+        buffer,
+        scalarOffset: offset,
+        x: origin.targetX,
+        y: origin.targetY,
+      });
+      includeMutationRange(
+        mutable(buffer),
+        offset * Float32Array.BYTES_PER_ELEMENT,
+        2 * Float32Array.BYTES_PER_ELEMENT,
+      );
+    }
 
     for (let index = 0; index < table.count; index += 1) {
       const record = plan.record(table, index);
       const opcode = plan.u16(record + layout.opcode);
-      const buffer = this.#buffer(plan.u32(record + layout.bufferId), plan.u32(record + layout.bufferGeneration));
+      const buffer = retainedBuffer(
+        buffers,
+        plan.u32(record + layout.bufferId),
+        plan.u32(record + layout.bufferGeneration),
+      );
       const destinationOffset = plan.u32(record + layout.destinationOffset);
       const byteLength = plan.u32(record + layout.byteLength);
 
-      if (opcode === opcodes.allocateOrResize || opcode === opcodes.retire) continue;
+      if (opcode === opcodes.allocateOrResize) {
+        if (destinationOffset !== 0 || byteLength !== buffer.array.byteLength) {
+          throw new RangeError('allocation patch does not match its retained buffer');
+        }
+        continue;
+      }
+      if (opcode === opcodes.retire) continue;
 
-      const destination = new Uint8Array(buffer.array.buffer, buffer.array.byteOffset, buffer.array.byteLength);
-      if (destinationOffset + byteLength > destination.byteLength)
-        throw new RangeError('buffer patch exceeds allocation');
+      const destination = scalarBytes(buffer.array);
+      assertByteRange(destinationOffset, byteLength, destination.byteLength, 'buffer patch exceeds allocation');
+      assertScalarAligned(buffer, destinationOffset, byteLength);
 
       if (opcode === opcodes.write) {
-        destination.set(plan.bytes(plan.u32(record + layout.payloadOffset), byteLength), destinationOffset);
+        operations.push({
+          kind: 'write',
+          buffer,
+          destinationOffset,
+          payload: plan.bytes(plan.u32(record + layout.payloadOffset), byteLength),
+        });
       } else if (opcode === opcodes.fill) {
         const fill = plan.u32(record + layout.fillValue);
-        const view = new DataView(destination.buffer, destination.byteOffset + destinationOffset, byteLength);
         if (byteLength % 4 !== 0) throw new RangeError('fill patch is not u32 aligned');
-
-        for (let offset = 0; offset < byteLength; offset += 4) view.setUint32(offset, fill, true);
+        operations.push({ kind: 'fill', buffer, destinationOffset, byteLength, value: fill });
       } else if (opcode === opcodes.copy) {
-        const source = this.#buffers.get(plan.u32(record + layout.sourceBufferId));
+        const source = buffers.get(plan.u32(record + layout.sourceBufferId));
         if (source === undefined) throw new Error('copy patch references an unknown source buffer');
 
         const sourceOffset = plan.u32(record + layout.sourceOffset);
-        const sourceBytes = new Uint8Array(source.array.buffer, source.array.byteOffset, source.array.byteLength);
-        if (source.array.buffer === buffer.array.buffer && source.array.byteOffset === buffer.array.byteOffset) {
-          destination.copyWithin(destinationOffset, sourceOffset, sourceOffset + byteLength);
-        } else {
-          destination.set(sourceBytes.subarray(sourceOffset, sourceOffset + byteLength), destinationOffset);
-        }
+        const sourceBytes = scalarBytes(source.array);
+        assertByteRange(sourceOffset, byteLength, sourceBytes.byteLength, 'copy patch exceeds its source buffer');
+        assertScalarAligned(source, sourceOffset, byteLength);
+        operations.push({ kind: 'copy', buffer, destinationOffset, source, sourceOffset, byteLength });
       } else {
         throw new Error(`unsupported text-engine patch opcode ${opcode}`);
       }
-      markUpdated(buffer, destinationOffset, byteLength);
+      includeMutationRange(mutable(buffer), destinationOffset, byteLength);
     }
+    return {
+      operations,
+      uploads: [...staged.values()].filter(({ start, end }) => end > start),
+    };
   }
 
-  #replaceDraws(
+  #prepareDraws(
     plan: TextEngineRenderPlanView,
     draws: RenderPlanTable,
     primitives: RenderPlanTable,
     buffers: RenderPlanTable,
     resources: RenderPlanTable,
-  ): void {
+  ): PreparedDrawReplacement {
+    const context = this.#preparation;
+    if (context === undefined) throw new Error('Three draw preparation requires an active publication');
+    const root = this.#owner.drawRoot;
     const drawLayout = textShaperAbi.layouts.engineDraw;
     const primitiveLayout = textShaperAbi.layouts.enginePrimitive;
     const bufferLayout = textShaperAbi.layouts.engineBuffer;
@@ -493,10 +783,11 @@ export class ThreeTextRenderPlanExecutor {
 
     const reused = new Set<THREE.Mesh>();
     const transformIndices = this.#collectTransformIndices(plan, draws);
-    const previousTransformAttribute = this.#transformAttribute;
-    const previousTransformGeneration = this.#transformGeneration;
-    const previousMaterialKeys = new Set(this.#materials.keys());
-    const transformCapacityChanged = this.#ensureTransformCapacity(transformIndices);
+    if (this.#ensureTransformCapacity(context, transformIndices)) {
+      for (const [key, realization] of context.materials) {
+        if (realization.indexedTransform) context.materials.delete(key);
+      }
+    }
 
     try {
       for (let index = 0; index < draws.count; index += 1) {
@@ -507,6 +798,14 @@ export class ThreeTextRenderPlanExecutor {
 
         const primitiveIndex = plan.u32(draw + drawLayout.primitiveStart);
         const primitive = plan.record(primitives, primitiveIndex);
+        const programId = plan.u32(draw + drawLayout.programId);
+        const programVariant = plan.u16(draw + drawLayout.programVariant);
+        if (
+          plan.u32(primitive + primitiveLayout.programId) !== programId ||
+          plan.u16(primitive + primitiveLayout.programVariant) !== programVariant
+        ) {
+          throw new Error('draw and primitive disagree about their renderer program');
+        }
         const primitiveKind = plan.u16(primitive + primitiveLayout.kind);
         if (
           primitiveKind !== textShaperAbi.engine.primitiveKinds.glyph &&
@@ -521,28 +820,87 @@ export class ThreeTextRenderPlanExecutor {
         for (let bufferIndex = drawBufferStart; bufferIndex < drawBufferStart + drawBufferCount; bufferIndex += 1) {
           const record = plan.record(buffers, bufferIndex);
           const buffer = this.#buffer(plan.u32(record + bufferLayout.id), plan.u32(record + bufferLayout.generation));
+          if (plan.u32(record + bufferLayout.programId) !== programId || buffer.programId !== programId) {
+            throw new Error('draw contains a buffer owned by a different renderer program');
+          }
+          if (byPolicyId.has(buffer.policyBufferId)) {
+            throw new Error(`draw repeats policy buffer ${buffer.policyBufferId}`);
+          }
           byPolicyId.set(buffer.policyBufferId, buffer);
         }
 
         const decoration = primitiveKind === textShaperAbi.engine.primitiveKinds.decoration;
-        const resource = decoration
-          ? undefined
-          : this.#resources.get(
-              plan.u32(plan.record(resources, plan.u32(draw + drawLayout.resourceStart)) + resourceLayout.id),
-            );
+        const primitiveResourceId = plan.u32(primitive + primitiveLayout.resourceId);
+        const primitiveResourceGeneration = plan.u32(primitive + primitiveLayout.resourceGeneration);
+        const resourceStart = plan.u32(draw + drawLayout.resourceStart);
+        const resourceCount = plan.u32(draw + drawLayout.resourceCount);
+        if (decoration ? resourceCount !== 0 : resourceCount === 0) {
+          throw new Error(
+            decoration ? 'decoration draw unexpectedly references resources' : 'glyph draw has no resource',
+          );
+        }
+        if (decoration && (primitiveResourceId !== 0 || primitiveResourceGeneration !== 0)) {
+          throw new Error('decoration primitive unexpectedly references a resource');
+        }
+        const resourceRecord = decoration ? undefined : plan.record(resources, resourceStart);
+        const resource =
+          resourceRecord === undefined
+            ? undefined
+            : this.#resourcesForPreparation().get(plan.u32(resourceRecord + resourceLayout.id));
         if (!decoration && resource === undefined) {
           throw new Error('draw references an unknown retained resource');
+        }
+        const techniqueId = plan.u32(primitive + primitiveLayout.techniqueId);
+        if (resource !== undefined) {
+          if (primitiveResourceId !== resource.id || primitiveResourceGeneration !== resource.generation) {
+            throw new Error('primitive and draw disagree about their primary resource');
+          }
+          for (let resourceIndex = resourceStart; resourceIndex < resourceStart + resourceCount; resourceIndex += 1) {
+            const row = plan.record(resources, resourceIndex);
+            const retained = context.resources.get(plan.u32(row + resourceLayout.id));
+            if (
+              retained === undefined ||
+              retained.generation !== plan.u32(row + resourceLayout.generation) ||
+              retained.techniqueId !== techniqueId ||
+              plan.u32(row + resourceLayout.techniqueId) !== techniqueId
+            ) {
+              throw new Error('draw contains a resource owned by a different technique');
+            }
+          }
         }
 
         const materialId = plan.u32(draw + drawLayout.materialId);
         const transformId = plan.u32(draw + drawLayout.transformId);
         const recordIndex = plan.u32(primitive + primitiveLayout.recordIndex);
         const recordCount = plan.u16(primitive + primitiveLayout.recordCount);
+        if (recordCount === 0) throw new RangeError('draw primitive needs a positive record count');
+        for (const buffer of byPolicyId.values()) {
+          if (recordIndex > buffer.capacityRecords || recordCount > buffer.capacityRecords - recordIndex) {
+            throw new RangeError('draw record span exceeds a retained buffer');
+          }
+        }
         const addressing = recordAddressing(plan, draw, primitive, byPolicyId);
         const transform = this.#transformRealization(byPolicyId, transformId);
         const resolvedResource =
           resource === undefined ? undefined : this.#coordinator.resolveResource(resource.referenceId);
-        const drawGeometry = resolveDrawGeometry(resolvedResource, recordCount);
+        const expectedTechnique = resolvedResource?.technique ?? decorationSchema.technique;
+        const expectedTechniqueId = this.#coordinator.host.wireIdentities.techniqueId(expectedTechnique);
+        const expectedProgramId =
+          resolvedResource !== undefined && 'program' in resolvedResource
+            ? resolvedResource.program.programId
+            : this.#coordinator.host.wireIdentities.programId(expectedTechnique, 'three');
+        const expectedProgramVariant =
+          resolvedResource !== undefined && 'program' in resolvedResource
+            ? (resolvedResource.program.policy.variant ?? 0)
+            : 0;
+        if (
+          techniqueId !== expectedTechniqueId ||
+          programId !== expectedProgramId ||
+          programVariant !== expectedProgramVariant
+        ) {
+          throw new Error('draw program contradicts its registered technique implementation');
+        }
+        const drawGeometry = resolveDrawGeometry(resolvedResource);
         const material = decoration
           ? this.#decorationMaterial(byPolicyId, transform, addressing)
           : this.#material(resource!, byPolicyId, materialId, transform, addressing);
@@ -570,16 +928,15 @@ export class ThreeTextRenderPlanExecutor {
           plan.u32(draw + drawLayout.clipId),
           plan.u32(draw + drawLayout.depthKey),
           transform,
-          this.#transformGeneration,
+          context.transformGeneration,
           drawGeometry.key,
         );
 
         const reusable = previous.get(key)?.shift();
         if (reusable !== undefined) {
-          assertGeometryInstanceCompatibility(reusable.geometry, drawGeometry, recordCount);
+          assertGeometryInstanceCompatibility(reusable.geometry);
           reusedUpdates.push({
             mesh: reusable,
-            geometry: drawGeometry,
             recordCount,
             recordIndex,
             transformId,
@@ -598,7 +955,7 @@ export class ThreeTextRenderPlanExecutor {
           geometry.setAttribute(`_pmndrsGlyph_${buffer.policyBufferId}`, buffer.attribute);
         }
 
-        if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', this.#transformAttribute);
+        if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.pmndrsGlyphRunStart = recordIndex;
         mesh.userData.pmndrsGlyphTransformId = transformId;
@@ -612,62 +969,33 @@ export class ThreeTextRenderPlanExecutor {
     } catch (error) {
       for (const mesh of next) {
         if (reused.has(mesh)) continue;
-        mesh.removeFromParent();
-        mesh.geometry.dispose();
-      }
-      this.#disposeMaterials((_realization, key) => !previousMaterialKeys.has(key));
-      if (transformCapacityChanged) {
-        this.#transformAttribute = previousTransformAttribute;
-        this.#transformGeneration = previousTransformGeneration;
+        try {
+          mesh.geometry.dispose();
+        } catch {
+          // Preserve the preparation failure; cleanup is best-effort and the mesh was never published.
+        }
       }
       throw error;
     }
-    for (const update of reusedUpdates) {
-      updateGeometryInstances(update.mesh.geometry, update.geometry, update.recordCount);
-      update.mesh.userData.pmndrsGlyphRunStart = update.recordIndex;
-      update.mesh.userData.pmndrsGlyphTransformId = update.transformId;
-      update.mesh.userData.pmndrsGlyphPrimitiveKind = update.primitiveKind;
-      update.mesh.matrixAutoUpdate = update.matrixAutoUpdate;
-      update.mesh.renderOrder = update.renderOrder;
-    }
-    for (const mesh of next) {
-      if (mesh.parent !== this.#owner.drawRoot) this.#owner.drawRoot.add(mesh);
-    }
-    if (transformCapacityChanged) {
-      this.#disposeMaterials(({ indexedTransform }, key) => indexedTransform && previousMaterialKeys.has(key));
-    }
-    this.#disposeDraws(reused);
-    this.#draws = next;
-    this.#drawKeys = nextKeys;
-    this.#originSegments = nextOriginSegments;
-    this.#activeTransformIndices.clear();
-    for (const transformIndex of transformIndices) this.#activeTransformIndices.add(transformIndex);
-    this.#directDrawsByTransform.clear();
-    for (const draw of this.#draws) {
+    const directDrawsByTransform = new Map<number, THREE.Mesh[]>();
+    for (const draw of next) {
       const transformId = directTransformId(draw);
       if (transformId === 0) continue;
-      const transformDraws = this.#directDrawsByTransform.get(transformId) ?? [];
+      const transformDraws = directDrawsByTransform.get(transformId) ?? [];
       transformDraws.push(draw);
-      this.#directDrawsByTransform.set(transformId, transformDraws);
+      directDrawsByTransform.set(transformId, transformDraws);
     }
-  }
-
-  #restoreOriginTargets(): void {
-    const touched = new Map<RetainedBuffer, readonly [number, number]>();
-    for (const record of this.#originRecords.values()) {
-      if (!(record.buffer.array instanceof Float32Array)) continue;
-      const offset = record.index * record.buffer.vectorWidth;
-      if (record.buffer.array[offset] === record.targetX && record.buffer.array[offset + 1] === record.targetY)
-        continue;
-      record.buffer.array[offset] = record.targetX;
-      record.buffer.array[offset + 1] = record.targetY;
-      const range = touched.get(record.buffer);
-      touched.set(record.buffer, [
-        Math.min(range?.[0] ?? offset, offset),
-        Math.max(range?.[1] ?? offset + 2, offset + 2),
-      ]);
-    }
-    markOriginRanges(touched);
+    return {
+      changed: true,
+      root,
+      draws: next,
+      keys: nextKeys,
+      originSegments: nextOriginSegments,
+      reused,
+      reusedUpdates,
+      activeTransformIndices: transformIndices,
+      directDrawsByTransform,
+    };
   }
 
   #ensureOriginRecords(): void {
@@ -710,15 +1038,15 @@ export class ThreeTextRenderPlanExecutor {
     return new Set();
   }
 
-  #ensureTransformCapacity(indices: ReadonlySet<number>): boolean {
+  #ensureTransformCapacity(context: PreparationContext, indices: ReadonlySet<number>): boolean {
     let maximum = 0;
     for (const index of indices) maximum = Math.max(maximum, index);
     const requiredRecords = (maximum + 1) * 4;
-    if (this.#transformAttribute.count >= requiredRecords) return false;
-    let capacity = this.#transformAttribute.count;
+    if (context.transformAttribute.count >= requiredRecords) return false;
+    let capacity = context.transformAttribute.count;
     while (capacity < requiredRecords) capacity *= 2;
-    this.#transformAttribute = transformAttribute(capacity / 4);
-    this.#transformGeneration += 1;
+    context.transformAttribute = transformAttribute(capacity / 4);
+    context.transformGeneration += 1;
     return true;
   }
 
@@ -738,8 +1066,10 @@ export class ThreeTextRenderPlanExecutor {
     const required = [part.origin, part.size, part.uvOrigin, part.uvSize, part.color, part.page];
     const key = `${resource.id}:${resource.generation}:${materialId}:snap=${String(this.#owner.pixelSnapping)}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
-    const cached = this.#materials.get(key);
+      .join(
+        ',',
+      )}:${transformProgramKey(transform, this.#transformGenerationForRealization())}:${addressingProgramKey(addressing)}`;
+    const cached = this.#materialRealizations().get(key);
     if (cached !== undefined) return cached.material;
     const texture = this.#bitmapTexture(resource.referenceId, strike);
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
@@ -762,7 +1092,12 @@ export class ThreeTextRenderPlanExecutor {
     );
     const position =
       transform.kind === 'indexed'
-        ? indexedTransformPosition(shader.position, transform.indices.attribute, this.#transformAttribute, instance)
+        ? indexedTransformPosition(
+            shader.position,
+            transform.indices.attribute,
+            this.#transformAttributeForRealization(),
+            instance,
+          )
         : shader.position;
     const material = this.#createMaterial(materialId, {
       technique: bitmap.id,
@@ -786,9 +1121,9 @@ export class ThreeTextRenderPlanExecutor {
     }
     const key = `decoration:${rect.id}:${rect.generation}:${packed.id}:${packed.generation}:${transformProgramKey(
       transform,
-      this.#transformGeneration,
+      this.#transformGenerationForRealization(),
     )}:${addressingProgramKey(addressing)}`;
-    const cached = this.#materials.get(key);
+    const cached = this.#materialRealizations().get(key);
     if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsGlyphRunStart as number | undefined) ?? 0,
@@ -800,7 +1135,12 @@ export class ThreeTextRenderPlanExecutor {
     });
     const position =
       transform.kind === 'indexed'
-        ? indexedTransformPosition(shader.position, transform.indices.attribute, this.#transformAttribute, instance)
+        ? indexedTransformPosition(
+            shader.position,
+            transform.indices.attribute,
+            this.#transformAttributeForRealization(),
+            instance,
+          )
         : shader.position;
     const material = baseTextMaterial();
     material.positionNode = position;
@@ -845,8 +1185,10 @@ export class ThreeTextRenderPlanExecutor {
     const resourceReferences = [...new Set(resolved.resourceReferences.values())].sort((left, right) => left - right);
     const key = `external:${resource.id}:${resource.generation}:${resourceReferences.join(',')}:${materialId}:${required
       .map((buffer) => `${buffer.policyBufferId}:${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
-    const cached = this.#materials.get(key);
+      .join(
+        ',',
+      )}:${transformProgramKey(transform, this.#transformGenerationForRealization())}:${addressingProgramKey(addressing)}`;
+    const cached = this.#materialRealizations().get(key);
     if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsGlyphRunStart as number | undefined) ?? 0,
@@ -877,7 +1219,12 @@ export class ThreeTextRenderPlanExecutor {
         material: this.#coordinator.resolveMaterial(materialId),
         transformPosition: (position) =>
           transform.kind === 'indexed'
-            ? indexedTransformPosition(position, transform.indices.attribute, this.#transformAttribute, instance)
+            ? indexedTransformPosition(
+                position,
+                transform.indices.attribute,
+                this.#transformAttributeForRealization(),
+                instance,
+              )
             : position,
       }),
     );
@@ -897,8 +1244,10 @@ export class ThreeTextRenderPlanExecutor {
     const required = [part.rect, part.uvRect, part.uvBounds, part.color, part.effectA, part.effectB, part.page];
     const key = `msdf:${resource.id}:${resource.generation}:${materialId}:${required
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
-      .join(',')}:${transformProgramKey(transform, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
-    const cached = this.#materials.get(key);
+      .join(
+        ',',
+      )}:${transformProgramKey(transform, this.#transformGenerationForRealization())}:${addressingProgramKey(addressing)}`;
+    const cached = this.#materialRealizations().get(key);
     if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsGlyphRunStart as number | undefined) ?? 0,
@@ -932,7 +1281,12 @@ export class ThreeTextRenderPlanExecutor {
     );
     const position =
       transform.kind === 'indexed'
-        ? indexedTransformPosition(shader.position, transform.indices.attribute, this.#transformAttribute, instance)
+        ? indexedTransformPosition(
+            shader.position,
+            transform.indices.attribute,
+            this.#transformAttributeForRealization(),
+            instance,
+          )
         : shader.position;
     const material = this.#createMaterial(materialId, {
       technique: msdf.id,
@@ -945,7 +1299,8 @@ export class ThreeTextRenderPlanExecutor {
   }
 
   #bitmapTexture(referenceId: number, strike: BitmapStrikeData): THREE.DataArrayTexture {
-    let texture = this.#bitmapTextures.get(referenceId);
+    const textures = this.#bitmapTexturesForRealization();
+    let texture = textures.get(referenceId);
     if (texture !== undefined) return texture;
     const width = Math.max(...strike.pages.map((page) => page.width));
     const height = Math.max(...strike.pages.map((page) => page.height));
@@ -967,12 +1322,14 @@ export class ThreeTextRenderPlanExecutor {
     texture.generateMipmaps = false;
     texture.flipY = false;
     texture.needsUpdate = true;
-    this.#bitmapTextures.set(referenceId, texture);
+    this.#preparation?.newTextures.add(texture);
+    textures.set(referenceId, texture);
     return texture;
   }
 
   #msdfAtlas(referenceId: number, data: MsdfData): THREE.DataArrayTexture {
-    let atlas = this.#msdfAtlases.get(referenceId);
+    const atlases = this.#msdfAtlasesForRealization();
+    let atlas = atlases.get(referenceId);
     if (atlas !== undefined) return atlas;
     const bytes = new Uint8Array(data.binding.width * data.binding.height * data.binding.layers * 4);
     for (let layer = 0; layer < data.pages.length; layer += 1) {
@@ -991,7 +1348,8 @@ export class ThreeTextRenderPlanExecutor {
     atlas.minFilter = THREE.LinearFilter;
     atlas.generateMipmaps = false;
     atlas.needsUpdate = true;
-    this.#msdfAtlases.set(referenceId, atlas);
+    this.#preparation?.newTextures.add(atlas);
+    atlases.set(referenceId, atlas);
     return atlas;
   }
 
@@ -1017,8 +1375,8 @@ export class ThreeTextRenderPlanExecutor {
       .map((buffer) => `${buffer.id}:${buffer.generation}`)
       .join(
         ',',
-      )}:${transformProgramKey(transformRealization, this.#transformGeneration)}:${addressingProgramKey(addressing)}`;
-    const cached = this.#materials.get(key);
+      )}:${transformProgramKey(transformRealization, this.#transformGenerationForRealization())}:${addressingProgramKey(addressing)}`;
+    const cached = this.#materialRealizations().get(key);
     if (cached !== undefined) return cached.material;
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsGlyphRunStart as number | undefined) ?? 0,
@@ -1036,7 +1394,11 @@ export class ThreeTextRenderPlanExecutor {
       .element(instance);
     const indexedTransform =
       transformRealization.kind === 'indexed'
-        ? indexedTransformNodes(transformRealization.indices.attribute, this.#transformAttribute, instance)
+        ? indexedTransformNodes(
+            transformRealization.indices.attribute,
+            this.#transformAttributeForRealization(),
+            instance,
+          )
         : undefined;
     const modelViewProjection =
       indexedTransform === undefined
@@ -1085,7 +1447,8 @@ export class ThreeTextRenderPlanExecutor {
   }
 
   #slugPage(referenceId: number, data: SlugPageData): RetainedSlugPage {
-    let page = this.#slugPages.get(referenceId);
+    const pages = this.#slugPagesForRealization();
+    let page = pages.get(referenceId);
     if (page !== undefined) return page;
     const curves = ownedUint16(data.curveBytes);
     const headers = ownedUint32(data.headerBytes);
@@ -1119,7 +1482,8 @@ export class ThreeTextRenderPlanExecutor {
         referenceTexture.dispose();
       },
     };
-    this.#slugPages.set(referenceId, page);
+    this.#preparation?.newTextures.add(page);
+    pages.set(referenceId, page);
     return page;
   }
 
@@ -1131,10 +1495,11 @@ export class ThreeTextRenderPlanExecutor {
   #ownMaterial(material: THREE.NodeMaterial): THREE.NodeMaterial {
     if (material?.isNodeMaterial !== true)
       throw new TypeError('text material factory must return a Three NodeMaterial');
-    if (this.#ownedMaterials.has(material)) {
+    if (this.#ownedMaterials.has(material) || this.#preparation?.newMaterials.has(material) === true) {
       throw new TypeError('text material factory must return a fresh unowned NodeMaterial');
     }
-    this.#ownedMaterials.add(material);
+    if (this.#preparation === undefined) this.#ownedMaterials.add(material);
+    else this.#preparation.newMaterials.add(material);
     return material;
   }
 
@@ -1145,7 +1510,7 @@ export class ThreeTextRenderPlanExecutor {
     buffers: readonly RetainedBuffer[],
     transformKind: TransformRealization['kind'],
   ): void {
-    this.#materials.set(key, {
+    this.#materialRealizations().set(key, {
       material,
       resourceId: resource?.id ?? 0,
       resourceGeneration: resource?.generation ?? 0,
@@ -1154,28 +1519,39 @@ export class ThreeTextRenderPlanExecutor {
     });
   }
 
-  #disposeMaterials(predicate: (realization: MaterialRealization, key: string) => boolean): void {
-    for (const [key, realization] of this.#materials) {
-      if (!predicate(realization, key)) continue;
-      realization.material.dispose();
-      this.#materials.delete(key);
-    }
+  #materialRealizations(): Map<string, MaterialRealization> {
+    return this.#preparation?.materials ?? this.#materials;
   }
 
-  #disposeResource(referenceId: number): void {
-    if ([...this.#resources.values()].some((resource) => resource.referenceId === referenceId)) return;
-    const bitmapTexture = this.#bitmapTextures.get(referenceId);
-    bitmapTexture?.dispose();
-    this.#bitmapTextures.delete(referenceId);
-    const msdfAtlas = this.#msdfAtlases.get(referenceId);
-    msdfAtlas?.dispose();
-    this.#msdfAtlases.delete(referenceId);
-    const retainedSlugPage = this.#slugPages.get(referenceId);
-    retainedSlugPage?.dispose();
-    this.#slugPages.delete(referenceId);
+  #resourcesForPreparation(): Map<number, RetainedResource> {
+    return this.#preparation?.resources ?? this.#resources;
   }
 
-  #applyRetirements(plan: TextEngineRenderPlanView, table: RenderPlanTable): void {
+  #bitmapTexturesForRealization(): Map<number, THREE.DataArrayTexture> {
+    return this.#preparation?.bitmapTextures ?? this.#bitmapTextures;
+  }
+
+  #msdfAtlasesForRealization(): Map<number, THREE.DataArrayTexture> {
+    return this.#preparation?.msdfAtlases ?? this.#msdfAtlases;
+  }
+
+  #slugPagesForRealization(): Map<number, RetainedSlugPage> {
+    return this.#preparation?.slugPages ?? this.#slugPages;
+  }
+
+  #transformAttributeForRealization(): THREE.StorageInstancedBufferAttribute {
+    return this.#preparation?.transformAttribute ?? this.#transformAttribute;
+  }
+
+  #transformGenerationForRealization(): number {
+    return this.#preparation?.transformGeneration ?? this.#transformGeneration;
+  }
+
+  #applyRetirementsToCandidate(
+    plan: TextEngineRenderPlanView,
+    table: RenderPlanTable,
+    context: PreparationContext,
+  ): void {
     const layout = textShaperAbi.layouts.engineRetirement;
     const kinds = textShaperAbi.engine.retirementKinds;
     for (let index = 0; index < table.count; index += 1) {
@@ -1184,32 +1560,128 @@ export class ThreeTextRenderPlanExecutor {
       const id = plan.u32(record + layout.id);
       const generation = plan.u32(record + layout.generation);
       if (kind === kinds.buffer) {
-        this.#disposeMaterials((realization) =>
-          realization.buffers.some((buffer) => buffer.id === id && buffer.generation === generation),
-        );
-        if (this.#buffers.get(id)?.generation === generation) this.#buffers.delete(id);
+        for (const [key, realization] of context.materials) {
+          if (realization.buffers.some((buffer) => buffer.id === id && buffer.generation === generation)) {
+            context.materials.delete(key);
+          }
+        }
+        if (context.buffers.get(id)?.generation === generation) context.buffers.delete(id);
         continue;
       }
       if (kind === kinds.resource) {
-        const resource = this.#resources.get(id);
+        const resource = context.resources.get(id);
         if (resource?.generation !== generation) continue;
-        // The selected primary resource owns material lifetime; named siblings are immutable bundle dependencies.
-        this.#disposeMaterials(
-          (realization) =>
-            realization.resourceId === resource.id && realization.resourceGeneration === resource.generation,
-        );
-        this.#resources.delete(id);
-        this.#disposeResource(resource.referenceId);
+        for (const [key, realization] of context.materials) {
+          if (realization.resourceId === resource.id && realization.resourceGeneration === resource.generation) {
+            context.materials.delete(key);
+          }
+        }
+        context.resources.delete(id);
+        if (![...context.resources.values()].some((entry) => entry.referenceId === resource.referenceId)) {
+          context.bitmapTextures.delete(resource.referenceId);
+          context.msdfAtlases.delete(resource.referenceId);
+          context.slugPages.delete(resource.referenceId);
+        }
+        continue;
+      }
+      if (kind === kinds.slotRange || kind === kinds.outputBytes) continue;
+      throw new Error(`unsupported text-engine retirement kind ${kind}`);
+    }
+  }
+
+  #assertDrawResourcesRetained(
+    draws: PreparedDrawReplacement,
+    materials: ReadonlyMap<string, MaterialRealization>,
+  ): void {
+    const retained = new Set([...materials.values()].map(({ material }) => material));
+    for (const draw of draws.draws) {
+      if (Array.isArray(draw.material) || !retained.has(draw.material as THREE.NodeMaterial)) {
+        throw new Error('draw references a material retired by the same publication');
+      }
+    }
+  }
+
+  #retiredTextures(context: PreparationContext): readonly (THREE.Texture | RetainedSlugPage)[] {
+    const retained = new Set<THREE.Texture | RetainedSlugPage>([
+      ...context.bitmapTextures.values(),
+      ...context.msdfAtlases.values(),
+      ...context.slugPages.values(),
+    ]);
+    return [
+      ...new Set<THREE.Texture | RetainedSlugPage>([
+        ...this.#bitmapTextures.values(),
+        ...this.#msdfAtlases.values(),
+        ...this.#slugPages.values(),
+        ...context.newTextures,
+      ]),
+    ].filter((texture) => !retained.has(texture));
+  }
+
+  #prepareTransforms(draws: PreparedDrawReplacement): PreparedTransforms {
+    const attribute = this.#transformAttributeForRealization();
+    const contents = (attribute.array as Float32Array).slice();
+    const direct: PreparedTransformUpdate[] = [];
+    let start = contents.length;
+    let end = 0;
+    const transformIds = new Set<number>();
+    for (const transformId of this.#owner.transformIds()) {
+      if (draws.activeTransformIndices.has(transformId) || draws.directDrawsByTransform.has(transformId)) {
+        transformIds.add(transformId);
+      }
+    }
+    if (transformIds.size === 0) return { contents, start: 0, end: 0, direct };
+    draws.root.updateWorldMatrix(true, false);
+    const rootInverse = new THREE.Matrix4().copy(draws.root.matrixWorld).invert();
+    const relative = new THREE.Matrix4();
+    for (const transformId of transformIds) {
+      const object = this.#owner.objectForTransform(transformId);
+      object.updateWorldMatrix(true, false);
+      relative.multiplyMatrices(rootInverse, object.matrixWorld);
+      const visible = visibleBelowRoot(object, draws.root);
+      if (draws.activeTransformIndices.has(transformId)) {
+        const offset = transformId * 16;
+        if (offset > contents.length - 16) throw new RangeError('transform identity exceeds its prepared table');
+        if (visible) contents.set(relative.elements, offset);
+        else contents.fill(0, offset, offset + 16);
+        start = Math.min(start, offset);
+        end = Math.max(end, offset + 16);
+      }
+      for (const mesh of draws.directDrawsByTransform.get(transformId) ?? []) {
+        direct.push({ mesh, matrix: relative.clone(), visible });
+      }
+    }
+    return { contents, start: end > start ? start : 0, end, direct };
+  }
+
+  #discardPreparation(context: PreparationContext, draws: PreparedDrawReplacement | undefined): void {
+    if (draws?.changed === true) {
+      for (const mesh of draws.draws) {
+        if (draws.reused.has(mesh)) continue;
+        try {
+          mesh.geometry.dispose();
+        } catch {
+          // The rejected candidate was never published; retain the original preparation failure.
+        }
+      }
+    }
+    for (const material of context.newMaterials) {
+      try {
+        material.dispose();
+      } catch {
+        // Candidate cleanup cannot replace the error that caused the rejection.
+      }
+    }
+    for (const texture of context.newTextures) {
+      try {
+        texture.dispose();
+      } catch {
+        // Candidate cleanup cannot replace the error that caused the rejection.
       }
     }
   }
 
   #buffer(id: number, generation: number): RetainedBuffer {
-    const buffer = this.#buffers.get(id);
-    if (buffer === undefined || buffer.generation !== generation) {
-      throw new Error(`text-engine buffer ${id}:${generation} is not retained`);
-    }
-    return buffer;
+    return retainedBuffer(this.#preparation?.buffers ?? this.#buffers, id, generation);
   }
 
   #disposeDraws(retained: ReadonlySet<THREE.Mesh> = new Set()): void {
@@ -1224,7 +1696,7 @@ export class ThreeTextRenderPlanExecutor {
 }
 
 /** The techniques this executor realizes, keyed by wire identity. */
-const techniqueSchemas: ReadonlyMap<string, TechniqueSchema> = new Map<string, TechniqueSchema>([
+const techniqueSchemas: ReadonlyMap<string, AnyTechniqueSchema> = new Map<string, AnyTechniqueSchema>([
   [bitmap.id, bitmapSchema],
   [msdf.id, msdfSchema],
   [slug.id, slugSchema],
@@ -1239,7 +1711,7 @@ function glyphOriginBuffer(resource: ThreeTextEngineResource): PolicyBufferDecla
 
 /** Resolve a draw's retained buffers by the schema's names instead of remembered ids. */
 function schemaDrawBuffers<Buffers extends PolicyBufferDeclarations>(
-  schema: TechniqueSchema<Buffers>,
+  schema: { readonly buffers: Buffers },
   buffers: ReadonlyMap<number, RetainedBuffer>,
   label: string,
 ): { readonly [Name in keyof Buffers]: RetainedBuffer } {
@@ -1422,9 +1894,14 @@ function slugPage(resource: ThreeTextEngineResource): SlugPageData {
 
 function scalarArray(scalarType: number, byteLength: number): ScalarArray {
   const scalar = textShaperAbi.policy.scalarTypes;
-  if (scalarType === scalar.f32) return new Float32Array(byteLength / 4);
-  if (scalarType === scalar.u32) return new Uint32Array(byteLength / 4);
-  if (scalarType === scalar.u16) return new Uint16Array(byteLength / 2);
+  if (scalarType === scalar.f32 || scalarType === scalar.u32) {
+    if (byteLength % 4 !== 0) throw new RangeError('f32/u32 text-engine buffers require four-byte alignment');
+    return scalarType === scalar.f32 ? new Float32Array(byteLength / 4) : new Uint32Array(byteLength / 4);
+  }
+  if (scalarType === scalar.u16) {
+    if (byteLength % 2 !== 0) throw new RangeError('u16 text-engine buffers require two-byte alignment');
+    return new Uint16Array(byteLength / 2);
+  }
   throw new Error(`unsupported text-engine scalar type ${scalarType}`);
 }
 
@@ -1523,12 +2000,12 @@ function packReferencePairs(
 }
 
 function markUpdated(buffer: RetainedBuffer, byteOffset: number, byteLength: number): void {
-  const scalarBytes = buffer.array.BYTES_PER_ELEMENT;
-  if (byteOffset % scalarBytes !== 0 || byteLength % scalarBytes !== 0) {
+  const bytesPerScalar = buffer.array.BYTES_PER_ELEMENT;
+  if (byteOffset % bytesPerScalar !== 0 || byteLength % bytesPerScalar !== 0) {
     throw new RangeError('buffer patch is not scalar aligned');
   }
   syncDetachedUploadRange(buffer, byteOffset, byteLength);
-  mergeUpdateRange(buffer.attribute, byteOffset / scalarBytes, byteLength / scalarBytes);
+  mergeUpdateRange(buffer.attribute, byteOffset / bytesPerScalar, byteLength / bytesPerScalar);
   buffer.attribute.needsUpdate = true;
   invalidatePboTexture(buffer.attribute);
 }
@@ -1575,7 +2052,7 @@ function geometryDeclaration(resource: ThreeTextEngineResource | undefined) {
     : { kind: 'synthetic-quad' as const };
 }
 
-function resolveDrawGeometry(resource: ThreeTextEngineResource | undefined, recordCount: number): DrawGeometry {
+function resolveDrawGeometry(resource: ThreeTextEngineResource | undefined): DrawGeometry {
   const declaration = geometryDeclaration(resource);
   if (declaration.kind === 'synthetic-quad') return syntheticQuadGeometry;
   if (resource === undefined || !('resources' in resource) || declaration.resource === undefined) {
@@ -1588,11 +2065,8 @@ function resolveDrawGeometry(resource: ThreeTextEngineResource | undefined, reco
   if (referenceId === undefined) {
     throw new Error(`supplied Three geometry "${declaration.kind}" has no retained resource identity`);
   }
-  assertRecordInstanceCapacity(declaration.resource, payload, recordCount);
   const range = geometryDrawRange(payload);
   const indexCount = payload.indices === undefined ? 0 : payload.accessors[payload.indices.accessor]!.count;
-  const instances = payload.instances?.source ?? 'records';
-  const fixedCount = payload.instances?.source === 'fixed' ? payload.instances.count : 0;
   return {
     kind: 'supplied',
     resourceName: declaration.resource,
@@ -1606,8 +2080,6 @@ function resolveDrawGeometry(resource: ThreeTextEngineResource | undefined, reco
       indexCount,
       range.start,
       range.count,
-      instances,
-      fixedCount,
     ].join(':'),
   };
 }
@@ -1619,52 +2091,20 @@ function realizeGeometry(drawGeometry: DrawGeometry, recordCount: number): THREE
     return geometry;
   }
   const geometry = createGeometry(drawGeometry.payload);
-  updateGeometryInstances(geometry, drawGeometry, recordCount);
+  updateGeometryInstances(geometry, recordCount);
   return geometry;
 }
 
-function updateGeometryInstances(
-  geometry: THREE.BufferGeometry,
-  drawGeometry: DrawGeometry,
-  recordCount: number,
-): void {
-  const instanceCount = assertGeometryInstanceCompatibility(geometry, drawGeometry, recordCount);
-  if (geometry instanceof THREE.InstancedBufferGeometry) geometry.instanceCount = instanceCount;
+function updateGeometryInstances(geometry: THREE.BufferGeometry, recordCount: number): void {
+  assertGeometryInstanceCompatibility(geometry);
+  geometry.instanceCount = recordCount;
 }
 
 function assertGeometryInstanceCompatibility(
   geometry: THREE.BufferGeometry,
-  drawGeometry: DrawGeometry,
-  recordCount: number,
-): number {
-  if (drawGeometry.kind === 'synthetic-quad') {
-    if (!(geometry instanceof THREE.InstancedBufferGeometry)) {
-      throw new TypeError('instanced text draw lost its instanced geometry');
-    }
-    return recordCount;
-  }
-  const payload = drawGeometry.payload;
-  const instanceCount = payload?.instances?.source === 'fixed' ? payload.instances.count : recordCount;
-  if (geometry instanceof THREE.InstancedBufferGeometry) return instanceCount;
-  if (instanceCount !== 1) {
-    throw new RangeError(`supplied non-instanced geometry cannot draw ${instanceCount} record instances`);
-  }
-  return instanceCount;
-}
-
-function assertRecordInstanceCapacity(
-  resourceName: string,
-  payload: PortableGeometryPayload,
-  recordCount: number,
-): void {
-  if (payload.instances?.source === 'fixed') return;
-  const attribute = payload.attributes.find(({ rate }) => rate === 'instance');
-  if (attribute === undefined) return;
-  const available = payload.accessors[attribute.accessor]!.count;
-  if (recordCount > available) {
-    throw new RangeError(
-      `supplied Three geometry resource "${resourceName}" has ${available} instance elements for ${recordCount} emitted records`,
-    );
+): asserts geometry is THREE.InstancedBufferGeometry {
+  if (!(geometry instanceof THREE.InstancedBufferGeometry)) {
+    throw new TypeError('instanced text draw lost its instanced geometry');
   }
 }
 
@@ -1676,10 +2116,7 @@ function createGeometry(payload: PortableGeometryPayload): THREE.BufferGeometry 
     const view = payload.views[accessor.view];
     if (view === undefined) throw new Error(`geometry accessor ${attribute.accessor} has no buffer view`);
     const array = typedGeometryArray(payload, accessor, view);
-    const bufferAttribute =
-      attribute.rate === 'instance'
-        ? new THREE.InstancedBufferAttribute(array, accessor.components)
-        : new THREE.BufferAttribute(array, accessor.components);
+    const bufferAttribute = new THREE.BufferAttribute(array, accessor.components);
     geometry.setAttribute(attribute.semantic, bufferAttribute);
   }
   let indices: Uint16Array | Uint32Array | undefined;
@@ -1761,6 +2198,133 @@ function typedGeometryArray(
   if (accessor.componentType === 'u16') return new Uint16Array(payload.bytes.buffer, offset, length);
   if (accessor.componentType === 'i16') return new Int16Array(payload.bytes.buffer, offset, length);
   return new Uint8Array(payload.bytes.buffer, offset, length);
+}
+
+function sameRetainedResource(left: RetainedResource, right: RetainedResource): boolean {
+  return (
+    left.id === right.id &&
+    left.generation === right.generation &&
+    left.techniqueId === right.techniqueId &&
+    left.resourceKind === right.resourceKind &&
+    left.referenceId === right.referenceId
+  );
+}
+
+function retainedBuffer(buffers: ReadonlyMap<number, RetainedBuffer>, id: number, generation: number): RetainedBuffer {
+  const buffer = buffers.get(id);
+  if (buffer === undefined || buffer.generation !== generation) {
+    throw new Error(`text-engine buffer ${id}:${generation} is not retained`);
+  }
+  return buffer;
+}
+
+function scalarBytes(array: ScalarArray): Uint8Array {
+  return new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
+}
+
+function assertByteRange(offset: number, byteLength: number, capacity: number, message: string): void {
+  if (offset > capacity || byteLength > capacity - offset) throw new RangeError(message);
+}
+
+function assertScalarAligned(buffer: RetainedBuffer, byteOffset: number, byteLength: number): void {
+  const bytesPerScalar = buffer.array.BYTES_PER_ELEMENT;
+  if (byteOffset % bytesPerScalar !== 0 || byteLength % bytesPerScalar !== 0) {
+    throw new RangeError('buffer patch is not scalar aligned');
+  }
+}
+
+function includeMutationRange(upload: StagedBufferUpload, byteOffset: number, byteLength: number): void {
+  if (byteLength === 0) return;
+  upload.start = Math.min(upload.start, byteOffset);
+  upload.end = Math.max(upload.end, byteOffset + byteLength);
+}
+
+function validateDetachedUpload(buffer: RetainedBuffer): void {
+  const upload = buffer.attribute.array;
+  if (upload === buffer.array) return;
+  if (upload.constructor !== buffer.array.constructor || upload.byteLength < buffer.array.byteLength) {
+    throw new TypeError('Three replaced a text-plan upload array with an incompatible view');
+  }
+}
+
+function commitBufferMutations(staged: StagedBufferMutations): void {
+  for (const operation of staged.operations) commitBufferOperation(operation);
+  for (const upload of staged.uploads) commitBufferUpload(upload);
+}
+
+function commitBufferOperation(operation: StagedBufferOperation): void {
+  const destination = scalarBytes(operation.buffer.array);
+  if (operation.kind === 'write') {
+    destination.set(operation.payload, operation.destinationOffset);
+    return;
+  }
+  if (operation.kind === 'fill') {
+    const view = new DataView(
+      destination.buffer,
+      destination.byteOffset + operation.destinationOffset,
+      operation.byteLength,
+    );
+    for (let offset = 0; offset < operation.byteLength; offset += 4) view.setUint32(offset, operation.value, true);
+    return;
+  }
+  if (operation.kind === 'copy') {
+    const source = scalarBytes(operation.source.array);
+    if (operation.source === operation.buffer) {
+      destination.copyWithin(
+        operation.destinationOffset,
+        operation.sourceOffset,
+        operation.sourceOffset + operation.byteLength,
+      );
+    } else {
+      destination.set(
+        source.subarray(operation.sourceOffset, operation.sourceOffset + operation.byteLength),
+        operation.destinationOffset,
+      );
+    }
+    return;
+  }
+  const target = operation.buffer.array;
+  if (!(target instanceof Float32Array)) throw new TypeError('glyph origin buffer changed scalar type before commit');
+  target[operation.scalarOffset] = operation.x;
+  target[operation.scalarOffset + 1] = operation.y;
+}
+
+function commitBufferUpload(uploadRange: StagedBufferUpload): void {
+  const { buffer, start, end } = uploadRange;
+  const byteLength = end - start;
+  const source = scalarBytes(buffer.array).subarray(start, end);
+  const upload = buffer.attribute.array;
+  if (upload !== buffer.array) {
+    new Uint8Array(upload.buffer, upload.byteOffset + start, byteLength).set(source);
+  }
+  const scalarBytesPerElement = buffer.array.BYTES_PER_ELEMENT;
+  mergeUpdateRange(buffer.attribute, start / scalarBytesPerElement, byteLength / scalarBytesPerElement);
+  buffer.attribute.needsUpdate = true;
+  invalidatePboTexture(buffer.attribute);
+}
+
+function commitTransforms(attribute: THREE.StorageInstancedBufferAttribute, prepared: PreparedTransforms): void {
+  if (prepared.end <= prepared.start) return;
+  const target = attribute.array as Float32Array;
+  target.set(prepared.contents.subarray(prepared.start, prepared.end), prepared.start);
+  mergeUpdateRange(attribute, prepared.start, prepared.end - prepared.start);
+  attribute.needsUpdate = true;
+  invalidatePboTexture(attribute);
+}
+
+function applyReusedDrawUpdate(update: ReusedDrawUpdate): void {
+  updateGeometryInstances(update.mesh.geometry, update.recordCount);
+  update.mesh.userData.pmndrsGlyphRunStart = update.recordIndex;
+  update.mesh.userData.pmndrsGlyphTransformId = update.transformId;
+  update.mesh.userData.pmndrsGlyphPrimitiveKind = update.primitiveKind;
+  update.mesh.matrixAutoUpdate = update.matrixAutoUpdate;
+  update.mesh.renderOrder = update.renderOrder;
+}
+
+function applyTransformUpdate(update: PreparedTransformUpdate): void {
+  update.mesh.visible = update.visible;
+  update.mesh.matrix.copy(update.matrix);
+  update.mesh.matrixWorldNeedsUpdate = true;
 }
 
 function unitQuad(): THREE.InstancedBufferGeometry {

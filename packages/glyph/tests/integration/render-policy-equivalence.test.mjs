@@ -2,10 +2,17 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { programId, techniqueWireIds } from '../../dist/core/render-policy.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 
 const fixtureUrl = new URL('../fixtures/render-policy/hand-numbered-policy-bytes.json', import.meta.url);
+const THREE_PROGRAM_IDS = new Map([
+  [techniqueWireIds.bitmap, programId('pmndrs.bitmap', 'three')],
+  [techniqueWireIds.msdf, programId('pmndrs.msdf', 'three')],
+  [techniqueWireIds.slug, programId('pmndrs.slug', 'three')],
+  [techniqueWireIds.decoration, programId('pmndrs.decoration', 'three')],
+]);
 
 /**
  * Semantic equivalence against the hand-numbered programs. Register numbers and
@@ -26,7 +33,13 @@ test('the Three render policy is semantically identical to the hand-numbered fix
       assert.deepEqual(current.capabilitySets, fixture.capabilitySets, `${key}: capability sets`);
       for (const [index, expected] of fixture.programs.entries()) {
         const actual = current.programs[index];
-        assert.deepEqual(actual.metadata, expected.metadata, `${key}: program ${index} metadata`);
+        const expectedProgramId = THREE_PROGRAM_IDS.get(expected.metadata.techniqueId);
+        assert.notEqual(expectedProgramId, undefined, `${key}: program ${index} technique identity`);
+        assert.deepEqual(
+          actual.metadata,
+          { ...expected.metadata, programId: expectedProgramId },
+          `${key}: program ${index} metadata`,
+        );
         assert.deepEqual(actual.inputs, expected.inputs, `${key}: program ${index} input table`);
         assert.deepEqual(actual.buffers, expected.buffers, `${key}: program ${index} buffers`);
         assert.deepEqual(actual.stores, expected.stores, `${key}: program ${index} store dataflow`);

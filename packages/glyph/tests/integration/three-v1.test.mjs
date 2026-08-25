@@ -347,7 +347,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   runtime.dispose();
 });
 
-test('Three retries an unapplied Rust publication before requesting another engine delta', async () => {
+test('Three retries an unpublished renderer candidate without requiring new input', async () => {
   const registry = new FontRegistry();
   const instrumented = await createInstrumentedRuntime(registry);
   const runtime = instrumented.runtime;
@@ -367,6 +367,8 @@ test('Three retries an unapplied Rust publication before requesting another engi
   const scene = new THREE.Scene();
   const group = new TextGroup();
   label = new Text({ font, material, text: 'Retry me' });
+  const errors = [];
+  group.onError = (error) => errors.push(error);
   group.add(label);
   scene.add(group);
 
@@ -375,12 +377,22 @@ test('Three retries an unapplied Rust publication before requesting another engi
   assert.equal(label.error, group.error, 'group-owned failures must remain visible from the child Text');
   assert.equal(instrumented.crossings, 1);
   assert.equal(group.children.filter((child) => child.isMesh).length, 0);
+  assert.equal(errors.length, 1);
+  assert.throws(() => label.layout(), /deliberate material realization failure/u);
 
   failMaterial = false;
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
   assert.equal(label.error, undefined);
-  assert.equal(instrumented.crossings, 1, 'retrying an owned command buffer must not cross into Rust again');
+  assert.equal(instrumented.crossings, 1, 'retrying retained plan bytes must not call the engine again');
+  assert.equal(errors.length, 1, 'a successful retry must not repeat the old failure');
+  assert.equal(group.children.filter((child) => child.isMesh).length, 1);
+
+  label.material = material;
+  scene.updateMatrixWorld();
+  assert.equal(group.error, undefined);
+  assert.equal(label.error, undefined);
+  assert.equal(instrumented.crossings, 2, 'new input after recovery must publish normally');
   assert.equal(group.children.filter((child) => child.isMesh).length, 1);
 
   group.dispose();

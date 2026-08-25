@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  defineTechniqueGeometryKind,
   defineTechniqueSchema,
   floatBuffers,
   schemaPolicyBuffers,
@@ -21,7 +22,7 @@ function declaration() {
       origin: { id: 1, scalar: 'f32', lanes: ['x', 'y'] },
       flags: { id: 2, scalar: 'u32', lanes: ['flags'] },
     },
-    resources: { atlas: { kind: 'texture' } },
+    resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } },
   };
 }
 
@@ -82,6 +83,21 @@ test('malformed schema containers fail with named call-time diagnostics', () => 
   );
 });
 
+test('schema names are usable and lane metadata is unambiguous at construction', () => {
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { '': { kind: 'buffer' } } }),
+    (error) => error instanceof TypeError && error.message.includes('resource names must not be empty'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        buffers: { repeated: { id: 1, scalar: 'f32', lanes: ['x', 'x'] } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('repeats a lane name'),
+  );
+});
+
 test('schemas own their data: caller accessors cannot change validated widths', () => {
   let reads = 0;
   const accessorInput = {
@@ -114,7 +130,7 @@ test('schema lookups do not accept inherited prototype names', () => {
   );
 
   const resources = Object.create(null);
-  resources.atlas = { kind: 'texture' };
+  resources.atlas = { kind: 'texture', format: 'rgba8unorm' };
   assert.throws(
     () =>
       defineTechniqueSchema({
@@ -164,10 +180,17 @@ function suppliedGeometryDeclaration(kind = 'quad') {
     ...declaration(),
     resources: {
       ...declaration().resources,
-      mesh: { kind: 'geometry' },
+      mesh: { kind: 'geometry', attributes: vertexInputs() },
     },
     render: { geometry: { kind, resource: 'mesh', coordinates: 'unit-square' } },
   };
+}
+
+function vertexInputs() {
+  return [
+    { semantic: 'position', componentType: 'f32', components: 2 },
+    { semantic: 'uv', componentType: 'f32', components: 2 },
+  ];
 }
 
 test('the portable render contract freezes and accepts synthetic-quad and supplied geometry', () => {
@@ -181,9 +204,18 @@ test('the portable render contract freezes and accepts synthetic-quad and suppli
 
   const quad = defineTechniqueSchema(suppliedGeometryDeclaration());
   assert.deepEqual(quad.render.geometry, { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' });
+  assert.ok(Object.isFrozen(quad.resources.mesh.attributes), 'vertex inputs');
+  assert.ok(Object.isFrozen(quad.resources.mesh.attributes[0]), 'vertex input');
   // Extensible supplied kinds such as hull follow the same declared-resource rule.
   const hull = defineTechniqueSchema(suppliedGeometryDeclaration('hull'));
   assert.equal(hull.render.geometry.kind, 'hull');
+
+  const meshlet = defineTechniqueGeometryKind('meshlet');
+  const custom = defineTechniqueSchema({
+    ...suppliedGeometryDeclaration(),
+    render: { geometry: { kind: 'custom', name: meshlet, resource: 'mesh', coordinates: 'em' } },
+  });
+  assert.deepEqual(custom.render.geometry, { kind: 'custom', name: 'meshlet', resource: 'mesh', coordinates: 'em' });
 });
 
 test('synthetic-quad declares no resource and no coordinate convention', () => {
@@ -217,7 +249,7 @@ test('supplied geometry must name a declared geometry resource and state its coo
     () =>
       defineTechniqueSchema({
         ...declaration(),
-        resources: { mesh: { kind: 'geometry' } },
+        resources: { mesh: { kind: 'geometry', attributes: vertexInputs() } },
         render: { geometry: { kind: 'quad', coordinates: 'unit-square' } },
       }),
     (error) => error instanceof TypeError && error.message.includes('needs a declared geometry resource'),
@@ -242,7 +274,7 @@ test('supplied geometry must name a declared geometry resource and state its coo
     () =>
       defineTechniqueSchema({
         ...declaration(),
-        resources: { mesh: { kind: 'geometry' } },
+        resources: { mesh: { kind: 'geometry', attributes: vertexInputs() } },
         render: { geometry: { kind: 'quad', resource: 'mesh' } },
       }),
     (error) => error instanceof TypeError && error.message.includes('unit-square or em coordinates'),
@@ -251,7 +283,7 @@ test('supplied geometry must name a declared geometry resource and state its coo
     () =>
       defineTechniqueSchema({
         ...declaration(),
-        resources: { mesh: { kind: 'geometry' } },
+        resources: { mesh: { kind: 'geometry', attributes: vertexInputs() } },
         render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'screen-pixels' } },
       }),
     (error) => error instanceof TypeError && error.message.includes('unit-square or em coordinates'),
@@ -259,13 +291,13 @@ test('supplied geometry must name a declared geometry resource and state its coo
   assert.doesNotThrow(() =>
     defineTechniqueSchema({
       ...declaration(),
-      resources: { mesh: { kind: 'geometry' } },
+      resources: { mesh: { kind: 'geometry', attributes: vertexInputs() } },
       render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'em' } },
     }),
   );
 });
 
-test('reserved resource kinds declare only their own fields; private kinds keep kind plus optional format', () => {
+test('portable resource declarations are closed and geometry owns its vertex-input contract', () => {
   assert.deepEqual(defineTechniqueSchema({ ...declaration(), resources: { raw: { kind: 'buffer' } } }).resources.raw, {
     kind: 'buffer',
   });
@@ -274,8 +306,14 @@ test('reserved resource kinds declare only their own fields; private kinds keep 
     (error) => error instanceof TypeError && error.message.includes('buffer resource "raw" declares only its kind'),
   );
   assert.throws(
-    () => defineTechniqueSchema({ ...declaration(), resources: { mesh: { kind: 'geometry', format: 'vec2' } } }),
-    (error) => error instanceof TypeError && error.message.includes('geometry resource "mesh" declares only its kind'),
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { mesh: { kind: 'geometry', attributes: vertexInputs(), format: 'vec2' } },
+      }),
+    (error) =>
+      error instanceof TypeError &&
+      error.message.includes('geometry resource "mesh" declares only kind and attributes'),
   );
   assert.deepEqual(
     defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } } })
@@ -287,10 +325,9 @@ test('reserved resource kinds declare only their own fields; private kinds keep 
       .resources.pages,
     { kind: 'texture-array', format: 'r8unorm' },
   );
-  assert.deepEqual(
-    defineTechniqueSchema({ ...declaration(), resources: { tint: { kind: 'example-tint', format: 'u8x4' } } }).resources
-      .tint,
-    { kind: 'example-tint', format: 'u8x4' },
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { tint: { kind: 'example-tint', format: 'u8x4' } } }),
+    /needs a portable resource kind/,
   );
   assert.throws(
     () => defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: '' } } }),
@@ -300,13 +337,33 @@ test('reserved resource kinds declare only their own fields; private kinds keep 
     () =>
       defineTechniqueSchema({
         ...declaration(),
-        resources: { atlas: { kind: 'texture', sampleFormat: 'rgba8unorm' } },
+        resources: { atlas: { kind: 'texture', format: 'rgba8unorm', sampleFormat: 'rgba8unorm' } },
       }),
     (error) => error instanceof TypeError && error.message.includes('declares only kind and format'),
   );
   assert.throws(
     () => defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: 'texture', format: '' } } }),
-    (error) => error instanceof TypeError && error.message.includes('needs a nonempty format'),
+    (error) => error instanceof TypeError && error.message.includes('needs a supported texture format'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { mesh: { kind: 'geometry', attributes: [] } } }),
+    /needs vertex inputs/,
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: {
+          mesh: {
+            kind: 'geometry',
+            attributes: [
+              { semantic: 'position', componentType: 'f32', components: 2 },
+              { semantic: 'position', componentType: 'f32', components: 2 },
+            ],
+          },
+        },
+      }),
+    /repeats semantic "position"/,
   );
 });
 

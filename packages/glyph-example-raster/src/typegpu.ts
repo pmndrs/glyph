@@ -32,7 +32,7 @@ export const TypeGpuGlyphExampleFragmentInput: d.WgslStruct<{
 }> = d.struct({ color: d.vec4f, quadUv: d.vec2f });
 export type TypeGpuGlyphExampleFragmentInput = d.InferGPU<typeof TypeGpuGlyphExampleFragmentInput>;
 
-export const glyphExampleTypeGpuVariant: GlyphExampleShaderVariant = Object.freeze({
+export const glyphExampleTypeGpuVariant: GlyphExampleShaderVariant<'typegpu'> = Object.freeze({
   language: 'typegpu',
   techniqueId: glyphExampleShaderContract.techniqueId,
   geometry: glyphExampleShaderContract.geometry,

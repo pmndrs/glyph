@@ -30,13 +30,13 @@ export const packageSizeBudgets = {
   // The measure/layout re-split priced +398 raw: the measurement lane answers from its own
   // cache again instead of sharing the positioned one, so the fast path is two small maps
   // rather than one lazy-resolution layer.
-  // Portable resources and external-engine contracts measure 331,162 raw / 209,470 minified /
-  // 55,340 gzip / 46,098 Brotli; the ceilings retain bounded review margin.
+  // Technique plans, exact binding/policy preflight, and portable geometry now measure
+  // 382,392 raw / 244,375 minified / 63,538 gzip / 52,804 Brotli.
   'core-subpath-js': {
-    rawBytes: 340_000,
-    minifiedBytes: 216_000,
-    gzipBytes: 57_000,
-    brotliBytes: 47_000,
+    rawBytes: 390_000,
+    minifiedBytes: 250_000,
+    gzipBytes: 65_000,
+    brotliBytes: 54_000,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -118,13 +118,13 @@ export const packageSizeBudgets = {
   // guidance left +468 of real production behaviour, which fits the existing ceiling.
   // +22 KB over main is `unicode-segmenter`, entering every graph via internal/graphemes.ts so span
   // alignment matches the engine's cluster grid. Deliberate; both hosts measure identically.
-  // Named views, supplied geometry, and transactional draw reuse measure 490,117 raw /
-  // 301,686 minified / 79,620 gzip / 66,430 Brotli.
+  // Generic variants plus prepare/commit plan realization measure 556,648 raw /
+  // 347,520 minified / 90,397 gzip / 75,445 Brotli.
   'three-runtime-js': {
-    rawBytes: 492_000,
-    minifiedBytes: 304_000,
-    gzipBytes: 81_000,
-    brotliBytes: 68_000,
+    rawBytes: 565_000,
+    minifiedBytes: 354_000,
+    gzipBytes: 92_500,
+    brotliBytes: 77_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -162,25 +162,25 @@ export const packageSizeBudgets = {
     gzipBytes: 690_000,
     brotliBytes: 510_000,
   },
-  // Shared Three runtime graphs measure at most 471,773 raw / 290,219 minified /
-  // 77,523 gzip / 64,324 Brotli; one ceiling keeps technique drift visible.
+  // Shared Three runtime graphs measure at most 537,892 raw / 335,736 minified /
+  // 88,187 gzip / 73,280 Brotli; one ceiling keeps technique drift visible.
   'bitmap-runtime-js': {
-    rawBytes: 480_000,
-    minifiedBytes: 296_000,
-    gzipBytes: 80_000,
-    brotliBytes: 67_000,
+    rawBytes: 545_000,
+    minifiedBytes: 342_000,
+    gzipBytes: 90_000,
+    brotliBytes: 75_000,
   },
   'mtsdf-runtime-js': {
-    rawBytes: 480_000,
-    minifiedBytes: 296_000,
-    gzipBytes: 80_000,
-    brotliBytes: 67_000,
+    rawBytes: 545_000,
+    minifiedBytes: 342_000,
+    gzipBytes: 90_000,
+    brotliBytes: 75_000,
   },
   'slug-runtime-js': {
-    rawBytes: 480_000,
-    minifiedBytes: 296_000,
-    gzipBytes: 80_000,
-    brotliBytes: 67_000,
+    rawBytes: 545_000,
+    minifiedBytes: 342_000,
+    gzipBytes: 90_000,
+    brotliBytes: 75_000,
   },
   'bitmap-baker-wasm': {
     rawBytes: 626_000,

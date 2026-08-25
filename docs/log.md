@@ -1,5 +1,14 @@
 # pmndrs/glyph documentation update log
 
+## 2026-08-25
+
+- **Renderer failures no longer wait for input churn** — Three now validates and prepares a complete plan candidate before
+  publication. A material or resource realization failure retains the engine-accepted publication and retries those exact
+  owned bytes on the next frame without another Wasm call; the prior draw state remains live because the candidate never
+  committed, not because the renderer restored a stale snapshot. New authored input supersedes an unpublished candidate
+  and receives a checkpoint from the last consumed plan revision. The former rejection latch decision is superseded by
+  D-279, and direct coverage proves an unchanged frame recovers as soon as the renderer dependency does.
+
 ## 2026-08-24
 
 - **Raster plans now cross renderer boundaries as named portable data** — A technique registers one schema, policy-body
@@ -14,9 +23,9 @@
   grouped Slug pages are not expressible as one declared name and one retained key; the docs now state that limit instead
   of claiming a migration that did not happen. The browser proof enforces matching WebGPU and forced-WebGL2 frames and
   currently observes RGBA SHA-256 `0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`;
-  the 101-sample Three lab retains one draw and geometry for equal 12-instance inputs at a 0.070 ms CPU-side median for
-  the generic path, and reviewed gzip sizes are 55,340 bytes for `/core` and 79,441 bytes for the complete Three
-  integration.
+  the 101-sample Three lab retains one draw and geometry for equal 12-instance inputs at a 0.085 ms CPU-side median for
+  the generic path, and reviewed gzip sizes are 63,538 bytes for `/core`, 90,397 bytes for the complete Three
+  integration, 3,940 bytes for the peer-externalized TSL technique graph, and 2,768 bytes for its TypeGPU sibling.
 
 ## 2026-08-23
 

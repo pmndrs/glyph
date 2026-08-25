@@ -20,7 +20,13 @@ import {
 } from './core/host.js';
 import { compileTextEngineFrameUpdate, type TextEngineStyleMutation } from './core/frame-wire.js';
 import { readTextEngineLayouts, readTextEngineMeasurements } from './core/layout-query-view.js';
-import { compileRenderPolicy, type PolicyCapabilitySet, type PolicyDescriptor } from './core/render-policy.js';
+import { definePolicyBuffers } from './core/technique-schema.js';
+import {
+  compileRenderPolicy,
+  RenderWireIdentityRegistry,
+  type PolicyCapabilitySet,
+  type PolicyDescriptor,
+} from './core/render-policy.js';
 import type { RuntimeShaper } from './shaper.js';
 import { textRuntimeShaper } from './text-runtime.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
@@ -67,6 +73,13 @@ const PARAGRAPH_ID = 1;
 const PARAGRAPH_POLICY_HANDLE = 0x8000_0001;
 /** First handle (font bindings, stacks, sessions) owned by the paragraph engine context. */
 const PARAGRAPH_HANDLE_BASE = 0x8000_0000;
+const MEASUREMENT_TECHNIQUE = 'pmndrs.paragraph.measurement';
+const MEASUREMENT_PROGRAM_NAMESPACE = 'paragraph';
+const MEASUREMENT_CAPABILITY_SET_ID = 1;
+const measurementBuffers = definePolicyBuffers({
+  result: { id: 1, scalar: 'f32', lanes: ['value'] },
+});
+const INLINE_ORIGIN_REGISTER = 0;
 
 /**
  * A query answers, or this package is broken.
@@ -337,7 +350,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
     const request = compileTextEngineFrameUpdate({
       sessionId: session.handle,
       policyHandle: PARAGRAPH_POLICY_HANDLE,
-      capabilitySet: 1,
+      capabilitySet: MEASUREMENT_CAPABILITY_SET_ID,
       expectedEngineRevision: this.#engineRevision,
       consumedPlanRevision: this.#planRevision,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
@@ -633,7 +646,7 @@ class ParagraphEngineContext {
 
   constructor(shaper: RuntimeShaper) {
     this.host = new TextEngineHost(shaper);
-    this.host.registerPolicy(PARAGRAPH_POLICY_HANDLE, measurementPolicyBytes());
+    this.host.registerPolicy(PARAGRAPH_POLICY_HANDLE, measurementPolicyBytes(this.host.wireIdentities));
   }
 
   createSession(options: { requestCapacity: number; resultCapacity: number }): TextEngineSession {
@@ -706,26 +719,32 @@ function paragraphEngineContext(runtime: TextRuntime): ParagraphEngineContext {
  * a plan, so this ships the smallest legal identity program over one semantic scalar. It is
  * never executed: no paragraph query requests render work.
  */
-function measurementPolicyBytes(): Uint8Array {
+function measurementPolicyBytes(identities: RenderWireIdentityRegistry): Uint8Array {
   const abi = textShaperAbi;
   const batch = abi.policy.batchFields;
+  const MEASUREMENT_TECHNIQUE_ID = identities.techniqueId(MEASUREMENT_TECHNIQUE);
+  const MEASUREMENT_PROGRAM_ID = identities.programId(MEASUREMENT_TECHNIQUE, MEASUREMENT_PROGRAM_NAMESPACE);
   const program = {
-    techniqueId: 1,
-    programId: 1,
+    techniqueId: MEASUREMENT_TECHNIQUE_ID,
+    programId: MEASUREMENT_PROGRAM_ID,
     f32InputCount: 1,
     u32InputCount: 0,
     inputs: [{ scope: 'semantic' as const, field: abi.engine.semanticF32Fields.inlineOrigin }],
-    buffers: [{ id: 1, scalar: abi.policy.scalarTypes.f32, vectorWidth: 1 }],
+    buffers: [{ id: measurementBuffers.result.id, scalar: abi.policy.scalarTypes.f32, vectorWidth: 1 }],
     operations: [
-      { opcode: abi.policy.opcodes.loadF32, target: 0, operand0: 0 },
-      { opcode: abi.policy.opcodes.storeF32, operand0: 0, immediate0: 1 },
+      { opcode: abi.policy.opcodes.loadF32, target: INLINE_ORIGIN_REGISTER, operand0: 0 },
+      {
+        opcode: abi.policy.opcodes.storeF32,
+        operand0: INLINE_ORIGIN_REGISTER,
+        immediate0: measurementBuffers.result.id,
+      },
     ],
     storageKeyMask: batch.technique | batch.program | batch.resource,
     drawKeyMask: batch.technique | batch.program | batch.resource | batch.order | batch.transform,
   };
   const flags = abi.policy.capabilityFlags;
   const capabilitySet: PolicyCapabilitySet = {
-    id: 1,
+    id: MEASUREMENT_CAPABILITY_SET_ID,
     flags: flags.storageBuffers | flags.aliasVec2 | flags.aliasVec4 | flags.orderedDirect | flags.stableIndirect,
     maxBufferBytes: 64 * 1024 * 1024,
     updateAlignment: 4,

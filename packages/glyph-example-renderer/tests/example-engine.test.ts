@@ -12,6 +12,7 @@ import { exampleRenderPolicyBytes } from '../src/policy.js';
 import { describe, expect, test } from 'vitest';
 
 import { ExampleTextEngine } from '../src/engine.js';
+import { EXAMPLE_POLICY_HANDLE } from '../src/policy.js';
 
 const require = createRequire(import.meta.url);
 
@@ -151,12 +152,12 @@ describe('a real engine driven through the published core surface', () => {
 test('TextEngineHost remains directly drivable', async () => {
   const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
   const host = new TextEngineHost(shaper);
-  host.registerPolicy(23, exampleRenderPolicyBytes());
+  host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes());
   const session = host.createSession({ handle: 30, requestCapacity: 4096, resultCapacity: 128 * 1024 });
   const publication = session.update(
     compileTextEngineFrameUpdate({
       sessionId: 30,
-      policyHandle: 23,
+      policyHandle: EXAMPLE_POLICY_HANDLE,
       capabilitySet: 1,
       expectedEngineRevision: 0,
       consumedPlanRevision: 0,

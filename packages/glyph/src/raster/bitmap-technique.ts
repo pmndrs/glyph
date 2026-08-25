@@ -222,7 +222,9 @@ export const bitmapSchema: TechniqueSchema<
   {
     readonly f32: readonly ['bearingX', 'bearingY', 'width', 'height', 'uvOriginX', 'uvOriginY', 'uvSizeX', 'uvSizeY'];
     readonly u32: readonly ['page'];
-  }
+  },
+  { readonly atlas: { readonly kind: 'texture-array'; readonly format: 'r8unorm' } },
+  'pmndrs.bitmap'
 > = defineTechniqueSchema({
   technique: 'pmndrs.bitmap',
   scope: 'strike',

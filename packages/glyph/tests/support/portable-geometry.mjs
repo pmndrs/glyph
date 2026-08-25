@@ -1,8 +1,4 @@
-/**
- * Canonical GLB-like fixtures for portable-resource contract tests: an indexed
- * triangle-list unit quad plus an instance-rate variant carrying one element per
- * drawn instance alongside its four vertices.
- */
+/** Canonical indexed triangle-list unit quad for portable-resource contract tests. */
 
 export function indexedQuadGeometry() {
   const bytes = new Uint8Array(76);
@@ -27,20 +23,5 @@ export function indexedQuadGeometry() {
       { semantic: 'uv', accessor: 1 },
     ],
     indices: { accessor: 2 },
-  };
-}
-
-export function instancedQuadGeometry() {
-  const geometry = indexedQuadGeometry();
-  const seeds = new Uint32Array([7, 11, 13, 17, 19]);
-  const bytes = new Uint8Array(geometry.bytes.length + seeds.byteLength);
-  bytes.set(geometry.bytes, 0);
-  bytes.set(new Uint8Array(seeds.buffer), geometry.bytes.length);
-  return {
-    ...geometry,
-    bytes,
-    views: [...geometry.views, { offset: geometry.bytes.length, length: seeds.byteLength }],
-    accessors: [...geometry.accessors, { componentType: 'u32', components: 1, view: 2, offset: 0, count: 5 }],
-    attributes: [...geometry.attributes, { semantic: 'seed', accessor: 3, rate: 'instance' }],
   };
 }

@@ -2,7 +2,6 @@ import {
   compileTextEngineFrameUpdate,
   compileRasterFont,
   TextEngineHost,
-  textShaperAbi,
   type RetainedTextEnginePublication,
   type RuntimeShaper,
   type TextEngineFrameLimits,
@@ -18,8 +17,10 @@ import type { AnyRasterTechnique, LoadedFont } from '@pmndrs/glyph';
 
 import type { ExampleDrawList } from './draw-list.js';
 import { readDrawList } from './plan-reader.js';
-import { EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes } from './policy.js';
+import { EXAMPLE_CAPABILITY_SET, EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes } from './policy.js';
 import type { ExampleRendererDevice, ExampleRendererResourceInput } from './device.js';
+
+const FIRST_EXAMPLE_BINDING_HANDLE = 100;
 
 /** The frame limits this host runs under. The engine rejects zero limits outright. */
 const EXAMPLE_LIMITS: TextEngineFrameLimits = {
@@ -59,13 +60,13 @@ export interface ExampleFrameInput {
 export class ExampleTextEngine {
   readonly #host: TextEngineHost;
   readonly #device: ExampleRendererDevice | undefined;
-  #nextBindingHandle = 100;
+  #nextBindingHandle = FIRST_EXAMPLE_BINDING_HANDLE;
   #session: TextEngineSession | undefined;
 
   constructor(shaper: RuntimeShaper, device?: ExampleRendererDevice) {
     this.#host = new TextEngineHost(shaper);
     this.#device = device;
-    this.#host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes());
+    this.#host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes(this.#host.wireIdentities));
   }
 
   /** Compile and register one loaded font through the portable raster program. */
@@ -81,23 +82,19 @@ export class ExampleTextEngine {
       throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
     const bindingHandle = this.#nextBindingHandle;
     if (bindingHandle > 0xffff_ffff) throw new RangeError('example renderer exhausted font binding handles');
+    const requiredNames =
+      shader === undefined ? [...compiled.declaredResources.keys()] : Object.keys(shader.variant.resources);
     const resources: ExampleRendererResourceInput[] = [];
-    for (const [name, key] of compiled.declaredResources) {
+    for (const name of requiredNames) {
+      const key = compiled.declaredResources.get(name);
+      if (key === undefined) throw new Error(`compiled font omitted declared resource "${name}"`);
       const resource = compiled.resources.get(key);
       if (resource === undefined) throw new Error(`compiled font omitted declared resource "${name}"`);
-      resources.push({ id: this.#host.wireIdentities.resolve(key), generation: 1, name, resource });
+      resources.push({ id: this.#host.wireIdentities.resourceId(key), generation: 1, name, resource });
     }
-    const registration = this.#device?.createResources(resources);
-    try {
-      this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
-    } catch (error) {
-      try {
-        registration?.rollback();
-      } catch (rollbackError) {
-        throw new AggregateError([error, rollbackError], 'font registration and resource rollback both failed');
-      }
-      throw error;
-    }
+    const pending = this.#device?.prepareResources(resources);
+    this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
+    pending?.commit();
     this.#nextBindingHandle += 1;
     return bindingHandle;
   }
@@ -125,7 +122,7 @@ export class ExampleTextEngine {
     return compileTextEngineFrameUpdate({
       sessionId: session.handle,
       policyHandle: EXAMPLE_POLICY_HANDLE,
-      capabilitySet: 1,
+      capabilitySet: EXAMPLE_CAPABILITY_SET,
       expectedEngineRevision: latest.engineRevision,
       consumedPlanRevision: latest.planRevision,
       acknowledgedPublicationGeneration: session.acknowledgedGeneration,
@@ -142,13 +139,7 @@ export class ExampleTextEngine {
   render(input: ExampleFrameInput): ExampleDrawList {
     const device = this.#device;
     const list = readDrawList(this.#retainPublication(this.session.update(this.frameRequest(input))));
-    device?.applyBufferPlan(list.bufferRecords, list.patches, list.retirements);
-    for (const retirement of list.retirements) {
-      if (retirement.kind === textShaperAbi.engine.retirementKinds.resource) {
-        device?.retireResource(retirement.id, retirement.generation);
-      }
-    }
-    device?.submit(list);
+    device?.prepareSubmission(list).commit();
     return list;
   }
 

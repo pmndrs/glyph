@@ -1,10 +1,12 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
+const outputRoot = join(packageRoot, 'dist');
 
+await rm(outputRoot, { recursive: true, force: true });
 await run('pnpm', ['exec', 'tsc', '-p', join(packageRoot, 'tsconfig.build.json')]);
 
 const { default: typegpuPlugin } = await import('unplugin-typegpu/rollup');
