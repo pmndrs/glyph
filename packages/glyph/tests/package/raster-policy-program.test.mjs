@@ -6,6 +6,7 @@ import {
   createRasterPolicyProgram,
   definePolicyBuffers,
   defineTechniqueSchema,
+  id,
   programId,
   registerRasterPlanProgram,
   techniqueId,
@@ -13,9 +14,11 @@ import {
   textShaperAbi,
 } from '../../dist/core.js';
 
-const TEST_CAPABILITY_SET_ID = 7;
 const TEST_PROGRAM_VARIANT = 3;
 const TEST_PROGRAM_NAMESPACE = 'test-renderer';
+const ORIGIN_BUFFER_ID = id('buffer', 'test.raster-policy-program/origin');
+const SYSTEM_BUFFER_ID = id('buffer', 'test.raster-policy-program/system/stable-glyph-id');
+const OTHER_SYSTEM_BUFFER_ID = id('buffer', 'test.raster-policy-program/system/other-stable-glyph-id');
 
 const technique = defineRasterTechnique({
   id: 'test.raster-policy-program',
@@ -36,24 +39,25 @@ const schema = defineTechniqueSchema({
   technique: technique.id,
   scope: 'glyph',
   binding: {},
-  buffers: { origin: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
+  buffers: { origin: { id: ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
   resources: { payload: { kind: 'buffer' } },
+  render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
 });
 const wrongSystemSchema = defineTechniqueSchema({
   technique: wrongSystemTechnique.id,
   scope: 'glyph',
   binding: {},
-  buffers: { origin: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
+  buffers: { origin: { id: ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
   resources: { payload: { kind: 'buffer' } },
+  render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
 });
 const system = definePolicyBuffers({
-  stableGlyphId: { id: 20, scalar: 'u32', lanes: ['stableGlyphId'] },
+  stableGlyphId: { id: SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 const otherSystem = definePolicyBuffers({
-  stableGlyphId: { id: 21, scalar: 'u32', lanes: ['stableGlyphId'] },
+  stableGlyphId: { id: OTHER_SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 const capabilitySet = {
-  id: TEST_CAPABILITY_SET_ID,
   flags: textShaperAbi.policy.capabilityFlags.orderedDirect,
   maxBufferBytes: 1024,
   updateAlignment: 4,
@@ -134,7 +138,8 @@ test('portable policy assembly owns host identities, system buffers, and variant
   });
   assert.equal(compiled.techniqueId, techniqueId(technique));
   assert.equal(compiled.programId, programId(technique, TEST_PROGRAM_NAMESPACE));
-  assert.equal(compiled.capabilitySetId, TEST_CAPABILITY_SET_ID);
+  assert.deepEqual(compiled.capabilitySet, capabilitySet);
+  assert.equal(Object.isFrozen(compiled.capabilitySet), true);
   assert.equal(compiled.variant, TEST_PROGRAM_VARIANT);
   assert.equal(receivedFrozenHostInputs, true);
   assert.deepEqual(

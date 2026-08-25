@@ -3,21 +3,24 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { TextEngineHost } from '../../dist/core/host.js';
-import { programId, techniqueId } from '../../dist/core/render-policy.js';
+import { id, programId, techniqueId } from '../../dist/core/render-policy.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
+const TEST_POLICY_HANDLE = id('policy', 'test.text-engine-host/default');
+const TEST_SESSION_HANDLE = id('session', 'test.text-engine-host/default');
+const THREE_POLICY_HANDLE = id('policy', 'test.text-engine-host/three');
 
 test('production text-engine host publishes borrowed A/B plans through the runtime shaper instance', async () => {
   const wasm = await readFile(wasmUrl);
   const abi = textShaperAbi;
   const shaper = await createRuntimeShaper({ wasm });
   const host = new TextEngineHost(shaper);
-  const policyHandle = 11;
-  const sessionId = 5;
+  const policyHandle = TEST_POLICY_HANDLE;
+  const sessionId = TEST_SESSION_HANDLE;
   host.registerPolicy(policyHandle, renderPolicyBytes(abi));
   const firstRequest = engineUpdateBytes(abi, {
     sessionId,
@@ -103,7 +106,7 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
 
   const shaper = await createRuntimeShaper({ wasm });
   const host = new TextEngineHost(shaper);
-  host.registerPolicy(12, bytes);
+  host.registerPolicy(THREE_POLICY_HANDLE, bytes);
   host.dispose();
   shaper.dispose();
 });

@@ -1,4 +1,4 @@
-import { defineTechniqueSchema, type PortableResource } from '../../src/core.js';
+import { defineTechniqueSchema, id, type PortableResource } from '../../src/core.js';
 import { defineRasterTechnique } from '../../src/raster-technique.js';
 import {
   registerThreeRasterPlanProgram,
@@ -28,8 +28,8 @@ const schema = defineTechniqueSchema({
   scope: 'glyph',
   binding: {},
   buffers: {
-    rect: { id: 1, scalar: 'f32', lanes: ['x', 'y', 'width', 'height'] },
-    flags: { id: 2, scalar: 'u32', lanes: ['value'] },
+    rect: { id: id('buffer', 'probe.three-exact-schema/rect'), scalar: 'f32', lanes: ['x', 'y', 'width', 'height'] },
+    flags: { id: id('buffer', 'probe.three-exact-schema/flags'), scalar: 'u32', lanes: ['value'] },
   },
   resources: {
     atlas: { kind: 'texture', format: 'rgba8unorm' },
@@ -39,7 +39,7 @@ const schema = defineTechniqueSchema({
       attributes: [{ semantic: 'position', componentType: 'f32', components: 3 }],
     },
   },
-  render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'em' } },
+  render: { resource: 'atlas', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'em' } },
 });
 
 type Variant = ThreeRasterPlanVariant<typeof schema>;

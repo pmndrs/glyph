@@ -32,7 +32,7 @@ const portableSchema = defineTechniqueSchema({
   binding: {},
   buffers: {},
   resources: { payload: { kind: 'buffer' } },
-  render: { geometry: { kind: 'synthetic-quad' } },
+  render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
 });
 let portableCompileCalls = 0;
 registerRasterPlanProgram({

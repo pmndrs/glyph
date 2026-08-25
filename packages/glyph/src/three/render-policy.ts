@@ -1,15 +1,16 @@
 import {
   compileRenderPolicy,
   createProgram,
+  createRasterPolicyProgram,
   definePolicyBuffers,
   defineTechniqueSchema,
-  f32,
+  id,
   RenderWireIdentityRegistry,
   schemaPolicyBuffers,
   techniqueProgram,
-  u32,
   type PolicyAllocationMode,
   type PolicyBuffer,
+  type PolicyBufferId,
   type PolicyCapabilitySet,
   type PolicyProgram,
   type PolicyTransformMode,
@@ -18,14 +19,15 @@ import {
   type AnyTechniqueSchema,
   type TechniqueSchema,
 } from '../core.js';
-import { bitmap, bitmapSchema } from '../raster/bitmap-technique.js';
-import { msdf, msdfSchema } from '../raster/msdf.js';
-import { slug, slugSchema } from '../raster/slug-technique.js';
+import { bitmap, bitmapPlanProgram } from '../raster/bitmap-technique.js';
+import { msdf, msdfPlanProgram } from '../raster/msdf.js';
+import { slug, slugPlanProgram } from '../raster/slug-technique.js';
 import { textShaperAbi } from '../core.js';
 
-const THREE_STABLE_GLYPH_BUFFER_ID = 14;
-const THREE_TRANSFORM_INDEX_BUFFER_ID = 15;
-export const THREE_CAPABILITY_SET_ID = 1;
+const THREE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/stable-glyph');
+const THREE_TRANSFORM_INDEX_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/transform-index');
+const DECORATION_RECT_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/decoration/rect');
+const DECORATION_PACKED_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/decoration/packed');
 
 /** Buffers the Three policy itself owns, shared by every program in it. */
 export const threeSystemBuffers: {
@@ -44,9 +46,9 @@ export const threeSystemBuffers: {
   transformIndex: { id: THREE_TRANSFORM_INDEX_BUFFER_ID, scalar: 'u32', lanes: ['transformIndex'] },
 });
 
-export const TRANSFORM_BUFFER_ID: number = threeSystemBuffers.transformIndex.id;
+export const TRANSFORM_BUFFER_ID: PolicyBufferId = threeSystemBuffers.transformIndex.id;
 
-export const STABLE_GLYPH_BUFFER_ID: number = threeSystemBuffers.stableGlyphId.id;
+export const STABLE_GLYPH_BUFFER_ID: PolicyBufferId = threeSystemBuffers.stableGlyphId.id;
 
 /**
  * Decoration is a reserved technique of the Three policy rather than a raster
@@ -55,11 +57,15 @@ export const STABLE_GLYPH_BUFFER_ID: number = threeSystemBuffers.stableGlyphId.i
 export const decorationSchema: TechniqueSchema<
   {
     readonly rect: {
-      readonly id: 1;
+      readonly id: typeof DECORATION_RECT_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['left', 'top', 'width', 'height'];
     };
-    readonly packed: { readonly id: 2; readonly scalar: 'u32'; readonly lanes: readonly ['color', 'flags'] };
+    readonly packed: {
+      readonly id: typeof DECORATION_PACKED_BUFFER_ID;
+      readonly scalar: 'u32';
+      readonly lanes: readonly ['color', 'flags'];
+    };
   },
   { readonly u32: readonly ['color', 'flags'] }
 > = defineTechniqueSchema({
@@ -67,8 +73,8 @@ export const decorationSchema: TechniqueSchema<
   scope: 'glyph',
   binding: { u32: ['color', 'flags'] },
   buffers: {
-    rect: { id: 1, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    packed: { id: 2, scalar: 'u32', lanes: ['color', 'flags'] },
+    rect: { id: DECORATION_RECT_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    packed: { id: DECORATION_PACKED_BUFFER_ID, scalar: 'u32', lanes: ['color', 'flags'] },
   },
 });
 
@@ -107,28 +113,43 @@ export function threeRenderPolicyBytes(
       throw new TypeError(`Three ${name} transform mode must be "direct" or "indexed"`);
     }
   }
-  const BITMAP_TECHNIQUE_ID = identityRegistry.techniqueId(bitmap);
-  const MSDF_TECHNIQUE_ID = identityRegistry.techniqueId(msdf);
-  const SLUG_TECHNIQUE_ID = identityRegistry.techniqueId(slug);
   const DECORATION_TECHNIQUE_ID = identityRegistry.techniqueId(decorationSchema.technique);
-  const BITMAP_PROGRAM_ID = identityRegistry.programId(bitmap, THREE_PROGRAM_NAMESPACE);
-  const MSDF_PROGRAM_ID = identityRegistry.programId(msdf, THREE_PROGRAM_NAMESPACE);
-  const SLUG_PROGRAM_ID = identityRegistry.programId(slug, THREE_PROGRAM_NAMESPACE);
   const DECORATION_PROGRAM_ID = identityRegistry.programId(decorationSchema.technique, THREE_PROGRAM_NAMESPACE);
+  const capabilitySet = threePolicyCapabilitySet();
   const programs: PolicyProgram[] = [
-    bitmapProgram(BITMAP_TECHNIQUE_ID, BITMAP_PROGRAM_ID, modes.bitmap, allocationMode),
-    msdfProgram(MSDF_TECHNIQUE_ID, MSDF_PROGRAM_ID, modes.msdf, allocationMode),
-    slugProgram(SLUG_TECHNIQUE_ID, SLUG_PROGRAM_ID, modes.slug, allocationMode),
+    createRasterPolicyProgram(bitmapPlanProgram, {
+      namespace: THREE_PROGRAM_NAMESPACE,
+      system: policySystemBuffers(modes.bitmap),
+      capabilitySet,
+      transformMode: modes.bitmap,
+      allocationMode,
+      identityRegistry,
+    }),
+    createRasterPolicyProgram(msdfPlanProgram, {
+      namespace: THREE_PROGRAM_NAMESPACE,
+      system: policySystemBuffers(modes.msdf),
+      capabilitySet,
+      transformMode: modes.msdf,
+      allocationMode,
+      identityRegistry,
+    }),
+    createRasterPolicyProgram(slugPlanProgram, {
+      namespace: THREE_PROGRAM_NAMESPACE,
+      system: policySystemBuffers(modes.slug),
+      capabilitySet,
+      transformMode: modes.slug,
+      allocationMode,
+      identityRegistry,
+    }),
     decorationProgram(DECORATION_TECHNIQUE_ID, DECORATION_PROGRAM_ID, modes.bitmap, allocationMode),
     ...additionalPrograms,
   ];
-  return compileRenderPolicy({ capabilitySets: [threePolicyCapabilitySet()], programs });
+  return compileRenderPolicy({ capabilitySets: [capabilitySet], programs });
 }
 
 export function threePolicyCapabilitySet(): PolicyCapabilitySet {
   const flags = textShaperAbi.policy.capabilityFlags;
   return {
-    id: THREE_CAPABILITY_SET_ID,
     flags: flags.storageBuffers | flags.aliasVec2 | flags.aliasVec4 | flags.orderedDirect | flags.stableIndirect,
     maxBufferBytes: 64 * 1024 * 1024,
     updateAlignment: 4,
@@ -140,119 +161,6 @@ export function threePolicyCapabilitySet(): PolicyCapabilitySet {
     fragmentationBudget: 8,
     wholeBufferThresholdBasisPoints: 7_500,
   };
-}
-
-function bitmapProgram(
-  techniqueId: RenderTechniqueId,
-  programId: RenderProgramId,
-  transformMode: ThreeTransformMode,
-  allocationMode: ThreeAllocationMode,
-): PolicyProgram {
-  const p = techniqueProgram(bitmapSchema, { system: policySystemBuffers(transformMode) });
-  const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
-  const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, page } = p.binding;
-  // Convert the baked em-space bearing and dimensions into the layout's pixel-space ink box.
-  return createProgram(
-    techniqueId,
-    programId,
-    p.compile({
-      origin: [f32.add(inlineOrigin, f32.mul(bearingX, fontSize)), f32.sub(blockOrigin, f32.mul(bearingY, fontSize))],
-      size: [f32.mul(width, fontSize), f32.mul(height, fontSize)],
-      uvOrigin: [uvOriginX, uvOriginY],
-      uvSize: [uvSizeX, uvSizeY],
-      color: [color.red, color.green, color.blue, color.alpha],
-      page: [page],
-    }),
-    programBuffers(bitmapSchema, transformMode),
-    transformMode,
-    allocationMode,
-  );
-}
-
-function msdfProgram(
-  techniqueId: RenderTechniqueId,
-  programId: RenderProgramId,
-  transformMode: ThreeTransformMode,
-  allocationMode: ThreeAllocationMode,
-): PolicyProgram {
-  const p = techniqueProgram(msdfSchema, { system: policySystemBuffers(transformMode) });
-  const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
-  const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } = p.binding;
-  const zero = f32.const(0);
-  // Effects default to disabled; the page occupies the shader contract's fourth f32 lane.
-  return createProgram(
-    techniqueId,
-    programId,
-    p.compile({
-      rect: [
-        f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
-        f32.sub(blockOrigin, f32.mul(bearingY, fontSize)),
-        f32.mul(width, fontSize),
-        f32.mul(height, fontSize),
-      ],
-      uvRect: [uvOriginX, uvOriginY, uvSizeX, uvSizeY],
-      uvBounds: [uvOriginX, uvOriginY, uvMaxX, uvMaxY],
-      color: [color.red, color.green, color.blue, color.alpha],
-      effectA: [zero, zero, zero, zero],
-      effectB: [zero, zero, zero, zero],
-      page: [zero, zero, zero, u32.toF32(page)],
-    }),
-    programBuffers(msdfSchema, transformMode),
-    transformMode,
-    allocationMode,
-  );
-}
-
-function slugProgram(
-  techniqueId: RenderTechniqueId,
-  programId: RenderProgramId,
-  transformMode: ThreeTransformMode,
-  allocationMode: ThreeAllocationMode,
-): PolicyProgram {
-  const p = techniqueProgram(slugSchema, { inverseFontSize: true, system: policySystemBuffers(transformMode) });
-  const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
-  const inverseFontSize = p.semantics.inverseFontSize;
-  if (inverseFontSize === undefined) throw new TypeError('the Slug program declares inverseFontSize');
-  const {
-    bearingX,
-    bearingY,
-    width,
-    height,
-    bandScaleX,
-    bandScaleY,
-    bandOffsetX,
-    bandOffsetY,
-    curveStart,
-    headerStart,
-    referenceStart,
-    bandStart,
-    horizontalBands,
-    verticalBands,
-  } = p.binding;
-  const zeroF32 = f32.const(0);
-  const zeroU32 = u32.const(0);
-  // `rect` is layout pixels; `planeRect` preserves the baked em-space hull coordinates.
-  return createProgram(
-    techniqueId,
-    programId,
-    p.compile({
-      rect: [
-        f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
-        f32.sub(blockOrigin, f32.mul(bearingY, fontSize)),
-        f32.mul(width, fontSize),
-        f32.mul(height, fontSize),
-      ],
-      planeRect: [bearingX, bearingY, width, height],
-      bandTransform: [bandScaleX, bandScaleY, bandOffsetX, bandOffsetY],
-      color: [color.red, color.green, color.blue, color.alpha],
-      inverseFontSize: [inverseFontSize, zeroF32, zeroF32, zeroF32],
-      tableStarts: [curveStart, headerStart, referenceStart, bandStart],
-      bandCounts: [horizontalBands, verticalBands, zeroU32, zeroU32],
-    }),
-    programBuffers(slugSchema, transformMode),
-    transformMode,
-    allocationMode,
-  );
 }
 
 /**

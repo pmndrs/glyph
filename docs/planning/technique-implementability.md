@@ -14,9 +14,9 @@ generated:
 
 ## Status and decision
 
-The portable contract, external TypeGPU example, and generic Three variant/material path are implemented on this branch.
-Bitmap, MSDF, and Slug keep their existing renderer-owned fallback until their resource multiplicity has a portable
-contract; the example, browser proof, and lab exercise the reusable path without pretending that gap is solved.
+The portable contract, external TypeGPU example, generic Three variant/material path, and first-party Bitmap, MSDF, and
+Slug portable plans are implemented. Repeated resource cardinality and fixed-member resource groups close the former
+first-party multiplicity gap without moving renderer logic into the technique contract.
 
 The locked decision is:
 
@@ -26,7 +26,10 @@ Three may expose a renderer-local `createMaterial(context)` helper. That helper 
 
 ## What is already fixed
 
-`TextEngineHost` accepts arbitrary binding and policy bytes (`packages/glyph/src/core/host.ts`), and the core now resolves portable technique programs before the built-in fallback (`packages/glyph/src/core/font-binding.ts`). This fixes the old asymmetry where Paragraph called `loadedFontBindingBytes` without the lookup that Three performed.
+`TextEngineHost` accepts arbitrary binding and policy bytes (`packages/glyph/src/core/host.ts`), and core resolves every
+registered portable technique program through one binding compiler (`packages/glyph/src/core/font-binding.ts`). This
+fixes the old asymmetry where Paragraph called `loadedFontBindingBytes` without the lookup that Three performed and
+removes the duplicate first-party binding compilers.
 
 The current branch also provides:
 
@@ -40,7 +43,7 @@ The current branch also provides:
 
 Those boundaries remain. The work below must not move Three policy numbers, Three materials, or shader-language types into `/core`.
 
-## Source audit: closed and deferred holes
+## Source audit: closed holes
 
 ### The primitive is not universally a quad
 
@@ -48,10 +51,10 @@ This branch closes the reusable path. The implementation carries explicit geomet
 geometry payload alongside the existing synthetic-quad path, and the generic Three executor retains both supplied and
 generated geometry across compatible updates.
 
-The renderer-owned first-party fallback still creates a `unitQuad()` per draw. Per-glyph records are attached as
+The Three executor creates a `unitQuad()` for a `synthetic-quad` draw. Per-glyph records are attached as
 `StorageInstancedBufferAttribute`s and `instanceCount` selects the records; the geometry is shared by the instances in
-that draw, not globally across meshes. The generic executor applies the same per-draw ownership while adding supplied
-geometry, indexed ranges, topology-aware conversion, and reuse keys.
+that draw, not globally across meshes. The same generic executor handles supplied geometry, indexed ranges,
+topology-aware conversion, and reuse keys.
 
 The current Slug path is analytic: its curve, band, header, and reference data are evaluated by the shader. It still consumes the unit quad's `positionLocal`; it does not currently emit baked hull vertices. “Hull” may describe the analytic outline representation, but it is not the current draw primitive.
 
@@ -70,21 +73,29 @@ The change is not to ban `createMaterial(context)`. The change is to place it co
 
 The context must consume logical names, not require a technique helper to hard-code host policy numbers.
 
-The current built-in path explains why importing `/three` does not register Bitmap, MSDF, or Slug today. `ThreeTextEngineCoordinator` snapshots only the custom plan-program registry (`packages/glyph/src/three/engine-runtime.ts:81-95`); absent a custom entry, `#registerResources` handles the three first-party data shapes directly (`:220-238`) and `engine-plan-target.ts:773-787` dispatches to the built-in material functions by technique id. This is the existing raster path, not an unused or unsupported path. The generic migration should preserve it until each built-in is registered through the new contract, after which the `/three` convenience entrypoint may register all Glyph-owned variants while individual/manual registration remains available for extensions.
+Bitmap, MSDF, and Slug now register their renderer-neutral plans from their raster modules and use the same compiled-font
+and named portable-resource path as extensions. Three still dispatches to its built-in material functions by technique
+identity, which is renderer-owned shader/material selection rather than a second policy or binding implementation.
 
 ### Portable resources are too opaque for a generic renderer
 
 This branch closes the constrained core representation and generic Three consumption. It validates resource identity,
-payload ownership, and geometry accessors before a device is touched. The first-party techniques remain on their existing
-renderer-owned fallback until the portable contract can express repeated or grouped resources.
+payload ownership, cardinality, group shape, and geometry accessors before a device is touched. First-party techniques use
+the same path.
 
 `registerRasterPlanProgram` infers the compiler's authored resource input at the real `retain()` call site. Compilation
 normalizes reserved payload kinds into owned portable data before exposing `CompiledRasterFont`; no renderer-owned
 `realizeResource` callback crosses the portable or Three program contracts.
 
-The portable resource payload must become self-describing enough for generic realization: buffer or texture class, element/sample format, dimensions or record layout, array-texture layer count where applicable, usage, and immutable bytes or geometry data. This is a small vocabulary derived from the resources the shipped techniques actually use; it is not a universal GPU object model. The reserved texture vocabulary includes both `texture` and `texture-array`; the latter is required by Bitmap and MSDF. Slug's page data is currently three independently shaped 2-D resources per page, so it remains `texture` until a grouped page payload is designed.
+The portable resource payload is self-describing enough for generic realization: buffer or texture class, element/sample
+format, dimensions or record layout, array-texture layer count where applicable, usage, immutable bytes or geometry data,
+and a fixed-member group of those leaf payloads. This is a small vocabulary derived from the shipped techniques, not a
+universal GPU object model.
 
-Resource multiplicity is a separate migration contract. MSDF fits one retained atlas resource; Bitmap needs one resource per strike under one logical atlas; Slug needs one grouped page record for curves, headers, and references. The current one-declared-name/one-retained-key operation does not express those first-party shapes, and `texture-array` alone does not solve that multiplicity. Layer 5 must either add an ordered/grouped portable payload or keep the affected first-party paths on their renderer-owned fallback until that contract is explicit.
+Resource declarations carry `cardinality: 'one' | 'many'`. Bitmap retains one atlas payload per strike under its repeated
+render role. MSDF retains one group containing its atlas and pixel-range buffer. Slug retains repeated page groups whose
+fixed members are curves, headers, and references. Nested groups and repeated geometry are rejected, and every declared
+role must retain the cardinality its schema promises.
 
 The existing `enginePrimitive` wire record has no geometry-resource field (`packages/glyph/src/generated/text-shaper-abi.ts:373-394`). Do not add an ad hoc renderer reference to that record. A supplied geometry declaration names a geometry resource in the technique contract; the compiled resource table carries its immutable bytes, vertex accessors, attributes, indices, topology, and draw range. The renderer combines that declaration with the primitive's existing record span. Geometry never declares an instance count or an instance-rate accessor: the primitive's retained `recordCount` is the sole draw-instance authority, and named policy buffers carry per-record data. Indexed geometry uses its index count and draw range. `synthetic-quad` remains the no-resource path.
 
@@ -179,7 +190,8 @@ Define variant lifecycle explicitly. A renderer or application selects one imple
 
 The generic path must support `createMaterial(context)`. Resolve the portable plan independently of the Three variant: a portable program without a compatible Three implementation must fail with an explicit unsupported-variant diagnostic, not fall through to the first-party resource resolver. What disappears is the requirement that a portable technique register a Three-specific program containing policy interpretation, resource ownership, and an opaque callback contract.
 
-First-party Bitmap, MSDF, and Slug keep their renderer-owned fallback in this change. Bitmap needs repeated strike atlases and Slug needs grouped page resources; the one-name/one-key portable compiler cannot represent either honestly, and migrating MSDF alone would leave two execution paths without deleting the fallback. Their existing TSL shader logic remains authoritative until a grouped/repeated resource contract is designed and reviewed.
+First-party Bitmap, MSDF, and Slug use the portable plan/compiler path. Their TSL shader and material logic remains in
+Three, where renderer realization belongs; no first-party binding/resource fallback remains.
 
 ### 4. Reorganize and implement `glyph-example-raster`
 
@@ -229,7 +241,7 @@ Keep the integrated history atomic and green in dependency order:
 2. generic Three variant selection, named binding/material context, primitive realization, draw reuse, and decoration preservation;
 3. portable/Three example package split, registration entrypoints, and shader-variant compatibility fixture;
 4. renderer-neutral example device plus the real font/bake/non-empty-draw acceptance path;
-5. Bitmap/MSDF/Slug fallback equivalence, docs/README/report/decision-register updates, benchmark proof, and generated digests.
+5. Bitmap/MSDF/Slug portable resource migration, docs/README/report/decision-register updates, benchmark proof, and generated digests.
 
 Each commit must pass its focused checks before the next commit is integrated; the final branch must pass every affected package check, `docs:check`, and the repository check. Use `gh stack` for the single PR branch and never merge to `main`. If the base moves, rebase with `git rebase --onto <new-base> <old-base> <branch>`; never use `--skip`. Resolve generated `source_digest` conflicts only with `mise exec -- pnpm scripts run docs:update`.
 
@@ -253,6 +265,7 @@ Done means all of the following are true:
 - Three may use a `createMaterial(context)` helper, but the portable plan does not depend on it;
 - the example renderer consumes the portable contract through the example's `/typegpu` realization, without Three or TSL imports;
 - Bitmap, MSDF, Slug, decoration, and the example preserve explicit wire primitive handling plus declared geometry kinds;
+- Bitmap repeated strikes and Slug repeated grouped pages compile through the portable resource contract;
 - `synthetic-quad` rendering uses one generated geometry per draw, shared by its instanced records;
 - `quad` rendering can use technique-supplied GLB-like geometry buffers;
 - supplied geometry can arrive as portable GLB-like buffers with vertex attributes, typed accessors, optional indices, topology, and draw range, while the plan record span remains the sole instance-count authority;
@@ -266,6 +279,5 @@ Done means all of the following are true:
 ## Cost
 
 The reusable plan work is complete as a medium-to-large renderer refactor across core metadata, generic Three realization,
-two example packages, tests, benchmarks, and docs. The deferred first-party migration needs a separate repeated/grouped
-resource contract before Bitmap, MSDF, or Slug can leave their renderer-owned fallback honestly. This work did not rewrite
-shaping, baking, layout, or the Wasm engines.
+first-party portable plans, two example packages, tests, benchmarks, and docs. This work did not rewrite shaping, baking,
+layout, or the Wasm engines.

@@ -2,8 +2,55 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
+import { id } from '../../dist/core/render-policy.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
+
+const SESSION_ID = id('session', 'engine-frame-wire/session');
+const POLICY_ID = id('policy', 'engine-frame-wire/policy');
+const FONT_STACK_ID = id('font-stack', 'engine-frame-wire/font-stack');
+const PARAGRAPH_ID = id('paragraph', 'engine-frame-wire/paragraph');
+const STYLE_ID = id('style', 'engine-frame-wire/style');
+const FLOW_THREAD_ID = id('flow-thread', 'engine-frame-wire/flow-thread');
+const REGION_ID = id('region', 'engine-frame-wire/region');
+const EXCLUSION_ID = id('exclusion', 'engine-frame-wire/exclusion');
+const INLINE_OBJECT_ID = id('inline-object', 'engine-frame-wire/inline-object');
+const MATERIAL_ID = id('material', 'engine-frame-wire/material');
+const RESOURCE_ID = id('resource', 'engine-frame-wire/resource');
+
+test('frame compiler rejects raw and cross-domain numeric identities before allocation', () => {
+  const valid = {
+    sessionId: SESSION_ID,
+    policyHandle: POLICY_ID,
+    expectedEngineRevision: 0,
+    consumedPlanRevision: 0,
+    acknowledgedPublicationGeneration: 0,
+    limits: {
+      maxParagraphs: 1,
+      maxClusters: 1,
+      maxLines: 1,
+      maxRegions: 1,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 1,
+      maxOutputBytes: 1024,
+    },
+  };
+  assert.throws(() => compileTextEngineFrameUpdate({ ...valid, sessionId: 1 }), /must come from id\('session'/);
+  assert.throws(() => compileTextEngineFrameUpdate({ ...valid, sessionId: POLICY_ID }), /must come from id\('session'/);
+  assert.throws(
+    () => compileTextEngineFrameUpdate({ ...valid, capabilitySet: 1 }),
+    /must come from selectPolicyCapabilitySet/,
+  );
+  assert.throws(
+    () =>
+      compileTextEngineFrameUpdate({
+        ...valid,
+        paragraphMutations: [{ opcode: 'remove', paragraphId: 1 }],
+      }),
+    /must come from id\('paragraph'/,
+  );
+});
 
 test('production frame compiler preserves the established benchmark request bytes', async () => {
   const abi = textShaperAbi;
@@ -11,18 +58,22 @@ test('production frame compiler preserves the established benchmark request byte
   const units = Array.from({ length: text.length }, (_, index) => text.charCodeAt(index));
   const limits = { maxClusters: 8, maxLines: 8, maxOutputBytes: 65_536 };
   const expected = engineFrameUpdateBytes(abi, {
-    sessionId: 5,
-    policyHandle: 11,
-    fontStackHandle: 7,
+    sessionId: SESSION_ID,
+    policyHandle: POLICY_ID,
+    fontStackHandle: FONT_STACK_ID,
+    paragraphId: PARAGRAPH_ID,
+    styleId: STYLE_ID,
+    flowThreadId: FLOW_THREAD_ID,
+    regionId: REGION_ID,
+    transformIndex: 1,
     textMutation: { start: 0, deleteCount: 0, insert: units },
     style: { textEnd: text.length, fontSize: 24, lineHeight: 1.2, rasterPixelRatio: 2 },
     geometry: { width: 320, height: 180, maxLines: 8, revision: 9 },
     limits,
   });
   const actual = compileTextEngineFrameUpdate({
-    sessionId: 5,
-    policyHandle: 11,
-    capabilitySet: 1,
+    sessionId: SESSION_ID,
+    policyHandle: POLICY_ID,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
     acknowledgedPublicationGeneration: 0,
@@ -34,24 +85,24 @@ test('production frame compiler preserves the established benchmark request byte
       maxInlineObjects: 1,
       maxSlotsPerBand: 1,
     },
-    paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
-    textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: text }],
+    paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 0 }],
+    textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: text }],
     styleMutations: [
       {
         opcode: 'upsert',
-        paragraphId: 1,
-        styleId: 1,
+        paragraphId: PARAGRAPH_ID,
+        styleId: STYLE_ID,
         cascadeOrder: 0,
         start: 0,
         end: text.length,
         root: true,
-        value: { fontStackHandle: 7, fontSize: 24, lineHeight: 1.2, rasterPixelRatio: 2 },
+        value: { fontStackHandle: FONT_STACK_ID, fontSize: 24, lineHeight: 1.2, rasterPixelRatio: 2 },
       },
     ],
     constraints: [
       {
-        paragraphId: 1,
-        flowThreadId: 1,
+        paragraphId: PARAGRAPH_ID,
+        flowThreadId: FLOW_THREAD_ID,
         geometryRevision: 0,
         width: 320,
         height: 180,
@@ -73,8 +124,9 @@ test('production frame compiler preserves the established benchmark request byte
     ],
     regions: [
       {
-        id: 1,
+        id: REGION_ID,
         geometryRevision: 9,
+        transformIndex: 1,
         shape: 'rectangle',
         exclusionStart: 0,
         exclusionCount: 0,
@@ -97,9 +149,8 @@ test('production frame compiler preserves the established benchmark request byte
 test('production frame compiler carries full style, polygon, exclusion, and inline-object payloads', async () => {
   const abi = textShaperAbi;
   const bytes = compileTextEngineFrameUpdate({
-    sessionId: 1,
-    policyHandle: 2,
-    capabilitySet: 1,
+    sessionId: SESSION_ID,
+    policyHandle: POLICY_ID,
     expectedEngineRevision: 3,
     consumedPlanRevision: 4,
     acknowledgedPublicationGeneration: 5,
@@ -115,18 +166,18 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
       maxSlotsPerBand: 3,
       maxOutputBytes: 1_048_576,
     },
-    paragraphMutations: [{ opcode: 'upsert', paragraphId: 3, order: 2 }],
+    paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 2 }],
     styleMutations: [
       {
         opcode: 'upsert',
-        paragraphId: 3,
-        styleId: 9,
+        paragraphId: PARAGRAPH_ID,
+        styleId: STYLE_ID,
         cascadeOrder: 2,
         start: 1,
         end: 5,
         value: {
-          fontStackHandle: 7,
-          materialId: 8,
+          fontStackHandle: FONT_STACK_ID,
+          materialId: MATERIAL_ID,
           language: 'ja',
           features: [{ tag: 'kern', value: 1, start: 1, end: 5 }],
           fontSize: 18,
@@ -152,8 +203,9 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
     constraints: [],
     regions: [
       {
-        id: 1,
+        id: REGION_ID,
         geometryRevision: 1,
+        transformIndex: 1,
         shape: 'polygon',
         vertices: [
           { inline: 0, block: 0 },
@@ -176,8 +228,8 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
     ],
     exclusions: [
       {
-        id: 2,
-        regionId: 1,
+        id: EXCLUSION_ID,
+        regionId: REGION_ID,
         geometryRevision: 1,
         shape: 'polygon',
         vertices: [
@@ -196,12 +248,12 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
     ],
     inlineObjects: [
       {
-        paragraphId: 3,
-        id: 3,
+        paragraphId: PARAGRAPH_ID,
+        id: INLINE_OBJECT_ID,
         contentRevision: 1,
         textOffset: 4,
-        materialId: 8,
-        resourceId: 10,
+        materialId: MATERIAL_ID,
+        resourceId: RESOURCE_ID,
         resourceGeneration: 1,
         inlineExtent: 12,
         blockExtent: 14,
@@ -228,16 +280,16 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   const styleOffset = header.getUint32(request.styleMutationsOffset, true);
   const style = abi.layouts.engineStyleMutation;
   const styleView = new DataView(bytes.buffer, bytes.byteOffset + styleOffset, style.size);
-  assert.equal(styleView.getUint32(style.paragraphId, true), 3);
+  assert.equal(styleView.getUint32(style.paragraphId, true), PARAGRAPH_ID);
   assert.equal(styleView.getUint8(style.direction), 2);
   assert.equal(styleView.getUint16(style.languageLength, true), 2);
   assert.equal(styleView.getUint16(style.featureCount, true), 1);
-  assert.equal(styleView.getUint32(style.materialId, true), 8);
+  assert.equal(styleView.getUint32(style.materialId, true), MATERIAL_ID);
   assert.equal(styleView.getUint32(style.decorationFlags, true), 13);
   const inlineObjectOffset = header.getUint32(request.inlineObjectsOffset, true);
   const inlineObject = abi.layouts.engineInlineObject;
   const inlineObjectView = new DataView(bytes.buffer, bytes.byteOffset + inlineObjectOffset, inlineObject.size);
-  assert.equal(inlineObjectView.getUint32(inlineObject.paragraphId, true), 3);
+  assert.equal(inlineObjectView.getUint32(inlineObject.paragraphId, true), PARAGRAPH_ID);
 });
 
 test('style payloads stay in per-record order when several paragraphs carry language and features', async () => {
@@ -252,13 +304,13 @@ test('style payloads stay in per-record order when several paragraphs carry lang
   const styleMutation = (paragraphId) => ({
     opcode: 'upsert',
     paragraphId,
-    styleId: 1,
+    styleId: id('style', `engine-frame-wire/style/${paragraphId}`),
     cascadeOrder: 0,
     start: 0,
     end: 5,
     root: true,
     value: {
-      fontStackHandle: 1,
+      fontStackHandle: FONT_STACK_ID,
       language: 'en',
       features: [
         { tag: 'kern', value: 1, start: 0, end: 5 },
@@ -269,11 +321,10 @@ test('style payloads stay in per-record order when several paragraphs carry lang
       rasterPixelRatio: 1,
     },
   });
-  const paragraphIds = [1, 2, 3, 4];
+  const paragraphIds = Array.from({ length: 4 }, (_, index) => id('paragraph', `engine-frame-wire/paragraph/${index}`));
   const bytes = compileTextEngineFrameUpdate({
-    sessionId: 1,
-    policyHandle: 2,
-    capabilitySet: 1,
+    sessionId: SESSION_ID,
+    policyHandle: POLICY_ID,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
     acknowledgedPublicationGeneration: 0,
@@ -321,8 +372,8 @@ test('style payloads stay in per-record order when several paragraphs carry lang
 test('production frame compiler encodes typography controls and their defaults', async () => {
   const abi = textShaperAbi;
   const constraint = (typography) => ({
-    paragraphId: 1,
-    flowThreadId: 1,
+    paragraphId: PARAGRAPH_ID,
+    flowThreadId: FLOW_THREAD_ID,
     geometryRevision: 1,
     width: 320,
     height: 180,
@@ -344,9 +395,8 @@ test('production frame compiler encodes typography controls and their defaults',
   });
   const compile = (typography) =>
     compileTextEngineFrameUpdate({
-      sessionId: 1,
-      policyHandle: 2,
-      capabilitySet: 1,
+      sessionId: SESSION_ID,
+      policyHandle: POLICY_ID,
       expectedEngineRevision: 0,
       consumedPlanRevision: 0,
       acknowledgedPublicationGeneration: 0,

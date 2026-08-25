@@ -8,6 +8,7 @@ import type {
   TextEngineRegion,
   TextEngineStyleValue,
 } from './core/frame-wire.js';
+import { id, type ParagraphId, type StyleId } from './core/render-policy.js';
 
 /**
  * The single implementation of the paragraph-to-engine encodings shared by every host:
@@ -16,13 +17,6 @@ import type {
  * incremental text edits through the mutation helpers, so one host cannot drift from
  * another in what the engine is asked to flow.
  */
-
-/**
- * Column region ids stride the high byte so every paragraph's extra columns
- * stay unique in the frame's region table while column zero keeps the
- * paragraph id itself — the single-column request bytes are unchanged.
- */
-export const COLUMN_REGION_ID_STRIDE = 0x01_00_00_00;
 
 export function normalizedColumns(contentBox: ParagraphContentBox | undefined): {
   count: number;
@@ -50,7 +44,8 @@ export function normalizedColumns(contentBox: ParagraphContentBox | undefined): 
 }
 
 export function compileEngineGeometry(
-  paragraphId: number,
+  paragraphId: ParagraphId,
+  transformIndex: number,
   geometryRevision: number,
   contentBox: ParagraphContentBox | undefined,
   regionStart: number,
@@ -69,7 +64,7 @@ export function compileEngineGeometry(
   return {
     constraint: {
       paragraphId,
-      flowThreadId: paragraphId,
+      flowThreadId: id('flow-thread', `paragraph/${paragraphId}`),
       geometryRevision,
       width: width.size,
       height: height.size,
@@ -97,9 +92,9 @@ export function compileEngineGeometry(
       const inlineStart = column * (columnWidth + columns.gap);
       const columnInlineEnd = column === columns.count - 1 ? inlineEnd : inlineStart + columnWidth;
       return {
-        id: paragraphId + COLUMN_REGION_ID_STRIDE * column,
+        id: id('region', `paragraph/${paragraphId}/column/${column}`),
         geometryRevision,
-        transformIndex: paragraphId,
+        transformIndex,
         shape: 'rectangle' as const,
         exclusionStart: 0,
         exclusionCount: 0,
@@ -116,6 +111,11 @@ export function compileEngineGeometry(
       };
     }),
   };
+}
+
+export function engineStyleId(paragraphId: ParagraphId, index: number): StyleId {
+  if (!Number.isSafeInteger(index) || index < 1) throw new RangeError('style index must be a positive integer');
+  return id('style', `paragraph/${paragraphId}/style/${index}`);
 }
 
 export function axis(value: ParagraphContentBox['width'] | undefined): {
