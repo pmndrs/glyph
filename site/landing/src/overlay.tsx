@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { Tooltip } from './tooltip';
+
 const INSTALL = 'npm install @pmndrs/glyph';
 const RESET_AFTER = 1600;
 
@@ -62,20 +64,24 @@ export function Overlay() {
   return (
     <div className="overlay">
       <nav className="links">
-        <button className={`link link-icon${copied ? ' is-copied' : ''}`} onClick={copy} title={INSTALL} type="button">
-          <span className="mark-swap">{copied ? <CheckMark /> : <NpmMark />}</span>
-          <span className="sr-only">Copy install command</span>
-        </button>
+        <Tooltip label={copied ? 'copied to clipboard' : INSTALL}>
+          <button className={`link link-icon${copied ? ' is-copied' : ''}`} onClick={copy} type="button">
+            <span className="mark-swap">{copied ? <CheckMark /> : <NpmMark />}</span>
+            <span className="sr-only">Copy install command</span>
+          </button>
+        </Tooltip>
 
-        <a
-          aria-label="glyph on GitHub"
-          className="link link-icon"
-          href="https://github.com/pmndrs/glyph"
-          rel="noreferrer"
-          target="_blank"
-        >
-          <GitHubMark />
-        </a>
+        <Tooltip label="github.com/pmndrs/glyph">
+          <a
+            aria-label="glyph on GitHub"
+            className="link link-icon"
+            href="https://github.com/pmndrs/glyph"
+            rel="noreferrer"
+            target="_blank"
+          >
+            <GitHubMark />
+          </a>
+        </Tooltip>
 
         <a className="link link-cta" href="/docs/getting-started/introduction">
           Get Started <span aria-hidden="true">→</span>
