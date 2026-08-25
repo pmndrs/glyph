@@ -56,25 +56,6 @@
       ]
     },
     {
-      "chars": "ئاحرسفنهويٹپ",
-      "glyphs": 12,
-      "name": "arabic",
-      "points": [
-        "U+0626",
-        "U+0627",
-        "U+062D",
-        "U+0631",
-        "U+0633",
-        "U+0641",
-        "U+0646",
-        "U+0647",
-        "U+0648",
-        "U+064A",
-        "U+0679",
-        "U+067E"
-      ]
-    },
-    {
       "chars": "אהוטירשת",
       "glyphs": 8,
       "name": "hebrew",
@@ -159,12 +140,6 @@
       "points": ["U+1780", "U+179A", "U+179F", "U+17A2", "U+17D2"]
     },
     {
-      "chars": "စလာုံး",
-      "glyphs": 6,
-      "name": "myanmar",
-      "points": ["U+1005", "U+101C", "U+102C", "U+102F", "U+1036", "U+1038"]
-    },
-    {
       "chars": "აოს",
       "glyphs": 3,
       "name": "georgian",
@@ -197,8 +172,8 @@
   ],
   "generated": "site/scripts/bake-chorus.mts",
   "totals": {
-    "faces": 22,
-    "points": 161,
-    "words": 49
+    "faces": 20,
+    "points": 143,
+    "words": 45
   }
 }
