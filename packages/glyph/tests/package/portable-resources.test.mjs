@@ -168,7 +168,7 @@ test('geometry views and accessors must stay inside the immutable bytes', () => 
         'mesh',
         mutate(quad, (g) => (g.views[1].length = 13)),
       ),
-    (error) => error instanceof RangeError && error.message.includes('buffer view 1 exceeds its 76 bytes'),
+    (error) => error instanceof RangeError && error.message.includes('buffer view 1 exceeds its 92 bytes'),
   );
   assert.throws(
     () =>
@@ -350,7 +350,7 @@ test('indices must be scalar integers and draw ranges must fit the addressed str
         'geometry',
         'mesh',
         mutate(quad, (g) => {
-          const indexBytes = new Uint16Array(g.bytes.buffer, g.bytes.byteOffset + 64, 6);
+          const indexBytes = new Uint16Array(g.bytes.buffer, g.bytes.byteOffset + 80, 6);
           indexBytes[0] = 4;
         }),
       ),
