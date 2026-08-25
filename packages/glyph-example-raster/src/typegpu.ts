@@ -39,8 +39,6 @@ export const glyphExampleTypeGpuVariant: GlyphExampleShaderVariant<'typegpu'> = 
   buffers: glyphExampleShaderContract.buffers,
   resources: glyphExampleShaderContract.resources,
   outputs: glyphExampleShaderContract.outputs,
-  resource: glyphExampleShaderContract.resource,
-  geometryResource: glyphExampleShaderContract.geometryResource,
 });
 
 export const glyphExampleVertex: TgpuFn<

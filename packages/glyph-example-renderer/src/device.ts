@@ -9,6 +9,7 @@ import {
   type RenderProgramId,
   type RenderTechniqueId,
   type TechniqueGeometryDeclaration,
+  type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
   type TextEngineBufferRecord,
   type TextEnginePatchRecord,
@@ -31,11 +32,6 @@ export interface ExampleRendererShaderBuffer {
 }
 
 type ShaderResourceName<Resources extends TechniqueResourceDeclarations> = Extract<keyof Resources, string>;
-type ShaderGeometryResource<Geometry extends TechniqueGeometryDeclaration> = Geometry extends {
-  readonly resource: infer Name extends string;
-}
-  ? Name
-  : undefined;
 
 /** Renderer-facing metadata shared by shader languages that realize one technique schema. */
 export interface ExampleRendererShaderVariant<
@@ -50,9 +46,6 @@ export interface ExampleRendererShaderVariant<
   readonly buffers: Readonly<Record<string, ExampleRendererShaderBuffer>>;
   readonly resources: Resources;
   readonly outputs: Readonly<Record<string, string>>;
-  /** The per-glyph resource selected by each primitive row. */
-  readonly resource: ShaderResourceName<Resources>;
-  readonly geometryResource: ShaderGeometryResource<Geometry>;
 }
 
 export interface ExampleRendererShader<Variant extends ExampleRendererShaderVariant = ExampleRendererShaderVariant> {
@@ -80,6 +73,13 @@ export interface ExamplePendingResources {
 /** One fully validated publication whose commit only swaps prepared owned state. */
 export interface ExamplePendingSubmission {
   commit(): void;
+}
+
+/** Candidate recording state used by a concrete backend to stage work before publication. */
+export interface RecordingPendingSubmission extends ExamplePendingSubmission {
+  readonly realizedDraws: readonly ExampleRealizedDraw[];
+  readonly buffersByName: ReadonlyMap<string, Uint8Array>;
+  publish(beforeCommit: () => void): boolean;
 }
 
 type GlyphExampleRendererShader = ExampleRendererShader<typeof glyphExampleTypeGpuVariant>;
@@ -122,7 +122,7 @@ export interface ExampleRendererDevice {
   prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission;
 }
 
-/** A concrete device used by the acceptance path; a real backend can implement the same seam. */
+/** Deterministic CPU oracle for plan validation and backend tests. */
 export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   readonly shader: ExampleRendererShader;
   readonly resources: Map<number, unknown> = new Map();
@@ -135,12 +135,13 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   readonly realizedDraws: ExampleRealizedDraw[] = [];
   readonly #resourceNames = new Map<number, string>();
   readonly #resourceGenerations = new Map<number, number>();
-  readonly #resourceIds = new Map<string, number>();
+  readonly #resourceIds = new Map<string, Set<number>>();
   readonly #planResources = new Map<number, RetainedExamplePlanResource>();
   readonly #retainedBuffers = new Map<string, RetainedExampleBuffer>();
   readonly #techniqueWireId: RenderTechniqueId;
   readonly #programWireId: RenderProgramId;
   readonly #programVariant: number;
+  readonly #renderResourceName: string;
   #resourceRevision = 0;
   #submissionRevision = 0;
 
@@ -148,6 +149,8 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     assertExampleRendererShader(shader);
     this.shader = shader;
     const identities = new RenderWireIdentityRegistry();
+    const portable = resolveRasterPlanProgram(shader.variant.techniqueId)!;
+    this.#renderResourceName = portable.schema.render.resource!;
     this.#techniqueWireId = identities.techniqueId(shader.variant.techniqueId);
     this.#programWireId = identities.programId(shader.variant.techniqueId, shader.programNamespace, shader.programName);
     this.#programVariant = unsignedInteger(shader.programVariant, 0xffff, 'shader program variant');
@@ -176,7 +179,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     });
   }
 
-  prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission {
+  prepareSubmission(drawList: ExampleDrawList): RecordingPendingSubmission {
     assertDrawList(drawList);
     const resourceRevision = this.#resourceRevision;
     const submissionRevision = this.#submissionRevision;
@@ -189,14 +192,21 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       drawList.retirements.length !== 0;
     if (!replacesRenderState) {
       let active = true;
+      const publish = (beforeCommit: () => void): boolean => {
+        if (!active) return false;
+        active = false;
+        if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision)
+          return false;
+        beforeCommit();
+        this.submissions.push(drawList);
+        this.#submissionRevision += 1;
+        return true;
+      };
       return Object.freeze({
-        commit: () => {
-          if (!active) return;
-          active = false;
-          if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return;
-          this.submissions.push(drawList);
-          this.#submissionRevision += 1;
-        },
+        realizedDraws: Object.freeze([...this.realizedDraws]),
+        buffersByName: new Map(this.buffersByName),
+        publish,
+        commit: () => void publish(() => {}),
       });
     }
     const buffers = prepareBufferState(
@@ -228,20 +238,26 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       this.#realizeDraw(draw, drawList, buffers, resources, planResources.retained),
     );
     let active = true;
+    const publish = (beforeCommit: () => void): boolean => {
+      if (!active) return false;
+      active = false;
+      if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return false;
+      beforeCommit();
+      replaceMap(this.#retainedBuffers, buffers.retained);
+      replaceMap(this.buffers, buffers.activeById);
+      replaceMap(this.buffersByName, buffers.activeByName);
+      replaceMap(this.#planResources, planResources.retained);
+      this.retirements.push(...planResources.retiredIds);
+      this.realizedDraws.splice(0, this.realizedDraws.length, ...realized);
+      this.submissions.push(drawList);
+      this.#submissionRevision += 1;
+      return true;
+    };
     return Object.freeze({
-      commit: () => {
-        if (!active) return;
-        active = false;
-        if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return;
-        replaceMap(this.#retainedBuffers, buffers.retained);
-        replaceMap(this.buffers, buffers.activeById);
-        replaceMap(this.buffersByName, buffers.activeByName);
-        replaceMap(this.#planResources, planResources.retained);
-        this.retirements.push(...planResources.retiredIds);
-        this.realizedDraws.splice(0, this.realizedDraws.length, ...realized);
-        this.submissions.push(drawList);
-        this.#submissionRevision += 1;
-      },
+      realizedDraws: Object.freeze(realized),
+      buffersByName: new Map(buffers.activeByName),
+      publish,
+      commit: () => void publish(() => {}),
     });
   }
 
@@ -375,15 +391,15 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     const primary = planResources.get(primaryId);
     if (
       primary?.generation !== primaryGeneration ||
-      state.resourceNames.get(primary.referenceId) !== this.shader.variant.resource
+      state.resourceNames.get(primary.referenceId) !== this.#renderResourceName
     ) {
-      throw new Error(`example renderer primitive does not select primary resource "${this.shader.variant.resource}"`);
+      throw new Error(`example renderer primitive does not select primary resource "${this.#renderResourceName}"`);
     }
 
     const resources = new Map<string, unknown>();
     for (const name of Object.keys(this.shader.variant.resources)) {
       const selectedResource = selectedByName.get(name);
-      if (selectedResource === undefined || state.resourceIds.get(name) !== selectedResource.referenceId) {
+      if (selectedResource === undefined || !state.resourceIds.get(name)?.has(selectedResource.referenceId)) {
         throw new Error(`example renderer submission is missing its required "${name}" resource`);
       }
       resources.set(name, selectedResource.resource);
@@ -457,7 +473,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       geometriesByName: new Map(this.geometriesByName),
       resourceNames: new Map(this.#resourceNames),
       resourceGenerations: new Map(this.#resourceGenerations),
-      resourceIds: new Map(this.#resourceIds),
+      resourceIds: new Map([...this.#resourceIds].map(([name, ids]) => [name, new Set(ids)])),
     };
   }
 
@@ -477,7 +493,7 @@ interface ExampleResourceState {
   readonly geometriesByName: Map<string, ExampleGeometry>;
   readonly resourceNames: Map<number, string>;
   readonly resourceGenerations: Map<number, number>;
-  readonly resourceIds: Map<string, number>;
+  readonly resourceIds: Map<string, Set<number>>;
 }
 
 interface ExampleResourceEntry {
@@ -557,10 +573,6 @@ function validateResourceEntry(
   if (previousName !== undefined && previousName !== input.name) {
     throw new Error(`example renderer resource id ${id} is already bound to "${previousName}"`);
   }
-  const previousId = state.resourceIds.get(input.name);
-  if (previousId !== undefined && previousId !== id) {
-    throw new Error(`example renderer resource "${input.name}" is already bound to id ${previousId}`);
-  }
   const previousGeneration = state.resourceGenerations.get(id);
   if (previousGeneration !== undefined && generation < previousGeneration) {
     throw new Error(`example renderer resource ${id} rejects stale generation ${generation}`);
@@ -572,18 +584,16 @@ function validateResourceEntry(
     ? shader.variant.resources[input.name as keyof typeof shader.variant.resources]
     : undefined;
   if (declaration !== undefined) {
-    assertPortableResource(
-      declaration.kind,
-      input.name,
-      input.resource,
-      'format' in declaration ? declaration.format : undefined,
-      declaration.kind === 'geometry' ? declaration.attributes : undefined,
-    );
-  } else if (shader.variant.geometryResource !== input.name) {
+    const previousIds = state.resourceIds.get(input.name);
+    if (declaration.cardinality !== 'many' && previousIds !== undefined && !previousIds.has(id)) {
+      throw new Error(`example renderer resource "${input.name}" already has its singleton binding`);
+    }
+    assertDeclaredResource(declaration, input.name, input.resource);
+  } else if (shader.variant.geometry.kind === 'synthetic-quad' || shader.variant.geometry.resource !== input.name) {
     throw new Error(`example renderer shader does not declare resource "${input.name}"`);
   }
   const geometry =
-    shader.variant.geometryResource === input.name
+    shader.variant.geometry.kind !== 'synthetic-quad' && shader.variant.geometry.resource === input.name
       ? realizeGeometry(shader.variant.geometry, input.name, input.resource)
       : undefined;
   return {
@@ -595,12 +605,35 @@ function validateResourceEntry(
   };
 }
 
+function assertDeclaredResource(declaration: TechniqueResourceDeclaration, name: string, resource: unknown): void {
+  assertPortableResource(
+    declaration.kind,
+    name,
+    resource,
+    declaration.kind === 'texture' || declaration.kind === 'texture-array' ? declaration.format : undefined,
+    declaration.kind === 'geometry' ? declaration.attributes : undefined,
+  );
+  if (declaration.kind !== 'group') return;
+  assertObject(resource, `resource group "${name}"`);
+  assertObject(resource.members, `resource group "${name}" members`);
+  const expected = Object.keys(declaration.members);
+  const actual = Object.keys(resource.members);
+  if (expected.length !== actual.length || actual.some((member) => !Object.hasOwn(declaration.members, member))) {
+    throw new TypeError(`resource group "${name}" members do not match its shader declaration`);
+  }
+  for (const member of expected) {
+    assertDeclaredResource(declaration.members[member]!, `${name}.${member}`, resource.members[member]);
+  }
+}
+
 function absorbResourceEntry(state: ExampleResourceState, entry: ExampleResourceEntry): void {
   state.resources.set(entry.id, entry.resource);
   state.resourcesByName.set(entry.name, entry.resource);
   state.resourceNames.set(entry.id, entry.name);
   state.resourceGenerations.set(entry.id, entry.generation);
-  state.resourceIds.set(entry.name, entry.id);
+  const ids = state.resourceIds.get(entry.name) ?? new Set<number>();
+  ids.add(entry.id);
+  state.resourceIds.set(entry.name, ids);
   if (entry.geometry !== undefined) state.geometriesByName.set(entry.name, entry.geometry);
 }
 
@@ -615,9 +648,16 @@ function retireResourceState(state: ExampleResourceState, retirement: TextEngine
   state.resourceGenerations.delete(id);
   state.resourceNames.delete(id);
   if (name !== undefined) {
-    state.resourcesByName.delete(name);
-    state.geometriesByName.delete(name);
-    if (state.resourceIds.get(name) === id) state.resourceIds.delete(name);
+    const ids = state.resourceIds.get(name);
+    ids?.delete(id);
+    if (ids?.size === 0) {
+      state.resourceIds.delete(name);
+      state.resourcesByName.delete(name);
+      state.geometriesByName.delete(name);
+    } else if (ids !== undefined) {
+      const replacement = ids.values().next().value as number | undefined;
+      if (replacement !== undefined) state.resourcesByName.set(name, state.resources.get(replacement));
+    }
   }
   return true;
 }
@@ -1086,17 +1126,12 @@ function assertExampleRendererShader(shader: ExampleRendererShader): void {
     }
   }
   assertObject(shader.variant.resources, 'shader resources');
-  if (
-    typeof shader.variant.resource !== 'string' ||
-    !Object.hasOwn(shader.variant.resources, shader.variant.resource)
-  ) {
-    throw new TypeError(`example renderer shader primary resource "${shader.variant.resource}" is not declared`);
+  const renderResource = portable.schema.render.resource;
+  if (renderResource === undefined || !Object.hasOwn(shader.variant.resources, renderResource)) {
+    throw new TypeError('example renderer portable plan does not select a declared render resource');
   }
   const geometryResource =
     shader.variant.geometry.kind === 'synthetic-quad' ? undefined : shader.variant.geometry.resource;
-  if (shader.variant.geometryResource !== geometryResource) {
-    throw new TypeError('example renderer shader geometry resource contradicts its geometry declaration');
-  }
   if (geometryResource !== undefined && !Object.hasOwn(shader.variant.resources, geometryResource)) {
     throw new TypeError(`example renderer shader geometry resource "${geometryResource}" is not declared`);
   }

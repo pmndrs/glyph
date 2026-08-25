@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import {
   compileTextEngineFrameUpdate,
   createRuntimeShaper,
+  id,
   TextEngineHost,
   TextEnginePublicationExpiredError,
   type TextEngineFrameLimits,
@@ -15,6 +16,10 @@ import { ExampleTextEngine } from '../src/engine.js';
 import { EXAMPLE_POLICY_HANDLE } from '../src/policy.js';
 
 const require = createRequire(import.meta.url);
+const SESSION_HANDLE = id('session', 'glyph-example-renderer-test/session');
+const DIRECT_SESSION_HANDLE = id('session', 'glyph-example-renderer-test/direct-session');
+const STACK_HANDLE = id('font-stack', 'glyph-example-renderer-test/stack');
+const MISSING_BINDING_HANDLE = id('font-binding', 'glyph-example-renderer-test/missing-font');
 
 /**
  * The engine's Wasm artifact is a published entry point (`@pmndrs/glyph/text-shaper.wasm`),
@@ -41,7 +46,7 @@ describe('a real engine driven through the published core surface', () => {
     const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(shaper);
     try {
-      engine.openSession(29);
+      engine.openSession(SESSION_HANDLE);
       const first = engine.render({});
       expect(first.publicationGeneration).toBe(1);
       expect(first.draws).toEqual([]);
@@ -73,7 +78,7 @@ describe('a real engine driven through the published core surface', () => {
     const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(shaper);
     try {
-      engine.openSession(29);
+      engine.openSession(SESSION_HANDLE);
       // One raw frame through the session, then a second raw frame built from the
       // first publication's revisions: the borrow from frame one is now expired.
       const stale = engine.session.update(engine.frameRequest({}));
@@ -81,8 +86,7 @@ describe('a real engine driven through the published core surface', () => {
       engine.session.update(
         compileTextEngineFrameUpdate({
           sessionId: engine.session.handle,
-          policyHandle: 23,
-          capabilitySet: 1,
+          policyHandle: EXAMPLE_POLICY_HANDLE,
           expectedEngineRevision: stale.engineRevision,
           consumedPlanRevision: stale.planRevision,
           acknowledgedPublicationGeneration: stale.publicationGeneration - 1,
@@ -104,7 +108,7 @@ describe('a real engine driven through the published core surface', () => {
     const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(shaper);
     try {
-      engine.openSession(29);
+      engine.openSession(SESSION_HANDLE);
       engine.render({});
       engine.render({});
       expect(engine.session.acknowledgedGeneration).toBe(2);
@@ -114,8 +118,7 @@ describe('a real engine driven through the published core surface', () => {
       const latest = { engineRevision: 2, planRevision: 2 };
       const replayed = compileTextEngineFrameUpdate({
         sessionId: engine.session.handle,
-        policyHandle: 23,
-        capabilitySet: 1,
+        policyHandle: EXAMPLE_POLICY_HANDLE,
         expectedEngineRevision: latest.engineRevision,
         consumedPlanRevision: latest.planRevision,
         acknowledgedPublicationGeneration: 0,
@@ -134,11 +137,11 @@ describe('a real engine driven through the published core surface', () => {
     const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(shaper);
     try {
-      engine.openSession(29);
-      // No shaping font exists behind handle 101 — the loader path lives outside
+      engine.openSession(SESSION_HANDLE);
+      // No shaping font exists behind this binding handle — the loader path lives outside
       // `/core` (recorded as audit item 12) — so stack registration fails cleanly
       // with the engine's own status instead of silently accepting a dead handle.
-      expect(() => engine.registerFontStack(17, [101])).toThrowError(/status 5/);
+      expect(() => engine.registerFontStack(STACK_HANDLE, [MISSING_BINDING_HANDLE])).toThrowError(/status 5/);
       // The policy itself registered fine: frames publish against it.
       expect(engine.render({}).engineRevision).toBe(1);
     } finally {
@@ -153,12 +156,15 @@ test('TextEngineHost remains directly drivable', async () => {
   const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
   const host = new TextEngineHost(shaper);
   host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes());
-  const session = host.createSession({ handle: 30, requestCapacity: 4096, resultCapacity: 128 * 1024 });
+  const session = host.createSession({
+    handle: DIRECT_SESSION_HANDLE,
+    requestCapacity: 4096,
+    resultCapacity: 128 * 1024,
+  });
   const publication = session.update(
     compileTextEngineFrameUpdate({
-      sessionId: 30,
+      sessionId: DIRECT_SESSION_HANDLE,
       policyHandle: EXAMPLE_POLICY_HANDLE,
-      capabilitySet: 1,
       expectedEngineRevision: 0,
       consumedPlanRevision: 0,
       acknowledgedPublicationGeneration: 0,
