@@ -7,15 +7,16 @@
  */
 export type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
 export { decodeDraw } from './draw-list.js';
-export { ExampleTextEngine, type ExampleFrameInput } from './engine.js';
+export {
+  ExampleText,
+  ExampleTextEngine,
+  type ExampleFrameInput,
+  type ExampleTextOptions,
+  type ExampleTextUpdate,
+} from './engine.js';
 export type { RetainedTextEnginePublication } from '@pmndrs/glyph/core';
 export { readDrawList } from './plan-reader.js';
-export {
-  EXAMPLE_CAPABILITY_SET,
-  EXAMPLE_POLICY_HANDLE,
-  exampleRenderPolicyBytes,
-  exampleSystemBuffers,
-} from './policy.js';
+export { exampleRenderPolicyBytes, exampleSystemBuffers } from './policy.js';
 export type { ExampleTableSnapshot } from './snapshot.js';
 export {
   exampleRendererShader,
@@ -29,4 +30,6 @@ export {
   type ExampleRendererDevice,
   type ExampleRendererResourceInput,
   type ExampleRendererShader,
+  type RecordingPendingSubmission,
 } from './device.js';
+export { TypeGpuExampleRendererDevice, type TypeGpuExampleRendererDeviceOptions } from './webgpu-device.js';

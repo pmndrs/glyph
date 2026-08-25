@@ -4,7 +4,7 @@ import {
   type TechniqueGeometryDeclaration,
 } from '@pmndrs/glyph/core';
 
-/** A small indexed GLB-like payload used by the external-engine geometry proof. */
+/** The technique's small indexed GLB-like unit quad. */
 const bytes = new Uint8Array(92);
 bytes.set(new Uint8Array(new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]).buffer), 0);
 bytes.set(new Uint8Array(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]).buffer), 48);

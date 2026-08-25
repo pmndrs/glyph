@@ -8,12 +8,15 @@ import {
   compileRenderPolicy,
   createRasterPolicyProgram,
   definePolicyBuffers,
+  id,
   RenderWireIdentityRegistry,
   textShaperAbi,
+  type PolicyBufferId,
+  type PolicyHandle,
 } from '@pmndrs/glyph/core';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 
-const EXAMPLE_STABLE_GLYPH_BUFFER_ID = 20;
+const EXAMPLE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-example-renderer/stable-glyph');
 
 /** The policy's own system lane: glyph identity that survives reflow within a paragraph. */
 export const exampleSystemBuffers: {
@@ -26,8 +29,7 @@ export const exampleSystemBuffers: {
   stableGlyphId: { id: EXAMPLE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 
-export const EXAMPLE_CAPABILITY_SET = 1;
-export const EXAMPLE_POLICY_HANDLE = 23;
+export const EXAMPLE_POLICY_HANDLE: PolicyHandle = id('policy', 'glyph-example-renderer');
 export const EXAMPLE_RENDERER_PROGRAM_NAMESPACE = 'example-renderer';
 
 /** Assemble the portable glyph-example body with this engine's own policy numbers. */
@@ -52,7 +54,6 @@ export function exampleRenderPolicyBytes(
 
 function exampleCapabilitySet() {
   return {
-    id: EXAMPLE_CAPABILITY_SET,
     flags:
       textShaperAbi.policy.capabilityFlags.storageBuffers |
       textShaperAbi.policy.capabilityFlags.aliasVec2 |

@@ -164,19 +164,19 @@ describe('public external raster proof', () => {
       expect(genericMaterialContexts[0]?.technique.id).toBe(glyphExample.id);
       expect([...genericMaterialContexts[0]!.outputs.keys()]).toEqual(['position', 'color', 'opacity']);
       const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
-      expect(geometry.getAttribute('_pmndrsGlyph_1')).toBeDefined();
-      expect(geometry.getAttribute('_pmndrsGlyph_2')).toBeDefined();
-      expect(geometry.getAttribute('_pmndrsGlyph_3')).toBeDefined();
-      expect(geometry.getAttribute('_pmndrsGlyph_15')).toBeDefined();
+      expect(geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.origin.id))).toBeDefined();
+      expect(geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.size.id))).toBeDefined();
+      expect(geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.color.id))).toBeDefined();
+      expect(geometry.getAttribute(glyphAttribute(threePolicyAbi.transformBufferId))).toBeDefined();
       expect(geometry.instanceCount).toBeGreaterThan(0);
-      const sizes = geometry.getAttribute('_pmndrsGlyph_2');
+      const sizes = geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.size.id));
       const expectedWidth = Math.max(48 * 0.05, 48 * 0.65 - font.data.inset * 48 * 2);
       const expectedHeight = Math.max(48 * 0.05, 48 - font.data.inset * 48 * 2);
       for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
         expect(sizes.getX(instance)).toBeCloseTo(expectedWidth, 5);
         expect(sizes.getY(instance)).toBeCloseTo(expectedHeight, 5);
       }
-      const colors = geometry.getAttribute('_pmndrsGlyph_3');
+      const colors = geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.color.id));
       for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
         expect(
           font.data.colors.some((_, offset) => glyphColorMatches(font.data.colors, offset, colors, instance)),
@@ -273,7 +273,10 @@ const suppliedGlyphExampleSchema = defineTechniqueSchema({
       ],
     },
   },
-  render: { geometry: { kind: 'quad', resource: 'glyphGeometry', coordinates: 'unit-square' } },
+  render: {
+    resource: 'glyphColors',
+    geometry: { kind: 'quad', resource: 'glyphGeometry', coordinates: 'unit-square' },
+  },
   glyphOrigin: { buffer: 'origin' },
 });
 
@@ -391,6 +394,10 @@ function createThreeMaterial(context: ThreePlanProgramMaterialContext): THREE.No
       createDefaultMaterial,
     }) ?? createDefaultMaterial()
   );
+}
+
+function glyphAttribute(bufferId: number): string {
+  return `_pmndrsGlyph_${bufferId}`;
 }
 
 function floatBuffer(buffers: ReadonlyMap<string, ThreePlanProgramBuffer>, name: string, vectorWidth: number) {

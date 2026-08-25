@@ -32,8 +32,6 @@ test('renderer languages share one exact portable shader contract', () => {
     expect(variant.buffers).toBe(glyphExampleShaderContract.buffers);
     expect(variant.resources).toBe(glyphExampleShaderContract.resources);
     expect(variant.outputs).toBe(glyphExampleShaderContract.outputs);
-    expect(variant.resource).toBe(glyphExampleShaderContract.resource);
-    expect(variant.geometryResource).toBe(glyphExampleShaderContract.geometryResource);
   }
 });
 
@@ -115,7 +113,6 @@ test('the TypeGPU realization matches the same contract and resolves to WGSL', (
     techniqueId: glyphExampleTslVariant.techniqueId,
     geometry: glyphExampleTslVariant.geometry,
     buffers: glyphExampleTslVariant.buffers,
-    resource: glyphExampleTslVariant.resource,
   });
   expect(glyphExampleShaderContract).toMatchObject({
     techniqueId: glyphExamplePlanProgram.technique.id,

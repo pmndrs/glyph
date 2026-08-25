@@ -5,7 +5,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "stripInternal": true,
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": ["@webgpu/types"]
   },
   "include": ["src/**/*.ts"]
 }

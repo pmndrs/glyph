@@ -10,8 +10,6 @@ function representativeVariant<const Language extends string>(language: Language
     buffers: glyphExampleShaderContract.buffers,
     resources: glyphExampleShaderContract.resources,
     outputs: glyphExampleShaderContract.outputs,
-    resource: glyphExampleShaderContract.resource,
-    geometryResource: glyphExampleShaderContract.geometryResource,
   });
 }
 
