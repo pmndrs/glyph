@@ -349,7 +349,7 @@ required base revision, publication generation, A/B output slot, policy/capabili
 input or an engine status, the call throws at `update()`; it does not return a result union or leave a recovery latch for
 the next frame. (`packages/glyph/src/core/host.ts`, `.agents/skills/engine-call-contract/SKILL.md:8`) The no-latch rule
 exists because an earlier rejected-frame design kept recompiling the invalid frame every render tick instead of preserving
-the last accepted scene. (`docs/planning/session-handoff.md:28`)
+the last accepted scene. (`docs/planning/session-handoff.md`)
 
 Use the last engine-accepted publication's `engineRevision`, but the last device-accepted publication's `planRevision` and
 `publicationGeneration`, for the next update. Do not use `session.acknowledgedGeneration` when a retained publication is
@@ -357,7 +357,7 @@ still awaiting device acceptance. Retention owns the bytes, while renderer commi
 became live. If a rejected candidate is superseded, this split lets the engine publish a safe checkpoint from the last
 consumed plan instead of latching stale bytes. Plan revision consumption and storage retirement acknowledgment remain
 distinct fences.
-(`packages/glyph-example-renderer/src/engine.ts`, `docs/planning/decision-register.md:238`)
+(`packages/glyph-example-renderer/src/engine.ts`, `docs/planning/decision-register.md`, D-279)
 
 ## 6. Read the plan
 
