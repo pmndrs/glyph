@@ -16,9 +16,10 @@ implementing the retention and patch protocols.
 
 The repository's `glyph-example-raster` and `glyph-example-renderer` packages are the external-consumer proof of that
 boundary. The raster package publishes renderer-neutral data plus explicit `/typegpu` and `/tsl` shader artifacts; the
-renderer package consumes `/core` and `/typegpu` without Three.js and realizes named resources, synthetic or supplied
-geometry, and non-empty draws. Three-specific material and registration code belongs in `@pmndrs/glyph/three` or in the
-consumer's Three integration, never in the portable raster entrypoint. Importing a technique root registers only its
+renderer package consumes `/core` and `/typegpu` without Three.js and realizes named resources plus synthetic or
+supplied geometry through a real TypeGPU/WebGPU submission that produces changing pixels. Three-specific material and
+registration code belongs in `@pmndrs/glyph/three` or in the consumer's Three integration, never in the portable raster
+entrypoint. Importing a technique root registers only its
 portable plan; shader subpaths carry no renderer registration, so each engine or application explicitly selects the
 variant it supports.
 

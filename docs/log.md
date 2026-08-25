@@ -2,6 +2,14 @@
 
 ## 2026-08-25
 
+- **The external renderer now proves hardware pixels and retained text updates** — `glyph-example-raster` supplies one
+  indexed GLB-like quad through the portable resource contract. `glyph-example-renderer` realizes that geometry and the
+  named policy-record buffers with TypeGPU, creates a WebGPU pipeline, submits indexed instanced draws, and reads its
+  offscreen RGBA target. Its small `ExampleText` façade owns branded paragraph/style/flow/region identities and exposes
+  create, update, render, and dispose lifecycle calls over the raw retained session. The browser lab runtime-bakes Inter
+  and rejects empty initial or updated draws, empty pixels, or an update that leaves every pixel unchanged. The recording
+  device remains the deterministic CPU oracle for malformed plans and failed-publication behavior.
+
 - **First-party plans now use the portable resource contract** — Resource declarations gained checked `one`/`many`
   cardinality and fixed-member portable groups. Bitmap retains repeated strike atlases, MSDF retains its atlas and
   pixel-range companion as one group, and Slug retains repeated curve/header/reference page groups; nested groups and

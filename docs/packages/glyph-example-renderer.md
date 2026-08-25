@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-example-renderer'
-description: Proves the published core engine surface through a headless TypeGPU-backed host without Three.js.
+description: Proves the published core engine surface through a real TypeGPU/WebGPU host without Three.js.
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:8ca884b4dfa4e6d36790430d7871be13e31957db276d3d8a57edae2e417a0569'
+source_digest: 'sha256:f25bd7983091e7095b7756cb08fcb88edefacd813af1888821552f82d91a3379'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -25,7 +25,13 @@ sources:
     title: Device-neutral draw list owned by the host
   - id: device
     resource: ../../packages/glyph-example-renderer/src/device.ts
-    title: GPU seam a TypeGPU backend implements
+    title: Deterministic renderer validation oracle
+  - id: webgpu-device
+    resource: ../../packages/glyph-example-renderer/src/webgpu-device.ts
+    title: Concrete TypeGPU/WebGPU renderer device
+  - id: build-script
+    resource: ../../packages/glyph-example-renderer/scripts/build.mjs
+    title: TypeGPU metadata build
   - id: boundary-tests
     resource: ../../packages/glyph-example-renderer/tests/package-boundary.test.ts
     title: Published-entry-point boundary proof
@@ -58,7 +64,8 @@ file under `src/` _and_ `tests/`; only the acceptance fixture may import the roo
 temporary font, while all other files remain limited to `/core` and the published Wasm artifact.
 
 It imports the portable example schema, plan, and `/typegpu` shader from `@pmndrs/glyph-example-raster`, and authors its own host render
-policy with `/core`'s compilers (`src/policy.ts`). It then runs the retention protocol on every frame in
+policy with `/core`'s compilers (`src/policy.ts`). Capability objects carry only actual limits and flags;
+`compileRenderPolicy()` assigns the ABI identity, and the single-profile frame omits any capability number. It then runs the retention protocol on every frame in
 `ExampleTextEngine.render`: update for the borrow,
 `assertLive` before decoding, `retain` for one contiguous host-owned copy, and decoded views over owned bytes only — dirty
 patch ranges and retirements included. The frame driver carries a separate device-accepted generation and plan revision;
@@ -70,14 +77,26 @@ values and compares the recovered buffers byte-for-byte with an oracle that obse
 is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: retained
 plans survive three frames plus capacity growth, stale borrows throw
 `TextEnginePublicationExpiredError`, a backwards acknowledgement is refused at the wire as a revision
-conflict. The recording device validates the complete resource, buffer, patch, primitive, draw, and retirement publication
-against the selected technique/program/variant before it can mutate accepted state. Allocation, offset write, u32 fill,
-copy, replacement generation, and exact retirement all have direct negative coverage. Font resources and frame submissions
-use prepare/commit handles: if host binding registration or plan validation throws, the prepared candidate remains
-unpublished instead of restoring an older snapshot. The acceptance test also loads a baked font through the public root
-loader, registers its portable binding and resource, resolves the example `/typegpu` shader to WGSL, realizes named
-resources, and asserts non-empty draws and one submission. A second test realizes supplied indexed GLB-like geometry and
-checks its index count while the primitive record span supplies the instance count.
+conflict. `RecordingExampleRendererDevice` is the deterministic CPU oracle: it validates the complete resource, buffer,
+patch, primitive, draw, and retirement publication against the selected technique/program/variant before accepted state can
+change. Allocation, offset write, u32 fill, copy, replacement generation, exact retirement, stale candidates, and a throwing
+backend publication callback have direct negative coverage.
+
+`TypeGpuExampleRendererDevice` is the concrete acceptance backend. It realizes the retained GLB-like geometry as TypeGPU
+vertex/index buffers, stages the per-draw policy instance buffers, and commits through an awaited WebGPU validation scope.
+Only a successfully submitted indexed pass publishes the same candidate to the CPU oracle and advances engine device
+fences. A rejected stage releases its unowned buffers and cannot restore or expose older bytes because live state was never
+changed. The offscreen `rgba8unorm` target supports padded asynchronous readback; an all-empty delta skips GPU allocation
+and submission, while an accepted removal still encodes the clear pass.
+The browser lab runtime-bakes Inter, creates one retained `ExampleText`, proves one initial and one updated draw, and observes
+7,740 then 6,588 non-transparent pixels with 10,287 changed pixels and zero GPU submissions for the following idle frame.
+Disposal publishes an empty scene and performs a real clear-only GPU submission without retaining retired instance buffers.
+
+`ExampleTextEngine.createText()` supplies the application lifecycle that raw frame fixtures intentionally expose but do not
+recommend as the ordinary path. `ExampleText.render()` emits the initial paragraph/text/style/constraint/region state,
+`update()` changes desired content/style/layout and advances geometry revisions when dimensions change, and `dispose()`
+publishes paragraph removal. The engine still exposes its session and raw `render(frame)` method for integrators implementing
+their own retained object model.
 
 The package still does not make font loading part of `/core`: `createTextRuntime` remains a root API. The acceptance uses
 the root loader only to obtain a `LoadedFont`, then hands that value to the core-facing engine registration method. This
