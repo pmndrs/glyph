@@ -83,6 +83,17 @@ type DrawGeometry =
   | Readonly<{ kind: 'synthetic-quad'; key: 'synthetic-quad' }>
   | Readonly<{ kind: 'supplied'; key: string; resourceName: string; payload: PortableGeometryPayload }>;
 
+interface ReusedDrawUpdate {
+  readonly mesh: THREE.Mesh;
+  readonly geometry: DrawGeometry;
+  readonly recordCount: number;
+  readonly recordIndex: number;
+  readonly transformId: number;
+  readonly primitiveKind: 'decoration' | 'glyph';
+  readonly matrixAutoUpdate: boolean;
+  readonly renderOrder: number;
+}
+
 const syntheticQuadGeometry: DrawGeometry = Object.freeze({ kind: 'synthetic-quad', key: 'synthetic-quad' });
 
 export interface ThreeTextEnginePlanOwner {
@@ -470,6 +481,7 @@ export class ThreeTextRenderPlanExecutor {
     const next: THREE.Mesh[] = [];
     const nextKeys: string[] = [];
     const nextOriginSegments: OriginSegment[] = [];
+    const reusedUpdates: ReusedDrawUpdate[] = [];
     const previous = new Map<string, THREE.Mesh[]>();
 
     for (let index = 0; index < this.#draws.length; index += 1) {
@@ -481,7 +493,10 @@ export class ThreeTextRenderPlanExecutor {
 
     const reused = new Set<THREE.Mesh>();
     const transformIndices = this.#collectTransformIndices(plan, draws);
-    this.#ensureTransformCapacity(transformIndices);
+    const previousTransformAttribute = this.#transformAttribute;
+    const previousTransformGeneration = this.#transformGeneration;
+    const previousMaterialKeys = new Set(this.#materials.keys());
+    const transformCapacityChanged = this.#ensureTransformCapacity(transformIndices);
 
     try {
       for (let index = 0; index < draws.count; index += 1) {
@@ -561,13 +576,17 @@ export class ThreeTextRenderPlanExecutor {
 
         const reusable = previous.get(key)?.shift();
         if (reusable !== undefined) {
-          updateGeometryInstances(reusable.geometry, drawGeometry, recordCount);
-          reusable.userData.pmndrsGlyphRunStart = recordIndex;
-          reusable.userData.pmndrsGlyphTransformId = transformId;
-          reusable.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
-          reusable.matrixAutoUpdate = transform.kind !== 'direct';
-          reusable.renderOrder = this.#owner.renderOrderBase + index;
-          if (reusable.parent !== this.#owner.drawRoot) this.#owner.drawRoot.add(reusable);
+          assertGeometryInstanceCompatibility(reusable.geometry, drawGeometry, recordCount);
+          reusedUpdates.push({
+            mesh: reusable,
+            geometry: drawGeometry,
+            recordCount,
+            recordIndex,
+            transformId,
+            primitiveKind: decoration ? 'decoration' : 'glyph',
+            matrixAutoUpdate: transform.kind !== 'direct',
+            renderOrder: this.#owner.renderOrderBase + index,
+          });
           reused.add(reusable);
           next.push(reusable);
           nextKeys.push(key);
@@ -587,7 +606,6 @@ export class ThreeTextRenderPlanExecutor {
         mesh.matrixAutoUpdate = transform.kind !== 'direct';
         mesh.frustumCulled = false;
         mesh.renderOrder = this.#owner.renderOrderBase + index;
-        this.#owner.drawRoot.add(mesh);
         next.push(mesh);
         nextKeys.push(key);
       }
@@ -597,7 +615,26 @@ export class ThreeTextRenderPlanExecutor {
         mesh.removeFromParent();
         mesh.geometry.dispose();
       }
+      this.#disposeMaterials((_realization, key) => !previousMaterialKeys.has(key));
+      if (transformCapacityChanged) {
+        this.#transformAttribute = previousTransformAttribute;
+        this.#transformGeneration = previousTransformGeneration;
+      }
       throw error;
+    }
+    for (const update of reusedUpdates) {
+      updateGeometryInstances(update.mesh.geometry, update.geometry, update.recordCount);
+      update.mesh.userData.pmndrsGlyphRunStart = update.recordIndex;
+      update.mesh.userData.pmndrsGlyphTransformId = update.transformId;
+      update.mesh.userData.pmndrsGlyphPrimitiveKind = update.primitiveKind;
+      update.mesh.matrixAutoUpdate = update.matrixAutoUpdate;
+      update.mesh.renderOrder = update.renderOrder;
+    }
+    for (const mesh of next) {
+      if (mesh.parent !== this.#owner.drawRoot) this.#owner.drawRoot.add(mesh);
+    }
+    if (transformCapacityChanged) {
+      this.#disposeMaterials(({ indexedTransform }, key) => indexedTransform && previousMaterialKeys.has(key));
     }
     this.#disposeDraws(reused);
     this.#draws = next;
@@ -673,16 +710,16 @@ export class ThreeTextRenderPlanExecutor {
     return new Set();
   }
 
-  #ensureTransformCapacity(indices: ReadonlySet<number>): void {
+  #ensureTransformCapacity(indices: ReadonlySet<number>): boolean {
     let maximum = 0;
     for (const index of indices) maximum = Math.max(maximum, index);
     const requiredRecords = (maximum + 1) * 4;
-    if (this.#transformAttribute.count >= requiredRecords) return;
+    if (this.#transformAttribute.count >= requiredRecords) return false;
     let capacity = this.#transformAttribute.count;
     while (capacity < requiredRecords) capacity *= 2;
     this.#transformAttribute = transformAttribute(capacity / 4);
     this.#transformGeneration += 1;
-    this.#disposeMaterials((realization) => realization.indexedTransform);
+    return true;
   }
 
   #bitmapMaterial(
@@ -1117,9 +1154,9 @@ export class ThreeTextRenderPlanExecutor {
     });
   }
 
-  #disposeMaterials(predicate: (realization: MaterialRealization) => boolean): void {
+  #disposeMaterials(predicate: (realization: MaterialRealization, key: string) => boolean): void {
     for (const [key, realization] of this.#materials) {
-      if (!predicate(realization)) continue;
+      if (!predicate(realization, key)) continue;
       realization.material.dispose();
       this.#materials.delete(key);
     }
@@ -1591,22 +1628,28 @@ function updateGeometryInstances(
   drawGeometry: DrawGeometry,
   recordCount: number,
 ): void {
+  const instanceCount = assertGeometryInstanceCompatibility(geometry, drawGeometry, recordCount);
+  if (geometry instanceof THREE.InstancedBufferGeometry) geometry.instanceCount = instanceCount;
+}
+
+function assertGeometryInstanceCompatibility(
+  geometry: THREE.BufferGeometry,
+  drawGeometry: DrawGeometry,
+  recordCount: number,
+): number {
   if (drawGeometry.kind === 'synthetic-quad') {
     if (!(geometry instanceof THREE.InstancedBufferGeometry)) {
       throw new TypeError('instanced text draw lost its instanced geometry');
     }
-    geometry.instanceCount = recordCount;
-    return;
+    return recordCount;
   }
   const payload = drawGeometry.payload;
   const instanceCount = payload?.instances?.source === 'fixed' ? payload.instances.count : recordCount;
-  if (geometry instanceof THREE.InstancedBufferGeometry) {
-    geometry.instanceCount = instanceCount;
-    return;
-  }
+  if (geometry instanceof THREE.InstancedBufferGeometry) return instanceCount;
   if (instanceCount !== 1) {
     throw new RangeError(`supplied non-instanced geometry cannot draw ${instanceCount} record instances`);
   }
+  return instanceCount;
 }
 
 function assertRecordInstanceCapacity(

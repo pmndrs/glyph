@@ -300,12 +300,17 @@ function retainBufferRecord(
   const generation = positiveInteger(record.generation, 'buffer generation');
   const policyBufferId = positiveInteger(record.policyBufferId, 'policy buffer id');
   const byteLength = nonnegativeInteger(record.byteLength, 'buffer byte length');
-  nonnegativeInteger(record.capacityRecords, 'buffer capacity');
+  const capacityRecords = nonnegativeInteger(record.capacityRecords, 'buffer capacity');
   if (!Number.isSafeInteger(record.scalarType) || record.scalarType < 1 || record.scalarType > 3) {
     throw new RangeError('example renderer buffer scalar types must be 1, 2, or 3');
   }
   if (!Number.isSafeInteger(record.vectorWidth) || record.vectorWidth < 1 || record.vectorWidth > 4) {
     throw new RangeError('example renderer buffer vector widths must be between 1 and 4');
+  }
+  const scalarBytes = record.scalarType === textShaperAbi.policy.scalarTypes.u16 ? 2 : 4;
+  const expectedByteLength = capacityRecords * record.vectorWidth * scalarBytes;
+  if (!Number.isSafeInteger(expectedByteLength) || byteLength !== expectedByteLength) {
+    throw new RangeError('example renderer requires tightly packed physical buffers');
   }
   if (active.has(id)) throw new Error(`example renderer plan repeats active buffer id ${id}`);
   const key = bufferKey(id, generation);

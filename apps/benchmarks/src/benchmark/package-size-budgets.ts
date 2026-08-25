@@ -118,10 +118,10 @@ export const packageSizeBudgets = {
   // guidance left +468 of real production behaviour, which fits the existing ceiling.
   // +22 KB over main is `unicode-segmenter`, entering every graph via internal/graphemes.ts so span
   // alignment matches the engine's cluster grid. Deliberate; both hosts measure identically.
-  // Named views and supplied geometry measure 488,878 raw / 301,090 minified /
-  // 79,441 gzip / 66,270 Brotli; the ceilings retain bounded review margin.
+  // Named views, supplied geometry, and transactional draw reuse measure 490,117 raw /
+  // 301,686 minified / 79,620 gzip / 66,430 Brotli.
   'three-runtime-js': {
-    rawBytes: 490_000,
+    rawBytes: 492_000,
     minifiedBytes: 304_000,
     gzipBytes: 81_000,
     brotliBytes: 68_000,
@@ -162,8 +162,8 @@ export const packageSizeBudgets = {
     gzipBytes: 690_000,
     brotliBytes: 510_000,
   },
-  // Shared Three runtime graphs measure at most 470,712 raw / 289,704 minified /
-  // 77,339 gzip / 64,122 Brotli; one ceiling keeps technique drift visible.
+  // Shared Three runtime graphs measure at most 471,773 raw / 290,219 minified /
+  // 77,523 gzip / 64,324 Brotli; one ceiling keeps technique drift visible.
   'bitmap-runtime-js': {
     rawBytes: 480_000,
     minifiedBytes: 296_000,

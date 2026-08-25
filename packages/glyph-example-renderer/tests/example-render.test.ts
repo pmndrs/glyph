@@ -253,6 +253,10 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
   const device = new RecordingExampleRendererDevice();
   const first = bufferRecord(1, 1, 16, 1);
   const second = bufferRecord(2, 1, 16, 2);
+  expect(() => device.applyBufferPlan([{ ...first, capacityRecords: 3 }], [], [])).toThrow(
+    'requires tightly packed physical buffers',
+  );
+  expect(device.bufferBytes(1, 1)).toBeUndefined();
   device.applyBufferPlan(
     [first, second],
     [

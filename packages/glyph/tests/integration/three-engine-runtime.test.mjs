@@ -41,7 +41,7 @@ const suppliedGeometrySchema = defineTechniqueSchema({
   technique: suppliedGeometryTechnique.id,
   scope: 'glyph',
   binding: {},
-  buffers: {},
+  buffers: { origin: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
   resources: { mesh: { kind: 'geometry' } },
   render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
 });
@@ -50,6 +50,10 @@ registerRasterPlanProgram({
   schema: suppliedGeometrySchema,
   policyBody(system) {
     const program = techniqueProgram(suppliedGeometrySchema);
+    program.store(suppliedGeometrySchema.buffers.origin, [
+      program.semantics.inlineOrigin,
+      program.semantics.blockOrigin,
+    ]);
     program.store(system.stableGlyphId, [program.semantics.stableGlyphId]);
     if (system.transformIndex !== undefined) program.store(system.transformIndex, [program.semantics.transformIndex]);
     return program.compile();
@@ -81,7 +85,7 @@ registerThreeRasterPlanProgram({
   variant: {
     id: 'test-tsl',
     language: 'tsl',
-    buffers: {},
+    buffers: { origin: { id: 1, scalar: 'f32', vectorWidth: 2 } },
     resources: { mesh: { kind: 'geometry' } },
     outputs: { position: 'vec3' },
     geometry: suppliedGeometrySchema.render.geometry,
@@ -129,9 +133,9 @@ test('records-sourced Three geometry validates capacity before reuse changes a d
     },
     transformIds: () => [],
   });
-  const frame = (previous, changes) =>
+  const frame = (engineSession, previous, changes) =>
     compileTextEngineFrameUpdate({
-      sessionId: session.handle,
+      sessionId: engineSession.handle,
       policyHandle: coordinator.policyHandle,
       capabilitySet: 1,
       expectedEngineRevision: previous?.engineRevision ?? 0,
@@ -153,7 +157,7 @@ test('records-sourced Three geometry validates capacity before reuse changes a d
   try {
     suppliedGeometryMaterialCalls = 0;
     const initial = session.update(
-      frame(undefined, {
+      frame(session, undefined, {
         paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
         textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: '12345' }],
         styleMutations: [
@@ -225,7 +229,7 @@ test('records-sourced Three geometry validates capacity before reuse changes a d
     assert.equal(suppliedGeometryMaterialCalls, 1);
 
     const shortened = session.update(
-      frame(initial, {
+      frame(session, initial, {
         textMutations: [{ paragraphId: 1, start: 4, deleteCount: 1, insert: '' }],
         styleMutations: [
           {
@@ -252,7 +256,7 @@ test('records-sourced Three geometry validates capacity before reuse changes a d
     assert.equal(retained.geometry.index.count, 6, 'reuse must preserve the normalized triangle-list topology');
 
     const oversized = session.update(
-      frame(shortened, {
+      frame(session, shortened, {
         textMutations: [{ paragraphId: 1, start: 4, deleteCount: 0, insert: '56' }],
         styleMutations: [
           {
@@ -280,6 +284,166 @@ test('records-sourced Three geometry validates capacity before reuse changes a d
     assert.equal(target.draws[0], retained);
     assert.equal(retained.geometry.instanceCount, 4, 'a rejected publication must not reach retained draw mutation');
     assert.equal(suppliedGeometryMaterialCalls, 1, 'a rejected publication must not reach material realization');
+
+    const primaryMaterial = coordinator.acquireMaterial(
+      defineTextMaterial((context) => context.createDefaultMaterial()),
+    );
+    const secondaryMaterial = coordinator.acquireMaterial(
+      defineTextMaterial((context) => context.createDefaultMaterial()),
+    );
+    const transactionalSession = coordinator.createSession({
+      requestCapacity: 4_096,
+      resultCapacity: 1024 * 1024,
+      textCapacity: 16,
+    });
+    const transactionalRoot = new THREE.Object3D();
+    const transactionalTarget = new ThreeTextRenderPlanExecutor(coordinator, {
+      drawRoot: transactionalRoot,
+      pixelSnapping: false,
+      renderOrderBase: 0,
+      objectForTransform() {
+        return transactionalRoot;
+      },
+      transformIds: () => [],
+    });
+    try {
+      const accepted = transactionalSession.update(
+        frame(transactionalSession, undefined, {
+          paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
+          textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: '12345' }],
+          styleMutations: [
+            {
+              opcode: 'upsert',
+              paragraphId: 1,
+              styleId: 1,
+              cascadeOrder: 0,
+              start: 0,
+              end: 5,
+              root: true,
+              value: {
+                fontStackHandle: stack.handle,
+                materialId: primaryMaterial.id,
+                fontSize: 16,
+                rasterPixelRatio: 1,
+                foregroundRgba: 0xffff_ffff,
+              },
+            },
+            {
+              opcode: 'upsert',
+              paragraphId: 1,
+              styleId: 2,
+              cascadeOrder: 1,
+              start: 2,
+              end: 5,
+              value: { materialId: secondaryMaterial.id },
+            },
+          ],
+          constraints: [
+            {
+              paragraphId: 1,
+              flowThreadId: 1,
+              geometryRevision: 1,
+              width: 256,
+              height: 64,
+              viewportBlockStart: 0,
+              viewportBlockEnd: 64,
+              resumeBlockOffset: 0,
+              maxLines: 4,
+              regionStart: 0,
+              resumeCluster: 0,
+              regionCount: 1,
+              resumeRegion: 0,
+              widthMode: 'at-most',
+              heightMode: 'at-most',
+              wrap: 'word',
+              align: 'start',
+              overflow: 'visible',
+              blockAlign: 'start',
+            },
+          ],
+          regions: [
+            {
+              id: 1,
+              geometryRevision: 1,
+              shape: 'rectangle',
+              exclusionStart: 0,
+              exclusionCount: 0,
+              writingMode: 'horizontal-tb',
+              textOrientation: 'mixed',
+              inlineStart: 0,
+              blockStart: 0,
+              inlineEnd: 256,
+              blockEnd: 64,
+              clipInlineStart: 0,
+              clipBlockStart: 0,
+              clipInlineEnd: 256,
+              clipBlockEnd: 64,
+            },
+          ],
+        }),
+      );
+      transactionalTarget.apply(accepted);
+      assert.equal(transactionalTarget.draws.length, 2);
+      const retainedDraws = [...transactionalTarget.draws];
+      assert.deepEqual(
+        retainedDraws.map((draw) => draw.geometry.instanceCount),
+        [2, 3],
+      );
+
+      const rejected = transactionalSession.update(
+        frame(transactionalSession, accepted, {
+          textMutations: [{ paragraphId: 1, start: 2, deleteCount: 0, insert: 'X' }],
+          styleMutations: [
+            {
+              opcode: 'upsert',
+              paragraphId: 1,
+              styleId: 1,
+              cascadeOrder: 0,
+              start: 0,
+              end: 6,
+              root: true,
+              value: {
+                fontStackHandle: stack.handle,
+                materialId: primaryMaterial.id,
+                fontSize: 16,
+                rasterPixelRatio: 1,
+                foregroundRgba: 0xffff_ffff,
+              },
+            },
+            {
+              opcode: 'upsert',
+              paragraphId: 1,
+              styleId: 2,
+              cascadeOrder: 1,
+              start: 3,
+              end: 6,
+              value: { materialId: secondaryMaterial.id },
+            },
+          ],
+        }),
+      );
+      const rejectedView = new TextEngineRenderPlanView().bind(rejected);
+      const rejectedDraws = rejectedView.table('draws');
+      assert.equal(rejectedDraws.count, 2);
+      const secondDraw = rejectedView.record(rejectedDraws, 1);
+      new DataView(rejected.memoryBuffer).setUint32(
+        rejected.bytes.byteOffset + secondDraw + textShaperAbi.layouts.engineDraw.bufferCount,
+        0,
+        true,
+      );
+      assert.throws(() => transactionalTarget.apply(rejected), /missing|required/);
+      assert.deepEqual(transactionalTarget.draws, retainedDraws);
+      assert.deepEqual(
+        retainedDraws.map((draw) => draw.geometry.instanceCount),
+        [2, 3],
+        'a later rejected draw must not partially update an earlier reused draw',
+      );
+    } finally {
+      transactionalTarget.dispose();
+      transactionalSession.dispose();
+      primaryMaterial.release();
+      secondaryMaterial.release();
+    }
   } finally {
     target.dispose();
     session.dispose();
