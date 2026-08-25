@@ -326,26 +326,34 @@ At renderer realization time, the engine resolves that identity to its wire reso
 
 ```ts
 interface ExampleRendererDevice {
-  createResource(id: number, resource: unknown): void;
-  writeBuffer(id: number, bytes: Uint8Array): void;
-  retireResource(id: number): void;
+  createResources(resources: readonly ExampleRendererResourceInput[]): { rollback(): void };
+  applyBufferPlan(
+    buffers: readonly TextEngineBufferRecord[],
+    patches: readonly TextEnginePatchRecord[],
+    retirements: readonly TextEngineRetirementRecord[],
+  ): void;
+  retireResource(id: number, generation: number): void;
   submit(drawList: ExampleDrawList): void;
 }
 ```
 
-`RecordingExampleRendererDevice` is a concrete device for the acceptance path. A real WebGPU/WebGL/CPU renderer can implement the same four operations without changing the portable technique.
+`RecordingExampleRendererDevice` is a concrete device for the acceptance path. It keys buffers by `(id, generation)`,
+applies allocate/write/fill/copy deltas at their declared ranges, and releases only exact-generation retirements. A real
+WebGPU/WebGL/CPU renderer can implement the same seam without changing the portable technique.
 
 ### Executable evidence
 
 The example-renderer acceptance loads Inter, compiles the portable binding, realizes named resources and both generated
-and supplied geometry, submits a non-empty draw list, and verifies retained updates. The Three browser proof renders the
-same external technique on WebGPU and forced WebGL2 with RGBA SHA-256
+and supplied geometry through its concrete recording device, submits a non-empty draw list, and verifies retained updates.
+That lane proves engine command integration rather than hardware pixels. The Three browser proof renders the same external
+technique on WebGPU and forced WebGL2, rejects within- or cross-backend hash divergence, and currently observes RGBA SHA-256
 `0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`.
 
 `pnpm scripts run benchmark:render-technique-lab` compares the generic Three path with Bitmap through one public
-`TextRuntime`. On the reviewed Chromium run, generic realization measured 3.09 ms cold and 0.065/0.095 ms median/p95
-retained; Bitmap measured 3.20 ms cold and 0.055/0.065 ms retained. Both retained one draw and its geometry. These are
-host observations, not CI timing thresholds; draw count, instance count, and identity retention are enforced invariants.
+`TextRuntime`. On the reviewed equal-12-instance Chromium run, generic host realization measured 3.13 ms cold and
+0.070/0.105 ms median/p95 retained; Bitmap measured 3.71 ms cold and 0.050/0.065 ms retained. Both retained one draw and
+its geometry. This lab measures CPU-side plan realization and publication, not renderer submission; timings are host
+observations, while equal nonzero instance count, draw count, and identity retention are enforced invariants.
 
 ## 4. Implementing a baker
 

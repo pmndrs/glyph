@@ -19,7 +19,7 @@ import type { AnyRasterTechnique, LoadedFont } from '@pmndrs/glyph';
 import type { ExampleDrawList } from './draw-list.js';
 import { readDrawList } from './plan-reader.js';
 import { EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes } from './policy.js';
-import type { ExampleRendererDevice } from './device.js';
+import type { ExampleRendererDevice, ExampleRendererResourceInput } from './device.js';
 
 /** The frame limits this host runs under. The engine rejects zero limits outright. */
 const EXAMPLE_LIMITS: TextEngineFrameLimits = {
@@ -79,13 +79,26 @@ export class ExampleTextEngine {
     const compiled = compileRasterFont(font, this.#host.wireIdentities);
     if (compiled === undefined)
       throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
-    const bindingHandle = this.#nextBindingHandle++;
-    this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
+    const bindingHandle = this.#nextBindingHandle;
+    if (bindingHandle > 0xffff_ffff) throw new RangeError('example renderer exhausted font binding handles');
+    const resources: ExampleRendererResourceInput[] = [];
     for (const [name, key] of compiled.declaredResources) {
       const resource = compiled.resources.get(key);
       if (resource === undefined) throw new Error(`compiled font omitted declared resource "${name}"`);
-      this.#device?.createResource(this.#host.wireIdentities.resolve(key), name, resource);
+      resources.push({ id: this.#host.wireIdentities.resolve(key), generation: 1, name, resource });
     }
+    const registration = this.#device?.createResources(resources);
+    try {
+      this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
+    } catch (error) {
+      try {
+        registration?.rollback();
+      } catch (rollbackError) {
+        throw new AggregateError([error, rollbackError], 'font registration and resource rollback both failed');
+      }
+      throw error;
+    }
+    this.#nextBindingHandle += 1;
     return bindingHandle;
   }
 
@@ -129,9 +142,7 @@ export class ExampleTextEngine {
   render(input: ExampleFrameInput): ExampleDrawList {
     const device = this.#device;
     const list = readDrawList(this.#retainPublication(this.session.update(this.frameRequest(input))));
-    for (const patch of list.patches) {
-      if (patch.payload !== undefined) device?.writeBuffer(patch.bufferId, patch.payload);
-    }
+    device?.applyBufferPlan(list.bufferRecords, list.patches, list.retirements);
     for (const retirement of list.retirements) {
       if (retirement.kind === textShaperAbi.engine.retirementKinds.resource) {
         device?.retireResource(retirement.id, retirement.generation);

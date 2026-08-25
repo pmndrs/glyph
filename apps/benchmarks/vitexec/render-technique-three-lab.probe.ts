@@ -12,6 +12,7 @@ if (
   report.bitmap.draws !== 1 ||
   report.generic.instances < 1 ||
   report.bitmap.instances < 1 ||
+  report.generic.instances !== report.bitmap.instances ||
   !report.generic.retainedGeometry ||
   !report.bitmap.retainedGeometry ||
   !Number.isFinite(report.warmMedianRatio)

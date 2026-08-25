@@ -8,7 +8,6 @@ import { msdfSchema } from '../raster/msdf.js';
 import { slugSchema } from '../raster/slug-technique.js';
 import type { PolicyBufferDeclaration, PolicyBufferDeclarations, TechniqueSchema } from '../core.js';
 import {
-  assertPortableResource,
   TextEngineRenderPlanView,
   type PortableGeometryPayload,
   type RenderPlanTable,
@@ -79,6 +78,12 @@ type TransformRealization =
 interface RecordAddressing {
   readonly order: RetainedBuffer | undefined;
 }
+
+type DrawGeometry =
+  | Readonly<{ kind: 'synthetic-quad'; key: 'synthetic-quad' }>
+  | Readonly<{ kind: 'supplied'; key: string; resourceName: string; payload: PortableGeometryPayload }>;
+
+const syntheticQuadGeometry: DrawGeometry = Object.freeze({ kind: 'synthetic-quad', key: 'synthetic-quad' });
 
 export interface ThreeTextEnginePlanOwner {
   readonly drawRoot: THREE.Object3D;
@@ -522,6 +527,7 @@ export class ThreeTextRenderPlanExecutor {
         const transform = this.#transformRealization(byPolicyId, transformId);
         const resolvedResource =
           resource === undefined ? undefined : this.#coordinator.resolveResource(resource.referenceId);
+        const drawGeometry = resolveDrawGeometry(resolvedResource, recordCount);
         const material = decoration
           ? this.#decorationMaterial(byPolicyId, transform, addressing)
           : this.#material(resource!, byPolicyId, materialId, transform, addressing);
@@ -550,12 +556,12 @@ export class ThreeTextRenderPlanExecutor {
           plan.u32(draw + drawLayout.depthKey),
           transform,
           this.#transformGeneration,
-          geometryKey(resolvedResource),
+          drawGeometry.key,
         );
 
         const reusable = previous.get(key)?.shift();
         if (reusable !== undefined) {
-          updateGeometryInstances(reusable.geometry, resolvedResource, recordCount);
+          updateGeometryInstances(reusable.geometry, drawGeometry, recordCount);
           reusable.userData.pmndrsGlyphRunStart = recordIndex;
           reusable.userData.pmndrsGlyphTransformId = transformId;
           reusable.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
@@ -568,7 +574,7 @@ export class ThreeTextRenderPlanExecutor {
           continue;
         }
 
-        const geometry = realizeGeometry(resolvedResource, recordCount);
+        const geometry = realizeGeometry(drawGeometry, recordCount);
         for (const buffer of byPolicyId.values()) {
           geometry.setAttribute(`_pmndrsGlyph_${buffer.policyBufferId}`, buffer.attribute);
         }
@@ -1532,69 +1538,67 @@ function geometryDeclaration(resource: ThreeTextEngineResource | undefined) {
     : { kind: 'synthetic-quad' as const };
 }
 
-function geometryKey(resource: ThreeTextEngineResource | undefined): string {
+function resolveDrawGeometry(resource: ThreeTextEngineResource | undefined, recordCount: number): DrawGeometry {
   const declaration = geometryDeclaration(resource);
-  if (declaration.kind === 'synthetic-quad') return 'synthetic-quad';
-  const payload = suppliedGeometryPayload(resource, declaration);
+  if (declaration.kind === 'synthetic-quad') return syntheticQuadGeometry;
+  if (resource === undefined || !('resources' in resource) || declaration.resource === undefined) {
+    throw new Error(`supplied Three geometry "${declaration.kind}" has no named portable resource`);
+  }
+  const payload = resource.resources.get(declaration.resource) as PortableGeometryPayload | undefined;
+  if (payload === undefined) throw new Error(`Three draw omits supplied geometry resource "${declaration.resource}"`);
   const referenceId =
-    resource !== undefined && 'resourceReferences' in resource && declaration.resource !== undefined
-      ? resource.resourceReferences.get(declaration.resource)
-      : undefined;
+    'resourceReferences' in resource ? resource.resourceReferences.get(declaration.resource) : undefined;
   if (referenceId === undefined) {
     throw new Error(`supplied Three geometry "${declaration.kind}" has no retained resource identity`);
   }
+  assertRecordInstanceCapacity(declaration.resource, payload, recordCount);
   const range = geometryDrawRange(payload);
   const indexCount = payload.indices === undefined ? 0 : payload.accessors[payload.indices.accessor]!.count;
   const instances = payload.instances?.source ?? 'records';
   const fixedCount = payload.instances?.source === 'fixed' ? payload.instances.count : 0;
-  return [
-    'supplied',
-    referenceId,
-    declaration.kind,
-    declaration.coordinates,
-    payload.topology,
-    indexCount,
-    range.start,
-    range.count,
-    instances,
-    fixedCount,
-  ].join(':');
+  return {
+    kind: 'supplied',
+    resourceName: declaration.resource,
+    payload,
+    key: [
+      'supplied',
+      referenceId,
+      declaration.kind,
+      declaration.coordinates,
+      payload.topology,
+      indexCount,
+      range.start,
+      range.count,
+      instances,
+      fixedCount,
+    ].join(':'),
+  };
 }
 
-function realizeGeometry(resource: ThreeTextEngineResource | undefined, recordCount: number): THREE.BufferGeometry {
-  const declaration = geometryDeclaration(resource);
-  if (declaration.kind === 'synthetic-quad') {
+function realizeGeometry(drawGeometry: DrawGeometry, recordCount: number): THREE.BufferGeometry {
+  if (drawGeometry.kind === 'synthetic-quad') {
     const geometry = unitQuad();
     geometry.instanceCount = recordCount;
     return geometry;
   }
-  if (resource === undefined || !('resources' in resource) || declaration.resource === undefined) {
-    throw new Error(`supplied Three geometry "${declaration.kind}" has no named portable resource`);
-  }
-  const payload = resource.resources.get(declaration.resource);
-  if (payload === undefined) throw new Error(`Three draw omits supplied geometry resource "${declaration.resource}"`);
-  assertPortableResource('geometry', declaration.resource, payload);
-  const geometry = createGeometry(payload as PortableGeometryPayload);
-  updateGeometryInstances(geometry, resource, recordCount, payload as PortableGeometryPayload);
+  const geometry = createGeometry(drawGeometry.payload);
+  updateGeometryInstances(geometry, drawGeometry, recordCount);
   return geometry;
 }
 
 function updateGeometryInstances(
   geometry: THREE.BufferGeometry,
-  resource: ThreeTextEngineResource | undefined,
+  drawGeometry: DrawGeometry,
   recordCount: number,
-  suppliedPayload?: PortableGeometryPayload,
 ): void {
-  const declaration = geometryDeclaration(resource);
-  if (declaration.kind === 'synthetic-quad') {
+  if (drawGeometry.kind === 'synthetic-quad') {
     if (!(geometry instanceof THREE.InstancedBufferGeometry)) {
       throw new TypeError('instanced text draw lost its instanced geometry');
     }
     geometry.instanceCount = recordCount;
     return;
   }
-  const payload = suppliedPayload ?? suppliedGeometryPayload(resource, declaration);
-  applyGeometryDrawState(geometry, payload);
+  const payload = drawGeometry.payload;
   const instanceCount = payload?.instances?.source === 'fixed' ? payload.instances.count : recordCount;
   if (geometry instanceof THREE.InstancedBufferGeometry) {
     geometry.instanceCount = instanceCount;
@@ -1605,20 +1609,20 @@ function updateGeometryInstances(
   }
 }
 
-function suppliedGeometryPayload(
-  resource: ThreeTextEngineResource | undefined,
-  declaration: ReturnType<typeof geometryDeclaration>,
-): PortableGeometryPayload {
-  if (declaration.kind === 'synthetic-quad') {
-    throw new Error('synthetic Three geometry has no portable payload');
+function assertRecordInstanceCapacity(
+  resourceName: string,
+  payload: PortableGeometryPayload,
+  recordCount: number,
+): void {
+  if (payload.instances?.source === 'fixed') return;
+  const attribute = payload.attributes.find(({ rate }) => rate === 'instance');
+  if (attribute === undefined) return;
+  const available = payload.accessors[attribute.accessor]!.count;
+  if (recordCount > available) {
+    throw new RangeError(
+      `supplied Three geometry resource "${resourceName}" has ${available} instance elements for ${recordCount} emitted records`,
+    );
   }
-  if (resource === undefined || !('resources' in resource) || declaration.resource === undefined) {
-    throw new Error(`supplied Three geometry "${declaration.kind}" has no named portable resource`);
-  }
-  const payload = resource.resources.get(declaration.resource);
-  if (payload === undefined) throw new Error(`Three draw omits supplied geometry resource "${declaration.resource}"`);
-  assertPortableResource('geometry', declaration.resource, payload);
-  return payload as PortableGeometryPayload;
 }
 
 function createGeometry(payload: PortableGeometryPayload): THREE.BufferGeometry {

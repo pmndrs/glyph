@@ -13,6 +13,9 @@ import {
 
 registerExternalGlyphExampleThree();
 
+const INITIAL_TEXT = 'PUBLICRASTER';
+const UPDATED_TEXT = 'PLUGINUPDATE';
+
 export interface RenderTechniqueThreeLabReport {
   readonly samples: number;
   readonly warmup: number;
@@ -67,6 +70,11 @@ export async function runRenderTechniqueThreeLab({
 
     const generic = measureTechnique(genericFont, warmup, samples);
     const bitmapResult = measureTechnique(bitmapFont, warmup, samples);
+    if (generic.instances !== bitmapResult.instances) {
+      throw new Error(
+        `Three render-technique lab compared ${generic.instances} generic instances with ${bitmapResult.instances} Bitmap instances`,
+      );
+    }
     return Object.freeze({
       samples,
       warmup,
@@ -89,7 +97,7 @@ function measureTechnique(
   samples: number,
 ): RenderTechniqueThreeLabResult {
   const firstStarted = performance.now();
-  const text = new Text({ font, text: 'PUBLIC RASTER', style: { fontSize: 48 } });
+  const text = new Text({ font, text: INITIAL_TEXT, style: { fontSize: 48 } });
   const group = new TextGroup();
   const scene = new THREE.Scene();
   group.add(text);
@@ -102,6 +110,9 @@ function measureTechnique(
     const geometry = draw.geometry;
     if (!(geometry instanceof THREE.InstancedBufferGeometry)) {
       throw new TypeError('Three render-technique lab expected instanced geometry');
+    }
+    if (!Number.isSafeInteger(geometry.instanceCount) || geometry.instanceCount < 1) {
+      throw new Error('Three render-technique lab expected a non-empty draw');
     }
     for (let index = 0; index < warmup; index += 1) update(index, text, scene, group, draw, geometry);
     const durations: number[] = [];
@@ -133,7 +144,7 @@ function update(
   draw: THREE.Mesh,
   geometry: THREE.BufferGeometry,
 ): void {
-  text.text = index % 2 === 0 ? 'PLUGIN UPDATE' : 'PUBLIC RASTER';
+  text.text = index % 2 === 0 ? UPDATED_TEXT : INITIAL_TEXT;
   scene.updateMatrixWorld(true);
   if (group.error !== undefined) throw group.error;
   const current = onlyDraw(group);

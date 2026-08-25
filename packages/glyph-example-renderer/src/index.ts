@@ -24,5 +24,7 @@ export {
   type ExampleRealizedDraw,
   RecordingExampleRendererDevice,
   type ExampleRendererDevice,
+  type ExampleRendererResourceInput,
+  type ExampleRendererResourceRegistration,
   type ExampleRendererShader,
 } from './device.js';

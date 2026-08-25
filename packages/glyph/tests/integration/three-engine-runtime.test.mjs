@@ -12,6 +12,7 @@ import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
+import { defineTechniqueSchema, registerRasterPlanProgram, techniqueProgram } from '../../dist/core.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { TextEngineRenderPlanView } from '../../dist/core/plan-view.js';
 import { LoadedFontImpl } from '../../dist/loaded-font.js';
@@ -21,12 +22,274 @@ import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
 import { defineRasterResourceId } from '../../dist/raster-technique.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
+import { registerThreeRasterPlanProgram } from '../../dist/three.js';
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 import { ThreeTextRenderPlanExecutor } from '../../dist/three/engine-plan-target.js';
 import { defineTextMaterial } from '../../dist/three/material.js';
+import { instancedQuadGeometry } from '../support/portable-geometry.mjs';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
+
+const suppliedGeometryTechnique = {
+  id: 'test.three-supplied-geometry-capacity',
+  kind: 'test',
+  extension: 'TEST_three_supplied_geometry',
+  version: 0,
+};
+const suppliedGeometrySchema = defineTechniqueSchema({
+  technique: suppliedGeometryTechnique.id,
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  resources: { mesh: { kind: 'geometry' } },
+  render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+});
+registerRasterPlanProgram({
+  technique: suppliedGeometryTechnique,
+  schema: suppliedGeometrySchema,
+  policyBody(system) {
+    const program = techniqueProgram(suppliedGeometrySchema);
+    program.store(system.stableGlyphId, [program.semantics.stableGlyphId]);
+    if (system.transformIndex !== undefined) program.store(system.transformIndex, [program.semantics.transformIndex]);
+    return program.compile();
+  },
+  compileFont(compiler) {
+    const { resource, geometry } = compiler.font.data;
+    compiler.retain('mesh', resource, geometry);
+    const { resources } = compiler.resources([resource]);
+    const glyphCount = compiler.font.font.glyphCount;
+    compiler.compile({
+      techniqueId: compiler.techniqueId,
+      programVariant: 0,
+      glyphCount,
+      strikes: [0],
+      resources,
+      resourceIndex: () => 0,
+      glyphF32: compiler.emptyTable(glyphCount),
+      glyphU32: compiler.emptyTable(glyphCount),
+      strikeF32: compiler.emptyTable(glyphCount),
+      strikeU32: compiler.emptyTable(glyphCount),
+      resourceF32: compiler.emptyTable(resources.length),
+      resourceU32: compiler.emptyTable(resources.length),
+    });
+  },
+});
+let suppliedGeometryMaterialCalls = 0;
+registerThreeRasterPlanProgram({
+  technique: suppliedGeometryTechnique,
+  variant: {
+    id: 'test-tsl',
+    language: 'tsl',
+    buffers: {},
+    resources: { mesh: { kind: 'geometry' } },
+    outputs: { position: 'vec3' },
+    geometry: suppliedGeometrySchema.render.geometry,
+    createMaterial() {
+      suppliedGeometryMaterialCalls += 1;
+      return new THREE.MeshBasicNodeMaterial();
+    },
+  },
+});
+
+test('records-sourced Three geometry validates capacity before reuse changes a draw', async () => {
+  const [fontBytes, wasm] = await Promise.all([
+    readFile(new URL('inter-bitmap-16.font.glb', fixtureRoot)),
+    readFile(wasmUrl),
+  ]);
+  const registry = new FontRegistry();
+  const registered = await registry.registerAsset(fontBytes);
+  const shaper = await createRuntimeShaper({ registry, wasm });
+  shaper.registerFont(registered);
+  const font = new LoadedFontImpl({
+    runtime: undefined,
+    font: registered,
+    technique: suppliedGeometryTechnique,
+    raster: undefined,
+    data: {
+      resource: defineRasterResourceId('test/three-supplied-geometry-capacity'),
+      geometry: instancedQuadGeometry(),
+    },
+    release: () => undefined,
+  });
+  const coordinator = new ThreeTextEngineCoordinator(shaper);
+  const stack = coordinator.acquireFontStack([font]);
+  const session = coordinator.createSession({
+    requestCapacity: 4_096,
+    resultCapacity: 1024 * 1024,
+    textCapacity: 16,
+  });
+  const drawRoot = new THREE.Object3D();
+  const target = new ThreeTextRenderPlanExecutor(coordinator, {
+    drawRoot,
+    pixelSnapping: false,
+    renderOrderBase: 0,
+    objectForTransform() {
+      return drawRoot;
+    },
+    transformIds: () => [],
+  });
+  const frame = (previous, changes) =>
+    compileTextEngineFrameUpdate({
+      sessionId: session.handle,
+      policyHandle: coordinator.policyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: previous?.engineRevision ?? 0,
+      consumedPlanRevision: previous?.planRevision ?? 0,
+      acknowledgedPublicationGeneration: previous?.publicationGeneration ?? 0,
+      limits: {
+        maxParagraphs: 1,
+        maxClusters: 16,
+        maxLines: 4,
+        maxRegions: 1,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      ...changes,
+    });
+
+  try {
+    suppliedGeometryMaterialCalls = 0;
+    const initial = session.update(
+      frame(undefined, {
+        paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
+        textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: '12345' }],
+        styleMutations: [
+          {
+            opcode: 'upsert',
+            paragraphId: 1,
+            styleId: 1,
+            cascadeOrder: 0,
+            start: 0,
+            end: 5,
+            root: true,
+            value: {
+              fontStackHandle: stack.handle,
+              fontSize: 16,
+              rasterPixelRatio: 1,
+              foregroundRgba: 0xffff_ffff,
+            },
+          },
+        ],
+        constraints: [
+          {
+            paragraphId: 1,
+            flowThreadId: 1,
+            geometryRevision: 1,
+            width: 256,
+            height: 64,
+            viewportBlockStart: 0,
+            viewportBlockEnd: 64,
+            resumeBlockOffset: 0,
+            maxLines: 4,
+            regionStart: 0,
+            resumeCluster: 0,
+            regionCount: 1,
+            resumeRegion: 0,
+            widthMode: 'at-most',
+            heightMode: 'at-most',
+            wrap: 'word',
+            align: 'start',
+            overflow: 'visible',
+            blockAlign: 'start',
+          },
+        ],
+        regions: [
+          {
+            id: 1,
+            geometryRevision: 1,
+            shape: 'rectangle',
+            exclusionStart: 0,
+            exclusionCount: 0,
+            writingMode: 'horizontal-tb',
+            textOrientation: 'mixed',
+            inlineStart: 0,
+            blockStart: 0,
+            inlineEnd: 256,
+            blockEnd: 64,
+            clipInlineStart: 0,
+            clipBlockStart: 0,
+            clipInlineEnd: 256,
+            clipBlockEnd: 64,
+          },
+        ],
+      }),
+    );
+    target.apply(initial);
+    const retained = target.draws[0];
+    assert.ok(retained);
+    assert.equal(retained.geometry.instanceCount, 5);
+    assert.equal(retained.geometry.index.count, 6);
+    assert.equal(suppliedGeometryMaterialCalls, 1);
+
+    const shortened = session.update(
+      frame(initial, {
+        textMutations: [{ paragraphId: 1, start: 4, deleteCount: 1, insert: '' }],
+        styleMutations: [
+          {
+            opcode: 'upsert',
+            paragraphId: 1,
+            styleId: 1,
+            cascadeOrder: 0,
+            start: 0,
+            end: 4,
+            root: true,
+            value: {
+              fontStackHandle: stack.handle,
+              fontSize: 16,
+              rasterPixelRatio: 1,
+              foregroundRgba: 0xffff_ffff,
+            },
+          },
+        ],
+      }),
+    );
+    target.apply(shortened);
+    assert.equal(target.draws[0], retained, 'compatible supplied geometry must reuse the retained Three draw');
+    assert.equal(retained.geometry.instanceCount, 4);
+    assert.equal(retained.geometry.index.count, 6, 'reuse must preserve the normalized triangle-list topology');
+
+    const oversized = session.update(
+      frame(shortened, {
+        textMutations: [{ paragraphId: 1, start: 4, deleteCount: 0, insert: '56' }],
+        styleMutations: [
+          {
+            opcode: 'upsert',
+            paragraphId: 1,
+            styleId: 1,
+            cascadeOrder: 0,
+            start: 0,
+            end: 6,
+            root: true,
+            value: {
+              fontStackHandle: stack.handle,
+              fontSize: 16,
+              rasterPixelRatio: 1,
+              foregroundRgba: 0xffff_ffff,
+            },
+          },
+        ],
+      }),
+    );
+    assert.throws(
+      () => target.apply(oversized),
+      (error) => error instanceof RangeError && error.message.includes('has 5 instance elements for 6 emitted records'),
+    );
+    assert.equal(target.draws[0], retained);
+    assert.equal(retained.geometry.instanceCount, 4, 'a rejected publication must not reach retained draw mutation');
+    assert.equal(suppliedGeometryMaterialCalls, 1, 'a rejected publication must not reach material realization');
+  } finally {
+    target.dispose();
+    session.dispose();
+    stack.release();
+    font.dispose();
+    coordinator.dispose();
+    shaper.dispose();
+    registered.dispose();
+  }
+});
 
 test('Three coordinator shares shaping data across technique bindings and reference-counts stack handles', async () => {
   const [bitmapBytes, compressedMsdf, compressedSlug, wasm] = await Promise.all([

@@ -118,8 +118,8 @@ export const packageSizeBudgets = {
   // guidance left +468 of real production behaviour, which fits the existing ceiling.
   // +22 KB over main is `unicode-segmenter`, entering every graph via internal/graphemes.ts so span
   // alignment matches the engine's cluster grid. Deliberate; both hosts measure identically.
-  // Named views and supplied geometry measure 489,056 raw / 301,172 minified /
-  // 79,414 gzip / 66,261 Brotli; the ceilings retain bounded review margin.
+  // Named views and supplied geometry measure 488,878 raw / 301,090 minified /
+  // 79,441 gzip / 66,270 Brotli; the ceilings retain bounded review margin.
   'three-runtime-js': {
     rawBytes: 490_000,
     minifiedBytes: 304_000,

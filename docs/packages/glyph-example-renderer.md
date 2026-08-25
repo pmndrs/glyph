@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a headless TypeGPU
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:3dff3e6d0c2fbbe9a859096da8b7f271d0bbdf5d2c68606cc5a699eed68a113b'
+source_digest: 'sha256:f88428f9e11c31a4529a204c8d90c16984aa6627611eb06bb3ae805d175c17b6'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -66,7 +66,9 @@ generation, and decoded views over owned bytes only — dirty patch ranges and r
 is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: retained
 plans survive three frames plus capacity growth, stale borrows throw
 `TextEnginePublicationExpiredError`, a backwards acknowledgement is refused at the wire as a revision
-conflict. The acceptance test also loads a baked font through the public root loader, registers its portable binding and
+conflict. The recording device applies the complete generation-aware buffer protocol transactionally: allocation, offset
+write, u32 fill, copy, replacement generation, and exact retirement all have direct negative coverage. Font resources are
+staged atomically and rolled back if host binding registration fails. The acceptance test also loads a baked font through the public root loader, registers its portable binding and
 resource, resolves the example `/typegpu` shader to WGSL, realizes named resources, and asserts non-empty draws and one
 submission. A second test realizes supplied indexed GLB-like geometry and checks its index and instance counts.
 

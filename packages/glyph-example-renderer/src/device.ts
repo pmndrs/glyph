@@ -2,8 +2,12 @@ import tgpu from 'typegpu';
 
 import {
   assertPortableResource,
+  textShaperAbi,
   type PortableGeometryPayload,
   type TechniqueGeometryDeclaration,
+  type TextEngineBufferRecord,
+  type TextEnginePatchRecord,
+  type TextEngineRetirementRecord,
 } from '@pmndrs/glyph/core';
 import {
   glyphExampleFragment,
@@ -17,6 +21,18 @@ export interface ExampleRendererShader {
   readonly variant: typeof glyphExampleTypeGpuVariant;
   readonly vertexWgsl: string;
   readonly fragmentWgsl: string;
+}
+
+export interface ExampleRendererResourceInput {
+  readonly id: number;
+  readonly generation: number;
+  readonly name: string;
+  readonly resource: unknown;
+}
+
+export interface ExampleRendererResourceRegistration {
+  /** Restore exactly the resource state that preceded this registration. */
+  rollback(): void;
 }
 
 let resolvedExampleRendererShader: ExampleRendererShader | undefined;
@@ -46,10 +62,14 @@ export const exampleRendererShader: ExampleRendererShader = Object.freeze({
 /** A narrow TypeGPU seam: the device owns resource, buffer, geometry, and submission work. */
 export interface ExampleRendererDevice {
   readonly shader: ExampleRendererShader;
-  /** Materialize one portable raster payload under its engine and schema identities. */
-  createResource(id: number, name: string, resource: unknown, generation?: number): void;
-  /** Upload or update one plan buffer. `id` is the engine's buffer id. */
-  writeBuffer(id: number, bytes: Uint8Array): void;
+  /** Materialize a font's payloads atomically and return its synchronous rollback. */
+  createResources(resources: readonly ExampleRendererResourceInput[]): ExampleRendererResourceRegistration;
+  /** Apply one publication's complete buffer delta atomically. */
+  applyBufferPlan(
+    buffers: readonly TextEngineBufferRecord[],
+    patches: readonly TextEnginePatchRecord[],
+    retirements: readonly TextEngineRetirementRecord[],
+  ): void;
   /** Release a resource only when the retired generation still owns the id. */
   retireResource(id: number, generation: number): void;
   /** Issue the publication's draws in `orderToken` order. */
@@ -70,41 +90,60 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   readonly #resourceNames = new Map<number, string>();
   readonly #resourceGenerations = new Map<number, number>();
   readonly #resourceIds = new Map<string, number>();
+  readonly #retainedBuffers = new Map<string, RetainedExampleBuffer>();
 
   constructor(shader: ExampleRendererShader = exampleRendererShader) {
     this.shader = shader;
   }
 
+  createResources(resources: readonly ExampleRendererResourceInput[]): ExampleRendererResourceRegistration {
+    if (!Array.isArray(resources)) throw new TypeError('example renderer resources must be an array');
+    const previous = this.#resourceState();
+    const next = copyResourceState(previous);
+    for (const input of resources) applyResourceInput(next, this.shader, input);
+    this.#replaceResourceState(next);
+    let active = true;
+    return Object.freeze({
+      rollback: () => {
+        if (!active) return;
+        active = false;
+        this.#replaceResourceState(previous);
+      },
+    });
+  }
+
   createResource(id: number, name: string, resource: unknown, generation = 1): void {
-    if (!Number.isSafeInteger(id) || id < 1)
-      throw new RangeError('example renderer resource ids must be positive integers');
-    if (typeof name !== 'string' || name.length === 0)
-      throw new TypeError('example renderer resource names are required');
-    if (!Number.isSafeInteger(generation) || generation < 1)
-      throw new RangeError('example renderer resource generations must be positive integers');
-    const previousName = this.#resourceNames.get(id);
-    if (previousName !== undefined && previousName !== name) {
-      throw new Error(`example renderer resource id ${id} is already bound to "${previousName}"`);
+    this.createResources([{ id, generation, name, resource }]);
+  }
+
+  applyBufferPlan(
+    buffers: readonly TextEngineBufferRecord[],
+    patches: readonly TextEnginePatchRecord[],
+    retirements: readonly TextEngineRetirementRecord[],
+  ): void {
+    if (!Array.isArray(buffers) || !Array.isArray(patches) || !Array.isArray(retirements)) {
+      throw new TypeError('example renderer buffer plans require arrays');
     }
-    const previousId = this.#resourceIds.get(name);
-    if (previousId !== undefined && previousId !== id) {
-      throw new Error(`example renderer resource "${name}" is already bound to id ${previousId}`);
-    }
-    this.resources.set(id, resource);
-    this.resourcesByName.set(name, resource);
-    this.#resourceNames.set(id, name);
-    this.#resourceGenerations.set(id, generation);
-    this.#resourceIds.set(name, id);
-    if (this.shader.variant.geometryResource === name) {
-      this.geometriesByName.set(name, realizeGeometry(this.shader.variant.geometry, name, resource));
+    const retained = cloneRetainedBuffers(this.#retainedBuffers);
+    const active = new Map<number, string>();
+    for (const record of buffers) retainBufferRecord(retained, active, record);
+    for (const patch of patches) applyBufferPatch(retained, active, patch);
+    for (const retirement of retirements) retireBuffer(retained, active, retirement);
+    this.#retainedBuffers.clear();
+    for (const [key, buffer] of retained) this.#retainedBuffers.set(key, buffer);
+    this.buffers.clear();
+    this.buffersByName.clear();
+    for (const [id, key] of active) {
+      const buffer = retained.get(key);
+      if (buffer === undefined) continue;
+      this.buffers.set(id, buffer.bytes);
+      const name = bufferName(this.shader, buffer.policyBufferId);
+      if (name !== undefined) this.buffersByName.set(name, buffer.bytes);
     }
   }
 
-  writeBuffer(id: number, bytes: Uint8Array): void {
-    const named = Object.entries(this.shader.variant.buffers).find(([, buffer]) => buffer.id === id)?.[0];
-    const copy = bytes.slice();
-    this.buffers.set(id, copy);
-    if (named !== undefined) this.buffersByName.set(named, copy);
+  bufferBytes(id: number, generation: number): Uint8Array | undefined {
+    return this.#retainedBuffers.get(bufferKey(id, generation))?.bytes;
   }
 
   retireResource(id: number, generation: number): void {
@@ -122,7 +161,8 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   }
 
   submit(drawList: ExampleDrawList): void {
-    for (const draw of drawList.draws) this.realizedDraws.push(this.realizeDraw(draw, drawList));
+    const realized = drawList.draws.map((draw) => this.realizeDraw(draw, drawList));
+    this.realizedDraws.push(...realized);
     this.submissions.push(drawList);
   }
 
@@ -149,6 +189,42 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     if (geometry === undefined) throw new Error(`example renderer has no realized geometry resource "${name}"`);
     return geometry.instancesSource === 'records' ? Object.freeze({ ...geometry, instanceCount }) : geometry;
   }
+
+  #resourceState(): ExampleResourceState {
+    return {
+      resources: new Map(this.resources),
+      resourcesByName: new Map(this.resourcesByName),
+      geometriesByName: new Map(this.geometriesByName),
+      resourceNames: new Map(this.#resourceNames),
+      resourceGenerations: new Map(this.#resourceGenerations),
+      resourceIds: new Map(this.#resourceIds),
+    };
+  }
+
+  #replaceResourceState(state: ExampleResourceState): void {
+    replaceMap(this.resources, state.resources);
+    replaceMap(this.resourcesByName, state.resourcesByName);
+    replaceMap(this.geometriesByName, state.geometriesByName);
+    replaceMap(this.#resourceNames, state.resourceNames);
+    replaceMap(this.#resourceGenerations, state.resourceGenerations);
+    replaceMap(this.#resourceIds, state.resourceIds);
+  }
+}
+
+interface ExampleResourceState {
+  readonly resources: Map<number, unknown>;
+  readonly resourcesByName: Map<string, unknown>;
+  readonly geometriesByName: Map<string, ExampleGeometry>;
+  readonly resourceNames: Map<number, string>;
+  readonly resourceGenerations: Map<number, number>;
+  readonly resourceIds: Map<string, number>;
+}
+
+interface RetainedExampleBuffer {
+  readonly id: number;
+  readonly generation: number;
+  readonly policyBufferId: number;
+  readonly bytes: Uint8Array;
 }
 
 export interface ExampleGeometry {
@@ -166,6 +242,198 @@ export interface ExampleRealizedDraw {
   readonly draw: ExampleDraw;
   readonly primitive: ExamplePrimitiveRecord;
   readonly geometry: ExampleGeometry;
+}
+
+function copyResourceState(state: ExampleResourceState): ExampleResourceState {
+  return {
+    resources: new Map(state.resources),
+    resourcesByName: new Map(state.resourcesByName),
+    geometriesByName: new Map(state.geometriesByName),
+    resourceNames: new Map(state.resourceNames),
+    resourceGenerations: new Map(state.resourceGenerations),
+    resourceIds: new Map(state.resourceIds),
+  };
+}
+
+function applyResourceInput(
+  state: ExampleResourceState,
+  shader: ExampleRendererShader,
+  input: ExampleRendererResourceInput,
+): void {
+  assertObject(input, 'resource entry');
+  const id = positiveInteger(input.id, 'resource id');
+  const generation = positiveInteger(input.generation, 'resource generation');
+  if (typeof input.name !== 'string' || input.name.length === 0) {
+    throw new TypeError('example renderer resource names are required');
+  }
+  const previousName = state.resourceNames.get(id);
+  if (previousName !== undefined && previousName !== input.name) {
+    throw new Error(`example renderer resource id ${id} is already bound to "${previousName}"`);
+  }
+  const previousId = state.resourceIds.get(input.name);
+  if (previousId !== undefined && previousId !== id) {
+    throw new Error(`example renderer resource "${input.name}" is already bound to id ${previousId}`);
+  }
+  const geometry =
+    shader.variant.geometryResource === input.name
+      ? realizeGeometry(shader.variant.geometry, input.name, input.resource)
+      : undefined;
+  state.resources.set(id, input.resource);
+  state.resourcesByName.set(input.name, input.resource);
+  state.resourceNames.set(id, input.name);
+  state.resourceGenerations.set(id, generation);
+  state.resourceIds.set(input.name, id);
+  if (geometry !== undefined) state.geometriesByName.set(input.name, geometry);
+}
+
+function cloneRetainedBuffers(source: ReadonlyMap<string, RetainedExampleBuffer>): Map<string, RetainedExampleBuffer> {
+  return new Map([...source].map(([key, buffer]) => [key, { ...buffer, bytes: buffer.bytes.slice() }] as const));
+}
+
+function retainBufferRecord(
+  retained: Map<string, RetainedExampleBuffer>,
+  active: Map<number, string>,
+  record: TextEngineBufferRecord,
+): void {
+  assertObject(record, 'buffer record');
+  const id = positiveInteger(record.id, 'buffer id');
+  const generation = positiveInteger(record.generation, 'buffer generation');
+  const policyBufferId = positiveInteger(record.policyBufferId, 'policy buffer id');
+  const byteLength = nonnegativeInteger(record.byteLength, 'buffer byte length');
+  nonnegativeInteger(record.capacityRecords, 'buffer capacity');
+  if (!Number.isSafeInteger(record.scalarType) || record.scalarType < 1 || record.scalarType > 3) {
+    throw new RangeError('example renderer buffer scalar types must be 1, 2, or 3');
+  }
+  if (!Number.isSafeInteger(record.vectorWidth) || record.vectorWidth < 1 || record.vectorWidth > 4) {
+    throw new RangeError('example renderer buffer vector widths must be between 1 and 4');
+  }
+  if (active.has(id)) throw new Error(`example renderer plan repeats active buffer id ${id}`);
+  const key = bufferKey(id, generation);
+  const existing = retained.get(key);
+  if (
+    existing !== undefined &&
+    (existing.policyBufferId !== policyBufferId || existing.bytes.byteLength !== byteLength)
+  ) {
+    throw new Error(`example renderer buffer ${key} changed shape without changing generation`);
+  }
+  if (existing === undefined) {
+    retained.set(key, { id, generation, policyBufferId, bytes: new Uint8Array(byteLength) });
+  }
+  active.set(id, key);
+}
+
+function applyBufferPatch(
+  retained: Map<string, RetainedExampleBuffer>,
+  active: ReadonlyMap<number, string>,
+  patch: TextEnginePatchRecord,
+): void {
+  assertObject(patch, 'buffer patch');
+  const id = positiveInteger(patch.bufferId, 'patch buffer id');
+  const generation = positiveInteger(patch.bufferGeneration, 'patch buffer generation');
+  const destinationOffset = nonnegativeInteger(patch.destinationOffset, 'patch destination offset');
+  const byteLength = nonnegativeInteger(patch.byteLength, 'patch byte length');
+  const key = bufferKey(id, generation);
+  if (active.get(id) !== key) throw new Error(`example renderer patch references inactive buffer ${key}`);
+  const target = retained.get(key);
+  if (target === undefined) throw new Error(`example renderer patch references unknown buffer ${key}`);
+  assertRange(destinationOffset, byteLength, target.bytes.byteLength, 'buffer patch');
+  const opcodes = textShaperAbi.engine.patchOpcodes;
+  if (patch.opcode === opcodes.allocateOrResize) {
+    if (destinationOffset !== 0 || byteLength !== target.bytes.byteLength) {
+      throw new RangeError(`example renderer allocation patch does not match buffer ${key}`);
+    }
+    return;
+  }
+  if (patch.opcode === opcodes.retire) return;
+  if (patch.opcode === opcodes.write) {
+    if (byteLength === 0) {
+      if (patch.payload !== undefined && patch.payload.byteLength !== 0) {
+        throw new RangeError('zero-length write patch has a payload');
+      }
+      return;
+    }
+    if (!(patch.payload instanceof Uint8Array) || patch.payload.byteLength !== byteLength) {
+      throw new RangeError('write patch payload length does not match its byte length');
+    }
+    target.bytes.set(patch.payload, destinationOffset);
+    return;
+  }
+  if (patch.opcode === opcodes.fill) {
+    if (byteLength % 4 !== 0) throw new RangeError('fill patch is not u32 aligned');
+    const fillValue = nonnegativeInteger(patch.fillValue, 'fill value');
+    if (fillValue > 0xffff_ffff) throw new RangeError('fill value exceeds u32');
+    const view = new DataView(target.bytes.buffer, target.bytes.byteOffset + destinationOffset, byteLength);
+    for (let offset = 0; offset < byteLength; offset += 4) view.setUint32(offset, fillValue, true);
+    return;
+  }
+  if (patch.opcode === opcodes.copy) {
+    const sourceId = positiveInteger(patch.sourceBufferId, 'copy source buffer id');
+    const sourceKey = active.get(sourceId);
+    const source = sourceKey === undefined ? undefined : retained.get(sourceKey);
+    if (source === undefined) throw new Error(`copy patch references inactive source buffer ${sourceId}`);
+    const sourceOffset = nonnegativeInteger(patch.sourceOffset, 'copy source offset');
+    assertRange(sourceOffset, byteLength, source.bytes.byteLength, 'copy patch source');
+    if (source === target) {
+      target.bytes.copyWithin(destinationOffset, sourceOffset, sourceOffset + byteLength);
+    } else {
+      target.bytes.set(source.bytes.subarray(sourceOffset, sourceOffset + byteLength), destinationOffset);
+    }
+    return;
+  }
+  throw new Error(`unsupported text-engine patch opcode ${patch.opcode}`);
+}
+
+function retireBuffer(
+  retained: Map<string, RetainedExampleBuffer>,
+  active: Map<number, string>,
+  retirement: TextEngineRetirementRecord,
+): void {
+  assertObject(retirement, 'retirement');
+  if (retirement.kind !== textShaperAbi.engine.retirementKinds.buffer) return;
+  const id = positiveInteger(retirement.id, 'retired buffer id');
+  const generation = positiveInteger(retirement.generation, 'retired buffer generation');
+  const key = bufferKey(id, generation);
+  retained.delete(key);
+  if (active.get(id) === key) active.delete(id);
+}
+
+function bufferName(shader: ExampleRendererShader, policyBufferId: number): string | undefined {
+  return Object.entries(shader.variant.buffers).find(([, buffer]) => buffer.id === policyBufferId)?.[0];
+}
+
+function bufferKey(id: number, generation: number): string {
+  return `${id}:${generation}`;
+}
+
+function assertObject(value: unknown, label: string): asserts value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`example renderer ${label} must be an object`);
+  }
+}
+
+function positiveInteger(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new RangeError(`example renderer ${label} must be a positive integer`);
+  }
+  return value;
+}
+
+function nonnegativeInteger(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(`example renderer ${label} must be a nonnegative integer`);
+  }
+  return value;
+}
+
+function assertRange(offset: number, length: number, capacity: number, label: string): void {
+  if (offset > capacity || length > capacity - offset) {
+    throw new RangeError(`example renderer ${label} exceeds its buffer`);
+  }
+}
+
+function replaceMap<Key, Value>(target: Map<Key, Value>, source: ReadonlyMap<Key, Value>): void {
+  target.clear();
+  for (const [key, value] of source) target.set(key, value);
 }
 
 function syntheticQuadGeometry(instanceCount: number): ExampleGeometry {

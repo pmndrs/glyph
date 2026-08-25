@@ -1,5 +1,6 @@
 import {
   textShaperAbi,
+  type TextEngineBufferRecord,
   type TextEnginePatchRecord,
   type TextEngineRenderPlanView,
   type TextEngineRetirementRecord,
@@ -66,6 +67,7 @@ export interface ExampleDrawList {
   readonly publicationGeneration: number;
   readonly draws: readonly ExampleDraw[];
   readonly resourceRecords: readonly ExampleResourceRecord[];
+  readonly bufferRecords: readonly TextEngineBufferRecord[];
   readonly primitiveRecords: readonly ExamplePrimitiveRecord[];
   /** Dirty ranges: what changed on which retained buffer, not whole arrays. */
   readonly patches: readonly TextEnginePatchRecord[];
