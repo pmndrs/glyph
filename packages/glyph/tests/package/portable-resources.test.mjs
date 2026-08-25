@@ -12,7 +12,7 @@ function mutate(geometry, patch) {
 }
 
 test('the reserved portable kinds and topologies are the frozen closed sets', () => {
-  assert.deepEqual([...portableResourceKinds], ['buffer', 'texture', 'texture-array', 'geometry']);
+  assert.deepEqual([...portableResourceKinds], ['buffer', 'texture', 'texture-array', 'geometry', 'group']);
   assert.deepEqual([...portableTopologies], ['triangle-list', 'triangle-strip']);
 });
 
@@ -39,6 +39,24 @@ test('valid buffer, texture, and geometry payloads pass their reserved declared 
   assert.throws(
     () => assertPortableResource('glyph-example-colors', 'tint', { anything: ['goes', true] }),
     (error) => error instanceof TypeError && error.message.includes('not reserved'),
+  );
+});
+
+test('resource groups own named leaf payloads and reject recursive groups', () => {
+  const source = {
+    kind: 'group',
+    members: {
+      metadata: { kind: 'buffer', bytes: new Uint8Array([1, 2, 3, 4]), stride: 4 },
+      page: { kind: 'texture', format: 'r8unorm', width: 1, height: 1, bytes: new Uint8Array([5]) },
+    },
+  };
+  const normalized = normalizePortableResource('group', 'atlas', source);
+  source.members.metadata.bytes[0] = 9;
+  assert.equal(normalized.members.metadata.bytes[0], 1);
+  assert.ok(Object.isFrozen(normalized.members));
+  assert.throws(
+    () => assertPortableResource('group', 'recursive', { kind: 'group', members: { child: source } }),
+    (error) => error instanceof TypeError && error.message.includes('needs a leaf resource'),
   );
 });
 

@@ -262,7 +262,6 @@ const publication = session.update(
   compileTextEngineFrameUpdate({
     sessionId: SESSION,
     policyHandle: POLICY,
-    capabilitySet: 1,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
     acknowledgedPublicationGeneration: 0,
@@ -311,7 +310,6 @@ function frame(edits) {
     compileTextEngineFrameUpdate({
       sessionId: SESSION,
       policyHandle: POLICY,
-      capabilitySet: 1,
       expectedEngineRevision: previous.engineRevision,
       consumedPlanRevision: previous.planRevision,
       acknowledgedPublicationGeneration: previous.publicationGeneration,
@@ -398,7 +396,7 @@ A renderer integration has five responsibilities:
 4. Realize materials and submit draw packets without re-shaping, re-sorting, or reconstructing layout.
 5. Acknowledge completed publication generations before the planner reuses retired storage.
 
-Three is the maintained reference executor. `@pmndrs/glyph/three/bitmap`, `/msdf`, and `/slug` export each built-in technique's renderer-owned contract; their repeated strike/page resources remain on the established Three fallback until the portable compiler can express resource multiplicity. A custom Three technique registers its portable plan in `/core`, then selects one compatible `{ technique, variant }` through `registerThreeRasterPlanProgram`; Three assembles the host policy, and only the shader/material realization half uses `threePolicyAbi`.
+Three is the maintained reference executor. Bitmap, MSDF, and Slug register portable plans and compiled resources through the same `/core` contract as external techniques; Three retains only their shader/material and GPU realization. A custom Three technique registers its portable plan in `/core`, then selects one compatible `{ technique, variant }` through `registerThreeRasterPlanProgram`; Three assembles the host policy, and only the shader/material realization half uses `threePolicyAbi`.
 
 The renderer-neutral host, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/glyph/core`, and the technique shaders as `@pmndrs/glyph/tsl` and `@pmndrs/glyph/typegpu` — the [Core API](#core-api) section shows the four moves. A new engine integration should start from the [renderer integration guide](docs/guides/renderer-integration.md), which walks all five responsibilities above with working code, then use the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as reference material.
 

@@ -10,12 +10,15 @@ import type { AnyTechniqueSchema, PolicyBufferDeclaration, PolicyBufferDeclarati
 import {
   TextEngineRenderPlanView,
   type PortableGeometryPayload,
+  type PortableResourceGroupPayload,
+  type PortableTextureArrayPayload,
+  type PortableTexturePayload,
   type RenderPlanTable,
   type TextEnginePublication,
 } from '../core.js';
-import { bitmap, type BitmapStrikeData } from '../raster/bitmap-technique.js';
-import { msdf, type MsdfData } from '../raster/msdf.js';
-import { slug, type SlugPageData } from '../raster/slug-technique.js';
+import { bitmap } from '../raster/bitmap-technique.js';
+import { msdf } from '../raster/msdf.js';
+import { slug } from '../raster/slug-technique.js';
 
 import { bitmapShader, decorationShader, msdfShader, slugShader, type TslSlugPageResources } from '../tsl.js';
 import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-runtime.js';
@@ -191,7 +194,10 @@ export interface ThreeTextEnginePlanOwner {
   readonly drawRoot: THREE.Object3D;
   readonly pixelSnapping: boolean;
   objectForTransform(transformId: number): THREE.Object3D;
+  /** Sparse direct identities and compact indexed slots that currently resolve to objects. */
   transformIds(): Iterable<number>;
+  /** Compact slots that may address the dense GPU transform table. */
+  transformIndices(): Iterable<number>;
   readonly renderOrderBase: number;
 }
 
@@ -886,13 +892,11 @@ export class ThreeTextRenderPlanExecutor {
         const expectedTechnique = resolvedResource?.technique ?? decorationSchema.technique;
         const expectedTechniqueId = this.#coordinator.host.wireIdentities.techniqueId(expectedTechnique);
         const expectedProgramId =
-          resolvedResource !== undefined && 'program' in resolvedResource
+          resolvedResource?.program !== undefined
             ? resolvedResource.program.programId
             : this.#coordinator.host.wireIdentities.programId(expectedTechnique, 'three');
         const expectedProgramVariant =
-          resolvedResource !== undefined && 'program' in resolvedResource
-            ? (resolvedResource.program.policy.variant ?? 0)
-            : 0;
+          resolvedResource?.program !== undefined ? (resolvedResource.program.policy.variant ?? 0) : 0;
         if (
           techniqueId !== expectedTechniqueId ||
           programId !== expectedProgramId ||
@@ -1033,7 +1037,7 @@ export class ThreeTextRenderPlanExecutor {
     const drawLayout = textShaperAbi.layouts.engineDraw;
     for (let drawIndex = 0; drawIndex < draws.count; drawIndex += 1) {
       const draw = plan.record(draws, drawIndex);
-      if (plan.u32(draw + drawLayout.transformId) === 0) return new Set(this.#owner.transformIds());
+      if (plan.u32(draw + drawLayout.transformId) === 0) return new Set(this.#owner.transformIndices());
     }
     return new Set();
   }
@@ -1061,7 +1065,7 @@ export class ThreeTextRenderPlanExecutor {
     if (resolved.technique !== bitmap.id) {
       throw new Error('this Three plan target checkpoint realizes Bitmap draws only');
     }
-    const strike = bitmapStrike(resolved);
+    const atlas = textureArrayResource(resolved, 'atlas', 'r8unorm', 'Bitmap');
     const part = schemaDrawBuffers(bitmapSchema, buffers, 'Bitmap');
     const required = [part.origin, part.size, part.uvOrigin, part.uvSize, part.color, part.page];
     const key = `${resource.id}:${resource.generation}:${materialId}:snap=${String(this.#owner.pixelSnapping)}:${required
@@ -1071,7 +1075,7 @@ export class ThreeTextRenderPlanExecutor {
       )}:${transformProgramKey(transform, this.#transformGenerationForRealization())}:${addressingProgramKey(addressing)}`;
     const cached = this.#materialRealizations().get(key);
     if (cached !== undefined) return cached.material;
-    const texture = this.#bitmapTexture(resource.referenceId, strike);
+    const texture = this.#bitmapTexture(resource.referenceId, atlas);
     const runStart = TSL.uniform(0, 'uint').onObjectUpdate(
       ({ object }) => (object?.userData.pmndrsGlyphRunStart as number | undefined) ?? 0,
     );
@@ -1168,14 +1172,22 @@ export class ThreeTextRenderPlanExecutor {
       return this.#bitmapMaterial(resource, buffers, materialId, transform, addressing);
     if (resolved.technique === msdf.id) return this.#msdfMaterial(resource, buffers, materialId, transform, addressing);
     if (resolved.technique === slug.id) return this.#slugMaterial(resource, buffers, materialId, transform, addressing);
-    if ('program' in resolved)
-      return this.#planProgramMaterial(resource, resolved, buffers, materialId, transform, addressing);
+    if (resolved.program !== undefined) {
+      return this.#planProgramMaterial(
+        resource,
+        { ...resolved, program: resolved.program },
+        buffers,
+        materialId,
+        transform,
+        addressing,
+      );
+    }
     throw new Error('this Three plan target does not recognize the draw technique');
   }
 
   #planProgramMaterial(
     resource: RetainedResource,
-    resolved: Extract<ThreeTextEngineResource, { readonly program: unknown }>,
+    resolved: ThreeTextEngineResource & { readonly program: NonNullable<ThreeTextEngineResource['program']> },
     buffers: ReadonlyMap<number, RetainedBuffer>,
     materialId: number,
     transform: TransformRealization,
@@ -1239,7 +1251,9 @@ export class ThreeTextRenderPlanExecutor {
     transform: TransformRealization,
     addressing: RecordAddressing,
   ): THREE.NodeMaterial {
-    const data = msdfData(this.#coordinator.resolveResource(resource.referenceId));
+    const atlas = resourceGroup(this.#coordinator.resolveResource(resource.referenceId), 'atlas', 'MSDF');
+    const data = textureArrayMember(atlas, 'texture', 'rgba8unorm', 'MSDF');
+    const pixelRange = f32BufferMember(atlas, 'pixelRange', 'MSDF');
     const part = schemaDrawBuffers(msdfSchema, buffers, 'MSDF');
     const required = [part.rect, part.uvRect, part.uvBounds, part.color, part.effectA, part.effectB, part.page];
     const key = `msdf:${resource.id}:${resource.generation}:${materialId}:${required
@@ -1274,9 +1288,9 @@ export class ThreeTextRenderPlanExecutor {
       },
       {
         atlas: this.#msdfAtlas(resource.referenceId, data),
-        atlasWidth: data.binding.width,
-        atlasHeight: data.binding.height,
-        pixelRange: data.pixelRange,
+        atlasWidth: data.width,
+        atlasHeight: data.height,
+        pixelRange,
       },
     );
     const position =
@@ -1298,22 +1312,11 @@ export class ThreeTextRenderPlanExecutor {
     return material;
   }
 
-  #bitmapTexture(referenceId: number, strike: BitmapStrikeData): THREE.DataArrayTexture {
+  #bitmapTexture(referenceId: number, data: PortableTextureArrayPayload): THREE.DataArrayTexture {
     const textures = this.#bitmapTexturesForRealization();
     let texture = textures.get(referenceId);
     if (texture !== undefined) return texture;
-    const width = Math.max(...strike.pages.map((page) => page.width));
-    const height = Math.max(...strike.pages.map((page) => page.height));
-    const bytes = new Uint8Array(width * height * strike.pages.length);
-    for (let layer = 0; layer < strike.pages.length; layer += 1) {
-      const page = strike.pages[layer]!;
-      for (let row = 0; row < page.height; row += 1) {
-        const source = row * page.width;
-        const target = (layer * height + row) * width;
-        bytes.set(page.bytes.subarray(source, source + page.width), target);
-      }
-    }
-    texture = new THREE.DataArrayTexture(bytes, width, height, strike.pages.length);
+    texture = new THREE.DataArrayTexture(data.bytes, data.width, data.height, data.layers);
     texture.format = THREE.RedFormat;
     texture.type = THREE.UnsignedByteType;
     texture.colorSpace = THREE.NoColorSpace;
@@ -1327,20 +1330,11 @@ export class ThreeTextRenderPlanExecutor {
     return texture;
   }
 
-  #msdfAtlas(referenceId: number, data: MsdfData): THREE.DataArrayTexture {
+  #msdfAtlas(referenceId: number, data: PortableTextureArrayPayload): THREE.DataArrayTexture {
     const atlases = this.#msdfAtlasesForRealization();
     let atlas = atlases.get(referenceId);
     if (atlas !== undefined) return atlas;
-    const bytes = new Uint8Array(data.binding.width * data.binding.height * data.binding.layers * 4);
-    for (let layer = 0; layer < data.pages.length; layer += 1) {
-      const page = data.pages[layer]!;
-      for (let row = 0; row < page.height; row += 1) {
-        const source = row * page.width * 4;
-        const target = (layer * data.binding.height + row) * data.binding.width * 4;
-        bytes.set(page.bytes.subarray(source, source + page.width * 4), target);
-      }
-    }
-    atlas = new THREE.DataArrayTexture(bytes, data.binding.width, data.binding.height, data.binding.layers);
+    atlas = new THREE.DataArrayTexture(data.bytes, data.width, data.height, data.layers);
     atlas.format = THREE.RGBAFormat;
     atlas.type = THREE.UnsignedByteType;
     atlas.colorSpace = THREE.NoColorSpace;
@@ -1360,7 +1354,7 @@ export class ThreeTextRenderPlanExecutor {
     transformRealization: TransformRealization,
     addressing: RecordAddressing,
   ): THREE.NodeMaterial {
-    const page = slugPage(this.#coordinator.resolveResource(resource.referenceId));
+    const page = resourceGroup(this.#coordinator.resolveResource(resource.referenceId), 'page', 'Slug');
     const part = schemaDrawBuffers(slugSchema, buffers, 'Slug');
     const required = [
       part.rect,
@@ -1446,23 +1440,26 @@ export class ThreeTextRenderPlanExecutor {
     return material;
   }
 
-  #slugPage(referenceId: number, data: SlugPageData): RetainedSlugPage {
+  #slugPage(referenceId: number, data: PortableResourceGroupPayload): RetainedSlugPage {
     const pages = this.#slugPagesForRealization();
     let page = pages.get(referenceId);
     if (page !== undefined) return page;
-    const curves = ownedUint16(data.curveBytes);
-    const headers = ownedUint32(data.headerBytes);
-    const references = packReferencePairs(ownedUint16(data.referenceBytes), data.referenceWidth);
-    const curveTexture = dataTexture(curves, data.curveWidth, data.curveHeight, THREE.RGBAFormat, THREE.HalfFloatType);
+    const curves = textureMember(data, 'curves', 'rgba16float', 'Slug');
+    const headers = textureMember(data, 'headers', 'r32uint', 'Slug');
+    const references = textureMember(data, 'references', 'r32uint', 'Slug');
+    const curveBytes = ownedUint16(curves.bytes);
+    const headerBytes = ownedUint32(headers.bytes);
+    const referenceBytes = ownedUint32(references.bytes);
+    const curveTexture = dataTexture(curveBytes, curves.width, curves.height, THREE.RGBAFormat, THREE.HalfFloatType);
     const headerTexture = dataTexture(
-      headers,
-      data.headerWidth,
-      data.headerHeight,
+      headerBytes,
+      headers.width,
+      headers.height,
       THREE.RedIntegerFormat,
       THREE.UnsignedIntType,
     );
     const referenceTexture = dataTexture(
-      references.data,
+      referenceBytes,
       references.width,
       references.height,
       THREE.RedIntegerFormat,
@@ -1470,12 +1467,12 @@ export class ThreeTextRenderPlanExecutor {
     );
     page = {
       curveTexture,
-      curveWidth: data.curveWidth,
+      curveWidth: curves.width,
       headerTexture,
-      headerWidth: data.headerWidth,
+      headerWidth: headers.width,
       referenceTexture,
       referenceWidth: references.width,
-      byteLength: curves.byteLength + headers.byteLength + references.data.byteLength,
+      byteLength: curveBytes.byteLength + headerBytes.byteLength + referenceBytes.byteLength,
       dispose() {
         curveTexture.dispose();
         headerTexture.dispose();
@@ -1704,7 +1701,7 @@ const techniqueSchemas: ReadonlyMap<string, AnyTechniqueSchema> = new Map<string
 
 /** Glyph-origin augmentation is schema-declared: no declaration, no augmentation. */
 function glyphOriginBuffer(resource: ThreeTextEngineResource): PolicyBufferDeclaration | undefined {
-  const schema = 'program' in resource ? resource.program.schema : techniqueSchemas.get(resource.technique);
+  const schema = resource.program?.schema ?? techniqueSchemas.get(resource.technique);
   if (schema?.glyphOrigin === undefined) return undefined;
   return schema.buffers[schema.glyphOrigin.buffer];
 }
@@ -1871,25 +1868,59 @@ function baseTextMaterial(): THREE.MeshBasicNodeMaterial {
   });
 }
 
-function bitmapStrike(resource: ThreeTextEngineResource): BitmapStrikeData {
-  if (resource.technique !== bitmap.id || !('strike' in resource)) {
-    throw new Error('this Three plan target checkpoint realizes Bitmap draws only');
+function textureArrayResource(
+  resource: ThreeTextEngineResource,
+  name: string,
+  format: PortableTextureArrayPayload['format'],
+  label: string,
+): PortableTextureArrayPayload {
+  const payload = resource.resources.get(name);
+  if (payload?.kind !== 'texture-array' || payload.format !== format) {
+    throw new TypeError(`${label} draw needs ${format} texture-array resource "${name}"`);
   }
-  return resource.strike as BitmapStrikeData;
+  return payload;
 }
 
-function msdfData(resource: ThreeTextEngineResource): MsdfData {
-  if (resource.technique !== msdf.id || !('data' in resource)) {
-    throw new Error('Three MSDF draw references an incompatible resource');
-  }
-  return resource.data;
+function resourceGroup(resource: ThreeTextEngineResource, name: string, label: string): PortableResourceGroupPayload {
+  const payload = resource.resources.get(name);
+  if (payload?.kind !== 'group') throw new TypeError(`${label} draw needs resource group "${name}"`);
+  return payload;
 }
 
-function slugPage(resource: ThreeTextEngineResource): SlugPageData {
-  if (resource.technique !== slug.id || !('page' in resource)) {
-    throw new Error('Three Slug draw references an incompatible resource');
+function textureMember(
+  group: PortableResourceGroupPayload,
+  name: string,
+  format: PortableTexturePayload['format'],
+  label: string,
+): PortableTexturePayload {
+  const payload = group.members[name];
+  if (payload?.kind !== 'texture' || payload.format !== format) {
+    throw new TypeError(`${label} resource group needs ${format} texture member "${name}"`);
   }
-  return resource.page as SlugPageData;
+  return payload;
+}
+
+function textureArrayMember(
+  group: PortableResourceGroupPayload,
+  name: string,
+  format: PortableTextureArrayPayload['format'],
+  label: string,
+): PortableTextureArrayPayload {
+  const payload = group.members[name];
+  if (payload?.kind !== 'texture-array' || payload.format !== format) {
+    throw new TypeError(`${label} resource group needs ${format} texture-array member "${name}"`);
+  }
+  return payload;
+}
+
+function f32BufferMember(group: PortableResourceGroupPayload, name: string, label: string): number {
+  const payload = group.members[name];
+  if (payload?.kind !== 'buffer' || payload.stride !== 4 || payload.bytes.byteLength !== 4) {
+    throw new TypeError(`${label} resource group needs one f32 buffer member "${name}"`);
+  }
+  const value = new DataView(payload.bytes.buffer, payload.bytes.byteOffset, 4).getFloat32(0, true);
+  if (!Number.isFinite(value)) throw new TypeError(`${label} resource group member "${name}" needs a finite f32`);
+  return value;
 }
 
 function scalarArray(scalarType: number, byteLength: number): ScalarArray {
@@ -1985,20 +2016,6 @@ function ownedUint32(bytes: Uint8Array): Uint32Array {
   return new Uint32Array(copy.buffer, copy.byteOffset, copy.byteLength / 4);
 }
 
-function packReferencePairs(
-  references: Uint16Array,
-  preferredWidth: number,
-): { readonly data: Uint32Array; readonly width: number; readonly height: number } {
-  const texelCount = Math.ceil(references.length / 2);
-  const width = Math.min(preferredWidth, texelCount);
-  const height = Math.ceil(texelCount / width);
-  const data = new Uint32Array(width * height);
-  for (let index = 0; index < references.length; index += 1) {
-    data[index >> 1] = (data[index >> 1] ?? 0) | (references[index]! << ((index & 1) * 16));
-  }
-  return { data, width, height };
-}
-
 function markUpdated(buffer: RetainedBuffer, byteOffset: number, byteLength: number): void {
   const bytesPerScalar = buffer.array.BYTES_PER_ELEMENT;
   if (byteOffset % bytesPerScalar !== 0 || byteLength % bytesPerScalar !== 0) {
@@ -2047,7 +2064,7 @@ function invalidatePboTexture(attribute: THREE.StorageInstancedBufferAttribute):
 }
 
 function geometryDeclaration(resource: ThreeTextEngineResource | undefined) {
-  return resource !== undefined && 'program' in resource
+  return resource?.program !== undefined
     ? (resource.program.schema.render?.geometry ?? { kind: 'synthetic-quad' as const })
     : { kind: 'synthetic-quad' as const };
 }

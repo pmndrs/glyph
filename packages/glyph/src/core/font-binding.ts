@@ -1,21 +1,17 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { LoadedFont } from '../loaded-font.js';
-import { bitmap, bitmapSchema, type BitmapData } from '../raster/bitmap-technique.js';
-import { msdf, msdfSchema, type MsdfData } from '../raster/msdf.js';
-import { slug, slugSchema, type SlugData } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
-import { RenderWireIdentityRegistry } from './render-policy.js';
+import { RenderWireIdentityRegistry, type RenderResourceId, type RenderTechniqueId } from './render-policy.js';
 import { compileRasterFont } from './raster-plan-program.js';
 
 const MAX_U32 = 0xffff_ffff;
 const MAX_U16 = 0xffff;
-const ABSENT_PAGE = 0xffff;
 const MISSING_RESOURCE = 0xffff_ffff;
 const MAX_BINDING_FIELDS = 32;
 
 export interface BindingResource {
   readonly key: RasterResourceId;
-  readonly id: number;
+  readonly id: RenderResourceId;
   readonly generation: number;
   readonly kind: number;
   readonly reference: number;
@@ -42,7 +38,7 @@ export function schemaFieldTable<const Names extends readonly string[]>(
 }
 
 export interface FontBindingDescriptor {
-  readonly techniqueId: number;
+  readonly techniqueId: RenderTechniqueId;
   readonly programVariant: number;
   readonly glyphCount: number;
   readonly strikes: readonly number[];
@@ -63,241 +59,11 @@ export function loadedFontBindingBytes(
 ): Uint8Array {
   const compiled = compileRasterFont(font, identities);
   if (compiled !== undefined) return compiled.binding;
-  if (font.technique.id === bitmap.id && isBitmapData(font.data)) {
-    return compileBitmap(font.font.glyphCount, font.data, identities.techniqueId(bitmap), identities);
-  }
-  if (font.technique.id === msdf.id && isMsdfData(font.data)) {
-    return compileMsdf(font.font.glyphCount, font.data, identities.techniqueId(msdf), identities);
-  }
-  if (font.technique.id === slug.id && isSlugData(font.data)) {
-    return compileSlug(font.font.glyphCount, font.data, identities.techniqueId(slug), identities);
-  }
-  throw new TypeError(`no first-party font-binding compiler is registered for "${font.technique.id}"`);
-}
-
-function isBitmapData(value: unknown): value is BitmapData {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.strikes) &&
-    value.strikes.length !== 0 &&
-    value.strikes.every(
-      (strike) =>
-        isRecord(strike) &&
-        Number.isSafeInteger(strike.ppem) &&
-        Number.isSafeInteger(strike.planeUnitsPerEm) &&
-        strike.records instanceof Uint8Array &&
-        Array.isArray(strike.pages),
-    )
-  );
-}
-
-function isMsdfData(value: unknown): value is MsdfData {
-  return (
-    isRecord(value) &&
-    typeof value.resource === 'string' &&
-    Number.isSafeInteger(value.planeUnitsPerEm) &&
-    value.records instanceof Uint8Array &&
-    Array.isArray(value.pages)
-  );
-}
-
-function isSlugData(value: unknown): value is SlugData {
-  return (
-    isRecord(value) &&
-    Number.isSafeInteger(value.planeUnitsPerEm) &&
-    value.records instanceof Uint8Array &&
-    Array.isArray(value.pages)
-  );
+  throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function compileBitmap(
-  glyphCount: number,
-  data: BitmapData,
-  techniqueId: number,
-  identities: RenderWireIdentityRegistry,
-): Uint8Array {
-  const entries = data.strikes.map((strike) => strike.pages[0]!.resource);
-  const { resources, indexFor } = fontBindingResources(entries, identities);
-  const views = data.strikes.map((strike) => recordView(strike.records));
-  const bindings = data.strikes.map((strike) => ({
-    width: Math.max(...strike.pages.map((page) => page.width)),
-    height: Math.max(...strike.pages.map((page) => page.height)),
-  }));
-  const rows = checkedProduct(glyphCount, data.strikes.length, 'bitmap strike rows');
-  const strikeRecord = (row: number): { readonly view: DataView; readonly record: number; readonly strike: number } => {
-    const strike = Math.floor(row / glyphCount);
-    return { view: views[strike]!, record: (row % glyphCount) * 20, strike };
-  };
-  const atlas = (row: number, offset: number, dimension: 'width' | 'height'): number => {
-    const { view, record, strike } = strikeRecord(row);
-    const page = view.getUint16(record + 16, true);
-    return page === ABSENT_PAGE ? 0 : view.getUint16(record + offset, true) / bindings[strike]![dimension];
-  };
-  const span = (row: number, start: number, end: number, dimension: 'width' | 'height'): number => {
-    const { view, record, strike } = strikeRecord(row);
-    const page = view.getUint16(record + 16, true);
-    return page === ABSENT_PAGE
-      ? 0
-      : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) / bindings[strike]![dimension];
-  };
-  return compileFontBinding({
-    techniqueId,
-    programVariant: 0,
-    glyphCount,
-    strikes: data.strikes.map((strike) => strike.ppem),
-    resources,
-    resourceIndex(row) {
-      const { view, record, strike } = strikeRecord(row);
-      const page = view.getUint16(record + 16, true);
-      return page === ABSENT_PAGE ? MISSING_RESOURCE : indexFor(data.strikes[strike]!.pages[0]!.resource);
-    },
-    glyphF32: emptyFontBindingTable(glyphCount),
-    glyphU32: emptyFontBindingTable(glyphCount),
-    strikeF32: schemaFieldTable(bitmapSchema.binding.f32, rows, {
-      bearingX: (row) => {
-        const { view, record, strike } = strikeRecord(row);
-        return view.getInt16(record, true) / data.strikes[strike]!.planeUnitsPerEm;
-      },
-      bearingY: (row) => {
-        const { view, record, strike } = strikeRecord(row);
-        return view.getInt16(record + 6, true) / data.strikes[strike]!.planeUnitsPerEm;
-      },
-      width: (row) => {
-        const { view, record, strike } = strikeRecord(row);
-        return (view.getInt16(record + 4, true) - view.getInt16(record, true)) / data.strikes[strike]!.planeUnitsPerEm;
-      },
-      height: (row) => {
-        const { view, record, strike } = strikeRecord(row);
-        return (
-          (view.getInt16(record + 6, true) - view.getInt16(record + 2, true)) / data.strikes[strike]!.planeUnitsPerEm
-        );
-      },
-      uvOriginX: (row) => atlas(row, 8, 'width'),
-      uvOriginY: (row) => atlas(row, 10, 'height'),
-      uvSizeX: (row) => span(row, 8, 12, 'width'),
-      uvSizeY: (row) => span(row, 10, 14, 'height'),
-    }),
-    strikeU32: schemaFieldTable(bitmapSchema.binding.u32, rows, {
-      page: (row) => {
-        const { view, record } = strikeRecord(row);
-        return view.getUint16(record + 16, true);
-      },
-    }),
-    resourceF32: emptyFontBindingTable(resources.length),
-    resourceU32: emptyFontBindingTable(resources.length),
-  });
-}
-
-function compileMsdf(
-  glyphCount: number,
-  data: MsdfData,
-  techniqueId: number,
-  identities: RenderWireIdentityRegistry,
-): Uint8Array {
-  const { resources, indexFor } = fontBindingResources([data.resource], identities);
-  const view = recordView(data.records);
-  const rowRecord = (row: number): number => row * 20;
-  const pageAt = (row: number): number => view.getUint16(rowRecord(row) + 16, true);
-  const atlas = (row: number, offset: number, dimension: 'width' | 'height'): number => {
-    const page = pageAt(row);
-    return page === ABSENT_PAGE ? 0 : view.getUint16(rowRecord(row) + offset, true) / data.binding[dimension];
-  };
-  const span = (row: number, start: number, end: number, dimension: 'width' | 'height'): number => {
-    const page = pageAt(row);
-    const record = rowRecord(row);
-    return page === ABSENT_PAGE
-      ? 0
-      : (view.getUint16(record + end, true) - view.getUint16(record + start, true)) / data.binding[dimension];
-  };
-  return compileFontBinding({
-    techniqueId,
-    programVariant: 0,
-    glyphCount,
-    strikes: [0],
-    resources,
-    resourceIndex(row) {
-      return pageAt(row) === ABSENT_PAGE ? MISSING_RESOURCE : indexFor(data.resource);
-    },
-    glyphF32: schemaFieldTable(msdfSchema.binding.f32, glyphCount, {
-      bearingX: (row) => view.getInt16(rowRecord(row), true) / data.planeUnitsPerEm,
-      bearingY: (row) => view.getInt16(rowRecord(row) + 6, true) / data.planeUnitsPerEm,
-      width: (row) =>
-        (view.getInt16(rowRecord(row) + 4, true) - view.getInt16(rowRecord(row), true)) / data.planeUnitsPerEm,
-      height: (row) =>
-        (view.getInt16(rowRecord(row) + 6, true) - view.getInt16(rowRecord(row) + 2, true)) / data.planeUnitsPerEm,
-      uvOriginX: (row) => atlas(row, 8, 'width'),
-      uvOriginY: (row) => atlas(row, 10, 'height'),
-      uvSizeX: (row) => span(row, 8, 12, 'width'),
-      uvSizeY: (row) => span(row, 10, 14, 'height'),
-      uvMaxX: (row) => atlas(row, 12, 'width'),
-      uvMaxY: (row) => atlas(row, 14, 'height'),
-    }),
-    glyphU32: schemaFieldTable(msdfSchema.binding.u32, glyphCount, { page: (row) => pageAt(row) }),
-    strikeF32: emptyFontBindingTable(glyphCount),
-    strikeU32: emptyFontBindingTable(glyphCount),
-    resourceF32: emptyFontBindingTable(resources.length),
-    resourceU32: emptyFontBindingTable(resources.length),
-  });
-}
-
-function compileSlug(
-  glyphCount: number,
-  data: SlugData,
-  techniqueId: number,
-  identities: RenderWireIdentityRegistry,
-): Uint8Array {
-  const { resources, indexFor } = fontBindingResources(
-    data.pages.map((page) => page.resource),
-    identities,
-  );
-  const view = recordView(data.records);
-  const record = (row: number): number => row * 40;
-  const pageAt = (row: number): number => view.getUint16(record(row) + 8, true);
-  const normalized = (row: number, offset: number): number =>
-    view.getInt16(record(row) + offset, true) / data.planeUnitsPerEm;
-  const width = (row: number): number => normalized(row, 4) - normalized(row, 0);
-  const height = (row: number): number => normalized(row, 6) - normalized(row, 2);
-  const horizontalBands = (row: number): number => view.getUint16(record(row) + 10, true);
-  const verticalBands = (row: number): number => view.getUint16(record(row) + 12, true);
-  const bandScaleX = (row: number): number => (width(row) === 0 ? 0 : verticalBands(row) / width(row));
-  const bandScaleY = (row: number): number => (height(row) === 0 ? 0 : horizontalBands(row) / height(row));
-  return compileFontBinding({
-    techniqueId,
-    programVariant: 0,
-    glyphCount,
-    strikes: [0],
-    resources,
-    resourceIndex(row) {
-      const page = pageAt(row);
-      return page === ABSENT_PAGE ? MISSING_RESOURCE : indexFor(data.pages[page]!.resource);
-    },
-    glyphF32: schemaFieldTable(slugSchema.binding.f32, glyphCount, {
-      bearingX: (row) => normalized(row, 0),
-      bearingY: (row) => normalized(row, 6),
-      width: (row) => width(row),
-      height: (row) => height(row),
-      bandScaleX: (row) => bandScaleX(row),
-      bandScaleY: (row) => bandScaleY(row),
-      bandOffsetX: (row) => -normalized(row, 0) * bandScaleX(row),
-      bandOffsetY: (row) => -normalized(row, 2) * bandScaleY(row),
-    }),
-    glyphU32: schemaFieldTable(slugSchema.binding.u32, glyphCount, {
-      curveStart: (row) => view.getUint32(record(row) + 16, true),
-      headerStart: (row) => view.getUint32(record(row) + 24, true),
-      referenceStart: (row) => view.getUint32(record(row) + 28, true),
-      bandStart: (row) => view.getUint32(record(row) + 32, true),
-      horizontalBands: (row) => horizontalBands(row),
-      verticalBands: (row) => verticalBands(row),
-    }),
-    strikeF32: emptyFontBindingTable(glyphCount),
-    strikeU32: emptyFontBindingTable(glyphCount),
-    resourceF32: emptyFontBindingTable(resources.length),
-    resourceU32: emptyFontBindingTable(resources.length),
-  });
 }
 
 export function fontBindingResources(

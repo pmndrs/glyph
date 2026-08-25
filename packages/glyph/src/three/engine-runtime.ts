@@ -1,15 +1,22 @@
 import type { LoadedFont } from '../loaded-font.js';
-import { bitmap, type BitmapData, type BitmapStrikeData } from '../raster/bitmap-technique.js';
-import { msdf, type MsdfData } from '../raster/msdf.js';
-import { slug, type SlugData, type SlugPageData } from '../raster/slug-technique.js';
+import { bitmap } from '../raster/bitmap-technique.js';
+import { msdf } from '../raster/msdf.js';
+import { slug } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { observeTextRuntimeDispose, type TextRuntime } from '../text-runtime.js';
 import {
-  loadedFontBindingBytes,
+  compileRasterFont,
+  id,
   observeLoadedFontDispose,
   resolveRasterPlanProgram,
   TextEngineHost,
   textRuntimeShaper,
+  type FontBindingHandle,
+  type FontStackHandle,
+  type GlyphId,
+  type GlyphIdKind,
+  type MaterialHandle,
+  type PolicyHandle,
   type PortableGeometryPayload,
   type PortableResource,
   type TextEngineSession,
@@ -24,28 +31,28 @@ import {
   type CompiledThreeRasterPlanProgram,
 } from './plan-program-registry.js';
 
-const POLICY_HANDLE = 1;
+const POLICY_HANDLE = id('policy', 'glyph-three/render');
 const MAX_U32 = 0xffff_ffff;
 const coordinators = new WeakMap<TextRuntime, ThreeTextEngineCoordinator>();
 const coordinatorDisposeObservers = new WeakMap<ThreeTextEngineCoordinator, () => void>();
 
 export interface ThreeTextEngineStackLease {
-  readonly handle: number;
+  readonly handle: FontStackHandle;
   release(): void;
 }
 
 export interface ThreeTextMaterialLease {
-  readonly id: number;
+  readonly id: MaterialHandle;
   release(): void;
 }
 
 interface RetainedStack {
-  readonly handle: number;
+  readonly handle: FontStackHandle;
   references: number;
 }
 
 interface RetainedMaterial {
-  readonly id: number;
+  readonly id: MaterialHandle;
   readonly material: ThreeTextMaterial;
   references: number;
 }
@@ -59,17 +66,13 @@ interface PreparedResource {
   readonly resource: ThreeTextEngineResource;
 }
 
-export type ThreeTextEngineResource =
-  | Readonly<{ technique: typeof bitmap.id; strike: BitmapStrikeData }>
-  | Readonly<{ technique: typeof msdf.id; data: MsdfData }>
-  | Readonly<{ technique: typeof slug.id; page: SlugPageData }>
-  | Readonly<{
-      technique: string;
-      resourceName: string;
-      resources: ReadonlyMap<string, PortableResource>;
-      resourceReferences: ReadonlyMap<string, number>;
-      program: CompiledThreeRasterPlanProgram;
-    }>;
+export type ThreeTextEngineResource = Readonly<{
+  technique: string;
+  resourceName: string;
+  resources: ReadonlyMap<string, PortableResource>;
+  resourceReferences: ReadonlyMap<string, number>;
+  program?: CompiledThreeRasterPlanProgram;
+}>;
 
 export interface ThreeTextEngineCoordinatorOptions {
   /** Renderer-policy choice; indexed is the first-party high-throughput default. */
@@ -79,7 +82,7 @@ export interface ThreeTextEngineCoordinatorOptions {
 /** Three-owned cold registrations shared by every text batch using one renderer-neutral runtime. */
 export class ThreeTextEngineCoordinator {
   readonly host: TextEngineHost;
-  readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, number>();
+  readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, FontBindingHandle>();
   readonly #resources = new Map<number, RetainedResourceOwners>();
   readonly #fontResourceReferences = new Map<LoadedFont<AnyRasterTechnique>, Set<number>>();
   readonly #fontDisposeObservers = new Map<LoadedFont<AnyRasterTechnique>, () => void>();
@@ -128,7 +131,7 @@ export class ThreeTextEngineCoordinator {
     }
   }
 
-  get policyHandle(): number {
+  get policyHandle(): PolicyHandle {
     return POLICY_HANDLE;
   }
 
@@ -239,54 +242,60 @@ export class ThreeTextEngineCoordinator {
     if (failure !== undefined) throw failure;
   }
 
-  #bindingHandle(font: LoadedFont<AnyRasterTechnique>): number {
+  #bindingHandle(font: LoadedFont<AnyRasterTechnique>): FontBindingHandle {
     if (font.disposed) throw new TypeError('cannot register a disposed loaded font with the Three text engine');
     const existing = this.#bindingHandles.get(font);
     if (existing !== undefined) return existing;
     const program = this.#planPrograms.get(font.technique.id);
-    if (program === undefined && resolveRasterPlanProgram(font.technique.id) !== undefined) {
+    const portable = resolveRasterPlanProgram(font.technique.id);
+    if (portable === undefined) {
+      throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
+    }
+    if (
+      program === undefined &&
+      font.technique.id !== bitmap.id &&
+      font.technique.id !== msdf.id &&
+      font.technique.id !== slug.id
+    ) {
       throw new TypeError(`Three has no registered renderer variant for portable technique "${font.technique.id}"`);
     }
-    let binding: Uint8Array;
-    let prepared: readonly PreparedResource[];
-    if (program === undefined) {
-      binding = loadedFontBindingBytes(font, this.host.wireIdentities);
-      prepared = this.#firstPartyResources(font);
-    } else {
-      const compiled = program.compileFont(font, this.host.wireIdentities);
-      const namedResources = new Map<string, PortableResource>();
-      const resourceReferences = new Map<string, number>();
-      const resourceNames = new Map<string, string>();
-      for (const [name, key] of compiled.declaredResources) {
-        const resource = compiled.resources.get(key);
-        if (resource === undefined) throw new Error(`compiled font omitted declared resource "${name}"`);
-        namedResources.set(name, resource);
-        resourceReferences.set(name, this.host.wireIdentities.resourceId(key));
-        resourceNames.set(key, name);
-      }
-      assertThreeGeometryPayload(program, namedResources);
-      const resources = readonlyMap(namedResources);
-      const references = readonlyMap(resourceReferences);
-      const next: PreparedResource[] = [];
-      for (const key of compiled.resources.keys()) {
-        const resourceName = resourceNames.get(key);
-        if (resourceName === undefined) throw new Error(`compiled font retained an unnamed resource "${key}"`);
-        next.push({
-          key,
-          resource: {
-            technique: font.technique.id,
-            resourceName,
-            resources,
-            resourceReferences: references,
-            program,
-          },
-        });
-      }
-      binding = compiled.binding;
-      prepared = next;
+    const compiled = compileRasterFont(font, this.host.wireIdentities);
+    if (compiled === undefined) throw new Error(`portable raster plan program "${font.technique.id}" did not compile`);
+    const resourceNames = new Map<string, string>();
+    const singletonResources = new Map<string, PortableResource>();
+    const singletonReferences = new Map<string, number>();
+    for (const [name, keys] of compiled.declaredResources) {
+      for (const key of keys) resourceNames.set(key, name);
+      if (portable.schema.resources[name]?.cardinality === 'many') continue;
+      const key = keys[0]!;
+      const resource = compiled.resources.get(key);
+      if (resource === undefined) throw new Error(`compiled font omitted declared resource "${name}"`);
+      singletonResources.set(name, resource);
+      singletonReferences.set(name, this.host.wireIdentities.resourceId(key));
     }
+    const prepared: PreparedResource[] = [];
+    for (const [key, selected] of compiled.resources) {
+      const resourceName = resourceNames.get(key);
+      if (resourceName === undefined) throw new Error(`compiled font retained an unnamed resource "${key}"`);
+      const namedResources = new Map(singletonResources);
+      const resourceReferences = new Map(singletonReferences);
+      namedResources.set(resourceName, selected);
+      resourceReferences.set(resourceName, this.host.wireIdentities.resourceId(key));
+      if (program !== undefined) assertThreeGeometryPayload(program, namedResources);
+      prepared.push({
+        key,
+        resource: {
+          technique: font.technique.id,
+          resourceName,
+          resources: readonlyMap(namedResources),
+          resourceReferences: readonlyMap(resourceReferences),
+          ...(program === undefined ? {} : { program }),
+        },
+      });
+    }
+    const binding = compiled.binding;
     this.#assertResourcesCompatible(prepared);
-    const handle = availableHandle(this.#nextBindingHandle, 'font binding');
+    const handle = namedHandle('font-binding', 'glyph-three', this.#nextBindingHandle);
     this.#observeFont(font);
     try {
       for (const { key, resource } of prepared) this.#retainResource(font, key, resource);
@@ -295,28 +304,9 @@ export class ThreeTextEngineCoordinator {
       this.#rollbackFontRegistration(font);
       throw error;
     }
-    this.#nextBindingHandle = nextHandle(handle);
+    this.#nextBindingHandle = nextOrdinal(this.#nextBindingHandle);
     this.#bindingHandles.set(font, handle);
     return handle;
-  }
-
-  #firstPartyResources(font: LoadedFont<AnyRasterTechnique>): readonly PreparedResource[] {
-    if (font.technique.id === bitmap.id) {
-      const data = font.data as BitmapData;
-      return data.strikes.map((strike) => ({
-        key: strike.pages[0]!.resource,
-        resource: { technique: bitmap.id, strike },
-      }));
-    }
-    if (font.technique.id === msdf.id) {
-      const data = font.data as MsdfData;
-      return [{ key: data.resource, resource: { technique: msdf.id, data } }];
-    }
-    if (font.technique.id === slug.id) {
-      const data = font.data as SlugData;
-      return data.pages.map((page) => ({ key: page.resource, resource: { technique: slug.id, page } }));
-    }
-    throw new TypeError(`no first-party Three resource resolver is registered for "${font.technique.id}"`);
   }
 
   #assertResourcesCompatible(resources: readonly PreparedResource[]): void {
@@ -373,16 +363,26 @@ export class ThreeTextEngineCoordinator {
     this.#bindingHandles.delete(font);
   }
 
-  #allocateStackHandle(): number {
-    return allocateHandle(this.#nextStackHandle, (next) => (this.#nextStackHandle = next), 'font stack');
+  #allocateStackHandle(): FontStackHandle {
+    return this.#allocateHandle('font-stack', this.#nextStackHandle, (next) => (this.#nextStackHandle = next));
   }
 
-  #allocateSessionHandle(): number {
-    return allocateHandle(this.#nextSessionHandle, (next) => (this.#nextSessionHandle = next), 'text session');
+  #allocateSessionHandle(): GlyphId<'session'> {
+    return this.#allocateHandle('session', this.#nextSessionHandle, (next) => (this.#nextSessionHandle = next));
   }
 
-  #allocateMaterialHandle(): number {
-    return allocateHandle(this.#nextMaterialHandle, (next) => (this.#nextMaterialHandle = next), 'material');
+  #allocateMaterialHandle(): MaterialHandle {
+    return this.#allocateHandle('material', this.#nextMaterialHandle, (next) => (this.#nextMaterialHandle = next));
+  }
+
+  #allocateHandle<const Kind extends GlyphIdKind>(
+    kind: Kind,
+    ordinal: number,
+    setNext: (next: number) => void,
+  ): GlyphId<Kind> {
+    const handle = namedHandle(kind, 'glyph-three', ordinal);
+    setNext(nextOrdinal(ordinal));
+    return handle;
   }
 
   #assertActive(): void {
@@ -408,20 +408,14 @@ export function threeTextEngineCoordinator(runtime: TextRuntime): ThreeTextEngin
   return coordinator;
 }
 
-function allocateHandle(current: number, setNext: (next: number) => void, label: string): number {
-  const handle = availableHandle(current, label);
-  setNext(nextHandle(handle));
-  return handle;
-}
-
-function availableHandle(current: number, label: string): number {
-  if (!Number.isSafeInteger(current) || current <= 0 || current > MAX_U32) {
-    throw new RangeError(`${label} handles are exhausted`);
+function namedHandle<const Kind extends GlyphIdKind>(kind: Kind, namespace: string, ordinal: number): GlyphId<Kind> {
+  if (!Number.isSafeInteger(ordinal) || ordinal <= 0 || ordinal > MAX_U32) {
+    throw new RangeError(`${kind} handles are exhausted`);
   }
-  return current;
+  return id(kind, `${namespace}/${ordinal}`);
 }
 
-function nextHandle(current: number): number {
+function nextOrdinal(current: number): number {
   return current === MAX_U32 ? MAX_U32 + 1 : current + 1;
 }
 
@@ -445,19 +439,12 @@ function readonlyMap<Key, Value>(source: Map<Key, Value>): ReadonlyMap<Key, Valu
 }
 
 function sameResourceBundle(left: ThreeTextEngineResource, right: ThreeTextEngineResource): boolean {
-  if ('resourceReferences' in left) {
-    if (!('resourceReferences' in right)) return false;
-    return (
-      left.resourceName === right.resourceName &&
-      left.program === right.program &&
-      sameMap(left.resourceReferences, right.resourceReferences, Object.is) &&
-      sameMap(left.resources, right.resources, samePortableResource)
-    );
-  }
-  if ('resourceReferences' in right) return false;
-  if ('strike' in left && 'strike' in right) return sameBitmapStrike(left.strike, right.strike);
-  if ('data' in left && 'data' in right) return sameMsdfData(left.data, right.data);
-  return 'page' in left && 'page' in right && sameSlugPage(left.page, right.page);
+  return (
+    left.resourceName === right.resourceName &&
+    left.program === right.program &&
+    sameMap(left.resourceReferences, right.resourceReferences, Object.is) &&
+    sameMap(left.resources, right.resources, samePortableResource)
+  );
 }
 
 function assertEquivalentResource(
@@ -486,65 +473,6 @@ function sameMap<Key, Value>(
   return true;
 }
 
-function sameBitmapStrike(left: BitmapStrikeData, right: BitmapStrikeData): boolean {
-  return (
-    left.ppem === right.ppem &&
-    left.planeUnitsPerEm === right.planeUnitsPerEm &&
-    sameBytes(left.records, right.records) &&
-    left.pages.length === right.pages.length &&
-    left.pages.every((page, index) => {
-      const other = right.pages[index]!;
-      return (
-        page.width === other.width &&
-        page.height === other.height &&
-        page.format === other.format &&
-        sameBytes(page.bytes, other.bytes)
-      );
-    })
-  );
-}
-
-function sameMsdfData(left: MsdfData, right: MsdfData): boolean {
-  return (
-    left.binding.width === right.binding.width &&
-    left.binding.height === right.binding.height &&
-    left.binding.layers === right.binding.layers &&
-    left.emSize === right.emSize &&
-    left.pixelRange === right.pixelRange &&
-    left.planeUnitsPerEm === right.planeUnitsPerEm &&
-    sameBytes(left.records, right.records) &&
-    (left.coverage === undefined || right.coverage === undefined
-      ? left.coverage === right.coverage
-      : sameBytes(left.coverage, right.coverage)) &&
-    left.pages.length === right.pages.length &&
-    left.pages.every((page, index) => {
-      const other = right.pages[index]!;
-      return (
-        page.width === other.width &&
-        page.height === other.height &&
-        page.format === other.format &&
-        sameBytes(page.bytes, other.bytes)
-      );
-    })
-  );
-}
-
-function sameSlugPage(left: SlugPageData, right: SlugPageData): boolean {
-  return (
-    left.curveWidth === right.curveWidth &&
-    left.curveHeight === right.curveHeight &&
-    sameBytes(left.curveBytes, right.curveBytes) &&
-    left.headerCount === right.headerCount &&
-    left.headerWidth === right.headerWidth &&
-    left.headerHeight === right.headerHeight &&
-    sameBytes(left.headerBytes, right.headerBytes) &&
-    left.referenceCount === right.referenceCount &&
-    left.referenceWidth === right.referenceWidth &&
-    left.referenceHeight === right.referenceHeight &&
-    sameBytes(left.referenceBytes, right.referenceBytes)
-  );
-}
-
 function samePortableResource(left: unknown, right: unknown): boolean {
   if (!isPortableResource(left) || !isPortableResource(right) || left.kind !== right.kind) return false;
   if (left.kind === 'buffer' && right.kind === 'buffer') {
@@ -567,13 +495,29 @@ function samePortableResource(left: unknown, right: unknown): boolean {
       sameBytes(left.bytes, right.bytes)
     );
   }
+  if (left.kind === 'group' && right.kind === 'group') {
+    return sameRecordMap(left.members, right.members, samePortableResource);
+  }
   return left.kind === 'geometry' && right.kind === 'geometry' && sameGeometry(left, right);
 }
 
 function isPortableResource(value: unknown): value is PortableResource {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const kind = (value as { readonly kind?: unknown }).kind;
-  return kind === 'buffer' || kind === 'texture' || kind === 'texture-array' || kind === 'geometry';
+  return kind === 'buffer' || kind === 'texture' || kind === 'texture-array' || kind === 'geometry' || kind === 'group';
+}
+
+function sameRecordMap<Value>(
+  left: Readonly<Record<string, Value>>,
+  right: Readonly<Record<string, Value>>,
+  same: (left: Value, right: Value) => boolean,
+): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key) => Object.hasOwn(right, key) && same(left[key]!, right[key]!))
+  );
 }
 
 function sameGeometry(left: PortableGeometryPayload, right: PortableGeometryPayload): boolean {

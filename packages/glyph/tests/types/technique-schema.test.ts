@@ -3,6 +3,7 @@ import {
   defineTechniqueGeometryKind,
   defineTechniqueSchema,
   f32,
+  id,
   schemaFieldTable,
   schemaPolicyBuffers,
   techniqueProgram,
@@ -19,8 +20,8 @@ const schema = defineTechniqueSchema({
   scope: 'glyph',
   binding: { f32: ['bearingX', 'size'] as const, u32: ['page'] as const },
   buffers: {
-    rect: { id: 1, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    page: { id: 2, scalar: 'u32', lanes: ['page'] },
+    rect: { id: id('buffer', 'type-schema/rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    page: { id: id('buffer', 'type-schema/page'), scalar: 'u32', lanes: ['page'] },
   } as const,
 });
 
@@ -80,7 +81,7 @@ const suppliedSchema = defineTechniqueSchema({
       ],
     },
   },
-  render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+  render: { resource: 'mesh', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
 });
 const positionComponents: 2 = suppliedSchema.resources.mesh.attributes[0].components;
 void positionComponents;
@@ -92,7 +93,7 @@ defineTechniqueSchema({
   binding: {},
   buffers: {},
   resources: suppliedSchema.resources,
-  render: { geometry: { kind: 'custom', name: meshlet, resource: 'mesh', coordinates: 'em' } },
+  render: { resource: 'mesh', geometry: { kind: 'custom', name: meshlet, resource: 'mesh', coordinates: 'em' } },
 });
 
 defineTechniqueSchema({
@@ -102,7 +103,7 @@ defineTechniqueSchema({
   buffers: {},
   resources: suppliedSchema.resources,
   // @ts-expect-error Extension geometry names must pass through defineTechniqueGeometryKind.
-  render: { geometry: { kind: 'custom', name: 'meshlet', resource: 'mesh', coordinates: 'em' } },
+  render: { resource: 'mesh', geometry: { kind: 'custom', name: 'meshlet', resource: 'mesh', coordinates: 'em' } },
 });
 
 defineTechniqueSchema({
@@ -112,7 +113,7 @@ defineTechniqueSchema({
 });
 
 const system = definePolicyBuffers({
-  stableGlyphId: { id: 14, scalar: 'u32', lanes: ['stableGlyphId'] },
+  stableGlyphId: { id: id('buffer', 'type-schema/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
 } as const);
 const p = techniqueProgram(schema, { system });
 const { fontSize } = p.semantics;
@@ -130,9 +131,11 @@ p.compile({
 });
 
 const foreignBuffers = definePolicyBuffers({
-  rect: { id: 1, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+  rect: { id: id('buffer', 'type-schema/foreign-rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
 } as const);
 void foreignBuffers;
+// @ts-expect-error Policy buffer declarations reject arbitrary numeric IDs.
+definePolicyBuffers({ raw: { id: 1, scalar: 'u32', lanes: ['value'] } });
 p.compile({
   rect: [scaled, scaled, scaled, scaled],
   page: [page],

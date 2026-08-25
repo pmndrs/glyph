@@ -35,7 +35,7 @@ const schema = defineTechniqueSchema({
       attributes: [{ semantic: 'position', componentType: 'f32', components: 3 }],
     },
   },
-  render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+  render: { resource: 'colors', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
 });
 
 const otherSchema = defineTechniqueSchema({
@@ -43,6 +43,14 @@ const otherSchema = defineTechniqueSchema({
   scope: 'glyph',
   binding: {},
   buffers: {},
+});
+// @ts-expect-error Resourceful schemas must select one declared resource as the per-draw render role.
+defineTechniqueSchema({
+  technique: otherTechnique.id,
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  resources: { payload: { kind: 'buffer' } },
 });
 type ResourceCoordinates = Parameters<RasterFontBinding<typeof schema.binding>['resource']>;
 const resourceCoordinates: ResourceCoordinates = [0, 1];

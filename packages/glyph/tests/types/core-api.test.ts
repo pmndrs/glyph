@@ -3,6 +3,7 @@ import {
   compileFontBinding,
   compileTextEngineFrameUpdate,
   createRuntimeShaper,
+  id,
   readTextEngineLayouts,
   readTextEngineMeasurements,
   TextEngineHost,
@@ -25,9 +26,9 @@ void shaper;
 
 declare const runtimeShaper: RuntimeShaper;
 const host = new TextEngineHost(runtimeShaper);
-host.registerPolicy(1, new Uint8Array(8));
+host.registerPolicy(id('policy', 'core-api-test/default'), new Uint8Array(8));
 const session: TextEngineSession = host.createSession({
-  handle: 1,
+  handle: id('session', 'core-api-test/session'),
   requestCapacity: 4096,
   resultCapacity: textShaperAbi.layouts.engineResult.size,
 });

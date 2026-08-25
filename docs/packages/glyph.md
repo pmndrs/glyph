@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:ef2e753861cc155d1b53842529718e4dad5066e9aa88c55b2fb95c6a679605de'
+source_digest: 'sha256:b8a3fd840a4fc182c9c15ac6d94ab4cd322dee6e108648af9e98e0c42598c57c'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -275,6 +275,20 @@ compiler alone lowers them into the strike-major wire table. Three validates dec
 semantics when a variant registers, then validates every retained payload attribute when a font is bound, before device
 realization. Material contexts retain the discriminated `PortableResource` union rather than erasing validated payloads
 to `unknown`.
+
+Portable resource declarations select `one` or `many` cardinality. Fixed-member groups carry synchronized leaf buffers
+and textures under one retained identity; groups cannot nest, geometry cannot repeat, and every resourceful schema names
+the primary render resource used by the plan primitive. Bitmap repeated strikes, MSDF atlas/range companions, and Slug
+repeated page groups all compile through this contract. Capability profiles contain capabilities only;
+`compileRenderPolicy()` assigns their nonzero wire IDs by descriptor order, and ordinary single-profile frames omit the
+selector.
+
+Renderer-authored wire identities use `id(kind, stableName)`. The helper hashes the canonical domain/name pair, returns a
+domain-branded number (`PolicyHandle`, `FontBindingHandle`, `FontStackHandle`, `TextEngineSessionHandle`,
+`MaterialHandle`, or `PolicyBufferId`), and rejects invalid names or observed collisions at the authoring call. Buffer IDs
+are folded into the nonzero `u16` ABI range; registration and policy compilation still reject conflicting IDs when values
+meet. Semantic document IDs such as paragraph and style IDs use the same helper with distinct brands, while dense renderer
+slots such as `transformIndex` remain explicit compact indices rather than identities.
 
 The first-party policy can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits

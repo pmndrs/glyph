@@ -18,6 +18,88 @@ const REGISTER_F32 = 1;
 const REGISTER_U32 = 2;
 
 const encoder = new TextEncoder();
+const namedIds = new Map<string, string>();
+
+const glyphIdKinds = new Set([
+  'buffer',
+  'policy',
+  'font-binding',
+  'font-stack',
+  'session',
+  'material',
+  'paragraph',
+  'style',
+  'flow-thread',
+  'region',
+  'exclusion',
+  'inline-object',
+  'resource',
+] as const);
+
+export type GlyphIdKind =
+  | 'buffer'
+  | 'policy'
+  | 'font-binding'
+  | 'font-stack'
+  | 'session'
+  | 'material'
+  | 'paragraph'
+  | 'style'
+  | 'flow-thread'
+  | 'region'
+  | 'exclusion'
+  | 'inline-object'
+  | 'resource';
+declare const glyphIdBrand: unique symbol;
+
+/** A deterministic, domain-branded wire identity. Buffer IDs occupy the non-reserved u16 range; others are u32. */
+export type GlyphId<Kind extends GlyphIdKind = GlyphIdKind> = number & { readonly [glyphIdBrand]: Kind };
+export type PolicyBufferId = GlyphId<'buffer'>;
+export type PolicyHandle = GlyphId<'policy'>;
+export type FontBindingHandle = GlyphId<'font-binding'>;
+export type FontStackHandle = GlyphId<'font-stack'>;
+export type TextEngineSessionHandle = GlyphId<'session'>;
+export type MaterialHandle = GlyphId<'material'>;
+export type ParagraphId = GlyphId<'paragraph'>;
+export type StyleId = GlyphId<'style'>;
+export type FlowThreadId = GlyphId<'flow-thread'>;
+export type RegionId = GlyphId<'region'>;
+export type ExclusionId = GlyphId<'exclusion'>;
+export type InlineObjectId = GlyphId<'inline-object'>;
+export type ResourceHandle = GlyphId<'resource'>;
+
+/** Derive a branded host-owned ID from a domain and stable name, rejecting collisions in this module instance. */
+export function id<const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> {
+  if (typeof kind !== 'string' || !glyphIdKinds.has(kind)) {
+    throw new TypeError('glyph ID kind is not supported');
+  }
+  if (typeof name !== 'string' || name.length === 0) throw new TypeError('glyph ID name must be a nonempty string');
+  const canonical = JSON.stringify(['glyph-id-v1', kind, name]);
+  const hash = renderWireId(canonical);
+  const value = kind === 'buffer' ? (hash % 0xfffe) + 1 : hash;
+  const key = `${kind}:${value}`;
+  const collision = namedIds.get(key);
+  if (collision !== undefined && collision !== canonical) {
+    throw new TypeError(`glyph ${kind} ID collision between ${collision} and ${canonical}`);
+  }
+  namedIds.set(key, canonical);
+  return value as GlyphId<Kind>;
+}
+
+/** @internal Reject values that did not come from this module instance's ID utility. */
+export function assertGlyphId<const Kind extends GlyphIdKind>(
+  value: unknown,
+  kind: Kind,
+  label: string,
+): GlyphId<Kind> {
+  if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > MAX_U32) {
+    throw new TypeError(`${label} must come from id('${kind}', name)`);
+  }
+  if (!namedIds.has(`${kind}:${value as number}`)) {
+    throw new TypeError(`${label} must come from id('${kind}', name)`);
+  }
+  return value as GlyphId<Kind>;
+}
 
 // Reused bit-level scratch for finite-constant checks; module scope avoids per-op allocation.
 const f32Scratch = new DataView(new ArrayBuffer(4));
@@ -30,7 +112,7 @@ export interface PolicyInput {
 }
 
 export interface PolicyBuffer {
-  readonly id: number;
+  readonly id: PolicyBufferId;
   readonly scalar: number;
   readonly vectorWidth: number;
   readonly alignment?: number;
@@ -54,7 +136,8 @@ export interface PolicyProgram {
   readonly programId: RenderProgramId;
   /** Plan primitive kind this program's records publish as; glyph when omitted. */
   readonly primitiveKind?: number;
-  readonly capabilitySetId?: number;
+  /** Capability profile this program targets; omitted programs apply to every profile. */
+  readonly capabilitySet?: PolicyCapabilitySet;
   readonly resourceKindMask?: number;
   readonly semanticViewMask?: number;
   readonly storageKeyMask?: number;
@@ -71,7 +154,6 @@ export interface PolicyProgram {
 }
 
 export interface PolicyCapabilitySet {
-  readonly id: number;
   readonly flags: number;
   readonly maxBufferBytes: number;
   readonly updateAlignment: number;
@@ -87,6 +169,49 @@ export interface PolicyCapabilitySet {
 export interface PolicyDescriptor {
   readonly capabilitySets: readonly PolicyCapabilitySet[];
   readonly programs: readonly PolicyProgram[];
+}
+
+declare const policyCapabilitySetSelectionBrand: unique symbol;
+
+/** Opaque selection of one capability profile from a specific policy descriptor. */
+export interface PolicyCapabilitySetSelection {
+  readonly [policyCapabilitySetSelectionBrand]: true;
+}
+
+const capabilitySetSelectionIds = new WeakMap<object, number>();
+
+/** Select a declared capability profile without exposing its order-dependent wire ordinal. */
+export function selectPolicyCapabilitySet(
+  descriptor: PolicyDescriptor,
+  selected: PolicyCapabilitySet,
+): PolicyCapabilitySetSelection {
+  assertPolicyDescriptorShape(descriptor);
+  if (descriptor.capabilitySets.length === 0 || descriptor.capabilitySets.length > MAX_POLICY_CAPABILITY_SETS) {
+    throw new RangeError(`policy needs one to ${MAX_POLICY_CAPABILITY_SETS} capability sets`);
+  }
+  const selectedKey = capabilitySetKey(normalizePolicyCapabilitySet(selected, 'selected policy capability set'));
+  let selectedId: number | undefined;
+  const seen = new Set<string>();
+  for (const [index, capabilitySet] of descriptor.capabilitySets.entries()) {
+    const key = capabilitySetKey(normalizePolicyCapabilitySet(capabilitySet, `policy capability set ${index}`));
+    if (seen.has(key)) throw new TypeError('policy repeats an equivalent capability set');
+    seen.add(key);
+    if (key === selectedKey) selectedId = index + 1;
+  }
+  if (selectedId === undefined) throw new TypeError('selected capability set is not declared by the policy');
+  const selection = Object.freeze({}) as PolicyCapabilitySetSelection;
+  capabilitySetSelectionIds.set(selection, selectedId);
+  return selection;
+}
+
+/** @internal Resolve only selections created by `selectPolicyCapabilitySet`. */
+export function policyCapabilitySetSelectionId(selection: unknown): number {
+  if (typeof selection !== 'object' || selection === null) {
+    throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
+  }
+  const id = capabilitySetSelectionIds.get(selection);
+  if (id === undefined) throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
+  return id;
 }
 
 declare const techniqueWireIdBrand: unique symbol;
@@ -188,8 +313,8 @@ export interface ProgramContext {
   ) => void;
   readonly constantF32: (target: number, value: number) => void;
   readonly constantU32: (target: number, value: number) => void;
-  readonly storeF32: (buffer: number, lane: number, register: number) => void;
-  readonly storeU32: (buffer: number, lane: number, register: number) => void;
+  readonly storeF32: (buffer: PolicyBufferId, lane: number, register: number) => void;
+  readonly storeU32: (buffer: PolicyBufferId, lane: number, register: number) => void;
 }
 
 export function programContext(
@@ -346,28 +471,12 @@ export function createProgram(
 }
 
 export function stores(
-  write: (buffer: number, lane: number, register: number) => void,
-  groups: readonly (readonly [number, readonly number[]])[],
+  write: (buffer: PolicyBufferId, lane: number, register: number) => void,
+  groups: readonly (readonly [PolicyBufferId, readonly number[]])[],
 ): void {
   for (const [buffer, registers] of groups) {
     for (const [lane, register] of registers.entries()) write(buffer, lane, register);
   }
-}
-
-export function floatBuffers(widths: readonly number[]): PolicyBuffer[] {
-  return widths.map((vectorWidth, index) => ({
-    id: index + 1,
-    scalar: textShaperAbi.policy.scalarTypes.f32,
-    vectorWidth,
-  }));
-}
-
-export function u32Buffers(widths: readonly number[], firstId: number): PolicyBuffer[] {
-  return widths.map((vectorWidth, index) => ({
-    id: firstId + index,
-    scalar: textShaperAbi.policy.scalarTypes.u32,
-    vectorWidth,
-  }));
 }
 
 export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
@@ -388,11 +497,14 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   if (descriptor.capabilitySets.length > MAX_POLICY_CAPABILITY_SETS) {
     throw new RangeError(`policy declares more than ${MAX_POLICY_CAPABILITY_SETS} capability sets`);
   }
-  const capabilityIds = new Set<number>();
-  for (const [index, set] of descriptor.capabilitySets.entries()) {
-    preflightCapabilitySet(set, `policy capability set ${index}`);
-    if (capabilityIds.has(set.id)) throw new TypeError(`policy repeats capability set id ${set.id}`);
-    capabilityIds.add(set.id);
+  const capabilitySets = descriptor.capabilitySets.map((set, index) =>
+    normalizePolicyCapabilitySet(set, `policy capability set ${index}`),
+  );
+  const capabilityIds = new Map<string, number>();
+  for (const [index, set] of capabilitySets.entries()) {
+    const key = capabilitySetKey(set);
+    if (capabilityIds.has(key)) throw new TypeError('policy repeats an equivalent capability set');
+    capabilityIds.set(key, index + 1);
   }
 
   if (programs.length === 0) throw new RangeError('policy declares no programs');
@@ -401,14 +513,12 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   }
   const programIds = new Set<number>();
   const variants = new Set<string>();
+  const programCapabilityIds: number[] = [];
   for (const program of programs) {
     nonzeroU32(program.techniqueId, 'policy technique id');
     nonzeroU32(program.programId, 'policy program id');
     const programLabel = `policy program ${program.programId}`;
     // Numeric domains first so the semantic rules below never judge unproven values.
-    if (program.capabilitySetId !== undefined) {
-      u32(program.capabilitySetId, `${programLabel} capability set id`);
-    }
     if (program.resourceKindMask !== undefined) u32(program.resourceKindMask, `${programLabel} resourceKindMask`);
     if (program.semanticViewMask !== undefined) u32(program.semanticViewMask, `${programLabel} semanticViewMask`);
     if (program.storageKeyMask !== undefined) u32(program.storageKeyMask, `${programLabel} storageKeyMask`);
@@ -431,7 +541,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     const bufferIds = new Set<number>();
     for (const [index, buffer] of program.buffers.entries()) {
       const bufferLabel = `policy program ${program.programId} buffer ${index}`;
-      const id = u16(buffer.id, `${bufferLabel} id`);
+      const id = u16(assertGlyphId(buffer.id, 'buffer', `${bufferLabel} id`), `${bufferLabel} id`);
       if (bufferIds.has(id)) throw new TypeError(`policy repeats buffer id ${id} within a program`);
       bufferIds.add(id);
       u8(buffer.scalar, `${bufferLabel} scalar`);
@@ -465,11 +575,9 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     }
 
     // Semantic rules, judged only after every numeric domain above held.
-    const effectiveCapabilitySetId = program.capabilitySetId ?? 0;
-    if (effectiveCapabilitySetId !== 0 && !capabilityIds.has(effectiveCapabilitySetId)) {
-      throw new TypeError(`${programLabel} references undeclared capability set ${effectiveCapabilitySetId}`);
-    }
-    preflightProgramSemantics(program, descriptor.capabilitySets);
+    const effectiveCapabilitySetId = resolveCapabilitySetId(program.capabilitySet, capabilityIds, programLabel);
+    programCapabilityIds.push(effectiveCapabilitySetId);
+    preflightProgramSemantics(program, capabilitySets, effectiveCapabilitySetId);
     if (programIds.has(program.programId)) throw new TypeError(`policy repeats program id ${program.programId}`);
     programIds.add(program.programId);
     const key = `${effectiveCapabilitySetId}:${program.techniqueId}:${variant}`;
@@ -479,13 +587,11 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
 
   // Every declared capability set must be reachable by some program; a wildcard
   // (unset) program reference covers all of them.
-  for (const set of descriptor.capabilitySets) {
-    const referenced = programs.some((program) => {
-      const id = program.capabilitySetId ?? 0;
-      return id === 0 || id === set.id;
-    });
+  for (const [index] of capabilitySets.entries()) {
+    const wireId = index + 1;
+    const referenced = programCapabilityIds.some((id) => id === 0 || id === wireId);
     if (!referenced) {
-      throw new TypeError(`policy capability set ${set.id} is declared but referenced by no program`);
+      throw new TypeError(`policy capability set ${index} is declared but referenced by no program`);
     }
   }
 
@@ -496,7 +602,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   const programsOffset = align(
     checkedAdd(
       capabilitiesOffset,
-      checkedProduct(capability.size, descriptor.capabilitySets.length, 'policy capabilities'),
+      checkedProduct(capability.size, capabilitySets.length, 'policy capabilities'),
       'policy programs',
     ),
     programLayout.alignment,
@@ -533,6 +639,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
 
   interface PlannedProgram {
     readonly value: PolicyProgram;
+    readonly capabilitySetId: number;
     readonly bufferStart: number;
     readonly operationStart: number;
     readonly inputStart: number;
@@ -543,8 +650,8 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   let bufferStart = 0;
   let operationStart = 0;
   let inputStart = 0;
-  const plans: PlannedProgram[] = programs.map((value) => {
-    const plan = { value, bufferStart, operationStart, inputStart };
+  const plans: PlannedProgram[] = programs.map((value, index) => {
+    const plan = { value, capabilitySetId: programCapabilityIds[index]!, bufferStart, operationStart, inputStart };
     bufferStart = checkedAdd(bufferStart, value.buffers.length, 'policy buffer start');
     operationStart = checkedAdd(operationStart, value.operations.length, 'policy operation start');
     inputStart = checkedAdd(inputStart, value.inputs.length, 'policy input start');
@@ -555,7 +662,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   const view = new DataView(bytes.buffer);
   view.setUint32(request.byteLength, bytes.byteLength, true);
   view.setUint32(request.capabilitySetsOffset, capabilitiesOffset, true);
-  view.setUint32(request.capabilitySetCount, descriptor.capabilitySets.length, true);
+  view.setUint32(request.capabilitySetCount, capabilitySets.length, true);
   view.setUint32(request.programsOffset, programsOffset, true);
   view.setUint32(request.programCount, programs.length, true);
   view.setUint32(request.buffersOffset, buffersOffset, true);
@@ -565,9 +672,9 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   view.setUint32(request.inputsOffset, inputsOffset, true);
   view.setUint32(request.inputCount, inputCount, true);
 
-  for (const [index, value] of descriptor.capabilitySets.entries()) {
+  for (const [index, value] of capabilitySets.entries()) {
     const offset = capabilitiesOffset + index * capability.size;
-    view.setUint32(offset + capability.id, value.id, true);
+    view.setUint32(offset + capability.id, index + 1, true);
     view.setUint32(offset + capability.flags, value.flags, true);
     view.setUint32(offset + capability.maxBufferBytes, value.maxBufferBytes, true);
     view.setUint32(offset + capability.updateAlignment, value.updateAlignment, true);
@@ -585,7 +692,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     const offset = programsOffset + index * programLayout.size;
     view.setUint32(offset + programLayout.techniqueId, value.techniqueId, true);
     view.setUint32(offset + programLayout.programId, value.programId, true);
-    view.setUint32(offset + programLayout.capabilitySetId, value.capabilitySetId ?? 0, true);
+    view.setUint32(offset + programLayout.capabilitySetId, planned.capabilitySetId, true);
     view.setUint32(offset + programLayout.resourceKindMask, value.resourceKindMask ?? 1, true);
     view.setUint32(offset + programLayout.semanticViewMask, value.semanticViewMask ?? 0, true);
     view.setUint32(offset + programLayout.storageKeyMask, value.storageKeyMask ?? 0, true);
@@ -696,7 +803,6 @@ function nonzeroU32(value: number, label: string): number {
 export function normalizePolicyCapabilitySet(value: unknown, label = 'policy capability set'): PolicyCapabilitySet {
   if (!isNonArrayObject(value)) throw new TypeError(`${label} needs an object`);
   const snapshot: PolicyCapabilitySet = Object.freeze({
-    id: value.id,
     flags: value.flags,
     maxBufferBytes: value.maxBufferBytes,
     updateAlignment: value.updateAlignment,
@@ -714,7 +820,6 @@ export function normalizePolicyCapabilitySet(value: unknown, label = 'policy cap
 
 /** Capability-set contract mirrored from validate_capability_sets. */
 function preflightCapabilitySet(set: PolicyCapabilitySet, label: string): void {
-  nonzeroU32(set.id, `${label} id`);
   u32(set.flags, `${label} flags`);
   u32(set.maxBufferBytes, `${label} maxBufferBytes`);
   u32(set.updateAlignment, `${label} updateAlignment`);
@@ -766,7 +871,11 @@ function preflightCapabilitySet(set: PolicyCapabilitySet, label: string): void {
 }
 
 /** Program-level contract mirrored from validate_policy's per-program checks. */
-function preflightProgramSemantics(program: PolicyProgram, capabilitySets: readonly PolicyCapabilitySet[]): void {
+function preflightProgramSemantics(
+  program: PolicyProgram,
+  capabilitySets: readonly PolicyCapabilitySet[],
+  effectiveCapabilitySetId: number,
+): void {
   const label = `policy program ${program.programId}`;
   const { batchFields, capabilityFlags, allocationStrategies } = textShaperAbi.policy;
   const { primitiveKinds } = textShaperAbi.engine;
@@ -811,16 +920,41 @@ function preflightProgramSemantics(program: PolicyProgram, capabilitySets: reado
 
   preflightProgramBody(program);
 
-  // A wildcard program (capability set id zero) draws against every declared set.
-  const effectiveCapabilitySetId = program.capabilitySetId ?? 0;
   for (const [index, set] of capabilitySets.entries()) {
     if (
-      (effectiveCapabilitySetId === 0 || effectiveCapabilitySetId === set.id) &&
+      (effectiveCapabilitySetId === 0 || effectiveCapabilitySetId === index + 1) &&
       (set.flags & requiredCapability) === 0
     ) {
       throw new RangeError(`policy capability set ${index} lacks the allocation support ${label} needs`);
     }
   }
+}
+
+function resolveCapabilitySetId(
+  capabilitySet: PolicyCapabilitySet | undefined,
+  capabilityIds: ReadonlyMap<string, number>,
+  programLabel: string,
+): number {
+  if (capabilitySet === undefined) return 0;
+  const normalized = normalizePolicyCapabilitySet(capabilitySet, `${programLabel} capability set`);
+  const id = capabilityIds.get(capabilitySetKey(normalized));
+  if (id === undefined) throw new TypeError(`${programLabel} references an undeclared capability set`);
+  return id;
+}
+
+function capabilitySetKey(set: PolicyCapabilitySet): string {
+  return [
+    set.flags,
+    set.maxBufferBytes,
+    set.updateAlignment,
+    set.coalesceGapBytes,
+    set.rangeCallPenaltyBytes,
+    set.maxBuffersPerDraw,
+    set.maxResourcesPerDraw,
+    set.maxIndirectDraws,
+    set.fragmentationBudget,
+    set.wholeBufferThresholdBasisPoints,
+  ].join(':');
 }
 
 /** Buffer schemas, exact input counts, and the straight-line operation graph from validate_program. */
