@@ -78,6 +78,16 @@ const GOOGLE_FONTS = 'https://raw.githubusercontent.com/google/fonts/main';
  * unfamiliar scripts reads as one continuous string rather than as a list of
  * words in different languages.
  */
+/**
+ * Atlas texels per em, and the encoded distance range in atlas pixels.
+ *
+ * The chorus sets at roughly 28 css px, so the default of 64 texels per em is
+ * more than twice what it can show. Atlas cost is area, so halving the em size
+ * quarters the artifact.
+ */
+const EM_SIZE = 32;
+const PIXEL_RANGE = 6;
+
 const ALWAYS = [0x20, 0x00b7];
 
 const check = process.argv.includes('--check');
@@ -141,10 +151,12 @@ for (const face of faces) {
       output,
       '--unicodes',
       owned.map((point) => `U+${point.toString(16).toUpperCase().padStart(4, '0')}`).join(','),
-      // MSDF: one atlas per face, but the chorus is small and static so the
-      // sampling holds, and it costs far less frame time than resolving curves
-      // for tens of thousands of glyphs.
+      // The chorus sets at roughly 28 css px, so the default of 64 atlas texels
+      // per em is more than twice what it can show. Atlas cost is area, so
+      // halving the em size quarters the artifact: this face set went from
+      // 4.64 MB to a fraction of it with no visible change.
       '--msdf',
+      `em-size=${EM_SIZE},pixel-range=${PIXEL_RANGE}`,
       ...(check ? ['--check'] : []),
     ],
     { cwd: site },
