@@ -22,6 +22,13 @@ import { compileTextEngineFrameUpdate, type TextEngineStyleMutation } from './co
 import { readTextEngineLayouts, readTextEngineMeasurements } from './core/layout-query-view.js';
 import { definePolicyBuffers } from './core/technique-schema.js';
 import {
+  id,
+  type FontBindingHandle,
+  type FontStackHandle,
+  type GlyphId,
+  type GlyphIdKind,
+} from './core/render-policy.js';
+import {
   compileRenderPolicy,
   RenderWireIdentityRegistry,
   type PolicyCapabilitySet,
@@ -43,6 +50,7 @@ import type {
 import {
   compileEngineGeometry,
   engineLimits,
+  engineStyleId,
   engineStyleValue,
   normalizedColumns,
   replacedContent,
@@ -58,26 +66,17 @@ const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
  * One engine paragraph id inside the paragraph's private session. Every `Paragraph`
  * owns a whole session, so the id is constant and no cross-paragraph arbitration exists.
  */
-const PARAGRAPH_ID = 1;
+const PARAGRAPH_ID = id('paragraph', 'glyph-paragraph/query');
 
 /**
  * The measurement-only policy registered once per runtime for paragraph sessions.
- *
- * Paragraph sessions answer synchronous semantic-view queries only; they never gather
- * or publish render plans, so the policy carries one capability set and the smallest
- * legal placeholder program. The handle lives in the high u32 range so it can never
- * collide with renderer-owned policies (the Three coordinator grows its handles up from
- * 1 on the shared Wasm instance), and every paragraph-owned handle allocates from the
- * same reserved range.
+ * Paragraph sessions answer semantic-view queries and never publish render plans.
  */
-const PARAGRAPH_POLICY_HANDLE = 0x8000_0001;
-/** First handle (font bindings, stacks, sessions) owned by the paragraph engine context. */
-const PARAGRAPH_HANDLE_BASE = 0x8000_0000;
+const PARAGRAPH_POLICY_HANDLE = id('policy', 'glyph-paragraph/measurement');
 const MEASUREMENT_TECHNIQUE = 'pmndrs.paragraph.measurement';
 const MEASUREMENT_PROGRAM_NAMESPACE = 'paragraph';
-const MEASUREMENT_CAPABILITY_SET_ID = 1;
 const measurementBuffers = definePolicyBuffers({
-  result: { id: 1, scalar: 'f32', lanes: ['value'] },
+  result: { id: id('buffer', 'glyph-paragraph/measurement-result'), scalar: 'f32', lanes: ['value'] },
 });
 const INLINE_ORIGIN_REGISTER = 0;
 
@@ -345,12 +344,11 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
     const session = this.#ensureSession();
     const text = this.#desired.text;
     const styleMutations = this.#compileStyles();
-    const geometry = compileEngineGeometry(PARAGRAPH_ID, this.#geometryRevision + 1, box, 0, text.length);
+    const geometry = compileEngineGeometry(PARAGRAPH_ID, 1, this.#geometryRevision + 1, box, 0, text.length);
     const limits = engineLimits(1, text.length, text.length, geometry.regions.length, MAX_TEXT_ENGINE_OUTPUT_BYTES);
     const request = compileTextEngineFrameUpdate({
       sessionId: session.handle,
       policyHandle: PARAGRAPH_POLICY_HANDLE,
-      capabilitySet: MEASUREMENT_CAPABILITY_SET_ID,
       expectedEngineRevision: this.#engineRevision,
       consumedPlanRevision: this.#planRevision,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
@@ -400,7 +398,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
       {
         opcode: 'upsert',
         paragraphId: PARAGRAPH_ID,
-        styleId: 1,
+        styleId: engineStyleId(PARAGRAPH_ID, 1),
         cascadeOrder: 0,
         start: 0,
         end: text.length,
@@ -416,7 +414,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
       styles.push({
         opcode: 'upsert',
         paragraphId: PARAGRAPH_ID,
-        styleId: index + 2,
+        styleId: engineStyleId(PARAGRAPH_ID, index + 2),
         cascadeOrder: index + 1,
         start: span.start,
         end: span.end,
@@ -428,7 +426,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
       });
     }
     for (let styleId = styles.length + 1; styleId <= this.#styleCount; styleId += 1) {
-      styles.push({ opcode: 'remove', paragraphId: PARAGRAPH_ID, styleId });
+      styles.push({ opcode: 'remove', paragraphId: PARAGRAPH_ID, styleId: engineStyleId(PARAGRAPH_ID, styleId) });
     }
     return styles;
   }
@@ -437,7 +435,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    * The stack handle addressing `fonts`, retaining one lease per distinct membership for
    * this paragraph's lifetime (retired on font change or disposal).
    */
-  #stackFor(fonts: readonly [LoadedFont<AnyRasterTechnique>, ...LoadedFont<AnyRasterTechnique>[]]): number {
+  #stackFor(fonts: readonly [LoadedFont<AnyRasterTechnique>, ...LoadedFont<AnyRasterTechnique>[]]): FontStackHandle {
     const prepared = this.#context.prepareFontStack(fonts);
     let lease = this.#stackLeases.get(prepared.key);
     if (lease === undefined) {
@@ -630,7 +628,7 @@ function layoutDigest(layout: ParagraphLayoutInspection): string {
 }
 
 interface ParagraphEngineStackLease {
-  readonly handle: number;
+  readonly handle: FontStackHandle;
   /** Binding-handle membership that names the stack, shared by equal font selections. */
   readonly key: string;
   readonly fonts: readonly LoadedFont<AnyRasterTechnique>[];
@@ -640,9 +638,9 @@ interface ParagraphEngineStackLease {
 /** Cold registrations shared by every `Paragraph` on one renderer-neutral runtime. */
 class ParagraphEngineContext {
   readonly host: TextEngineHost;
-  readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, number>();
+  readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, FontBindingHandle>();
   readonly #stacks = new Map<string, { lease: ParagraphEngineStackLease }>();
-  #nextHandle = PARAGRAPH_HANDLE_BASE;
+  #nextHandle = 1;
 
   constructor(shaper: RuntimeShaper) {
     this.host = new TextEngineHost(shaper);
@@ -650,7 +648,7 @@ class ParagraphEngineContext {
   }
 
   createSession(options: { requestCapacity: number; resultCapacity: number }): TextEngineSession {
-    return this.host.createSession({ ...options, handle: this.#allocateHandle('paragraph session') });
+    return this.host.createSession({ ...options, handle: this.#allocateHandle('session') });
   }
 
   /** Ensures every font in the selection has a registered binding, and names the stack by its membership. */
@@ -660,10 +658,12 @@ class ParagraphEngineContext {
   }
 
   retainFontStack(key: string, fonts: readonly LoadedFont<AnyRasterTechnique>[]): ParagraphEngineStackLease {
+    const bindingHandles = fonts.map((font) => this.#bindingHandle(font));
+    if (bindingHandles.join(',') !== key) throw new TypeError('paragraph font stack key does not match its fonts');
     let retained = this.#stacks.get(key);
     if (retained === undefined) {
-      const handle = this.#allocateHandle('paragraph font stack');
-      this.host.registerFontStack(handle, [...key.split(',').map((value) => Number.parseInt(value, 10))]);
+      const handle = this.#allocateHandle('font-stack');
+      this.host.registerFontStack(handle, bindingHandles);
       let released = false;
       const lease: ParagraphEngineStackLease = {
         handle,
@@ -684,21 +684,21 @@ class ParagraphEngineContext {
     return retained.lease;
   }
 
-  #bindingHandle(font: LoadedFont<AnyRasterTechnique>): number {
+  #bindingHandle(font: LoadedFont<AnyRasterTechnique>): FontBindingHandle {
     if (font.disposed) throw new TypeError('cannot register a disposed loaded font with the paragraph engine');
     const existing = this.#bindingHandles.get(font);
     if (existing !== undefined) return existing;
-    const handle = this.#allocateHandle('paragraph font binding');
+    const handle = this.#allocateHandle('font-binding');
     this.host.registerFontBinding(handle, font.font.handle, loadedFontBindingBytes(font, this.host.wireIdentities));
     this.#bindingHandles.set(font, handle);
     return handle;
   }
 
-  #allocateHandle(label: string): number {
-    const handle = this.#nextHandle;
-    if (handle > 0xffff_ffff) throw new RangeError(`${label} handles are exhausted`);
-    this.#nextHandle = handle + 1;
-    return handle;
+  #allocateHandle<const Kind extends GlyphIdKind>(kind: Kind): GlyphId<Kind> {
+    const ordinal = this.#nextHandle;
+    if (ordinal > 0xffff_ffff) throw new RangeError(`paragraph ${kind} handles are exhausted`);
+    this.#nextHandle = ordinal + 1;
+    return id(kind, `glyph-paragraph/${ordinal}`);
   }
 }
 
@@ -744,7 +744,6 @@ function measurementPolicyBytes(identities: RenderWireIdentityRegistry): Uint8Ar
   };
   const flags = abi.policy.capabilityFlags;
   const capabilitySet: PolicyCapabilitySet = {
-    id: MEASUREMENT_CAPABILITY_SET_ID,
     flags: flags.storageBuffers | flags.aliasVec2 | flags.aliasVec4 | flags.orderedDirect | flags.stableIndirect,
     maxBufferBytes: 64 * 1024 * 1024,
     updateAlignment: 4,

@@ -66,9 +66,14 @@ export type ThreeRasterPlanBufferCapabilities<Buffers extends PolicyBufferDeclar
 };
 
 export type ThreeRasterPlanResourceCapability<Declaration> = Declaration extends TechniqueResourceDeclaration
-  ? Declaration extends { readonly format: PortableTextureFormat }
-    ? { readonly kind: Declaration['kind']; readonly format: Declaration['format'] }
-    : { readonly kind: Declaration['kind']; readonly format?: never }
+  ? Declaration extends { readonly kind: 'group'; readonly members: infer Members }
+    ? {
+        readonly kind: 'group';
+        readonly members: { readonly [Name in keyof Members]: ThreeRasterPlanResourceCapability<Members[Name]> };
+      }
+    : Declaration extends { readonly format: PortableTextureFormat }
+      ? { readonly kind: Declaration['kind']; readonly format: Declaration['format'] }
+      : { readonly kind: Declaration['kind']; readonly format?: never }
   : never;
 
 export type ThreeRasterPlanResourceCapabilities<Resources extends TechniqueResourceDeclarations> = {
@@ -442,25 +447,79 @@ function normalizeResourceCapabilities(
     if (!isNonArrayObject(capability)) {
       throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" needs resource "${name}"`);
     }
-    const format = 'format' in declaration ? declaration.format : undefined;
-    const candidateFormat = capability.format;
-    if (capability.kind !== declaration.kind || candidateFormat !== format) {
-      throw new TypeError(
-        `Three raster variant "${techniqueId}/${variantId}" resource "${name}" must consume ` +
-          `${format === undefined ? declaration.kind : `${declaration.kind}:${format}`}`,
-      );
-    }
-    owned[name] =
-      declaration.kind === 'buffer'
-        ? Object.freeze({ kind: declaration.kind })
-        : declaration.kind === 'geometry'
-          ? Object.freeze({
-              kind: declaration.kind,
-              attributes: Object.freeze(declaration.attributes.map((attribute) => Object.freeze({ ...attribute }))),
-            })
-          : Object.freeze({ kind: declaration.kind, format: declaration.format });
+    owned[name] = normalizeResourceCapability(techniqueId, variantId, name, capability, declaration);
   }
   return Object.freeze(owned);
+}
+
+function normalizeResourceCapability(
+  techniqueId: string,
+  variantId: string,
+  name: string,
+  capability: Record<PropertyKey, unknown>,
+  declaration: TechniqueResourceDeclaration,
+): TechniqueResourceDeclaration {
+  const format =
+    declaration.kind === 'texture' || declaration.kind === 'texture-array' ? declaration.format : undefined;
+  if (capability.kind !== declaration.kind || capability.format !== format) {
+    throw new TypeError(
+      `Three raster variant "${techniqueId}/${variantId}" resource "${name}" must consume ` +
+        `${format === undefined ? declaration.kind : `${declaration.kind}:${format}`}`,
+    );
+  }
+  if (declaration.kind === 'group') {
+    const members = capability.members;
+    if (!isNonArrayObject(members)) {
+      throw new TypeError(`Three raster variant "${techniqueId}/${variantId}" resource "${name}" needs group members`);
+    }
+    assertExactNames(members, Object.keys(declaration.members), techniqueId, variantId, `resource "${name}" member`);
+    const owned: Record<string, TechniqueResourceDeclaration> = Object.create(null);
+    for (const [memberName, memberDeclaration] of Object.entries(declaration.members)) {
+      const member = members[memberName];
+      if (!isNonArrayObject(member)) {
+        throw new TypeError(
+          `Three raster variant "${techniqueId}/${variantId}" resource "${name}" needs member "${memberName}"`,
+        );
+      }
+      owned[memberName] = normalizeResourceCapability(
+        techniqueId,
+        variantId,
+        `${name}.${memberName}`,
+        member,
+        memberDeclaration,
+      );
+    }
+    return Object.freeze({
+      kind: 'group',
+      members: Object.freeze(owned),
+      ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+    }) as TechniqueResourceDeclaration;
+  }
+  if (declaration.kind === 'buffer') {
+    return Object.freeze({
+      kind: declaration.kind,
+      ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+    });
+  }
+  if (declaration.kind === 'geometry') {
+    return Object.freeze({
+      kind: declaration.kind,
+      attributes: Object.freeze(declaration.attributes.map((attribute) => Object.freeze({ ...attribute }))),
+      ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+    });
+  }
+  if (declaration.kind === 'texture') {
+    return Object.freeze({
+      kind: declaration.kind,
+      format: declaration.format,
+      ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+    });
+  }
+  return Object.freeze({
+    kind: declaration.kind,
+    format: declaration.format,
+    ...(declaration.cardinality === undefined ? {} : { cardinality: declaration.cardinality }),
+  });
 }
 
 function normalizeOutputs(techniqueId: string, variantId: string, value: unknown): Readonly<Record<string, string>> {

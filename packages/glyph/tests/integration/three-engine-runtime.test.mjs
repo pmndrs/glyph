@@ -12,15 +12,15 @@ import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
-import { defineTechniqueSchema, programId, registerRasterPlanProgram, techniqueProgram } from '../../dist/core.js';
-import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
+import { defineTechniqueSchema, id, programId, registerRasterPlanProgram, techniqueProgram } from '../../dist/core.js';
+import { decorationSchema, threeRenderPolicyBytes, threeSystemBuffers } from '../../dist/three/render-policy.js';
 import { TextEngineRenderPlanView } from '../../dist/core/plan-view.js';
 import { LoadedFontImpl } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
-import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
+import { msdf, msdfDescriptor, msdfSchema } from '../../dist/raster/msdf.js';
 import { defineRasterResourceId, defineRasterTechnique } from '../../dist/raster-technique.js';
-import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
+import { slug, slugDescriptor, slugSchema } from '../../dist/raster/slug-technique.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { registerThreeRasterPlanProgram } from '../../dist/three.js';
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
@@ -30,6 +30,16 @@ import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
+const SUPPLIED_ORIGIN_BUFFER_ID = id('buffer', 'test.three-supplied-geometry-capacity/origin');
+const PARAGRAPH_1 = id('paragraph', 'three-engine-runtime/paragraph/1');
+const PARAGRAPH_2 = id('paragraph', 'three-engine-runtime/paragraph/2');
+const STYLE_1 = id('style', 'three-engine-runtime/style/1');
+const STYLE_2 = id('style', 'three-engine-runtime/style/2');
+const FLOW_THREAD_1 = id('flow-thread', 'three-engine-runtime/flow-thread/1');
+const FLOW_THREAD_2 = id('flow-thread', 'three-engine-runtime/flow-thread/2');
+const REGION_1 = id('region', 'three-engine-runtime/region/1');
+const REGION_2 = id('region', 'three-engine-runtime/region/2');
+const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
 
 const suppliedGeometryTechnique = defineRasterTechnique({
   id: 'test.three-supplied-geometry-capacity',
@@ -46,14 +56,14 @@ const suppliedGeometrySchema = defineTechniqueSchema({
   technique: suppliedGeometryTechnique.id,
   scope: 'glyph',
   binding: {},
-  buffers: { origin: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
+  buffers: { origin: { id: SUPPLIED_ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
   resources: {
     mesh: {
       kind: 'geometry',
       attributes: [{ semantic: 'uv', componentType: 'f32', components: 2 }],
     },
   },
-  render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+  render: { resource: 'mesh', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
 });
 registerRasterPlanProgram({
   technique: suppliedGeometryTechnique,
@@ -142,12 +152,12 @@ test('records-sourced Three geometry retains supplied topology across instance-c
       return drawRoot;
     },
     transformIds: () => [],
+    transformIndices: () => [],
   });
   const frame = (engineSession, previous, changes) =>
     compileTextEngineFrameUpdate({
       sessionId: engineSession.handle,
       policyHandle: coordinator.policyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: previous?.engineRevision ?? 0,
       consumedPlanRevision: previous?.planRevision ?? 0,
       acknowledgedPublicationGeneration: previous?.publicationGeneration ?? 0,
@@ -168,13 +178,13 @@ test('records-sourced Three geometry retains supplied topology across instance-c
     suppliedGeometryMaterialCalls = 0;
     const initial = session.update(
       frame(session, undefined, {
-        paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
-        textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: '12345' }],
+        paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_1, order: 0 }],
+        textMutations: [{ paragraphId: PARAGRAPH_1, start: 0, deleteCount: 0, insert: '12345' }],
         styleMutations: [
           {
             opcode: 'upsert',
-            paragraphId: 1,
-            styleId: 1,
+            paragraphId: PARAGRAPH_1,
+            styleId: STYLE_1,
             cascadeOrder: 0,
             start: 0,
             end: 5,
@@ -189,8 +199,8 @@ test('records-sourced Three geometry retains supplied topology across instance-c
         ],
         constraints: [
           {
-            paragraphId: 1,
-            flowThreadId: 1,
+            paragraphId: PARAGRAPH_1,
+            flowThreadId: FLOW_THREAD_1,
             geometryRevision: 1,
             width: 256,
             height: 64,
@@ -212,8 +222,9 @@ test('records-sourced Three geometry retains supplied topology across instance-c
         ],
         regions: [
           {
-            id: 1,
+            id: REGION_1,
             geometryRevision: 1,
+            transformIndex: 1,
             shape: 'rectangle',
             exclusionStart: 0,
             exclusionCount: 0,
@@ -244,12 +255,12 @@ test('records-sourced Three geometry retains supplied topology across instance-c
 
     const shortened = session.update(
       frame(session, initial, {
-        textMutations: [{ paragraphId: 1, start: 4, deleteCount: 1, insert: '' }],
+        textMutations: [{ paragraphId: PARAGRAPH_1, start: 4, deleteCount: 1, insert: '' }],
         styleMutations: [
           {
             opcode: 'upsert',
-            paragraphId: 1,
-            styleId: 1,
+            paragraphId: PARAGRAPH_1,
+            styleId: STYLE_1,
             cascadeOrder: 0,
             start: 0,
             end: 4,
@@ -270,12 +281,12 @@ test('records-sourced Three geometry retains supplied topology across instance-c
     assert.equal(retained.geometry.index.count, 6, 'reuse must preserve the normalized triangle-list topology');
     const expanded = session.update(
       frame(session, shortened, {
-        textMutations: [{ paragraphId: 1, start: 4, deleteCount: 0, insert: '56' }],
+        textMutations: [{ paragraphId: PARAGRAPH_1, start: 4, deleteCount: 0, insert: '56' }],
         styleMutations: [
           {
             opcode: 'upsert',
-            paragraphId: 1,
-            styleId: 1,
+            paragraphId: PARAGRAPH_1,
+            styleId: STYLE_1,
             cascadeOrder: 0,
             start: 0,
             end: 6,
@@ -303,12 +314,12 @@ test('records-sourced Three geometry retains supplied topology across instance-c
     );
     const rejected = session.update(
       frame(session, expanded, {
-        textMutations: [{ paragraphId: 1, start: 6, deleteCount: 0, insert: '7' }],
+        textMutations: [{ paragraphId: PARAGRAPH_1, start: 6, deleteCount: 0, insert: '7' }],
         styleMutations: [
           {
             opcode: 'upsert',
-            paragraphId: 1,
-            styleId: 1,
+            paragraphId: PARAGRAPH_1,
+            styleId: STYLE_1,
             cascadeOrder: 0,
             start: 0,
             end: 7,
@@ -557,7 +568,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const initialRequest = compileTextEngineFrameUpdate({
     sessionId: session.handle,
     policyHandle: coordinator.policyHandle,
-    capabilitySet: 1,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
     acknowledgedPublicationGeneration: 0,
@@ -572,18 +582,18 @@ test('Three coordinator shares shaping data across technique bindings and refere
       maxOutputBytes: 1024 * 1024,
     },
     paragraphMutations: [
-      { opcode: 'upsert', paragraphId: 1, order: 0 },
-      { opcode: 'upsert', paragraphId: 2, order: 1 },
+      { opcode: 'upsert', paragraphId: PARAGRAPH_1, order: 0 },
+      { opcode: 'upsert', paragraphId: PARAGRAPH_2, order: 1 },
     ],
     textMutations: [
-      { paragraphId: 1, start: 0, deleteCount: 0, insert: 'abc' },
-      { paragraphId: 2, start: 0, deleteCount: 0, insert: 'def' },
+      { paragraphId: PARAGRAPH_1, start: 0, deleteCount: 0, insert: 'abc' },
+      { paragraphId: PARAGRAPH_2, start: 0, deleteCount: 0, insert: 'def' },
     ],
     styleMutations: [
       {
         opcode: 'upsert',
-        paragraphId: 1,
-        styleId: 1,
+        paragraphId: PARAGRAPH_1,
+        styleId: STYLE_1,
         cascadeOrder: 0,
         start: 0,
         end: 3,
@@ -598,8 +608,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
       },
       {
         opcode: 'upsert',
-        paragraphId: 2,
-        styleId: 1,
+        paragraphId: PARAGRAPH_2,
+        styleId: STYLE_1,
         cascadeOrder: 0,
         start: 0,
         end: 3,
@@ -615,8 +625,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
     ],
     constraints: [
       {
-        paragraphId: 1,
-        flowThreadId: 1,
+        paragraphId: PARAGRAPH_1,
+        flowThreadId: FLOW_THREAD_1,
         geometryRevision: 1,
         width: 256,
         height: 128,
@@ -636,8 +646,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
         blockAlign: 'start',
       },
       {
-        paragraphId: 2,
-        flowThreadId: 2,
+        paragraphId: PARAGRAPH_2,
+        flowThreadId: FLOW_THREAD_2,
         geometryRevision: 1,
         width: 256,
         height: 128,
@@ -659,8 +669,9 @@ test('Three coordinator shares shaping data across technique bindings and refere
     ],
     regions: [
       {
-        id: 1,
+        id: REGION_1,
         geometryRevision: 1,
+        transformIndex: 1,
         shape: 'rectangle',
         exclusionStart: 0,
         exclusionCount: 0,
@@ -676,8 +687,9 @@ test('Three coordinator shares shaping data across technique bindings and refere
         clipBlockEnd: 128,
       },
       {
-        id: 2,
+        id: REGION_2,
         geometryRevision: 1,
+        transformIndex: 2,
         shape: 'rectangle',
         exclusionStart: 0,
         exclusionCount: 0,
@@ -737,6 +749,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
       return object;
     },
     transformIds: () => paragraphObjects.keys(),
+    transformIndices: () => paragraphObjects.keys(),
   });
   target.apply(publication);
   assert.equal(target.draws.length, 2);
@@ -755,7 +768,9 @@ test('Three coordinator shares shaping data across technique bindings and refere
     target.draws.map((draw) => draw.renderOrder),
     [10, 11],
   );
-  const transformIndexAttribute = target.draws[0].geometry.getAttribute('_pmndrsGlyph_15');
+  const transformIndexAttribute = target.draws[0].geometry.getAttribute(
+    glyphAttribute(threeSystemBuffers.transformIndex.id),
+  );
   const transformTableAttribute = target.draws[0].geometry.getAttribute('_pmndrsGlyphTransforms');
   assert.ok(transformIndexAttribute.array instanceof Uint32Array);
   assert.ok(transformTableAttribute.array instanceof Float32Array);
@@ -796,7 +811,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
     compileTextEngineFrameUpdate({
       sessionId: session.handle,
       policyHandle: coordinator.policyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: publication.engineRevision,
       consumedPlanRevision: publication.planRevision,
       acknowledgedPublicationGeneration: 0,
@@ -811,8 +825,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
         maxOutputBytes: 1024 * 1024,
       },
       paragraphMutations: [
-        { opcode: 'upsert', paragraphId: 1, order: 1 },
-        { opcode: 'upsert', paragraphId: 2, order: 0 },
+        { opcode: 'upsert', paragraphId: PARAGRAPH_1, order: 1 },
+        { opcode: 'upsert', paragraphId: PARAGRAPH_2, order: 0 },
       ],
     }),
   );
@@ -847,7 +861,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
     compileTextEngineFrameUpdate({
       sessionId: session.handle,
       policyHandle: coordinator.policyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: reorderedPublication.engineRevision,
       consumedPlanRevision: reorderedPublication.planRevision,
       acknowledgedPublicationGeneration: 0,
@@ -864,8 +877,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
       styleMutations: [
         {
           opcode: 'upsert',
-          paragraphId: 2,
-          styleId: 1,
+          paragraphId: PARAGRAPH_2,
+          styleId: STYLE_1,
           cascadeOrder: 0,
           start: 0,
           end: 3,
@@ -890,7 +903,9 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(reorderedTargetDraws[0].parent, null, 'coalescing retires only the incompatible secondary draw');
   assert.equal(target.draws.length, 1);
   assert.equal(target.draws[0].geometry.instanceCount, 6);
-  const coalescedTransformIndices = target.draws[0].geometry.getAttribute('_pmndrsGlyph_15').array;
+  const coalescedTransformIndices = target.draws[0].geometry.getAttribute(
+    glyphAttribute(threeSystemBuffers.transformIndex.id),
+  ).array;
   const coalescedStart = target.draws[0].userData.pmndrsGlyphRunStart;
   assert.deepEqual(
     Array.from(coalescedTransformIndices.subarray(coalescedStart, coalescedStart + 6)),
@@ -901,7 +916,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
     compileTextEngineFrameUpdate({
       sessionId: session.handle,
       policyHandle: coordinator.policyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: coalescedPublication.engineRevision,
       consumedPlanRevision: coalescedPublication.planRevision,
       acknowledgedPublicationGeneration: 0,
@@ -915,10 +929,10 @@ test('Three coordinator shares shaping data across technique bindings and refere
         maxSlotsPerBand: 2,
         maxOutputBytes: 1024 * 1024,
       },
-      styleMutations: [2, 1].map((paragraphId) => ({
+      styleMutations: [PARAGRAPH_2, PARAGRAPH_1].map((paragraphId) => ({
         opcode: 'upsert',
         paragraphId,
-        styleId: 1,
+        styleId: STYLE_1,
         cascadeOrder: 0,
         start: 0,
         end: 3,
@@ -940,8 +954,11 @@ test('Three coordinator shares shaping data across technique bindings and refere
   target.apply(msdfPublication);
   assert.equal(target.draws.length, 1);
   assert.equal(target.draws[0].geometry.instanceCount, 6);
-  for (const policyBufferId of [1, 2, 3, 4, 5, 6, 7, 15]) {
-    assert.ok(target.draws[0].geometry.getAttribute(`_pmndrsGlyph_${policyBufferId}`));
+  for (const policyBufferId of [
+    ...Object.values(msdfSchema.buffers).map((buffer) => buffer.id),
+    threeSystemBuffers.transformIndex.id,
+  ]) {
+    assert.ok(target.draws[0].geometry.getAttribute(glyphAttribute(policyBufferId)));
   }
   assert.equal(
     target.gpuBytes,
@@ -955,7 +972,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
     compileTextEngineFrameUpdate({
       sessionId: session.handle,
       policyHandle: coordinator.policyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: msdfPublication.engineRevision,
       consumedPlanRevision: msdfPublication.planRevision,
       acknowledgedPublicationGeneration: 0,
@@ -969,10 +985,10 @@ test('Three coordinator shares shaping data across technique bindings and refere
         maxSlotsPerBand: 2,
         maxOutputBytes: 1024 * 1024,
       },
-      styleMutations: [2, 1].map((paragraphId) => ({
+      styleMutations: [PARAGRAPH_2, PARAGRAPH_1].map((paragraphId) => ({
         opcode: 'upsert',
         paragraphId,
-        styleId: 1,
+        styleId: STYLE_1,
         cascadeOrder: 0,
         start: 0,
         end: 3,
@@ -994,8 +1010,11 @@ test('Three coordinator shares shaping data across technique bindings and refere
   target.apply(slugPublication);
   assert.equal(target.draws.length, 1);
   assert.equal(target.draws[0].geometry.instanceCount, 6);
-  for (const policyBufferId of [1, 2, 3, 4, 5, 6, 7, 15]) {
-    assert.ok(target.draws[0].geometry.getAttribute(`_pmndrsGlyph_${policyBufferId}`));
+  for (const policyBufferId of [
+    ...Object.values(slugSchema.buffers).map((buffer) => buffer.id),
+    threeSystemBuffers.transformIndex.id,
+  ]) {
+    assert.ok(target.draws[0].geometry.getAttribute(glyphAttribute(policyBufferId)));
   }
   const resourceLayout = textShaperAbi.layouts.engineResource;
   const draw = slugPlan.record(slugDraws, 0);
@@ -1004,7 +1023,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(slugResource.technique, slug.id);
   assert.equal(
     target.gpuBytes,
-    textStorageBytes(target.draws) + slugPageGpuBytes(slugResource.page),
+    textStorageBytes(target.draws) + slugPageGpuBytes(slugResource.resources.get('page')),
     'retired MSDF state is excluded and the live Slug page is included',
   );
   assert.notEqual(target.gpuBytes, msdfGpuBytes);
@@ -1016,7 +1035,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   ]);
   assert.ok(target.gpuBytes > 0);
 
-  const directPolicyHandle = 2;
+  const directPolicyHandle = id('policy', 'three-engine-runtime/direct');
   coordinator.host.registerPolicy(
     directPolicyHandle,
     threeRenderPolicyBytes(coordinator.host.wireIdentities, 'direct'),
@@ -1038,23 +1057,24 @@ test('Three coordinator shares shaping data across technique bindings and refere
     Array.from({ length: directDraws.count }, (_, index) =>
       directPlan.u32(directPlan.record(directDraws, index) + drawLayout.transformId),
     ),
-    [1, 2],
+    [PARAGRAPH_1, PARAGRAPH_2],
     'the direct policy makes transform identity an authoritative Rust draw boundary',
   );
   const directTarget = new ThreeTextRenderPlanExecutor(coordinator, {
     drawRoot,
     renderOrderBase: 20,
     objectForTransform(transformId) {
-      const object = paragraphObjects.get(transformId);
+      const object = paragraphObjects.get(transformId === PARAGRAPH_1 ? 1 : transformId === PARAGRAPH_2 ? 2 : 0);
       if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
       return object;
     },
-    transformIds: () => paragraphObjects.keys(),
+    transformIds: () => [PARAGRAPH_1, PARAGRAPH_2],
+    transformIndices: () => [],
   });
   directTarget.apply(directPublication);
   assert.equal(directTarget.draws.length, 2);
   for (const [index, directDraw] of directTarget.draws.entries()) {
-    assert.equal(directDraw.geometry.getAttribute('_pmndrsGlyph_15'), undefined);
+    assert.equal(directDraw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id)), undefined);
     assert.equal(directDraw.geometry.getAttribute('_pmndrsGlyphTransforms'), undefined);
     assert.equal(directDraw.matrixAutoUpdate, false);
     assert.equal(directDraw.matrix.elements[12], index === 0 ? 4 : 7);
@@ -1072,7 +1092,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   directTarget.dispose();
   directSession.dispose();
 
-  const hybridPolicyHandle = 3;
+  const hybridPolicyHandle = id('policy', 'three-engine-runtime/hybrid');
   coordinator.host.registerPolicy(
     hybridPolicyHandle,
     threeRenderPolicyBytes(coordinator.host.wireIdentities, {
@@ -1095,18 +1115,20 @@ test('Three coordinator shares shaping data across technique bindings and refere
     drawRoot,
     renderOrderBase: 30,
     objectForTransform(transformId) {
-      const object = paragraphObjects.get(transformId);
+      const object = paragraphObjects.get(
+        transformId === PARAGRAPH_1 ? 1 : transformId === PARAGRAPH_2 ? 2 : transformId,
+      );
       if (object === undefined) throw new Error(`unknown paragraph transform ${transformId}`);
       return object;
     },
-    transformIds: () => paragraphObjects.keys(),
+    transformIds: () => [1, 2, PARAGRAPH_1, PARAGRAPH_2],
+    transformIndices: () => paragraphObjects.keys(),
   });
   hybridTarget.apply(hybridInitialPublication);
   const hybridPublication = hybridSession.update(
     compileTextEngineFrameUpdate({
       sessionId: hybridSession.handle,
       policyHandle: hybridPolicyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: hybridInitialPublication.engineRevision,
       consumedPlanRevision: hybridInitialPublication.planRevision,
       acknowledgedPublicationGeneration: 0,
@@ -1123,8 +1145,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
       styleMutations: [
         {
           opcode: 'upsert',
-          paragraphId: 2,
-          styleId: 1,
+          paragraphId: PARAGRAPH_2,
+          styleId: STYLE_1,
           cascadeOrder: 0,
           start: 0,
           end: 3,
@@ -1149,15 +1171,15 @@ test('Three coordinator shares shaping data across technique bindings and refere
     }),
     [
       [programId(bitmap, 'three'), 0],
-      [programId(msdf, 'three'), 2],
+      [programId(msdf, 'three'), PARAGRAPH_2],
     ],
     'one Rust publication may mix indexed and direct program contracts',
   );
   hybridTarget.apply(hybridPublication);
   const [hybridIndexedDraw, hybridDirectDraw] = hybridTarget.draws;
-  assert.ok(hybridIndexedDraw.geometry.getAttribute('_pmndrsGlyph_15'));
+  assert.ok(hybridIndexedDraw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id)));
   assert.ok(hybridIndexedDraw.geometry.getAttribute('_pmndrsGlyphTransforms'));
-  assert.equal(hybridDirectDraw.geometry.getAttribute('_pmndrsGlyph_15'), undefined);
+  assert.equal(hybridDirectDraw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id)), undefined);
   assert.equal(hybridDirectDraw.geometry.getAttribute('_pmndrsGlyphTransforms'), undefined);
   assert.equal(hybridDirectDraw.matrix.elements[12], 9);
   let hybridDirectDisposals = 0;
@@ -1170,7 +1192,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(hybridTarget.draws[1].material, hybridDirectDraw.material);
   paragraphObjects.get(1).position.x = 6;
   paragraphObjects.get(2).position.x = 10;
-  assert.equal(hybridTarget.syncTransforms(), 2);
+  assert.equal(hybridTarget.syncTransforms(), 3);
   assert.equal(hybridTarget.draws[0].geometry.getAttribute('_pmndrsGlyphTransforms').array[1 * 16 + 12], 6);
   assert.equal(hybridDirectDraw.matrix.elements[12], 10);
   hybridTarget.dispose();
@@ -1178,7 +1200,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   paragraphObjects.delete(20);
   hybridSession.dispose();
 
-  const stablePolicyHandle = 4;
+  const stablePolicyHandle = id('policy', 'three-engine-runtime/stable');
   coordinator.host.registerPolicy(
     stablePolicyHandle,
     threeRenderPolicyBytes(coordinator.host.wireIdentities, 'indexed', [], 'stable'),
@@ -1218,10 +1240,11 @@ test('Three coordinator shares shaping data across technique bindings and refere
       return object;
     },
     transformIds: () => paragraphObjects.keys(),
+    transformIndices: () => paragraphObjects.keys(),
   });
   stableTarget.apply(stableInitialPublication);
   const stableOrder = stableTarget.draws[0].geometry.getAttribute(`_pmndrsGlyph_${orderBinding}`);
-  const stableIds = stableTarget.draws[0].geometry.getAttribute('_pmndrsGlyph_14');
+  const stableIds = stableTarget.draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.stableGlyphId.id));
   assert.ok(stableOrder.array instanceof Uint32Array);
   assert.ok(stableIds.array instanceof Uint32Array);
   const physicalIds = stableIds.array.slice();
@@ -1231,7 +1254,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
     compileTextEngineFrameUpdate({
       sessionId: stableSession.handle,
       policyHandle: stablePolicyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: stableInitialPublication.engineRevision,
       consumedPlanRevision: stableInitialPublication.planRevision,
       acknowledgedPublicationGeneration: 0,
@@ -1246,8 +1268,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
         maxOutputBytes: 1024 * 1024,
       },
       paragraphMutations: [
-        { opcode: 'upsert', paragraphId: 1, order: 1 },
-        { opcode: 'upsert', paragraphId: 2, order: 0 },
+        { opcode: 'upsert', paragraphId: PARAGRAPH_1, order: 1 },
+        { opcode: 'upsert', paragraphId: PARAGRAPH_2, order: 0 },
       ],
     }),
   );
@@ -1282,7 +1304,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
     compileTextEngineFrameUpdate({
       sessionId: decorationSession.handle,
       policyHandle: coordinator.policyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: 0,
       consumedPlanRevision: 0,
       acknowledgedPublicationGeneration: 0,
@@ -1296,13 +1317,13 @@ test('Three coordinator shares shaping data across technique bindings and refere
         maxSlotsPerBand: 2,
         maxOutputBytes: 1024 * 1024,
       },
-      paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
-      textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'abc' }],
+      paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_1, order: 0 }],
+      textMutations: [{ paragraphId: PARAGRAPH_1, start: 0, deleteCount: 0, insert: 'abc' }],
       styleMutations: [
         {
           opcode: 'upsert',
-          paragraphId: 1,
-          styleId: 1,
+          paragraphId: PARAGRAPH_1,
+          styleId: STYLE_1,
           cascadeOrder: 0,
           start: 0,
           end: 3,
@@ -1326,8 +1347,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
       ],
       constraints: [
         {
-          paragraphId: 1,
-          flowThreadId: 1,
+          paragraphId: PARAGRAPH_1,
+          flowThreadId: FLOW_THREAD_1,
           geometryRevision: 1,
           width: 256,
           height: 128,
@@ -1349,8 +1370,9 @@ test('Three coordinator shares shaping data across technique bindings and refere
       ],
       regions: [
         {
-          id: 1,
+          id: REGION_1,
           geometryRevision: 1,
+          transformIndex: 1,
           shape: 'rectangle',
           exclusionStart: 0,
           exclusionCount: 0,
@@ -1377,6 +1399,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
       return object;
     },
     transformIds: () => paragraphObjects.keys(),
+    transformIndices: () => paragraphObjects.keys(),
   });
   decorationTarget.apply(decorationPublication);
   const primitiveKinds = decorationTarget.draws.map(
@@ -1390,8 +1413,14 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.equal(primitiveKinds.at(-1), 'decoration', 'the line-through row paints after its glyph run');
   for (const [index, decorationDraw] of decorationTarget.draws.entries()) {
     if (primitiveKinds[index] !== 'decoration') continue;
-    assert.ok(decorationDraw.geometry.getAttribute('_pmndrsGlyph_1').array instanceof Float32Array);
-    assert.ok(decorationDraw.geometry.getAttribute('_pmndrsGlyph_2').array instanceof Uint32Array);
+    assert.ok(
+      decorationDraw.geometry.getAttribute(glyphAttribute(decorationSchema.buffers.rect.id)).array instanceof
+        Float32Array,
+    );
+    assert.ok(
+      decorationDraw.geometry.getAttribute(glyphAttribute(decorationSchema.buffers.packed.id)).array instanceof
+        Uint32Array,
+    );
   }
   const decorationInstanceTotal = decorationTarget.draws.reduce(
     (total, decorationDraw) => total + decorationDraw.geometry.instanceCount,
@@ -1401,7 +1430,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
     compileTextEngineFrameUpdate({
       sessionId: decorationSession.handle,
       policyHandle: coordinator.policyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: decorationPublication.engineRevision,
       consumedPlanRevision: decorationPublication.planRevision,
       acknowledgedPublicationGeneration: decorationPublication.publicationGeneration,
@@ -1415,7 +1443,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
         maxSlotsPerBand: 2,
         maxOutputBytes: 1024 * 1024,
       },
-      textMutations: [{ paragraphId: 1, start: 0, deleteCount: 3, insert: 'abc' }],
+      textMutations: [{ paragraphId: PARAGRAPH_1, start: 0, deleteCount: 3, insert: 'abc' }],
     }),
   );
   assert.equal(
@@ -1455,8 +1483,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const topologyStyles = (spanSize) => [
     {
       opcode: 'upsert',
-      paragraphId: 1,
-      styleId: 1,
+      paragraphId: PARAGRAPH_1,
+      styleId: STYLE_1,
       cascadeOrder: 0,
       start: 0,
       end: 24,
@@ -1471,8 +1499,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
     },
     {
       opcode: 'upsert',
-      paragraphId: 1,
-      styleId: 2,
+      paragraphId: PARAGRAPH_1,
+      styleId: STYLE_2,
       cascadeOrder: 1,
       start: 8,
       end: 16,
@@ -1483,7 +1511,6 @@ test('Three coordinator shares shaping data across technique bindings and refere
     compileTextEngineFrameUpdate({
       sessionId: topologySession.handle,
       policyHandle: coordinator.policyHandle,
-      capabilitySet: 1,
       expectedEngineRevision: previous?.engineRevision ?? 0,
       consumedPlanRevision: previous?.planRevision ?? 0,
       acknowledgedPublicationGeneration: previous?.publicationGeneration ?? 0,
@@ -1503,12 +1530,12 @@ test('Three coordinator shares shaping data across technique bindings and refere
   // Frame 1: the span size equals the root — shaping runs merge across the span.
   const topologyFirst = topologySession.update(
     topologyFrame(undefined, 16, {
-      paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
-      textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'alpha beta gamma epsilon' }],
+      paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_1, order: 0 }],
+      textMutations: [{ paragraphId: PARAGRAPH_1, start: 0, deleteCount: 0, insert: 'alpha beta gamma epsilon' }],
       constraints: [
         {
-          paragraphId: 1,
-          flowThreadId: 1,
+          paragraphId: PARAGRAPH_1,
+          flowThreadId: FLOW_THREAD_1,
           geometryRevision: 1,
           width: 512,
           height: 128,
@@ -1530,8 +1557,9 @@ test('Three coordinator shares shaping data across technique bindings and refere
       ],
       regions: [
         {
-          id: 1,
+          id: REGION_1,
           geometryRevision: 1,
+          transformIndex: 1,
           shape: 'rectangle',
           exclusionStart: 0,
           exclusionCount: 0,
@@ -1608,13 +1636,6 @@ function textStorageBytes(draws) {
 }
 
 function slugPageGpuBytes(page) {
-  const references = new Uint16Array(
-    page.referenceBytes.buffer,
-    page.referenceBytes.byteOffset,
-    page.referenceBytes.byteLength / 2,
-  );
-  const texels = Math.ceil(references.length / 2);
-  const width = Math.min(page.referenceWidth, texels);
-  const height = Math.ceil(texels / width);
-  return page.curveBytes.byteLength + page.headerBytes.byteLength + width * height * 4;
+  assert.equal(page?.kind, 'group');
+  return Object.values(page.members).reduce((bytes, member) => bytes + member.bytes.byteLength, 0);
 }

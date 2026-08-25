@@ -1,11 +1,9 @@
 /**
- * The TypeGPU technique shader library: the Bitmap, MSDF, Slug, and decoration techniques realized as typed TypeGPU
- * functions, importable without any renderer or scene integration. A host that owns a `GPUDevice` and a render pass
- * reuses one canonical shading implementation per technique instead of reimplementing coverage math.
+ * Renderer-free TypeGPU shader functions. Bitmap is the currently published built-in realization; other techniques may
+ * publish TypeGPU, TSL, WGSL, GLSL, or engine-authored variants without changing their portable plan contracts.
  *
- * The surface mirrors `/tsl` in every structural respect: technique shader realizations only, no engine driving, no
- * renderer ownership. Where `/tsl` builds three.js node graphs from pre-resolved nodes, this subpath exports TypeGPU
- * schemas and functions a host composes into its own entry points.
+ * This subpath owns shader code only—no engine driving or renderer objects. A TypeGPU host composes the exported schemas
+ * and functions into its own entry points, bindings, pipeline, and submission lifecycle.
  */
 export {
   bitmapAtlasUv,

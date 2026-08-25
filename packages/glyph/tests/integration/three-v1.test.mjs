@@ -9,6 +9,9 @@ import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
 import { defineTextMaterial, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
+import { bitmapSchema } from '../../dist/raster/bitmap-technique.js';
+import { slugSchema } from '../../dist/raster/slug-technique.js';
+import { threeSystemBuffers } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -25,6 +28,7 @@ const iconSlugFontUrl = new URL(
   import.meta.url,
 );
 const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
+const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
 
 test('one runtime request registers one font and returns typed resources for every declared technique', async () => {
   const runtime = await createTextRuntime({
@@ -524,7 +528,14 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () 
   );
   assert.deepEqual(realizedTechniques.sort(), [bitmap.id, slug.id].sort());
   assert.deepEqual(
-    draws.map((draw) => draw.geometry.getAttribute('_pmndrsGlyph_2').itemSize).sort(),
+    draws
+      .map(
+        (draw) =>
+          draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.size.id)) ??
+          draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.planeRect.id)),
+      )
+      .map((attribute) => attribute.itemSize)
+      .sort(),
     [2, 4],
     'Bitmap vec2 and Slug vec4 records must coexist without a user technique selector',
   );
@@ -558,7 +569,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
   assert.equal(draws[0].geometry.instanceCount, 4);
   const start = draws[0].userData.pmndrsGlyphRunStart;
-  const indices = draws[0].geometry.getAttribute('_pmndrsGlyph_15').array;
+  const indices = draws[0].geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id)).array;
   assert.deepEqual(Array.from(indices.subarray(start, start + 4)), [1, 1, 2, 2]);
   const transforms = draws[0].geometry.getAttribute('_pmndrsGlyphTransforms');
   assert.equal(transforms.array[1 * 16 + 12], 2);
@@ -640,7 +651,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   const rightShapedX = rightOrigins.glyphs.map((glyph) => glyph.shapedX);
   leftOrigins.glyphs[0].x += 2;
   rightOrigins.glyphs[0].x += 4;
-  const originsAttribute = draws[0].geometry.getAttribute('_pmndrsGlyph_1');
+  const originsAttribute = draws[0].geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
   const canonicalOrigins = originsAttribute.array;
   const pboUploadOrigins = new Float32Array(canonicalOrigins.length + 4);
   pboUploadOrigins.set(canonicalOrigins);
@@ -856,7 +867,7 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   const initialDraw = group.children.find((child) => child.isMesh);
   assert.ok(initialDraw);
   const initialStart = initialDraw.userData.pmndrsGlyphRunStart;
-  const initialOrigins = initialDraw.geometry.getAttribute('_pmndrsGlyph_1').array;
+  const initialOrigins = initialDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id)).array;
   const initialAdvance = initialOrigins[(initialStart + 1) * 2] - initialOrigins[initialStart * 2];
 
   label.style = { ...label.style, fontSize: 16 };
@@ -865,9 +876,9 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   const draw = group.children.find((child) => child.isMesh);
   assert.ok(draw);
   const start = draw.userData.pmndrsGlyphRunStart;
-  const transforms = draw.geometry.getAttribute('_pmndrsGlyph_15').array;
+  const transforms = draw.geometry.getAttribute(glyphAttribute(threeSystemBuffers.transformIndex.id)).array;
   assert.deepEqual(Array.from(transforms.subarray(start, start + draw.geometry.instanceCount)), [1, 1]);
-  const scaledOrigins = draw.geometry.getAttribute('_pmndrsGlyph_1').array;
+  const scaledOrigins = draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id)).array;
   const scaledAdvance = scaledOrigins[(start + 1) * 2] - scaledOrigins[start * 2];
   assert.ok(
     Math.abs(scaledAdvance - initialAdvance * 2) < 1e-5,
@@ -908,7 +919,10 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async ()
   assert.equal(group.error, undefined);
   const draws = group.children.filter((child) => child.isMesh);
   assert.equal(draws.length, 1, 'atlas page changes must select texture-array layers without fragmenting draws');
-  assert.ok(draws[0].geometry.getAttribute('_pmndrsGlyph_6'), 'the Bitmap plan must publish a page-layer stream');
+  assert.ok(
+    draws[0].geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.page.id)),
+    'the Bitmap plan must publish a page-layer stream',
+  );
 
   group.dispose();
   label.dispose();

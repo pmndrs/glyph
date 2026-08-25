@@ -1,4 +1,19 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import type {
+  ExclusionId,
+  FlowThreadId,
+  FontStackHandle,
+  InlineObjectId,
+  MaterialHandle,
+  ParagraphId,
+  PolicyHandle,
+  PolicyCapabilitySetSelection,
+  RegionId,
+  ResourceHandle,
+  StyleId,
+  TextEngineSessionHandle,
+} from './render-policy.js';
+import { assertGlyphId, policyCapabilitySetSelectionId } from './render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
 const encoder = new TextEncoder();
@@ -15,11 +30,11 @@ export interface TextEngineFrameLimits {
 }
 
 export type TextEngineParagraphMutation =
-  | { readonly opcode: 'upsert'; readonly paragraphId: number; readonly order: number }
-  | { readonly opcode: 'remove'; readonly paragraphId: number };
+  | { readonly opcode: 'upsert'; readonly paragraphId: ParagraphId; readonly order: number }
+  | { readonly opcode: 'remove'; readonly paragraphId: ParagraphId };
 
 export interface TextEngineTextMutation {
-  readonly paragraphId: number;
+  readonly paragraphId: ParagraphId;
   readonly start: number;
   readonly deleteCount: number;
   readonly insert: string;
@@ -44,8 +59,8 @@ export interface TextEngineDecoration {
 }
 
 export interface TextEngineStyleValue {
-  readonly fontStackHandle?: number;
-  readonly materialId?: number;
+  readonly fontStackHandle?: FontStackHandle;
+  readonly materialId?: MaterialHandle;
   readonly language?: string;
   readonly features?: readonly TextEngineFeature[];
   readonly fontSize?: number;
@@ -60,11 +75,11 @@ export interface TextEngineStyleValue {
 }
 
 export type TextEngineStyleMutation =
-  | { readonly opcode: 'remove'; readonly paragraphId: number; readonly styleId: number }
+  | { readonly opcode: 'remove'; readonly paragraphId: ParagraphId; readonly styleId: StyleId }
   | {
       readonly opcode: 'upsert';
-      readonly paragraphId: number;
-      readonly styleId: number;
+      readonly paragraphId: ParagraphId;
+      readonly styleId: StyleId;
       readonly cascadeOrder: number;
       readonly start: number;
       readonly end: number;
@@ -73,8 +88,8 @@ export type TextEngineStyleMutation =
     };
 
 export interface TextEngineConstraint {
-  readonly paragraphId: number;
-  readonly flowThreadId: number;
+  readonly paragraphId: ParagraphId;
+  readonly flowThreadId: FlowThreadId;
   readonly geometryRevision: number;
   readonly width: number;
   readonly height: number;
@@ -119,10 +134,10 @@ export interface TextEngineFlowVertex {
 }
 
 export interface TextEngineRegion {
-  readonly id: number;
+  readonly id: RegionId;
   readonly geometryRevision: number;
-  /** Stable compact slot in the renderer-owned region transform table. Defaults to `id`. */
-  readonly transformIndex?: number;
+  /** Stable compact slot in the renderer-owned region transform table. */
+  readonly transformIndex: number;
   readonly shape: 'rectangle' | 'polygon';
   readonly vertices?: readonly TextEngineFlowVertex[];
   readonly exclusionStart: number;
@@ -140,8 +155,8 @@ export interface TextEngineRegion {
 }
 
 export interface TextEngineExclusion {
-  readonly id: number;
-  readonly regionId: number;
+  readonly id: ExclusionId;
+  readonly regionId: RegionId;
   readonly geometryRevision: number;
   readonly shape: 'rectangle' | 'polygon';
   readonly vertices?: readonly TextEngineFlowVertex[];
@@ -155,12 +170,12 @@ export interface TextEngineExclusion {
 }
 
 export interface TextEngineInlineObject {
-  readonly paragraphId: number;
-  readonly id: number;
+  readonly paragraphId: ParagraphId;
+  readonly id: InlineObjectId;
   readonly contentRevision: number;
   readonly textOffset: number;
-  readonly materialId: number;
-  readonly resourceId: number;
+  readonly materialId: MaterialHandle;
+  readonly resourceId: ResourceHandle;
   readonly resourceGeneration: number;
   readonly inlineExtent: number;
   readonly blockExtent: number;
@@ -173,9 +188,10 @@ export interface TextEngineInlineObject {
 }
 
 export interface TextEngineFrameUpdate {
-  readonly sessionId: number;
-  readonly policyHandle: number;
-  readonly capabilitySet: number;
+  readonly sessionId: TextEngineSessionHandle;
+  readonly policyHandle: PolicyHandle;
+  /** Opaque multi-profile selection; omit it to use the policy's first profile. */
+  readonly capabilitySet?: PolicyCapabilitySetSelection;
   readonly expectedEngineRevision: number;
   readonly consumedPlanRevision: number;
   readonly acknowledgedPublicationGeneration: number;
@@ -203,6 +219,16 @@ export function compileTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint
   const regions = frame.regions ?? [];
   const exclusions = frame.exclusions ?? [];
   const inlineObjects = frame.inlineObjects ?? [];
+  assertFrameIds(
+    frame,
+    paragraphMutations,
+    textMutations,
+    styleMutations,
+    constraints,
+    regions,
+    exclusions,
+    inlineObjects,
+  );
   let cursor: number = request.size;
   const allocate = (count: number, stride: number, alignment: number, label: string): number => {
     if (count === 0) return 0;
@@ -278,6 +304,53 @@ export function compileTextEngineFrameUpdate(frame: TextEngineFrameUpdate): Uint
   return bytes;
 }
 
+function assertFrameIds(
+  frame: TextEngineFrameUpdate,
+  paragraphMutations: readonly TextEngineParagraphMutation[],
+  textMutations: readonly TextEngineTextMutation[],
+  styleMutations: readonly TextEngineStyleMutation[],
+  constraints: readonly TextEngineConstraint[],
+  regions: readonly TextEngineRegion[],
+  exclusions: readonly TextEngineExclusion[],
+  inlineObjects: readonly TextEngineInlineObject[],
+): void {
+  assertGlyphId(frame.sessionId, 'session', 'frame sessionId');
+  assertGlyphId(frame.policyHandle, 'policy', 'frame policyHandle');
+  for (const mutation of paragraphMutations) {
+    assertGlyphId(mutation.paragraphId, 'paragraph', 'paragraph mutation paragraphId');
+  }
+  for (const mutation of textMutations) {
+    assertGlyphId(mutation.paragraphId, 'paragraph', 'text mutation paragraphId');
+  }
+  for (const mutation of styleMutations) {
+    assertGlyphId(mutation.paragraphId, 'paragraph', 'style mutation paragraphId');
+    assertGlyphId(mutation.styleId, 'style', 'style mutation styleId');
+    if (mutation.opcode === 'upsert') {
+      if (mutation.value.fontStackHandle !== undefined) {
+        assertGlyphId(mutation.value.fontStackHandle, 'font-stack', 'style fontStackHandle');
+      }
+      if (mutation.value.materialId !== undefined) {
+        assertGlyphId(mutation.value.materialId, 'material', 'style materialId');
+      }
+    }
+  }
+  for (const constraint of constraints) {
+    assertGlyphId(constraint.paragraphId, 'paragraph', 'constraint paragraphId');
+    assertGlyphId(constraint.flowThreadId, 'flow-thread', 'constraint flowThreadId');
+  }
+  for (const region of regions) assertGlyphId(region.id, 'region', 'region id');
+  for (const exclusion of exclusions) {
+    assertGlyphId(exclusion.id, 'exclusion', 'exclusion id');
+    assertGlyphId(exclusion.regionId, 'region', 'exclusion regionId');
+  }
+  for (const object of inlineObjects) {
+    assertGlyphId(object.paragraphId, 'paragraph', 'inline object paragraphId');
+    assertGlyphId(object.id, 'inline-object', 'inline object id');
+    assertGlyphId(object.materialId, 'material', 'inline object materialId');
+    assertGlyphId(object.resourceId, 'resource', 'inline object resourceId');
+  }
+}
+
 interface HeaderOffsets {
   readonly paragraphOffset: number;
   readonly textOffset: number;
@@ -305,7 +378,7 @@ function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: n
     ['consumedPlanRevision', frame.consumedPlanRevision],
     ['acknowledgedPublicationGeneration', frame.acknowledgedPublicationGeneration],
     ['policyHandle', frame.policyHandle],
-    ['capabilitySet', frame.capabilitySet],
+    ['capabilitySet', frame.capabilitySet === undefined ? 1 : policyCapabilitySetSelectionId(frame.capabilitySet)],
     ['semanticViewMask', frame.semanticViewMask ?? 0],
     ['maxParagraphs', limits.maxParagraphs],
     ['maxClusters', limits.maxClusters],
@@ -526,11 +599,7 @@ function writeRegions(
     const offset = tableOffset + index * layout.size;
     view.setUint32(offset + layout.id, u32(value.id, 'region ID'), true);
     view.setUint32(offset + layout.geometryRevision, u32(value.geometryRevision, 'region geometry revision'), true);
-    view.setUint32(
-      offset + layout.transformIndex,
-      u32(value.transformIndex ?? value.id, 'region transform index'),
-      true,
-    );
+    view.setUint32(offset + layout.transformIndex, u32(value.transformIndex, 'region transform index'), true);
     view.setUint32(offset + layout.verticesOffset, vertexOffsets[index]!, true);
     view.setUint16(offset + layout.vertexCount, u16(value.vertices?.length ?? 0, 'region vertex count'), true);
     view.setUint16(offset + layout.exclusionStart, u16(value.exclusionStart, 'region exclusion start'), true);

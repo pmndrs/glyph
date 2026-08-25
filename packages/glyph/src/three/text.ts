@@ -25,6 +25,7 @@ import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import {
   compileTextEngineFrameUpdate,
+  id,
   readTextEngineLayouts,
   readTextEngineMeasurements,
   TextEngineRenderPlanView,
@@ -32,6 +33,9 @@ import {
   textShaperAbi,
   type TextEngineConstraint,
   type TextEngineFault,
+  type FontStackHandle,
+  type MaterialHandle,
+  type ParagraphId,
   type TextEnginePublication,
   type TextEngineRegion,
   type RetainedTextEnginePublication,
@@ -49,6 +53,7 @@ import {
 import {
   compileEngineGeometry,
   engineLimits,
+  engineStyleId,
   engineStyleValue,
   minimalTextMutation,
   normalizedColumns,
@@ -64,7 +69,6 @@ import {
   type ThreeTextEngineStackLease,
 } from './engine-runtime.js';
 import type { ThreeTextMaterial } from './material.js';
-import { THREE_CAPABILITY_SET_ID } from './render-policy.js';
 
 // The scoped import lint denies `/three` any reach into `internal/`, so the guard is written here as
 // the same ecosystem-standard comparison a bundler strips in a production build.
@@ -590,7 +594,8 @@ export class TextGroup extends THREE.Object3D {
 
 /** One paragraph of a rejected frame, in render order: what it was and which desired state it held. */
 interface RetainedEngineParagraph {
-  readonly id: number;
+  readonly id: ParagraphId;
+  readonly transformIndex: number;
   textLength: number;
   styleCount: number;
   order: number;
@@ -613,6 +618,7 @@ class ThreeTextBatchBinding {
   readonly #target: ThreeTextRenderPlanExecutor;
   readonly #paragraphs = new Map<Text<AnyRasterTechnique>, RetainedEngineParagraph>();
   readonly #textsByParagraph = new Map<number, Text<AnyRasterTechnique>>();
+  readonly #textsByTransform = new Map<number, Text<AnyRasterTechnique>>();
   readonly #removed: RetainedEngineParagraph[] = [];
   readonly #measurements = new Map<Text<AnyRasterTechnique>, ParagraphLayoutSummary>();
   readonly #layoutInspections = new Map<Text<AnyRasterTechnique>, ParagraphLayoutInspection>();
@@ -657,12 +663,15 @@ class ThreeTextBatchBinding {
         return owner.#renderOrderBase();
       },
       objectForTransform(transformId) {
-        const text = owner.#textsByParagraph.get(transformId);
+        const text = owner.#textsByParagraph.get(transformId) ?? owner.#textsByTransform.get(transformId);
         if (text === undefined) throw new Error(`Three command buffer references unknown transform ${transformId}`);
         return text;
       },
       transformIds() {
-        return owner.#textsByParagraph.keys();
+        return new Set([...owner.#textsByParagraph.keys(), ...owner.#textsByTransform.keys()]);
+      },
+      transformIndices() {
+        return owner.#textsByTransform.keys();
       },
     });
   }
@@ -701,7 +710,8 @@ class ThreeTextBatchBinding {
     // Every other paragraph must be quiescent so the frame this query speculates
     // ahead of is exactly the frame synchronize will later commit and adopt.
     const ordered = [...this.#paragraphs.entries()].sort(
-      ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
+      ([leftText, left], [rightText, right]) =>
+        leftText.renderOrder - rightText.renderOrder || left.transformIndex - right.transformIndex,
     );
     for (const [order, [entry, entryParagraph]] of ordered.entries()) {
       if (entryParagraph.order !== order || entryParagraph.created) return false;
@@ -718,6 +728,7 @@ class ThreeTextBatchBinding {
     const content = properties.text as string;
     const geometry = compileEngineGeometry(
       paragraph.id,
+      paragraph.transformIndex,
       paragraph.geometryRevision + 1,
       properties.contentBox,
       0,
@@ -727,7 +738,6 @@ class ThreeTextBatchBinding {
       compileTextEngineFrameUpdate({
         sessionId: this.#session.handle,
         policyHandle: this.#coordinator.policyHandle,
-        capabilitySet: THREE_CAPABILITY_SET_ID,
         expectedEngineRevision: this.#engineRevision,
         consumedPlanRevision: this.#planRevision,
         acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
@@ -798,7 +808,7 @@ class ThreeTextBatchBinding {
   }
   markTransformDirty(text: Text<AnyRasterTechnique>): void {
     const paragraph = this.#paragraphs.get(text);
-    if (paragraph !== undefined) this.#dirtyTransformIds.add(paragraph.id);
+    if (paragraph !== undefined) this.#dirtyTransformIds.add(paragraph.transformIndex);
   }
   #assertRendererReady(): void {
     this.#coordinator.assertFrameUpdateAllowed();
@@ -816,7 +826,8 @@ class ThreeTextBatchBinding {
     if (this.#disposed) return;
     this.#coordinator.assertFrameUpdateAllowed();
     const ordered = [...this.#paragraphs.entries()].sort(
-      ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
+      ([leftText, left], [rightText, right]) =>
+        leftText.renderOrder - rightText.renderOrder || left.transformIndex - right.transformIndex,
     );
     const changed = ordered.flatMap(([text, paragraph], order) => {
       const semanticChanges =
@@ -888,12 +899,17 @@ class ThreeTextBatchBinding {
           );
           styleMutations.push(...styles);
           for (let styleId = styles.length + 1; styleId <= paragraph.styleCount; styleId += 1) {
-            styleMutations.push({ opcode: 'remove', paragraphId: paragraph.id, styleId });
+            styleMutations.push({
+              opcode: 'remove',
+              paragraphId: paragraph.id,
+              styleId: engineStyleId(paragraph.id, styleId),
+            });
           }
         }
         if (semanticChanges & GEOMETRY_CHANGE) {
           const geometry = compileEngineGeometry(
             paragraph.id,
+            paragraph.transformIndex,
             paragraph.geometryRevision + 1,
             properties.contentBox,
             regions.length,
@@ -929,7 +945,6 @@ class ThreeTextBatchBinding {
       const frame = compileTextEngineFrameUpdate({
         sessionId: this.#session.handle,
         policyHandle: this.#coordinator.policyHandle,
-        capabilitySet: THREE_CAPABILITY_SET_ID,
         expectedEngineRevision: this.#engineRevision,
         consumedPlanRevision: this.#planRevision,
         acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
@@ -958,7 +973,7 @@ class ThreeTextBatchBinding {
       this.#engineRevision = publication.engineRevision;
       for (const removed of this.#removed) releaseStackLeases(removed.stackLeases);
       for (const removed of this.#removed) releaseMaterialLeases(removed.materialLeases);
-      for (const removed of this.#removed) this.#freeParagraphIds.push(removed.id);
+      for (const removed of this.#removed) this.#freeParagraphIds.push(removed.transformIndex);
       this.#removed.length = 0;
       for (const [order, [text, paragraph]] of ordered.entries()) {
         const semanticChanges = pendingChanges.get(paragraph) ?? 0;
@@ -1107,7 +1122,8 @@ class ThreeTextBatchBinding {
     if (paragraph === undefined) return;
     this.#paragraphs.delete(text);
     this.#textsByParagraph.delete(paragraph.id);
-    this.#dirtyTransformIds.delete(paragraph.id);
+    this.#textsByTransform.delete(paragraph.transformIndex);
+    this.#dirtyTransformIds.delete(paragraph.transformIndex);
     this.#removed.push(paragraph);
     reconciler.unbindFrom(text, this);
   }
@@ -1123,6 +1139,7 @@ class ThreeTextBatchBinding {
     for (const paragraph of this.#removed) releaseMaterialLeases(paragraph.materialLeases);
     this.#paragraphs.clear();
     this.#textsByParagraph.clear();
+    this.#textsByTransform.clear();
     this.#measurements.clear();
     this.#layoutInspections.clear();
     this.#removed.length = 0;
@@ -1134,9 +1151,11 @@ class ThreeTextBatchBinding {
     validateBinding(this.#runtime, text);
     let paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined) {
-      const id = this.#freeParagraphIds.pop() ?? this.#nextParagraphId++;
+      const transformIndex = this.#freeParagraphIds.pop() ?? this.#nextParagraphId++;
+      const paragraphId = id('paragraph', `glyph-three/${this.#session.handle}/${transformIndex}`);
       paragraph = {
-        id,
+        id: paragraphId,
+        transformIndex,
         textLength: 0,
         styleCount: 0,
         order: -1,
@@ -1146,7 +1165,8 @@ class ThreeTextBatchBinding {
         materialLeases: [],
       };
       this.#paragraphs.set(text, paragraph);
-      this.#textsByParagraph.set(id, text);
+      this.#textsByParagraph.set(paragraphId, text);
+      this.#textsByTransform.set(transformIndex, text);
       reconciler.bind(text, this, group);
     }
   }
@@ -1179,7 +1199,6 @@ class ThreeTextBatchBinding {
       compileTextEngineFrameUpdate({
         sessionId: this.#session.handle,
         policyHandle: this.#coordinator.policyHandle,
-        capabilitySet: THREE_CAPABILITY_SET_ID,
         expectedEngineRevision: this.#engineRevision,
         consumedPlanRevision: this.#planRevision,
         acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
@@ -1240,7 +1259,7 @@ class ThreeTextBatchBinding {
 
 function compileEngineStyles<Technique extends AnyRasterTechnique>(
   coordinator: ThreeTextEngineCoordinator,
-  paragraphId: number,
+  paragraphId: ParagraphId,
   properties: TextProperties<Technique>,
   groupMaterial: ThreeTextMaterial | undefined,
   leases: ThreeTextEngineStackLease[],
@@ -1254,7 +1273,7 @@ function compileEngineStyles<Technique extends AnyRasterTechnique>(
     {
       opcode: 'upsert',
       paragraphId,
-      styleId: 1,
+      styleId: engineStyleId(paragraphId, 1),
       cascadeOrder: 0,
       start: 0,
       end: text.length,
@@ -1273,7 +1292,7 @@ function compileEngineStyles<Technique extends AnyRasterTechnique>(
     styles.push({
       opcode: 'upsert',
       paragraphId,
-      styleId: index + 2,
+      styleId: engineStyleId(paragraphId, index + 2),
       cascadeOrder: index + 1,
       start: span.start,
       end: span.end,
@@ -1290,7 +1309,7 @@ function acquireEngineMaterial(
   coordinator: ThreeTextEngineCoordinator,
   material: ThreeTextMaterial | undefined,
   leases: ThreeTextMaterialLease[],
-): number | undefined {
+): MaterialHandle | undefined {
   if (material === undefined) return undefined;
   const lease = coordinator.acquireMaterial(material);
   leases.push(lease);
@@ -1301,7 +1320,7 @@ function acquireEngineStack<Technique extends AnyRasterTechnique>(
   coordinator: ThreeTextEngineCoordinator,
   selection: FontSelection<Technique>,
   leases: ThreeTextEngineStackLease[],
-): number {
+): FontStackHandle {
   const fonts = concreteFonts(selection) as readonly [
     LoadedFont<AnyRasterTechnique>,
     ...LoadedFont<AnyRasterTechnique>[],

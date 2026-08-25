@@ -118,6 +118,11 @@ export function engineFrameUpdateBytes(
     sessionId,
     policyHandle,
     fontStackHandle,
+    paragraphId = 1,
+    styleId = 1,
+    flowThreadId = 1,
+    regionId = 1,
+    transformIndex = 1,
     expectedEngineRevision = 0,
     consumedPlanRevision = 0,
     acknowledgedPublicationGeneration = 0,
@@ -178,14 +183,14 @@ export function engineFrameUpdateBytes(
 
   if (hasParagraph) {
     view.setUint8(paragraphRecordOffset + paragraphRecord.opcode, abi.engine.paragraphMutationOpcodes.upsert);
-    view.setUint32(paragraphRecordOffset + paragraphRecord.paragraphId, 1, true);
+    view.setUint32(paragraphRecordOffset + paragraphRecord.paragraphId, paragraphId, true);
     view.setUint32(paragraphRecordOffset + paragraphRecord.order, 0, true);
   }
 
   if (textMutation !== undefined) {
     view.setUint8(textRecordOffset + textRecord.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
     view.setUint8(textRecordOffset + textRecord.encoding, abi.engine.textEncodings.utf16Le);
-    view.setUint32(textRecordOffset + textRecord.paragraphId, textMutation.paragraphId ?? 1, true);
+    view.setUint32(textRecordOffset + textRecord.paragraphId, textMutation.paragraphId ?? paragraphId, true);
     view.setUint32(textRecordOffset + textRecord.textStart, textMutation.start, true);
     view.setUint32(textRecordOffset + textRecord.deleteCount, textMutation.deleteCount, true);
     view.setUint32(textRecordOffset + textRecord.insertOffset, textPayloadOffset, true);
@@ -198,8 +203,8 @@ export function engineFrameUpdateBytes(
   if (style !== undefined) {
     view.setUint8(styleRecordOffset + styleRecord.opcode, abi.engine.styleMutationOpcodes.upsert);
     view.setUint8(styleRecordOffset + styleRecord.flags, abi.engine.styleFlags.root);
-    view.setUint32(styleRecordOffset + styleRecord.paragraphId, style.paragraphId ?? 1, true);
-    view.setUint32(styleRecordOffset + styleRecord.styleId, 1, true);
+    view.setUint32(styleRecordOffset + styleRecord.paragraphId, style.paragraphId ?? paragraphId, true);
+    view.setUint32(styleRecordOffset + styleRecord.styleId, styleId, true);
     view.setUint32(
       styleRecordOffset + styleRecord.fieldMask,
       abi.engine.styleFields.fontStack |
@@ -216,8 +221,8 @@ export function engineFrameUpdateBytes(
   }
 
   if (geometry !== undefined) {
-    view.setUint32(constraintOffset + constraint.paragraphId, geometry.paragraphId ?? 1, true);
-    view.setUint32(constraintOffset + constraint.flowThreadId, 1, true);
+    view.setUint32(constraintOffset + constraint.paragraphId, geometry.paragraphId ?? paragraphId, true);
+    view.setUint32(constraintOffset + constraint.flowThreadId, flowThreadId, true);
     view.setFloat32(constraintOffset + constraint.width, geometry.width, true);
     view.setFloat32(constraintOffset + constraint.height, geometry.height, true);
     view.setFloat32(constraintOffset + constraint.viewportBlockEnd, geometry.height, true);
@@ -231,9 +236,9 @@ export function engineFrameUpdateBytes(
     view.setUint8(constraintOffset + constraint.blockAlign, abi.engine.blockAlignments.start);
     view.setUint8(constraintOffset + constraint.lastLine, abi.engine.lastLinePolicies.auto);
 
-    view.setUint32(regionOffset + region.id, 1, true);
+    view.setUint32(regionOffset + region.id, regionId, true);
     view.setUint32(regionOffset + region.geometryRevision, geometry.revision, true);
-    view.setUint32(regionOffset + region.transformIndex, 1, true);
+    view.setUint32(regionOffset + region.transformIndex, transformIndex, true);
     view.setUint8(regionOffset + region.shape, abi.engine.flowShapeKinds.rectangle);
     view.setUint8(regionOffset + region.writingMode, abi.engine.writingModes.horizontalTb);
     view.setUint8(regionOffset + region.textOrientation, abi.engine.textOrientations.mixed);

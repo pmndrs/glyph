@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   compileTextEngineFrameUpdate,
   createRuntimeShaper,
+  id,
   TextEngineHost,
   TextEnginePublicationExpiredError,
   retainedPublicationBrand,
@@ -13,6 +14,7 @@ import {
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
+const POLICY_HANDLE = id('policy', 'publication-retention/policy');
 
 const LIMITS = {
   maxParagraphs: 8,
@@ -29,8 +31,7 @@ const LIMITS = {
 function frameRequest(session, latest) {
   return compileTextEngineFrameUpdate({
     sessionId: session.handle,
-    policyHandle: 23,
-    capabilitySet: 1,
+    policyHandle: POLICY_HANDLE,
     expectedEngineRevision: latest.engineRevision,
     consumedPlanRevision: latest.planRevision,
     acknowledgedPublicationGeneration: session.acknowledgedGeneration,
@@ -42,8 +43,12 @@ async function drivenSession() {
   const wasm = await readFile(wasmUrl);
   const shaper = await createRuntimeShaper({ wasm });
   const host = new TextEngineHost(shaper);
-  host.registerPolicy(23, threeRenderPolicyBytes());
-  const session = host.createSession({ handle: 29, requestCapacity: 4096, resultCapacity: 128 * 1024 });
+  host.registerPolicy(POLICY_HANDLE, threeRenderPolicyBytes());
+  const session = host.createSession({
+    handle: id('session', 'publication-retention/session'),
+    requestCapacity: 4096,
+    resultCapacity: 128 * 1024,
+  });
   let latest = { engineRevision: 0, planRevision: 0 };
   return {
     host,
@@ -119,8 +124,7 @@ test('the engine verifies consumption: an acknowledged generation that goes back
   // ...so replaying an older one is a revision conflict, proving the wire field is load-bearing.
   const replayed = compileTextEngineFrameUpdate({
     sessionId: session.handle,
-    policyHandle: 23,
-    capabilitySet: 1,
+    policyHandle: POLICY_HANDLE,
     expectedEngineRevision: second.engineRevision,
     consumedPlanRevision: second.planRevision,
     acknowledgedPublicationGeneration: 0,

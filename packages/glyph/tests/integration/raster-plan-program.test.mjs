@@ -47,7 +47,7 @@ function schemaFor(value) {
         ],
       },
     },
-    render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+    render: { resource: 'colors', geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
   });
 }
 
@@ -162,8 +162,8 @@ test('font compilation owns binding metadata and normalizes retained payloads', 
   assert.deepEqual(
     [...compiled.declaredResources],
     [
-      ['colors', COLORS],
-      ['mesh', MESH],
+      ['colors', [COLORS]],
+      ['mesh', [MESH]],
     ],
   );
   assert.equal(typeof compiled.resources.set, 'undefined');
@@ -226,12 +226,32 @@ test('authored resource identities remain stable across independent compiler cal
   const first = compileRasterFont(loaded(value), identities);
   const second = compileRasterFont(loaded(value), identities);
 
-  assert.equal(first.declaredResources.get('colors'), COLORS);
-  assert.equal(second.declaredResources.get('colors'), COLORS);
+  assert.deepEqual(first.declaredResources.get('colors'), [COLORS]);
+  assert.deepEqual(second.declaredResources.get('colors'), [COLORS]);
   assert.deepEqual(bindingResourceIds(first.binding), bindingResourceIds(second.binding));
   assert.ok(bindingResourceIds(first.binding).includes(identities.resourceId(COLORS)));
   assert.equal(first.resources.get(COLORS).bytes[0], 1);
   assert.equal(second.resources.get(COLORS).bytes[0], 2);
+});
+
+test('one loaded font reuses its immutable compilation across engine identity registries', () => {
+  const value = technique('test.plan-compile-once');
+  let calls = 0;
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      calls += 1;
+      return validCompile(compiler);
+    },
+  });
+  const font = loaded(value);
+  const first = compileRasterFont(font, new RenderWireIdentityRegistry());
+  const second = compileRasterFont(font, new RenderWireIdentityRegistry());
+
+  assert.equal(first, second);
+  assert.equal(calls, 1);
 });
 
 test('retention rejects undeclared, duplicate, missing, and wrong-kind resources', () => {
@@ -338,7 +358,7 @@ test('binding readers and selected resources reject at compiler.compile', () => 
   });
   assert.throws(
     () => compileRasterFont(loaded(unknownResource), new RenderWireIdentityRegistry()),
-    /unknown raster resource/,
+    /outside render role "colors"/,
   );
 });
 

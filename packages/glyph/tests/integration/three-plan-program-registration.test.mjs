@@ -25,6 +25,7 @@ import {
   defineTechniqueGeometryKind,
   defineTechniqueSchema,
   f32,
+  id,
   registerRasterPlanProgram,
   techniqueProgram,
   textRuntimeShaper,
@@ -32,6 +33,10 @@ import {
 } from '@pmndrs/glyph/core';
 
 import { shaperWasmUrl } from '../support/text-mutation-lanes.mjs';
+
+const RECT_BUFFER_ID = id('buffer', 'test.three-plan-program/rect');
+const STABLE_GLYPH_BUFFER_ID = id('buffer', 'test.three-plan-program/system/stable-glyph-id');
+const TRANSFORM_BUFFER_ID = id('buffer', 'test.three-plan-program/system/transform-index');
 // The coordinator is what takes the snapshot, so the lifecycle is asserted against it directly
 // rather than through a mounted scene that would only reach it incidentally.
 import { ThreeTextEngineCoordinator, threeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
@@ -51,13 +56,20 @@ const planProgram = (id, declaration = {}) => {
       },
       dispose() {},
     });
+    const resources = declaration.resources ?? { payload: { kind: 'buffer' } };
+    const render = {
+      resource: Object.keys(resources)[0],
+      geometry: { kind: 'synthetic-quad' },
+      ...declaration.render,
+    };
     const schema = defineTechniqueSchema({
       technique: id,
       scope: 'glyph',
       binding: {},
       buffers: {},
-      resources: { payload: { kind: 'buffer' } },
       ...declaration,
+      resources,
+      render,
     });
     portable = { technique, schema };
     registerRasterPlanProgram({
@@ -176,13 +188,13 @@ test('variant registration rejects incompatible capabilities before a runtime ex
   assert.throws(() => registerThreeRasterPlanProgram(wrongCustomGeometryName), /declares incompatible geometry/);
 
   const wrongScalar = planProgram('test-wrong-scalar', {
-    buffers: { rect: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
+    buffers: { rect: { id: RECT_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
   });
   wrongScalar.variant.buffers.rect.scalar = 'u32';
   assert.throws(() => registerThreeRasterPlanProgram(wrongScalar), /buffer "rect" must consume f32x2/);
 
   const missingBuffer = planProgram('test-missing-buffer', {
-    buffers: { rect: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
+    buffers: { rect: { id: RECT_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
   });
   delete missingBuffer.variant.buffers.rect;
   assert.throws(() => registerThreeRasterPlanProgram(missingBuffer), /omits buffer "rect"/);
@@ -287,6 +299,7 @@ test('runtime construction rejects a portable body compiled for different system
     binding: {},
     buffers: {},
     resources: { payload: { kind: 'buffer' } },
+    render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
   });
   const portable = registerRasterPlanProgram({
     technique,
@@ -294,8 +307,8 @@ test('runtime construction rejects a portable body compiled for different system
     policyBody() {
       const authoring = techniqueProgram(schema, {
         system: {
-          stableGlyphId: { id: 14, scalar: 'u32', lanes: ['stableGlyphId'] },
-          transformIndex: { id: 13, scalar: 'u32', lanes: ['transformIndex'] },
+          stableGlyphId: { id: STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
+          transformIndex: { id: TRANSFORM_BUFFER_ID, scalar: 'u32', lanes: ['transformIndex'] },
         },
       });
       return authoring.compile({});

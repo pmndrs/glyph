@@ -102,6 +102,8 @@ the meeting point of what the technique's programs produce and what its shaders 
 
 ```ts
 // @pmndrs/glyph/raster/bitmap — the ONLY place bitmap's shape is stated.
+import { defineTechniqueSchema, id } from '@pmndrs/glyph/core';
+
 export const bitmapSchema = defineTechniqueSchema({
   technique: 'pmndrs.bitmap',
   scope: 'strike',
@@ -110,12 +112,12 @@ export const bitmapSchema = defineTechniqueSchema({
     u32: ['page'],
   },
   buffers: {
-    origin: { id: 1, scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
-    size: { id: 2, scalar: 'f32', lanes: ['width', 'height'] },
-    uvOrigin: { id: 3, scalar: 'f32', lanes: ['u', 'v'] },
-    uvSize: { id: 4, scalar: 'f32', lanes: ['uSpan', 'vSpan'] },
-    color: { id: 5, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
-    page: { id: 6, scalar: 'u32', lanes: ['page'] },
+    origin: { id: id('buffer', 'pmndrs.bitmap/origin'), scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
+    size: { id: id('buffer', 'pmndrs.bitmap/size'), scalar: 'f32', lanes: ['width', 'height'] },
+    uvOrigin: { id: id('buffer', 'pmndrs.bitmap/uv-origin'), scalar: 'f32', lanes: ['u', 'v'] },
+    uvSize: { id: id('buffer', 'pmndrs.bitmap/uv-size'), scalar: 'f32', lanes: ['uSpan', 'vSpan'] },
+    color: { id: id('buffer', 'pmndrs.bitmap/color'), scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    page: { id: id('buffer', 'pmndrs.bitmap/page'), scalar: 'u32', lanes: ['page'] },
   },
   resources: { atlas: { kind: 'texture-array', format: 'r8unorm' } },
 });

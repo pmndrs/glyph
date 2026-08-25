@@ -348,7 +348,17 @@ function checkedBytes(left: number, right: number): number {
   return total;
 }
 
+import { f32, id, techniqueProgram, u32, type PolicyBufferId, type RasterPlanProgram } from '../core.js';
+import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
+
+const SLUG_RECT_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/rect');
+const SLUG_PLANE_RECT_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/plane-rect');
+const SLUG_BAND_TRANSFORM_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/band-transform');
+const SLUG_COLOR_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/color');
+const SLUG_INVERSE_FONT_SIZE_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/inverse-font-size');
+const SLUG_TABLE_STARTS_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/table-starts');
+const SLUG_BAND_COUNTS_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/band-counts');
 
 /**
  * The authoritative physical shape of the Slug technique.
@@ -356,37 +366,37 @@ import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-s
 export const slugSchema: TechniqueSchema<
   {
     readonly rect: {
-      readonly id: 1;
+      readonly id: typeof SLUG_RECT_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['left', 'top', 'width', 'height'];
     };
     readonly planeRect: {
-      readonly id: 2;
+      readonly id: typeof SLUG_PLANE_RECT_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['left', 'top', 'width', 'height'];
     };
     readonly bandTransform: {
-      readonly id: 3;
+      readonly id: typeof SLUG_BAND_TRANSFORM_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['scaleX', 'scaleY', 'offsetX', 'offsetY'];
     };
     readonly color: {
-      readonly id: 4;
+      readonly id: typeof SLUG_COLOR_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
     };
     readonly inverseFontSize: {
-      readonly id: 5;
+      readonly id: typeof SLUG_INVERSE_FONT_SIZE_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['inverseFontSize', 'unused1', 'unused2', 'unused3'];
     };
     readonly tableStarts: {
-      readonly id: 6;
+      readonly id: typeof SLUG_TABLE_STARTS_BUFFER_ID;
       readonly scalar: 'u32';
       readonly lanes: readonly ['curveStart', 'headerStart', 'referenceStart', 'bandStart'];
     };
     readonly bandCounts: {
-      readonly id: 7;
+      readonly id: typeof SLUG_BAND_COUNTS_BUFFER_ID;
       readonly scalar: 'u32';
       readonly lanes: readonly ['horizontalBands', 'verticalBands', 'unused2', 'unused3'];
     };
@@ -412,13 +422,19 @@ export const slugSchema: TechniqueSchema<
     ];
   },
   {
-    readonly curves: { readonly kind: 'texture'; readonly format: 'rgba16float' };
-    readonly headers: { readonly kind: 'texture'; readonly format: 'rgba32uint' };
-    readonly references: { readonly kind: 'texture'; readonly format: 'r32uint' };
+    readonly page: {
+      readonly kind: 'group';
+      readonly cardinality: 'many';
+      readonly members: {
+        readonly curves: { readonly kind: 'texture'; readonly format: 'rgba16float' };
+        readonly headers: { readonly kind: 'texture'; readonly format: 'r32uint' };
+        readonly references: { readonly kind: 'texture'; readonly format: 'r32uint' };
+      };
+    };
   },
-  'pmndrs.slug'
+  typeof slug.id
 > = defineTechniqueSchema({
-  technique: 'pmndrs.slug',
+  technique: slug.id,
   scope: 'glyph',
   glyphOrigin: { buffer: 'rect' },
   binding: {
@@ -426,17 +442,165 @@ export const slugSchema: TechniqueSchema<
     u32: ['curveStart', 'headerStart', 'referenceStart', 'bandStart', 'horizontalBands', 'verticalBands'],
   },
   buffers: {
-    rect: { id: 1, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    planeRect: { id: 2, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    bandTransform: { id: 3, scalar: 'f32', lanes: ['scaleX', 'scaleY', 'offsetX', 'offsetY'] },
-    color: { id: 4, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
-    inverseFontSize: { id: 5, scalar: 'f32', lanes: ['inverseFontSize', 'unused1', 'unused2', 'unused3'] },
-    tableStarts: { id: 6, scalar: 'u32', lanes: ['curveStart', 'headerStart', 'referenceStart', 'bandStart'] },
-    bandCounts: { id: 7, scalar: 'u32', lanes: ['horizontalBands', 'verticalBands', 'unused2', 'unused3'] },
+    rect: { id: SLUG_RECT_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    planeRect: { id: SLUG_PLANE_RECT_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    bandTransform: {
+      id: SLUG_BAND_TRANSFORM_BUFFER_ID,
+      scalar: 'f32',
+      lanes: ['scaleX', 'scaleY', 'offsetX', 'offsetY'],
+    },
+    color: { id: SLUG_COLOR_BUFFER_ID, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    inverseFontSize: {
+      id: SLUG_INVERSE_FONT_SIZE_BUFFER_ID,
+      scalar: 'f32',
+      lanes: ['inverseFontSize', 'unused1', 'unused2', 'unused3'],
+    },
+    tableStarts: {
+      id: SLUG_TABLE_STARTS_BUFFER_ID,
+      scalar: 'u32',
+      lanes: ['curveStart', 'headerStart', 'referenceStart', 'bandStart'],
+    },
+    bandCounts: {
+      id: SLUG_BAND_COUNTS_BUFFER_ID,
+      scalar: 'u32',
+      lanes: ['horizontalBands', 'verticalBands', 'unused2', 'unused3'],
+    },
   },
   resources: {
-    curves: { kind: 'texture', format: 'rgba16float' },
-    headers: { kind: 'texture', format: 'rgba32uint' },
-    references: { kind: 'texture', format: 'r32uint' },
+    page: {
+      kind: 'group',
+      cardinality: 'many',
+      members: {
+        curves: { kind: 'texture', format: 'rgba16float' },
+        headers: { kind: 'texture', format: 'r32uint' },
+        references: { kind: 'texture', format: 'r32uint' },
+      },
+    },
+  },
+  render: { resource: 'page', geometry: { kind: 'synthetic-quad' } },
+});
+
+export const slugPlanProgram: RasterPlanProgram<typeof slug, typeof slugSchema> = registerGlyphRasterPlanProgram({
+  technique: slug,
+  schema: slugSchema,
+  policyBody(system) {
+    const p = techniqueProgram(slugSchema, { inverseFontSize: true, system });
+    const { inlineOrigin, blockOrigin, fontSize, color, inverseFontSize } = p.semantics;
+    if (inverseFontSize === undefined) throw new TypeError('the Slug program declares inverseFontSize');
+    const {
+      bearingX,
+      bearingY,
+      width,
+      height,
+      bandScaleX,
+      bandScaleY,
+      bandOffsetX,
+      bandOffsetY,
+      curveStart,
+      headerStart,
+      referenceStart,
+      bandStart,
+      horizontalBands,
+      verticalBands,
+    } = p.binding;
+    const zeroF32 = f32.const(0);
+    const zeroU32 = u32.const(0);
+    return p.compile({
+      rect: [
+        f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
+        f32.sub(blockOrigin, f32.mul(bearingY, fontSize)),
+        f32.mul(width, fontSize),
+        f32.mul(height, fontSize),
+      ],
+      planeRect: [bearingX, bearingY, width, height],
+      bandTransform: [bandScaleX, bandScaleY, bandOffsetX, bandOffsetY],
+      color: [color.red, color.green, color.blue, color.alpha],
+      inverseFontSize: [inverseFontSize, zeroF32, zeroF32, zeroF32],
+      tableStarts: [curveStart, headerStart, referenceStart, bandStart],
+      bandCounts: [horizontalBands, verticalBands, zeroU32, zeroU32],
+    });
+  },
+  compileFont(compiler) {
+    const data = compiler.font.data;
+    for (const page of data.pages) compiler.retain('page', page.resource, slugPagePayload(page));
+    const view = new DataView(data.records.buffer, data.records.byteOffset);
+    const record = (row: number) => row * SLUG_GLYPH_RECORD_STRIDE;
+    const page = (row: number) => view.getUint16(record(row) + 8, true);
+    const normalized = (row: number, offset: number) =>
+      view.getInt16(record(row) + offset, true) / data.planeUnitsPerEm;
+    const width = (row: number) => normalized(row, 4) - normalized(row, 0);
+    const height = (row: number) => normalized(row, 6) - normalized(row, 2);
+    const horizontalBands = (row: number) => view.getUint16(record(row) + 10, true);
+    const verticalBands = (row: number) => view.getUint16(record(row) + 12, true);
+    const bandScaleX = (row: number) => (width(row) === 0 ? 0 : verticalBands(row) / width(row));
+    const bandScaleY = (row: number) => (height(row) === 0 ? 0 : horizontalBands(row) / height(row));
+    return compiler.compile({
+      strikes: [0],
+      resource: (glyph) => {
+        const selected = page(glyph);
+        return selected === ABSENT_PAGE ? undefined : data.pages[selected]!.resource;
+      },
+      f32: {
+        bearingX: (row) => normalized(row, 0),
+        bearingY: (row) => normalized(row, 6),
+        width,
+        height,
+        bandScaleX,
+        bandScaleY,
+        bandOffsetX: (row) => -normalized(row, 0) * bandScaleX(row),
+        bandOffsetY: (row) => -normalized(row, 2) * bandScaleY(row),
+      },
+      u32: {
+        curveStart: (row) => view.getUint32(record(row) + 16, true),
+        headerStart: (row) => view.getUint32(record(row) + 24, true),
+        referenceStart: (row) => view.getUint32(record(row) + 28, true),
+        bandStart: (row) => view.getUint32(record(row) + 32, true),
+        horizontalBands,
+        verticalBands,
+      },
+    });
   },
 });
+
+function slugPagePayload(page: SlugPageData) {
+  const references = packSlugReferences(page.referenceBytes, page.referenceWidth);
+  return {
+    kind: 'group' as const,
+    members: {
+      curves: {
+        kind: 'texture' as const,
+        format: 'rgba16float' as const,
+        width: page.curveWidth,
+        height: page.curveHeight,
+        bytes: page.curveBytes,
+      },
+      headers: {
+        kind: 'texture' as const,
+        format: 'r32uint' as const,
+        width: page.headerWidth,
+        height: page.headerHeight,
+        bytes: page.headerBytes,
+      },
+      references: {
+        kind: 'texture' as const,
+        format: 'r32uint' as const,
+        width: references.width,
+        height: references.height,
+        bytes: new Uint8Array(references.data.buffer),
+      },
+    },
+  };
+}
+
+function packSlugReferences(bytes: Uint8Array, preferredWidth: number) {
+  const copied = bytes.slice();
+  const references = new Uint16Array(copied.buffer, copied.byteOffset, copied.byteLength / 2);
+  const texelCount = Math.ceil(references.length / 2);
+  const width = Math.min(preferredWidth, texelCount);
+  const height = Math.ceil(texelCount / width);
+  const data = new Uint32Array(width * height);
+  for (let index = 0; index < references.length; index += 1) {
+    data[index >> 1] = (data[index >> 1] ?? 0) | (references[index]! << ((index & 1) * 16));
+  }
+  return { data, width, height };
+}

@@ -1,16 +1,26 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import type { FontHandle } from '../identity.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import {
   retainedPublicationBrand,
   TextEnginePublicationExpiredError,
   type RetainedTextEnginePublication,
 } from './retention.js';
-import { RenderWireIdentityRegistry } from './render-policy.js';
+import {
+  assertGlyphId,
+  RenderWireIdentityRegistry,
+  type FontBindingHandle,
+  type FontStackHandle,
+  type ParagraphId,
+  type PolicyHandle,
+  type StyleId,
+  type TextEngineSessionHandle,
+} from './render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
 
 export interface TextEngineSessionOptions {
-  readonly handle: number;
+  readonly handle: TextEngineSessionHandle;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
   readonly textCapacity?: number;
@@ -31,7 +41,7 @@ export interface TextEnginePublication {
   readonly publicationGeneration: number;
   readonly outputSlot: number;
   readonly flags: number;
-  readonly policyHandle: number;
+  readonly policyHandle: PolicyHandle | 0;
   readonly capabilitySet: number;
   readonly semanticViewCount: number;
   readonly primitiveCount: number;
@@ -47,8 +57,8 @@ export interface TextEnginePublication {
  * session-level conflict attributes nothing.
  */
 export interface TextEngineFault {
-  readonly paragraphId: number;
-  readonly styleId: number;
+  readonly paragraphId: ParagraphId | 0;
+  readonly styleId: StyleId | 0;
 }
 
 const NO_FAULT: TextEngineFault = Object.freeze({ paragraphId: 0, styleId: 0 });
@@ -86,7 +96,9 @@ function headerFault(header: DataView): TextEngineFault {
   const layout = textShaperAbi.layouts.engineResult;
   const paragraphId = header.getUint32(layout.faultParagraphId, true);
   const styleId = header.getUint32(layout.faultStyleId, true);
-  return paragraphId === 0 && styleId === 0 ? NO_FAULT : Object.freeze({ paragraphId, styleId });
+  return paragraphId === 0 && styleId === 0
+    ? NO_FAULT
+    : Object.freeze({ paragraphId: paragraphId as ParagraphId | 0, styleId: styleId as StyleId | 0 });
 }
 
 /** Lifecycle owner for retained policy, font-stack, and session state in a RuntimeShaper's Wasm instance. */
@@ -94,17 +106,17 @@ export class TextEngineHost {
   readonly wireIdentities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry();
   readonly #exports;
   readonly #sessions = new Set<TextEngineSession>();
-  readonly #policies = new Set<number>();
-  readonly #fontStacks = new Set<number>();
+  readonly #policies = new Set<PolicyHandle>();
+  readonly #fontStacks = new Set<FontStackHandle>();
   #disposed = false;
 
   constructor(shaper: RuntimeShaper) {
     this.#exports = runtimeShaperEngineExports(shaper);
   }
 
-  registerFontBinding(bindingHandle: number, shapingFontHandle: number, bytes: Uint8Array): void {
+  registerFontBinding(bindingHandle: FontBindingHandle, shapingFontHandle: FontHandle, bytes: Uint8Array): void {
     this.#assertActive();
-    uint32Handle(bindingHandle, 'font binding handle');
+    assertGlyphId(bindingHandle, 'font-binding', 'font binding handle');
     uint32Handle(shapingFontHandle, 'shaping font handle');
     this.#withBytes(bytes, (pointer, length) =>
       requireStatus(
@@ -114,14 +126,14 @@ export class TextEngineHost {
     );
   }
 
-  registerFontStack(handle: number, fontHandles: readonly number[]): void {
+  registerFontStack(handle: FontStackHandle, fontHandles: readonly FontBindingHandle[]): void {
     this.#assertActive();
-    uint32Handle(handle, 'font stack handle');
+    assertGlyphId(handle, 'font-stack', 'font stack handle');
     if (fontHandles.length === 0) throw new RangeError('font stack must contain at least one font');
     const bytes = new Uint8Array(checkedProduct(fontHandles.length, 4, 'font stack bytes'));
     const view = new DataView(bytes.buffer);
     for (const [index, fontHandle] of fontHandles.entries()) {
-      view.setUint32(index * 4, uint32Handle(fontHandle, 'font handle'), true);
+      view.setUint32(index * 4, assertGlyphId(fontHandle, 'font-binding', 'font binding handle'), true);
     }
     this.#withBytes(bytes, (pointer) =>
       requireStatus(this.#exports.registerFontStack(handle, pointer, fontHandles.length), 'register font stack'),
@@ -129,17 +141,17 @@ export class TextEngineHost {
     this.#fontStacks.add(handle);
   }
 
-  disposeFontStack(handle: number): void {
+  disposeFontStack(handle: FontStackHandle): void {
     this.#assertActive();
-    uint32Handle(handle, 'font stack handle');
+    assertGlyphId(handle, 'font-stack', 'font stack handle');
     if (!this.#fontStacks.has(handle)) throw new Error(`font stack ${handle} is not owned by this text engine host`);
     requireStatus(this.#exports.disposeFontStack(handle), 'dispose font stack');
     this.#fontStacks.delete(handle);
   }
 
-  registerPolicy(handle: number, bytes: Uint8Array): void {
+  registerPolicy(handle: PolicyHandle, bytes: Uint8Array): void {
     this.#assertActive();
-    uint32Handle(handle, 'policy handle');
+    assertGlyphId(handle, 'policy', 'policy handle');
     this.#withBytes(bytes, (pointer, length) =>
       requireStatus(this.#exports.registerPolicy(handle, pointer, length), 'register render policy'),
     );
@@ -148,7 +160,7 @@ export class TextEngineHost {
 
   createSession(options: TextEngineSessionOptions): TextEngineSession {
     this.#assertActive();
-    const handle = uint32Handle(options.handle, 'session handle');
+    const handle = assertGlyphId(options.handle, 'session', 'session handle');
     const requestCapacity = uint32(options.requestCapacity, 'request capacity');
     const resultCapacity = uint32(options.resultCapacity, 'result capacity');
     const textCapacity = uint32(options.textCapacity ?? 0, 'text capacity');
@@ -196,7 +208,7 @@ export class TextEngineHost {
 
 export class TextEngineSession {
   readonly #exports;
-  readonly #handle: number;
+  readonly #handle: TextEngineSessionHandle;
   readonly #onDispose: () => void;
   #requestCapacity: number;
   #resultCapacity: number;
@@ -212,7 +224,7 @@ export class TextEngineSession {
   /** @internal Sessions are created through {@link TextEngineHost.createSession}. */
   constructor(
     exports: ReturnType<typeof runtimeShaperEngineExports>,
-    handle: number,
+    handle: TextEngineSessionHandle,
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
@@ -226,7 +238,7 @@ export class TextEngineSession {
     this.#onDispose = onDispose;
   }
 
-  get handle(): number {
+  get handle(): TextEngineSessionHandle {
     return this.#handle;
   }
 
@@ -371,13 +383,13 @@ export class TextEngineSession {
    * publication generation, and the renderer fence are untouched, so the following
    * ordinary frame proceeds from pre-measure state.
    */
-  measureParagraph(request: Uint8Array, paragraphId: number): TextEnginePublication {
+  measureParagraph(request: Uint8Array, paragraphId: ParagraphId): TextEnginePublication {
     this.#assertActive();
     this.#invalidate();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
       throw new TypeError('paragraph measure request must be a nonempty Uint8Array');
     }
-    uint32Handle(paragraphId, 'paragraph id');
+    assertGlyphId(paragraphId, 'paragraph', 'paragraph id');
     const requestLength = uint32(request.byteLength, 'paragraph measure byte length');
     const initialMemoryBuffer = this.#exports.memory.buffer;
     if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
@@ -445,7 +457,7 @@ export class TextEngineSession {
       publicationGeneration: header.getUint32(layout.publicationGeneration, true),
       outputSlot: header.getUint32(layout.outputSlot, true),
       flags: header.getUint32(layout.flags, true),
-      policyHandle: header.getUint32(layout.policyHandle, true),
+      policyHandle: uint32(header.getUint32(layout.policyHandle, true), 'result policy handle') as PolicyHandle | 0,
       capabilitySet: header.getUint32(layout.capabilitySet, true),
       semanticViewCount: header.getUint32(layout.semanticViewCount, true),
       primitiveCount: header.getUint32(layout.primitiveCount, true),
@@ -479,10 +491,10 @@ function uint32(value: number, label: string): number {
   return value;
 }
 
-function uint32Handle(value: number, label: string): number {
-  value = uint32(value, label);
-  if (value === 0) throw new RangeError(`${label} must be nonzero`);
-  return value;
+function uint32Handle<const Value extends number>(value: Value, label: string): Value {
+  const validated = uint32(value, label);
+  if (validated === 0) throw new RangeError(`${label} must be nonzero`);
+  return validated as Value;
 }
 
 function checkedProduct(left: number, right: number, label: string): number {

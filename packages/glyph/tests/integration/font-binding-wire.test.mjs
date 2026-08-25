@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
+import { read as readKtx2 } from 'ktx-parse';
 
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 
@@ -97,8 +98,18 @@ async function fixture(name) {
     planeUnitsPerEm: extension.planeUnitsPerEm,
     records: raster.records,
     pages: raster.pages.map((page, pageIndex) => ({
-      ...page,
       resource: defineRasterResourceId(`test.slug.${pageIndex}`),
+      curveWidth: page.curveWidth,
+      curveHeight: page.curveHeight,
+      curveBytes: readKtx2(page.curve.bytes).levels[0].levelData.slice(),
+      headerCount: page.headerCount,
+      headerWidth: page.headerWidth,
+      headerHeight: page.headerHeight,
+      headerBytes: page.headers.bytes.slice(),
+      referenceCount: page.referenceCount,
+      referenceWidth: page.referenceWidth,
+      referenceHeight: page.referenceHeight,
+      referenceBytes: page.references.bytes.slice(),
     })),
   };
   return { core, raster, loaded: { font: core, technique: slug, data } };

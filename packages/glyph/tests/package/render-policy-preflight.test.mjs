@@ -1,15 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileRenderPolicy, textShaperAbi } from '../../dist/core.js';
+import { compileRenderPolicy, id, programId, techniqueId, textShaperAbi } from '../../dist/core.js';
 
 const layouts = textShaperAbi.layouts;
 const policy = textShaperAbi.policy;
 const { batchFields, capabilityFlags, scalarTypes, opcodes } = policy;
+const PRIMARY_TECHNIQUE_ID = techniqueId('test.policy-preflight/primary');
+const SECONDARY_TECHNIQUE_ID = techniqueId('test.policy-preflight/secondary');
+const PRIMARY_PROGRAM_ID = programId('test.policy-preflight/primary', 'test');
+const SECONDARY_PROGRAM_ID = programId('test.policy-preflight/secondary', 'test');
+const F32_BUFFER_ID = id('buffer', 'test.policy-preflight/f32');
+const U16_BUFFER_ID = id('buffer', 'test.policy-preflight/u16');
+const U32_BUFFER_ID = id('buffer', 'test.policy-preflight/u32');
+const SECONDARY_BUFFER_ID = id('buffer', 'test.policy-preflight/secondary-u32');
+const UNKNOWN_BUFFER_ID = id('buffer', 'test.policy-preflight/unknown');
 
 function capabilitySet(overrides = {}) {
   return {
-    id: 7,
     flags: capabilityFlags.storageBuffers | capabilityFlags.orderedDirect | capabilityFlags.stableIndirect,
     maxBufferBytes: 0xfe_dc_ba_98,
     updateAlignment: 256,
@@ -38,24 +46,25 @@ const FULL_OPERATIONS = [
   { opcode: opcodes.addF32, target: 9, operand0: 3, operand1: 8 },
   { opcode: opcodes.loadU32, target: 10, operand0: 0 },
   { opcode: opcodes.constantU32, target: 11, immediate0: 0xffff_ffff },
-  { opcode: opcodes.storeF32, operand0: 0, operand1: 0, immediate0: 1 },
-  { opcode: opcodes.storeF32, operand0: 1, operand1: 1, immediate0: 1 },
-  { opcode: opcodes.storeF32, operand0: 9, operand1: 2, immediate0: 1 },
-  { opcode: opcodes.storeF32, operand0: 3, operand1: 3, immediate0: 1 },
-  { opcode: opcodes.storeU32, operand0: 11, operand1: 0, immediate0: 3 },
-  { opcode: opcodes.storeU16, operand0: 4, operand1: 0, immediate0: 2 },
-  { opcode: opcodes.storeU16, operand0: 10, operand1: 1, immediate0: 2 },
+  { opcode: opcodes.storeF32, operand0: 0, operand1: 0, immediate0: F32_BUFFER_ID },
+  { opcode: opcodes.storeF32, operand0: 1, operand1: 1, immediate0: F32_BUFFER_ID },
+  { opcode: opcodes.storeF32, operand0: 9, operand1: 2, immediate0: F32_BUFFER_ID },
+  { opcode: opcodes.storeF32, operand0: 3, operand1: 3, immediate0: F32_BUFFER_ID },
+  { opcode: opcodes.storeU32, operand0: 11, operand1: 0, immediate0: U32_BUFFER_ID },
+  { opcode: opcodes.storeU16, operand0: 4, operand1: 0, immediate0: U16_BUFFER_ID },
+  { opcode: opcodes.storeU16, operand0: 10, operand1: 1, immediate0: U16_BUFFER_ID },
 ];
 
 /** One descriptor that is valid under every mirrored engine rule. */
 function fullDescriptor() {
+  const capabilities = capabilitySet();
   return {
-    capabilitySets: [capabilitySet()],
+    capabilitySets: [capabilities],
     programs: [
       {
-        techniqueId: 101,
-        programId: 202,
-        capabilitySetId: 7,
+        techniqueId: PRIMARY_TECHNIQUE_ID,
+        programId: PRIMARY_PROGRAM_ID,
+        capabilitySet: capabilities,
         primitiveKind: textShaperAbi.engine.primitiveKinds.decoration,
         resourceKindMask: 0x13_57_9b_df,
         semanticViewMask: 3,
@@ -74,24 +83,24 @@ function fullDescriptor() {
           { scope: 'resource', field: 10 },
         ],
         buffers: [
-          { id: 1, scalar: scalarTypes.f32, vectorWidth: 4, alignment: 16, stride: 64, usage: 7, capacityClass: 3 },
-          { id: 2, scalar: scalarTypes.u16, vectorWidth: 2 },
-          { id: 3, scalar: scalarTypes.u32, vectorWidth: 1 },
+          { id: F32_BUFFER_ID, scalar: scalarTypes.f32, vectorWidth: 4, alignment: 16, stride: 64, usage: 7, capacityClass: 3 },
+          { id: U16_BUFFER_ID, scalar: scalarTypes.u16, vectorWidth: 2 },
+          { id: U32_BUFFER_ID, scalar: scalarTypes.u32, vectorWidth: 1 },
         ],
         operations: FULL_OPERATIONS.map((operation) => ({ ...operation })),
       },
       {
-        techniqueId: 102,
-        programId: 203,
+        techniqueId: SECONDARY_TECHNIQUE_ID,
+        programId: SECONDARY_PROGRAM_ID,
         f32InputCount: 0,
         u32InputCount: 1,
         inputs: [{ scope: 'glyph', field: 200 }],
         storageKeyMask: batchFields.technique | batchFields.resource | batchFields.program,
         drawKeyMask: batchFields.technique | batchFields.resource | batchFields.program | batchFields.order,
-        buffers: [{ id: 1, scalar: scalarTypes.u32, vectorWidth: 1 }],
+        buffers: [{ id: SECONDARY_BUFFER_ID, scalar: scalarTypes.u32, vectorWidth: 1 }],
         operations: [
           { opcode: opcodes.loadU32, target: 0, operand0: 0 },
-          { opcode: opcodes.storeU32, operand0: 0, operand1: 0, immediate0: 1 },
+          { opcode: opcodes.storeU32, operand0: 0, operand1: 0, immediate0: SECONDARY_BUFFER_ID },
         ],
       },
     ],
@@ -117,7 +126,7 @@ test('a fully specified policy retains every serialized value exactly', () => {
   assert.equal(view.getUint32(request.inputCount, true), 5);
 
   const capabilitiesOffset = view.getUint32(request.capabilitySetsOffset, true);
-  assert.equal(view.getUint32(capabilitiesOffset + capability.id, true), 7);
+  assert.equal(view.getUint32(capabilitiesOffset + capability.id, true), 1);
   assert.equal(
     view.getUint32(capabilitiesOffset + capability.flags, true),
     capabilityFlags.storageBuffers | capabilityFlags.orderedDirect | capabilityFlags.stableIndirect,
@@ -136,9 +145,9 @@ test('a fully specified policy retains every serialized value exactly', () => {
   const programLayout = layouts.policyProgram;
   const programsOffset = view.getUint32(request.programsOffset, true);
   const first = programsOffset;
-  assert.equal(view.getUint32(first + programLayout.techniqueId, true), 101);
-  assert.equal(view.getUint32(first + programLayout.programId, true), 202);
-  assert.equal(view.getUint32(first + programLayout.capabilitySetId, true), 7);
+  assert.equal(view.getUint32(first + programLayout.techniqueId, true), PRIMARY_TECHNIQUE_ID);
+  assert.equal(view.getUint32(first + programLayout.programId, true), PRIMARY_PROGRAM_ID);
+  assert.equal(view.getUint32(first + programLayout.capabilitySetId, true), 1);
   assert.equal(view.getUint32(first + programLayout.resourceKindMask, true), 0x13_57_9b_df);
   assert.equal(view.getUint32(first + programLayout.semanticViewMask, true), 3);
   assert.equal(
@@ -167,7 +176,7 @@ test('a fully specified policy retains every serialized value exactly', () => {
   assert.equal(view.getUint32(first + programLayout.inputStart, true), 0);
 
   const second = programsOffset + programLayout.size;
-  assert.equal(view.getUint32(second + programLayout.techniqueId, true), 102);
+  assert.equal(view.getUint32(second + programLayout.techniqueId, true), SECONDARY_TECHNIQUE_ID);
   // Omitted optional fields keep their ABI defaults.
   assert.equal(view.getUint32(second + programLayout.capabilitySetId, true), 0);
   assert.equal(view.getUint32(second + programLayout.resourceKindMask, true), 1);
@@ -185,7 +194,7 @@ test('a fully specified policy retains every serialized value exactly', () => {
   const bufferLayout = layouts.policyBuffer;
   const buffersOffset = view.getUint32(request.buffersOffset, true);
   const explicitBuffer = buffersOffset;
-  assert.equal(view.getUint16(explicitBuffer + bufferLayout.id, true), 1);
+  assert.equal(view.getUint16(explicitBuffer + bufferLayout.id, true), F32_BUFFER_ID);
   assert.equal(view.getUint8(explicitBuffer + bufferLayout.scalar, true), scalarTypes.f32);
   assert.equal(view.getUint8(explicitBuffer + bufferLayout.vectorWidth, true), 4);
   assert.equal(view.getUint16(explicitBuffer + bufferLayout.alignment, true), 16);
@@ -193,7 +202,7 @@ test('a fully specified policy retains every serialized value exactly', () => {
   assert.equal(view.getUint32(explicitBuffer + bufferLayout.usage, true), 7);
   assert.equal(view.getUint16(explicitBuffer + bufferLayout.capacityClass, true), 3);
   const defaultedBuffer = buffersOffset + bufferLayout.size;
-  assert.equal(view.getUint16(defaultedBuffer + bufferLayout.id, true), 2);
+  assert.equal(view.getUint16(defaultedBuffer + bufferLayout.id, true), U16_BUFFER_ID);
   assert.equal(view.getUint8(defaultedBuffer + bufferLayout.scalar, true), scalarTypes.u16);
   assert.equal(view.getUint8(defaultedBuffer + bufferLayout.vectorWidth, true), 2);
   assert.equal(view.getUint16(defaultedBuffer + bufferLayout.alignment, true), 2);
@@ -222,7 +231,7 @@ test('a fully specified policy retains every serialized value exactly', () => {
   assert.equal(view.getUint8(lastStore + operationLayout.opcode, true), opcodes.storeU16);
   assert.equal(view.getUint8(lastStore + operationLayout.operand0, true), 10);
   assert.equal(view.getUint8(lastStore + operationLayout.operand1, true), 1);
-  assert.equal(view.getUint32(lastStore + operationLayout.immediate0, true), 2);
+  assert.equal(view.getUint32(lastStore + operationLayout.immediate0, true), U16_BUFFER_ID);
 
   const inputLayout = layouts.policyInput;
   const inputsOffset = view.getUint32(request.inputsOffset, true);
@@ -247,12 +256,16 @@ test('a decoration program may accept zero resource kinds', () => {
 
 test('buffer ids collide only within one program', () => {
   const descriptor = fullDescriptor();
-  descriptor.programs[1].buffers = [{ id: 1, scalar: scalarTypes.u32, vectorWidth: 1 }];
+  descriptor.programs[1].buffers = [{ id: F32_BUFFER_ID, scalar: scalarTypes.u32, vectorWidth: 1 }];
+  descriptor.programs[1].operations[1].immediate0 = F32_BUFFER_ID;
   assert.doesNotThrow(() => compileRenderPolicy(descriptor));
 
   const colliding = fullDescriptor();
-  colliding.programs[0].buffers[1].id = 1;
-  assert.throws(() => compileRenderPolicy(colliding), /repeats buffer id 1 within a program/);
+  colliding.programs[0].buffers[1].id = F32_BUFFER_ID;
+  assert.throws(
+    () => compileRenderPolicy(colliding),
+    new RegExp(`repeats buffer id ${F32_BUFFER_ID} within a program`),
+  );
 });
 
 test('rejection happens before any output allocation or write', () => {
@@ -325,7 +338,11 @@ const numericRejections = [
     (d) => (d.capabilitySets[0].maxBuffersPerDraw = 65536),
     /maxBuffersPerDraw needs a u16/,
   ],
-  ['a fractional buffer id', (d) => (d.programs[0].buffers[0].id = 1.5), /buffer 0 id needs a u16/],
+  [
+    'a fractional buffer id',
+    (d) => (d.programs[0].buffers[0].id = 1.5),
+    /buffer 0 id must come from id\('buffer', name\)/,
+  ],
   [
     'an infinite stride',
     (d) => (d.programs[0].buffers[0].stride = Number.POSITIVE_INFINITY),
@@ -347,7 +364,6 @@ const numericRejections = [
     (d) => (d.programs[1].inputs = Array.from({ length: 65537 }, () => ({ scope: 'semantic', field: 0 }))),
     /input count needs a u16/,
   ],
-  ['a negative capability id', (d) => (d.capabilitySets[0].id = -1), /capability set 0 id needs a nonzero u32/],
   [
     'an overflowing maxBufferBytes',
     (d) => (d.capabilitySets[0].maxBufferBytes = 2 ** 32),
@@ -403,23 +419,40 @@ test('preflight rejects unknown and inherited input scope keys before indexing t
   }
 });
 
-test('preflight rejects duplicate capability ids', () => {
+test('preflight rejects equivalent capability sets', () => {
   const descriptor = fullDescriptor();
   descriptor.capabilitySets.push({ ...descriptor.capabilitySets[0] });
-  assert.throws(() => compileRenderPolicy(descriptor), /repeats capability set id 7/);
+  assert.throws(() => compileRenderPolicy(descriptor), /repeats an equivalent capability set/);
+});
+
+test('compiler snapshots each declared capability field once', () => {
+  const descriptor = fullDescriptor();
+  descriptor.programs[0].capabilitySet = undefined;
+  let reads = 0;
+  Object.defineProperty(descriptor.capabilitySets[0], 'flags', {
+    enumerable: true,
+    get() {
+      reads += 1;
+      return capabilityFlags.storageBuffers | capabilityFlags.orderedDirect | capabilityFlags.stableIndirect;
+    },
+  });
+
+  compileRenderPolicy(descriptor);
+
+  assert.equal(reads, 1);
 });
 
 test('preflight rejects a program referencing an undeclared capability set', () => {
   const descriptor = fullDescriptor();
-  descriptor.programs[0].capabilitySetId = 9;
-  assert.throws(() => compileRenderPolicy(descriptor), /references undeclared capability set 9/);
+  descriptor.programs[0].capabilitySet = capabilitySet({ maxBufferBytes: 0xfe_dc_ba_97 });
+  assert.throws(() => compileRenderPolicy(descriptor), /references an undeclared capability set/);
 });
 
 test('preflight rejects a repeated technique, capability set, and variant', () => {
   const descriptor = fullDescriptor();
   Object.assign(descriptor.programs[1], {
-    techniqueId: 101,
-    capabilitySetId: 7,
+    techniqueId: PRIMARY_TECHNIQUE_ID,
+    capabilitySet: descriptor.capabilitySets[0],
     variant: 0xffff,
   });
   assert.throws(() => compileRenderPolicy(descriptor), /repeats a technique, capability set, and program variant/);
@@ -430,10 +463,10 @@ const semanticRejections = [
   ['empty capability sets', (d) => (d.capabilitySets = []), /declares no capability sets/],
   [
     'more than eight capability sets',
-    (d) => (d.capabilitySets = Array.from({ length: 9 }, (_, index) => capabilitySet({ id: index + 1 }))),
+    (d) =>
+      (d.capabilitySets = Array.from({ length: 9 }, (_, index) => capabilitySet({ maxBufferBytes: 1024 + index }))),
     /more than 8 capability sets/,
   ],
-  ['a zero capability id', (d) => (d.capabilitySets[0].id = 0), /needs a nonzero u32/],
   [
     'unknown capability flag bits',
     (d) => (d.capabilitySets[0].flags |= 1 << 6),
@@ -486,8 +519,8 @@ const semanticRejections = [
     (d) =>
       (d.programs = Array.from({ length: 33 }, (_, index) => ({
         ...d.programs[1],
-        techniqueId: 500 + index,
-        programId: 1000 + index,
+        techniqueId: techniqueId(`test.policy-preflight/many/${index}`),
+        programId: programId(`test.policy-preflight/many/${index}`, 'test'),
         buffers: [...d.programs[1].buffers],
         operations: [...d.programs[1].operations],
         inputs: [...d.programs[1].inputs],
@@ -531,7 +564,8 @@ const semanticRejections = [
   [
     'a declared capability set no program references',
     (d) => (
-      d.capabilitySets.push(capabilitySet({ id: 8 })), d.programs.forEach((program) => (program.capabilitySetId = 7))
+      d.capabilitySets.push(capabilitySet({ maxBufferBytes: 0xfe_dc_ba_97 })),
+      d.programs.forEach((program) => (program.capabilitySet = d.capabilitySets[0]))
     ),
     /referenced by no program/,
   ],
@@ -546,13 +580,17 @@ const semanticRejections = [
     'more than sixteen buffers',
     (d) =>
       (d.programs[1].buffers = Array.from({ length: 17 }, (_, index) => ({
-        id: index + 1,
+        id: id('buffer', `test.policy-preflight/many/${index}`),
         scalar: scalarTypes.u32,
         vectorWidth: 1,
       }))),
     /more than 16 buffers/,
   ],
-  ['a zero buffer id', (d) => (d.programs[1].buffers[0].id = 0), /reserved zero id/],
+  [
+    'a zero buffer id',
+    (d) => (d.programs[1].buffers[0].id = 0),
+    /buffer 0 id must come from id\('buffer', name\)/,
+  ],
   ['a zero vector width', (d) => (d.programs[1].buffers[0].vectorWidth = 0), /vectorWidth needs 1\.\.4/],
   ['a five-lane vector width', (d) => (d.programs[0].buffers[0].vectorWidth = 5), /vectorWidth needs 1\.\.4/],
   [
@@ -606,7 +644,11 @@ const semanticRejections = [
   ],
   ['a NaN f32 constant', (d) => (d.programs[0].operations[2].immediate0 = 0x7fc0_0000), /not a finite f32/],
   ['an infinite f32 constant', (d) => (d.programs[0].operations[2].immediate0 = 0x7f80_0000), /not a finite f32/],
-  ['stores into an undeclared buffer', (d) => (d.programs[0].operations[12].immediate0 = 99), /undeclared buffer 99/],
+  [
+    'stores into an undeclared buffer',
+    (d) => (d.programs[0].operations[12].immediate0 = UNKNOWN_BUFFER_ID),
+    new RegExp(`undeclared buffer ${UNKNOWN_BUFFER_ID}`),
+  ],
   [
     'u32 stores into an f32 buffer',
     (d) => (d.programs[0].operations[17].opcode = opcodes.storeU32),
@@ -617,11 +659,15 @@ const semanticRejections = [
     (d) => (d.programs[0].operations[12].operand1 = 4),
     /lane exceeds the buffer width/,
   ],
-  ['two stores to one lane', (d) => (d.programs[0].operations[18].operand1 = 0), /writes buffer 2 lane 0 twice/],
+  [
+    'two stores to one lane',
+    (d) => (d.programs[0].operations[18].operand1 = 0),
+    new RegExp(`writes buffer ${U16_BUFFER_ID} lane 0 twice`),
+  ],
   [
     'a buffer with unwritten lanes',
     (d) => d.programs[0].operations.pop(),
-    /leaves buffer 2 lane.*unwritten|lanes unwritten/,
+    new RegExp(`leaves buffer ${U16_BUFFER_ID} lane.*unwritten|lanes unwritten`),
   ],
 ];
 

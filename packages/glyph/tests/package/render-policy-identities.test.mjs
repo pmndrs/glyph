@@ -4,8 +4,10 @@ import test from 'node:test';
 import {
   compileRenderPolicy,
   createProgram,
+  id,
   programId,
   RenderWireIdentityRegistry,
+  selectPolicyCapabilitySet,
   techniqueId,
   textShaperAbi,
 } from '../../dist/core.js';
@@ -16,7 +18,6 @@ const capabilityFlags = textShaperAbi.policy.capabilityFlags;
 
 function capabilitySet() {
   return {
-    id: 1,
     flags: capabilityFlags.storageBuffers | capabilityFlags.orderedDirect | capabilityFlags.stableIndirect,
     maxBufferBytes: 1024 * 1024,
     updateAlignment: 4,
@@ -30,21 +31,22 @@ function capabilitySet() {
   };
 }
 
-const FIRST_TECHNIQUE_ID = 101;
-const SECOND_TECHNIQUE_ID = 102;
-const SHARED_PROGRAM_ID = 201;
+const FIRST_TECHNIQUE_ID = techniqueId('test.identities.first');
+const SECOND_TECHNIQUE_ID = techniqueId('test.identities.second');
+const SHARED_PROGRAM_ID = programId('test.identities.shared', 'test');
+const BUFFER_ID = id('buffer', 'test.identities.value');
 const ZERO_WIRE_ID = 0;
 // Smallest engine-valid body: one u32 lane written by one constant store.
 const body = {
   inputs: [],
   operations: [
     { opcode: opcodes.constantU32, target: 0, immediate0: 7 },
-    { opcode: opcodes.storeU32, operand0: 0, operand1: 0, immediate0: 1 },
+    { opcode: opcodes.storeU32, operand0: 0, operand1: 0, immediate0: BUFFER_ID },
   ],
   f32InputCount: 0,
   u32InputCount: 0,
 };
-const buffers = [{ id: 1, scalar: scalarTypes.u32, vectorWidth: 1 }];
+const buffers = [{ id: BUFFER_ID, scalar: scalarTypes.u32, vectorWidth: 1 }];
 
 test('semantic ID helpers are stable and namespace program variants', () => {
   const MSDF_TECHNIQUE_ID = techniqueId('pmndrs.msdf');
@@ -56,12 +58,38 @@ test('semantic ID helpers are stable and namespace program variants', () => {
   assert.notEqual(MSDF_TECHNIQUE_ID, MSDF_PROGRAM_ID);
 });
 
+test('host ID helpers are stable, nonzero, domain-separated, and collision-checked', () => {
+  assert.equal(id('policy', 'example/default'), id('policy', 'example/default'));
+  assert.notEqual(id('policy', 'example/default'), id('session', 'example/default'));
+  assert.ok(id('buffer', 'example/origin') > 0 && id('buffer', 'example/origin') <= 0xffff);
+  assert.throws(() => id('policy', ''), /nonempty string/);
+  assert.throws(() => id('unknown', 'example'), /kind is not supported/);
+  id('buffer', 'collision-36');
+  assert.throws(() => id('buffer', 'collision-326'), /ID collision/);
+});
+
 test('identity registries reject colliding program names at assembly', () => {
   const identities = new RenderWireIdentityRegistry();
   const first = identities.programId('v4gawj', 'three', '1y4hsl2');
   assert.equal(first, programId('v4gawj', 'three', '1y4hsl2'));
   assert.equal(first, programId('3boc7l', 'three', '74ae4c'));
   assert.throws(() => identities.programId('3boc7l', 'three', '74ae4c'), /render wire identity collision/);
+});
+
+test('capability profiles are selected from descriptors without exposing wire ordinals', () => {
+  const first = capabilitySet();
+  const second = { ...capabilitySet(), maxBufferBytes: 2 * 1024 * 1024 };
+  const descriptor = {
+    capabilitySets: [first, second],
+    programs: [program(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID)],
+  };
+  const selection = selectPolicyCapabilitySet(descriptor, second);
+  assert.equal(typeof selection, 'object');
+  assert.ok(Object.isFrozen(selection));
+  assert.throws(
+    () => selectPolicyCapabilitySet(descriptor, { ...second, maxBufferBytes: 3 * 1024 * 1024 }),
+    /not declared/,
+  );
 });
 
 function program(wireTechniqueId, wireProgramId, transformMode = 'direct') {
@@ -99,7 +127,7 @@ test('program construction snapshots accepted body and buffer records', () => {
   mutableBody.operations[0].opcode = 255;
   mutableBuffers[0].id = 999;
   assert.equal(compiled.operations[0].opcode, opcodes.constantU32);
-  assert.equal(compiled.buffers[0].id, 1);
+  assert.equal(compiled.buffers[0].id, BUFFER_ID);
   assert.ok(Object.isFrozen(compiled));
   assert.ok(Object.isFrozen(compiled.operations));
   assert.ok(Object.isFrozen(compiled.buffers));
@@ -112,6 +140,6 @@ test('policy compilation rejects a program id shared by different techniques', (
         capabilitySets: [capabilitySet()],
         programs: [program(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID), program(SECOND_TECHNIQUE_ID, SHARED_PROGRAM_ID)],
       }),
-    /repeats program id 201/,
+    new RegExp(`repeats program id ${SHARED_PROGRAM_ID}`),
   );
 });

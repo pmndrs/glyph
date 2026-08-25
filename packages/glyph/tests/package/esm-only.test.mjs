@@ -23,6 +23,11 @@ test('the published contract is ESM-only', async () => {
     registry: 'https://registry.npmjs.org/',
   });
   assert.deepEqual(manifest.bin, { glyph: './bin/glyph.js' });
+  assert.deepEqual(manifest.sideEffects, [
+    './dist/raster/bitmap-technique.js',
+    './dist/raster/msdf.js',
+    './dist/raster/slug-technique.js',
+  ]);
   assert.equal(manifest.exports['./internal/raster-baker-profile'], undefined);
   assert.deepEqual(manifest.pmndrs, {
     glyph: { bitmap: './bakers/bitmap', msdf: './bakers/msdf', slug: './bakers/slug' },

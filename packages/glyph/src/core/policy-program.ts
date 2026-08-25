@@ -1,12 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { PolicyInput, PolicyInputScope, PolicyOperation } from './render-policy.js';
-import type {
-  PolicyBufferDeclaration,
-  TechniqueBindingDeclaration,
-  TechniqueResourceDeclarations,
-  TechniqueSchema,
-  AnyTechniqueSchema,
-} from './technique-schema.js';
+import type { PolicyBufferId, PolicyInput, PolicyInputScope, PolicyOperation } from './render-policy.js';
+import type { PolicyBufferDeclaration, AnyTechniqueSchema } from './technique-schema.js';
 import { isTechniqueSchema } from './technique-schema.js';
 
 /**
@@ -201,8 +195,8 @@ export interface PolicyProgramOptions<
 declare const compiledPolicySchemaBrand: unique symbol;
 interface CompiledPolicyMetadata {
   readonly schema: AnyTechniqueSchema;
-  readonly stableGlyphId: number | undefined;
-  readonly transformIndex: number | undefined;
+  readonly stableGlyphId: PolicyBufferId | undefined;
+  readonly transformIndex: PolicyBufferId | undefined;
 }
 
 const compiledPolicyMetadata = new WeakMap<object, CompiledPolicyMetadata>();
@@ -223,8 +217,8 @@ export interface PolicyProgramBuilder<F32 extends readonly string[], U32 extends
     buffer: Buffer,
     lanes: Buffer['scalar'] extends 'f32' ? readonly PolicyF32Value[] : readonly PolicyU32Value[],
   ): void;
-  storeF32(buffer: number, lanes: readonly PolicyF32Value[]): void;
-  storeU32(buffer: number, lanes: readonly PolicyU32Value[]): void;
+  storeF32(buffer: PolicyBufferId, lanes: readonly PolicyF32Value[]): void;
+  storeU32(buffer: PolicyBufferId, lanes: readonly PolicyU32Value[]): void;
   compile(): CompiledPolicyProgramBody;
 }
 
@@ -265,25 +259,20 @@ type BindingNames<Names> = Names extends readonly string[] ? Names : readonly []
 
 interface StoreRecord {
   readonly opcode: number;
-  readonly buffer: number;
+  readonly buffer: PolicyBufferId;
   readonly lane: number;
   readonly node: Node;
 }
 
 /** Build a program against one technique's authoritative schema. */
-export function techniqueProgram<
-  const Buffers extends import('./technique-schema.js').PolicyBufferDeclarations,
-  const Binding extends TechniqueBindingDeclaration,
-  const Resources extends TechniqueResourceDeclarations,
-  const TechniqueId extends string,
->(
-  schema: TechniqueSchema<Buffers, Binding, Resources, TechniqueId>,
+export function techniqueProgram<const Schema extends AnyTechniqueSchema>(
+  schema: Schema,
   options: { readonly inverseFontSize?: boolean; readonly system?: PolicyProgramSystemBuffers } = {},
 ): TechniquePolicyProgramBuilder<
-  TechniqueSchema<Buffers, Binding, Resources, TechniqueId>,
-  Buffers,
-  BindingNames<Binding['f32']>,
-  BindingNames<Binding['u32']>
+  Schema,
+  Schema['buffers'],
+  BindingNames<Schema['binding']['f32']>,
+  BindingNames<Schema['binding']['u32']>
 > {
   if (!isTechniqueSchema(schema)) throw new TypeError('technique policy programs need a defined technique schema');
   if (!isNonArrayObject(options)) throw new TypeError('technique policy options need an object');
@@ -294,15 +283,15 @@ export function techniqueProgram<
     options.system === undefined ? undefined : normalizePolicyProgramSystemBuffers(schema.buffers, options.system);
   const program = policyProgram({
     scope: schema.scope,
-    bindingF32: (schema.binding.f32 ?? []) as BindingNames<Binding['f32']>,
-    bindingU32: (schema.binding.u32 ?? []) as BindingNames<Binding['u32']>,
+    bindingF32: (schema.binding.f32 ?? []) as BindingNames<Schema['binding']['f32']>,
+    bindingU32: (schema.binding.u32 ?? []) as BindingNames<Schema['binding']['u32']>,
     ...(options.inverseFontSize === undefined ? {} : { inverseFontSize: options.inverseFontSize }),
   });
   let compiled = false;
   return Object.freeze({
     semantics: program.semantics,
     binding: program.binding,
-    compile(stores: TechniquePolicyStores<Buffers>) {
+    compile(stores: TechniquePolicyStores<Schema['buffers']>) {
       if (compiled) throw new Error('technique policy program already compiled');
       compiled = true;
       if (typeof stores !== 'object' || stores === null || Array.isArray(stores)) {
@@ -317,7 +306,7 @@ export function techniqueProgram<
       for (const name of expected) {
         if (!Object.hasOwn(stores, name)) throw new TypeError(`technique policy omits declared buffer "${name}"`);
         const buffer = schema.buffers[name]!;
-        const lanes = stores[name as keyof Buffers];
+        const lanes = stores[name as keyof Schema['buffers']];
         if (!Array.isArray(lanes)) throw new TypeError(`technique policy buffer "${name}" needs a value tuple`);
         if (lanes.length !== buffer.lanes.length) {
           throw new RangeError(
@@ -339,7 +328,7 @@ export function techniqueProgram<
         stableGlyphId: system?.stableGlyphId.id,
         transformIndex: system?.transformIndex?.id,
       });
-      return body as unknown as CompiledPolicyProgramBody<TechniqueSchema<Buffers, Binding, Resources, TechniqueId>>;
+      return body as unknown as CompiledPolicyProgramBody<Schema>;
     },
   });
 }

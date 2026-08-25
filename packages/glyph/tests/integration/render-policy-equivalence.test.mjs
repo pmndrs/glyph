@@ -18,9 +18,10 @@ const THREE_PROGRAM_IDS = new Map([
  * Semantic equivalence against the hand-numbered programs. Register numbers and
  * operation order are private to a program's execution — the interpreter only
  * requires forward-only writes — so the DSL port may renumber freely. What must
- * never drift: the input tables, buffer schemas, capability sets, program
+ * never drift: the input tables, buffer shapes, capability sets, program
  * metadata, and the expression each buffer lane receives. This test decodes both
- * byte streams and compares exactly that.
+ * byte streams and compares exactly that. Named buffer IDs deliberately differ
+ * from the retired hand-numbered fixture, so buffers and stores compare by order.
  */
 test('the Three render policy is semantically identical to the hand-numbered fixture', async () => {
   const fixtures = JSON.parse(await readFile(fixtureUrl, 'utf8'));
@@ -37,7 +38,11 @@ test('the Three render policy is semantically identical to the hand-numbered fix
         assert.notEqual(expectedProgramId, undefined, `${key}: program ${index} technique identity`);
         assert.deepEqual(
           actual.metadata,
-          { ...expected.metadata, programId: expectedProgramId },
+          {
+            ...expected.metadata,
+            programId: expectedProgramId,
+            capabilitySetId: expected.metadata.techniqueId === techniqueId('pmndrs.decoration') ? 0 : 1,
+          },
           `${key}: program ${index} metadata`,
         );
         assert.deepEqual(actual.inputs, expected.inputs, `${key}: program ${index} input table`);
@@ -113,7 +118,12 @@ function decodePolicy(bytes) {
     const buffers = [];
     for (let buffer = 0; buffer < bufferCount; buffer += 1) {
       const bufferAt = buffersOffset + (bufferStart + buffer) * bufferLayout.size;
-      buffers.push(Buffer.from(bytes.slice(bufferAt, bufferAt + bufferLayout.size)).toString('hex'));
+      buffers.push(Buffer.from(bytes.slice(bufferAt + 2, bufferAt + bufferLayout.size)).toString('hex'));
+    }
+    const bufferOrder = new Map();
+    for (let buffer = 0; buffer < bufferCount; buffer += 1) {
+      const bufferAt = buffersOffset + (bufferStart + buffer) * bufferLayout.size;
+      bufferOrder.set(view.getUint16(bufferAt + bufferLayout.id, true), buffer);
     }
 
     const operationStart = view.getUint32(at + programLayout.operationStart, true);
@@ -144,7 +154,7 @@ function decodePolicy(bytes) {
         if (commutative.has(name) && right < left) [left, right] = [right, left];
         registers.set(target, `${name}(${left}, ${right})`);
       } else if (name === 'storeF32' || name === 'storeU32' || name === 'storeU16') {
-        stores.set(`${name}:buffer${immediate0}:lane${operand1}`, required(registers, operand0));
+        stores.set(`${name}:buffer${required(bufferOrder, immediate0)}:lane${operand1}`, required(registers, operand0));
       } else {
         throw new Error(`unexpected policy opcode ${String(name)}`);
       }

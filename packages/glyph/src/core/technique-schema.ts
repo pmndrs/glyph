@@ -15,7 +15,7 @@ import {
   type PortableTextureFormat,
   type PortableVertexInput,
 } from './portable-resources.js';
-import type { PolicyBuffer } from './render-policy.js';
+import { assertGlyphId, type PolicyBuffer, type PolicyBufferId } from './render-policy.js';
 
 export type PolicyScalarKind = 'f32' | 'u32';
 
@@ -24,7 +24,7 @@ export interface PolicyBufferDeclaration<
   Lanes extends readonly string[] = readonly string[],
 > {
   /** Wire buffer id — nonzero, unique within the owning program. */
-  readonly id: number;
+  readonly id: PolicyBufferId;
   readonly scalar: Scalar;
   /** One name per lane; the lane count is the buffer's vector width. */
   readonly lanes: Lanes;
@@ -51,7 +51,7 @@ export function definePolicyBuffers<const Buffers extends PolicyBufferDeclaratio
     if (!Array.isArray(sourceLanes)) {
       throw new TypeError(`policy buffer "${name}" needs a declaration with named lanes`);
     }
-    const id = buffer.id;
+    const id = assertGlyphId(buffer.id, 'buffer', `policy buffer "${name}" id`);
     const scalar = buffer.scalar;
     const lanes = sourceLanes.map((lane, index) => {
       if (typeof lane !== 'string' || lane.length === 0) {
@@ -86,18 +86,21 @@ export interface TechniqueBindingDeclaration {
 export interface TechniqueBufferResourceDeclaration {
   readonly kind: 'buffer';
   readonly format?: never;
+  readonly cardinality?: 'one' | 'many';
 }
 
 /** Immutable sample payload; retained payloads validate as `PortableTexturePayload`. */
 export interface TechniqueTextureResourceDeclaration {
   readonly kind: 'texture';
   readonly format: PortableTextureFormat;
+  readonly cardinality?: 'one' | 'many';
 }
 
 /** Immutable layered sample payload; retained payloads validate as `PortableTextureArrayPayload`. */
 export interface TechniqueTextureArrayResourceDeclaration {
   readonly kind: 'texture-array';
   readonly format: PortableTextureFormat;
+  readonly cardinality?: 'one' | 'many';
 }
 
 /** GLB-like geometry payload; retained payloads validate as `PortableGeometryPayload`. */
@@ -106,6 +109,21 @@ export interface TechniqueGeometryResourceDeclaration {
   /** Vertex semantics and scalar shapes the technique's shader consumes. */
   readonly attributes: readonly PortableVertexInput[];
   readonly format?: never;
+  readonly cardinality?: 'one';
+}
+
+export type TechniqueResourceGroupMembers = Readonly<
+  Record<
+    string,
+    TechniqueBufferResourceDeclaration | TechniqueTextureResourceDeclaration | TechniqueTextureArrayResourceDeclaration
+  >
+>;
+
+/** Fixed named leaf payloads selected and realized as one logical resource. */
+export interface TechniqueResourceGroupDeclaration {
+  readonly kind: 'group';
+  readonly members: TechniqueResourceGroupMembers;
+  readonly cardinality?: 'one' | 'many';
 }
 
 /**
@@ -116,7 +134,8 @@ export type TechniqueResourceDeclaration =
   | TechniqueBufferResourceDeclaration
   | TechniqueTextureResourceDeclaration
   | TechniqueTextureArrayResourceDeclaration
-  | TechniqueGeometryResourceDeclaration;
+  | TechniqueGeometryResourceDeclaration
+  | TechniqueResourceGroupDeclaration;
 
 export type TechniqueResourceDeclarations = Readonly<Record<string, TechniqueResourceDeclaration>>;
 type NoTechniqueResources = Readonly<Record<never, never>>;
@@ -164,9 +183,14 @@ export type TechniqueGeometryDeclaration<ResourceName extends string = string> =
         }
     );
 
-export interface TechniqueRenderDeclaration<ResourceName extends string = string> {
+export interface TechniqueRenderDeclaration<
+  ResourceName extends string = string,
+  GeometryResourceName extends string = ResourceName,
+> {
+  /** Logical resource role selected by each non-recordless draw. */
+  readonly resource?: ResourceName;
   /** The geometry this technique's draws realize. */
-  readonly geometry: TechniqueGeometryDeclaration<ResourceName>;
+  readonly geometry: TechniqueGeometryDeclaration<GeometryResourceName>;
 }
 
 type GeometryResourceNames<Resources extends TechniqueResourceDeclarations> = string extends keyof Resources
@@ -202,7 +226,7 @@ export interface TechniqueSchemaDeclaration<
   readonly buffers: Buffers;
   readonly resources?: Resources;
   /** The portable render contract: declared geometry and its resource linkage; absent means synthetic-quad. */
-  readonly render?: TechniqueRenderDeclaration<GeometryResourceNames<Resources>>;
+  readonly render?: TechniqueRenderDeclaration<keyof Resources & string, GeometryResourceNames<Resources>>;
   /**
    * Opt-in glyph-origin metadata: names the declared f32 buffer whose first two
    * lanes carry the glyph's position. Renderers that augment glyph origins
@@ -229,7 +253,10 @@ export interface TechniqueSchema<
   >,
 > extends TechniqueSchemaDeclaration<Buffers, Binding, Resources, TechniqueId> {
   readonly resources: Resources;
-  readonly render: TechniqueRenderDeclaration<GeometryResourceNames<Resources>> & { readonly geometry: Geometry };
+  readonly render: TechniqueRenderDeclaration<keyof Resources & string, GeometryResourceNames<Resources>> &
+    (keyof Resources extends never
+      ? { readonly resource?: never; readonly geometry: Geometry }
+      : { readonly resource: keyof Resources & string; readonly geometry: Geometry });
   readonly [techniqueSchemaBrand]: true;
 }
 
@@ -255,15 +282,18 @@ export function isTechniqueSchema(value: unknown): value is AnyTechniqueSchema {
   );
 }
 
+type DefinedTechniqueResources<Resources> = Resources extends TechniqueResourceDeclarations
+  ? Resources
+  : NoTechniqueResources;
 /** Validate and freeze one technique's authoritative schema. */
 export function defineTechniqueSchema<
   const TechniqueId extends RasterTechniqueId | string,
   const Buffers extends PolicyBufferDeclarations,
   const Binding extends TechniqueBindingDeclaration,
   const Resources = NoTechniqueResources,
-  const Geometry extends TechniqueGeometryDeclaration<
-    GeometryResourceNames<Resources extends TechniqueResourceDeclarations ? Resources : NoTechniqueResources>
-  > = { readonly kind: 'synthetic-quad' },
+  const Geometry extends TechniqueGeometryDeclaration<GeometryResourceNames<DefinedTechniqueResources<Resources>>> = {
+    readonly kind: 'synthetic-quad';
+  },
 >(
   declaration: Omit<
     TechniqueSchemaDeclaration<Buffers, Binding, TechniqueResourceDeclarations, TechniqueId>,
@@ -275,17 +305,17 @@ export function defineTechniqueSchema<
         ? never
         : Resources
       : never;
-    readonly render?: TechniqueRenderDeclaration<
-      GeometryResourceNames<Resources extends TechniqueResourceDeclarations ? Resources : NoTechniqueResources>
-    > & { readonly geometry: Geometry };
-  },
-): TechniqueSchema<
-  Buffers,
-  Binding,
-  Resources extends TechniqueResourceDeclarations ? Resources : NoTechniqueResources,
-  TechniqueId,
-  Geometry
-> {
+  } & (keyof DefinedTechniqueResources<Resources> extends never
+      ? {
+          readonly render?: TechniqueRenderDeclaration<never, never> & { readonly geometry: Geometry };
+        }
+      : {
+          readonly render: TechniqueRenderDeclaration<
+            keyof DefinedTechniqueResources<Resources> & string,
+            GeometryResourceNames<DefinedTechniqueResources<Resources>>
+          > & { readonly resource: keyof DefinedTechniqueResources<Resources> & string; readonly geometry: Geometry };
+        }),
+): TechniqueSchema<Buffers, Binding, DefinedTechniqueResources<Resources>, TechniqueId, Geometry> {
   // Read every input property exactly once into owned structures, validate the
   // owned data, then freeze and return the copy. Caller input is never mutated
   // or frozen — a rejected declaration leaves it exactly as passed — and only
@@ -326,11 +356,36 @@ export function defineTechniqueSchema<
   }
   let render: TechniqueRenderDeclaration = Object.freeze({ geometry: Object.freeze({ kind: 'synthetic-quad' }) });
   const renderDeclaration = declaration.render;
+  if (Object.keys(resources).length !== 0 && renderDeclaration === undefined) {
+    throw new TypeError(`technique "${technique}" with resources needs a declared render resource`);
+  }
   if (renderDeclaration !== undefined) {
     if (typeof renderDeclaration !== 'object' || renderDeclaration === null || Array.isArray(renderDeclaration)) {
       throw new TypeError(`technique "${technique}" render declaration needs an object`);
     }
-    render = Object.freeze({ geometry: defineGeometryDeclaration(renderDeclaration.geometry, technique, resources) });
+    const selectedResource = renderDeclaration.resource;
+    if (Object.keys(resources).length !== 0 && selectedResource === undefined) {
+      throw new TypeError(`technique "${technique}" with resources needs a declared render resource`);
+    }
+    if (
+      selectedResource !== undefined &&
+      (typeof selectedResource !== 'string' || !Object.hasOwn(resources, selectedResource))
+    ) {
+      throw new TypeError(`technique "${technique}" render resource must name a declared resource`);
+    }
+    const repeatedResources = Object.entries(resources)
+      .filter(([, resource]) => resource.cardinality === 'many')
+      .map(([name]) => name);
+    if (repeatedResources.length > 1) {
+      throw new TypeError(`technique "${technique}" may declare only one repeated resource role`);
+    }
+    if (repeatedResources.length === 1 && selectedResource !== repeatedResources[0]) {
+      throw new TypeError(`technique "${technique}" must select its repeated resource as the render resource`);
+    }
+    render = Object.freeze({
+      ...(selectedResource === undefined ? {} : { resource: selectedResource }),
+      geometry: defineGeometryDeclaration(renderDeclaration.geometry, technique, resources),
+    });
   }
   let glyphOrigin: { readonly buffer: string } | undefined;
   const glyphOriginDeclaration = declaration.glyphOrigin;
@@ -363,13 +418,7 @@ export function defineTechniqueSchema<
     resources,
     render,
     ...(glyphOrigin === undefined ? {} : { glyphOrigin }),
-  } as unknown as TechniqueSchema<
-    Buffers,
-    Binding,
-    Resources extends TechniqueResourceDeclarations ? Resources : NoTechniqueResources,
-    TechniqueId,
-    Geometry
-  >;
+  } as unknown as TechniqueSchema<Buffers, Binding, DefinedTechniqueResources<Resources>, TechniqueId, Geometry>;
   const frozen = Object.freeze(schema);
   techniqueSchemaInstances.add(frozen);
   return frozen;
@@ -389,18 +438,63 @@ function defineResourceDeclaration(
     throw new TypeError(`technique "${technique}" resource "${name}" needs a nonempty resource kind`);
   }
   const keys = Object.keys(resource ?? {});
+  const cardinality = declared?.cardinality ?? 'one';
+  if (cardinality !== 'one' && cardinality !== 'many') {
+    throw new TypeError(`technique "${technique}" resource "${name}" needs one or many cardinality`);
+  }
   if (kind === 'buffer') {
-    if (keys.some((key) => key !== 'kind')) {
-      throw new TypeError(`technique "${technique}" ${kind} resource "${name}" declares only its kind`);
+    if (keys.some((key) => key !== 'kind' && key !== 'cardinality')) {
+      throw new TypeError(`technique "${technique}" ${kind} resource "${name}" declares kind and cardinality only`);
     }
-    return Object.freeze({ kind });
+    return Object.freeze({ kind, ...(cardinality === 'many' ? { cardinality } : {}) });
   }
   if (kind === 'geometry') {
-    if (keys.some((key) => key !== 'kind' && key !== 'attributes')) {
-      throw new TypeError(`technique "${technique}" geometry resource "${name}" declares only kind and attributes`);
+    if (cardinality !== 'one') {
+      throw new TypeError(`technique "${technique}" geometry resource "${name}" must have one cardinality`);
+    }
+    if (keys.some((key) => key !== 'kind' && key !== 'attributes' && key !== 'cardinality')) {
+      throw new TypeError(
+        `technique "${technique}" geometry resource "${name}" declares kind, attributes, and cardinality only`,
+      );
     }
     const attributes = (declared as Partial<TechniqueGeometryResourceDeclaration>).attributes;
     return Object.freeze({ kind, attributes: defineVertexInputs(attributes, name, technique) });
+  }
+  if (kind === 'group') {
+    if (keys.some((key) => key !== 'kind' && key !== 'members' && key !== 'cardinality')) {
+      throw new TypeError(
+        `technique "${technique}" group resource "${name}" declares kind, members, and cardinality only`,
+      );
+    }
+    const members = (declared as Partial<TechniqueResourceGroupDeclaration>).members;
+    if (!isNonArrayObject(members) || Object.keys(members).length === 0) {
+      throw new TypeError(`technique "${technique}" group resource "${name}" needs named members`);
+    }
+    const owned: Record<string, TechniqueResourceGroupMembers[string]> = Object.create(null);
+    for (const [memberName, member] of Object.entries(members)) {
+      if (memberName.length === 0) {
+        throw new TypeError(`technique "${technique}" group resource "${name}" has an empty member name`);
+      }
+      const memberKind: unknown = isNonArrayObject(member) ? (member as Record<PropertyKey, unknown>).kind : undefined;
+      if (
+        !isNonArrayObject(member) ||
+        member.cardinality === 'many' ||
+        memberKind === 'geometry' ||
+        memberKind === 'group'
+      ) {
+        throw new TypeError(`technique "${technique}" group resource "${name}.${memberName}" needs one leaf payload`);
+      }
+      const normalized = defineResourceDeclaration(
+        member as TechniqueResourceDeclaration,
+        `${name}.${memberName}`,
+        technique,
+      );
+      if (normalized.kind === 'geometry' || normalized.kind === 'group') {
+        throw new TypeError(`technique "${technique}" group resource "${name}.${memberName}" needs one leaf payload`);
+      }
+      owned[memberName] = normalized;
+    }
+    return Object.freeze({ kind, members: Object.freeze(owned), ...(cardinality === 'many' ? { cardinality } : {}) });
   }
   if (kind !== 'texture' && kind !== 'texture-array') {
     throw new TypeError(`technique "${technique}" resource "${name}" needs a portable resource kind`);
@@ -409,10 +503,10 @@ function defineResourceDeclaration(
   if (!isPortableTextureFormat(format)) {
     throw new TypeError(`technique "${technique}" resource "${name}" needs a supported texture format`);
   }
-  if (keys.some((key) => key !== 'kind' && key !== 'format')) {
-    throw new TypeError(`technique "${technique}" resource "${name}" declares only kind and format`);
+  if (keys.some((key) => key !== 'kind' && key !== 'format' && key !== 'cardinality')) {
+    throw new TypeError(`technique "${technique}" resource "${name}" declares kind, format, and cardinality only`);
   }
-  return Object.freeze({ kind, format });
+  return Object.freeze({ kind, format, ...(cardinality === 'many' ? { cardinality } : {}) });
 }
 
 function defineVertexInputs(value: unknown, resource: string, technique: string): readonly PortableVertexInput[] {
