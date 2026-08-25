@@ -1,7 +1,9 @@
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+
+import { embedTypeGpuMetadataFiles } from '../../glyph/scripts/support/embed-typegpu-metadata.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const outputRoot = join(packageRoot, 'dist');
@@ -9,16 +11,8 @@ const outputRoot = join(packageRoot, 'dist');
 await rm(outputRoot, { recursive: true, force: true });
 await run('pnpm', ['exec', 'tsc', '-p', join(packageRoot, 'tsconfig.build.json')]);
 
-const { default: typegpuPlugin } = await import('unplugin-typegpu/rollup');
-const plugin = typegpuPlugin();
 const outputPath = join(outputRoot, 'webgpu-device.js');
-const source = await readFile(outputPath, 'utf8');
-const transformed = await plugin.transform.handler.call({}, source, outputPath);
-if (transformed && typeof transformed.code === 'string') await writeFile(outputPath, transformed.code);
-const output = transformed?.code ?? source;
-if (output.includes('use gpu') && !output.includes('__TYPEGPU_META__')) {
-  throw new Error('dist/webgpu-device.js contains TypeGPU directives without compiler metadata');
-}
+await embedTypeGpuMetadataFiles([outputPath]);
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
