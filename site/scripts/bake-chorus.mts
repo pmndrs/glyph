@@ -30,7 +30,6 @@ const SOURCE = `https://raw.githubusercontent.com/notofonts/notofonts.github.io/
  */
 const NOTO = [
   'NotoSans',
-  'NotoSansArabic',
   'NotoSansHebrew',
   'NotoSansDevanagari',
   'NotoSansBengali',
@@ -45,7 +44,6 @@ const NOTO = [
   'NotoSansThai',
   'NotoSansLao',
   'NotoSansKhmer',
-  'NotoSansMyanmar',
   'NotoSansGeorgian',
   'NotoSansArmenian',
   'NotoSansEthiopic',
@@ -143,12 +141,10 @@ for (const face of faces) {
       output,
       '--unicodes',
       owned.map((point) => `U+${point.toString(16).toUpperCase().padStart(4, '0')}`).join(','),
-      // Slug: exact outlines rather than an atlas. MSDF bakes a full-size
-      // atlas per face regardless of glyph count — twenty-two of those came to
-      // 448 MB of texture for a few hundred glyphs — while Slug carries curve
-      // data, so the cost scales with the glyphs actually baked instead of with
-      // the number of faces.
-      '--slug',
+      // MSDF: one atlas per face, but the chorus is small and static so the
+      // sampling holds, and it costs far less frame time than resolving curves
+      // for tens of thousands of glyphs.
+      '--msdf',
       ...(check ? ['--check'] : []),
     ],
     { cwd: site },
