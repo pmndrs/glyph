@@ -19,7 +19,8 @@ import face16 from '../assets/chorus-myanmar.font.glb?url';
 import face17 from '../assets/chorus-georgian.font.glb?url';
 import face18 from '../assets/chorus-armenian.font.glb?url';
 import face19 from '../assets/chorus-ethiopic.font.glb?url';
-import face20 from '../assets/chorus-cjk.font.glb?url';
+import face20 from '../assets/chorus-japanese.font.glb?url';
+import face21 from '../assets/chorus-korean.font.glb?url';
 
 /** Fallback order: Latin first, CJK last, scripted faces in between. */
 export const CHORUS_URLS = [
@@ -44,4 +45,5 @@ export const CHORUS_URLS = [
   face18,
   face19,
   face20,
+  face21,
 ] as const;
