@@ -842,7 +842,7 @@ Deliver:
 - viewport, column, obstacle, text-editing, typewriter, strike, and display-transform controls with consumer-facing phase, frame, GPU, allocation, and residency evidence;
 - a reproducible comparison with Pretext that distinguishes approximate browser-compatible line breaking from exact GPU-ready shaping and makes no unmeasured speed claim.
 
-Maintainers intend an editorial piece as a v1 showcase, so the typography that composition depends on is scoped into milestone 11 rather than left here: items 11.12–11.14 cover baked decoration metrics, the break-inserted hyphen contract, and `wordSpacing`, first-line indent, paragraph spacing, and justification controls. This milestone keeps only the flow-region planner itself.
+Maintainers intend an editorial piece as a v1 showcase, so the typography that composition depends on is scoped into milestone 11 rather than left here: items 11.12–11.14 cover baked decoration metrics, the break-inserted hyphen contract, and `wordSpacing`, first-line indent, paragraph spacing, and justification controls. This milestone keeps only the flow-region planner itself. The landing page in [the documentation site plan](../planning/docs-site.md) is this milestone's first committed consumer: it ships a three-column justified composition with no exclusions at all, and adopts authored two-dimensional exclusions here so the wordmark reflows the field instead of overlaying it.
 
 Contour-tight glyph-ink wrapping, arbitrary rendered-pixel occlusion, balanced columns, automatic hyphenation, vertical flow, and a frozen public flow API remain deferred until the initial integration produces evidence. The [editorial flow research concept](../planning/editorial-flow-layout.md) defines the proposed internal model, benchmark composition, comparison rules, and acceptance gates.
 
@@ -909,6 +909,17 @@ Closes the class of defect behind the displaced-record-slot corruption, in depen
 - [ ] randomized instanced updates in the benchmark harness, whose monotonic reveal exercises only edits that displace nothing.
 
 Exit gate: the differential oracle covers every edit class on every shipped technique and script class; reverting any correctness change in this milestone fails it.
+## Documentation site and landing page
+
+This is product-surface work rather than a library capability milestone, so it sits outside the numbered
+sequence above and carries no exit gate against the v1 API. [The site plan](../planning/docs-site.md) owns the
+design and D-259 records the decision. Two static outputs compose into one GitHub Pages artifact: a
+`@pmndrs/docs` MDX export under `/docs`, and a WebGPU landing page at `/` whose hero renders the wordmark
+through the library itself rather than illustrating it. Nothing publishes until a separate publish decision
+fixes the base path and the Pages workflow together.
+
+Its only tie to the sequence above runs in the other direction: the landing page ships without exclusions, and
+Milestone 12's authored-exclusion core is committed immediately after the composition lands.
 
 ## Roadmap change rule
 
