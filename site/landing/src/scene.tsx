@@ -9,7 +9,8 @@ import { normalize, positionLocal, uniform, vec3 } from 'three/tsl';
 import { DirectionalLight, DoubleSide, MeshPhysicalNodeMaterial, NormalBlending, Vector2 } from 'three/webgpu';
 
 import fontUrl from '../assets/playwrite-glyph.font.glb?url';
-import { useLook } from './controls';
+import { live } from './controls';
+import { publishMarkBottom } from './anchor';
 import { Effects } from './effects';
 import { trackKey } from './lens';
 
@@ -38,11 +39,14 @@ export function Scene() {
   const mark = useRef<ThreeText<typeof slug>>(null);
   const font = useFont(FONT);
   const viewport = useThree((state) => state.viewport);
-  const look = useLook();
 
   // Only `envMapIntensity` is a plain material field rather than a node, so it
   // is the one dial that costs a rebuild; everything else rides a uniform and
   // updates live.
+  // Held so the one dial that is a plain material field rather than a node can
+  // still be driven live.
+  const built = useRef<MeshPhysicalNodeMaterial>(null);
+
   const hero = useMemo(
     () =>
       defineTextMaterial((context) => {
@@ -70,14 +74,15 @@ export function Scene() {
         material.metalnessNode = metalness;
         material.roughnessNode = roughness;
         material.emissiveNode = context.shader.color.mul(emissive);
-        material.envMapIntensity = look.envIntensity;
+        material.envMapIntensity = live.envIntensity;
+        built.current = material;
         return material;
       }),
-    [look.envIntensity],
+    [],
   );
 
   const width = viewport.width;
-  const fontSize = Math.min(width * look.measure, viewport.height * 0.62);
+  const fontSize = Math.min(width * live.measure, viewport.height * 0.62);
 
   // A three-point rig rather than one lamp. Directional lights carry parallel
   // rays, so the specular is even across the word instead of exploding wherever
@@ -88,10 +93,11 @@ export function Scene() {
   const [lineBox, setLineBox] = useState(0);
   const elapsed = useRef(0);
   useFrame((_state, delta) => {
-    curvature.value = look.curvature;
-    metalness.value = look.metalness;
-    roughness.value = look.roughness;
-    emissive.value = look.emissive;
+    if (built.current) built.current.envMapIntensity = live.envIntensity;
+    curvature.value = live.curvature;
+    metalness.value = live.metalness;
+    roughness.value = live.roughness;
+    emissive.value = live.emissive;
 
     const summary = mark.current?.measureLayout();
     if (summary && summary.contentHeight > 0) {
@@ -100,25 +106,34 @@ export function Scene() {
       // in x = [0, width] and y = [-height, 0].
       inkCentre.value.set(width / 2, -summary.contentHeight / 2);
       inkSpan.value.set(Math.max(summary.contentWidth, 1) / 2, Math.max(summary.contentHeight, 1) / 2);
+
+      // Where the controls sit, in screen terms.
+      //
+      // Below the line box, not the baseline: the descenders of g, y and p hang
+      // under the baseline, so anchoring there puts the buttons through the
+      // tails. Until Text publishes ink extents (#113) the clearance below the
+      // box is a dialled allowance in ems — the honest fudge.
+      const belowInk = summary.contentHeight / 2 + fontSize * live.markGap;
+      publishMarkBottom(0.5 + belowInk / Math.max(viewport.height, 1e-3));
     }
 
     elapsed.current += delta;
-    const t = elapsed.current * look.keySpeed;
-    const keyX = Math.cos(t) * look.keyRadius;
-    const keyY = Math.sin(t * 0.7) * look.keyRadius * look.keyElevation;
+    const t = elapsed.current * live.keySpeed;
+    const keyX = Math.cos(t) * live.keyRadius;
+    const keyY = Math.sin(t * 0.7) * live.keyRadius * live.keyElevation;
     key.current?.position.set(keyX, keyY, 4);
-    trackKey(keyX, keyY, viewport.width, viewport.height, look.aberrationPeak, look.aberrationFalloff);
+    trackKey(keyX, keyY, viewport.width, viewport.height, live.aberrationPeak, live.aberrationFalloff);
   });
 
   return (
     <>
-      <ambientLight intensity={look.ambient} />
-      <directionalLight color="#f2f6ff" intensity={look.keyIntensity} ref={key} />
-      <directionalLight color="#8fa6cc" intensity={look.fillIntensity} position={[-5, -2, 3]} />
+      <ambientLight color="#e7ecf6" intensity={live.ambient} />
+      <directionalLight color="#f2f6ff" intensity={live.keyIntensity} ref={key} />
+      <directionalLight color="#8fa6cc" intensity={live.fillIntensity} position={[-5, -2, 3]} />
       <directionalLight
         color="#cfe0ff"
-        intensity={look.rimIntensity}
-        position={[Math.cos(look.rimAngle) * 6, Math.sin(look.rimAngle) * 6, -4]}
+        intensity={live.rimIntensity}
+        position={[Math.cos(live.rimAngle) * 6, Math.sin(live.rimAngle) * 6, -4]}
       />
 
       <Text
@@ -133,10 +148,65 @@ export function Scene() {
         {WORDMARK}
       </Text>
 
-      <Environment frames={1} resolution={256}>
-        <Lightformer color="#dfe8ff" intensity={0.6} position={[-4, 2, 4]} scale={[7, 3, 1]} />
-        <Lightformer color="#aebfe0" intensity={0.3} position={[4, -1, 3]} scale={[5, 5, 1]} />
-        <Lightformer color="#ffffff" intensity={0.4} position={[0, 5, -2]} scale={[10, 2, 1]} />
+      {/*
+        A studio, built rather than downloaded. drei's `preset="studio"` fetches a
+        multi-megabyte HDRI from the drei-assets CDN, which a self-contained Pages
+        artifact should not depend on — and a built rig is art-directable besides.
+        The shape is a real studio: a large soft key box, a long overhead strip,
+        and two vertical side strips. The side strips are what matter on script
+        type: chrome reads as chrome because its edges catch a bright vertical,
+        and a cursive stroke turning through 360° needs something to catch at
+        every angle. Baked once, since none of it moves.
+      */}
+      <Environment frames={1} resolution={live.envResolution}>
+        <color args={['#05060a']} attach="background" />
+
+        {/* Key: broad and soft, upper left. */}
+        <Lightformer
+          color="#eef3ff"
+          form="rect"
+          intensity={live.studioKey}
+          position={[-5, 3.5, 5]}
+          rotation={[0, Math.PI / 7, 0]}
+          scale={[8, 5, 1]}
+        />
+
+        {/* Ceiling strip, straight overhead. */}
+        <Lightformer
+          color="#ffffff"
+          form="rect"
+          intensity={live.studioTop}
+          position={[0, 7, 0]}
+          rotation={[Math.PI / 2, 0, 0]}
+          scale={[14, 3, 1]}
+        />
+
+        {/* Side strips: the vertical catches that make a curved stroke read as metal. */}
+        <Lightformer
+          color="#cfe0ff"
+          form="rect"
+          intensity={live.studioSides}
+          position={[7, 0, 2]}
+          rotation={[0, -Math.PI / 2, 0]}
+          scale={[6, 9, 1]}
+        />
+        <Lightformer
+          color="#9fb4d8"
+          form="rect"
+          intensity={live.studioSides * 0.6}
+          position={[-7, -0.5, 2]}
+          rotation={[0, Math.PI / 2, 0]}
+          scale={[6, 9, 1]}
+        />
+
+        {/* A dim ring behind, so the descenders have something to fall off into. */}
+        <Lightformer
+          color="#6f83a6"
+          form="ring"
+          intensity={live.studioBack}
+          position={[0, -1, -8]}
+          scale={[12, 12, 1]}
+        />
       </Environment>
 
       <Effects />
