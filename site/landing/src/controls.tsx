@@ -70,7 +70,7 @@ export const LOOK: Readonly<LookValues> = Object.freeze({
   keyIntensity: 3.6,
   keyRadius: 5,
   keySpeed: 0.35,
-  markGap: 0.55,
+  markGap: 0.218,
   measure: 0.28,
   metalness: 0.18,
   rimAngle: 2.4,
@@ -84,6 +84,12 @@ export const LOOK: Readonly<LookValues> = Object.freeze({
 
 /** What the scene actually reads, every frame. */
 export const live: LookValues = { ...LOOK };
+
+// Reachable from the console in development, which is how the panel's own
+// behaviour gets checked rather than assumed.
+if (import.meta.env.DEV) {
+  (globalThis as unknown as { __look: LookValues }).__look = live;
+}
 
 /** Bumped whenever a value that is compiled into the render graph changes. */
 export const graphVersion = { value: 0 };
@@ -178,12 +184,11 @@ function schema(keys: readonly (keyof LookValues)[]) {
  * writes into `live`.
  */
 export function LookPanel() {
-  const [, set] = useControls(() => ({
+  const [values, set] = useControls(() => ({
     ...Object.fromEntries(
       Object.entries(GROUPS).map(([name, keys]) => [name, folder(schema(keys), { collapsed: true })]),
     ),
     Reset: button(() => {
-      for (const key of KEYS) apply(key, LOOK[key]);
       set(Object.fromEntries(KEYS.map((key) => [pathOf(key), LOOK[key]])));
     }),
     'Copy for handoff': button(() => {
@@ -195,6 +200,14 @@ export function LookPanel() {
       void navigator.clipboard.writeText(block);
     }),
   }));
+
+  // leva flattens folder contents by key, so this bridges the panel into the
+  // record the frame loop reads. The scene is never re-rendered by it.
+  const held = values as Partial<Record<keyof LookValues, number>>;
+  for (const key of KEYS) {
+    const value = held[key];
+    if (typeof value === 'number') apply(key, value);
+  }
 
   return null;
 }
