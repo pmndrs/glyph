@@ -114,6 +114,26 @@
   its hand-written identity builder, its parallel-array assertion over six public arrays, and its
   double-snapshot staleness re-check: 271 lines to 204, with the three things it was compensating for now
   guaranteed by construction.
+- **The published site becomes a third top-level surface, and the wordmark becomes a proof** — `site/` joins
+  `packages/` and `apps/` because a deployable web surface is neither a library nor an example, and root
+  `docs/` is already the knowledge bundle, so the pmndrs convention of MDX-at-`docs/` moves one level down to
+  `site/docs`. One private package composes two static outputs into `site/dist` exactly as GitHub Pages serves
+  them; uikit's `static.yml` is the precedent for merging a reusable-workflow artifact with sibling outputs
+  under one `deploy-pages`. Nothing publishes yet, so no workflow file ships and there is nothing to disable.
+  Three capability questions were answered from source rather than assumed. Contour hole-punching does not
+  exist and is not close: the v1 boundary states plainly that body text cannot flow around a contour, so the
+  landing composition ships three justified columns with no exclusions at all, and Milestone 12's core —
+  authored two-dimensional exclusions, not glyph-ink contours — is committed immediately after (D-259).
+  Multi-column justified flow and `defineTextMaterial` both already exist and carry the design. And
+  `@react-three/postprocessing` cannot: it wraps the WebGL `EffectComposer`, so the WebGPU path is
+  `useRenderPipeline` with TSL display nodes, which is what paris-site does and why it carries no such
+  dependency. Two earlier readings were wrong and are corrected here: the reusable docs workflow composes fine
+  rather than owning the artifact, and drei ships a matching `11.0.0-alpha.5` under its `alpha` tag — the
+  incompatible peer range came from reading `latest`. Playwrite is variable-only in `google/fonts`, which the
+  baker rejects outright, but the upstream project ships statics at the same pinned commit, so no font
+  instancer and no Python toolchain enter the repository. The hero sets `glÿph` decomposed as `y` + `U+0308`:
+  the diaeresis is decorative and phonetically inert, and encoding it decomposed makes the wordmark its own
+  GPOS mark-attachment proof.
 
 ## 2026-08-18
 
