@@ -4,14 +4,54 @@ import test from 'node:test';
 
 import * as THREE from 'three/webgpu';
 
-import { createTextRuntime } from '@pmndrs/glyph';
-import { Paragraph } from '@pmndrs/glyph/core';
+import { createTextRuntime, defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
+import { defineTechniqueSchema, Paragraph, registerRasterPlanProgram, techniqueProgram } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
+
+import { LoadedFontImpl } from '../../dist/loaded-font.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 
 const TEXT = 'The quick brown fox jumps over the lazy dog';
+const PORTABLE_RESOURCE = defineRasterResourceId('test.paragraph.portable-resource');
+const portableTechnique = defineRasterTechnique({
+  id: 'test.paragraph.portable-technique',
+  kind: 'test',
+  extension: 'TEST_paragraph_portable',
+  version: 0,
+  descriptor: () => ({}),
+  async decode() {
+    return {};
+  },
+  dispose() {},
+});
+const portableSchema = defineTechniqueSchema({
+  technique: portableTechnique.id,
+  scope: 'glyph',
+  binding: {},
+  buffers: {},
+  resources: { payload: { kind: 'buffer' } },
+  render: { geometry: { kind: 'synthetic-quad' } },
+});
+let portableCompileCalls = 0;
+registerRasterPlanProgram({
+  technique: portableTechnique,
+  schema: portableSchema,
+  policyBody(system) {
+    const program = techniqueProgram(portableSchema, { system });
+    return program.compile({});
+  },
+  compileFont(compiler) {
+    portableCompileCalls += 1;
+    compiler.retain('payload', PORTABLE_RESOURCE, {
+      kind: 'buffer',
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      stride: 4,
+    });
+    return compiler.compile({ strikes: [0], resource: () => PORTABLE_RESOURCE });
+  },
+});
 
 async function bootstrap() {
   const runtime = await createTextRuntime({
@@ -86,6 +126,28 @@ test('glyphs() positioned columns agree byte-for-byte with the Three.js Text ins
     paragraph.dispose();
   } finally {
     text.dispose();
+  }
+});
+
+test('Paragraph compiles a registered third-party font binding through its host identity registry', async () => {
+  await using boot = await bootstrap();
+  const font = new LoadedFontImpl({
+    runtime: boot.runtime,
+    font: boot.font.font,
+    technique: portableTechnique,
+    raster: boot.font.raster,
+    data: {},
+    release: () => undefined,
+  });
+  const paragraph = new Paragraph({ font, text: 'portable', style: { fontSize: 16 } });
+  const callsBefore = portableCompileCalls;
+  try {
+    const measurement = paragraph.layout();
+    assert.ok(measurement.glyphCount > 0);
+    assert.equal(portableCompileCalls, callsBefore + 1);
+  } finally {
+    paragraph.dispose();
+    font.dispose();
   }
 });
 

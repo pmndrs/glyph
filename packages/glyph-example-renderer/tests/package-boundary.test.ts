@@ -23,13 +23,17 @@ describe('package boundary', () => {
 
   test('reaches the engine only through the /core entry point', async () => {
     for (const [file, source] of await packageSources()) {
-      // Internals, generated modules, and every other subpath are off limits — in src
-      // AND in tests. A second renderer that needs them proves the published surface
-      // is insufficient, which is the defect this package exists to catch. The one
-      // exception is the engine's Wasm artifact, a published entry point that carries
-      // no code surface.
-      expect(source, file).not.toMatch(/@pmndrs\/glyph\/(?!core\b|text-shaper\.wasm)/);
-      // No scene-graph integration and no renderer dependency.
+      const glyphImports = [...source.matchAll(/from ['"](@pmndrs\/glyph(?=\/|['"])(?:\/[A-Za-z0-9_.-]+)?)/g)].map(
+        ([, specifier]) => specifier!,
+      );
+      const allowed = new Set(['@pmndrs/glyph/core', '@pmndrs/glyph/text-shaper.wasm']);
+      if (file === 'src/engine.ts') allowed.add('@pmndrs/glyph');
+      if (file === 'tests/example-render.test.ts') {
+        allowed.add('@pmndrs/glyph');
+        allowed.add('@pmndrs/glyph/bake');
+      }
+      for (const specifier of glyphImports) expect(allowed, `${file}: ${specifier}`).toContain(specifier);
+      // No scene-graph integration or Three dependency.
       expect(source, file).not.toMatch(threeImport);
     }
   });

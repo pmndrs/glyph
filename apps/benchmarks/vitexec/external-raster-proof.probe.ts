@@ -12,6 +12,7 @@ const [{ runRegisteredBenchmark }, { environmentResource }, rendererModule] = aw
 const environment = await environmentResource();
 if (environment.webgpu !== true) throw new Error('External raster proof requires WebGPU-capable Chrome');
 
+let referenceHash: string | undefined;
 for (const [targetId, backendMetric] of [
   ['external-raster-proof-webgpu', 'backendWebGpu'],
   ['external-raster-proof-webgl2', 'backendWebGl2'],
@@ -74,10 +75,16 @@ for (const [targetId, backendMetric] of [
   ) {
     throw new Error(`${targetId} did not preserve the public external raster contract`);
   }
-  console.log(
-    'external-raster-proof-ready',
-    JSON.stringify({ targetId, hash: result.measurements[0]?.hash, validation: result.validation }),
-  );
+  const hash = result.measurements[0]?.hash;
+  if (typeof hash !== 'string' || hash.length === 0) throw new Error(`${targetId} produced no frame hash`);
+  if (result.measurements.some((measurement: BenchmarkMeasurement) => measurement.hash !== hash)) {
+    throw new Error(`${targetId} produced inconsistent frame hashes`);
+  }
+  if (referenceHash !== undefined && hash !== referenceHash) {
+    throw new Error(`${targetId} frame hash differs from the other backend`);
+  }
+  referenceHash = hash;
+  console.log('external-raster-proof-ready', JSON.stringify({ targetId, hash, validation: result.validation }));
 }
 
 export {};

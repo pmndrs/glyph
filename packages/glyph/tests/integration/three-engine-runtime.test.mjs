@@ -12,21 +12,411 @@ import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
+import { defineTechniqueSchema, programId, registerRasterPlanProgram, techniqueProgram } from '../../dist/core.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { TextEngineRenderPlanView } from '../../dist/core/plan-view.js';
 import { LoadedFontImpl } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
 import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
-import { defineRasterResourceId } from '../../dist/raster-technique.js';
+import { defineRasterResourceId, defineRasterTechnique } from '../../dist/raster-technique.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
+import { registerThreeRasterPlanProgram } from '../../dist/three.js';
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 import { ThreeTextRenderPlanExecutor } from '../../dist/three/engine-plan-target.js';
 import { defineTextMaterial } from '../../dist/three/material.js';
+import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
+
+const suppliedGeometryTechnique = defineRasterTechnique({
+  id: 'test.three-supplied-geometry-capacity',
+  kind: 'test',
+  extension: 'TEST_three_supplied_geometry',
+  version: 0,
+  descriptor: () => ({}),
+  async decode() {
+    return {};
+  },
+  dispose() {},
+});
+const suppliedGeometrySchema = defineTechniqueSchema({
+  technique: suppliedGeometryTechnique.id,
+  scope: 'glyph',
+  binding: {},
+  buffers: { origin: { id: 1, scalar: 'f32', lanes: ['x', 'y'] } },
+  resources: {
+    mesh: {
+      kind: 'geometry',
+      attributes: [{ semantic: 'uv', componentType: 'f32', components: 2 }],
+    },
+  },
+  render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' } },
+});
+registerRasterPlanProgram({
+  technique: suppliedGeometryTechnique,
+  schema: suppliedGeometrySchema,
+  policyBody(system) {
+    const program = techniqueProgram(suppliedGeometrySchema, { system });
+    return program.compile({ origin: [program.semantics.inlineOrigin, program.semantics.blockOrigin] });
+  },
+  compileFont(compiler) {
+    const { resource, geometry } = compiler.font.data;
+    compiler.retain('mesh', resource, geometry);
+    return compiler.compile({
+      strikes: [0],
+      resource: () => resource,
+    });
+  },
+});
+let suppliedGeometryMaterialCalls = 0;
+registerThreeRasterPlanProgram({
+  technique: suppliedGeometryTechnique,
+  schema: suppliedGeometrySchema,
+  variant: {
+    id: 'test-tsl',
+    language: 'tsl',
+    buffers: { origin: { scalar: 'f32', vectorWidth: 2 } },
+    resources: { mesh: { kind: 'geometry' } },
+    outputs: { position: 'vec3' },
+    geometry: suppliedGeometrySchema.render.geometry,
+    createMaterial() {
+      suppliedGeometryMaterialCalls += 1;
+      return new THREE.MeshBasicNodeMaterial();
+    },
+  },
+});
+
+test('records-sourced Three geometry retains supplied topology across instance-count changes', async () => {
+  const [fontBytes, wasm] = await Promise.all([
+    readFile(new URL('inter-bitmap-16.font.glb', fixtureRoot)),
+    readFile(wasmUrl),
+  ]);
+  const registry = new FontRegistry();
+  const registered = await registry.registerAsset(fontBytes);
+  const shaper = await createRuntimeShaper({ registry, wasm });
+  shaper.registerFont(registered);
+  const font = new LoadedFontImpl({
+    runtime: undefined,
+    font: registered,
+    technique: suppliedGeometryTechnique,
+    raster: undefined,
+    data: {
+      resource: defineRasterResourceId('test/three-supplied-geometry-capacity'),
+      geometry: indexedQuadGeometry(),
+    },
+    release: () => undefined,
+  });
+  const invalidGeometry = indexedQuadGeometry();
+  invalidGeometry.accessors[0].components = 2;
+  const invalidFont = new LoadedFontImpl({
+    runtime: undefined,
+    font: registered,
+    technique: suppliedGeometryTechnique,
+    raster: undefined,
+    data: {
+      resource: defineRasterResourceId('test/three-invalid-supplied-geometry'),
+      geometry: invalidGeometry,
+    },
+    release: () => undefined,
+  });
+  const coordinator = new ThreeTextEngineCoordinator(shaper);
+  assert.throws(
+    () => coordinator.acquireFontStack([invalidFont]),
+    /geometry payload attribute "position" needs 3 components; got 2/u,
+  );
+  const stack = coordinator.acquireFontStack([font]);
+  const session = coordinator.createSession({
+    requestCapacity: 4_096,
+    resultCapacity: 1024 * 1024,
+    textCapacity: 16,
+  });
+  const drawRoot = new THREE.Object3D();
+  const target = new ThreeTextRenderPlanExecutor(coordinator, {
+    drawRoot,
+    pixelSnapping: false,
+    renderOrderBase: 0,
+    objectForTransform() {
+      return drawRoot;
+    },
+    transformIds: () => [],
+  });
+  const frame = (engineSession, previous, changes) =>
+    compileTextEngineFrameUpdate({
+      sessionId: engineSession.handle,
+      policyHandle: coordinator.policyHandle,
+      capabilitySet: 1,
+      expectedEngineRevision: previous?.engineRevision ?? 0,
+      consumedPlanRevision: previous?.planRevision ?? 0,
+      acknowledgedPublicationGeneration: previous?.publicationGeneration ?? 0,
+      limits: {
+        maxParagraphs: 1,
+        maxClusters: 16,
+        maxLines: 4,
+        maxRegions: 1,
+        maxExclusions: 1,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 2,
+        maxOutputBytes: 1024 * 1024,
+      },
+      ...changes,
+    });
+
+  try {
+    suppliedGeometryMaterialCalls = 0;
+    const initial = session.update(
+      frame(session, undefined, {
+        paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
+        textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: '12345' }],
+        styleMutations: [
+          {
+            opcode: 'upsert',
+            paragraphId: 1,
+            styleId: 1,
+            cascadeOrder: 0,
+            start: 0,
+            end: 5,
+            root: true,
+            value: {
+              fontStackHandle: stack.handle,
+              fontSize: 16,
+              rasterPixelRatio: 1,
+              foregroundRgba: 0xffff_ffff,
+            },
+          },
+        ],
+        constraints: [
+          {
+            paragraphId: 1,
+            flowThreadId: 1,
+            geometryRevision: 1,
+            width: 256,
+            height: 64,
+            viewportBlockStart: 0,
+            viewportBlockEnd: 64,
+            resumeBlockOffset: 0,
+            maxLines: 4,
+            regionStart: 0,
+            resumeCluster: 0,
+            regionCount: 1,
+            resumeRegion: 0,
+            widthMode: 'at-most',
+            heightMode: 'at-most',
+            wrap: 'word',
+            align: 'start',
+            overflow: 'visible',
+            blockAlign: 'start',
+          },
+        ],
+        regions: [
+          {
+            id: 1,
+            geometryRevision: 1,
+            shape: 'rectangle',
+            exclusionStart: 0,
+            exclusionCount: 0,
+            writingMode: 'horizontal-tb',
+            textOrientation: 'mixed',
+            inlineStart: 0,
+            blockStart: 0,
+            inlineEnd: 256,
+            blockEnd: 64,
+            clipInlineStart: 0,
+            clipBlockStart: 0,
+            clipInlineEnd: 256,
+            clipBlockEnd: 64,
+          },
+        ],
+      }),
+    );
+    target.apply(initial);
+    const retained = target.draws[0];
+    assert.ok(retained);
+    assert.equal(retained.geometry.instanceCount, 5);
+    assert.equal(retained.geometry.index.count, 6);
+    assert.equal(retained.geometry.getAttribute('position').itemSize, 3);
+    retained.geometry.computeBoundingBox();
+    assert.deepEqual(retained.geometry.boundingBox?.min.toArray(), [0, 0, 0]);
+    assert.deepEqual(retained.geometry.boundingBox?.max.toArray(), [1, 1, 0]);
+    assert.equal(suppliedGeometryMaterialCalls, 1);
+
+    const shortened = session.update(
+      frame(session, initial, {
+        textMutations: [{ paragraphId: 1, start: 4, deleteCount: 1, insert: '' }],
+        styleMutations: [
+          {
+            opcode: 'upsert',
+            paragraphId: 1,
+            styleId: 1,
+            cascadeOrder: 0,
+            start: 0,
+            end: 4,
+            root: true,
+            value: {
+              fontStackHandle: stack.handle,
+              fontSize: 16,
+              rasterPixelRatio: 1,
+              foregroundRgba: 0xffff_ffff,
+            },
+          },
+        ],
+      }),
+    );
+    target.apply(shortened);
+    assert.equal(target.draws[0], retained, 'compatible supplied geometry must reuse the retained Three draw');
+    assert.equal(retained.geometry.instanceCount, 4);
+    assert.equal(retained.geometry.index.count, 6, 'reuse must preserve the normalized triangle-list topology');
+    const expanded = session.update(
+      frame(session, shortened, {
+        textMutations: [{ paragraphId: 1, start: 4, deleteCount: 0, insert: '56' }],
+        styleMutations: [
+          {
+            opcode: 'upsert',
+            paragraphId: 1,
+            styleId: 1,
+            cascadeOrder: 0,
+            start: 0,
+            end: 6,
+            root: true,
+            value: {
+              fontStackHandle: stack.handle,
+              fontSize: 16,
+              rasterPixelRatio: 1,
+              foregroundRgba: 0xffff_ffff,
+            },
+          },
+        ],
+      }),
+    );
+    target.apply(expanded);
+    assert.equal(target.draws[0], retained);
+    assert.equal(retained.geometry.instanceCount, 6);
+    assert.equal(retained.geometry.index.count, 6);
+    assert.equal(suppliedGeometryMaterialCalls, 1);
+
+    const acceptedBytes = new Map(
+      Object.entries(retained.geometry.attributes)
+        .filter(([name]) => name.startsWith('_pmndrsGlyph_'))
+        .map(([name, attribute]) => [name, attribute.array.slice()]),
+    );
+    const rejected = session.update(
+      frame(session, expanded, {
+        textMutations: [{ paragraphId: 1, start: 6, deleteCount: 0, insert: '7' }],
+        styleMutations: [
+          {
+            opcode: 'upsert',
+            paragraphId: 1,
+            styleId: 1,
+            cascadeOrder: 0,
+            start: 0,
+            end: 7,
+            root: true,
+            value: {
+              fontStackHandle: stack.handle,
+              fontSize: 16,
+              rasterPixelRatio: 1,
+              foregroundRgba: 0xffff_ffff,
+            },
+          },
+        ],
+      }),
+    );
+    const rejectedView = new TextEngineRenderPlanView().bind(rejected);
+    const rejectedBytes = new DataView(rejected.memoryBuffer);
+    const rejectedResource = rejectedView.record(rejectedView.table('resources'), 0);
+    const resourceKindOffset =
+      rejected.bytes.byteOffset + rejectedResource + textShaperAbi.layouts.engineResource.resourceKind;
+    const resourceKind = rejectedBytes.getUint16(resourceKindOffset, true);
+    rejectedBytes.setUint16(resourceKindOffset, 0, true);
+    assert.throws(() => target.apply(rejected), /invalid kind/u);
+    rejectedBytes.setUint16(resourceKindOffset, resourceKind, true);
+
+    const rejectedPrimitive = rejectedView.record(rejectedView.table('primitives'), 0);
+    const recordCountOffset =
+      rejected.bytes.byteOffset + rejectedPrimitive + textShaperAbi.layouts.enginePrimitive.recordCount;
+    const recordCount = rejectedBytes.getUint16(recordCountOffset, true);
+    rejectedBytes.setUint16(recordCountOffset, 0, true);
+    assert.throws(() => target.apply(rejected), /positive record count/u);
+    rejectedBytes.setUint16(recordCountOffset, recordCount, true);
+
+    const rejectedDraw = rejectedView.record(rejectedView.table('draws'), 0);
+    rejectedBytes.setUint32(
+      rejected.bytes.byteOffset + rejectedDraw + textShaperAbi.layouts.engineDraw.bufferCount,
+      0,
+      true,
+    );
+    assert.throws(() => target.apply(rejected), /missing|buffer/u);
+    assert.equal(target.draws[0], retained, 'a rejected candidate must preserve the accepted draw identity');
+    assert.equal(retained.geometry.instanceCount, 6, 'a rejected candidate must not resize the accepted draw');
+    for (const [name, bytes] of acceptedBytes) {
+      assert.deepEqual(
+        retained.geometry.getAttribute(name).array,
+        bytes,
+        `a rejected candidate must not patch accepted buffer ${name}`,
+      );
+    }
+  } finally {
+    target.dispose();
+    session.dispose();
+    stack.release();
+    invalidFont.dispose();
+    font.dispose();
+    coordinator.dispose();
+    shaper.dispose();
+    registered.dispose();
+  }
+});
+
+test('Three rejects conflicting portable payloads before changing shared resource ownership', async () => {
+  const [fontBytes, wasm] = await Promise.all([
+    readFile(new URL('inter-bitmap-16.font.glb', fixtureRoot)),
+    readFile(wasmUrl),
+  ]);
+  const registry = new FontRegistry();
+  const registered = await registry.registerAsset(fontBytes);
+  const shaper = await createRuntimeShaper({ registry, wasm });
+  shaper.registerFont(registered);
+  const resource = defineRasterResourceId('test/three-shared-geometry-content');
+  const loaded = (geometry) =>
+    new LoadedFontImpl({
+      runtime: undefined,
+      font: registered,
+      technique: suppliedGeometryTechnique,
+      raster: undefined,
+      data: { resource, geometry },
+      release: () => undefined,
+    });
+  const originalGeometry = indexedQuadGeometry();
+  const original = loaded(originalGeometry);
+  const equal = loaded({ ...indexedQuadGeometry(), bytes: new Uint8Array(originalGeometry.bytes) });
+  const conflictingGeometry = indexedQuadGeometry();
+  conflictingGeometry.bytes[0] ^= 0xff;
+  const conflicting = loaded(conflictingGeometry);
+  const coordinator = new ThreeTextEngineCoordinator(shaper);
+  let originalLease;
+  let equalLease;
+  try {
+    originalLease = coordinator.acquireFontStack([original]);
+    equalLease = coordinator.acquireFontStack([equal]);
+    const reference = coordinator.host.wireIdentities.resourceId(resource);
+    const retained = coordinator.resolveResource(reference);
+    assert.deepEqual(retained.resources.get('mesh').bytes, originalGeometry.bytes);
+
+    assert.throws(() => coordinator.acquireFontStack([conflicting]), /incompatible resource content/u);
+    assert.equal(coordinator.resolveResource(reference), retained, 'rejection must leave the original owner live');
+  } finally {
+    equalLease?.release();
+    originalLease?.release();
+    conflicting.dispose();
+    equal.dispose();
+    original.dispose();
+    coordinator.dispose();
+    shaper.dispose();
+    registered.dispose();
+  }
+});
 
 test('Three coordinator shares shaping data across technique bindings and reference-counts stack handles', async () => {
   const [bitmapBytes, compressedMsdf, compressedSlug, wasm] = await Promise.all([
@@ -150,8 +540,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
     }),
   );
   const first = coordinator.acquireFontStack([bitmapFont, msdfFont]);
-  const bitmapReference = coordinator.host.wireIdentities.resolve(bitmapFont.data.strikes[0].pages[0].resource);
-  const msdfReference = coordinator.host.wireIdentities.resolve(msdfFont.data.resource);
+  const bitmapReference = coordinator.host.wireIdentities.resourceId(bitmapFont.data.strikes[0].pages[0].resource);
+  const msdfReference = coordinator.host.wireIdentities.resourceId(msdfFont.data.resource);
   assert.equal(coordinator.resolveResource(bitmapReference).technique, bitmap.id);
   assert.equal(coordinator.resolveResource(msdfReference).technique, msdf.id);
   const shared = coordinator.acquireFontStack([bitmapFont, msdfFont]);
@@ -546,7 +936,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const msdfPlan = plan.bind(msdfPublication);
   const msdfDraws = msdfPlan.table('draws');
   assert.equal(msdfDraws.count, 1);
-  assert.equal(msdfPlan.u32(msdfPlan.record(msdfDraws, 0) + drawLayout.programId), 2);
+  assert.equal(msdfPlan.u32(msdfPlan.record(msdfDraws, 0) + drawLayout.programId), programId(msdf, 'three'));
   target.apply(msdfPublication);
   assert.equal(target.draws.length, 1);
   assert.equal(target.draws[0].geometry.instanceCount, 6);
@@ -600,7 +990,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   const slugPlan = plan.bind(slugPublication);
   const slugDraws = slugPlan.table('draws');
   assert.equal(slugDraws.count, 1);
-  assert.equal(slugPlan.u32(slugPlan.record(slugDraws, 0) + drawLayout.programId), 3);
+  assert.equal(slugPlan.u32(slugPlan.record(slugDraws, 0) + drawLayout.programId), programId(slug, 'three'));
   target.apply(slugPublication);
   assert.equal(target.draws.length, 1);
   assert.equal(target.draws[0].geometry.instanceCount, 6);
@@ -758,8 +1148,8 @@ test('Three coordinator shares shaping data across technique bindings and refere
       return [hybridPlan.u32(hybridDraw + drawLayout.programId), hybridPlan.u32(hybridDraw + drawLayout.transformId)];
     }),
     [
-      [1, 0],
-      [2, 2],
+      [programId(bitmap, 'three'), 0],
+      [programId(msdf, 'three'), 2],
     ],
     'one Rust publication may mix indexed and direct program contracts',
   );

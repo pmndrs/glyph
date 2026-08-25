@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ai-cli": {
+      "command": "mise",
+      "args": ["exec", "--", "pnpm", "exec", "ai-cli-mcp"],
+      "env": {
+        "MCP_CLAUDE_DEBUG": "false"
+      }
+    }
+  }
+}

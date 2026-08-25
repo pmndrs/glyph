@@ -1,5 +1,41 @@
 # pmndrs/glyph documentation update log
 
+## 2026-08-25
+
+- **The external renderer now separates owned bytes from device acceptance** — A retained publication may advance the
+  session's convenience counter before a device accepts its candidate, so the example host now carries its own accepted
+  generation and plan revision while advancing engine revision when Wasm accepts the update. A rejected device candidate
+  is superseded by the next frame, whose old consumed-plan fence requests a safe checkpoint instead of latching failed
+  bytes. A throw-once test pins the wire fields and reaches byte-identical buffer state against an oracle. The same
+  adversarial pass replaced ambiguous resource rows with `(glyphIndex, strikeIndex)`, made Three snapshot tracking weak,
+  preserved portable resource types through material creation, validates Three's reserved supplied-geometry widths on
+  both declarations and retained payloads, and corrected the renderer guide and package-boundary proof.
+
+- **Renderer failures no longer wait for input churn** — Three now validates and prepares a complete plan candidate before
+  publication. A material or resource realization failure retains the engine-accepted publication and retries those exact
+  owned bytes on the next frame without another Wasm call; the prior draw state remains live because the candidate never
+  committed, not because the renderer restored a stale snapshot. New authored input supersedes an unpublished candidate
+  and receives a checkpoint from the last consumed plan revision. The former rejection latch decision is superseded by
+  D-279, and direct coverage proves an unchanged frame recovers as soon as the renderer dependency does.
+
+## 2026-08-24
+
+- **Raster plans now cross renderer boundaries as named portable data** — A technique registers one schema, policy-body
+  factory, binding compiler, and constrained immutable resource set; each host assigns its own system lanes and assembles
+  its own policy. The external example publishes independent TypeGPU and TSL shader subpaths, while its root remains
+  renderer-free and performs only portable registration. The example renderer loads a real font, registers the binding,
+  realizes generated and supplied indexed geometry through its own device, applies generation-aware buffer deltas and
+  retirements transactionally, and submits non-empty draws. Three selects one
+  renderer variant per technique at registration, validates named buffer/resource/geometry capabilities before its first
+  runtime snapshot, preserves generic user materials and glyph-origin augmentation, and retains draw/geometry identity
+  across updates. Bitmap, MSDF, and Slug remain on their renderer-owned fallback because repeated strike atlases and
+  grouped Slug pages are not expressible as one declared name and one retained key; the docs now state that limit instead
+  of claiming a migration that did not happen. The browser proof enforces matching WebGPU and forced-WebGL2 frames and
+  currently observes RGBA SHA-256 `0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d`;
+  the 101-sample Three lab retains one draw and geometry for equal 12-instance inputs at a 0.075 ms CPU-side median for
+  the generic path, and reviewed gzip sizes are 63,468 bytes for `/core`, 91,400 bytes for the complete Three
+  integration, 3,940 bytes for the peer-externalized TSL technique graph, and 2,768 bytes for its TypeGPU sibling.
+
 ## 2026-08-23
 
 - **A retained host can now hold the render plan without holding a hazard** — item 11 of the API surface
@@ -10,13 +46,14 @@
   publication the session never issued is rejected outright. `session.retain` makes one contiguous copy
   of the whole encoded result — header, tables, and patch payloads stay consistent by construction — and
   brands it `RetainedTextPublication`, so retaining APIs demand it in their types. Retaining or
-  `acknowledge()`ing advances `session.acknowledgedGeneration`, the value frame requests carry and the
-  engine already verified monotonically: retirements name the generation that makes release safe, so an
+  `acknowledge()`ing advances `session.acknowledgedGeneration`; in-place consumers may carry it in frame requests, while
+  transactional renderers carry their last device-accepted generation separately. The engine verifies that wire value
+  monotonically: retirements name the generation that makes release safe, so an
   unacknowledging host leaks retired GPU storage rather than reading freed memory.
   `readTextEnginePatch` surfaces dirty ranges per `(bufferId, bufferGeneration)`; paragraph ids are
   caller-chosen handles, glyph identity rides the policy's stable-id lane, and engine storage is keyed
   by `(id, generation)` with retirement as the only release signal. `packages/glyph-example-renderer`
-  stopped being a defensive-copy stub: it authors its own technique schema and policy through `/core`,
+  stopped being a defensive-copy stub: it imports the portable technique plan, authors its own host policy through `/core`,
   drives real `TextEngineHost` frames over the published Wasm artifact, holds retained plans across
   slots and capacity growth, watches stale borrows die loudly, and records the finding that a
   `/core`-only host cannot register a shaping font at all (`RuntimeShaper.registerFont` needs

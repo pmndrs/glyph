@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  defineTechniqueGeometryKind,
   defineTechniqueSchema,
   floatBuffers,
   schemaPolicyBuffers,
@@ -21,7 +22,7 @@ function declaration() {
       origin: { id: 1, scalar: 'f32', lanes: ['x', 'y'] },
       flags: { id: 2, scalar: 'u32', lanes: ['flags'] },
     },
-    resources: { atlas: { kind: 'texture' } },
+    resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } },
   };
 }
 
@@ -63,6 +64,40 @@ test('rejected declarations leave caller-owned input untouched', () => {
   assert.equal(Object.isFrozen(input.buffers.origin.lanes), false);
 });
 
+test('malformed schema containers fail with named call-time diagnostics', () => {
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), binding: null }),
+    (error) => error instanceof TypeError && error.message.includes('needs a binding object'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), buffers: null }),
+    (error) => error instanceof TypeError && error.message.includes('policy buffers need a declaration object'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: null }),
+    (error) => error instanceof TypeError && error.message.includes('resources need a declaration object'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), glyphOrigin: null }),
+    (error) => error instanceof TypeError && error.message.includes('glyphOrigin needs a buffer name'),
+  );
+});
+
+test('schema names are usable and lane metadata is unambiguous at construction', () => {
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { '': { kind: 'buffer' } } }),
+    (error) => error instanceof TypeError && error.message.includes('resource names must not be empty'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        buffers: { repeated: { id: 1, scalar: 'f32', lanes: ['x', 'x'] } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('repeats a lane name'),
+  );
+});
+
 test('schemas own their data: caller accessors cannot change validated widths', () => {
   let reads = 0;
   const accessorInput = {
@@ -84,6 +119,27 @@ test('schemas own their data: caller accessors cannot change validated widths', 
   assert.deepEqual([...schema.buffers.sneaky.lanes], ['x']);
   assert.equal(schemaPolicyBuffers(schema)[0].vectorWidth, 1);
   assert.equal(schemaPolicyBuffers(schema)[0].vectorWidth, 1);
+});
+
+test('schema lookups do not accept inherited prototype names', () => {
+  const buffers = Object.create(null);
+  buffers.origin = { id: 1, scalar: 'f32', lanes: ['x', 'y'] };
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), buffers, glyphOrigin: { buffer: '__proto__' } }),
+    (error) => error instanceof TypeError && error.message.includes('undeclared buffer'),
+  );
+
+  const resources = Object.create(null);
+  resources.atlas = { kind: 'texture', format: 'rgba8unorm' };
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources,
+        render: { geometry: { kind: 'quad', resource: '__proto__', coordinates: 'unit-square' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('undeclared resource "__proto__"'),
+  );
 });
 
 test('glyphOrigin metadata must name a declared f32 buffer with two origin lanes', () => {
@@ -117,4 +173,209 @@ test('schemaPolicyBuffers derives exactly the hand-rolled wire buffer list', () 
     { id: 1, scalar: textShaperAbi.policy.scalarTypes.f32, vectorWidth: 2 },
     { id: 2, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 },
   ]);
+});
+
+function suppliedGeometryDeclaration(kind = 'quad') {
+  return {
+    ...declaration(),
+    resources: {
+      ...declaration().resources,
+      mesh: { kind: 'geometry', attributes: vertexInputs() },
+    },
+    render: { geometry: { kind, resource: 'mesh', coordinates: 'unit-square' } },
+  };
+}
+
+function vertexInputs() {
+  return [
+    { semantic: 'position', componentType: 'f32', components: 2 },
+    { semantic: 'uv', componentType: 'f32', components: 2 },
+  ];
+}
+
+test('the portable render contract freezes and accepts synthetic-quad and supplied geometry', () => {
+  const implicit = defineTechniqueSchema({
+    ...declaration(),
+    render: { geometry: { kind: 'synthetic-quad' } },
+  });
+  assert.ok(Object.isFrozen(implicit.render), 'render');
+  assert.ok(Object.isFrozen(implicit.render.geometry), 'geometry');
+  assert.deepEqual(implicit.render.geometry, { kind: 'synthetic-quad' });
+
+  const quad = defineTechniqueSchema(suppliedGeometryDeclaration());
+  assert.deepEqual(quad.render.geometry, { kind: 'quad', resource: 'mesh', coordinates: 'unit-square' });
+  assert.ok(Object.isFrozen(quad.resources.mesh.attributes), 'vertex inputs');
+  assert.ok(Object.isFrozen(quad.resources.mesh.attributes[0]), 'vertex input');
+  // Extensible supplied kinds such as hull follow the same declared-resource rule.
+  const hull = defineTechniqueSchema(suppliedGeometryDeclaration('hull'));
+  assert.equal(hull.render.geometry.kind, 'hull');
+
+  const meshlet = defineTechniqueGeometryKind('meshlet');
+  const custom = defineTechniqueSchema({
+    ...suppliedGeometryDeclaration(),
+    render: { geometry: { kind: 'custom', name: meshlet, resource: 'mesh', coordinates: 'em' } },
+  });
+  assert.deepEqual(custom.render.geometry, { kind: 'custom', name: 'meshlet', resource: 'mesh', coordinates: 'em' });
+});
+
+test('synthetic-quad declares no resource and no coordinate convention', () => {
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        render: { geometry: { kind: 'synthetic-quad', resource: 'atlas' } },
+      }),
+    TypeError,
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        render: { geometry: { kind: 'synthetic-quad', coordinates: 'unit-square' } },
+      }),
+    TypeError,
+  );
+});
+
+test('raw null render declarations produce a contract error', () => {
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), render: null }),
+    (error) => error instanceof TypeError && error.message.includes('render declaration needs an object'),
+  );
+});
+
+test('supplied geometry must name a declared geometry resource and state its coordinate convention', () => {
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { mesh: { kind: 'geometry', attributes: vertexInputs() } },
+        render: { geometry: { kind: 'quad', coordinates: 'unit-square' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('needs a declared geometry resource'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        render: { geometry: { kind: 'quad', resource: 'missing', coordinates: 'unit-square' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('undeclared resource "missing"'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        render: { geometry: { kind: 'quad', resource: 'atlas', coordinates: 'unit-square' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('needs the geometry resource kind'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { mesh: { kind: 'geometry', attributes: vertexInputs() } },
+        render: { geometry: { kind: 'quad', resource: 'mesh' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('unit-square or em coordinates'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { mesh: { kind: 'geometry', attributes: vertexInputs() } },
+        render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'screen-pixels' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('unit-square or em coordinates'),
+  );
+  assert.doesNotThrow(() =>
+    defineTechniqueSchema({
+      ...declaration(),
+      resources: { mesh: { kind: 'geometry', attributes: vertexInputs() } },
+      render: { geometry: { kind: 'quad', resource: 'mesh', coordinates: 'em' } },
+    }),
+  );
+});
+
+test('portable resource declarations are closed and geometry owns its vertex-input contract', () => {
+  assert.deepEqual(defineTechniqueSchema({ ...declaration(), resources: { raw: { kind: 'buffer' } } }).resources.raw, {
+    kind: 'buffer',
+  });
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { raw: { kind: 'buffer', format: 'r8unorm' } } }),
+    (error) => error instanceof TypeError && error.message.includes('buffer resource "raw" declares only its kind'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { mesh: { kind: 'geometry', attributes: vertexInputs(), format: 'vec2' } },
+      }),
+    (error) =>
+      error instanceof TypeError &&
+      error.message.includes('geometry resource "mesh" declares only kind and attributes'),
+  );
+  assert.deepEqual(
+    defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: 'texture', format: 'rgba8unorm' } } })
+      .resources.atlas,
+    { kind: 'texture', format: 'rgba8unorm' },
+  );
+  assert.deepEqual(
+    defineTechniqueSchema({ ...declaration(), resources: { pages: { kind: 'texture-array', format: 'r8unorm' } } })
+      .resources.pages,
+    { kind: 'texture-array', format: 'r8unorm' },
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { tint: { kind: 'example-tint', format: 'u8x4' } } }),
+    /needs a portable resource kind/,
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: '' } } }),
+    (error) => error instanceof TypeError && error.message.includes('nonempty resource kind'),
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: { atlas: { kind: 'texture', format: 'rgba8unorm', sampleFormat: 'rgba8unorm' } },
+      }),
+    (error) => error instanceof TypeError && error.message.includes('declares only kind and format'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { atlas: { kind: 'texture', format: '' } } }),
+    (error) => error instanceof TypeError && error.message.includes('needs a supported texture format'),
+  );
+  assert.throws(
+    () => defineTechniqueSchema({ ...declaration(), resources: { mesh: { kind: 'geometry', attributes: [] } } }),
+    /needs vertex inputs/,
+  );
+  assert.throws(
+    () =>
+      defineTechniqueSchema({
+        ...declaration(),
+        resources: {
+          mesh: {
+            kind: 'geometry',
+            attributes: [
+              { semantic: 'position', componentType: 'f32', components: 2 },
+              { semantic: 'position', componentType: 'f32', components: 2 },
+            ],
+          },
+        },
+      }),
+    /repeats semantic "position"/,
+  );
+});
+
+test('declaring a render contract leaves wire buffer derivation and the generated primitive enum untouched', () => {
+  const withRender = defineTechniqueSchema(suppliedGeometryDeclaration());
+  const withoutRender = defineTechniqueSchema(declaration());
+  assert.deepEqual(schemaPolicyBuffers(withRender), schemaPolicyBuffers(withoutRender));
+  assert.deepEqual(textShaperAbi.engine.primitiveKinds, {
+    glyph: 1,
+    decoration: 2,
+    inlineObject: 3,
+    clip: 4,
+    policy: 5,
+  });
 });

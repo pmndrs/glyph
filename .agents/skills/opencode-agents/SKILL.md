@@ -94,6 +94,17 @@ actually asked for.
 Do not shorten these intervals to make a run finish sooner. Being rude to a free endpoint that is
 under load test is how the endpoint stops being available to us at all.
 
+Trace files are append-only and rotate at a bounded size. Inspect them with the bounded reader
+instead of loading a complete JSONL trace into context:
+
+```bash
+node .agents/tools/read-append-log.mjs <trace.jsonl> --delta
+node .agents/tools/read-append-log.mjs <trace.jsonl> --lines 80 --bytes 12000
+```
+
+`--delta` advances a cursor sidecar and prints only bytes appended since the last read; a rolled
+or truncated file restarts from its current beginning.
+
 ## Writing the brief
 
 The brief is the entire specification. The agent cannot ask a question.

@@ -14,6 +14,14 @@ The [renderer integration guide](docs/guides/renderer-integration.md) walks that
 technique schema, authoring and registering a policy, driving a session, reading all seven plan tables, and
 implementing the retention and patch protocols.
 
+The repository's `glyph-example-raster` and `glyph-example-renderer` packages are the external-consumer proof of that
+boundary. The raster package publishes renderer-neutral data plus explicit `/typegpu` and `/tsl` shader artifacts; the
+renderer package consumes `/core` and `/typegpu` without Three.js and realizes named resources, synthetic or supplied
+geometry, and non-empty draws. Three-specific material and registration code belongs in `@pmndrs/glyph/three` or in the
+consumer's Three integration, never in the portable raster entrypoint. Importing a technique root registers only its
+portable plan; shader subpaths carry no renderer registration, so each engine or application explicitly selects the
+variant it supports.
+
 The rule, if you are deciding where something belongs: **a type an application can encounter lives at the root; a
 thing only an integrator constructs lives in `/core`.** That is why `ParagraphMeasurement` is at the root and
 `Paragraph` is not.
@@ -311,7 +319,9 @@ function frame(edits) {
       textMutations: edits,
     }),
   );
-  plan.bind(next); // apply patches, draw, then acknowledge next frame
+  plan.bind(next);
+  applyPlanAndSubmit(plan); // returns only after the renderer commits the publication
+  session.acknowledge(next);
   previous = next;
 }
 ```
@@ -338,24 +348,25 @@ flowchart TD
   baker["Baker<br/><i>RasterBakerModule</i>"] -->|"baked GLB: strikes, atlases, curves"| artifact["Font artifact"]
   artifact --> technique
   subgraph portable["Written once — works in every engine"]
-    technique["Technique<br/><i>decode, dispose, descriptor</i>"]
-    policy["Render policy<br/><i>numeric bytecode</i>"]
-    binding["Font binding<br/><i>Rust wire bytes</i>"]
+    technique["Technique<br/><i>decode, dispose, schema</i>"]
+    policy["Policy body<br/><i>portable operations</i>"]
+    binding["Cold compiler<br/><i>binding bytes + resources</i>"]
   end
-  technique --> policy --> plan["Render plan<br/><i>fixed-record data</i>"]
+  technique --> policy --> assemble["Engine policy assembly<br/><i>system lanes + capabilities</i>"]
+  assemble --> plan["Render plan<br/><i>fixed-record data</i>"]
   technique --> binding --> plan
   subgraph engine["Written once per engine"]
-    gpu["Bind buffers and textures<br/><i>from the baked bytes</i>"]
-    material["Realize material"]
+    gpu["Bind buffers, textures, resources<br/><i>from the plan</i>"]
+    material["Realize material and submit"]
   end
   plan --> gpu --> draw["Draws"]
   plan --> material --> draw
 ```
 
-The policy and the font binding contain no renderer types — the policy is numbers, the binding is Rust wire
-bytes, and plan resources are handles into the baked payload. Only buffer/texture binding and material
-realization are engine-specific, because only those are engine objects. A technique is therefore authored
-once and consumed by any renderer that can execute the plan.
+The portable plan and compiled font result contain no renderer types. The plan owns the schema, policy body, and
+cold binding/resource composition; each engine supplies its own system-lane numbers, capabilities, transform and
+allocation choices, and final `PolicyProgram` assembly. Only buffer/texture/resource binding and material realization
+are engine objects. A technique is therefore authored once and consumed by any renderer that can execute the plan.
 
 The policy declares:
 
@@ -381,13 +392,13 @@ No GPU is required to shape, lay out, execute the policy, or produce this plan. 
 
 A renderer integration has five responsibilities:
 
-1. Register one policy and capability set before the first text update.
-2. Compile each loaded font's technique resources into the policy's cold binding table.
+1. Compose and register one host policy and capability set before the first text update.
+2. Resolve each loaded font's portable plan and compile its binding/resources into the policy's cold table.
 3. Apply plan resource and buffer operations, then upload the declared patch ranges.
 4. Realize materials and submit draw packets without re-shaping, re-sorting, or reconstructing layout.
 5. Acknowledge completed publication generations before the planner reuses retired storage.
 
-Three is the maintained reference executor. `@pmndrs/glyph/three/bitmap`, `/msdf`, and `/slug` export each technique's raster contract; the Three runtime resolves the matching policy program and TSL material when a loaded font requests that technique. A custom Three technique can use the public `registerThreeRasterPlanProgram` and `threePolicyAbi` exports to provide its declarative policy, cold font binding, and material realization.
+Three is the maintained reference executor. `@pmndrs/glyph/three/bitmap`, `/msdf`, and `/slug` export each built-in technique's renderer-owned contract; their repeated strike/page resources remain on the established Three fallback until the portable compiler can express resource multiplicity. A custom Three technique registers its portable plan in `/core`, then selects one compatible `{ technique, variant }` through `registerThreeRasterPlanProgram`; Three assembles the host policy, and only the shader/material realization half uses `threePolicyAbi`.
 
 The renderer-neutral host, frame wire, policy authoring toolkit, and plan view publish as `@pmndrs/glyph/core`, and the technique shaders as `@pmndrs/glyph/tsl` and `@pmndrs/glyph/typegpu` — the [Core API](#core-api) section shows the four moves. A new engine integration should start from the [renderer integration guide](docs/guides/renderer-integration.md), which walks all five responsibilities above with working code, then use the [Rust layout engine contract](docs/planning/rust-layout-engine.md#render-plan-policy) and the [Three executor](docs/planning/three-api.md) as reference material.
 

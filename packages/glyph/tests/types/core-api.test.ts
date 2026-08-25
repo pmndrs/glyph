@@ -71,17 +71,17 @@ void code;
 // compiles them to validated bytes without touching Three.
 import {
   compileRenderPolicy,
-  techniqueWireIds,
   programContext,
   renderWireId,
   RenderWireIdentityRegistry,
+  techniqueId as renderTechniqueId,
   type PolicyCapabilitySet,
   type PolicyDescriptor,
   type PolicyProgram,
 } from '@pmndrs/glyph/core';
 
 const techniqueId: number = renderWireId('example.technique');
-void techniqueWireIds.decoration;
+const brandedTechniqueId: number = renderTechniqueId('example.technique');
 const registry = new RenderWireIdentityRegistry();
 void registry;
 
@@ -91,4 +91,5 @@ const descriptor: PolicyDescriptor = { capabilitySets: [capability], programs: [
 const policyBytes: Uint8Array = compileRenderPolicy(descriptor);
 void policyBytes;
 void techniqueId;
+void brandedTechniqueId;
 void programContext;

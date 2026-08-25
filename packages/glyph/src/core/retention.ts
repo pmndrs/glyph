@@ -18,8 +18,8 @@
  *   has acknowledged consuming a publication (`retirements` carry
  *   `afterPublicationGeneration`), and rejects a frame whose acknowledged generation goes
  *   backwards. `retain()` acknowledges implicitly — taking the copy *is* taking what you need —
- *   and `acknowledge()` covers hosts consuming the borrow in place;
- *   `session.acknowledgedGeneration` is the value a frame request carries.
+ *   and `acknowledge()` covers hosts consuming the borrow in place. A transactional renderer
+ *   carries its last device-accepted generation separately until submission commits.
  * - **Dirty ranges, not whole arrays.** The `patches` table names buffer deltas by
  *   `(bufferId, bufferGeneration)` with destination offsets and payload ranges; a host applies
  *   those instead of re-uploading whole arrays. `readTextEnginePatch` surfaces them decoded.

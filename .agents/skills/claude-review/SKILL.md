@@ -25,7 +25,7 @@ node .agents/skills/claude-review/scripts/run-review.mjs \
   --prompt-file <absolute-prompt-path>
 ```
 
-The launcher defaults to the `opus` alias at `max` effort, Claude plan mode, and read-oriented `Read,Grep,Glob,Bash` tools. Override `--model` or `--effort` only when the user requests a different review tier.
+The launcher defaults to the `opus` alias at `high` effort, Claude plan mode, and read-oriented `Read,Grep,Glob,Bash` tools. Pass a higher `--effort` only when the user explicitly requests that effort; a model name or difficult task never implies it.
 
 Let the terminal output remain visible while the process runs. Tool activity and completed assistant messages are progress evidence; do not replace observation with periodic guesses about the process.
 

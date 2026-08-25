@@ -1,12 +1,14 @@
 import {
+  readTextEngineBuffer,
   readTextEnginePatch,
+  readTextEngineResource,
   readTextEngineRetirement,
   retainedPublicationBrand,
   TextEngineRenderPlanView,
   type RetainedTextEnginePublication,
 } from '@pmndrs/glyph/core';
 
-import { decodeDraw, type ExampleDrawList } from './draw-list.js';
+import { decodeDraw, decodePrimitive, type ExampleDrawList } from './draw-list.js';
 import type { ExampleTableSnapshot } from './snapshot.js';
 
 /**
@@ -29,6 +31,21 @@ export function readDrawList(
   const draws = view.table('draws');
   const decoded: ReturnType<typeof decodeDraw>[] = [];
   for (let index = 0; index < draws.count; index += 1) decoded.push(decodeDraw(view, view.record(draws, index)));
+  const resources = view.table('resources');
+  const resourceRecords: ReturnType<typeof readTextEngineResource>[] = [];
+  for (let index = 0; index < resources.count; index += 1) {
+    resourceRecords.push(readTextEngineResource(view, resources, index));
+  }
+  const buffers = view.table('buffers');
+  const bufferRecords: ReturnType<typeof readTextEngineBuffer>[] = [];
+  for (let index = 0; index < buffers.count; index += 1) {
+    bufferRecords.push(readTextEngineBuffer(view, buffers, index));
+  }
+  const primitives = view.table('primitives');
+  const primitiveRecords: ReturnType<typeof decodePrimitive>[] = [];
+  for (let index = 0; index < primitives.count; index += 1) {
+    primitiveRecords.push(decodePrimitive(view, view.record(primitives, index)));
+  }
   const patches = view.table('patches');
   const patchRecords: ReturnType<typeof readTextEnginePatch>[] = [];
   for (let index = 0; index < patches.count; index += 1) patchRecords.push(readTextEnginePatch(view, patches, index));
@@ -42,6 +59,9 @@ export function readDrawList(
     planRevision: publication.planRevision,
     publicationGeneration: publication.publicationGeneration,
     draws: decoded,
+    resourceRecords,
+    bufferRecords,
+    primitiveRecords,
     patches: patchRecords,
     retirements: retirementRecords,
     resources: snapshot(view, 'resources'),

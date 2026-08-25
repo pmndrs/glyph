@@ -34,6 +34,7 @@ import {
   type TextEngineFault,
   type TextEnginePublication,
   type TextEngineRegion,
+  type RetainedTextEnginePublication,
   type TextEngineSession,
   type TextEngineStyleMutation,
   type TextEngineTextMutation,
@@ -63,6 +64,7 @@ import {
   type ThreeTextEngineStackLease,
 } from './engine-runtime.js';
 import type { ThreeTextMaterial } from './material.js';
+import { THREE_CAPABILITY_SET_ID } from './render-policy.js';
 
 // The scoped import lint denies `/three` any reach into `internal/`, so the guard is written here as
 // the same ecosystem-standard comparison a bundler strips in a production build.
@@ -407,8 +409,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
       this.#binding.reconcileStandalone(eraseTextTechnique(this));
       try {
         this.#binding.synchronize();
-        // A latched batch published nothing this frame, so the rejection `.error` already holds is
-        // still the current state. Clearing it here would erase the only signal a rejected frame has.
+        // Keep an unpublished renderer failure visible until its retained publication commits.
         if (!this.#binding.failed) this.#error = undefined;
       } catch (error) {
         this.#error = error;
@@ -557,8 +558,7 @@ export class TextGroup extends THREE.Object3D {
             if (this.#transformTracker.pathChanged(text, this)) this.#binding.markTransformDirty(text);
           }
           this.#binding.synchronize();
-          // A latched batch published nothing this frame, so the rejection `.error` already holds
-          // is still the current state; clearing it would erase the only signal it has.
+          // Keep an unpublished renderer failure visible until its retained publication commits.
           if (!this.#binding.failed) this.#error = undefined;
         } catch (error) {
           this.#error = error;
@@ -600,6 +600,11 @@ interface RetainedEngineParagraph {
   materialLeases: ThreeTextMaterialLease[];
 }
 
+interface PendingRendererPublication {
+  readonly publication: RetainedTextEnginePublication;
+  readonly semanticViewMask: number;
+}
+
 class ThreeTextBatchBinding {
   readonly #runtime: TextRuntime;
   readonly #group: TextGroup | undefined;
@@ -619,13 +624,13 @@ class ThreeTextBatchBinding {
   #engineRevision = 0;
   #planRevision = 0;
   #acknowledgedPublicationGeneration = 0;
-  #lastPublication: TextEnginePublication | undefined;
   #requestCapacity: number;
   #resultCapacity: number;
   #textCapacity = 0;
   #capacity: GlyphBufferCapacity;
   #materialInvalidated = false;
-  #rejection: unknown;
+  #pendingPublication: PendingRendererPublication | undefined;
+  #pendingFailureReported = false;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #disposed = false;
 
@@ -672,7 +677,7 @@ class ThreeTextBatchBinding {
   }
   measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary | undefined {
     if (!this.#paragraphs.has(text)) return undefined;
-    this.#assertNotLatched();
+    this.#assertRendererReady();
     if (this.#measureThroughParagraphQuery(text)) return this.#measurements.get(text);
     this.synchronize(textShaperAbi.engine.semanticViewMasks.measurement);
     return this.#measurements.get(text);
@@ -686,7 +691,7 @@ class ThreeTextBatchBinding {
    * Anything else answers `false` and falls back to the committing synchronize path.
    */
   #measureThroughParagraphQuery(text: Text<AnyRasterTechnique>): boolean {
-    if (this.#disposed || this.#lastPublication !== undefined || this.#materialInvalidated) return false;
+    if (this.#disposed || this.#materialInvalidated) return false;
     if (this.#removed.length !== 0) return false;
     const paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined || paragraph.created) return false;
@@ -722,7 +727,7 @@ class ThreeTextBatchBinding {
       compileTextEngineFrameUpdate({
         sessionId: this.#session.handle,
         policyHandle: this.#coordinator.policyHandle,
-        capabilitySet: 1,
+        capabilitySet: THREE_CAPABILITY_SET_ID,
         expectedEngineRevision: this.#engineRevision,
         consumedPlanRevision: this.#planRevision,
         acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
@@ -746,7 +751,7 @@ class ThreeTextBatchBinding {
   }
   layoutInspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection | undefined {
     if (!this.#paragraphs.has(text)) return undefined;
-    this.#assertNotLatched();
+    this.#assertRendererReady();
     this.synchronize(textShaperAbi.engine.semanticViewMasks.layoutInspection);
     return this.#layoutInspections.get(text);
   }
@@ -795,51 +800,24 @@ class ThreeTextBatchBinding {
     const paragraph = this.#paragraphs.get(text);
     if (paragraph !== undefined) this.#dirtyTransformIds.add(paragraph.id);
   }
-  /**
-   * A caller-invoked query cannot answer from a latched batch, and must not answer `undefined` as if
-   * the paragraph merely had no layout yet. It raises the rejection the frame path is holding, which
-   * is what the query threw before the latch existed.
-   */
-  #assertNotLatched(): void {
-    if (this.#rejection !== undefined) throw this.#rejection;
+  #assertRendererReady(): void {
+    this.#coordinator.assertFrameUpdateAllowed();
+    const failure = this.#retryPendingPublication();
+    if (failure !== undefined) throw failure;
   }
-  /**
-   * True once a frame was refused, which means this package broke one of its own invariants.
-   *
-   * Shaping, layout, and measurement cannot fail with the data they need, and every input a caller
-   * controls -- span ranges and nesting, feature ranges, surrogate pairing, cluster alignment -- is
-   * refused at `set()` before it reaches the engine. A refusal here is therefore a defect to report,
-   * not a condition to recover from, and there is deliberately nothing that clears it: the batch
-   * reports once and stops compiling instead of failing silently at frame rate behind the last good
-   * picture.
-   */
   /** What a fixed budget could not hold, while it cannot hold it. Cleared when the content fits again. */
   get capacityExceeded(): { readonly required: number; readonly size: number } | undefined {
     return this.#capacityExceeded;
   }
   get failed(): boolean {
-    return this.#rejection !== undefined;
+    return this.#pendingPublication !== undefined;
   }
   synchronize(semanticViewMask = 0): void {
     if (this.#disposed) return;
     this.#coordinator.assertFrameUpdateAllowed();
-    if (this.#lastPublication !== undefined) this.retry();
     const ordered = [...this.#paragraphs.entries()].sort(
       ([leftText, left], [rightText, right]) => leftText.renderOrder - rightText.renderOrder || left.id - right.id,
     );
-    if (this.#rejection !== undefined) {
-      // A rejection is a defect in this package, not a state to recover from: shaping and layout
-      // cannot fail once the data they need is present, and every input a caller controls is
-      // refused at `set()` before it reaches here. So there is nothing to try again for, and the
-      // batch stops compiling for good rather than deciding when the input has moved enough.
-      //
-      // Transforms still run. They are applied to the last accepted publication and never entered
-      // the frame the engine refused, so withholding them would turn one broken paragraph into a
-      // whole group that stops responding to the camera.
-      this.#target.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
-      this.#dirtyTransformIds.clear();
-      return;
-    }
     const changed = ordered.flatMap(([text, paragraph], order) => {
       const semanticChanges =
         (paragraph.created ? ALL_SEMANTIC_CHANGES : reconciler.semanticChanges(text)) |
@@ -849,6 +827,11 @@ class ThreeTextBatchBinding {
         : [];
     });
     if (changed.length === 0 && this.#removed.length === 0) {
+      const failure = this.#retryPendingPublication();
+      if (failure !== undefined && !this.#pendingFailureReported) {
+        this.#pendingFailureReported = true;
+        throw failure;
+      }
       this.#target.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
       this.#dirtyTransformIds.clear();
       if (semanticViewMask !== 0 && !this.#hasSemanticViews(semanticViewMask)) {
@@ -856,6 +839,10 @@ class ThreeTextBatchBinding {
       }
       return;
     }
+    // New desired state supersedes a renderer candidate that never became live. The old plan
+    // revision remains unconsumed, so the engine answers this update with a safe checkpoint.
+    this.#pendingPublication = undefined;
+    this.#pendingFailureReported = false;
     const paragraphMutations = [
       ...this.#removed.map((paragraph) => ({ opcode: 'remove' as const, paragraphId: paragraph.id })),
       ...changed.map(({ paragraph, order }) => ({
@@ -942,7 +929,7 @@ class ThreeTextBatchBinding {
       const frame = compileTextEngineFrameUpdate({
         sessionId: this.#session.handle,
         policyHandle: this.#coordinator.policyHandle,
-        capabilitySet: 1,
+        capabilitySet: THREE_CAPABILITY_SET_ID,
         expectedEngineRevision: this.#engineRevision,
         consumedPlanRevision: this.#planRevision,
         acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
@@ -994,28 +981,47 @@ class ThreeTextBatchBinding {
       this.#measurements.clear();
       this.#layoutInspections.clear();
       committed = true;
+      let commitFailure: unknown | undefined;
       try {
-        this.#target.apply(publication);
-        this.#dirtyTransformIds.clear();
-        this.#planRevision = publication.planRevision;
-        this.#lastPublication = undefined;
+        commitFailure = this.#target.apply(publication);
       } catch (error) {
-        this.#lastPublication = ownPublication(publication);
+        this.#pendingPublication = {
+          publication: this.#session.retain(publication),
+          semanticViewMask,
+        };
+        this.#pendingFailureReported = true;
         throw error;
       }
+      this.#dirtyTransformIds.clear();
+      this.#planRevision = publication.planRevision;
       this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
       this.#retainSemanticViews(publication, semanticViewMask);
+      if (commitFailure !== undefined) throw commitFailure;
     } catch (error) {
       const rejected = textFrameError(error, (fault) => this.#faultSubject(fault));
       if (!committed) {
         for (const leases of pendingLeases.values()) releaseStackLeases(leases);
         for (const leases of pendingMaterials.values()) releaseMaterialLeases(leases);
-        // A committed frame whose GPU application failed is retried from `#lastPublication` on the
-        // next frame, so latching it would suppress the retry that is meant to recover it. Only an
-        // uncommitted frame -- one the engine or the compiler refused -- is latched.
-        this.#rejection = rejected;
       }
       throw rejected;
+    }
+  }
+
+  /** Retry one accepted engine publication that renderer preparation has not committed yet. */
+  #retryPendingPublication(): unknown | undefined {
+    const pending = this.#pendingPublication;
+    if (pending === undefined) return undefined;
+    try {
+      const { publication, semanticViewMask } = pending;
+      const commitFailure = this.#target.apply(publication);
+      this.#pendingPublication = undefined;
+      this.#pendingFailureReported = false;
+      this.#planRevision = publication.planRevision;
+      this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
+      this.#retainSemanticViews(publication, semanticViewMask);
+      return commitFailure;
+    } catch (error) {
+      return error;
     }
   }
   /**
@@ -1096,14 +1102,6 @@ class ThreeTextBatchBinding {
   invalidateMaterial(): void {
     this.#materialInvalidated = true;
   }
-  retry(): void {
-    const publication = this.#lastPublication;
-    if (publication === undefined) return;
-    this.#target.apply(publication);
-    this.#planRevision = publication.planRevision;
-    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
-    this.#lastPublication = undefined;
-  }
   removeText(text: Text<AnyRasterTechnique>): void {
     const paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined) return;
@@ -1181,7 +1179,7 @@ class ThreeTextBatchBinding {
       compileTextEngineFrameUpdate({
         sessionId: this.#session.handle,
         policyHandle: this.#coordinator.policyHandle,
-        capabilitySet: 1,
+        capabilitySet: THREE_CAPABILITY_SET_ID,
         expectedEngineRevision: this.#engineRevision,
         consumedPlanRevision: this.#planRevision,
         acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
@@ -1200,8 +1198,8 @@ class ThreeTextBatchBinding {
     const plan = this.#queryPlanView.bind(publication);
     for (const table of ['resources', 'buffers', 'patches', 'primitives', 'draws', 'retirements'] as const) {
       if (plan.table(table).count !== 0) {
-        this.#lastPublication = ownPublication(publication);
-        throw new Error('a semantic-only text query unexpectedly published render work');
+        const error = new Error('a semantic-only text query unexpectedly published render work');
+        throw error;
       }
     }
     this.#planRevision = publication.planRevision;
@@ -1319,11 +1317,6 @@ function releaseStackLeases(leases: readonly ThreeTextEngineStackLease[]): void 
 
 function releaseMaterialLeases(leases: readonly ThreeTextMaterialLease[]): void {
   for (const lease of leases) lease.release();
-}
-
-function ownPublication(publication: TextEnginePublication): TextEnginePublication {
-  const bytes = publication.bytes.slice();
-  return { ...publication, bytes, memoryBuffer: bytes.buffer, memoryGrew: false };
 }
 
 function classifySemanticChanges<Technique extends AnyRasterTechnique>(update: TextUpdate<Technique>): number {

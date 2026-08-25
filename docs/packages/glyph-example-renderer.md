@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-example-renderer'
-description: Proves the published core engine surface is sufficient for a second renderer by driving it without Three.js.
+description: Proves the published core engine surface through a headless TypeGPU-backed host without Three.js.
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:4e5b76958b653abbcc70246739a3d52a8d4c11cc181ec805510668fc79d705a8'
+source_digest: 'sha256:8ca884b4dfa4e6d36790430d7871be13e31957db276d3d8a57edae2e417a0569'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -16,7 +16,7 @@ sources:
     title: Retention-protocol frame driver
   - id: policy
     resource: ../../packages/glyph-example-renderer/src/policy.ts
-    title: Host-authored technique schema and render policy
+    title: Host-authored system lanes and render policy
   - id: plan-reader
     resource: ../../packages/glyph-example-renderer/src/plan-reader.ts
     title: Retained-publication reader and draw decoder
@@ -29,9 +29,12 @@ sources:
   - id: boundary-tests
     resource: ../../packages/glyph-example-renderer/tests/package-boundary.test.ts
     title: Published-entry-point boundary proof
-  - id: engine-tests
+  - id: retention-tests
     resource: ../../packages/glyph-example-renderer/tests/example-engine.test.ts
-    title: Real-frame retention protocol proof
+    title: Retention protocol and capacity-growth proof
+  - id: acceptance-tests
+    resource: ../../packages/glyph-example-renderer/tests/example-render.test.ts
+    title: Real font, resource, geometry, and non-empty draw acceptance
   - id: reader-tests
     resource: ../../packages/glyph-example-renderer/tests/plan-reader.test.ts
     title: Publication-lifetime, patch-range, and decode proof
@@ -42,27 +45,43 @@ generated:
 
 # Package reference: `@pmndrs/glyph-example-renderer`
 
-Status: Active consumer proof. It drives real engine frames through the item 11 retention protocol;
-shaping fonts remain unreachable from `/core` (audit item 12), so text frames are out of reach by design.
+Status: Active external-engine proof. It drives a real loaded font through the retention protocol, portable raster
+registration, resource realization, and a concrete submission seam without importing Three.js.
 
-This private workspace package is a consumer proof for `@pmndrs/glyph/core`, the way
+This private workspace package is a consumer proof for `@pmndrs/glyph/core` and the example technique's `/typegpu`
+shader realization, the way
 `@pmndrs/glyph-example-raster` is a consumer proof for the raster and baker boundary. It imports the
-published core entry point and nothing else — no `internal/`, no `generated/`, no `/three`, and no
-renderer dependency of its own — so a second renderer that cannot be written against the published
+published core and shader entry points — no `internal/`, no `generated/`, no `/three`, and no
+Three dependency — so a second renderer that cannot be written against the published
 surface turns the build red instead of turning into a planning argument. The boundary test scans every
-file under `src/` *and* `tests/`, and rejects any `@pmndrs/glyph` subpath except `/core` and the
-published Wasm artifact.
+file under `src/` _and_ `tests/`; only the acceptance fixture may import the root loader and `/bake` to create its
+temporary font, while all other files remain limited to `/core` and the published Wasm artifact.
 
-It authors its own technique schema and render policy with `/core`'s compilers (`src/policy.ts`), then
-runs the retention protocol on every frame in `ExampleTextEngine.render`: update for the borrow,
-`assertLive` before decoding, `retain` for one contiguous host-owned copy that acknowledges the
-generation, and decoded views over owned bytes only — dirty patch ranges and retirements included.
+It imports the portable example schema, plan, and `/typegpu` shader from `@pmndrs/glyph-example-raster`, and authors its own host render
+policy with `/core`'s compilers (`src/policy.ts`). It then runs the retention protocol on every frame in
+`ExampleTextEngine.render`: update for the borrow,
+`assertLive` before decoding, `retain` for one contiguous host-owned copy, and decoded views over owned bytes only — dirty
+patch ranges and retirements included. The frame driver carries a separate device-accepted generation and plan revision;
+retaining bytes never advances that wire fence before `prepareSubmission(...).commit()` succeeds. The engine revision
+still advances when Wasm accepts the update, so a rejected device candidate is superseded by the next frame and the old
+consumed-plan fence forces a safe checkpoint instead of a retry latch. A throw-once acceptance test pins all three wire
+values and compares the recovered buffers byte-for-byte with an oracle that observed the rejected candidate.
 `readDrawList` demands the branded `RetainedTextEnginePublication`, so passing a live-but-doomed borrow
 is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: retained
 plans survive three frames plus capacity growth, stale borrows throw
 `TextEnginePublicationExpiredError`, a backwards acknowledgement is refused at the wire as a revision
-conflict, and registering a font stack without a shaping font fails cleanly with `fontMissing` — the
-recorded evidence for audit item 12.
+conflict. The recording device validates the complete resource, buffer, patch, primitive, draw, and retirement publication
+against the selected technique/program/variant before it can mutate accepted state. Allocation, offset write, u32 fill,
+copy, replacement generation, and exact retirement all have direct negative coverage. Font resources and frame submissions
+use prepare/commit handles: if host binding registration or plan validation throws, the prepared candidate remains
+unpublished instead of restoring an older snapshot. The acceptance test also loads a baked font through the public root
+loader, registers its portable binding and resource, resolves the example `/typegpu` shader to WGSL, realizes named
+resources, and asserts non-empty draws and one submission. A second test realizes supplied indexed GLB-like geometry and
+checks its index count while the primitive record span supplies the instance count.
+
+The package still does not make font loading part of `/core`: `createTextRuntime` remains a root API. The acceptance uses
+the root loader only to obtain a `LoadedFont`, then hands that value to the core-facing engine registration method. This
+keeps font acquisition and engine execution separate while proving that a non-Three host can render a real text frame.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides
-work with the planned `@pmndrs/glyph/typegpu` shader subpath.
+work with the technique-owned `/typegpu` shader subpath.
