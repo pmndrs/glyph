@@ -13,6 +13,7 @@ import { Chorus } from './chorus';
 import { live } from './controls';
 import { publishMarkBottom } from './anchor';
 import { Effects } from './effects';
+import { drift } from './drift';
 import { trackKey } from './lens';
 
 const FONT = { input: { baked: fontUrl }, raster: { technique: slug } } as const;
@@ -40,6 +41,7 @@ export function Scene() {
   const mark = useRef<ThreeText<typeof slug>>(null);
   const font = useFont(FONT);
   const viewport = useThree((state) => state.viewport);
+  const camera = useThree((state) => state.camera);
 
   // Only `envMapIntensity` is a plain material field rather than a node, so it
   // is the one dial that costs a rebuild; everything else rides a uniform and
@@ -126,6 +128,20 @@ export function Scene() {
     }
 
     elapsed.current += delta;
+
+    // Parallax by orbiting, not by sliding. A lateral camera move shifts the
+    // *nearer* object further across the frame, so translating alone would swing
+    // the mark and leave the field behind it almost still — the wrong way round.
+    // Keeping the aim on the origin puts the mark on the pivot: it barely moves,
+    // while the chorus several units behind it travels.
+    const drifting = elapsed.current * live.driftSpeed;
+    camera.position.set(
+      drift(drifting, 0) * live.driftAmount,
+      drift(drifting, 101) * live.driftAmount * 0.6,
+      6 + drift(drifting, 211) * live.driftAmount * 0.5,
+    );
+    camera.lookAt(0, 0, 0);
+
     const t = elapsed.current * live.keySpeed;
     const keyX = Math.cos(t) * live.keyRadius;
     const keyY = Math.sin(t * 0.7) * live.keyRadius * live.keyElevation;
