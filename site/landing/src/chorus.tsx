@@ -5,6 +5,10 @@ import { msdf } from '@pmndrs/glyph/three/msdf';
 import { useThree } from '@react-three/fiber/webgpu';
 import { useMemo, useRef } from 'react';
 
+/** Must match site/scripts/bake-chorus.mts. */
+const EM_SIZE = 32;
+const PIXEL_RANGE = 6;
+
 import { CHORUS_URLS } from './chorus-stack';
 import { RTL_WORDS, WORDS } from './chorus-words';
 import { live } from './controls';
@@ -114,7 +118,17 @@ function columnsFor(width: number): number {
 // face regardless of glyph count — twenty-two of those came to 448 MB of
 // texture for a few hundred glyphs — while Slug carries curve data, so the
 // cost scales with the glyphs actually baked rather than with the face count.
-const REQUESTS = CHORUS_URLS.map((url) => ({ input: { baked: url }, raster: { technique: msdf } }) as const);
+// The options are part of the raster identity, so the runtime request has to
+// name the same ones the artifact was baked with. Ask for the defaults against
+// a 32-texel atlas and the loader finds no matching raster, falls back to
+// generating one, and fails for want of the source bytes.
+const REQUESTS = CHORUS_URLS.map(
+  (url) =>
+    ({
+      input: { baked: url },
+      raster: { options: { emSize: EM_SIZE, pixelRange: PIXEL_RANGE }, technique: msdf },
+    }) as const,
+);
 
 for (const request of REQUESTS) useFont.preload(request);
 
