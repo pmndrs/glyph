@@ -64,6 +64,7 @@ body {
 /* Anchored under the mark rather than to the bottom of the screen, so the gap
    reads the same whether the type is filling a phone or a display. */
 .links {
+  background: radial-gradient(ellipse at center, color-mix(in oklab, var(--ink) 82%, transparent) 0%, transparent 72%);
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -92,10 +93,30 @@ body {
   padding: 0.65rem 1.15rem;
   text-decoration: none;
   text-transform: uppercase;
+  /* Lifted off the field behind them: a dark drop for separation, a soft outer
+     glow so the edge survives against bright type, and an inner highlight along
+     the top so the pill reads as a raised surface rather than a hole. */
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.5),
+    0 8px 24px -6px rgb(0 0 0 / 0.75),
+    0 0 22px -4px color-mix(in oklab, var(--paper) 22%, transparent),
+    inset 0 1px 0 color-mix(in oklab, var(--paper) 12%, transparent);
   transition:
     color 160ms ease,
     border-color 160ms ease,
-    background-color 160ms ease;
+    background-color 160ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.link:hover,
+.link:focus-visible {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.5),
+    0 10px 28px -6px rgb(0 0 0 / 0.8),
+    0 0 30px -2px color-mix(in oklab, var(--paper) 34%, transparent),
+    inset 0 1px 0 color-mix(in oklab, var(--paper) 18%, transparent);
+  transform: translateY(-1px);
 }
 
 /* Square-ish so the two marks sit on the same optical footprint. */
