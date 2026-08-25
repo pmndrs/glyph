@@ -1,77 +1,116 @@
 import { button, folder, useControls } from 'leva';
-import { createContext, createElement, useContext, type ReactNode } from 'react';
 
 /**
- * Every dial the look depends on, in one place, so the values can be set by eye
- * and handed back as a block rather than guessed one round-trip at a time.
+ * Every dial the look depends on, in one place, so values can be set by eye and
+ * handed back as a block rather than guessed a round-trip at a time.
  *
- * Dev only. `import.meta.env.DEV` is statically false in a production build, so
- * the panel and leva itself drop out of the bundle.
+ * Deliberately *not* React context. `Scene` and `Effects` render inside
+ * `<Canvas>`, which is its own reconciler root, and context does not cross that
+ * boundary — consumers there read the default value and nothing appears to
+ * update. `live` is a plain mutable record instead: the panel writes to it and
+ * the frame loop reads it, which is both simpler and immediate.
+ *
+ * Dev only. `import.meta.env.DEV` is a build-time constant, so the panel and
+ * leva itself drop out of a production bundle.
  */
 export interface LookValues {
-  readonly aberrationFalloff: number;
-  readonly aberrationPeak: number;
-  readonly ambient: number;
-  readonly bloomRadius: number;
-  readonly bloomStrength: number;
-  readonly bloomThreshold: number;
-  readonly curvature: number;
-  readonly emissive: number;
-  readonly envIntensity: number;
-  readonly exposure: number;
-  readonly fillIntensity: number;
-  readonly flareAttenuation: number;
-  readonly flareSamples: number;
-  readonly flareSpacing: number;
-  readonly flareThreshold: number;
-  readonly keyElevation: number;
-  readonly keyIntensity: number;
-  readonly keyRadius: number;
-  readonly rimAngle: number;
-  readonly keySpeed: number;
-  readonly measure: number;
-  readonly metalness: number;
-  readonly rimIntensity: number;
-  readonly roughness: number;
+  aberrationFalloff: number;
+  aberrationPeak: number;
+  ambient: number;
+  bloomRadius: number;
+  bloomStrength: number;
+  bloomThreshold: number;
+  curvature: number;
+  descent: number;
+  emissive: number;
+  envIntensity: number;
+  envResolution: number;
+  exposure: number;
+  fillIntensity: number;
+  flareAttenuation: number;
+  flareSamples: number;
+  flareSpacing: number;
+  flareThreshold: number;
+  keyElevation: number;
+  keyIntensity: number;
+  keyRadius: number;
+  keySpeed: number;
+  markGap: number;
+  measure: number;
+  metalness: number;
+  rimAngle: number;
+  rimIntensity: number;
+  roughness: number;
+  studioBack: number;
+  studioKey: number;
+  studioSides: number;
+  studioTop: number;
 }
 
-export const LOOK: LookValues = {
+/** The committed look. `Reset` returns the panel to exactly this. */
+export const LOOK: Readonly<LookValues> = Object.freeze({
   aberrationFalloff: 2.2,
   aberrationPeak: 0.16,
-  ambient: 0.07,
+  ambient: 0.62,
   bloomRadius: 0.32,
   bloomStrength: 0.3,
   bloomThreshold: 0.92,
   curvature: 0.4,
+  descent: 0.42,
   emissive: 0.008,
   envIntensity: 0.3,
-  exposure: 0.6,
+  envResolution: 256,
+  exposure: 0.86,
   fillIntensity: 0.35,
   flareAttenuation: 26,
   flareSamples: 6,
   flareSpacing: 0.16,
   flareThreshold: 0.72,
   keyElevation: 0.55,
-  keyIntensity: 2.4,
+  keyIntensity: 3.6,
   keyRadius: 5,
-  rimAngle: 2.4,
   keySpeed: 0.35,
+  markGap: 0.55,
   measure: 0.28,
-  metalness: 0.45,
+  metalness: 0.18,
+  rimAngle: 2.4,
   rimIntensity: 1.4,
-  roughness: 0.28,
-};
+  roughness: 0.3,
+  studioBack: 0.35,
+  studioKey: 1.1,
+  studioSides: 0.9,
+  studioTop: 0.7,
+});
+
+/** What the scene actually reads, every frame. */
+export const live: LookValues = { ...LOOK };
+
+/** Bumped whenever a value that is compiled into the render graph changes. */
+export const graphVersion = { value: 0 };
+
+const GRAPH_KEYS = new Set<keyof LookValues>([
+  'bloomRadius',
+  'bloomStrength',
+  'bloomThreshold',
+  'envResolution',
+  'flareAttenuation',
+  'flareSamples',
+  'flareSpacing',
+  'flareThreshold',
+]);
 
 const RANGES: Record<keyof LookValues, readonly [number, number, number]> = {
   aberrationFalloff: [0, 8, 0.1],
   aberrationPeak: [0, 0.8, 0.005],
-  ambient: [0, 1, 0.005],
+  ambient: [0, 3, 0.005],
   bloomRadius: [0, 1, 0.01],
   bloomStrength: [0, 2, 0.01],
   bloomThreshold: [0, 1.5, 0.005],
   curvature: [0, 2, 0.01],
+  descent: [0, 1.5, 0.005],
   emissive: [0, 0.3, 0.001],
   envIntensity: [0, 4, 0.01],
+  envResolution: [64, 1024, 64],
   exposure: [0.1, 2, 0.01],
   fillIntensity: [0, 4, 0.01],
   flareAttenuation: [1, 60, 1],
@@ -81,16 +120,21 @@ const RANGES: Record<keyof LookValues, readonly [number, number, number]> = {
   keyElevation: [-1.5, 1.5, 0.01],
   keyIntensity: [0, 12, 0.05],
   keyRadius: [0, 14, 0.1],
-  rimAngle: [0, 6.283, 0.01],
   keySpeed: [0, 2, 0.01],
+  markGap: [0, 2, 0.01],
   measure: [0.05, 0.9, 0.005],
   metalness: [0, 1, 0.01],
+  rimAngle: [0, 6.283, 0.01],
   rimIntensity: [0, 4, 0.01],
   roughness: [0, 1, 0.005],
+  studioBack: [0, 4, 0.01],
+  studioKey: [0, 6, 0.01],
+  studioSides: [0, 6, 0.01],
+  studioTop: [0, 6, 0.01],
 };
 
 const GROUPS = {
-  Mark: ['measure', 'curvature', 'metalness', 'roughness', 'envIntensity', 'emissive'],
+  Mark: ['measure', 'descent', 'markGap', 'curvature', 'metalness', 'roughness', 'emissive'],
   Light: [
     'keyIntensity',
     'keyRadius',
@@ -101,64 +145,56 @@ const GROUPS = {
     'rimAngle',
     'ambient',
   ],
+  Studio: ['studioKey', 'studioTop', 'studioSides', 'studioBack', 'envIntensity', 'envResolution'],
   Bloom: ['bloomStrength', 'bloomRadius', 'bloomThreshold'],
   Flare: ['flareSamples', 'flareSpacing', 'flareAttenuation', 'flareThreshold'],
   Lens: ['exposure', 'aberrationPeak', 'aberrationFalloff'],
 } as const satisfies Record<string, readonly (keyof LookValues)[]>;
 
+const KEYS = Object.keys(LOOK) as (keyof LookValues)[];
+
+function pathOf(key: keyof LookValues): string {
+  const group = Object.entries(GROUPS).find(([, keys]) => (keys as readonly string[]).includes(key));
+  return `${group![0]}.${key}`;
+}
+
+function apply(key: keyof LookValues, value: number): void {
+  if (live[key] === value) return;
+  live[key] = value;
+  if (GRAPH_KEYS.has(key)) graphVersion.value += 1;
+}
+
 function schema(keys: readonly (keyof LookValues)[]) {
   return Object.fromEntries(
     keys.map((key) => {
       const [min, max, step] = RANGES[key];
-      return [key, { max, min, step, value: LOOK[key] }];
+      return [key, { max, min, onChange: (value: number) => apply(key, value), step, value: LOOK[key] }];
     }),
   );
 }
 
-const LookContext = createContext<LookValues>(LOOK);
-
-/** Reads the shared look. Every consumer sees the same values. */
-export function useLook(): LookValues {
-  return useContext(LookContext);
-}
-
 /**
- * Owns the one leva store and publishes it. In production the provider renders
- * its children against the frozen `LOOK` block and leva never loads.
+ * The panel. Rendered outside `<Canvas>`; it never re-renders the scene, it just
+ * writes into `live`.
  */
-export function LookProvider({ children }: { children: ReactNode }) {
-  if (!import.meta.env.DEV) {
-    return createElement(LookContext.Provider, { value: LOOK }, children);
-  }
-
-  // Safe: `import.meta.env.DEV` is a build-time constant, so this branch is
-  // either always taken or always eliminated and hook order never varies.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const values = useControls(() => ({
+export function LookPanel() {
+  const [, set] = useControls(() => ({
     ...Object.fromEntries(
-      Object.entries(GROUPS).map(([name, keys]) => [name, folder(schema(keys), { collapsed: false })]),
+      Object.entries(GROUPS).map(([name, keys]) => [name, folder(schema(keys), { collapsed: true })]),
     ),
-    'Copy for handoff': button((get) => {
-      const entries = (Object.keys(LOOK) as (keyof LookValues)[])
-        .map((key) => {
-          const group = Object.entries(GROUPS).find(([, keys]) => (keys as readonly string[]).includes(key));
-          return [key, get(`${group![0]}.${key}`) as number] as const;
-        })
-        .sort(([a], [b]) => a.localeCompare(b));
-
+    Reset: button(() => {
+      for (const key of KEYS) apply(key, LOOK[key]);
+      set(Object.fromEntries(KEYS.map((key) => [pathOf(key), LOOK[key]])));
+    }),
+    'Copy for handoff': button(() => {
       const block = [
-        'export const LOOK: LookValues = {',
-        ...entries.map(([key, value]) => `  ${key}: ${round(value)},`),
-        '};',
+        'export const LOOK: Readonly<LookValues> = Object.freeze({',
+        ...KEYS.map((key) => `  ${key}: ${Math.round(live[key] * 1e4) / 1e4},`),
+        '});',
       ].join('\n');
-
       void navigator.clipboard.writeText(block);
     }),
   }));
 
-  return createElement(LookContext.Provider, { value: { ...LOOK, ...(values as Partial<LookValues>) } }, children);
-}
-
-function round(value: number): number {
-  return Math.round(value * 1e4) / 1e4;
+  return null;
 }

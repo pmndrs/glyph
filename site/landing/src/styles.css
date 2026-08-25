@@ -16,6 +16,13 @@
   --rule: #1a1f28;
 
   --measure: 68rem;
+
+  /* Published by the scene: where the wordmark's line box ends, as a fraction
+     of the frame. The fallback only applies for the frame or two before the
+     paragraph has been measured. */
+  --mark-bottom: 62%;
+  /* Optical gap under the mark, in viewport height so it tracks the type. */
+  --mark-gap: clamp(1.25rem, 4vh, 3rem);
   --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
@@ -51,22 +58,23 @@ body {
 /* The overlay never intercepts the pointer except on its own controls, so the
    canvas keeps every drag and hover it would otherwise lose. */
 .overlay {
-  align-items: center;
-  display: flex;
-  flex-direction: column;
   inset: 0;
-  justify-content: flex-end;
-  padding: 0 1.5rem clamp(2.5rem, 12vh, 7rem);
   pointer-events: none;
   position: absolute;
 }
 
+/* Anchored under the mark rather than to the bottom of the screen, so the gap
+   reads the same whether the type is filling a phone or a display. */
 .links {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   justify-content: center;
+  left: 50%;
   pointer-events: auto;
+  position: absolute;
+  top: calc(var(--mark-bottom) + var(--mark-gap));
+  transform: translateX(-50%);
 }
 
 .link {
