@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "pnpm build:landing && pnpm build:docs",
-    "build:docs": "pnpm dlx @pmndrs/docs@4.1.2 build docs dist/docs --format website --libname \"@pmndrs/glyph\" --libname-short glyph --libname-dotsuffix-label docs --libname-dotsuffix-href https://docs.pmnd.rs --icon ♠️ --github https://github.com/pmndrs/glyph --discord https://discord.gg/poimandres --home-redirect /getting-started/introduction --theme-primary \"#0a0c12\" --theme-scheme neutral --theme-contrast 0",
+    "build:docs": "npm_config_cache=.npx-cache npx -y @pmndrs/docs@4.1.2 build docs dist/docs --format website --libname \"@pmndrs/glyph\" --libname-short glyph --libname-dotsuffix-label docs --libname-dotsuffix-href https://docs.pmnd.rs --icon ♠️ --github https://github.com/pmndrs/glyph --discord https://discord.gg/poimandres --home-redirect /getting-started/introduction --theme-primary \"#0a0c12\" --theme-scheme neutral --theme-contrast 0",
     "build:landing": "vite build",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:docs && pnpm build:landing",
-    "check:docs": "pnpm dlx @pmndrs/docs@4.1.2 build docs dist/.mdx-check",
+    "check:docs": "npm_config_cache=.npx-cache npx -y @pmndrs/docs@4.1.2 build docs dist/.mdx-check",
     "dev": "vite",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
