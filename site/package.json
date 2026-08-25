@@ -1,0 +1,37 @@
+{
+  "name": "@pmndrs/glyph-site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm build:landing && pnpm build:docs",
+    "build:docs": "pnpm dlx @pmndrs/docs@4.1.2 build docs dist/docs --format website --libname \"@pmndrs/glyph\" --libname-short glyph --libname-dotsuffix-label docs --libname-dotsuffix-href https://docs.pmnd.rs --icon ♠️ --github https://github.com/pmndrs/glyph --discord https://discord.gg/poimandres --home-redirect /getting-started/introduction --theme-primary \"#0a0c12\" --theme-scheme neutral --theme-contrast 0",
+    "build:landing": "vite build",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:docs && pnpm build:landing",
+    "check:docs": "pnpm dlx @pmndrs/docs@4.1.2 build docs dist/.mdx-check",
+    "dev": "vite",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --deny-warnings .",
+    "preview": "node ./scripts/preview.mts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pmndrs/glyph": "workspace:*",
+    "@react-three/drei": "11.0.0-alpha.5",
+    "@react-three/fiber": "10.0.0-alpha.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.185.4",
+    "@vitejs/plugin-react": "6.0.1",
+    "oxfmt": "0.35.0",
+    "oxlint": "1.75.0",
+    "typescript": "7.0.2",
+    "vite": "8.1.5"
+  }
+}

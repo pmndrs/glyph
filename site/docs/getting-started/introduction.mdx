@@ -1,0 +1,65 @@
+---
+title: Introduction
+description: Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
+nav: 0
+---
+
+<Intro>
+  `@pmndrs/glyph` shapes and lays out text in Rust/Wasm, then publishes a retained render plan for the active renderer.
+  The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
+</Intro>
+
+## Install
+
+```sh
+npm install @pmndrs/glyph
+```
+
+## Render text with React Three Fiber
+
+```tsx
+import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
+import { msdf } from '@pmndrs/glyph/three/msdf';
+
+const fontRequest = {
+  input: { baked: '/fonts/Inter.font.glb' },
+  raster: { technique: msdf },
+} as const;
+
+useFont.preload(fontRequest);
+
+function Labels() {
+  const inter = useFont(fontRequest);
+
+  return (
+    <TextGroup compositing="independent">
+      <Text
+        font={inter}
+        contentBox={{ width: { mode: 'at-most', size: 480 }, wrap: 'word' }}
+        style={{ fontSize: 32, lineHeight: 1.2 }}
+        paint={{ color: '#f4f7ff' }}
+      >
+        Hello <Text paint={{ color: '#70d6ff' }}>world</Text>
+      </Text>
+    </TextGroup>
+  );
+}
+```
+
+`Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is a span, and inherits the surrounding
+font, style, paint, and material unless it overrides them.
+
+`TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the
+ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text
+semantics and lazily owns an implicit batch of one.
+
+## Bake a font
+
+Fonts are baked ahead of time into a `.font.glb` carrying the shaping data and every raster you ask for.
+
+```sh
+npx glyph bake --input Inter-Regular.ttf --output inter.font.glb \
+  --unicodes U+0020-007E --bitmap 32 --msdf --slug
+```
+
+`--unicodes` subsets the shaping font, so an artifact only carries the coverage you render.
