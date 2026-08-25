@@ -18,6 +18,17 @@ export interface LookValues {
   aberrationPeak: number;
   ambient: number;
   bloomRadius: number;
+  chorusDepth: number;
+  chorusDim: number;
+  chorusJustify: number;
+  chorusGap: number;
+  chorusWords: number;
+  chorusRtl: number;
+  chorusLetter: number;
+  chorusMaxSpace: number;
+  chorusMinSpace: number;
+  chorusLeading: number;
+  chorusSize: number;
   bloomStrength: number;
   bloomThreshold: number;
   curvature: number;
@@ -53,6 +64,17 @@ export const LOOK: Readonly<LookValues> = Object.freeze({
   aberrationPeak: 0.16,
   ambient: 0.62,
   bloomRadius: 0.32,
+  chorusDepth: 3.2,
+  chorusDim: 0.16,
+  chorusJustify: 0,
+  chorusGap: 26,
+  chorusWords: 1600,
+  chorusRtl: 0.12,
+  chorusLetter: 0,
+  chorusMaxSpace: 1.5,
+  chorusMinSpace: 0.82,
+  chorusLeading: 0.92,
+  chorusSize: 0.0115,
   bloomStrength: 0.3,
   bloomThreshold: 0.92,
   curvature: 0.4,
@@ -110,6 +132,17 @@ const RANGES: Record<keyof LookValues, readonly [number, number, number]> = {
   aberrationPeak: [0, 0.8, 0.005],
   ambient: [0, 3, 0.005],
   bloomRadius: [0, 1, 0.01],
+  chorusDepth: [0, 12, 0.1],
+  chorusDim: [0, 1, 0.005],
+  chorusJustify: [0, 1, 1],
+  chorusGap: [2, 60, 1],
+  chorusWords: [200, 8000, 100],
+  chorusRtl: [0, 0.6, 0.01],
+  chorusLetter: [0, 0.4, 0.005],
+  chorusMaxSpace: [1, 3, 0.01],
+  chorusMinSpace: [0.4, 1, 0.01],
+  chorusLeading: [0.6, 2.2, 0.01],
+  chorusSize: [0.008, 0.09, 0.001],
   bloomStrength: [0, 2, 0.01],
   bloomThreshold: [0, 1.5, 0.005],
   curvature: [0, 2, 0.01],
@@ -141,6 +174,19 @@ const RANGES: Record<keyof LookValues, readonly [number, number, number]> = {
 
 const GROUPS = {
   Mark: ['measure', 'descent', 'markGap', 'curvature', 'metalness', 'roughness', 'emissive'],
+  Chorus: [
+    'chorusJustify',
+    'chorusSize',
+    'chorusLeading',
+    'chorusDim',
+    'chorusDepth',
+    'chorusMinSpace',
+    'chorusMaxSpace',
+    'chorusLetter',
+    'chorusGap',
+    'chorusRtl',
+    'chorusWords',
+  ],
   Light: [
     'keyIntensity',
     'keyRadius',
