@@ -1,0 +1,198 @@
+{
+  "faces": [
+    {
+      "chars": " Gacdefghijklmnoprstyzíýăάήαγλμρυφабвгзиклнуфіữ",
+      "glyphs": 47,
+      "name": "latin",
+      "points": [
+        "U+0020",
+        "U+0047",
+        "U+0061",
+        "U+0063",
+        "U+0064",
+        "U+0065",
+        "U+0066",
+        "U+0067",
+        "U+0068",
+        "U+0069",
+        "U+006A",
+        "U+006B",
+        "U+006C",
+        "U+006D",
+        "U+006E",
+        "U+006F",
+        "U+0070",
+        "U+0072",
+        "U+0073",
+        "U+0074",
+        "U+0079",
+        "U+007A",
+        "U+00ED",
+        "U+00FD",
+        "U+0103",
+        "U+03AC",
+        "U+03AE",
+        "U+03B1",
+        "U+03B3",
+        "U+03BB",
+        "U+03BC",
+        "U+03C1",
+        "U+03C5",
+        "U+03C6",
+        "U+0430",
+        "U+0431",
+        "U+0432",
+        "U+0433",
+        "U+0437",
+        "U+0438",
+        "U+043A",
+        "U+043B",
+        "U+043D",
+        "U+0443",
+        "U+0444",
+        "U+0456",
+        "U+1EEF"
+      ]
+    },
+    {
+      "chars": "ئاحرسفنهويٹپ",
+      "glyphs": 12,
+      "name": "arabic",
+      "points": [
+        "U+0626",
+        "U+0627",
+        "U+062D",
+        "U+0631",
+        "U+0633",
+        "U+0641",
+        "U+0646",
+        "U+0647",
+        "U+0648",
+        "U+064A",
+        "U+0679",
+        "U+067E"
+      ]
+    },
+    {
+      "chars": "אהוטירשת",
+      "glyphs": 8,
+      "name": "hebrew",
+      "points": ["U+05D0", "U+05D4", "U+05D5", "U+05D8", "U+05D9", "U+05E8", "U+05E9", "U+05EA"]
+    },
+    {
+      "chars": "अकणरवष्",
+      "glyphs": 7,
+      "name": "devanagari",
+      "points": ["U+0905", "U+0915", "U+0923", "U+0930", "U+0935", "U+0937", "U+094D"]
+    },
+    {
+      "chars": "অকরষ্",
+      "glyphs": 5,
+      "name": "bengali",
+      "points": ["U+0985", "U+0995", "U+09B0", "U+09B7", "U+09CD"]
+    },
+    {
+      "chars": "ਅਖਰੱ",
+      "glyphs": 4,
+      "name": "gurmukhi",
+      "points": ["U+0A05", "U+0A16", "U+0A30", "U+0A71"]
+    },
+    {
+      "chars": "અકરષ્",
+      "glyphs": 5,
+      "name": "gujarati",
+      "points": ["U+0A85", "U+0A95", "U+0AB0", "U+0AB7", "U+0ACD"]
+    },
+    {
+      "chars": "ଅକରଷ୍",
+      "glyphs": 5,
+      "name": "oriya",
+      "points": ["U+0B05", "U+0B15", "U+0B30", "U+0B37", "U+0B4D"]
+    },
+    {
+      "chars": "எதழு்",
+      "glyphs": 5,
+      "name": "tamil",
+      "points": ["U+0B8E", "U+0BA4", "U+0BB4", "U+0BC1", "U+0BCD"]
+    },
+    {
+      "chars": "ంఅకరష్",
+      "glyphs": 6,
+      "name": "telugu",
+      "points": ["U+0C02", "U+0C05", "U+0C15", "U+0C30", "U+0C37", "U+0C4D"]
+    },
+    {
+      "chars": "ಅಕರಷ್",
+      "glyphs": 5,
+      "name": "kannada",
+      "points": ["U+0C85", "U+0C95", "U+0CB0", "U+0CB7", "U+0CCD"]
+    },
+    {
+      "chars": "ംഅകരഷ്",
+      "glyphs": 6,
+      "name": "malayalam",
+      "points": ["U+0D02", "U+0D05", "U+0D15", "U+0D30", "U+0D37", "U+0D4D"]
+    },
+    {
+      "chars": "අකරු",
+      "glyphs": 4,
+      "name": "sinhala",
+      "points": ["U+0D85", "U+0D9A", "U+0DBB", "U+0DD4"]
+    },
+    {
+      "chars": "กขรอะั",
+      "glyphs": 6,
+      "name": "thai",
+      "points": ["U+0E01", "U+0E02", "U+0E23", "U+0E2D", "U+0E30", "U+0E31"]
+    },
+    {
+      "chars": "ກຕນວສອັົ",
+      "glyphs": 8,
+      "name": "lao",
+      "points": ["U+0E81", "U+0E95", "U+0E99", "U+0EA7", "U+0EAA", "U+0EAD", "U+0EB1", "U+0EBB"]
+    },
+    {
+      "chars": "ករសអ្",
+      "glyphs": 5,
+      "name": "khmer",
+      "points": ["U+1780", "U+179A", "U+179F", "U+17A2", "U+17D2"]
+    },
+    {
+      "chars": "စလာုံး",
+      "glyphs": 6,
+      "name": "myanmar",
+      "points": ["U+1005", "U+101C", "U+102C", "U+102F", "U+1036", "U+1038"]
+    },
+    {
+      "chars": "აოს",
+      "glyphs": 3,
+      "name": "georgian",
+      "points": ["U+10D0", "U+10DD", "U+10E1"]
+    },
+    {
+      "chars": "առտ",
+      "glyphs": 3,
+      "name": "armenian",
+      "points": ["U+0561", "U+057C", "U+057F"]
+    },
+    {
+      "chars": "ልደፊ",
+      "glyphs": 3,
+      "name": "ethiopic",
+      "points": ["U+120D", "U+12F0", "U+134A"]
+    },
+    {
+      "chars": "字形文글리자프",
+      "glyphs": 7,
+      "name": "cjk",
+      "points": ["U+5B57", "U+5F62", "U+6587", "U+AE00", "U+B9AC", "U+C790", "U+D504"]
+    }
+  ],
+  "generated": "site/scripts/bake-chorus.mts",
+  "strike": 32,
+  "totals": {
+    "faces": 21,
+    "points": 160,
+    "words": 49
+  }
+}

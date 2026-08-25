@@ -1,14 +1,15 @@
-import { Text, useFont } from '@pmndrs/glyph/react';
+import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/three/slug';
-import { Environment, Lightformer } from '@react-three/drei';
+import { Environment, Lightformer, Stats } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useMemo, useRef, useState } from 'react';
 import { normalize, positionLocal, uniform, vec3 } from 'three/tsl';
 import { DirectionalLight, DoubleSide, MeshPhysicalNodeMaterial, NormalBlending, Vector2 } from 'three/webgpu';
 
 import fontUrl from '../assets/playwrite-glyph.font.glb?url';
+import { Chorus } from './chorus';
 import { live } from './controls';
 import { publishMarkBottom } from './anchor';
 import { Effects } from './effects';
@@ -134,6 +135,8 @@ export function Scene() {
 
   return (
     <>
+      {import.meta.env.DEV && <Stats />}
+
       <ambientLight color="#e7ecf6" intensity={live.ambient} />
       <directionalLight color="#f2f6ff" intensity={live.keyIntensity} ref={key} />
       <directionalLight color="#8fa6cc" intensity={live.fillIntensity} position={[-5, -2, 3]} />
@@ -143,17 +146,25 @@ export function Scene() {
         position={[Math.cos(live.rimAngle) * 6, Math.sin(live.rimAngle) * 6, -4]}
       />
 
-      <Text
-        contentBox={{ align: 'center', width: { mode: 'exact', size: width }, wrap: 'none' }}
-        font={font}
-        material={hero}
-        paint={{ color: '#e7ecf6' }}
-        position={[-width / 2, lineBox / 2, 0]}
-        ref={mark}
-        style={{ fontSize }}
-      >
-        {WORDMARK}
-      </Text>
+      {/* One batching and ordering boundary. The field is authored first so it
+          draws behind the mark, rather than depending on two implicit batches
+          happening to sort the way we want. Each Text still owns its own
+          material, so the mark keeps its lit node graph inside the group. */}
+      <TextGroup>
+        <Chorus />
+
+        <Text
+          contentBox={{ align: 'center', width: { mode: 'exact', size: width }, wrap: 'none' }}
+          font={font}
+          material={hero}
+          paint={{ color: '#e7ecf6' }}
+          position={[-width / 2, lineBox / 2, 0]}
+          ref={mark}
+          style={{ fontSize }}
+        >
+          {WORDMARK}
+        </Text>
+      </TextGroup>
 
       {/*
         A studio, built rather than downloaded. drei's `preset="studio"` fetches a
