@@ -1,7 +1,7 @@
 import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
-import { slug } from '@pmndrs/glyph/three/slug';
+import { msdf } from '@pmndrs/glyph/three/msdf';
 import { useThree } from '@react-three/fiber/webgpu';
 import { useMemo, useRef } from 'react';
 
@@ -114,7 +114,7 @@ function columnsFor(width: number): number {
 // face regardless of glyph count — twenty-two of those came to 448 MB of
 // texture for a few hundred glyphs — while Slug carries curve data, so the
 // cost scales with the glyphs actually baked rather than with the face count.
-const REQUESTS = CHORUS_URLS.map((url) => ({ input: { baked: url }, raster: { technique: slug } }) as const);
+const REQUESTS = CHORUS_URLS.map((url) => ({ input: { baked: url }, raster: { technique: msdf } }) as const);
 
 for (const request of REQUESTS) useFont.preload(request);
 
@@ -131,7 +131,7 @@ export function Chorus() {
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const fonts = REQUESTS.map((request) => useFont(request));
 
-  const field = useRef<ThreeText<typeof slug>>(null);
+  const field = useRef<ThreeText<typeof msdf>>(null);
 
   // A hole in a line of justified text is either a stretched space or a word
   // that failed to shape. The engine knows which, so ask it rather than guess.

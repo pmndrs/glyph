@@ -39,9 +39,6 @@ export const WORDS = [
   'буква',
   'знак',
   // Right-to-left
-  'حرف',
-  'نويسه',
-  'ٹائپ',
   'אות',
   'שריטה',
   // Indic
@@ -60,7 +57,6 @@ export const WORDS = [
   'อักขระ',
   'ຕົວອັກສອນ',
   'អក្សរ',
-  'စာလုံး',
   // Caucasus and Horn of Africa
   'ასო',
   'տառ',
