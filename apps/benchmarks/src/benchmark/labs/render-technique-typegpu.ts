@@ -18,6 +18,7 @@ export interface RenderTechniqueTypeGpuLabReport {
   readonly initialVisiblePixels: number;
   readonly updatedVisiblePixels: number;
   readonly changedPixels: number;
+  readonly idleGpuSubmissions: number;
 }
 
 /** Runs the external-renderer contract through a real WebGPU device and reads its RGBA target back. */
@@ -49,27 +50,35 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       height: 192,
     });
     try {
-      const initial = text.render();
+      const initial = await text.render();
       const initialPixels = await renderer.readPixels();
       text.update({ text: 'Updated WebGPU', foregroundRgba: 0xff40_a0ff });
-      const updated = text.render();
+      const updated = await text.render();
       const updatedPixels = await renderer.readPixels();
+      const submissionsBeforeIdle = renderer.submittedPasses;
+      await text.render();
       const report = Object.freeze({
         initialDraws: initial.draws.length,
         updatedDraws: updated.draws.length,
         initialVisiblePixels: visiblePixelCount(initialPixels),
         updatedVisiblePixels: visiblePixelCount(updatedPixels),
         changedPixels: changedPixelCount(initialPixels, updatedPixels),
+        idleGpuSubmissions: renderer.submittedPasses - submissionsBeforeIdle,
       });
       if (report.initialDraws === 0 || report.updatedDraws === 0) {
         throw new Error('the TypeGPU renderer lab produced an empty draw list');
       }
-      if (report.initialVisiblePixels === 0 || report.updatedVisiblePixels === 0 || report.changedPixels === 0) {
+      if (
+        report.initialVisiblePixels === 0 ||
+        report.updatedVisiblePixels === 0 ||
+        report.changedPixels === 0 ||
+        report.idleGpuSubmissions !== 0
+      ) {
         throw new Error('the TypeGPU renderer lab did not produce changing visible pixels');
       }
       return report;
     } finally {
-      text.dispose();
+      await text.dispose();
     }
   } finally {
     engine.dispose();

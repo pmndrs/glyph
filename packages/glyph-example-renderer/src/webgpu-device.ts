@@ -80,9 +80,12 @@ interface GpuInstanceBuffer {
   readonly byteLength: number;
 }
 
+type GpuInstanceBuffers = Map<string, Map<Uint8Array, GpuInstanceBuffer>>;
+
 interface PreparedGeometry {
   readonly resource: unknown;
   readonly geometry: GpuGeometry;
+  readonly resourceIds: number[];
 }
 
 /** A concrete offscreen TypeGPU renderer whose accepted submissions produce RGBA pixels. */
@@ -98,8 +101,9 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   readonly #viewport;
   readonly #viewportGroup;
   readonly #pipeline;
-  readonly #geometries = new Map<string, GpuGeometry>();
-  readonly #instanceBuffers = new Map<string, GpuInstanceBuffer>();
+  readonly #geometries = new Map<unknown, GpuGeometry>();
+  readonly #instanceBuffers: GpuInstanceBuffers = new Map();
+  #submittedPasses = 0;
   #lost = false;
   #disposed = false;
 
@@ -116,7 +120,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     this.shader = exampleRendererShader;
     this.recording = new RecordingExampleRendererDevice(this.shader);
     this.#root = tgpu.initFromDevice({ device: this.#device });
-    this.#target = this.#root['~unstable']
+    this.#target = this.#root
       .createTexture({ size: [this.width, this.height], format: 'rgba8unorm' })
       .$overrideFlags(GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC);
     this.#targetView = this.#target.createView('render');
@@ -147,20 +151,28 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     });
   }
 
+  get submittedPasses(): number {
+    return this.#submittedPasses;
+  }
+
   prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources {
     this.#assertLive();
     const pending = this.recording.prepareResources(resources);
-    const prepared = new Map<string, PreparedGeometry>();
+    const prepared = new Map<unknown, PreparedGeometry>();
     try {
       for (const input of resources) {
         if (input.name !== this.shader.variant.geometry.resource) continue;
-        const previous = prepared.get(input.name);
+        const existing = prepared.get(input.resource);
+        if (existing !== undefined) {
+          existing.resourceIds.push(input.id);
+          continue;
+        }
         const geometry = this.#createGeometry(input.name, input.resource as PortableGeometryPayload);
-        prepared.set(input.name, { resource: input.resource, geometry });
-        if (previous !== undefined) destroyGeometry(previous.geometry);
+        prepared.set(input.resource, { resource: input.resource, geometry, resourceIds: [input.id] });
       }
     } catch (error) {
       for (const entry of prepared.values()) destroyGeometry(entry.geometry);
+      pending.discard();
       throw error;
     }
     let active = true;
@@ -169,15 +181,21 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         if (!active) return;
         active = false;
         pending.commit();
-        for (const [name, entry] of prepared) {
-          if (this.recording.resourcesByName.get(name) !== entry.resource) {
+        for (const entry of prepared.values()) {
+          if (!entry.resourceIds.some((id) => this.recording.resources.get(id) === entry.resource)) {
             destroyGeometry(entry.geometry);
             continue;
           }
-          const previous = this.#geometries.get(name);
-          this.#geometries.set(name, entry.geometry);
+          const previous = this.#geometries.get(entry.resource);
+          this.#geometries.set(entry.resource, entry.geometry);
           if (previous !== undefined) destroyGeometry(previous);
         }
+      },
+      discard: () => {
+        if (!active) return;
+        active = false;
+        pending.discard();
+        for (const entry of prepared.values()) destroyGeometry(entry.geometry);
       },
     });
   }
@@ -185,34 +203,54 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission {
     this.#assertLive();
     const pending = this.recording.prepareSubmission(drawList);
-    const buffers = this.#prepareInstanceBuffers(pending.buffersByName, pending.realizedDraws.length !== 0);
-    let command: GPUCommandBuffer;
+    if (isNoOpDrawList(drawList)) {
+      let active = true;
+      return Object.freeze({
+        commit: async () => {
+          if (!active) return false;
+          active = false;
+          this.#assertLive();
+          return pending.publishAsync(async () => {});
+        },
+        discard: () => {
+          active = false;
+          pending.discard();
+        },
+      });
+    }
+    let buffers: GpuInstanceBuffers;
     try {
-      command = this.#encodeAcceptedState(pending.realizedDraws, buffers);
+      buffers = this.#prepareInstanceBuffers(pending.realizedDraws);
     } catch (error) {
-      destroyInstanceBuffers(buffers);
+      pending.discard();
       throw error;
     }
     let active = true;
     return Object.freeze({
-      commit: () => {
-        if (!active) return;
+      commit: async () => {
+        if (!active) return false;
         active = false;
-        this.#assertLive();
-        let accepted = false;
         try {
-          accepted = pending.publish(() => this.#device.queue.submit([command]));
+          this.#assertLive();
+          const accepted = await pending.publishAsync(() => this.#submitValidated(pending.realizedDraws, buffers));
+          if (!accepted) {
+            destroyInstanceBuffers(buffers);
+            return false;
+          }
         } catch (error) {
           destroyInstanceBuffers(buffers);
           throw error;
         }
-        if (!accepted) {
-          destroyInstanceBuffers(buffers);
-          return;
-        }
         destroyInstanceBuffers(this.#instanceBuffers);
         this.#instanceBuffers.clear();
-        for (const [name, buffer] of buffers) this.#instanceBuffers.set(name, buffer);
+        for (const [name, byBytes] of buffers) this.#instanceBuffers.set(name, byBytes);
+        return true;
+      },
+      discard: () => {
+        if (!active) return;
+        active = false;
+        pending.discard();
+        destroyInstanceBuffers(buffers);
       },
     });
   }
@@ -251,7 +289,9 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     if (this.#disposed) return;
     this.#disposed = true;
     for (const geometry of this.#geometries.values()) destroyGeometry(geometry);
-    for (const entry of this.#instanceBuffers.values()) entry.buffer.destroy();
+    destroyInstanceBuffers(this.#instanceBuffers);
+    this.#target.destroy();
+    this.#viewport.buffer.destroy();
     this.#root.destroy();
   }
 
@@ -298,23 +338,28 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     return this.#root.unwrap(buffer);
   }
 
-  #prepareInstanceBuffers(source: ReadonlyMap<string, Uint8Array>, required: boolean): Map<string, GpuInstanceBuffer> {
-    const prepared = new Map<string, GpuInstanceBuffer>();
-    if (!required) return prepared;
+  #prepareInstanceBuffers(realizedDraws: readonly ExampleRealizedDraw[]): GpuInstanceBuffers {
+    const prepared: GpuInstanceBuffers = new Map();
     try {
-      for (const name of ['origin', 'size', 'color'] as const) {
-        const bytes = source.get(name);
-        if (bytes === undefined) throw new Error(`TypeGPU example renderer is missing accepted "${name}" bytes`);
-        const vectorWidth = name === 'color' ? 4 : 2;
-        const count = bytes.byteLength / (vectorWidth * 4);
-        const typed =
-          name === 'origin'
-            ? this.#root.createBuffer(originLayout.schemaForCount(count)).$usage('vertex')
-            : name === 'size'
-              ? this.#root.createBuffer(sizeLayout.schemaForCount(count)).$usage('vertex')
-              : this.#root.createBuffer(colorLayout.schemaForCount(count)).$usage('vertex');
-        typed.write(exactBuffer(bytes));
-        prepared.set(name, { buffer: this.#root.unwrap(typed), byteLength: bytes.byteLength });
+      for (const realized of realizedDraws) {
+        for (const [name, declaration] of Object.entries(this.shader.variant.buffers)) {
+          if (declaration.scalar !== 'f32') {
+            throw new TypeError(`TypeGPU example renderer does not support ${declaration.scalar} buffer "${name}"`);
+          }
+          const bytes = realized.buffers.get(name);
+          if (bytes === undefined) throw new Error(`TypeGPU example renderer is missing accepted "${name}" bytes`);
+          const byBytes = prepared.get(name) ?? new Map<Uint8Array, GpuInstanceBuffer>();
+          if (byBytes.has(bytes)) continue;
+          const scalarBytes = declaration.vectorWidth * 4;
+          if (bytes.byteLength % scalarBytes !== 0) {
+            throw new RangeError(`TypeGPU example renderer buffer "${name}" has a partial record`);
+          }
+          const count = bytes.byteLength / scalarBytes;
+          const typed = this.#createInstanceBuffer(name, declaration.vectorWidth, count);
+          typed.write(exactBuffer(bytes));
+          byBytes.set(bytes, { buffer: this.#root.unwrap(typed), byteLength: bytes.byteLength });
+          prepared.set(name, byBytes);
+        }
       }
       return prepared;
     } catch (error) {
@@ -325,7 +370,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
 
   #encodeAcceptedState(
     realizedDraws: readonly ExampleRealizedDraw[],
-    buffers: ReadonlyMap<string, GpuInstanceBuffer>,
+    buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
   ): GPUCommandBuffer {
     if (realizedDraws.length === 0) {
       const encoder = this.#root['~unstable'].createCommandEncoder();
@@ -342,16 +387,6 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
       pass.end();
       return encoder.finish();
     }
-    const geometryName = this.shader.variant.geometry.resource;
-    if (geometryName === undefined) throw new Error('TypeGPU example renderer needs supplied geometry');
-    const geometry = this.#geometries.get(geometryName);
-    if (geometry === undefined) throw new Error(`TypeGPU example renderer has no "${geometryName}" geometry`);
-    const origin = buffers.get('origin')?.buffer;
-    const size = buffers.get('size')?.buffer;
-    const color = buffers.get('color')?.buffer;
-    if (origin === undefined || size === undefined || color === undefined) {
-      throw new Error('TypeGPU example renderer has incomplete instance buffers');
-    }
     const encoder = this.#root['~unstable'].createCommandEncoder();
     const pass = encoder.beginRenderPass({
       colorAttachments: [
@@ -364,6 +399,16 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
       ],
     });
     for (const realized of realizedDraws) {
+      const geometryName = realized.geometry.resourceName;
+      if (geometryName === undefined) throw new Error('TypeGPU example renderer needs supplied geometry');
+      const geometryResource = realized.resources.get(geometryName);
+      const geometry = this.#geometries.get(geometryResource);
+      if (geometryResource === undefined || geometry === undefined) {
+        throw new Error(`TypeGPU example renderer has no realized "${geometryName}" geometry`);
+      }
+      const origin = gpuBufferForDraw(buffers, realized, 'origin');
+      const size = gpuBufferForDraw(buffers, realized, 'size');
+      const color = gpuBufferForDraw(buffers, realized, 'color');
       const drawGeometry = realized.geometry;
       this.#pipeline
         .with(this.#viewportGroup)
@@ -384,6 +429,36 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     }
     pass.end();
     return encoder.finish();
+  }
+
+  #createInstanceBuffer(name: string, vectorWidth: number, count: number) {
+    if (name === 'origin' && vectorWidth === 2)
+      return this.#root.createBuffer(originLayout.schemaForCount(count)).$usage('vertex');
+    if (name === 'size' && vectorWidth === 2)
+      return this.#root.createBuffer(sizeLayout.schemaForCount(count)).$usage('vertex');
+    if (name === 'color' && vectorWidth === 4)
+      return this.#root.createBuffer(colorLayout.schemaForCount(count)).$usage('vertex');
+    throw new TypeError(`TypeGPU example renderer has no vertex layout for "${name}" f32x${vectorWidth}`);
+  }
+
+  async #submitValidated(
+    realizedDraws: readonly ExampleRealizedDraw[],
+    buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
+  ): Promise<void> {
+    this.#device.pushErrorScope('validation');
+    let command: GPUCommandBuffer;
+    try {
+      command = this.#encodeAcceptedState(realizedDraws, buffers);
+      this.#device.queue.submit([command]);
+    } catch (error) {
+      const validationError = await this.#device.popErrorScope();
+      throw validationError ?? error;
+    }
+    const validationError = await this.#device.popErrorScope();
+    if (validationError !== null) throw validationError;
+    await this.#device.queue.onSubmittedWorkDone();
+    this.#assertLive();
+    this.#submittedPasses += 1;
   }
 
   #assertLive(): void {
@@ -449,12 +524,36 @@ function positiveDimension(value: number, name: string): number {
   return value;
 }
 
+function isNoOpDrawList(drawList: ExampleDrawList): boolean {
+  return (
+    drawList.resourceRecords.length === 0 &&
+    drawList.bufferRecords.length === 0 &&
+    drawList.primitiveRecords.length === 0 &&
+    drawList.draws.length === 0 &&
+    drawList.patches.length === 0 &&
+    drawList.retirements.length === 0
+  );
+}
+
+function gpuBufferForDraw(
+  buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
+  realized: ExampleRealizedDraw,
+  name: string,
+): GPUBuffer {
+  const bytes = realized.buffers.get(name);
+  const buffer = bytes === undefined ? undefined : buffers.get(name)?.get(bytes)?.buffer;
+  if (buffer === undefined) throw new Error(`TypeGPU example renderer has no realized "${name}" buffer for this draw`);
+  return buffer;
+}
+
 function destroyGeometry(geometry: GpuGeometry): void {
   geometry.position.destroy();
   geometry.uv.destroy();
   geometry.indices.destroy();
 }
 
-function destroyInstanceBuffers(buffers: ReadonlyMap<string, GpuInstanceBuffer>): void {
-  for (const entry of buffers.values()) entry.buffer.destroy();
+function destroyInstanceBuffers(buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>): void {
+  for (const byBytes of buffers.values()) {
+    for (const entry of byBytes.values()) entry.buffer.destroy();
+  }
 }
