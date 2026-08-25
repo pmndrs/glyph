@@ -39,6 +39,12 @@ createRoot(root).render(
       )}
       <Canvas
         camera={{ far: 100, fov: 32, near: 0.1, position: [0, 0, 6] }}
+        // Clamped on purpose. Left alone this canvas backs a 3064x3224 buffer,
+        // and the post chain allocates several full-size float targets over it —
+        // measured at 732 MB of texture. The mark is a smooth curve and the
+        // chorus is a native strike, so neither is buying much from the extra
+        // samples, and the bloom is a blur besides.
+        dpr={[1, 1.5]}
         fallback={<div className="fallback">WebGPU or WebGL2 is required to render the mark.</div>}
         // AgX rather than ACES: the mark's specular is meant to roll off like
         // film instead of clipping to a flat white.

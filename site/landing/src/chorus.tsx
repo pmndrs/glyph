@@ -1,4 +1,4 @@
-import { Text, useFont } from '@pmndrs/glyph/react';
+import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
@@ -24,8 +24,6 @@ import { live } from './controls';
  * on every load — the layout has to be stable to be judged, and a page that
  * reshuffles itself on refresh cannot be art-directed.
  */
-const STREAM_WORDS = 5_000;
-
 const SEED = 0x9e3779b9;
 
 /** mulberry32 — small, fast, and good enough for scattering words. */
@@ -42,28 +40,58 @@ function random(seed: number): () => number {
 const LTR = WORDS.filter((word) => !RTL_WORDS.has(word));
 const RTL = WORDS.filter((word) => RTL_WORDS.has(word));
 
-function stream(rtlShare: number, count: number): string {
+/**
+ * Words in short same-script runs rather than shuffled one at a time.
+ *
+ * A paragraph binds a different atlas for every font run, so scattering
+ * twenty-one faces word-by-word makes nearly every word its own draw — measured
+ * at 2429 draw calls for one paragraph. Emitting a handful of words per script
+ * before switching cuts the switches by the run length while still reading as
+ * mixed, because the eye samples a line, not a word.
+ */
+function stream(rtlShare: number, count: number, runLength: number): string {
   const next = random(SEED);
   const words: string[] = [];
   let previous = '';
-  for (let index = 0; index < count; index += 1) {
+
+  while (words.length < count) {
     const pool = next() < rtlShare ? RTL : LTR;
-    // Never twice in a row: a repeat reads as a mistake rather than a shuffle.
-    let pick = previous;
-    while (pick === previous) pick = pool[Math.floor(next() * pool.length)]!;
-    previous = pick;
-    words.push(pick);
+    const script = scriptOf(pool[Math.floor(next() * pool.length)]!);
+    const run = Math.max(1, Math.round(runLength * (0.5 + next())));
+    const family = pool.filter((word) => scriptOf(word) === script);
+
+    for (let index = 0; index < run && words.length < count; index += 1) {
+      let pick = previous;
+      // Never twice in a row: a repeat reads as a mistake rather than a shuffle.
+      while (pick === previous && family.length > 1) pick = family[Math.floor(next() * family.length)]!;
+      if (family.length === 1) pick = family[0]!;
+      previous = pick;
+      words.push(pick);
+    }
   }
   return words.join(' ');
 }
 
+/** Which face will end up drawing this word, near enough to group by. */
+function scriptOf(word: string): string {
+  const point = word.codePointAt(0)!;
+  if (point < 0x0370) return 'latin';
+  if (point < 0x0400) return 'greek';
+  if (point < 0x0590) return 'cyrillic';
+  if (point < 0x0600) return 'hebrew';
+  if (point < 0x0900) return 'arabic';
+  if (point < 0x3000) return `indic-${(point >> 7).toString(16)}`;
+  return 'cjk';
+}
+
 /** Rebuilt only when the mix changes, which is a panel action rather than a frame. */
 const cache = new Map<string, string>();
-function chorusFor(rtlShare: number, count: number): string {
-  const key = `${Math.round(rtlShare * 100) / 100}:${count}`;
+function chorusFor(rtlShare: number, count: number, runLength: number): string {
+  const share = Math.round(rtlShare * 100) / 100;
+  const key = `${share}:${count}:${runLength}`;
   let text = cache.get(key);
   if (text === undefined) {
-    text = stream(Math.round(rtlShare * 100) / 100, count);
+    text = stream(share, count, runLength);
     cache.set(key, text);
   }
   return text;
@@ -140,49 +168,56 @@ export function Chorus() {
   const fontSize = width * live.chorusSize;
 
   return (
-    <Text
-      contentBox={{
-        // Flush columns and exactly-one-space cannot both be had: justification
-        // pays for a flush edge with variable word spaces. At roughly
-        // twenty-five characters per line — well under the thirty-five a
-        // newspaper insists on — the deficit has too few spaces to hide in, so
-        // ragged is the honest default and flush is a toggle.
-        align: live.chorusJustify > 0.5 ? 'justify' : 'start',
-        // The gap is specified in screen pixels and converted, so a column
-        // never closes up to a hairline just because the field sits deeper or
-        // the viewport got narrow.
-        columns: {
-          count: columnsFor(size.width),
-          gap: Math.max(fontSize * 0.9, (live.chorusGap * width) / Math.max(size.width, 1)),
-        },
-        // Columns fill top to bottom and then move across, so the engine needs a
-        // bounded height to know where one column ends.
-        height: { mode: 'exact', size: height },
-        // Elastic both ways, with the remainder spilling into letter spacing
-        // rather than into the word gaps. Growth alone is what produces rivers:
-        // a line that can only stretch has to open every space to reach flush,
-        // where one that can also shrink usually absorbs the deficit invisibly.
-        justify: {
-          letterSpaceExpansion: live.chorusLetter,
-          maxWordSpaceRatio: live.chorusMaxSpace,
-          minWordSpaceRatio: live.chorusMinSpace,
-        },
-        // Only the final line of the whole flow is short, so leaving it ragged
-        // is correct rather than stretching it across the column.
-        lastLine: 'auto',
-        overflow: 'clip',
-        width: { mode: 'exact', size: width },
-        wrap: 'word',
-      }}
-      font={stack}
-      ref={field}
-      // Set back by value, not only by depth: the field has to read as ground
-      // for the mark, and at full strength it competes with it.
-      paint={{ color: '#8fa3c4', opacity: live.chorusDim }}
-      position={[-width / 2, height / 2, -depth]}
-      style={{ fontSize, lineHeight: live.chorusLeading }}
-    >
-      {chorusFor(live.chorusRtl, live.chorusWords)}
-    </Text>
+    // `independent` lets Rust reorder compatible draws. The default is
+    // `ordered`, which forbids it — correct for text that overlaps itself, and
+    // needlessly strict here: these words never touch each other, so nothing
+    // depends on the order they are composited in, and same-atlas runs scattered
+    // through the paragraph can collapse into one draw.
+    <TextGroup compositing="independent" renderOrder={-1}>
+      <Text
+        contentBox={{
+          // Flush columns and exactly-one-space cannot both be had: justification
+          // pays for a flush edge with variable word spaces. At roughly
+          // twenty-five characters per line — well under the thirty-five a
+          // newspaper insists on — the deficit has too few spaces to hide in, so
+          // ragged is the honest default and flush is a toggle.
+          align: live.chorusJustify > 0.5 ? 'justify' : 'start',
+          // The gap is specified in screen pixels and converted, so a column
+          // never closes up to a hairline just because the field sits deeper or
+          // the viewport got narrow.
+          columns: {
+            count: columnsFor(size.width),
+            gap: Math.max(fontSize * 0.9, (live.chorusGap * width) / Math.max(size.width, 1)),
+          },
+          // Columns fill top to bottom and then move across, so the engine needs a
+          // bounded height to know where one column ends.
+          height: { mode: 'exact', size: height },
+          // Elastic both ways, with the remainder spilling into letter spacing
+          // rather than into the word gaps. Growth alone is what produces rivers:
+          // a line that can only stretch has to open every space to reach flush,
+          // where one that can also shrink usually absorbs the deficit invisibly.
+          justify: {
+            letterSpaceExpansion: live.chorusLetter,
+            maxWordSpaceRatio: live.chorusMaxSpace,
+            minWordSpaceRatio: live.chorusMinSpace,
+          },
+          // Only the final line of the whole flow is short, so leaving it ragged
+          // is correct rather than stretching it across the column.
+          lastLine: 'auto',
+          overflow: 'clip',
+          width: { mode: 'exact', size: width },
+          wrap: 'word',
+        }}
+        font={stack}
+        ref={field}
+        // Set back by value, not only by depth: the field has to read as ground
+        // for the mark, and at full strength it competes with it.
+        paint={{ color: '#8fa3c4', opacity: live.chorusDim }}
+        position={[-width / 2, height / 2, -depth]}
+        style={{ fontSize, lineHeight: live.chorusLeading }}
+      >
+        {chorusFor(live.chorusRtl, live.chorusWords, live.chorusRun)}
+      </Text>
+    </TextGroup>
   );
 }
