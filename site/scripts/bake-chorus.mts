@@ -26,10 +26,9 @@ const SOURCE = `https://raw.githubusercontent.com/notofonts/notofonts.github.io/
 
 /**
  * Fallback order. Noto Sans leads because it carries Latin, Greek and Cyrillic;
- * the scripted faces follow; CJK is last because it is the only face large
- * enough that we would rather nothing else resolved to it.
+ * the scripted faces follow.
  */
-const FAMILIES = [
+const NOTO = [
   'NotoSans',
   'NotoSansArabic',
   'NotoSansHebrew',
@@ -52,14 +51,36 @@ const FAMILIES = [
   'NotoSansEthiopic',
 ] as const;
 
-/** Outside the Noto site repository, and far too large to fetch on demand. */
-const CJK = { file: resolve(fixtures, 'noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf'), name: 'cjk' };
+/**
+ * CJK, from elsewhere and deliberately not Noto.
+ *
+ * Noto Sans CJK ships only CFF outlines, and the baker rasterises a CFF face to
+ * nothing — no error, no warning, just a GLB with shaping data and an empty
+ * raster, so the words lay out at full width and draw as holes. These three are
+ * static TrueType, which rasterises correctly. Noto Sans JP/SC/KR are TrueType
+ * but variable-only, which the baker rejects outright.
+ */
+const CJK = [
+  { file: 'MPLUS1p-Regular.ttf', name: 'japanese', path: 'ofl/mplus1p/MPLUS1p-Regular.ttf' },
+  { file: 'NanumGothic-Regular.ttf', name: 'korean', path: 'ofl/nanumgothic/NanumGothic-Regular.ttf' },
+  {
+    file: 'ZCOOLXiaoWei-Regular.ttf',
+    name: 'chinese',
+    path: 'ofl/zcoolxiaowei/ZCOOLXiaoWei-Regular.ttf',
+  },
+] as const;
 
-/** The strike the chorus renders at. */
-const STRIKE = 32;
+const GOOGLE_FONTS = 'https://raw.githubusercontent.com/google/fonts/main';
 
-/** The space is in no word, but every line break needs one. */
-const ALWAYS = [0x20];
+/**
+ * Not in any word, but both are set.
+ *
+ * U+0020 because every line break needs one, and U+00B7 MIDDLE DOT because the
+ * stream separates entries with it — without a mark between them a run of
+ * unfamiliar scripts reads as one continuous string rather than as a list of
+ * words in different languages.
+ */
+const ALWAYS = [0x20, 0x00b7];
 
 const check = process.argv.includes('--check');
 
@@ -67,19 +88,31 @@ await mkdir(noto, { recursive: true });
 const present = new Set(await readdir(noto).catch(() => []));
 
 const faces: { file: string; name: string }[] = [];
-for (const family of FAMILIES) {
-  const local = `${family}-Regular.ttf`;
-  const file = resolve(noto, local);
-  if (!present.has(local)) {
-    const path = `fonts/${family}/hinted/ttf/${local}`;
-    const response = await fetch(`${SOURCE}/${path}`);
-    if (!response.ok) throw new Error(`${family}: ${response.status} fetching ${path}`);
-    await writeFile(file, Buffer.from(await response.arrayBuffer()));
-    console.log(`fetched ${local}`);
-  }
-  faces.push({ file, name: family.replace(/^NotoSans/, '').toLowerCase() || 'latin' });
+
+async function ensure(file: string, url: string): Promise<string> {
+  const target = resolve(noto, file);
+  if (present.has(file)) return target;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${file}: ${response.status} fetching ${url}`);
+  await writeFile(target, Buffer.from(await response.arrayBuffer()));
+  console.log(`fetched ${file}`);
+  return target;
 }
-faces.push(CJK);
+
+for (const family of NOTO) {
+  const file = `${family}-Regular.ttf`;
+  faces.push({
+    file: await ensure(file, `${SOURCE}/fonts/${family}/hinted/ttf/${file}`),
+    name: family.replace(/^NotoSans/, '').toLowerCase() || 'latin',
+  });
+}
+
+for (const face of CJK) {
+  faces.push({
+    file: await ensure(face.file, `${GOOGLE_FONTS}/${face.path}`),
+    name: face.name,
+  });
+}
 
 const wanted = new Set<number>(ALWAYS);
 for (const word of WORDS) for (const character of word) wanted.add(character.codePointAt(0)!);
@@ -110,13 +143,12 @@ for (const face of faces) {
       output,
       '--unicodes',
       owned.map((point) => `U+${point.toString(16).toUpperCase().padStart(4, '0')}`).join(','),
-      // Bitmap, not MSDF. The chorus is small body copy at a fixed size, which
-      // is exactly what a native strike is for — and `--msdf` bakes a
-      // full-size atlas per face regardless of how few glyphs it carries, so
-      // twenty-one faces cost hundreds of megabytes of texture for a few
-      // hundred glyphs.
-      '--bitmap',
-      String(STRIKE),
+      // Slug: exact outlines rather than an atlas. MSDF bakes a full-size
+      // atlas per face regardless of glyph count — twenty-two of those came to
+      // 448 MB of texture for a few hundred glyphs — while Slug carries curve
+      // data, so the cost scales with the glyphs actually baked instead of with
+      // the number of faces.
+      '--slug',
       ...(check ? ['--check'] : []),
     ],
     { cwd: site },
@@ -145,7 +177,6 @@ await writeFile(
         points: points.map((point) => `U+${point.toString(16).toUpperCase().padStart(4, '0')}`),
       })),
       generated: 'site/scripts/bake-chorus.mts',
-      strike: STRIKE,
       totals: { faces: baked.length, points: [...claimed].length, words: WORDS.length },
     },
     null,
