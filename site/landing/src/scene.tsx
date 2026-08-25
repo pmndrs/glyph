@@ -13,7 +13,7 @@ import { Chorus } from './chorus';
 import { live } from './controls';
 import { publishMarkBottom } from './anchor';
 import { Effects } from './effects';
-import { drift } from './drift';
+import { shake } from './drift';
 import { trackKey } from './lens';
 
 const FONT = { input: { baked: fontUrl }, raster: { technique: slug } } as const;
@@ -42,6 +42,14 @@ export function Scene() {
   const font = useFont(FONT);
   const viewport = useThree((state) => state.viewport);
   const camera = useThree((state) => state.camera);
+
+  // Filtered camera state. The noise is sampled as a target and the camera is
+  // eased toward it rather than snapped onto it: stacked octaves are continuous
+  // but their derivative is not, and reading a target straight onto the
+  // transform every frame makes the motion frame-rate dependent besides. A
+  // one-pole filter removes both — and the lag it introduces is the point,
+  // because a real camera has mass.
+  const eased = useRef({ aimX: 0, aimY: 0, x: 0, y: 0, z: 6 });
 
   // Only `envMapIntensity` is a plain material field rather than a node, so it
   // is the one dial that costs a rebuild; everything else rides a uniform and
@@ -132,19 +140,32 @@ export function Scene() {
     // Parallax by orbiting, not by sliding. A lateral camera move shifts the
     // *nearer* object further across the frame, so translating alone would swing
     // the mark and leave the field behind it almost still — the wrong way round.
-    // Keeping the aim on the origin puts the mark on the pivot: it barely moves,
-    // while the chorus several units behind it travels.
-    const drifting = elapsed.current * live.driftSpeed;
-    camera.position.set(
-      drift(drifting, 0) * live.driftAmount,
-      drift(drifting, 101) * live.driftAmount * 0.6,
-      6 + drift(drifting, 211) * live.driftAmount * 0.5,
-    );
-    camera.lookAt(0, 0, 0);
+    // Keeping the aim near the origin puts the mark on the pivot: it barely
+    // moves, while the chorus several units behind it travels.
+    //
+    // The aim is jittered separately and by a fraction of the body movement.
+    // Translation alone reads as a dolly however small it is; it is the tiny
+    // rotation riding on top that makes it read as a camera being held rather
+    // than a camera being moved.
+    const t = elapsed.current * live.shakeSpeed;
+    // Frame-rate independent: the coefficient comes from the elapsed time and
+    // the time constant, so the same damping holds at 30fps and at 120.
+    const alpha = 1 - Math.exp(-delta / Math.max(live.shakeDamping, 1e-3));
+    const ease = (from: number, to: number) => from + (to - from) * alpha;
 
-    const t = elapsed.current * live.keySpeed;
-    const keyX = Math.cos(t) * live.keyRadius;
-    const keyY = Math.sin(t * 0.7) * live.keyRadius * live.keyElevation;
+    const eye = eased.current;
+    eye.x = ease(eye.x, shake(t, 0) * live.shakeAmount);
+    eye.y = ease(eye.y, shake(t, 101) * live.shakeAmount * 0.7);
+    eye.z = ease(eye.z, 6 + shake(t, 211) * live.shakeAmount * 0.25);
+    eye.aimX = ease(eye.aimX, shake(t * 1.6, 307) * live.shakeAim);
+    eye.aimY = ease(eye.aimY, shake(t * 1.6, 401) * live.shakeAim * 0.7);
+
+    camera.position.set(eye.x, eye.y, eye.z);
+    camera.lookAt(eye.aimX, eye.aimY, 0);
+
+    const keyT = elapsed.current * live.keySpeed;
+    const keyX = Math.cos(keyT) * live.keyRadius;
+    const keyY = Math.sin(keyT * 0.7) * live.keyRadius * live.keyElevation;
     key.current?.position.set(keyX, keyY, 4);
     trackKey(keyX, keyY, viewport.width, viewport.height, live.aberrationPeak, live.aberrationFalloff);
   });
