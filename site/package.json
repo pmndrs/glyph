@@ -29,6 +29,7 @@
     "@types/react-dom": "19.2.3",
     "@types/three": "0.185.4",
     "@vitejs/plugin-react": "6.0.1",
+    "leva": "^0.10.1",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
     "typescript": "7.0.2",
