@@ -18,6 +18,12 @@ function Exposure() {
   useFrame(() => {
     renderer.toneMappingExposure = live.exposure;
   });
+
+  // Reachable from the console in development so draw calls and frame cost can
+  // be measured rather than guessed at.
+  if (import.meta.env.DEV) {
+    (globalThis as unknown as { __renderer: unknown }).__renderer = renderer;
+  }
   return null;
 }
 
