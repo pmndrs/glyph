@@ -22,6 +22,7 @@
 - [External gpucat integration fitness plan](gpucat-integration.md) — public-surface mapping, external-package boundary, ordering/lifecycle plan, and remaining shader-reuse proof for gpucat.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.
+- [Documentation site and landing page](docs-site.md) — the `site/` surface: a pmndrs/docs MDX build under `/docs`, a WebGPU landing hero rendering the wordmark through the library, and the committed Milestone 12 follow-on.
 
 ## Data and extension contracts
 

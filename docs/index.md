@@ -9,6 +9,7 @@ okf_version: '0.2'
 - [Project README](../README.md) — product overview, API preview, implementation order, and local setup.
 - [Project brief](planning/project-brief.md) — product outcome, scope, non-goals, and success criteria.
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
+- [Documentation site and landing page](planning/docs-site.md) — the `site/` workspace surface, its two composed static outputs, and the publication decision it defers.
 - [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
 - [Core text API](planning/core-api.md) — authoritative application and integration API for fonts, measurement, engines, backends, render planners, and renderer targets.
