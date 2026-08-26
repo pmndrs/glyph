@@ -6,7 +6,7 @@ import { decorationSchema, threeSystemBuffers } from './render-policy.js';
 import { bitmapSchema } from '../raster/bitmap-technique.js';
 import { msdfSchema } from '../raster/msdf.js';
 import { slugSchema } from '../raster/slug-technique.js';
-import type { AnyTechniqueSchema, PolicyBufferDeclaration, PolicyBufferDeclarations } from '../core.js';
+import type { AnyTechniqueSchema, PolicyBufferDeclaration, PolicyBufferDeclarations, PolicyBufferId } from '../core.js';
 import {
   TextEngineRenderPlanView,
   type PortableGeometryPayload,
@@ -29,11 +29,16 @@ type ScalarArray = Float32Array | Uint32Array | Uint16Array;
 const MAX_RESOURCE_KIND = 32;
 const MAX_POLICY_BUFFER_VECTOR_WIDTH = 4;
 
+declare const threePolicyAttributeNameBrand: unique symbol;
+type ThreePolicyAttributeName = string & { readonly [threePolicyAttributeNameBrand]: true };
+type ThreeBufferBindingId = PolicyBufferId | typeof textShaperAbi.engine.internalBufferBindings.order;
+
 interface RetainedBuffer {
   readonly id: number;
   readonly generation: number;
   readonly programId: number;
-  readonly policyBufferId: number;
+  readonly policyBufferId: ThreeBufferBindingId;
+  readonly threeAttributeName: ThreePolicyAttributeName;
   readonly scalarType: number;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
@@ -614,11 +619,12 @@ export class ThreeTextRenderPlanExecutor {
       const capacityRecords = plan.u32(record + layout.capacityRecords);
       const byteLength = plan.u32(record + layout.byteLength);
       const programId = plan.u32(record + layout.programId);
-      const policyBufferId = plan.u16(record + layout.policyBufferId);
+      const wirePolicyBufferId = plan.u16(record + layout.policyBufferId);
       const existing = buffers.get(id);
-      if (id === 0 || generation === 0 || programId === 0 || policyBufferId === 0) {
+      if (id === 0 || generation === 0 || programId === 0 || wirePolicyBufferId === 0) {
         throw new Error('text-engine buffers require nonzero identities and generations');
       }
+      const policyBufferId = this.#coordinator.resolveBufferBindingId(programId, wirePolicyBufferId);
       if (existing !== undefined && generation < existing.generation) {
         throw new Error(`buffer ${id} rejects stale generation ${generation}`);
       }
@@ -655,6 +661,7 @@ export class ThreeTextRenderPlanExecutor {
         generation,
         programId,
         policyBufferId,
+        threeAttributeName: threePolicyAttributeName(policyBufferId),
         scalarType,
         vectorWidth,
         capacityRecords,
@@ -822,7 +829,7 @@ export class ThreeTextRenderPlanExecutor {
 
         const drawBufferStart = plan.u32(draw + drawLayout.bufferStart);
         const drawBufferCount = plan.u32(draw + drawLayout.bufferCount);
-        const byPolicyId = new Map<number, RetainedBuffer>();
+        const byPolicyId = new Map<ThreeBufferBindingId, RetainedBuffer>();
         for (let bufferIndex = drawBufferStart; bufferIndex < drawBufferStart + drawBufferCount; bufferIndex += 1) {
           const record = plan.record(buffers, bufferIndex);
           const buffer = this.#buffer(plan.u32(record + bufferLayout.id), plan.u32(record + bufferLayout.generation));
@@ -956,7 +963,7 @@ export class ThreeTextRenderPlanExecutor {
 
         const geometry = realizeGeometry(drawGeometry, recordCount);
         for (const buffer of byPolicyId.values()) {
-          geometry.setAttribute(`_pmndrsGlyph_${buffer.policyBufferId}`, buffer.attribute);
+          geometry.setAttribute(buffer.threeAttributeName, buffer.attribute);
         }
 
         if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
@@ -1024,7 +1031,10 @@ export class ThreeTextRenderPlanExecutor {
     }
   }
 
-  #transformRealization(buffers: ReadonlyMap<number, RetainedBuffer>, transformId: number): TransformRealization {
+  #transformRealization(
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
+    transformId: number,
+  ): TransformRealization {
     if (transformId !== 0) return { kind: 'direct', transformId };
     const indices = buffers.get(threeSystemBuffers.transformIndex.id);
     if (indices === undefined || !(indices.array instanceof Uint32Array)) {
@@ -1056,7 +1066,7 @@ export class ThreeTextRenderPlanExecutor {
 
   #bitmapMaterial(
     resource: RetainedResource,
-    buffers: ReadonlyMap<number, RetainedBuffer>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
     materialId: number,
     transform: TransformRealization,
     addressing: RecordAddressing,
@@ -1114,7 +1124,7 @@ export class ThreeTextRenderPlanExecutor {
   }
 
   #decorationMaterial(
-    buffers: ReadonlyMap<number, RetainedBuffer>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
     transform: TransformRealization,
     addressing: RecordAddressing,
   ): THREE.NodeMaterial {
@@ -1162,7 +1172,7 @@ export class ThreeTextRenderPlanExecutor {
 
   #material(
     resource: RetainedResource,
-    buffers: ReadonlyMap<number, RetainedBuffer>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
     materialId: number,
     transform: TransformRealization,
     addressing: RecordAddressing,
@@ -1188,7 +1198,7 @@ export class ThreeTextRenderPlanExecutor {
   #planProgramMaterial(
     resource: RetainedResource,
     resolved: ThreeTextEngineResource & { readonly program: NonNullable<ThreeTextEngineResource['program']> },
-    buffers: ReadonlyMap<number, RetainedBuffer>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
     materialId: number,
     transform: TransformRealization,
     addressing: RecordAddressing,
@@ -1246,7 +1256,7 @@ export class ThreeTextRenderPlanExecutor {
 
   #msdfMaterial(
     resource: RetainedResource,
-    buffers: ReadonlyMap<number, RetainedBuffer>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
     materialId: number,
     transform: TransformRealization,
     addressing: RecordAddressing,
@@ -1349,7 +1359,7 @@ export class ThreeTextRenderPlanExecutor {
 
   #slugMaterial(
     resource: RetainedResource,
-    buffers: ReadonlyMap<number, RetainedBuffer>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
     materialId: number,
     transformRealization: TransformRealization,
     addressing: RecordAddressing,
@@ -1709,7 +1719,7 @@ function glyphOriginBuffer(resource: ThreeTextEngineResource): PolicyBufferDecla
 /** Resolve a draw's retained buffers by the schema's names instead of remembered ids. */
 function schemaDrawBuffers<Buffers extends PolicyBufferDeclarations>(
   schema: { readonly buffers: Buffers },
-  buffers: ReadonlyMap<number, RetainedBuffer>,
+  buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
   label: string,
 ): { readonly [Name in keyof Buffers]: RetainedBuffer } {
   const resolved: Record<string, RetainedBuffer> = {};
@@ -1722,11 +1732,15 @@ function schemaDrawBuffers<Buffers extends PolicyBufferDeclarations>(
   return resolved as { readonly [Name in keyof Buffers]: RetainedBuffer };
 }
 
+function threePolicyAttributeName(id: ThreeBufferBindingId): ThreePolicyAttributeName {
+  return `_pmndrsGlyph_${id}` as ThreePolicyAttributeName;
+}
+
 function drawRealizationKey(
   programId: number,
   resource: RetainedResource | undefined,
   materialId: number,
-  buffers: ReadonlyMap<number, RetainedBuffer>,
+  buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
   clipId: number,
   depthKey: number,
   transform: TransformRealization,
@@ -1749,7 +1763,7 @@ function recordAddressing(
   plan: TextEngineRenderPlanView,
   draw: number,
   primitive: number,
-  buffers: ReadonlyMap<number, RetainedBuffer>,
+  buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
 ): RecordAddressing {
   const drawLayout = textShaperAbi.layouts.engineDraw;
   const primitiveLayout = textShaperAbi.layouts.enginePrimitive;

@@ -1,5 +1,5 @@
 import type { LoadedFont, LoadedFontRequest, ParagraphLayout } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -17,6 +17,7 @@ import {
   type RichTextCompanionFonts,
 } from '../../../workloads/rich-text/scene';
 import type { BenchmarkTarget } from '../../contracts';
+import { requiredPolicyAttribute } from '../three-policy-buffer-evidence';
 
 type BitmapTechnique = typeof bitmap;
 
@@ -358,10 +359,10 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
   text.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || !(child.geometry instanceof THREE.InstancedBufferGeometry)) return;
     if (child.userData.pmndrsGlyphPrimitiveKind === 'decoration') {
-      const rect = child.geometry.getAttribute('_pmndrsGlyph_1');
-      const packed = child.geometry.getAttribute('_pmndrsGlyph_2');
+      const rect = requiredPolicyAttribute(child.geometry, 'f32', 4, 'decoration rect evidence');
+      const packed = requiredPolicyAttribute(child.geometry, 'u32', 2, 'decoration packed evidence');
       if (!(rect?.array instanceof Float32Array) || !(packed?.array instanceof Uint32Array)) {
-        throw new Error('decoration draw is missing its rect lane 1 or packed color/flags lane 2');
+        throw new Error('decoration draw is missing its rect or packed color/flags buffer');
       }
       const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
       for (let instance = 0; instance < child.geometry.instanceCount; instance += 1) {
@@ -375,8 +376,13 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
       return;
     }
     drawCount += 1;
-    const attribute = child.geometry.getAttribute('_pmndrsGlyph_5');
-    if (attribute === undefined) throw new Error('Bitmap draw is missing command-buffer color lane 5');
+    const color = bitmapSchema.buffers.color;
+    const attribute = requiredPolicyAttribute(
+      child.geometry,
+      color.scalar,
+      color.lanes.length,
+      'Bitmap color evidence',
+    );
     const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
     const count = child.geometry.instanceCount;
     renderedGlyphCount += count;

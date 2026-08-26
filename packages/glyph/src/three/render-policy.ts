@@ -12,6 +12,7 @@ import {
   type PolicyBuffer,
   type PolicyBufferId,
   type PolicyCapabilitySet,
+  type PolicyDescriptor,
   type PolicyProgram,
   type PolicyTransformMode,
   type RenderProgramId,
@@ -97,6 +98,18 @@ export function threeRenderPolicyBytes(
   additionalPrograms: readonly PolicyProgram[] = [],
   allocationMode: ThreeAllocationMode = 'ordered',
 ): Uint8Array {
+  return compileRenderPolicy(
+    threeRenderPolicyDescriptor(identityRegistry, transformMode, additionalPrograms, allocationMode),
+  );
+}
+
+/** @internal Assemble the descriptor retained by the Three adapter alongside its compiled wire policy. */
+export function threeRenderPolicyDescriptor(
+  identityRegistry: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
+  transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
+  additionalPrograms: readonly PolicyProgram[] = [],
+  allocationMode: ThreeAllocationMode = 'ordered',
+): PolicyDescriptor {
   if (!(identityRegistry instanceof RenderWireIdentityRegistry)) {
     throw new TypeError('Three render policy identityRegistry must be a RenderWireIdentityRegistry');
   }
@@ -144,7 +157,7 @@ export function threeRenderPolicyBytes(
     decorationProgram(DECORATION_TECHNIQUE_ID, DECORATION_PROGRAM_ID, modes.bitmap, allocationMode),
     ...additionalPrograms,
   ];
-  return compileRenderPolicy({ capabilitySets: [capabilitySet], programs });
+  return { capabilitySets: [capabilitySet], programs };
 }
 
 export function threePolicyCapabilitySet(): PolicyCapabilitySet {

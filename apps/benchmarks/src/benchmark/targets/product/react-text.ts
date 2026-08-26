@@ -3,7 +3,7 @@ import React, { createRef, StrictMode } from 'react';
 import * as THREE from 'three/webgpu';
 
 import type { LoadedFont, ParagraphLayout } from '@pmndrs/glyph';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { Text, TextSpan, useFont } from '@pmndrs/glyph/react';
 import type { LoadedFontRequest, ParagraphContentBox, Text as CoreText } from '@pmndrs/glyph/three';
 
@@ -11,6 +11,7 @@ import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-l
 import bitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
 import { hashParagraphLayout } from '../../paragraph-layout-digest';
+import { requiredPolicyAttribute } from '../three-policy-buffer-evidence';
 import { createConfiguredRenderer, disposeConfiguredRenderer } from '../../../renderer/webgpu-renderer';
 
 type BitmapTechnique = typeof bitmap;
@@ -352,9 +353,8 @@ function countUniquePaints(object: BitmapTextObject): number {
   const paints = new Set<string>();
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
-    // Bitmap policy buffer 5 is the command buffer's packed RGBA instance lane.
-    const colors = child.geometry.getAttribute('_pmndrsGlyph_5');
-    if (colors === undefined) return;
+    const color = bitmapSchema.buffers.color;
+    const colors = requiredPolicyAttribute(child.geometry, color.scalar, color.lanes.length, 'Bitmap color evidence');
     // One physical batch backs every run of a paragraph, so a draw reads its own window of the shared paint buffer.
     const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
     const instanceCount =

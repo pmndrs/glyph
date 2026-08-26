@@ -45,7 +45,7 @@ tree-shaking boundaries; and states the proof obligations that keep the contract
 
 ## The sin, measured
 
-Where "Bitmap" lives today — six sites, four of which repeat schema knowledge the others cannot see:
+Where "Bitmap" lived before this work — six sites, four of which repeated schema knowledge the others could not see:
 
 ```mermaid
 flowchart TB
@@ -61,7 +61,7 @@ flowchart TB
   subgraph three ["@pmndrs/glyph/three"]
     policy["render-policy.ts\nBITMAP_COLOR = 5\n(ids = declared here)"]
     exec["engine-plan-target.ts\nbyPolicyId.get(1)\n(ids = known again, by hand)"]
-    material["material wiring\n_pmndrsGlyph_5 → color node\n(ids = known a third time)"]
+    material["material wiring\nprivate Three key → color node\n(ids = known a third time)"]
   end
   subgraph bakers ["@pmndrs/glyph/bakers/bitmap"]
     baker["baker + validator\n(artifact schema)"]
