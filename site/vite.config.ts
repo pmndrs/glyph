@@ -1,12 +1,18 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
-/** The shaper Wasm wants cross-origin isolation, exactly as the r3f example serves it. */
-const CROSS_ORIGIN_ISOLATION_HEADERS = {
-  'Cross-Origin-Embedder-Policy': 'require-corp',
-  'Cross-Origin-Opener-Policy': 'same-origin',
-} as const;
-
+// No cross-origin isolation headers.
+//
+// Isolation buys exactly one thing, SharedArrayBuffer, and neither shaper nor
+// baker Wasm declares a shared memory — measured, not assumed. Requiring it
+// costs real reach: COEP require-corp rejects every cross-origin subresource
+// that does not carry CORP, which is a CORS-shaped failure for anyone
+// embedding this page or serving its assets from elsewhere.
+//
+// It also cannot rescue a phone on the LAN. WebGPU is gated on a secure
+// context, which is a property of the origin rather than of any response
+// header, so http://<lan-ip> has no navigator.gpu no matter what is sent.
+// That needs HTTPS or a tunnel.
 export default defineConfig({
   resolve: {
     // drei and the app must share one React and one three, or hooks resolve
@@ -19,10 +25,8 @@ export default defineConfig({
   },
   build: { emptyOutDir: false, outDir: '../dist', target: 'es2022' },
   plugins: [react()],
-  preview: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
   root: 'landing',
   server: {
-    headers: CROSS_ORIGIN_ISOLATION_HEADERS,
     // The docs build writes thousands of files into both of these, and the npx
     // cache has to live inside the workspace so Next resolves its root here
     // rather than in $HOME. Watching either turns a docs build into a reload
