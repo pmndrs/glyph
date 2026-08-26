@@ -38,7 +38,6 @@ export interface LookValues {
   bloomStrength: number;
   bloomThreshold: number;
   curvature: number;
-  descent: number;
   emissive: number;
   envIntensity: number;
   envResolution: number;
@@ -86,7 +85,6 @@ export const LOOK: Readonly<LookValues> = Object.freeze({
   chorusSize: 0.0182,
   chorusWords: 1600,
   curvature: 0.87,
-  descent: 0.42,
   emissive: 0.008,
   envIntensity: 0.3,
   envResolution: 256,
@@ -164,7 +162,6 @@ const RANGES: Record<keyof LookValues, readonly [number, number, number]> = {
   bloomStrength: [0, 2, 0.01],
   bloomThreshold: [0, 1.5, 0.005],
   curvature: [0, 2, 0.01],
-  descent: [0, 1.5, 0.005],
   emissive: [0, 0.3, 0.001],
   envIntensity: [0, 4, 0.01],
   envResolution: [64, 1024, 64],
@@ -191,7 +188,7 @@ const RANGES: Record<keyof LookValues, readonly [number, number, number]> = {
 };
 
 const GROUPS = {
-  Mark: ['measure', 'descent', 'markGap', 'curvature', 'metalness', 'roughness', 'emissive'],
+  Mark: ['measure', 'markGap', 'curvature', 'metalness', 'roughness', 'emissive'],
   Chorus: [
     'chorusJustify',
     'chorusSize',
