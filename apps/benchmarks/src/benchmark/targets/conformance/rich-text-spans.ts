@@ -1,4 +1,5 @@
 import type { LoadedFont, LoadedFontRequest, ParagraphLayout } from '@pmndrs/glyph';
+import { id as hashId } from '@pmndrs/glyph/core';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -17,7 +18,7 @@ import {
   type RichTextCompanionFonts,
 } from '../../../workloads/rich-text/scene';
 import type { BenchmarkTarget } from '../../contracts';
-import { requiredPolicyAttribute } from '../three-policy-buffer-evidence';
+import { policyAttributeName, requiredPolicyAttribute } from '../three-policy-buffer-evidence';
 
 type BitmapTechnique = typeof bitmap;
 
@@ -31,6 +32,9 @@ type BitmapTechnique = typeof bitmap;
 const CONTENT_WIDTH = 700;
 const BODY_FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
+const BITMAP_COLOR_ATTRIBUTE = policyAttributeName(bitmapSchema.buffers.color.id);
+const DECORATION_RECT_ATTRIBUTE = policyAttributeName(hashId('buffer', 'glyph-three/decoration/rect'));
+const DECORATION_PACKED_ATTRIBUTE = policyAttributeName(hashId('buffer', 'glyph-three/decoration/packed'));
 // Decoration gather convention (D-248): buffer 2 packs [color, flags | style << 8] per instance. The bit values are
 // the shaper ABI's `engine.decorationFlags` / `engine.decorationStyles`, pinned here because a silent renumbering
 // must fail this lane rather than shift what the probe counts.
@@ -359,8 +363,8 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
   text.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || !(child.geometry instanceof THREE.InstancedBufferGeometry)) return;
     if (child.userData.pmndrsGlyphPrimitiveKind === 'decoration') {
-      const rect = requiredPolicyAttribute(child.geometry, 'f32', 4, 'decoration rect evidence');
-      const packed = requiredPolicyAttribute(child.geometry, 'u32', 2, 'decoration packed evidence');
+      const rect = requiredPolicyAttribute(child.geometry, DECORATION_RECT_ATTRIBUTE, 'decoration rect evidence');
+      const packed = requiredPolicyAttribute(child.geometry, DECORATION_PACKED_ATTRIBUTE, 'decoration packed evidence');
       if (!(rect?.array instanceof Float32Array) || !(packed?.array instanceof Uint32Array)) {
         throw new Error('decoration draw is missing its rect or packed color/flags buffer');
       }
@@ -376,13 +380,7 @@ function readEvidence(text: THREE.Object3D, layout: ParagraphLayout): CaseEviden
       return;
     }
     drawCount += 1;
-    const color = bitmapSchema.buffers.color;
-    const attribute = requiredPolicyAttribute(
-      child.geometry,
-      color.scalar,
-      color.lanes.length,
-      'Bitmap color evidence',
-    );
+    const attribute = requiredPolicyAttribute(child.geometry, BITMAP_COLOR_ATTRIBUTE, 'Bitmap color evidence');
     const start = (child.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
     const count = child.geometry.instanceCount;
     renderedGlyphCount += count;

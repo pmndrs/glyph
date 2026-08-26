@@ -52,6 +52,7 @@ class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
   readonly oracle = new RecordingExampleRendererDevice();
   readonly shader = this.primary.shader;
   readonly #oracleGenerations = new Set<number>();
+  failNextResourceCommit = false;
   failNextSubmission = false;
   discardedResourceBatches = 0;
 
@@ -75,7 +76,11 @@ class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
     const primary = this.primary.prepareResources(resources);
     const oracle = this.oracle.prepareResources(resources);
     return Object.freeze({
-      commit() {
+      commit: () => {
+        if (this.failNextResourceCommit) {
+          this.failNextResourceCommit = false;
+          throw new Error('injected resource commit failure');
+        }
         oracle.commit();
         primary.commit();
       },
@@ -152,6 +157,11 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       const invalidFont = Object.create(font) as typeof font;
       Object.defineProperty(invalidFont, 'font', { value: { ...font.font, handle: 0 } });
       expect(() => engine.registerFont(invalidFont)).toThrow();
+      expect(device.resources.size).toBe(0);
+
+      device.failNextResourceCommit = true;
+      expect(() => engine.registerFont(font)).toThrow('injected resource commit failure');
+      expect(device.discardedResourceBatches).toBe(1);
       expect(device.resources.size).toBe(0);
 
       const binding = engine.registerFont(font);
@@ -300,7 +310,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       await replacement.dispose();
       engine.dispose();
       expect(() => engine.registerFont(font)).toThrow('disposed');
-      expect(device.discardedResourceBatches).toBe(0);
+      expect(device.discardedResourceBatches).toBe(1);
     } finally {
       engine.dispose();
       font.dispose();
