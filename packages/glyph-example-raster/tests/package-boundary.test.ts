@@ -6,33 +6,42 @@ import { describe, expect, test } from 'vitest';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 
-async function sourceFiles(): Promise<readonly (readonly [string, string])[]> {
-  const entries = await readdir(join(packageRoot, 'src'), { recursive: true });
-  return Promise.all(
-    entries
-      .filter((entry) => entry.endsWith('.ts'))
-      .map(async (entry) => [entry, await readFile(join(packageRoot, 'src', entry), 'utf8')] as const),
-  );
+async function packageSources(): Promise<readonly (readonly [string, string])[]> {
+  const directories = ['src', 'tests', 'scripts'];
+  const files: string[] = [];
+  for (const directory of directories) {
+    const entries = await readdir(join(packageRoot, directory), { recursive: true });
+    files.push(...entries.filter((entry) => /\.(?:mjs|mts|ts)$/.test(entry)).map((entry) => join(directory, entry)));
+  }
+  return Promise.all(files.map(async (file) => [file, await readFile(join(packageRoot, file), 'utf8')] as const));
 }
 
 describe('package boundary', () => {
   test('keeps the portable source tree renderer-free', async () => {
-    for (const [file, source] of await sourceFiles()) {
+    for (const [file, source] of await packageSources()) {
+      if (!file.startsWith('src/')) continue;
       expect(source).not.toMatch(/@pmndrs\/glyph\/internal|@pmndrs\/glyph\/raster\/(?:bitmap|msdf|slug)/);
       expect(source).not.toMatch(/@pmndrs\/glyph\/bakers\/(?:bitmap|msdf|slug)/);
-      if (file === 'tsl.ts' || file === 'typegpu.ts') continue;
+      if (file === 'src/tsl.ts' || file === 'src/typegpu.ts') continue;
       expect(source).not.toMatch(/from ['"]three(?:\/|['"])/);
       expect(source).not.toMatch(/from ['"]typegpu(?:\/|['"])/);
     }
   });
 
+  test('imports nothing from the engine package by relative path either', async () => {
+    for (const [file, source] of await packageSources()) {
+      expect(source, file).not.toMatch(/from ['"]\.\.\/\.\.\/glyph\//);
+      expect(source, file).not.toMatch(/from ['"]\.\.\/\.\.\/\.\.\/packages\/glyph\//);
+    }
+  });
+
   test('keeps shader variants explicit and registration-free', async () => {
-    const sources = await sourceFiles();
-    const tsl = sources.find(([file]) => file === 'tsl.ts')?.[1];
+    const sources = await packageSources();
+    const tsl = sources.find(([file]) => file === 'src/tsl.ts')?.[1];
     expect(tsl).toBeDefined();
     expect(tsl).not.toContain('registerThreeRasterPlanProgram');
     expect(tsl).not.toContain('@pmndrs/glyph/three');
-    const typegpu = sources.find(([file]) => file === 'typegpu.ts')?.[1];
+    const typegpu = sources.find(([file]) => file === 'src/typegpu.ts')?.[1];
     expect(typegpu).toBeDefined();
     expect(typegpu).not.toMatch(/from ['"]three(?:\/|['"])/);
   });
