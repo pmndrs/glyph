@@ -19,6 +19,7 @@ export interface RenderTechniqueTypeGpuLabReport {
   readonly updatedVisiblePixels: number;
   readonly changedPixels: number;
   readonly idleGpuSubmissions: number;
+  readonly clearGpuSubmissions: number;
 }
 
 /** Runs the external-renderer contract through a real WebGPU device and reads its RGBA target back. */
@@ -49,6 +50,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       width: 768,
       height: 192,
     });
+    let textDisposed = false;
     try {
       const initial = await text.render();
       const initialPixels = await renderer.readPixels();
@@ -56,14 +58,20 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       const updated = await text.render();
       const updatedPixels = await renderer.readPixels();
       const submissionsBeforeIdle = renderer.submittedPasses;
+      if (submissionsBeforeIdle !== 2) throw new Error('the TypeGPU renderer lab expected two visible GPU submissions');
       await text.render();
+      const idleGpuSubmissions = renderer.submittedPasses - submissionsBeforeIdle;
+      const submissionsBeforeDispose = renderer.submittedPasses;
+      await text.dispose();
+      textDisposed = true;
       const report = Object.freeze({
         initialDraws: initial.draws.length,
         updatedDraws: updated.draws.length,
         initialVisiblePixels: visiblePixelCount(initialPixels),
         updatedVisiblePixels: visiblePixelCount(updatedPixels),
         changedPixels: changedPixelCount(initialPixels, updatedPixels),
-        idleGpuSubmissions: renderer.submittedPasses - submissionsBeforeIdle,
+        idleGpuSubmissions,
+        clearGpuSubmissions: renderer.submittedPasses - submissionsBeforeDispose,
       });
       if (report.initialDraws === 0 || report.updatedDraws === 0) {
         throw new Error('the TypeGPU renderer lab produced an empty draw list');
@@ -72,13 +80,14 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         report.initialVisiblePixels === 0 ||
         report.updatedVisiblePixels === 0 ||
         report.changedPixels === 0 ||
-        report.idleGpuSubmissions !== 0
+        report.idleGpuSubmissions !== 0 ||
+        report.clearGpuSubmissions !== 1
       ) {
         throw new Error('the TypeGPU renderer lab did not produce changing visible pixels');
       }
       return report;
     } finally {
-      await text.dispose();
+      if (!textDisposed) await text.dispose();
     }
   } finally {
     engine.dispose();

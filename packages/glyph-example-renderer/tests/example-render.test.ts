@@ -282,6 +282,9 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       text.update({ text: 'updated', foregroundRgba: 0xff80_40ff });
       expect((await text.render()).draws.length).toBeGreaterThan(0);
       expect(text.text).toBe('updated');
+      const inFlight = engine.render({});
+      expect(() => engine.registerFont(font)).toThrow('while a frame submission is in progress');
+      await inFlight;
       await text.dispose();
       expect(() => text.render()).toThrow('disposed');
       engine.dispose();
@@ -296,7 +299,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
   }
 });
 
-test('realizes a supplied indexed geometry resource from an authenticated portable declaration', () => {
+test('realizes a supplied indexed geometry resource from an authenticated portable declaration', async () => {
   expect(
     () =>
       new RecordingExampleRendererDevice({
@@ -438,6 +441,7 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
   expect(device.realizedDraws).toEqual([]);
   expect(device.submissions).toEqual([]);
   const pending = device.prepareSubmission(drawList);
+  expect(pending.replacesRenderState).toBe(true);
   expect(device.realizedDraws).toEqual([]);
   pending.commit();
   pending.commit();
@@ -452,20 +456,20 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
   });
 
   const stale = device.prepareSubmission({ ...drawList, publicationGeneration: 2 });
-  device
-    .prepareSubmission({
-      ...drawList,
-      publicationGeneration: 3,
-      draws: [],
-      resourceRecords: [],
-      bufferRecords: [],
-      primitiveRecords: [],
-      retirements: [
-        retirement(textShaperAbi.engine.retirementKinds.resource, 51, 1),
-        retirement(textShaperAbi.engine.retirementKinds.resource, 52, 1),
-      ],
-    })
-    .commit();
+  const retirementOnly = device.prepareSubmission({
+    ...drawList,
+    publicationGeneration: 3,
+    draws: [],
+    resourceRecords: [],
+    bufferRecords: [],
+    primitiveRecords: [],
+    retirements: [
+      retirement(textShaperAbi.engine.retirementKinds.resource, 51, 1),
+      retirement(textShaperAbi.engine.retirementKinds.resource, 52, 1),
+    ],
+  });
+  expect(retirementOnly.replacesRenderState).toBe(true);
+  retirementOnly.commit();
   expect(device.realizedDraws).toEqual([]);
   expect(device.resources.has(41)).toBe(true);
   expect(device.resources.has(42)).toBe(true);
@@ -474,6 +478,23 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
 
   device.prepareSubmission({ ...drawList, publicationGeneration: 4 }).commit();
   expect(device.realizedDraws).toHaveLength(1);
+
+  const idle = device.prepareSubmission({
+    ...drawList,
+    publicationGeneration: 5,
+    draws: [],
+    resourceRecords: [],
+    bufferRecords: [],
+    primitiveRecords: [],
+    retirements: [],
+  });
+  expect(idle.replacesRenderState).toBe(false);
+  const release = Promise.withResolvers<void>();
+  const idleCommit = idle.publishAsync(() => release.promise);
+  expect(() => device.prepareResources([])).toThrow('asynchronous publication is in progress');
+  expect(() => device.applyBufferPlan([], [], [])).toThrow('asynchronous publication is in progress');
+  release.resolve();
+  await expect(idleCommit).resolves.toBe(true);
 });
 
 test('does not retire a newer resource generation through a stale retirement', () => {
