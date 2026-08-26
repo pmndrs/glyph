@@ -17,7 +17,7 @@ sources:
     title: Decision register
 generated:
   by: openai-codex/gpt-5
-  at: '2026-08-24T03:12:27Z'
+  at: '2026-08-26T00:00:00Z'
 ---
 
 # Public API surface audit and cleanup plan
@@ -47,8 +47,8 @@ Findings worth keeping, because they answer questions that would otherwise be re
 - **Our cluster resolution matches the normative rule.** Rounding a style boundary outward to the containing cluster is CSSOM View's normative behaviour and Skia's painting behaviour. troika's `colorRanges` has no cluster logic at all; ProseMirror, Lexical, and React Native split blindly; Unreal snaps clusters for the caret but **not** at style boundaries. Our previous behaviour — rejecting the whole frame — was harsher than every system surveyed.
 - **Our React tree is the strongest rich-text story in the three.js ecosystem.** drei's `Text` has no styled-run model; non-string children become scene children parked at the mesh origin. troika's `colorRanges` is colour-only in the published version.
 - **Nobody hands out offsets the caller must maintain.** The DOM adjusts every live `Range` on mutation; ProseMirror gives a `Mapping` per transaction; Lexical never issues a document offset. Unity invalidates everything on each regeneration and signals through an event; Unreal re-offsets run ranges itself but leaves highlight ranges to the caller to rebuild.
-- **Per-glyph write is where we are genuinely ahead.** `setGlyphOrigins` patches a retained GPU buffer with no CPU re-upload and no reshape. troika's route fights `sync()`, Skia's `RSXform` requires rebuilding the blob, Unreal has no per-glyph placement at all, Unity makes you mutate its arrays and re-snapshot manually. This capability is justified by GPU-resident retained batching and must be kept.
-- **Per-glyph read is where we are behind everyone.** We expose no glyph extents, so no caret, no selection rectangle, and no hit test can be built on top. troika ships `getCaretAtPoint`/`getSelectionRects`, Skia `getClosestGlyphClusterAt`, Flutter `getClosestGlyphInfoForOffset`, the DOM `Range.getClientRects()`. The only route to extents in this repo is decoding technique-specific packed records, which is the internal-representation leak again.
+- **Per-glyph write is where we are genuinely ahead.** `applyGlyphs()` patches a retained GPU buffer with no CPU re-upload and no reshape, and `restoreGlyphs()` explicitly returns authority to layout. troika's route fights `sync()`, Skia's `RSXform` requires rebuilding the blob, Unreal has no per-glyph placement at all, and Unity makes the application mutate and re-snapshot arrays.
+- **Per-glyph read was the missing half and now shares one source.** Positioned glyph advances and ink boxes come from the engine's semantic view, not technique-specific packed records. `snapshotGlyphs()`, `caretAt()`, and `selectionRects()` build on that data. F13 records the remaining cluster-end/caret-edge defects in those derived helpers.
 
 ## Delete
 
@@ -86,11 +86,12 @@ One stale decision to reconcile: D-118 accepted a renderer-neutral `stageBatch(p
 
 ## Fix
 
-These are lettered `F1`-`F9` because the requirement lists elsewhere in this document number from 1 independently. A reference to "item 6" means the numbered requirement; "F6" means the fix below.
+These are the audit findings in the form in which they were discovered. The handoff table under **Goal and current state** is authoritative about whether each one has landed; imperative wording here records the defect and required invariant rather than implying every item remains open. A reference to "item 6" means the numbered requirement; "F6" means the fix below.
 
 F1. **Distinguish frame-rejection causes.** `EngineError::InvalidRequest` collapses more than twenty distinct failures — style splits a cluster, missing style index, missing run, missing font metrics, every arithmetic overflow — into `status 6`. It names no span, paragraph, or offset. Give the engine distinct variants for at least the caller-actionable cases, carry the offending paragraph and style id in the result header, and re-raise as a typed error from `/three` so a consumer never sees a bare integer. `textShaperAbi.status` is exported from `/core` but not `/three`, so a `/three` consumer cannot even map the number to a name without a second import.
-F2. **Stop the per-frame rejection loop.** A permanently invalid frame is recompiled and rejected every frame forever, with the last good publication left on screen and no visual signal. `markApplied()` is only reached after a successful update, so `needsApply()` stays true. Latch after repeated identical rejections: stop recompiling, keep `.error`, report once. Reachable today with a type-legal inverted span.
-**Shaping and layout do not fail once they have their data.** Every input a caller controls is refused at `set()`, where the offending object is named and the caller is still on the stack. What remains is one class -- an invariant this package broke -- and there is nothing a caller could do about that, so there is no recovery protocol and no `retry()`. The batch reports it once and stops compiling, rather than recompiling an invalid frame at frame rate behind the last good picture; transforms keep running so one broken paragraph does not freeze the scene around it. The machinery that used to decide _when to try again_ -- a per-paragraph revision record and the frame-comparison that read it -- is gone, because there is nothing to try again for.
+F2. **Stop the per-frame rejection loop.** The first proposed fix was a rejection latch. It was rejected because it hid a renderer lifetime or ordering defect until unrelated authored input changed. The landed split is stricter: every caller-controlled invalid input throws at its public call boundary; an engine-accepted renderer publication is prepared and validated as one candidate before device state changes. If realization fails, the renderer keeps the previous complete scene live and retries the exact unpublished publication bytes without another engine call. A newer desired input supersedes that candidate from the last device-accepted plan revision. There is no stale-state restoration and no input-driven recovery latch (D-279).
+
+**Shaping and layout answer once their validated data exists.** A bad span, constraint, identity, resource descriptor, policy, or plan reference is rejected while the responsible caller is still on the stack. A renderer preparation error is therefore an implementation or device-boundary fault, not an alternate content state for the application to repair. Three reports it, leaves the accepted scene intact, and retries only the exact candidate it has not yet consumed.
 
 `capacity.policy: 'fixed'` is deliberately not in that class. A caller declaring a hard glyph budget is a real thing to want in a memory-constrained scene, so exceeding it is the policy doing its job, not a failure. The defined behaviour is that the update does not apply, the last complete revision stays visible, development builds warn once with both numbers, and `capacityExceeded` carries it for reporting. It self-heals: the comparison is recomputed each frame rather than latched, so shortening the text or raising the capacity clears it. It used to throw a `RangeError` from inside `updateMatrixWorld`, taking out the whole scene traversal for something the caller had asked for.
 
@@ -130,12 +131,12 @@ F16. **Reject contradictory span authorities in `ParagraphOptions`.** The type a
 
 ## Reshape
 
-| Surface                                                                                                             | To                                                                                                                                                                                                    | Precedent                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `Text.layout()`, `Text.glyphs()`, `snapshotGlyphOrigins()` returning `undefined` for "not bound to the scene graph" | Distinguish unbound (throw, as `setGlyphOrigins` already does) from "no layout yet", and add a readiness signal so callers stop writing `updateMatrixWorld(true); if (group.error) throw group.error` | troika `sync(cb)` with `syncstart`/`synccomplete`; Flutter `TextPainter.layout()` then `.size`         |
-| `Text.error` / `onError` as the only signal                                                                         | Add the positive signal. Today the only way to know a layout committed is that `.error` is still `undefined`                                                                                          | troika `onSync`, which is drei's sole seam onto it                                                     |
-| No anchoring                                                                                                        | `anchorX`/`anchorY` on `ParagraphContentBox`. `contentBox.align` aligns lines within the box; nothing anchors the box, so `r3f-hello-world` hand-computes `position={[-width / 2, height / 2, 0]}`    | troika and drei both ship it; drei defaults to `center`/`middle`                                       |
-| No glyph extents                                                                                                    | Per-glyph advance or bounds, then `caretAt(x, y)` and `selectionRects(start, end)` on top                                                                                                             | troika, Skia, Flutter, and the DOM all ship a hit-test surface; we are the only surveyed API with none |
+| Surface | Resolution | State | Precedent |
+| --- | --- | :---: | --- |
+| `Text.layout()` previously required a committed scene frame | An attached `Text.layout()` now measures current desired local state synchronously before the first frame, without matrix traversal, renderer realization, plan publication, or revision advancement. Detached measurement belongs to `Paragraph.layout(constraints)`. | ✅ D-282 | Flutter `TextPainter.layout()` then `.size` |
+| `Text.error` / `onError` was the only signal | `commitState()` distinguishes `unbound`, `pending`, `committed`, and `failed`. | ✅ D-272 | troika `onSync` |
+| No anchoring | Add `anchorX`/`anchorY` as a separate Three positioning feature. It must not alter renderer-neutral paragraph measurement or force semantic inspection on every render. | ⬜ | troika and drei |
+| No glyph extents | Paragraph and line summaries now publish advance and ink extents; positioned glyph output carries advances and ink boxes; Three exposes cluster-aware `caretAt()` and `selectionRects()`. | ✅ D-274 through D-276 | Skia, Flutter, troika, DOM |
 
 ## Goal and current state
 
@@ -158,7 +159,7 @@ preparation failure retains and retries the exact accepted publication without w
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | :-----: | ------------------------------------------------ |
 | --            | Un-publish the reconciler protocol, delete-list surgery                                                                                                     |   ✅    | [#104](https://github.com/pmndrs/glyph/pull/104) |
 | --            | Keep `/core` and `/tsl` published; correct the false "no consumers" finding                                                                                 |   ✅    | #104                                             |
-| --            | `packages/glyph-example-renderer`, a second engine consumer on `/core` alone                                                                                | ✅ stub | #104                                             |
+| --            | `packages/glyph-example-renderer`, a second engine consumer on `/core` alone with real TypeGPU/WebGPU resources, submission, and changing pixels          |   ✅    | [#120](https://github.com/pmndrs/glyph/pull/120) |
 | --            | Adversarial review of #104 addressed                                                                                                                        |   ✅    | #104                                             |
 | F1-F3, F6, F9 | Rejection diagnostics, call-time span validation, late registration, layout re-exports; F2 latch superseded by D-279                                        |   ✅    | [#106](https://github.com/pmndrs/glyph/pull/106) |
 | --            | **Every caller-reachable path to a frame rejection closed** — overlap, feature ranges, unpaired surrogates all throw at `set()`                             |   ✅    | [#109](https://github.com/pmndrs/glyph/pull/109) |
@@ -170,9 +171,18 @@ preparation failure retains and retries the exact accepted publication without w
 | 24            | `@pmndrs/glyph/typegpu` — Bitmap                                                                                                                            |   ✅    | [#108](https://github.com/pmndrs/glyph/pull/108) |
 | 24            | `/typegpu` — MSDF and decoration                                                                                                                            |   🚧    | `feat/typegpu-msdf`                              |
 | 24            | `/typegpu` — Slug (PR #46 is reference only, never merged)                                                                                                  |   🚧    | `feat/typegpu-slug`                              |
-| 11            | Retention and ownership protocol for the render plan                                                                                                        |   ⬜    | --                                               |
-| 12-15         | Host font path, published size delta, uikit parity gate, correct `uikit-integration.md`                                                                     |   ⬜    | unblocked by #109                                |
-| 17-23         | Change notification, font readiness, measurement purity, constraint model, direction, baseline contract, revision primitive                                 |   ⬜    | unblocked by #109                                |
+| 11            | Retention and ownership protocol for borrowed and retained render-plan publications                                                                         |   ✅    | [#110](https://github.com/pmndrs/glyph/pull/110) |
+| 12            | Documented host font path through root `TextRuntime.loadFont()` plus the `/core` integration surface                                                        |   ✅    | #120                                             |
+| 13            | Published package-size evidence and reviewed ceilings                                                                                                       |   ✅    | #120                                             |
+| 14            | Parity gate against uikit's own text, selection, clipping, and lifecycle fixtures                                                                           |   ⬜    | downstream uikit work                            |
+| 15            | Re-point `uikit-integration.md` at `Paragraph` and the retained render-plan contract                                                                         |   ⬜    | document still names superseded `stageBatch`     |
+| 17-18         | Change notification and asynchronous font-readiness requirements                                                                                            | review | premise narrowed: `Paragraph` requires a loaded font |
+| 19, 23        | Measurement ownership/purity and paragraph-scoped positioned-output revision                                                                                |   ✅    | #109                                             |
+| 20-22         | Host-side constraint resolution, direction inheritance, and complete Yoga baseline convention                                                              |   ⬜    | package contract follow-up                       |
+| F10           | Portable technique schema, policy-body factory, compiled resources, and engine-owned realization                                                            |   ✅    | #120                                             |
+| F11           | Stop generated `source_digest` conflicts from dominating rebases                                                                                            |   ⬜    | tooling follow-up                                |
+| F12           | Paragraph baseline invariant                                                                                                                                |   ✅    | current branch                                   |
+| F13-F16       | Cluster-end caret/word ranges, cached-constraint revision transitions, mutable cached positioned arrays, contradictory `ParagraphOptions` authorities       |   ⬜    | current API review findings                      |
 | --            | `anchorX`/`anchorY` (D-272)                                                                                                                                 |   ⬜    | --                                               |
 | --            | Resolve overlapping spans per cluster instead of refusing them                                                                                              |   ⬜    | engine change, recorded intent                   |
 
@@ -180,9 +190,9 @@ preparation failure retains and retries the exact accepted publication without w
 
     Bitmap shipped first, end to end: typed schemas and vertex/fragment stages under `src/typegpu/`, the `./typegpu` subpath export, `typegpu` as an optional peer, and build-time embedding of the shader metadata so the published functions resolve without consumer-side tooling. Parity is pinned against the TSL realization's actual generated WGSL — extracted device-free at test time, not translated by eye — which surfaced two facts the port reproduces exactly: coverage pages are read as clamped nearest texels through `textureLoad` (data textures never filter), and pixel snapping multiplies reciprocals in the emitter's own order. MSDF, Slug, and decoration remain.
 
-Two findings that de-risk the list. `TextEngineSession.measureParagraph(request, paragraphId)` already exists, so item 6 is largely a JavaScript-side wrapper rather than a Rust change. And the render plan already models `clipId`, `depthKey`, `orderToken`, `materialId`, and `transformId` across seven tables, so item 11 is a contract over an existing surface rather than a new one.
+Two findings that originally de-risked the list are now implemented. `Paragraph` and pre-frame `Text.layout()` both use the paragraph-scoped synchronous measurement call, while the session retention protocol gives an external renderer an owned publication when it must cross another engine call or an asynchronous device boundary. The render plan remains the integration surface: `clipId`, `depthKey`, `orderToken`, `materialId`, `transformId`, named buffers, named resources, geometry, patches, and retirements are data an engine maps to its renderer.
 
-Corrections this document has already absorbed, recorded so they are not re-derived: `/core` has consumers and stays published; ascent and descent exist per font on `FontMetrics` and are missing only from paragraph measurement; the revisions are published on `/core` and are missing only as paragraph-scoped state; `stageBatch` from D-118 was never implemented and was superseded; `FontLoadError` and `createFontStack` were wrongly listed for deletion; the uikit shadow-adapter stage is not downstream of this cleanup; `Paragraph` lives on `/core` (not the root entry) because its engine session pulls the first-party font-binding compilers, which keeps the root entry's raster-free bundle boundary intact -- this was re-tested and re-confirmed by the delivery gate, and F10 records that the coupling is fixable rather than inherent; and "minimum-content width from a zero-width measurement" was wrong as an implementation recipe -- a literal zero-width flow is degenerate, so intrinsic widths are now scanned from the cluster arena in the same measurement pass.
+Corrections this document has already absorbed, recorded so they are not re-derived: `/core` has consumers and stays published; paragraph and line ascent/descent now ship beside first/last baselines; `Paragraph.layoutRevision` is paragraph-scoped while engine and plan revisions remain publication-scoped; `stageBatch` from D-118 was never implemented and was superseded by the retained render-plan contract; `FontLoadError` and `createFontStack` were wrongly listed for deletion; the uikit shadow-adapter stage is not downstream of this cleanup; `Paragraph` lives on `/core` because only an integrator constructs it; and "minimum-content width from a zero-width measurement" was wrong as an implementation recipe -- a literal zero-width flow is degenerate, so intrinsic widths are scanned from the cluster arena in the same measurement pass.
 
 ### Answered: the shared module behind the graph delta
 
@@ -202,131 +212,136 @@ The plan is `docs/planning/benchmark-trust.md`. It must answer how a run establi
 
 ## Measurement and positioning
 
-Reported from production use: an agent integrating this package "has a hell of a time getting text positioned correctly." The measure surface is the cause, and it is the same gap as the missing glyph extents — both are per-glyph and per-line geometry we compute and do not publish.
+The production report was accurate: positioning was hard because the package computed geometry it did not publish and made a Three caller traverse the scene before measurement existed. The data and timing gaps are now closed without making matrices part of local layout.
 
-`ParagraphLayoutSummary` is what `layout()` returns and its own docstring says it "is suitable for positioning UI, telemetry, and missing-glyph admission checks." It carries `width`, `height`, `contentWidth`, `contentHeight`, `firstBaseline`, `lastBaseline`, `overflowed`, `glyphCount`, `lineCount`, `missingGlyphCount`. Measured against what positioning actually needs:
+| Need | Current API | State |
+| --- | --- | :---: |
+| Paragraph and line baselines | `ParagraphMeasurement` and each `ParagraphLineMetrics` publish `ascent`, `descent`, and `lineHeight`, with `ascent + descent === lineHeight`. `firstBaseline` and `lastBaseline` remain box-relative. | ✅ |
+| Advance versus visible extent | `contentWidth`/`contentHeight` are advance extents for layout hosts. `inkBounds` is the outline union for visual positioning. The names prevent silently substituting one for the other. | ✅ |
+| Per-glyph geometry | `Paragraph.glyphs()` returns copied, internally consistent columns with shaped advances and glyph ink boxes. Three's `snapshotGlyphs()`, `caretAt()`, and `selectionRects()` use that same engine geometry. F13 still tracks cluster-end and caret-edge defects in the derived helpers. | partial |
+| Detached measurement | `new Paragraph(...).layout(constraints)` is synchronous, renderer-free, scene-free, and leaves authored state unchanged. `glyphs(constraints)` is a separate positioned query so a sizing probe does not allocate per-glyph arrays. | ✅ |
+| Attached pre-frame measurement | After `group.add(text)` or any other scene attachment, `text.layout()` measures current desired state immediately. It does not call `updateMatrixWorld()`, publish a render plan, realize materials/resources, or change `commitState()` from `pending`. | ✅ D-282 |
+| Positive render state | `text.commitState()` returns `unbound`, `pending`, `committed`, or `failed`; callers no longer infer success from the absence of `error`. | ✅ |
+| Common Three anchoring | `anchorX`/`anchorY` remains separate work. It belongs to Three placement, not renderer-neutral paragraph measurement. | ⬜ |
 
-| Needed             | We publish                                                                                                                                                                                                                                                                  | Elsewhere                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Ascent and descent | **Nothing on any paragraph measurement type.** `FontMetrics` publishes `ascender`, `descender`, and `lineGap` per font, but no measurement or layout type carries them per line or per paragraph. Without them a caller cannot align to a baseline, cap height, or x height | Skia `getLineMetrics()`, Flutter `computeLineMetrics()`, DOM `TextMetrics.fontBoundingBox*`                                              |
-| Ink bounds         | **Nothing.** `contentWidth`/`contentHeight` are advance-based, so a glyph overhanging its advance — italics, accents, swashes — centres visually wrong                                                                                                                      | troika publishes `blockBounds` AND `visibleBounds` explicitly; DOM publishes `actualBoundingBoxLeft/Right/Ascent/Descent` beside `width` |
-| Per-line metrics   | `lineBaselines` and `lineAdvances` exist, but only on the heavy `ParagraphLayout`, never on the summary, and neither carries per-line height, ascent, or descent                                                                                                            | Skia and Flutter both return full line metrics from the measure call                                                                     |
-| An anchor          | **Nothing.** `contentBox.align` aligns lines within the box; nothing anchors the box itself                                                                                                                                                                                 | troika and drei both ship `anchorX`/`anchorY`; drei defaults to `center`/`middle`                                                        |
+The intended orders are now explicit:
 
-`width` and `height` additionally echo the authored box under `width: { mode: 'exact' }` — the common case — so the only load-bearing number is `contentWidth`, and it is the advance extent rather than the visual one.
+```ts
+// Layout host: no scene or renderer.
+const paragraph = new Paragraph({ font, text, style, policy });
+const metrics = paragraph.layout({ width: { mode: 'at-most', size: availableWidth } });
+const positioned = paragraph.glyphs({ width: { mode: 'exact', size: resolvedWidth } });
 
-Compounding it, the order of operations is circular and undocumented: positioning needs measurements, measurements need a committed layout, the layout commits inside `updateMatrixWorld`, and `layout()` returns `undefined` until then. There is no readiness signal, so a caller must force a commit by hand and check `error` to find out whether the answer is trustworthy. React has no clean hook point for that at all. This is the same defect as the missing readiness signal in the Reshape table, seen from the caller's side.
+// Three: attach to establish retained batch/session ownership, then measure before frame one.
+const text = new Text({ font, text: 'Measured before render', style, contentBox });
+group.add(text);
+const desiredMetrics = text.layout();
+// renderer.render(scene, camera) later publishes and realizes the draw plan.
+```
 
-Required:
-
-1. Publish ascent, descent, and line height on the measurement summary, per line and for the paragraph.
-2. Publish ink bounds beside the advance extents, named so the difference is unmissable. A caller centring text visually must not have to know which one they hold.
-3. Add `anchorX`/`anchorY` so the common case needs no arithmetic, and so the anchor is applied where the layout already knows the extents.
-4. Make the layout-then-position order non-circular: either a synchronous layout that does not require a committed frame, or a readiness signal that tells a caller when the answer is valid. Flutter's `TextPainter.layout()` followed by a synchronous `.size` is the precedent.
-5. Whatever the animation API exposes as per-glyph extents must be the same geometry, from the same source, in the same coordinate space as these paragraph and line metrics.
+Late binding remains intentional. Construction and `set()` validate and record desired state without shaping. The call that needs an answer performs the work: `Paragraph.layout()` for a renderer-free host, attached `Text.layout()` for Three pre-frame metrics, or normal renderer traversal when no early measurement is requested. The speculative measurement transaction can be adopted by the next frame; measurement does not become a hidden render.
 
 ### Third-party layout hosts: uikit and Yoga
 
 The same gap decides whether `pmndrs/glyph` can be the text solution for pmndrs/uikit. [uikit integration](uikit-integration.md) specifies the contract; this section records what is actually shipped against it.
 
-What is already sound. `ParagraphAxisConstraint` is `unconstrained | at-most | exact`, a one-to-one map onto Yoga's `Undefined | AtMost | Exactly`. `firstBaseline` is measured from the box top edge, which is Yoga's baseline-function convention. Milestone 11.17 made repeated measurement cheap by routing a geometry-only change to a paragraph-scoped synchronous query. The constraint vocabulary and the measurement cost are not the problem.
-
-What is missing. The `Paragraph` interface that [uikit integration](uikit-integration.md) calls the "Minimum core API" -- `layout(constraints)`, `glyphs(constraints)`, `update(input)`, `dispose()` -- does not exist in the package. There is no `Paragraph` type and no `ParagraphConstraints` type; `layout()` takes no arguments. The paragraph-boundary fixture validates the contract through a hand-written adapter in the benchmarks application, which mutates the retained object and forces a scene-graph commit for every distinct constraint:
+The package-side measurement contract now exists. `ParagraphAxisConstraint` maps directly to Yoga's `Undefined`, `AtMost`, and `Exactly`; a `Paragraph` owns stable flow policy while `layout(constraints)` and `glyphs(constraints)` accept only the two axis probes. A host resolves CSS percentages, minimums, maximums, padding, and inheritance before this boundary, because those belong to its box tree rather than to one text paragraph.
 
 ```ts
-text.contentBox = value;
-group.updateMatrixWorld(true);
-if (group.error !== undefined) throw group.error;
-const measured = text.layout();
+import { Paragraph } from '@pmndrs/glyph/core';
+
+const paragraph = new Paragraph({
+  font, // already-loaded Font or FontStack
+  text,
+  style: { direction: inheritedDirection, fontSize: 16 },
+  policy: { wrap: 'word', align: 'start', overflow: 'visible' },
+});
+
+const metrics = paragraph.layout({
+  width: yogaWidthMode === Yoga.MeasureMode.Undefined
+    ? { mode: 'unconstrained' }
+    : { mode: yogaWidthMode === Yoga.MeasureMode.Exactly ? 'exact' : 'at-most', size: width },
+  height: yogaHeightMode === Yoga.MeasureMode.Undefined
+    ? { mode: 'unconstrained' }
+    : { mode: yogaHeightMode === Yoga.MeasureMode.Exactly ? 'exact' : 'at-most', size: height },
+});
 ```
 
-That is what an integrator must write to answer one Yoga measure callback, and it is unsound in four ways that a retained layout engine makes worse rather than better:
+The old hazards are gone at this boundary:
 
-| Hazard                                     | Why a Yoga host makes it worse                                                                                                                                                                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The commit runs inside the callback        | Yoga invokes measure during its own layout pass. `updateMatrixWorld(true)` commits the whole `TextGroup`, including every other `Text` in it. A layout engine driving a scene-graph commit is a layering inversion and is re-entrant. |
-| A speculative probe mutates authored state | Yoga probes several candidate constraints before resolving one. The last probe is left behind on the object. The fixture needs a `JSON.stringify` memo key to survive it.                                                             |
-| Yoga may measure a node it never lays out  | A frame was committed for it regardless.                                                                                                                                                                                              |
-| Errors arrive out of band                  | Failure surfaces on `group.error` rather than as a result of the measurement, and `undefined` still conflates unbound, uncommitted, and failed.                                                                                       |
+| Previous hazard | Current contract |
+| --- | --- |
+| Yoga measurement traversed a Three scene | `Paragraph.layout()` has no scene or renderer dependency. |
+| A speculative probe mutated authored state | Constraints are call arguments; authored content and stable policy change only through `update()`. |
+| Measurement allocated positioned glyph columns | `layout()` returns allocation-light metrics; `glyphs()` is the explicit positioned query. |
+| Errors arrived later on `TextGroup.error` | Invalid constraints and impossible policy combinations throw from the call that supplied them. |
+| Results borrowed mutable Wasm memory | Readers copy out of Wasm, so a later engine call cannot detach the result. F15 remains open because `glyphs()` caches and re-returns mutable typed arrays a caller can alter. |
+| Every host had to derive intrinsic widths separately | `minContentWidth` and `maxContentWidth` ride the same measurement result. |
 
-`ParagraphContentBox` additionally conflates per-call constraints (`width`, `height`) with stable policy (`wrap`, `align`, `maxLines`, `overflow`, `justify`, columns, indents). Yoga varies two fields per probe, so a host must re-send the entire policy object every call; that conflation is also why the fixture's memo key must stringify the whole object.
-
-One core, one shared gap, two consumer-specific edges. A framework-neutral `Paragraph` -- pure, synchronous, constraint-parameterized, requiring no scene, renderer, or committed frame -- serves both hosts. The three.js `Text` becomes a thin retained wrapper over it, which is also what removes the layout-then-position circularity above. The remaining differences are small and must not be allowed to cross:
-
-- Shared, and missing for both: ascent, descent, and line height per line and per paragraph; and a cluster-aware hit-test, caret, and selection surface. uikit's migration explicitly blocks on the latter because its current query path indexes one layout entry per JavaScript character.
-- Needed by a layout host only: minimum-content and maximum-content widths as first-class outputs. Today a host derives `minWidth` from a second full measurement at `{ mode: 'at-most', size: 0 }`, so every `CustomLayouting` recompute pays two measurements. Skia returns `getMinIntrinsicWidth` and `getMaxIntrinsicWidth`, and Flutter returns `minIntrinsicWidth` and `maxIntrinsicWidth`, from a single pass.
-- Needed by a positioning caller only: `anchorX`/`anchorY` and ink bounds. Neither may reach paragraph measurement. An anchor applied there would corrupt a host's box arithmetic, and CSS and flex layout are advance-based, so `contentWidth` is the correct extent for Yoga and the wrong one for visual centring. Both extents ship, named so they cannot be confused.
-
-Required, in addition to the five items above:
-
-6. Extract a framework-neutral `Paragraph` with `layout(constraints)` and `glyphs(constraints)` that need no scene, renderer, or committed frame, and that leave authored state untouched. Re-express the three.js `Text` as a retained wrapper over it.
-7. Separate per-call constraints from stable policy so a host varies only the axis constraints per probe.
-8. Publish minimum-content and maximum-content widths from a single measurement.
-9. Return failure from the measurement itself rather than through an out-of-band group error.
-10. Re-point the paragraph-boundary fixture at the real `Paragraph`. While it runs through an adapter that the package does not ship, the fixture proves the adapter, not the contract.
+The remaining package decisions for a Yoga integration are narrower than the old report claimed: document the exact host-side min/max/percentage reduction, pin inherited direction and baseline conventions including empty paragraphs, and decide whether a notification is needed beyond the caller that invokes synchronous `Paragraph.update()`. Font readiness is not currently asynchronous on this surface: construction requires an already-loaded `Font` or `FontStack`, so there is no fallback-to-final metrics transition for `Paragraph` to report.
 
 ### Shipping the uikit pull request
 
-The goal is a fork of pmndrs/uikit whose text subsystem is replaced by this package, submitted upstream. [uikit integration](uikit-integration.md) already sequences that migration in five steps, but it is written as guidance for uikit's maintainers and assumes surfaces this package does not ship. Three of its five steps are currently blocked, and one is blocked on an API that was never built.
+The goal is a fork of pmndrs/uikit whose text subsystem is replaced by this package, submitted upstream. The package prerequisites have moved substantially; the upstream adapter and parity work have not happened in this repository.
 
-| uikit migration step                         | Blocked on                                                                          | Status                                        |
-| -------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------- |
-| 1. Shadow adapter beside the existing layout | Nothing                                                                             | Reachable today through the benchmark adapter |
-| 2. Replace measurement                       | `Paragraph` (items 6-10), line and font metrics (item 1), intrinsic widths (item 8) | Blocked                                       |
-| 3. Replace positioned layout and rendering   | A framework-neutral draw-batch surface                                              | Blocked, and the surface does not exist       |
-| 4. Replace interaction queries               | Cluster-aware hit-test, caret, selection                                            | Blocked                                       |
-| 5. Remove the legacy text subsystem          | Steps 2 through 4                                                                   | Blocked                                       |
+| uikit migration step | Package status | Remaining work |
+| --- | --- | --- |
+| 1. Shadow adapter beside the existing layout | Reachable | Build and compare in the uikit fork. |
+| 2. Replace measurement | `Paragraph`, metrics, intrinsic widths, and copied positioned output are shipped | Adapt Yoga constraints and run uikit parity fixtures. |
+| 3. Replace positioned layout and rendering | `/core` publishes the renderer-neutral plan plus explicit borrow/retain/acknowledge semantics | Implement uikit's Three realization, batching, clipping, and submission from that public plan. |
+| 4. Replace interaction queries | Three has cluster-aware caret and selection helpers; renderer-neutral positioned glyph data is available | Decide whether uikit consumes the columns directly or needs a renderer-neutral helper. |
+| 5. Remove the legacy text subsystem | Package prerequisites are substantially present | Blocked on upstream steps 2 through 4 and their parity evidence. |
 
-Step 3 is the one the existing document overstates. It describes uikit consuming a "selected raster `stageBatch` transaction", but there is no `stageBatch`, `RasterBatch`, or `DrawBatch` anywhere in `packages/glyph/src`. Everything a renderer can consume today arrives as the `Text` and `TextGroup` `Object3D` pair from `@pmndrs/glyph/three`. uikit cannot adopt those: it owns instancing, clipping, transforms, render ordering, and batching, and its whole value is that those stay uniform across every element. Being a three.js library is not the obstacle -- uikit is three.js, so `/three` and `/tsl` coupling is fine -- the obstacle is that our only renderer entry point is a scene object rather than a batch a host can place itself.
-
-There is no `/core` contradiction once the demotion is withdrawn, and no bespoke uikit surface is required. uikit reaches the engine the same way any custom renderer does, through `/core`'s render policy and `TextEngineRenderPlanView`. The gap is not a missing surface but a missing contract on the existing one: a `TextEnginePublication` is borrowed only until the next Wasm call ([`core/host.ts:14`](../../packages/glyph/src/core/host.ts)), and a retained host such as uikit cannot hold that across frames. Item 11 below is therefore a retention and ownership protocol, not a new API.
+The obsolete `stageBatch` sketch is not the API. uikit reaches the engine like any custom renderer: through `/core`'s policy, session, retained publication, and render-plan readers. The plan names buffers, resources, geometry, draws, transforms, ordering, patches, and retirements; uikit owns the Three material/pipeline realization and integrates those draws with its existing batching and clipping. It does not adopt glyph's `Text` or `TextGroup` scene objects.
 
 Required for a submittable pull request, beyond items 1 through 10:
 
-11. A retention and ownership protocol on the existing render plan. Specify whether a host receives borrowed or copied buffers, when it may retain them and when they expire, how it acknowledges a publication, whether it receives dirty ranges or complete arrays, how paragraph and glyph identity survive an update, how multiple techniques and draw partitions are addressed, and the generation semantics for atlas and texture resources. Today the publication is valid only until the next Wasm call, which no retained host can honour.
+11. A retention and ownership protocol on the existing render plan.
 
     **Landed.** The protocol lives on the session (`core/retention.ts` is its specification): borrows stay the default and expire at the session's next answered call; `isExpired`/`assertLive` detect a stale borrow in two integer compares and throw `TextEnginePublicationExpiredError` instead of reading freed bytes; `retain` makes one contiguous host-owned copy of the whole encoded result and brands it `RetainedTextEnginePublication`, so retaining APIs demand it in their types; `retain`/`acknowledge` feed `session.acknowledgedGeneration`, which the engine already verified monotonically at the wire — retirements carry `afterPublicationGeneration`, so acknowledgement is what releases retired GPU storage; decoded patch records surface dirty ranges per `(bufferId, bufferGeneration)`; paragraph ids are caller-chosen handles, glyph identity rides the policy's stable-id lane, and engine storage is keyed by `(id, generation)` with retirement as the only release signal. `packages/glyph-example-renderer` proves all of it against a real `TextEngineHost` and real Wasm frames.
 
-12. A documented font path for a host that does not use our loader. uikit resolves fonts from URLs through its own signals; `./runtime-bake` exists and must be shown working from a host-owned fetch, with the baked-asset workflow documented for uikit's own font assets.
+12. A documented font path for a host that does not use Three's loader.
 
-    **Finding, now pinned empirically.** A `/core`-only host cannot register a shaping font at all: `RuntimeShaper.registerFont` requires a loader-registered `RegisteredFont` (the shaper checks `registry.getByHandle` and reads loader-populated private data), `registerFontBinding` is refused by Rust with `fontMissing` unless the shaping handle was registered that way, and `createTextRuntime` is exported only from the root entry point. Real text frames are therefore unreachable from the published integration surface — `packages/glyph-example-renderer`'s real-frame test records this by asserting the clean `fontMissing` rejection rather than reaching for a private import. Item 12 is the fix: one published path from host-owned bytes to a registered shaping font.
+    **Landed.** `/core` is deliberately not a second font loader. An integration creates `TextRuntime` and loads or runtime-bakes the font through the root entry, obtains its synchronous shaper with `textRuntimeShaper(runtime)`, then uses `/core` for policy, binding, stack, session, and plan work. The TypeGPU example runs this exact route with runtime-baked Inter and real non-empty draws.
 
-13. A published size number. uikit is a general UI toolkit, and a Wasm shaper is a real adoption cost that upstream review will raise first. `release:size:check` already enforces reviewed ceilings; the pull request must state the delta a uikit consumer actually pays, split into shaper, raster module, and baked font assets, so the trade is explicit rather than discovered.
+13. A published size number.
+
+    **Landed.** The release-size workflow reports and gates the core JavaScript graph, Three adapter, text-shaper Wasm, each technique graph, and compressed sizes. A size-gate failure is a required review point, not a reason to reject correct work; an explained implementation cost updates the reviewed ceiling with evidence.
 14. A parity gate against uikit's own fixtures: text, textarea, selection, clipping, and lifecycle. The paragraph-boundary fixture in this repository proves the seam, not the product.
-15. Re-point `docs/planning/uikit-integration.md` at the shipped `Paragraph` and draw-batch surfaces, and correct the `stageBatch` reference. Its fixture-status table must distinguish what the package provides from what the benchmark adapter supplies.
+15. Re-point `docs/planning/uikit-integration.md` at the shipped `Paragraph` and retained render-plan surfaces, and remove the superseded `stageBatch` reference. Its fixture-status table must distinguish what the package provides from what the benchmark adapter supplies. **Open.**
 
 Change notification, from a community report. A community member who attempted the swap reported: "For your yoga integration are you using their `hasNewLayout` method? Uikit wasn't using it before and was thus computing layouts for every component a second time. Improved our cpu performance by around 50%." The method is real -- `hasNewLayout(): boolean` and `markLayoutSeen(): void` are on `Node` in yoga-layout 3.2.1 -- and the fix belongs to uikit, which owns the Yoga nodes. It matters here because it is precisely the gate on when a host calls `glyphs()`, the one call that materializes per-glyph arrays out of Wasm, and because composing that gate correctly needs something this package does not publish.
 
 The two flags are not equivalent in either direction:
 
 - Yoga reports a new layout, but our positioned output is unchanged. A box can change in an axis the text does not consume, or in the block axis while the inline axis and every line break stay identical. A host gating only on Yoga re-copies every array for nothing. This is the wasted work the report describes, seen from our side.
-- Yoga reports no new layout, but our positioned output _has_ changed. Text edits, style changes, and asynchronous font resolution all change us without moving the Yoga box. A host gating only on `hasNewLayout` renders stale glyphs. This is a correctness defect, not a performance one, and directing a host to use `hasNewLayout` without giving it a second gate would ship that defect into their fork.
+- Yoga reports no new layout, but our positioned output _has_ changed. Text and style edits can change the paragraph without moving the Yoga box. A host gating only on `hasNewLayout` renders stale glyphs. `Paragraph` itself has no asynchronous font-resolution transition because it requires an already-loaded font.
 
-The engine already tracks `planRevision`, `geometryRevision`, `contentRevision`, and `engineRevision`, and `/core` does publish them -- `engineRevision` and `planRevision` on `TextEnginePublication`, the other two on the frame-wire types. What none of them is, is _paragraph-scoped positioned-layout_ state: `planRevision` and `engineRevision` are global publication counters, so on a shared engine one paragraph's edit advances the number every other paragraph reads. No revision is published on `ParagraphLayout`, on `Text`, or on any paragraph object. A host must be able to write the composed gate:
+The landed `Paragraph.layoutRevision` is paragraph-scoped positioned-output state. It advances only from `glyphs()`, when a 96-bit digest over the box, metrics, line records, and per-glyph positioned values differs; stable renderer bookkeeping is excluded. A host can therefore compose its two independent dirtiness sources:
 
 ```ts
 const needsReadback = node.hasNewLayout() || paragraph.layoutRevision !== lastSeenRevision;
 ```
 
-16. Publish a monotonic layout revision on the paragraph that advances exactly when positioned output changes, so a host can gate readback without copying arrays to compare them.
-17. Publish a change notification so a host can mark its own layout node dirty when our content changes beneath it. Yoga's inverse channel is `setDirtiedFunc`; ours does not exist, so a host would have to poll. Asynchronous font resolution makes this mandatory rather than optional: a font that resolves after the first layout pass must be able to dirty the node.
+16. Publish a monotonic layout revision on the paragraph that advances exactly when positioned output changes, so a host can gate readback without copying arrays to compare them. **Contract landed; F14 still tracks switching back to a previously cached constraint without advancing the revision.**
+17. Decide whether `Paragraph` needs a separate change notification. The caller already performs synchronous `update()` and can dirty its Yoga node in the same operation; there is no internal asynchronous font transition. A notification is justified only if a package-owned event can change desired measurement after the call returns. **Open, with the original premise narrowed.**
 
 Additional requirements, from adversarial review of this plan:
 
-18. Define the font-readiness state machine. Font loading is Promise-based while `Text` requires an already-loaded font at construction, and a layout host measures synchronously whenever it wants. Specify what `layout()` returns before fonts resolve (pending, fallback metrics, or an error), whether a host may synchronously lay out an unresolved paragraph, whether fallback metrics may differ from final metrics in intrinsic width, which revision advances when fallback becomes final, and how the host is dirtied at that moment. Item 17 provides the channel; this item provides its semantics.
-19. Specify layout purity precisely rather than asserting it. Define the complete cache key -- constraints, policy, direction, font-stack identity, font readiness, raster availability, scale, and content revision -- whether equal inputs must return equal results or the identical cached object, whether `layout()` may be re-entered or called while another paragraph is laying out, how long a returned result stays valid once another paragraph is laid out, and whether layout may call back into the host. The engine already rejects one class of re-entry during render-plan application, and its Wasm views are transient, so "pure" alone is not a contract.
-20. Complete the constraint model. `ParagraphAxisConstraint` covers unconstrained, at-most, and exact only. Document where percentage, min-width/max-width, and definite-versus-indefinite block sizing are resolved -- in the host before the callback, or in the paragraph -- and what happens when exact conflicts with min or max. Left unstated, two hosts will feed the same paragraph different interpretations.
-21. Specify direction inheritance. The engine has a `direction` style property, but a host owns property inheritance. Define how a host-supplied inherited direction reaches the paragraph and how `start` and `end` alignment resolve under RTL.
-22. Specify the baseline contract, not just the metrics. `firstBaseline` and `lastBaseline` already exist. What is undefined is the host-facing contract a Yoga baseline function needs: baseline relative to the content box or the outer box, how padding and border participate, what an empty paragraph returns, and which line a multi-line paragraph reports. Publishing ascent and descent does not by itself define `align-items: baseline`.
-23. Pin down the revision primitive. A monotonic counter needs identity and overflow rules to be usable: revisions are u32-bounded and the wire rejects overflow rather than defining wraparound; paragraph ids are recycled after removal, so an id alone is not a durable host identity; and "advances exactly when positioned output changes" needs an explicit definition of output equality across glyph ids, stable ids, line baselines, draw partitions, and positions. False positives must be bounded, or a host gains nothing over unconditional readback.
+18. Define the font-readiness state machine. **Narrowed:** `Paragraph` construction requires a loaded font selection, so `layout()` has no pending or fallback-metrics result. If a future API admits unresolved fonts, it needs a new explicit state machine rather than changing this synchronous contract silently.
+19. Specify layout purity precisely rather than asserting it. **Landed:** authored changes invalidate caches; constraints form the per-query key; equal cached queries return the identical host-owned object; different paragraphs own independent sessions; queries are synchronous, do not call back into the host, and copy result memory out of Wasm.
+20. Complete the constraint model. **Open documentation:** percentages, min/max, padding, and definite-versus-indefinite box resolution belong to the host before it supplies `unconstrained`, `at-most`, or `exact`.
+21. Specify direction inheritance. **Open documentation:** the host resolves its inherited direction into `ParagraphStyle.direction`; the package must state the `start`/`end` convention under RTL beside that boundary.
+22. Specify the baseline contract, not just the metrics. **Partly landed:** box-relative baselines and line ascent/descent are explicit; empty-paragraph and host padding/border conventions still need a uikit-facing statement.
+23. Pin down the revision primitive. **Specified:** revision identity belongs to the `Paragraph` object, starts at zero, advances only when positioned output differs by a 96-bit digest, and excludes stable renderer IDs that do not alter geometry. F14 is the remaining implementation mismatch with that contract.
 
 Sequencing. The uikit fork is downstream of items 1 through 23 for anything that replaces uikit's renderer or its query path. It is _not_ downstream for the shadow-adapter stage, which this plan's own migration table already marks reachable today: a shadow adapter runs a paragraph beside uikit's existing layout, compares metrics, and changes nothing visible. That stage should start early, because several items above -- the baseline contract, font readiness and dirty propagation, constraint resolution, direction inheritance, and the retention protocol -- are specified more accurately with a real host exercising them than by reasoning alone. The fork is an acceptance consumer and a design feedback loop; only its later stages are strictly downstream.
 
 ## The animation API
 
-### What is wrong with the one we have
+### What was wrong with the previous surface
 
-`snapshotGlyphOrigins` / `setGlyphOrigins` / `clearGlyphOriginOverrides` has one real consumer, `apps/benchmarks/src/techniques/shared/glyph-origin-transition.ts`, and that consumer demonstrates every flaw:
+`snapshotGlyphOrigins` / `setGlyphOrigins` / `clearGlyphOriginOverrides` had one real consumer, and that consumer demonstrated every flaw below. D-273 through D-276 replaced this surface with `snapshotGlyphs()` → `applyGlyphs()` → `restoreGlyphs()`; the list remains as the rationale and regression checklist.
 
 - **The identity we thread through is not the identity it needs.** It ignores `glyphStableIds` and builds its own `${fontHandle}:${glyphId}:${cluster}:${occurrence}` key, because the stable id does not survive the reflow it exists to animate across.
 - **It re-asserts invariants the API should carry**, hand-checking six public arrays for equal length and re-checking that the snapshot's `layout` is identical to the one it holds.
@@ -334,7 +349,7 @@ Sequencing. The uikit fork is downstream of items 1 through 23 for anything that
 - **It cannot tell how much of its write landed**, because both write and read skip missing records silently.
 - **Two coordinate spaces arrive in one array** with no discriminant.
 
-### What to build instead
+### Landed replacement contract
 
 Animation targets what _looks_ like a unit on screen — a glyph, a word, a line — not a position in a string. The structure is ours to define and need not be derived from text offsets at all. The shape is an explicit cycle:
 
@@ -355,10 +370,10 @@ Keep the retained-GPU-buffer write path. That capability is genuinely ahead of e
 ## Sequencing
 
 1. ✅ Un-publish the reconciler protocol. Same class as the two shipped defects and the worst remaining hole.
-2. ✅ The delete list, then the demotion of `/core` and `/tsl`. Landed as D-267, with two rows rejected on re-measurement
-   as noted in the Delete table.
-3. Fixes 1 through 3 — the frame-rejection identity, the rejection loop, and the `spans` validation timing — since those are what a caller actually hits.
-4. The animation API, replacing the origin trio, and the measurement and positioning surface with it -- they are the same geometry.
-5. The remaining fixes and reshapes.
+2. ✅ Apply the supported delete list while keeping `/core` and `/tsl` published. Landed as D-267, with the rejected rows retained as noted in the Delete table.
+3. ✅ Close caller-reachable frame rejections at call time and replace the rejected recovery latch with D-279 prepare/commit semantics.
+4. ✅ Replace the origin trio, publish shared glyph/line geometry, and land renderer-free plus pre-frame measurement.
+5. ✅ Harden render-plan retention and portable technique implementation through a real TypeGPU/WebGPU consumer.
+6. Close F13-F16, update `uikit-integration.md`, and run the uikit parity work without reopening the renderer-neutral ownership boundary.
 
 Each step must keep the packed-lane differential oracle green, and no step may regress the incremental fast path.
