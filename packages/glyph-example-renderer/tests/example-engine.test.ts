@@ -16,9 +16,7 @@ import { ExampleTextEngine } from '../src/engine.js';
 import { EXAMPLE_POLICY_HANDLE } from '../src/policy.js';
 
 const require = createRequire(import.meta.url);
-const SESSION_HANDLE = id('session', 'glyph-example-renderer-test/session');
 const DIRECT_SESSION_HANDLE = id('session', 'glyph-example-renderer-test/direct-session');
-const STACK_HANDLE = id('font-stack', 'glyph-example-renderer-test/stack');
 const MISSING_BINDING_HANDLE = id('font-binding', 'glyph-example-renderer-test/missing-font');
 
 /**
@@ -46,7 +44,7 @@ describe('a real engine driven through the published core surface', () => {
     const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(shaper);
     try {
-      engine.openSession(SESSION_HANDLE);
+      engine.openSession();
       const firstPending = engine.render({});
       expect(() => engine.render({})).toThrow('submission in progress');
       const first = await firstPending;
@@ -80,7 +78,7 @@ describe('a real engine driven through the published core surface', () => {
     const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(shaper);
     try {
-      engine.openSession(SESSION_HANDLE);
+      engine.openSession();
       // One raw frame through the session, then a second raw frame built from the
       // first publication's revisions: the borrow from frame one is now expired.
       const stale = engine.session.update(engine.frameRequest({}));
@@ -110,7 +108,7 @@ describe('a real engine driven through the published core surface', () => {
     const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(shaper);
     try {
-      engine.openSession(SESSION_HANDLE);
+      engine.openSession();
       await engine.render({});
       await engine.render({});
       expect(engine.session.acknowledgedGeneration).toBe(2);
@@ -139,11 +137,11 @@ describe('a real engine driven through the published core surface', () => {
     const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(shaper);
     try {
-      engine.openSession(SESSION_HANDLE);
+      engine.openSession();
       // No shaping font exists behind this binding handle — the loader path lives outside
       // `/core` (recorded as audit item 12) — so stack registration fails cleanly
       // with the engine's own status instead of silently accepting a dead handle.
-      expect(() => engine.registerFontStack(STACK_HANDLE, [MISSING_BINDING_HANDLE])).toThrowError(/status 5/);
+      expect(() => engine.registerFontStack([MISSING_BINDING_HANDLE])).toThrowError(/status 5/);
       // The policy itself registered fine: frames publish against it.
       expect((await engine.render({})).engineRevision).toBe(1);
     } finally {

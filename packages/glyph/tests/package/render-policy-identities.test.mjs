@@ -11,6 +11,7 @@ import {
   techniqueId,
   textShaperAbi,
 } from '../../dist/core.js';
+import { assertGlyphId, GlyphIdScope } from '../../dist/core/render-policy.js';
 
 const opcodes = textShaperAbi.policy.opcodes;
 const scalarTypes = textShaperAbi.policy.scalarTypes;
@@ -66,6 +67,19 @@ test('host ID helpers are stable, nonzero, domain-separated, and collision-check
   assert.throws(() => id('unknown', 'example'), /kind is not supported/);
   id('buffer', 'collision-36');
   assert.throws(() => id('buffer', 'collision-326'), /ID collision/);
+});
+
+test('runtime ID scopes retain shared provenance until their last owner is disposed', () => {
+  const first = new GlyphIdScope();
+  const second = new GlyphIdScope();
+  const firstId = first.id('paragraph', 'test.identities/scoped-paragraph');
+  const secondId = second.id('paragraph', 'test.identities/scoped-paragraph');
+  assert.equal(firstId, secondId);
+  first.dispose();
+  assert.equal(assertGlyphId(secondId, 'paragraph', 'scoped paragraph'), secondId);
+  second.dispose();
+  assert.throws(() => assertGlyphId(firstId, 'paragraph', 'scoped paragraph'), /must come from id/);
+  assert.throws(() => second.id('paragraph', 'test.identities/after-dispose'), /scope has been disposed/);
 });
 
 test('identity registries reject colliding program names at assembly', () => {

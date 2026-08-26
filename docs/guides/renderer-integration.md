@@ -235,7 +235,13 @@ Resolve every technique and resource string through the host's one registry:
 
 ```ts
 import { createTextRuntime } from '@pmndrs/glyph';
-import { compileRenderPolicy, createRasterPolicyProgram, id, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
+import {
+  compileRenderPolicy,
+  createRasterPolicyProgram,
+  id,
+  TextEngineHost,
+  textRuntimeShaper,
+} from '@pmndrs/glyph/core';
 
 const runtime = await createTextRuntime();
 const host = new TextEngineHost(textRuntimeShaper(runtime));
@@ -295,10 +301,10 @@ Create one `TextEngineSession` for each retained frame state. The capacities res
 result arenas, and optionally retained UTF-16 text storage:
 
 ```ts
-import { compileTextEngineFrameUpdate, id, type TextEngineFrameLimits } from '@pmndrs/glyph/core';
+import { compileTextEngineFrameUpdate, type TextEngineFrameLimits } from '@pmndrs/glyph/core';
 
-const SESSION_HANDLE = id('session', 'my-renderer/main-view');
-const POLICY_HANDLE = id('policy', 'my-renderer/default');
+const SESSION_HANDLE = host.id('session', 'my-renderer/main-view');
+const POLICY_HANDLE = host.id('policy', 'my-renderer/default');
 
 const session = host.createSession({
   handle: SESSION_HANDLE,
@@ -675,9 +681,8 @@ const device = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768,
 const engine = new ExampleTextEngine(textRuntimeShaper(runtime), device);
 
 const binding = engine.registerFont(font);
-const stack = id('font-stack', 'my-renderer/body');
-engine.registerFontStack(stack, [binding]);
-engine.openSession(id('session', 'my-renderer/main-view'));
+const stack = engine.registerFontStack([binding]);
+engine.openSession();
 
 const text = engine.createText({
   fontStack: stack,

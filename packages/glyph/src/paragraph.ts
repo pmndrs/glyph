@@ -35,7 +35,7 @@ import {
   type PolicyDescriptor,
 } from './core/render-policy.js';
 import type { RuntimeShaper } from './shaper.js';
-import { textRuntimeShaper } from './text-runtime.js';
+import { observeTextRuntimeDispose, textRuntimeShaper } from './text-runtime.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 import type { FontSelection, LoadedFont } from './loaded-font.js';
 import type { ParagraphLayoutInspection, ParagraphLayoutSummary, ParagraphMetrics } from './layout.js';
@@ -344,7 +344,15 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
     const session = this.#ensureSession();
     const text = this.#desired.text;
     const styleMutations = this.#compileStyles();
-    const geometry = compileEngineGeometry(PARAGRAPH_ID, 1, this.#geometryRevision + 1, box, 0, text.length);
+    const geometry = compileEngineGeometry(
+      this.#context.host.id,
+      PARAGRAPH_ID,
+      1,
+      this.#geometryRevision + 1,
+      box,
+      0,
+      text.length,
+    );
     const limits = engineLimits(1, text.length, text.length, geometry.regions.length, MAX_TEXT_ENGINE_OUTPUT_BYTES);
     const request = compileTextEngineFrameUpdate({
       sessionId: session.handle,
@@ -398,7 +406,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
       {
         opcode: 'upsert',
         paragraphId: PARAGRAPH_ID,
-        styleId: engineStyleId(PARAGRAPH_ID, 1),
+        styleId: engineStyleId(this.#context.host.id, PARAGRAPH_ID, 1),
         cascadeOrder: 0,
         start: 0,
         end: text.length,
@@ -414,7 +422,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
       styles.push({
         opcode: 'upsert',
         paragraphId: PARAGRAPH_ID,
-        styleId: engineStyleId(PARAGRAPH_ID, index + 2),
+        styleId: engineStyleId(this.#context.host.id, PARAGRAPH_ID, index + 2),
         cascadeOrder: index + 1,
         start: span.start,
         end: span.end,
@@ -426,7 +434,11 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
       });
     }
     for (let styleId = styles.length + 1; styleId <= this.#styleCount; styleId += 1) {
-      styles.push({ opcode: 'remove', paragraphId: PARAGRAPH_ID, styleId: engineStyleId(PARAGRAPH_ID, styleId) });
+      styles.push({
+        opcode: 'remove',
+        paragraphId: PARAGRAPH_ID,
+        styleId: engineStyleId(this.#context.host.id, PARAGRAPH_ID, styleId),
+      });
     }
     return styles;
   }
@@ -641,23 +653,37 @@ class ParagraphEngineContext {
   readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, FontBindingHandle>();
   readonly #stacks = new Map<string, { lease: ParagraphEngineStackLease }>();
   #nextHandle = 1;
+  #disposed = false;
 
   constructor(shaper: RuntimeShaper) {
-    this.host = new TextEngineHost(shaper);
-    this.host.registerPolicy(PARAGRAPH_POLICY_HANDLE, measurementPolicyBytes(this.host.wireIdentities));
+    const host = new TextEngineHost(shaper);
+    try {
+      host.registerPolicy(PARAGRAPH_POLICY_HANDLE, measurementPolicyBytes(host.wireIdentities));
+    } catch (error) {
+      try {
+        host.dispose();
+      } catch (disposeError) {
+        throw new AggregateError([error, disposeError], 'paragraph engine construction and teardown both failed');
+      }
+      throw error;
+    }
+    this.host = host;
   }
 
   createSession(options: { requestCapacity: number; resultCapacity: number }): TextEngineSession {
+    this.#assertActive();
     return this.host.createSession({ ...options, handle: this.#allocateHandle('session') });
   }
 
   /** Ensures every font in the selection has a registered binding, and names the stack by its membership. */
   prepareFontStack(fonts: readonly LoadedFont<AnyRasterTechnique>[]): { readonly key: string } {
+    this.#assertActive();
     const key = fonts.map((font) => this.#bindingHandle(font)).join(',');
     return { key };
   }
 
   retainFontStack(key: string, fonts: readonly LoadedFont<AnyRasterTechnique>[]): ParagraphEngineStackLease {
+    this.#assertActive();
     const bindingHandles = fonts.map((font) => this.#bindingHandle(font));
     if (bindingHandles.join(',') !== key) throw new TypeError('paragraph font stack key does not match its fonts');
     let retained = this.#stacks.get(key);
@@ -684,6 +710,14 @@ class ParagraphEngineContext {
     return retained.lease;
   }
 
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    // Late paragraph disposal sees no owned stack and therefore never calls a dead host.
+    this.#stacks.clear();
+    this.host.dispose();
+  }
+
   #bindingHandle(font: LoadedFont<AnyRasterTechnique>): FontBindingHandle {
     if (font.disposed) throw new TypeError('cannot register a disposed loaded font with the paragraph engine');
     const existing = this.#bindingHandles.get(font);
@@ -698,7 +732,11 @@ class ParagraphEngineContext {
     const ordinal = this.#nextHandle;
     if (ordinal > 0xffff_ffff) throw new RangeError(`paragraph ${kind} handles are exhausted`);
     this.#nextHandle = ordinal + 1;
-    return id(kind, `glyph-paragraph/${ordinal}`);
+    return this.host.id(kind, `glyph-paragraph/${ordinal}`);
+  }
+
+  #assertActive(): void {
+    if (this.#disposed) throw new Error('paragraph engine context is disposed');
   }
 }
 
@@ -709,6 +747,11 @@ function paragraphEngineContext(runtime: TextRuntime): ParagraphEngineContext {
   if (context === undefined) {
     context = new ParagraphEngineContext(textRuntimeShaper(runtime));
     contexts.set(runtime, context);
+    const owned = context;
+    observeTextRuntimeDispose(runtime, () => {
+      contexts.delete(runtime);
+      owned.dispose();
+    });
   }
   return context;
 }

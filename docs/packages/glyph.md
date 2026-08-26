@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:65b96c9dcf56368688a183b07ff16cf2ac3b4235138e5c84e1f2d6f2620c9f1b'
+source_digest: 'sha256:c3b5609e4ebe7c1bebc429e73da715eee18407c7d9064ce4d3faf10d61501018'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -286,12 +286,14 @@ repeated page groups all compile through this contract. Capability profiles cont
 `compileRenderPolicy()` assigns their nonzero wire IDs by descriptor order, and ordinary single-profile frames omit the
 selector.
 
-Renderer-authored wire identities use `id(kind, stableName)`. The helper hashes the canonical domain/name pair, returns a
-domain-branded number (`PolicyHandle`, `FontBindingHandle`, `FontStackHandle`, `TextEngineSessionHandle`,
-`MaterialHandle`, or `PolicyBufferId`), and rejects invalid names or observed collisions at the authoring call. Buffer IDs
-are folded into the nonzero `u16` ABI range; registration and policy compilation still reject conflicting IDs when values
-meet. Semantic document IDs such as paragraph and style IDs use the same helper with distinct brands, while dense renderer
-slots such as `transformIndex` remain explicit compact indices rather than identities.
+Renderer-authored wire identities are hashed domain/name pairs returned as branded numbers (`PolicyHandle`,
+`FontBindingHandle`, `FontStackHandle`, `TextEngineSessionHandle`, `MaterialHandle`, or `PolicyBufferId`). Module-level
+policy and buffer constants use `id(kind, stableName)`. Runtime-created bindings, stacks, sessions, materials, paragraphs,
+styles, flows, and regions use `host.id(kind, stableName)`, whose collision provenance is released by `host.dispose()`.
+Both paths reject invalid names or observed collisions at the authoring call, and every consuming host call verifies active
+provenance. Buffer IDs are folded into the nonzero `u16` ABI range; registration and policy compilation still reject
+conflicting IDs when values meet. Dense renderer slots such as `transformIndex` remain explicit compact indices rather
+than identities.
 
 The first-party policy can select indexed transform batching, direct per-draw transforms, or a hybrid. Indexed mode adds a
 stable transform-table ID to each rendered glyph so compatible paragraphs may collapse into one draw. Direct mode splits

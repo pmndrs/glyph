@@ -1,7 +1,6 @@
 import {
   compileTextEngineFrameUpdate,
   compileRasterFont,
-  id,
   TextEngineHost,
   type FontBindingHandle,
   type FontStackHandle,
@@ -15,7 +14,6 @@ import {
   type TextEngineParagraphMutation,
   type TextEnginePublication,
   type TextEngineSession,
-  type TextEngineSessionHandle,
   type TextEngineStyleMutation,
   type TextEngineTextMutation,
   type TextEngineConstraint,
@@ -88,19 +86,31 @@ export class ExampleTextEngine {
   readonly #host: TextEngineHost;
   readonly #device: ExampleRendererDevice | undefined;
   #nextBindingOrdinal = 1;
+  #nextStackOrdinal = 1;
   #nextTextOrdinal = 1;
   readonly #freeTextOrdinals: number[] = [];
   #session: TextEngineSession | undefined;
   #rendering = false;
+  #disposed = false;
 
   constructor(shaper: RuntimeShaper, device?: ExampleRendererDevice) {
     this.#host = new TextEngineHost(shaper);
     this.#device = device;
-    this.#host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes(this.#host.wireIdentities));
+    try {
+      this.#host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes(this.#host.wireIdentities));
+    } catch (error) {
+      try {
+        this.#host.dispose();
+      } catch (disposeError) {
+        throw new AggregateError([error, disposeError], 'example engine construction and teardown both failed');
+      }
+      throw error;
+    }
   }
 
   /** Compile and register one loaded font through the portable raster program. */
   registerFont(font: LoadedFont<AnyRasterTechnique>): FontBindingHandle {
+    this.#assertActive();
     if (this.#rendering)
       throw new Error('example engine cannot register a font while a frame submission is in progress');
     const shader = this.#device?.shader;
@@ -112,7 +122,7 @@ export class ExampleTextEngine {
     const compiled = compileRasterFont(font, this.#host.wireIdentities);
     if (compiled === undefined)
       throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
-    const bindingHandle = id('font-binding', `glyph-example-renderer/${this.#nextBindingOrdinal}`);
+    const bindingHandle = this.#host.id('font-binding', `glyph-example-renderer/${this.#nextBindingOrdinal}`);
     const requiredNames =
       shader === undefined ? [...compiled.declaredResources.keys()] : Object.keys(shader.variant.resources);
     const resources: ExampleRendererResourceInput[] = [];
@@ -139,18 +149,26 @@ export class ExampleTextEngine {
 
   /** The live session, for hosts that compose raw protocol steps themselves. */
   get session(): TextEngineSession {
+    this.#assertActive();
     if (this.#session === undefined) throw new Error('example engine has no open frame session');
     return this.#session;
   }
 
-  /** Registers a font stack by handle. Shaping fonts themselves come from outside `/core`. */
-  registerFontStack(handle: FontStackHandle, fontHandles: readonly FontBindingHandle[]): void {
+  /** Register a selectable font stack and return the handle later text options reference. */
+  registerFontStack(fontHandles: readonly FontBindingHandle[]): FontStackHandle {
+    this.#assertActive();
+    const handle = this.#host.id('font-stack', `glyph-example-renderer/${this.#nextStackOrdinal}`);
     this.#host.registerFontStack(handle, fontHandles);
+    this.#nextStackOrdinal += 1;
+    return handle;
   }
 
-  openSession(handle: TextEngineSessionHandle): void {
+  openSession(): TextEngineSession {
+    this.#assertActive();
     if (this.#session !== undefined) throw new Error('example engine already has an open frame session');
+    const handle = this.#host.id('session', 'glyph-example-renderer/main');
     this.#session = this.#host.createSession({ handle, requestCapacity: 4096, resultCapacity: 128 * 1024 });
+    return this.#session;
   }
 
   /** Creates one retained application text after its font stack and session exist. */
@@ -161,6 +179,7 @@ export class ExampleTextEngine {
     try {
       return new ExampleText(
         exampleTextConstruction,
+        this.#host.id,
         (input, accepted) => this.#startRender(input, accepted),
         () => this.#freeTextOrdinals.push(ordinal),
         ordinal,
@@ -196,6 +215,7 @@ export class ExampleTextEngine {
   }
 
   #startRender(input: ExampleFrameInput, engineAccepted?: () => void): Promise<ExampleDrawList> {
+    this.#assertActive();
     if (this.#rendering) throw new Error('example engine already has a frame submission in progress');
     this.#rendering = true;
     return this.#render(input, engineAccepted).finally(() => {
@@ -235,9 +255,18 @@ export class ExampleTextEngine {
   }
 
   dispose(): void {
-    this.#session?.dispose();
-    this.#session = undefined;
-    this.#host.dispose();
+    if (this.#disposed) return;
+    if (this.#rendering) throw new Error('example engine cannot dispose while a frame submission is in progress');
+    this.#disposed = true;
+    try {
+      this.#host.dispose();
+    } finally {
+      this.#session = undefined;
+    }
+  }
+
+  #assertActive(): void {
+    if (this.#disposed) throw new Error('example engine is disposed');
   }
 }
 
@@ -260,6 +289,7 @@ export class ExampleText {
 
   constructor(
     construction: typeof exampleTextConstruction,
+    id: TextEngineHost['id'],
     renderFrame: (input: ExampleFrameInput, engineAccepted: () => void) => Promise<ExampleDrawList>,
     releaseOrdinal: () => void,
     ordinal: number,

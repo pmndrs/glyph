@@ -246,9 +246,12 @@ const inter = await runtime.loadFont({
 
 // Styles reference fonts through stack handles, so bind and stack the loaded font once.
 const host = new TextEngineHost(textRuntimeShaper(runtime));
-host.registerPolicy(POLICY, compileRenderPolicy(myPolicy));
-host.registerFontBinding(BINDING, inter.font.handle, myBindingBytes);
-host.registerFontStack(STACK, [BINDING]);
+const policyHandle = host.id('policy', 'my-renderer/default');
+const bindingHandle = host.id('font-binding', 'my-renderer/inter');
+const fontStackHandle = host.id('font-stack', 'my-renderer/body');
+host.registerPolicy(policyHandle, compileRenderPolicy(myPolicy));
+host.registerFontBinding(bindingHandle, inter.font.handle, myBindingBytes);
+host.registerFontStack(fontStackHandle, [bindingHandle]);
 ```
 
 The policy is your own declaration — `@pmndrs/glyph/core` exports the authoring toolkit (`compileRenderPolicy`, `programContext`, the wire-identity registry) that Three's first-party policy is itself built with.
@@ -258,17 +261,19 @@ Shape text — a session update is one serialized frame of mutations, constraint
 ```ts
 import { compileTextEngineFrameUpdate } from '@pmndrs/glyph/core';
 
-const session = host.createSession({ handle: SESSION, requestCapacity: 4096, resultCapacity: 65536 });
+const sessionHandle = host.id('session', 'my-renderer/main-view');
+const paragraphId = host.id('paragraph', 'my-renderer/title');
+const session = host.createSession({ handle: sessionHandle, requestCapacity: 4096, resultCapacity: 65536 });
 const publication = session.update(
   compileTextEngineFrameUpdate({
-    sessionId: SESSION,
-    policyHandle: POLICY,
+    sessionId: sessionHandle,
+    policyHandle,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
     acknowledgedPublicationGeneration: 0,
     limits,
-    paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
-    textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: 'Hello' }],
+    paragraphMutations: [{ opcode: 'upsert', paragraphId, order: 0 }],
+    textMutations: [{ paragraphId, start: 0, deleteCount: 0, insert: 'Hello' }],
     styleMutations: [rootStyle],
     constraints: [paragraphConstraint],
     regions: [paragraphRegion],

@@ -18,7 +18,13 @@ const REGISTER_F32 = 1;
 const REGISTER_U32 = 2;
 
 const encoder = new TextEncoder();
-const namedIds = new Map<string, string>();
+interface NamedGlyphId {
+  readonly canonical: string;
+  permanent: boolean;
+  scopeCount: number;
+}
+
+const namedIds = new Map<string, NamedGlyphId>();
 
 const glyphIdKinds = new Set([
   'buffer',
@@ -67,23 +73,47 @@ export type RegionId = GlyphId<'region'>;
 export type ExclusionId = GlyphId<'exclusion'>;
 export type InlineObjectId = GlyphId<'inline-object'>;
 export type ResourceHandle = GlyphId<'resource'>;
+export type GlyphIdFactory = <const Kind extends GlyphIdKind>(kind: Kind, name: string) => GlyphId<Kind>;
 
-/** Derive a branded host-owned ID from a domain and stable name, rejecting collisions in this module instance. */
+/** Derive a branded module-lifetime ID from a domain and stable name, rejecting collisions. */
 export function id<const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> {
-  if (typeof kind !== 'string' || !glyphIdKinds.has(kind)) {
-    throw new TypeError('glyph ID kind is not supported');
+  const derived = deriveGlyphId(kind, name);
+  registerGlyphId(derived, true);
+  return derived.value;
+}
+
+/** @internal Runtime-owned ID provenance released with its host. */
+export class GlyphIdScope {
+  readonly #keys = new Set<string>();
+  #disposed = false;
+
+  id<const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> {
+    if (this.#disposed) throw new Error('glyph ID scope has been disposed');
+    const derived = deriveGlyphId(kind, name);
+    const registered = registerGlyphId(derived, false);
+    if (!this.#keys.has(derived.key)) {
+      this.#keys.add(derived.key);
+      registered.scopeCount += 1;
+    }
+    return derived.value;
   }
-  if (typeof name !== 'string' || name.length === 0) throw new TypeError('glyph ID name must be a nonempty string');
-  const canonical = JSON.stringify(['glyph-id-v1', kind, name]);
-  const hash = renderWireId(canonical);
-  const value = kind === 'buffer' ? (hash % 0xfffe) + 1 : hash;
-  const key = `${kind}:${value}`;
-  const collision = namedIds.get(key);
-  if (collision !== undefined && collision !== canonical) {
-    throw new TypeError(`glyph ${kind} ID collision between ${collision} and ${canonical}`);
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    let failure: unknown;
+    for (const key of this.#keys) {
+      const registered = namedIds.get(key);
+      if (registered === undefined || registered.scopeCount === 0) {
+        failure ??= new Error('glyph ID scope lost an owned registration');
+        continue;
+      }
+      registered.scopeCount -= 1;
+      if (!registered.permanent && registered.scopeCount === 0) namedIds.delete(key);
+    }
+    this.#keys.clear();
+    if (failure !== undefined) throw failure;
   }
-  namedIds.set(key, canonical);
-  return value as GlyphId<Kind>;
 }
 
 /** @internal Reject values that did not come from this module instance's ID utility. */
@@ -93,12 +123,43 @@ export function assertGlyphId<const Kind extends GlyphIdKind>(
   label: string,
 ): GlyphId<Kind> {
   if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > MAX_U32) {
-    throw new TypeError(`${label} must come from id('${kind}', name)`);
+    throw new TypeError(`${label} must come from id('${kind}', name) or host.id('${kind}', name)`);
   }
   if (!namedIds.has(`${kind}:${value as number}`)) {
-    throw new TypeError(`${label} must come from id('${kind}', name)`);
+    throw new TypeError(`${label} must come from id('${kind}', name) or host.id('${kind}', name)`);
   }
   return value as GlyphId<Kind>;
+}
+
+interface DerivedGlyphId<Kind extends GlyphIdKind> {
+  readonly canonical: string;
+  readonly key: string;
+  readonly value: GlyphId<Kind>;
+}
+
+function deriveGlyphId<const Kind extends GlyphIdKind>(kind: Kind, name: string): DerivedGlyphId<Kind> {
+  if (typeof kind !== 'string' || !glyphIdKinds.has(kind)) {
+    throw new TypeError('glyph ID kind is not supported');
+  }
+  if (typeof name !== 'string' || name.length === 0) throw new TypeError('glyph ID name must be a nonempty string');
+  const canonical = JSON.stringify(['glyph-id-v1', kind, name]);
+  const hash = renderWireId(canonical);
+  const value = (kind === 'buffer' ? (hash % 0xfffe) + 1 : hash) as GlyphId<Kind>;
+  return { canonical, key: `${kind}:${value}`, value };
+}
+
+function registerGlyphId(derived: DerivedGlyphId<GlyphIdKind>, permanent: boolean): NamedGlyphId {
+  const registered = namedIds.get(derived.key);
+  if (registered !== undefined) {
+    if (registered.canonical !== derived.canonical) {
+      throw new TypeError(`glyph ID collision between ${registered.canonical} and ${derived.canonical}`);
+    }
+    if (permanent) registered.permanent = true;
+    return registered;
+  }
+  const created = { canonical: derived.canonical, permanent, scopeCount: 0 };
+  namedIds.set(derived.key, created);
+  return created;
 }
 
 // Reused bit-level scratch for finite-constant checks; module scope avoids per-op allocation.

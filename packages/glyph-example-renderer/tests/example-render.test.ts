@@ -40,8 +40,6 @@ import { ExampleTextEngine } from '../src/engine.js';
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const shaperWasm = new URL('../../glyph/dist/text-shaper.wasm', import.meta.url);
 const temporaryDirectories: string[] = [];
-const STACK_HANDLE = id('font-stack', 'glyph-example-renderer-test/render-stack');
-const SESSION_HANDLE = id('session', 'glyph-example-renderer-test/render-session');
 const PARAGRAPH_ID = id('paragraph', 'glyph-example-renderer-test/paragraph');
 const STYLE_ID = id('style', 'glyph-example-renderer-test/style');
 const FLOW_THREAD_ID = id('flow-thread', 'glyph-example-renderer-test/flow-thread');
@@ -158,8 +156,8 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
 
       const binding = engine.registerFont(font);
       expect(binding).toBe(id('font-binding', 'glyph-example-renderer/1'));
-      engine.registerFontStack(STACK_HANDLE, [binding]);
-      engine.openSession(SESSION_HANDLE);
+      const stackHandle = engine.registerFontStack([binding]);
+      engine.openSession();
       const list = await engine.render({
         paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 0 }],
         textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: 'glyph' }],
@@ -172,7 +170,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
             start: 0,
             end: 5,
             root: true,
-            value: { fontStackHandle: STACK_HANDLE, fontSize: 48, rasterPixelRatio: 1, foregroundRgba: 0xffff_ffff },
+            value: { fontStackHandle: stackHandle, fontSize: 48, rasterPixelRatio: 1, foregroundRgba: 0xffff_ffff },
           },
         ],
         constraints: [
@@ -268,10 +266,10 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(device.oracle.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 3, 4]);
       await engine.render({ paragraphMutations: [{ opcode: 'remove', paragraphId: PARAGRAPH_ID }] });
 
-      expect(() => engine.createText({ fontStack: STACK_HANDLE, text: 'invalid', fontSize: Number.NaN })).toThrow(
+      expect(() => engine.createText({ fontStack: stackHandle, text: 'invalid', fontSize: Number.NaN })).toThrow(
         'fontSize',
       );
-      const text = engine.createText({ fontStack: STACK_HANDLE, text: 'retained', fontSize: 42, width: 512 });
+      const text = engine.createText({ fontStack: stackHandle, text: 'retained', fontSize: 42, width: 512 });
       const initialText = await text.render();
       expect(initialText.draws.length).toBeGreaterThan(0);
       const initialTransformIds = initialText.draws.map(({ transformId }) => transformId);
@@ -287,16 +285,22 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(text.text).toBe('updated');
       const inFlight = engine.render({});
       expect(() => engine.registerFont(font)).toThrow('while a frame submission is in progress');
+      expect(() => engine.dispose()).toThrow('while a frame submission is in progress');
       await inFlight;
       await text.dispose();
       expect(() => text.render()).toThrow('disposed');
-      const replacement = engine.createText({ fontStack: STACK_HANDLE, text: 'replacement', fontSize: 42, width: 512 });
+      const replacement = engine.createText({
+        fontStack: stackHandle,
+        text: 'replacement',
+        fontSize: 42,
+        width: 512,
+      });
       const replacementText = await replacement.render();
       expect(replacementText.draws.map(({ transformId }) => transformId)).toEqual(initialTransformIds);
       await replacement.dispose();
       engine.dispose();
       expect(() => engine.registerFont(font)).toThrow('disposed');
-      expect(device.discardedResourceBatches).toBe(1);
+      expect(device.discardedResourceBatches).toBe(0);
     } finally {
       engine.dispose();
       font.dispose();

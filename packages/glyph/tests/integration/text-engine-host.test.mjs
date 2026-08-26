@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { TextEngineHost } from '../../dist/core/host.js';
-import { id, programId, techniqueId } from '../../dist/core/render-policy.js';
+import { assertGlyphId, id, programId, techniqueId } from '../../dist/core/render-policy.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
@@ -62,6 +62,17 @@ test('production text-engine host publishes borrowed A/B plans through the runti
 
   host.dispose();
   assert.throws(() => session.update(firstRequest), /disposed/);
+  shaper.dispose();
+});
+
+test('host-scoped ID provenance expires with its owning host', async () => {
+  const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
+  const host = new TextEngineHost(shaper);
+  const handle = host.id('session', 'test.text-engine-host/scoped-session');
+  assert.equal(assertGlyphId(handle, 'session', 'session handle'), handle);
+  host.dispose();
+  assert.throws(() => assertGlyphId(handle, 'session', 'session handle'), /must come from id/);
+  assert.throws(() => host.id('session', 'test.text-engine-host/after-dispose'), /disposed/);
   shaper.dispose();
 });
 

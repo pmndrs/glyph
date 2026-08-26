@@ -28,10 +28,18 @@ declare const runtimeShaper: RuntimeShaper;
 const host = new TextEngineHost(runtimeShaper);
 host.registerPolicy(id('policy', 'core-api-test/default'), new Uint8Array(8));
 const session: TextEngineSession = host.createSession({
-  handle: id('session', 'core-api-test/session'),
+  handle: host.id('session', 'core-api-test/session'),
   requestCapacity: 4096,
   resultCapacity: textShaperAbi.layouts.engineResult.size,
 });
+host.createSession({
+  // @ts-expect-error Host ID domains remain distinct even though every value serializes as a number.
+  handle: host.id('paragraph', 'core-api-test/not-a-session'),
+  requestCapacity: 4096,
+  resultCapacity: textShaperAbi.layouts.engineResult.size,
+});
+// @ts-expect-error Raw numbers cannot bypass host-scoped provenance.
+host.createSession({ handle: 1, requestCapacity: 4096, resultCapacity: textShaperAbi.layouts.engineResult.size });
 
 declare const frame: TextEngineFrameUpdate;
 const request: Uint8Array = compileTextEngineFrameUpdate(frame);
