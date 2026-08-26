@@ -5,8 +5,6 @@ packages:
 
 minimumReleaseAgeExclude:
   - '@pmndrs/scheduler@0.2.0'
-  - '@react-three/fiber@10.0.0-alpha.4'
-  - '@react-three/test-renderer@10.0.0-alpha.4'
   - typegpu@0.12.3
 
 onlyBuiltDependencies: []
