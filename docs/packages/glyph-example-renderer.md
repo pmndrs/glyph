@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:656b9148f452e35676bef809a037bfb06dea9b206f11f74a061aa3c0d3141d8d'
+source_digest: 'sha256:11e0aa4a9061a40bbf899d2cd8be266cb403abaadf91dc8e0950d238f8e92c7f'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -81,6 +81,8 @@ conflict. `RecordingExampleRendererDevice` is the deterministic CPU oracle: it v
 patch, primitive, draw, and retirement publication against the selected technique/program/variant before accepted state can
 change. Allocation, offset write, u32 fill, copy, replacement generation, exact retirement, stale candidates, and a throwing
 backend publication callback have direct negative coverage.
+Font registration is transactional across the host and device: if resource commit fails, the just-registered Wasm binding
+is disposed before the pending resource batch is discarded, so a retry cannot observe an orphaned binding or stale resource.
 
 `TypeGpuExampleRendererDevice` is the concrete acceptance backend. It realizes the retained GLB-like geometry as TypeGPU
 vertex/index buffers, stages the per-draw policy instance buffers, and commits through an awaited WebGPU validation scope.
