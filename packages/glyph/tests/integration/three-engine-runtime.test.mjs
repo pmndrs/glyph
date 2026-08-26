@@ -15,13 +15,13 @@ import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
 import { defineTechniqueSchema, id, programId, registerRasterPlanProgram, techniqueProgram } from '../../dist/core.js';
 import { decorationSchema, threeRenderPolicyBytes, threeSystemBuffers } from '../../dist/three/render-policy.js';
 import { TextEngineRenderPlanView } from '../../dist/core/plan-view.js';
-import { LoadedFontImpl } from '../../dist/loaded-font.js';
+import { acquireFontSelectionForRuntime, LoadedFontImpl, releaseFontSelection } from '../../dist/loaded-font.js';
 import { FontRegistry } from '../../dist/loader.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
 import { msdf, msdfDescriptor, msdfSchema } from '../../dist/raster/msdf.js';
 import { defineRasterResourceId, defineRasterTechnique } from '../../dist/raster-technique.js';
 import { slug, slugDescriptor, slugSchema } from '../../dist/raster/slug-technique.js';
-import { createRuntimeShaper } from '../../dist/shaper.js';
+import { createRuntimeShaper, runtimeShaperEngineExports } from '../../dist/shaper.js';
 import { registerThreeRasterPlanProgram } from '../../dist/three.js';
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 import { ThreeTextRenderPlanExecutor } from '../../dist/three/engine-plan-target.js';
@@ -97,6 +97,68 @@ registerThreeRasterPlanProgram({
       return new THREE.MeshBasicNodeMaterial();
     },
   },
+});
+
+test('Three retires a disposed font binding after its last live stack lease', async () => {
+  const [fontBytes, wasm] = await Promise.all([
+    readFile(new URL('inter-bitmap-16.font.glb', fixtureRoot)),
+    readFile(wasmUrl),
+  ]);
+  const registry = new FontRegistry();
+  const registered = await registry.registerAsset(fontBytes);
+  const shaper = await createRuntimeShaper({ registry, wasm });
+  shaper.registerFont(registered);
+  const resource = defineRasterResourceId('test/three-font-binding-lifecycle');
+  const runtime = {};
+  let fontReleaseCalls = 0;
+  const font = new LoadedFontImpl({
+    runtime,
+    font: registered,
+    technique: suppliedGeometryTechnique,
+    raster: undefined,
+    data: { resource, geometry: indexedQuadGeometry() },
+    release: () => {
+      fontReleaseCalls += 1;
+    },
+  });
+  acquireFontSelectionForRuntime(font, runtime);
+  const coordinator = new ThreeTextEngineCoordinator(shaper);
+  const first = coordinator.acquireFontStack([font]);
+  const shared = coordinator.acquireFontStack([font]);
+  const reference = coordinator.host.wireIdentities.resourceId(resource);
+  const exports = runtimeShaperEngineExports(shaper);
+  try {
+    assert.equal(exports.fontBindingCount(), 1);
+    const warnings = [];
+    const originalWarn = console.warn;
+    try {
+      console.warn = (...values) => warnings.push(values.join(' '));
+      font.dispose();
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.ok(warnings.some((warning) => warning.includes('deferring release')));
+    assert.equal(exports.fontBindingCount(), 1, 'a live stack keeps its disposed font binding valid');
+    assert.equal(fontReleaseCalls, 0, 'manual disposal defers the underlying font while a Text lease is live');
+    assert.equal(coordinator.resolveResource(reference).technique, suppliedGeometryTechnique.id);
+
+    first.release();
+    assert.equal(exports.fontBindingCount(), 1, 'one shared lease still owns the registered stack');
+    shared.release();
+    assert.equal(exports.fontBindingCount(), 0, 'the final stack release disposes the Wasm binding');
+    assert.throws(() => coordinator.resolveResource(reference), /unknown resource/u);
+    assert.throws(() => coordinator.acquireFontStack([font]), /disposed/u);
+    releaseFontSelection(font);
+    assert.equal(fontReleaseCalls, 1, 'the final Text lease releases the underlying font after renderer teardown');
+  } finally {
+    shared.release();
+    first.release();
+    font.dispose();
+    releaseFontSelection(font);
+    coordinator.dispose();
+    shaper.dispose();
+    registered.dispose();
+  }
 });
 
 test('records-sourced Three geometry retains supplied topology across instance-count changes', async () => {
