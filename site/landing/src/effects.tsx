@@ -5,7 +5,7 @@ import { chromaticAberration } from 'three/examples/jsm/tsl/display/ChromaticAbe
 import { lensflare } from 'three/examples/jsm/tsl/display/LensflareNode.js';
 import { float, vec3 } from 'three/tsl';
 
-import { graphVersion, live } from './controls';
+import { graphVersion, live } from './look';
 import { aberrationCentre, aberrationStrength } from './lens';
 
 /**
@@ -21,6 +21,10 @@ import { aberrationCentre, aberrationStrength } from './lens';
  */
 export function Effects() {
   const { rebuild } = useRenderPipeline(({ passes, renderPipeline }) => {
+    // Nullable on this r3f alpha: the callback also runs for the teardown pass,
+    // where there is no pipeline left to write an output node onto.
+    if (renderPipeline === null) return;
+
     const scene = passes.scenePass.getTextureNode();
 
     const bloomPass = bloom(scene, live.bloomStrength, live.bloomRadius, live.bloomThreshold);

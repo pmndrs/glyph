@@ -1,11 +1,9 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber/webgpu';
-import { Leva } from 'leva';
-import { StrictMode, Suspense, useEffect } from 'react';
+import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AgXToneMapping } from 'three/webgpu';
 
-import { LookPanel, live } from './controls';
-import { bindDebugToggle, useDebugVisible } from './debug-visibility';
+import { live } from './look';
 import { Overlay } from './overlay';
 import { Scene } from './scene';
 import './styles.css';
@@ -28,26 +26,22 @@ function Exposure() {
   return null;
 }
 
-/** Dev overlays, shown on load and toggled with the space bar. */
-function DevPanel() {
-  const visible = useDebugVisible();
-  useEffect(bindDebugToggle, []);
-
-  // `hidden` rather than unmounting: leva keeps its store either way, so a
-  // toggle never resets a value that was dialled in.
-  return (
-    <>
-      <Leva collapsed hidden={!visible} titleBar={{ title: 'glÿph' }} />
-      <LookPanel />
-    </>
-  );
-}
+// Dev overlays: leva, the look panel, and the space-bar toggle. `import.meta.env.DEV`
+// is a build-time constant, so production folds this to `null`, the `import()`
+// never runs, and leva stays out of the bundle entirely. It has to be reached
+// this way rather than by a guarded static import — leva builds its stitches
+// theme at module scope, which defeats tree-shaking.
+const DevOverlays = import.meta.env.DEV ? lazy(() => import('./dev/panel')) : null;
 
 const root = document.querySelector('#root')!;
 createRoot(root).render(
   <StrictMode>
     <div className="stage">
-      {import.meta.env.DEV && <DevPanel />}
+      {DevOverlays !== null && (
+        <Suspense fallback={null}>
+          <DevOverlays />
+        </Suspense>
+      )}
       <Canvas
         camera={{ far: 100, fov: 32, near: 0.1, position: [0, 0, 6] }}
         // Clamped on purpose. Left alone this canvas backs a 3064x3224 buffer,
