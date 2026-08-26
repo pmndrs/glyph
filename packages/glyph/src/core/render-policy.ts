@@ -98,6 +98,30 @@ export class GlyphIdScope {
     return derived.value;
   }
 
+  /** Retain provenance for a registration even when another scope minted its handle. */
+  retain<const Kind extends GlyphIdKind>(value: unknown, kind: Kind, label: string): boolean {
+    if (this.#disposed) throw new Error('glyph ID scope has been disposed');
+    const handle = assertGlyphId(value, kind, label);
+    const key = `${kind}:${handle}`;
+    if (this.#keys.has(key)) return false;
+    const registered = namedIds.get(key);
+    if (registered === undefined) throw new Error('glyph ID provenance disappeared during retention');
+    this.#keys.add(key);
+    registered.scopeCount += 1;
+    return true;
+  }
+
+  release<const Kind extends GlyphIdKind>(value: GlyphId<Kind>, kind: Kind): void {
+    const key = `${kind}:${value}`;
+    if (!this.#keys.delete(key)) return;
+    const registered = namedIds.get(key);
+    if (registered === undefined || registered.scopeCount === 0) {
+      throw new Error('glyph ID scope lost an owned registration');
+    }
+    registered.scopeCount -= 1;
+    if (!registered.permanent && registered.scopeCount === 0) namedIds.delete(key);
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;

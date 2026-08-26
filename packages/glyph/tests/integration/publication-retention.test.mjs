@@ -4,12 +4,12 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
+  assertOwnedTextEnginePublication,
   compileTextEngineFrameUpdate,
   createRuntimeShaper,
   id,
   TextEngineHost,
   TextEnginePublicationExpiredError,
-  retainedPublicationBrand,
 } from '../../dist/core.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 
@@ -27,14 +27,14 @@ const LIMITS = {
   maxOutputBytes: 128 * 1024,
 };
 
-/** One real engine frame: an empty plan publication, acknowledged at `acknowledgedGeneration`. */
-function frameRequest(session, latest) {
+/** One real engine frame with renderer acceptance carried explicitly on the wire. */
+function frameRequest(session, latest, accepted) {
   return compileTextEngineFrameUpdate({
     sessionId: session.handle,
     policyHandle: POLICY_HANDLE,
     expectedEngineRevision: latest.engineRevision,
-    consumedPlanRevision: latest.planRevision,
-    acknowledgedPublicationGeneration: session.acknowledgedGeneration,
+    consumedPlanRevision: accepted.planRevision,
+    acknowledgedPublicationGeneration: accepted.publicationGeneration,
     limits: LIMITS,
   });
 }
@@ -50,50 +50,60 @@ async function drivenSession() {
     resultCapacity: 128 * 1024,
   });
   let latest = { engineRevision: 0, planRevision: 0 };
+  let accepted = { planRevision: 0, publicationGeneration: 0 };
   return {
     host,
     session,
     publish() {
-      latest = session.update(frameRequest(session, latest));
+      latest = session.update(frameRequest(session, latest, accepted));
       return latest;
+    },
+    accept(publication) {
+      accepted = {
+        planRevision: publication.planRevision,
+        publicationGeneration: publication.publicationGeneration,
+      };
     },
   };
 }
 
-test('a borrowed publication expires loudly at the next call, and retain() survives everything', async () => {
-  const { session, publish } = await drivenSession();
+test('a borrowed publication expires at the next call, and an owned copy survives everything', async () => {
+  const { session, publish, accept } = await drivenSession();
 
   const first = publish();
   assert.equal(first.publicationGeneration, 1);
   assert.equal(session.isExpired(first), false, 'a fresh borrow is live');
 
-  // Retaining is taking what you need: one contiguous copy plus the acknowledgement.
-  const owned = session.retain(first);
-  assert.equal(owned[retainedPublicationBrand], true);
+  // Copying establishes JavaScript ownership but does not claim renderer acceptance.
+  const owned = session.copyPublication(first);
+  assert.doesNotThrow(() => assertOwnedTextEnginePublication(owned));
   assert.equal(owned.bytes.byteLength, first.bytes.byteLength);
   assert.notEqual(owned.bytes.buffer, first.memoryBuffer, 'the copy never aliases Wasm memory');
-  assert.equal(session.acknowledgedGeneration, 1);
+  const forged = Object.freeze({ ...owned, bytes: first.bytes, memoryBuffer: first.memoryBuffer });
+  assert.throws(
+    () => assertOwnedTextEnginePublication(forged),
+    /was not copied/u,
+    'copying the visible fields cannot forge owned provenance',
+  );
 
   // The borrow dies at the next call even though the A/B slot keeps its bytes readable.
+  accept(first);
   const second = publish();
   assert.equal(second.publicationGeneration, 2);
   assert.notEqual(second.outputSlot, first.outputSlot, 'publications alternate slots');
   assert.equal(session.isExpired(first), true);
 
+  accept(second);
   publish();
   assert.throws(
-    () => session.assertLive(first),
+    () => session.copyPublication(first),
     (error) =>
       error instanceof TextEnginePublicationExpiredError &&
       error.consumedGeneration === 1 &&
       error.latestGeneration === 3,
     'a stale borrow must be loud, not silently re-read',
   );
-  assert.equal(
-    owned.bytes.byteLength > 0 && owned.bytes[0] !== undefined,
-    true,
-    'the retained copy outlives every slot',
-  );
+  assert.equal(owned.bytes.byteLength > 0 && owned.bytes[0] !== undefined, true, 'the owned copy outlives every slot');
 
   session.dispose();
 });
@@ -112,13 +122,12 @@ test('expiry covers capacity growth and disposal, and foreign publications are r
   other.session.dispose();
 });
 
-test('the engine verifies consumption: an acknowledged generation that goes backwards is a conflict', async () => {
-  const { session, publish } = await drivenSession();
+test('the engine verifies acceptance: a generation that goes backwards is a conflict', async () => {
+  const { session, publish, accept } = await drivenSession();
   const first = publish();
-  session.acknowledge(first);
-  assert.equal(session.acknowledgedGeneration, first.publicationGeneration);
+  accept(first);
 
-  // The engine records the acknowledgement when this frame lands...
+  // The engine records renderer acceptance when this frame lands...
   const second = publish();
   assert.equal(second.publicationGeneration, 2);
   // ...so replaying an older one is a revision conflict, proving the wire field is load-bearing.

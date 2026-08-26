@@ -37,7 +37,6 @@ import {
   type ParagraphId,
   type TextEnginePublication,
   type TextEngineRegion,
-  type RetainedTextEnginePublication,
   type TextEngineSession,
   type TextEngineStyleMutation,
   type TextEngineTextMutation,
@@ -429,7 +428,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
       this.#binding.reconcileStandalone(eraseTextTechnique(this));
       try {
         this.#binding.synchronize();
-        // Keep an unpublished renderer failure visible until its retained publication commits.
+        // Keep a renderer failure visible until checkpoint recovery commits.
         if (!this.#binding.failed) this.#error = undefined;
       } catch (error) {
         this.#error = error;
@@ -583,7 +582,7 @@ export class TextGroup extends THREE.Object3D {
             if (this.#transformTracker.pathChanged(text, this)) this.#binding.markTransformDirty(text);
           }
           this.#binding.synchronize();
-          // Keep an unpublished renderer failure visible until its retained publication commits.
+          // Keep a renderer failure visible until checkpoint recovery commits.
           if (!this.#binding.failed) this.#error = undefined;
         } catch (error) {
           this.#error = error;
@@ -636,11 +635,6 @@ interface RetainedEngineParagraph {
   materialLeases: ThreeTextMaterialLease[];
 }
 
-interface PendingRendererPublication {
-  readonly publication: RetainedTextEnginePublication;
-  readonly semanticViewMask: number;
-}
-
 class ThreeTextBatchBinding {
   readonly #runtime: TextRuntime;
   readonly #group: TextGroup | undefined;
@@ -669,8 +663,7 @@ class ThreeTextBatchBinding {
   #textCapacity = 0;
   #capacity: GlyphBufferCapacity;
   #materialInvalidated = false;
-  #pendingPublication: PendingRendererPublication | undefined;
-  #pendingFailureReported = false;
+  #needsCheckpoint = false;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #disposed = false;
 
@@ -877,15 +870,13 @@ class ThreeTextBatchBinding {
   }
   #assertRendererReady(): void {
     this.#coordinator.assertFrameUpdateAllowed();
-    const failure = this.#retryPendingPublication();
-    if (failure !== undefined) throw failure;
   }
   /** What a fixed budget could not hold, while it cannot hold it. Cleared when the content fits again. */
   get capacityExceeded(): { readonly required: number; readonly size: number } | undefined {
     return this.#capacityExceeded;
   }
   get failed(): boolean {
-    return this.#pendingPublication !== undefined;
+    return this.#needsCheckpoint;
   }
   synchronize(semanticViewMask = 0): void {
     if (this.#disposed) return;
@@ -902,12 +893,7 @@ class ThreeTextBatchBinding {
         ? [{ text, paragraph, order, semanticChanges }]
         : [];
     });
-    if (changed.length === 0 && this.#removed.length === 0) {
-      const failure = this.#retryPendingPublication();
-      if (failure !== undefined && !this.#pendingFailureReported) {
-        this.#pendingFailureReported = true;
-        throw failure;
-      }
+    if (changed.length === 0 && this.#removed.length === 0 && !this.#needsCheckpoint) {
       this.#target?.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
       this.#dirtyTransformIds.clear();
       if (semanticViewMask !== 0 && !this.#hasSemanticViews(semanticViewMask)) {
@@ -915,10 +901,6 @@ class ThreeTextBatchBinding {
       }
       return;
     }
-    // New desired state supersedes a renderer candidate that never became live. The old plan
-    // revision remains unconsumed, so the engine answers this update with a safe checkpoint.
-    this.#pendingPublication = undefined;
-    this.#pendingFailureReported = false;
     const paragraphMutations = [
       ...this.#removed.map((paragraph) => ({ opcode: 'remove' as const, paragraphId: paragraph.id })),
       ...changed.map(({ paragraph, order }) => ({
@@ -1069,17 +1051,14 @@ class ThreeTextBatchBinding {
       try {
         commitFailure = this.#renderTarget().apply(publication);
       } catch (error) {
-        this.#pendingPublication = {
-          publication: this.#session.retain(publication),
-          semanticViewMask,
-        };
-        this.#pendingFailureReported = true;
+        this.#needsCheckpoint = true;
         throw error;
       }
       this.#dirtyTransformIds.clear();
       this.#planRevision = publication.planRevision;
       this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
       this.#retainSemanticViews(publication, semanticViewMask);
+      this.#needsCheckpoint = false;
       if (commitFailure !== undefined) throw commitFailure;
     } catch (error) {
       const rejected = textFrameError(error, (fault) => this.#faultSubject(fault));
@@ -1092,23 +1071,6 @@ class ThreeTextBatchBinding {
     }
   }
 
-  /** Retry one accepted engine publication that renderer preparation has not committed yet. */
-  #retryPendingPublication(): unknown | undefined {
-    const pending = this.#pendingPublication;
-    if (pending === undefined) return undefined;
-    try {
-      const { publication, semanticViewMask } = pending;
-      const commitFailure = this.#renderTarget().apply(publication);
-      this.#pendingPublication = undefined;
-      this.#pendingFailureReported = false;
-      this.#planRevision = publication.planRevision;
-      this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
-      this.#retainSemanticViews(publication, semanticViewMask);
-      return commitFailure;
-    } catch (error) {
-      return error;
-    }
-  }
   /**
    * Resolves an engine fault onto the objects the caller wrote.
    *

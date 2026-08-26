@@ -3,8 +3,9 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     STATUS_FONT_IN_USE, STATUS_FONT_STACK_MISSING, STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST,
-    STATUS_OK, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING, STATUS_RESULT_TOO_LARGE,
-    STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT, STATUS_SESSION_MISSING, ShaperRegistry,
+    STATUS_OK, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING, STATUS_REGISTRATION_IN_USE,
+    STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT,
+    STATUS_SESSION_MISSING, ShaperRegistry,
     engine::{
         EngineError, FrameFault, TextEngine,
         font_binding_wire::parse_font_binding,
@@ -841,6 +842,7 @@ fn engine_status(error: EngineError) -> u32 {
         EngineError::RevisionExhausted => STATUS_RESULT_TOO_LARGE,
         EngineError::InvalidRequest => STATUS_INVALID_REQUEST,
         EngineError::ResultTooLarge => STATUS_RESULT_TOO_LARGE,
+        EngineError::RegistrationInUse => STATUS_REGISTRATION_IN_USE,
         EngineError::StyleRangeInvalid(_) => crate::STATUS_STYLE_RANGE_INVALID,
         EngineError::StyleSplitsCluster(_) => crate::STATUS_STYLE_SPLITS_CLUSTER,
         EngineError::StyleNestingInvalid(_) => crate::STATUS_STYLE_NESTING_INVALID,

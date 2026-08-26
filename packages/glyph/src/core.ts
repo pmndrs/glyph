@@ -54,9 +54,9 @@ export {
   type TextEngineRetirementRecord,
 } from './core/plan-view.js';
 export {
+  assertOwnedTextEnginePublication,
   TextEnginePublicationExpiredError,
-  retainedPublicationBrand,
-  type RetainedTextEnginePublication,
+  type OwnedTextEnginePublication,
 } from './core/retention.js';
 export { readTextEngineLayouts, readTextEngineMeasurements } from './core/layout-query-view.js';
 export {

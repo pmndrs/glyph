@@ -253,6 +253,12 @@ impl StyleArena {
         self.records.len()
     }
 
+    pub(crate) fn references_font_stack(&self, handle: u32) -> bool {
+        self.records.iter().any(|style| {
+            style.field_mask & STYLE_FIELD_FONT_STACK != 0 && style.font_stack_handle == handle
+        })
+    }
+
     pub(crate) fn reserve_default(&mut self) -> Result<(), EngineError> {
         self.records
             .try_reserve_exact(DEFAULT_STYLE_CAPACITY)

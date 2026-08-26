@@ -33,7 +33,7 @@ sources:
     title: Render plan reader
   - id: retention
     resource: ../../packages/glyph/src/core/retention.ts
-    title: Publication retention protocol
+    title: Publication ownership protocol
   - id: three-policy
     resource: ../../packages/glyph/src/three/render-policy.ts
     title: Three.js render policy
@@ -45,7 +45,7 @@ sources:
     title: Renderer-neutral render plan records
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-23T21:49:18Z'
+  at: '2026-08-26T18:18:53Z'
 ---
 
 # Author a render policy and consume a render plan
@@ -277,7 +277,7 @@ glyph/strike/resource tables and their resource identities. A registered `Raster
 and `compileRasterFont()` returns the binding bytes plus constrained portable resource payloads; the byte-only
 `loadedFontBindingBytes()` projection consults that registry for every first- and third-party raster technique.
 (`packages/glyph/src/core/raster-plan-program.ts`, `packages/glyph/src/core/font-binding.ts`,
-`packages/glyph/src/core/font-binding.ts`) The engine still owns resource realization and material creation, so a
+`packages/glyph/src/core/font-binding.ts`) The renderer still owns resource realization and material creation, so a
 Three consumer pairs the portable plan with a registered `{ technique, variant }` through
 `registerThreeRasterPlanProgram()` rather than copying the compiler. Register exactly one chosen realization per technique
 before the first Three runtime snapshot; a second variant or a late registration throws at that call. The variant receives
@@ -334,10 +334,10 @@ const request = compileTextEngineFrameUpdate({
 });
 
 const borrowed = session.update(request);
-session.assertLive(borrowed);
-const publication = session.retain(borrowed);
+const publication = session.copyPublication(borrowed);
 const pending = prepareRendererSubmission(publication); // validate without changing live state
 await pending.commit();
+acceptedPlanRevision = publication.planRevision;
 acceptedPublicationGeneration = publication.publicationGeneration;
 ```
 
@@ -346,6 +346,12 @@ selected policy, hard per-frame limits, and optional paragraph, text, style, con
 exclusion, inline-object, semantic-view, compositing, and policy-parameter sections.
 (`packages/glyph/src/core/frame-wire.ts`) `compileTextEngineFrameUpdate()` only serializes those sections; shaping,
 layout, policy execution, and packing remain in Rust. (`packages/glyph/src/core/frame-wire.ts`)
+
+The host claims every registered policy, binding, stack, and session in its Wasm instance. A second host may use the same
+shaper with different registrations, but cannot claim the same numeric handle or submit a frame that names the first
+host's policy or stack. Those checks happen before the current publication expires. A successful registration also
+adopts scoped ID provenance, so disposing the host that originally minted a handle cannot orphan another host's live
+registration. (`packages/glyph/src/core/host.ts`, `packages/glyph/src/core/render-policy.ts`)
 
 Capability-set wire IDs are assigned from descriptor order by `compileRenderPolicy()`. Omit `capabilitySet` to select the
 first or only profile. A renderer publishing several profiles calls
@@ -366,16 +372,14 @@ exists because an earlier rejected-frame design kept recompiling the invalid fra
 the last accepted scene. (`docs/planning/session-handoff.md`)
 
 Use the last engine-accepted publication's `engineRevision`, but the last device-accepted publication's `planRevision` and
-`publicationGeneration`, for the next update. Do not use `session.acknowledgedGeneration` when a retained publication is
-still awaiting device acceptance. Retention owns the bytes, while renderer commit proves that their patches and resources
-became live. If a rejected candidate is superseded, this split lets the engine publish a safe checkpoint from the last
-consumed plan instead of latching stale bytes. Plan revision consumption and storage retirement acknowledgment remain
-distinct fences.
+`publicationGeneration`, for the next update. Copying owns bytes; it does not prove that their patches and resources became
+live. If a renderer rejects a candidate, keep the device-accepted values unchanged. The next update then publishes a safe
+checkpoint instead of replaying copied bytes or latching stale renderer state.
 (`packages/glyph-example-renderer/src/engine.ts`, `docs/planning/decision-register.md`, D-279)
 
 ## 6. Read the plan
 
-Bind a live borrowed publication, or a retained publication, to `TextEngineRenderPlanView`. `bind()` verifies that the byte
+Bind a live borrowed publication, or an owned publication, to `TextEngineRenderPlanView`. `bind()` verifies that the byte
 view belongs to the reported memory, validates the publication length, and validates all seven table spans. `table()`
 returns `{ offset, count, stride }`; `record()` range-checks an index; `u8`, `u16`, `u32`, `f32`, and `bytes` read within the
 publication in canonical little-endian order. (`packages/glyph/src/core/plan-view.ts`,
@@ -386,7 +390,7 @@ The layout constants are public through `textShaperAbi`, so records without a co
 copying:
 
 ```ts
-import { TextEngineRenderPlanView, textShaperAbi, type RetainedTextEnginePublication } from '@pmndrs/glyph/core';
+import { TextEngineRenderPlanView, textShaperAbi, type OwnedTextEnginePublication } from '@pmndrs/glyph/core';
 
 interface DecodedDraw {
   readonly programId: number;
@@ -404,7 +408,7 @@ interface DecodedDraw {
   readonly orderToken: number;
 }
 
-export function decodeDraws(publication: RetainedTextEnginePublication): DecodedDraw[] {
+export function decodeDraws(publication: OwnedTextEnginePublication): DecodedDraw[] {
   const plan = new TextEngineRenderPlanView().bind(publication);
   const table = plan.table('draws');
   const layout = textShaperAbi.layouts.engineDraw;
@@ -432,7 +436,7 @@ export function decodeDraws(publication: RetainedTextEnginePublication): Decoded
 }
 ```
 
-The example renderer uses the same pattern, while requiring a retained publication because its draw list survives the
+The example renderer uses the same pattern, while requiring an owned publication because its draw list survives the
 call. (`packages/glyph-example-renderer/src/plan-reader.ts`,
 `packages/glyph-example-renderer/src/draw-list.ts`)
 
@@ -501,7 +505,7 @@ authority; the Rust declarations provide the scalar types and exact strides.
   record through the policy buffer in indexed mode. (`packages/glyph/rust/shaper/src/engine/render_plan.rs:118`,
   `packages/glyph/src/three/engine-plan-target.ts`)
 
-## 7. Retain the frame handoff correctly
+## 7. Choose the publication ownership mode
 
 The publication transport is an A/B double buffer. A session owns two result arenas; the engine encodes into the inactive
 slot, validates and commits, then makes that slot active. The host can keep displaying the previously realized frame while
@@ -519,27 +523,29 @@ on hidden arena state and eventually feed stale bytes to the GPU. (`packages/gly
 
 Choose one handoff:
 
-- Consume the borrow synchronously: call `session.assertLive(publication)` before decoding, apply every needed table and
-  payload before another session call, then call `session.acknowledge(publication)`.
-- Keep plan bytes or views: call `session.retain(publication)`. It makes one contiguous copy of the header, all tables, and
-  patch payloads and brands the result as `RetainedTextEnginePublication`. The retained copy never expires. Because
-  `retain()` also advances the session's convenience acknowledgment, a transactional renderer must keep its own
-  device-accepted generation and use that value on the wire until submission commits.
+- Consume the borrow synchronously: decode and apply every needed table and payload before another session call. No copy
+  or session acknowledgment method is required; advance the renderer's accepted revision and generation only after commit.
+- Keep plan bytes or views: call `session.copyPublication(publication)`. It makes one contiguous copy of the header, all
+  tables, and patch payloads and records package-private provenance as `OwnedTextEnginePublication`. The owned copy never
+  expires, and `assertOwnedTextEnginePublication()` rejects a visible-field copy or JavaScript cast. Copy before an
+  asynchronous operation, later session call, retained scene handoff, or worker transfer.
   (`packages/glyph/src/core/host.ts`, `packages/glyph/src/core/retention.ts`)
 
-Use `session.isExpired()` when branching is useful and `session.assertLive()` when a stale read is a defect. Both also
-reject a publication issued by another session. (`packages/glyph/src/core/host.ts`,
-`packages/glyph/src/core/host.ts`)
+`session.isExpired()` is an optional diagnostic for a borrowed publication. `copyPublication()` performs the throwing
+currentness check itself and rejects a publication issued by another session. (`packages/glyph/src/core/host.ts`)
 
-Acknowledgment is load-bearing, not bookkeeping. The engine delays retirements until the host has consumed the required
-publication generation; acknowledging late retains old GPU storage, never acknowledging leaks it, and sending a generation
-that goes backward is a revision conflict. A synchronous in-place consumer may copy `session.acknowledgedGeneration` into
-the next frame update after applying the publication. A renderer that retains before device submission must instead carry
-the last generation whose submission committed.
+Acceptance is load-bearing, not bookkeeping. The engine delays retirements until the renderer reports the required
+publication generation; reporting late retains old GPU storage, never advancing leaks it, and sending a generation that
+goes backward is a revision conflict. Carry the last generation whose device submission committed in the next frame.
 (`packages/glyph/src/core/plan-view.ts`, `packages/glyph/src/core/retention.ts`,
 `packages/glyph/src/core/frame-wire.ts`) This separate fence exists because “the host consumed plan revision N” does
 not prove that storage associated with an earlier publication can be reused or released. Conflating the two would allow
 retirement while renderer work still depended on that storage. (`docs/planning/decision-register.md:235`)
+
+Three consumes the borrow synchronously. If material or resource realization throws, it keeps the last accepted plan
+revision and generation and requests a fresh checkpoint on the next engine call. It does not copy or replay the rejected
+publication. Device-loss recovery follows the same shape: discard device-owned resources, create a replacement resource
+pool, then realize a complete checkpoint on the new device. (`packages/glyph/src/three/text.ts`)
 
 ## 8. Apply patches instead of uploading whole buffers
 
@@ -562,7 +568,7 @@ import {
   readTextEngineRetirement,
   TextEngineRenderPlanView,
   textShaperAbi,
-  type RetainedTextEnginePublication,
+  type OwnedTextEnginePublication,
 } from '@pmndrs/glyph/core';
 
 interface BufferStorage {
@@ -576,7 +582,7 @@ function bufferKey(id: number, generation: number): string {
 }
 
 export function applyBufferDeltas(
-  publication: RetainedTextEnginePublication,
+  publication: OwnedTextEnginePublication,
   storage: Map<string, BufferStorage>,
   currentGenerations: Map<number, number>,
   releaseResource: (id: number, generation: number) => void,
@@ -715,6 +721,10 @@ before the pending resource batch is discarded. A binding cannot be disposed whi
 dispose stacks first, or let `TextEngineHost.dispose()` tear down sessions, stacks, bindings, policies, and ID provenance.
 Three therefore marks a disposed font's cached binding for retirement and performs that disposal only when its final
 registered-stack lease releases; the last accepted draw never loses resources out from under it.
+The example recording device stores realizations in a map because that is its renderer-owned pool, not because `/core`
+requires a `Map`. A production renderer normally scopes this pool to one GPU device and reuses an immutable texture,
+buffer, or supplied geometry for every session leasing the same `(referenceId, generation)`. Session teardown releases a
+lease; it does not release a realization still used by another session.
 `text.render()` performs the frame compilation, retention, decode, and submission transaction. `text.update()` only
 changes desired state; shaping and GPU work happen on the next `render()`. `text.dispose()` publishes paragraph removal,
 and the accepted empty scene clears the target. The browser lab uses this exact path with runtime-baked Inter and requires

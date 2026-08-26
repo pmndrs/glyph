@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:2b3a4fd5147fa01fbd7a6499209adbc918f92defb60c1b81ff5cc95332ed4e0b'
+source_digest: 'sha256:b4318ac970e9884092200c57c3b7e2c45e38478952662814bf4d72dfb996b6db'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -72,8 +72,8 @@ sources:
     resource: ../planning/three-api.md
     title: Three.js text API reference
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-08-24T03:12:27Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-26T18:18:53Z'
 ---
 
 # Package reference: `@pmndrs/glyph`
@@ -98,6 +98,13 @@ pass its `wasm32-unknown-unknown --no-default-features` build. The text engine u
 for font registrations and the single mutating `pmndrs_glyph_engine_update(sessionId, requestOffset, requestLength)`
 export for retained engine sessions.
 TypeScript does not independently shape, lay out, or pack paragraphs.
+
+`TextEngineHost` is the cold registration owner within one shaper: it claims policies, font bindings, font stacks, and
+sessions, retains every claimed ID's provenance, and rejects cross-host frame references before a live borrow expires.
+`TextEngineSession` is the hot lifetime of one independently revisioned paragraph batch. It owns paragraph state,
+physical plan storage and generations, publications, and engine-side resource residency; it is not a scene, device, or
+render pass. Portable compiled resources remain immutable payload data. A renderer owns the per-device realization pool
+that turns those payloads into textures, buffers, and geometry and leases them across sessions by stable plan identity.
 
 ## Public package surfaces
 
@@ -261,7 +268,9 @@ correct spacing through intermediate animated sizes for Bitmap, MSDF, and Slug.
 
 The Three executor does not infer paragraph layout from GPU records and does not maintain a parallel candidate/current
 target state machine. It applies the Rust command buffer transactionally and retains only renderer resources required by
-future deltas.
+future deltas. Portable payload bytes are already shared by `LoadedFont`; Three's current GPU texture realization remains
+session-local. Pooling those immutable device objects above sessions is a Three implementation follow-up, not a core scene,
+device, render-pass, or implicit-standalone-batch API.
 
 A paragraph's content box may declare `columns: { count, gap }`, flowing text through side-by-side ordered columns inside
 the exact content-box width. Columns fill in order without balancing, so the final column may run short, and an exact

@@ -14,7 +14,7 @@ export {
   type ExampleTextOptions,
   type ExampleTextUpdate,
 } from './engine.js';
-export type { RetainedTextEnginePublication } from '@pmndrs/glyph/core';
+export type { OwnedTextEnginePublication } from '@pmndrs/glyph/core';
 export { readDrawList } from './plan-reader.js';
 export type { ExampleTableSnapshot } from './snapshot.js';
 export {

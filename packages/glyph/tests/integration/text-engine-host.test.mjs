@@ -8,7 +8,12 @@ import { TextEngineHost } from '../../dist/core/host.js';
 import { assertGlyphId, id, programId, techniqueId } from '../../dist/core/render-policy.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
-import { engineUpdateBytes, fontBindingBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
+import {
+  engineFrameUpdateBytes,
+  engineUpdateBytes,
+  fontBindingBytes,
+  renderPolicyBytes,
+} from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
@@ -89,8 +94,10 @@ test('font bindings cannot be disposed while an owned stack still references the
   const shaper = await createRuntimeShaper({ registry, wasm });
   shaper.registerFont(font);
   const host = new TextEngineHost(shaper);
+  const foreignHost = new TextEngineHost(shaper);
   const bindingHandle = host.id('font-binding', 'test.text-engine-host/lifecycle-binding');
   const stackHandle = host.id('font-stack', 'test.text-engine-host/lifecycle-stack');
+  const foreignStackHandle = foreignHost.id('font-stack', 'test.text-engine-host/foreign-lifecycle-stack');
   const glyphCount = validated.glyphExtents.byteLength / 8;
   const binding = fontBindingBytes(textShaperAbi, {
     techniqueId: 1,
@@ -102,16 +109,51 @@ test('font bindings cannot be disposed while an owned stack still references the
   });
   try {
     host.registerFontBinding(bindingHandle, font.handle, binding);
+    assert.throws(
+      () => foreignHost.registerFontStack(foreignStackHandle, [bindingHandle]),
+      /not owned by this text engine host/u,
+    );
     host.registerFontStack(stackHandle, [bindingHandle]);
     assert.throws(() => host.disposeFontBinding(bindingHandle), /still used by font stack/u);
     assert.throws(() => shaper.disposeFont(font), /retained by a registered font stack/u);
     assert.equal(shaper.memoryReport().fontCount, 1, 'a refused disposal must keep the shaper registration owned');
+    const policyHandle = host.id('policy', 'test.text-engine-host/lifecycle-policy');
+    const sessionHandle = host.id('session', 'test.text-engine-host/lifecycle-session');
+    host.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
+    const request = engineFrameUpdateBytes(textShaperAbi, {
+      sessionId: sessionHandle,
+      policyHandle,
+      fontStackHandle: stackHandle,
+      textMutation: { start: 0, deleteCount: 0, insert: [0x41] },
+      style: { textEnd: 1, fontSize: 16, lineHeight: 19.2, rasterPixelRatio: 1 },
+      geometry: { width: 100, height: 100, maxLines: 4, revision: 1 },
+      limits: { maxClusters: 16, maxLines: 4, maxOutputBytes: 128 * 1024 },
+    });
+    const session = host.createSession({
+      handle: sessionHandle,
+      requestCapacity: request.byteLength,
+      resultCapacity: 128 * 1024,
+    });
+    session.update(request);
+    assert.throws(
+      () => host.disposeFontStack(stackHandle),
+      (error) => error.status === textShaperAbi.status.registrationInUse,
+      'a committed session must retain the stack named by its styles',
+    );
+    assert.throws(
+      () => host.disposePolicy(policyHandle),
+      (error) => error.status === textShaperAbi.status.registrationInUse,
+      'a committed session must retain its policy',
+    );
+    session.dispose();
     host.disposeFontStack(stackHandle);
     host.disposeFontBinding(bindingHandle);
-    assert.throws(() => host.disposeFontBinding(bindingHandle), /not owned/u);
+    host.disposePolicy(policyHandle);
+    assert.throws(() => host.disposeFontBinding(bindingHandle), /must come from id/u);
     shaper.disposeFont(font);
     assert.equal(shaper.memoryReport().fontCount, 0);
   } finally {
+    foreignHost.dispose();
     host.dispose();
     font.dispose();
     shaper.dispose();

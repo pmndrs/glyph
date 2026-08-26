@@ -245,6 +245,10 @@ policy, load and compile each font into portable resources plus binding bytes, r
 update text by submitting serialized frames and consuming their revisioned render plans. The engine never calls back into
 JavaScript during shaping, layout, or packing.
 
+The host owns cold Wasm registrations; each session owns one hot revisioned paragraph batch. Neither is a scene, render
+pass, or GPU device. Portable compiled payloads stay immutable, while the renderer realizes and pools their textures,
+buffers, and geometry per device by the plan's stable resource identity.
+
 Load a font and own the engine lifecycle once:
 
 ```ts
@@ -301,6 +305,8 @@ host.registerFontStack(fontStackHandle, [bindingHandle]);
 The policy is your own declaration — `@pmndrs/glyph/core` exports the authoring toolkit (`compileRenderPolicy`, `programContext`, the wire-identity registry) that Three's first-party policy is itself built with. Its handle is an authored
 module constant from `id()`; bindings, stacks, sessions, and text identities come from `host.id()` because their collision
 provenance ends with that host.
+Registrations are claimed per Wasm instance. Multiple hosts may use one shaper with distinct handles, but a cross-host
+policy or stack reference throws before the session invalidates its last accepted publication.
 
 Shape text — a session update is one serialized frame of mutations, constraints, and the revision handshake:
 
@@ -327,7 +333,11 @@ const publication = session.update(
 );
 ```
 
-Consume the plan. A publication is borrowed A/B memory — its bytes stay readable only until the next call into the same Wasm module, so a synchronous renderer walks it before touching the engine again. The static path applies buffer patches, then issues one draw per packet:
+Consume the plan. A publication is borrowed A/B memory — its bytes stay readable only until the next call on that session
+or a Wasm-memory growth, so a synchronous renderer walks it before touching the engine again. An asynchronous renderer
+calls `session.copyPublication()` once; APIs that store the result use `assertOwnedTextEnginePublication()` to verify
+package-private provenance that a visible-field copy cannot forge. The static path applies buffer patches, then issues one
+draw per packet:
 
 ```ts
 import { TextEngineRenderPlanView, textShaperAbi } from '@pmndrs/glyph/core';
@@ -356,29 +366,32 @@ for (let index = 0; index < draws.count; index += 1) {
 The frame loop echoes what it consumed. Adjacent revisions publish minimal policy-costed patches; a consumer that fell behind the required base revision receives a complete checkpoint instead of an unsafe delta:
 
 ```ts
-let previous = publication;
+let engineRevision = publication.engineRevision;
+let acceptedPlanRevision = publication.planRevision;
+let acceptedPublicationGeneration = publication.publicationGeneration;
 function frame(edits) {
   const next = session.update(
     compileTextEngineFrameUpdate({
       sessionId: sessionHandle,
       policyHandle: POLICY_HANDLE,
-      expectedEngineRevision: previous.engineRevision,
-      consumedPlanRevision: previous.planRevision,
-      acknowledgedPublicationGeneration: previous.publicationGeneration,
+      expectedEngineRevision: engineRevision,
+      consumedPlanRevision: acceptedPlanRevision,
+      acknowledgedPublicationGeneration: acceptedPublicationGeneration,
       limits,
       textMutations: edits,
     }),
   );
+  engineRevision = next.engineRevision;
   plan.bind(next);
   applyPlanAndSubmit(plan); // returns only after the renderer commits the publication
-  session.acknowledge(next);
-  previous = next;
+  acceptedPlanRevision = next.planRevision;
+  acceptedPublicationGeneration = next.publicationGeneration;
 }
 ```
 
-Record layouts come from the versioned ABI (`@pmndrs/glyph/shaper-abi.json`); the next section describes what policies and
-plans mean, and `host.dispose()` releases sessions, font stacks, font bindings, policies, and its runtime ID provenance in
-dependency order.
+Record layouts come from `textShaperAbi`; the next section describes what policies and plans mean. `host.dispose()`
+releases sessions, font stacks, font bindings, policies, and runtime ID provenance in dependency order. Explicit policy
+or stack disposal rejects `registrationInUse` while a live session names it, and failed disposal remains retryable.
 
 ## Render policy and render plan
 

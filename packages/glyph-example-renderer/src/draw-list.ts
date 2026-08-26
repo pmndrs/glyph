@@ -58,7 +58,7 @@ export interface ExampleDraw {
 /**
  * One frame's render plan, safe to hold forever.
  *
- * Ownership comes from `TextEngineSession.retain`, which copies the whole encoded
+ * Ownership comes from `TextEngineSession.copyPublication`, which copies the whole encoded
  * result once and brands it; every field here is either a decode of that copy or a
  * view into it, and nothing aliases the engine's Wasm memory.
  */
@@ -70,7 +70,7 @@ export interface ExampleDrawList {
   readonly resourceRecords: readonly ExampleResourceRecord[];
   readonly bufferRecords: readonly TextEngineBufferRecord[];
   readonly primitiveRecords: readonly ExamplePrimitiveRecord[];
-  /** Dirty ranges: what changed on which retained buffer, not whole arrays. */
+  /** Dirty ranges: what changed on which renderer buffer, not whole arrays. */
   readonly patches: readonly TextEnginePatchRecord[];
   /**
    * Storage to release, each naming `(kind, id, generation)` and the acknowledged

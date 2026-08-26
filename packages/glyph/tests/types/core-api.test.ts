@@ -6,6 +6,7 @@ import {
   type ParagraphSpan,
 } from '@pmndrs/glyph';
 import {
+  assertOwnedTextEnginePublication,
   compileFontBinding,
   compileTextEngineFrameUpdate,
   createRuntimeShaper,
@@ -20,7 +21,7 @@ import {
   textRuntimeShaper,
   textShaperAbi,
   type FontBindingDescriptor,
-  type RetainedTextEnginePublication,
+  type OwnedTextEnginePublication,
   type RuntimeShaper,
   type TextEngineFrameUpdate,
   type TextEnginePublication,
@@ -33,7 +34,9 @@ void shaper;
 
 declare const runtimeShaper: RuntimeShaper;
 const host = new TextEngineHost(runtimeShaper);
-host.registerPolicy(id('policy', 'core-api-test/default'), new Uint8Array(8));
+const policyHandle = id('policy', 'core-api-test/default');
+host.registerPolicy(policyHandle, new Uint8Array(8));
+host.disposePolicy(policyHandle);
 const session: TextEngineSession = host.createSession({
   handle: host.id('session', 'core-api-test/session'),
   requestCapacity: 4096,
@@ -52,17 +55,26 @@ declare const frame: TextEngineFrameUpdate;
 const request: Uint8Array = compileTextEngineFrameUpdate(frame);
 const publication: TextEnginePublication = session.update(request);
 
-// Retention protocol: borrows expire loudly, retained copies never do.
+// Ownership protocol: borrows expire; owned copies do not.
 declare const expiredError: TextEnginePublicationExpiredError;
 const generations: readonly [number, number] = [expiredError.consumedGeneration, expiredError.latestGeneration];
 void generations;
-const retainedPublication: RetainedTextEnginePublication = session.retain(publication);
-void retainedPublication;
-session.assertLive(publication);
+const ownedPublication: OwnedTextEnginePublication = session.copyPublication(publication);
+assertOwnedTextEnginePublication(ownedPublication);
+// @ts-expect-error A borrowed publication does not carry package-private owned provenance.
+const forgedOwnedPublication: OwnedTextEnginePublication = publication;
+void forgedOwnedPublication;
+void ownedPublication;
 const live: boolean = session.isExpired(publication);
-const acknowledged: number = session.acknowledgedGeneration;
 void live;
-void acknowledged;
+// @ts-expect-error Copying is explicit ownership, not retain/release reference counting.
+session.retain(publication);
+// @ts-expect-error Borrow checks are internal to ownership-boundary operations.
+session.assertLive(publication);
+// @ts-expect-error Renderer acceptance is carried by the next frame's revision fields.
+session.acknowledge(publication);
+// @ts-expect-error Copying bytes must not expose an early-advancing acceptance counter.
+void session.acknowledgedGeneration;
 
 const plan = new TextEngineRenderPlanView().bind(publication);
 const draws = plan.table('draws');
@@ -116,9 +128,11 @@ declare const paragraphFont: FontSelection<AnyRasterTechnique>;
 declare const formattedText: FormattedText<AnyRasterTechnique>;
 declare const paragraphSpans: readonly ParagraphSpan<AnyRasterTechnique>[];
 const paragraph = new Paragraph({ font: paragraphFont, text: 'plain', spans: paragraphSpans });
-new Paragraph({ font: paragraphFont, text: formattedText });
+const formattedParagraph = new Paragraph({ font: paragraphFont, text: formattedText });
+void formattedParagraph;
 // @ts-expect-error Formatted text already owns its spans.
-new Paragraph({ font: paragraphFont, text: formattedText, spans: paragraphSpans });
+const invalidFormattedParagraph = new Paragraph({ font: paragraphFont, text: formattedText, spans: paragraphSpans });
+void invalidFormattedParagraph;
 paragraph.update({ text: 'updated', spans: paragraphSpans });
 paragraph.update({ text: formattedText });
 // @ts-expect-error Updates cannot provide two span authorities either.

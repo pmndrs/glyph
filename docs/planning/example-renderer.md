@@ -17,8 +17,8 @@ sources:
     resource: uikit-integration.md
     title: uikit integration
 generated:
-  by: anthropic/claude-opus-5
-  at: '2026-08-23T09:15:00Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-26T18:18:53Z'
 ---
 
 # Example renderer
@@ -41,7 +41,14 @@ validation seam.
 
 The plan surface is richer than the audit first credited. One publication carries seven tables — `resources`, `buffers`, `patches`, `primitives`, `draws`, `retirements`, `diagnostics` — and a decoded draw already carries `clipId`, `depthKey`, `orderToken`, `materialId`, and `transformId`. Clipping, render ordering, material selection, incremental patching, and resource retirement are all modelled. A host that owns its own instancing has what it needs.
 
-What it proves about **ownership** is now the headline. Item 11's retention protocol landed on the session, and this package drives it against a real engine: real Wasm, the portable raster plan from `glyph-example-raster`, a host-owned policy assembled through `/core` (`src/policy.ts`), real frames through `TextEngineSession.update`, a deterministic recording oracle (`src/device.ts`), and a concrete TypeGPU/WebGPU device (`src/webgpu-device.ts`). The protocol steps run in order on every frame in `ExampleTextEngine.render` — update to get the borrow, `assertLive` as the cheap liveness gate, `retain` for one contiguous host-owned copy, then decoding views over owned bytes only. The recording oracle validates complete candidate resource and draw state before publication, including technique/program/variant identity, resource metadata, buffer generations, patch ranges, primitive spans, and draw references. The TypeGPU device uploads supplied geometry and policy records, creates a real render pipeline, submits indexed instanced draws, and exposes pixel readback. Font registration and frame submission use prepare/commit handles: a failed host call, invalid plan, or failed submission leaves the candidate unpublished rather than rolling live state backward or restoring stale content. Tests cover stale borrows, revision conflicts, dirty patch ranges, exact-generation retirement, and failed publication. The browser lab runtime-bakes Inter, creates and updates an `ExampleText`, and requires non-empty, changing RGBA pixels. The reader demands the `RetainedTextEnginePublication` brand in its parameter type, so handing it a live-but-doomed borrow is a compile error; the brand is checked again at runtime because plain JavaScript callers bypass the types. The old defensive per-table copy is gone: copying happens once, in `session.retain`.
+What it proves about **ownership** is now the headline. The package drives real Wasm, the portable raster plan from `glyph-example-raster`, a host-owned `/core` policy, real `TextEngineSession.update` frames, a deterministic recording oracle, and a concrete TypeGPU/WebGPU device. Its asynchronous submission path calls `copyPublication()` once before the borrow can cross an `await`; a synchronous renderer such as Three consumes the A/B borrow directly. The recording oracle validates complete candidate resource and draw state before commit, including technique/program/variant identity, resource metadata, buffer generations, patch ranges, primitive spans, and draw references. The TypeGPU device uploads supplied geometry and policy records, creates a real render pipeline, submits indexed instanced draws, and exposes pixel readback. A failed submission leaves the last accepted plan revision and generation unchanged, so the next update publishes a checkpoint instead of replaying copied bytes. Tests cover stale borrows, private owned-publication provenance, revision conflicts, dirty patch ranges, exact-generation retirement, and failed publication. The browser lab runtime-bakes Inter, creates and updates an `ExampleText`, and requires non-empty, changing RGBA pixels.
+
+The example's resource map is the recording device's concrete realization pool, not a core requirement to store payloads
+in a `Map`. `ExampleTextEngine.registerFont` walks `compiled.declaredResources`, assigns the same numeric `referenceId`
+the plan will publish, and passes the portable payload to `device.prepareResources`. The recording device keeps validated
+CPU objects; the TypeGPU device creates real WebGPU buffers, textures, bind groups, and geometry. A production renderer
+normally scopes that pool to its GPU device and shares immutable realizations across all sessions that lease the same
+`(referenceId, generation)`.
 
 Font acquisition remains outside `/core`: `createTextRuntime` is a root API and a core-only host cannot itself load a shaping font. The acceptance uses that root API only to obtain a `LoadedFont`, then hands it to the core-facing engine registration method. This keeps font loading and engine execution separate while proving that the published core surface is sufficient for a non-Three host to render a real text frame.
 

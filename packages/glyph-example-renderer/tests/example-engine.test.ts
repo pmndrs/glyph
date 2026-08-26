@@ -5,6 +5,7 @@ import {
   compileTextEngineFrameUpdate,
   createRuntimeShaper,
   id,
+  textShaperAbi,
   TextEngineHost,
   TextEnginePublicationExpiredError,
   type TextEngineFrameLimits,
@@ -40,7 +41,7 @@ const LIMITS: TextEngineFrameLimits = {
 };
 
 describe('a real engine driven through the published core surface', () => {
-  test('publishes real frames whose retained plans outlive borrows, growth, and slots', async () => {
+  test('publishes real frames whose owned plans outlive borrows, growth, and slots', async () => {
     const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
     const engine = new ExampleTextEngine(shaper);
     try {
@@ -52,18 +53,17 @@ describe('a real engine driven through the published core surface', () => {
       expect(first.draws).toEqual([]);
       expect(first.engineRevision).toBe(1);
 
-      // The borrow behind frame 1 died the moment frame 2 was answered; the retained
+      // The borrow behind frame 1 died the moment frame 2 was answered; the owned
       // plan did not. Two more frames also walk both A/B output slots.
       const session = engine.session;
       const second = await engine.render({});
       expect(second.publicationGeneration).toBe(2);
       expect(second.engineRevision).toBe(2);
-      expect(session.acknowledgedGeneration).toBe(2);
       expect((await engine.render({})).publicationGeneration).toBe(3);
       expect(first.patches).toEqual([]);
       expect(first.retirements).toEqual([]);
 
-      // Capacity growth moves every Wasm arena; retained plans still read fine while
+      // Capacity growth moves every Wasm arena; owned plans still read fine while
       // any borrow held across it is detected rather than silently re-read.
       session.reserve(4096, 8 * 1024 * 1024);
       const afterGrowth = await engine.render({});
@@ -94,8 +94,8 @@ describe('a real engine driven through the published core surface', () => {
         }),
       );
       expect(engine.session.isExpired(stale)).toBe(true);
-      expect(() => engine.session.assertLive(stale)).toThrowError(TextEnginePublicationExpiredError);
-      expect(() => engine.session.assertLive(stale)).toThrowError(/publication 1 expired/);
+      expect(() => engine.session.copyPublication(stale)).toThrowError(TextEnginePublicationExpiredError);
+      expect(() => engine.session.copyPublication(stale)).toThrowError(/publication 1 expired/);
 
       // A publication this session never issued cannot be reasoned about at all.
       expect(() => engine.session.isExpired({ ...stale })).toThrowError(TypeError);
@@ -111,7 +111,9 @@ describe('a real engine driven through the published core surface', () => {
       engine.openSession();
       await engine.render({});
       await engine.render({});
-      expect(engine.session.acknowledgedGeneration).toBe(2);
+      const request = engine.frameRequest({});
+      const view = new DataView(request.buffer, request.byteOffset, request.byteLength);
+      expect(view.getUint32(textShaperAbi.layouts.engineUpdateRequest.acknowledgedPublicationGeneration, true)).toBe(2);
 
       // A request that acknowledges an older generation than the engine has recorded
       // is rejected as a revision conflict: consumption is verified, not trusted.

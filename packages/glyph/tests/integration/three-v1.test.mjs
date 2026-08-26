@@ -4,6 +4,7 @@ import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
 import { createFontStack, createTextRuntime, FontRegistry } from '@pmndrs/glyph';
+import { TextEngineSession } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -356,7 +357,16 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   runtime.dispose();
 });
 
-test('layout leaves an unpublished renderer candidate for traversal to retry', async () => {
+test('renderer rejection recovers through a fresh engine checkpoint without replaying copied bytes', async (t) => {
+  const copyPublication = TextEngineSession.prototype.copyPublication;
+  let publicationCopies = 0;
+  TextEngineSession.prototype.copyPublication = function (publication) {
+    publicationCopies += 1;
+    return copyPublication.call(this, publication);
+  };
+  t.after(() => {
+    TextEngineSession.prototype.copyPublication = copyPublication;
+  });
   const registry = new FontRegistry();
   const instrumented = await createInstrumentedRuntime(registry);
   const runtime = instrumented.runtime;
@@ -395,15 +405,16 @@ test('layout leaves an unpublished renderer candidate for traversal to retry', a
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
   assert.equal(label.error, undefined);
-  assert.equal(instrumented.crossings, 1, 'retrying retained plan bytes must not call the engine again');
-  assert.equal(errors.length, 1, 'a successful retry must not repeat the old failure');
+  assert.equal(instrumented.crossings, 2, 'recovery must request a checkpoint from the engine');
+  assert.equal(publicationCopies, 0, 'Three must not copy a borrowed publication for renderer recovery');
+  assert.equal(errors.length, 1, 'a successful checkpoint must not repeat the old failure');
   assert.equal(group.children.filter((child) => child.isMesh).length, 1);
 
   label.material = material;
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
   assert.equal(label.error, undefined);
-  assert.equal(instrumented.crossings, 2, 'new input after recovery must publish normally');
+  assert.equal(instrumented.crossings, 3, 'new input after recovery must publish normally');
   assert.equal(group.children.filter((child) => child.isMesh).length, 1);
 
   group.dispose();

@@ -132,9 +132,8 @@ sequenceDiagram
   App->>Host: createSession(options)
   App->>Text: createText(authored state)
   Text->>Session: update(compileTextEngineFrameUpdate(mutations))
-  App->>Session: assertLive(publication)
-  App->>Session: retain(publication)
-  App->>Device: prepareSubmission(readDrawList(retained))
+  App->>Session: copyPublication(borrowed)
+  App->>Device: prepareSubmission(readDrawList(owned))
   App->>Device: pendingSubmission.commit()
   App->>Device: readPixels()
   App->>Text: update(...) then render()
@@ -155,8 +154,8 @@ sequenceDiagram
 | Text update      | `text.update(changes)`                           | changed content, style, or dimensions                 | desired state marked dirty; no shaping occurs yet                                 |
 | Text render      | `text.render()`                                  | current desired state                                 | minimal frame mutations sent through the existing session                         |
 | Frame            | `session.update(requestBytes)`                   | validated mutations, constraints, and revision fences | borrowed render-plan publication                                                  |
-| Ownership        | `session.assertLive()` then `session.retain()`   | borrowed publication                                  | owned publication safe across later calls                                         |
-| Decode           | `readDrawList(retained)`                         | retained plan bytes                                   | draws, primitives, buffers, resources, patches, retirements                       |
+| Ownership        | `session.copyPublication()`                      | borrowed publication                                  | owned publication safe across later calls                                         |
+| Decode           | `readDrawList(owned)`                            | owned plan bytes                                      | draws, primitives, buffers, resources, patches, retirements                       |
 | Submit           | `device.prepareSubmission(list).commit()`        | complete candidate plan                               | staged GPU buffers and commands become one accepted renderer state                |
 | Pixel proof      | `await device.readPixels()`                      | accepted offscreen WebGPU target                      | tightly packed RGBA bytes                                                         |
 
@@ -357,20 +356,20 @@ const request = compileTextEngineFrameUpdate({
   ],
 });
 const borrowed = session.update(request);
-session.assertLive(borrowed);
-const retained = session.retain(borrowed);
+const owned = session.copyPublication(borrowed);
 ```
 
 The frame omits `capabilitySet`; the first compiled profile is selected. `session.update()` returns a borrow into Wasm
-memory. Retain before calling code that may re-enter the runtime or before storing the publication across a frame. An
+memory. A synchronous renderer decodes and applies it before the next session call. Copy before an `await`, a later
+session call, a retained scene handoff, or a worker transfer. Copying does not advance renderer acceptance. An
 application-facing text object owns these five records: `update()` changes desired text or geometry, the next frame
 replaces the prior text range and advances `geometryRevision` when dimensions change, and disposal publishes
-`{ opcode: 'remove', paragraphId }`. `ExampleText` is the complete reference for that retained update loop.
+`{ opcode: 'remove', paragraphId }`. `ExampleText` is the complete reference for that owned asynchronous update loop.
 
 ### 4. Decode, validate, and atomically submit
 
 ```ts
-const drawList = readDrawList(retained);
+const drawList = readDrawList(owned);
 const pendingSubmission = device.prepareSubmission(drawList);
 await pendingSubmission.commit();
 

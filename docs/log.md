@@ -2,6 +2,15 @@
 
 ## 2026-08-26
 
+- **Core host and session ownership are now enforceable** — Registrations are claimed per Wasm instance and host,
+  cross-host frame references fail before invalidating the last publication, and scoped ID provenance follows a
+  successful registration. Live sessions retain their policy and font stacks; failed disposal remains retryable.
+  Owned publication copies now use package-private runtime provenance instead of an exported forgeable symbol. Copying
+  does not advance renderer acceptance. Three consumes the A/B borrow directly and recovers realization failure through
+  a fresh checkpoint rather than retaining and replaying rejected bytes. The core
+  reference also fixes the lifecycle map: compiled payloads are portable data, while each renderer owns per-device GPU
+  realization and cross-session leases.
+
 - **Attached text can measure desired layout before its first frame** — `Text.layout()` now creates or reconciles its
   batch after attachment and uses a non-publishing paragraph query without matrix traversal, material or GPU realization,
   or draw publication. Sequential group queries share one speculative lifecycle candidate that the first traversal can

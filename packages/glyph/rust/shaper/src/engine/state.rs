@@ -70,6 +70,8 @@ pub enum EngineError {
     /// Every cause a caller can act on has its own variant below; this one never names one.
     InvalidRequest,
     ResultTooLarge,
+    /// A host tried to dispose a policy or font stack still named by committed session state.
+    RegistrationInUse,
     /// A style's `[start, end)` is inverted, reaches past the end of the paragraph's text, or lands
     /// inside a UTF-16 surrogate pair.
     StyleRangeInvalid(FrameFault),
@@ -436,6 +438,13 @@ impl TextEngine {
             .font_stacks
             .binary_search_by_key(&handle, |stack| stack.handle)
             .map_err(|_| EngineError::FontStackMissing)?;
+        if self
+            .sessions
+            .values()
+            .any(|session| session.references_font_stack(handle))
+        {
+            return Err(EngineError::RegistrationInUse);
+        }
         self.font_stacks.remove(index);
         Ok(())
     }
@@ -491,6 +500,13 @@ impl TextEngine {
     }
 
     pub fn dispose_policy(&mut self, handle: u32) -> Result<(), EngineError> {
+        if self.sessions.values().any(|session| {
+            session
+                .policy_binding
+                .is_some_and(|binding| binding.handle == handle)
+        }) {
+            return Err(EngineError::RegistrationInUse);
+        }
         self.policies
             .remove(&handle)
             .ok_or(EngineError::PolicyMissing)?;
@@ -1590,6 +1606,17 @@ fn append_session_gather(
 }
 
 impl EngineSession {
+    fn references_font_stack(&self, handle: u32) -> bool {
+        self.paragraphs.iter().any(|paragraph| {
+            paragraph
+                .state
+                .styles
+                .active()
+                .arena
+                .references_font_stack(handle)
+        })
+    }
+
     #[cfg(test)]
     fn first_paragraph_state(&self) -> Option<&ParagraphState> {
         self.ordered_paragraphs
@@ -4955,6 +4982,12 @@ mod tests {
                 .paragraph_levels,
             &[1]
         );
+        assert_eq!(
+            engine.dispose_font_stack(7),
+            Err(EngineError::RegistrationInUse)
+        );
+        engine.dispose_session(4).unwrap();
+        assert_eq!(engine.dispose_font_stack(7), Ok(()));
     }
 
     #[test]
@@ -5322,7 +5355,7 @@ mod tests {
     }
 
     #[test]
-    fn a_committed_session_rejects_rebinding_its_policy_identity() {
+    fn a_committed_session_retains_its_policy_registration() {
         let mut engine = TextEngine::default();
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
@@ -5331,14 +5364,15 @@ mod tests {
         let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         engine.commit_update(first).unwrap();
 
+        assert_eq!(
+            engine.dispose_policy(9),
+            Err(EngineError::RegistrationInUse)
+        );
+        engine.dispose_session(4).unwrap();
         engine.dispose_policy(9).unwrap();
         engine
             .register_policy(9, validated_policy(TechniqueId(2)))
             .unwrap();
-        assert_eq!(
-            engine.prepare_update(update(1, 1, 1), 2),
-            Err(EngineError::InvalidRequest)
-        );
     }
 
     fn validated_policy(technique: TechniqueId) -> ValidatedPolicy {

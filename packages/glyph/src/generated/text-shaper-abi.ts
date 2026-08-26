@@ -797,6 +797,7 @@ export const textShaperAbi = {
     "ok": 0,
     "policyConflict": 8,
     "policyMissing": 9,
+    "registrationInUse": 20,
     "resultTooLarge": 7,
     "revisionConflict": 12,
     "sessionConflict": 10,

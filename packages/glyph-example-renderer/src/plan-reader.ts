@@ -1,32 +1,38 @@
 import {
+  assertOwnedTextEnginePublication,
   readTextEngineBuffer,
   readTextEnginePatch,
   readTextEngineResource,
   readTextEngineRetirement,
-  retainedPublicationBrand,
   TextEngineRenderPlanView,
-  type RetainedTextEnginePublication,
+  type OwnedTextEnginePublication,
+  type TextEnginePublication,
 } from '@pmndrs/glyph/core';
 
 import { decodeDraw, decodePrimitive, type ExampleDrawList } from './draw-list.js';
 import type { ExampleTableSnapshot } from './snapshot.js';
 
 /**
- * Reads one retained publication into the host's draw-list structures.
+ * Reads one owned publication into the host's draw-list structures.
  *
- * The parameter demands `RetainedTextEnginePublication`, not a plain publication: a
+ * The parameter demands `OwnedTextEnginePublication`, not a plain publication: a
  * draw list is built to be held across frames, and a borrowed publication expires at
  * the session's next call. The brand makes passing a live-but-doomed borrow a compile
  * error instead of a latent read of freed memory.
  */
 export function readDrawList(
-  publication: RetainedTextEnginePublication,
+  publication: OwnedTextEnginePublication,
   view: TextEngineRenderPlanView = new TextEngineRenderPlanView(),
 ): ExampleDrawList {
-  // The brand is checked again at runtime because plain JavaScript callers bypass the types.
-  if (!(retainedPublicationBrand in publication)) {
-    throw new TypeError('readDrawList needs a retained publication: borrow expires, retain first');
-  }
+  assertOwnedTextEnginePublication(publication);
+  return readPublication(publication, view);
+}
+
+/** @internal Pure plan decoding seam used by fixture tests; public callers use `readDrawList`. */
+export function readPublication(
+  publication: TextEnginePublication,
+  view: TextEngineRenderPlanView = new TextEngineRenderPlanView(),
+): ExampleDrawList {
   view.bind(publication);
   const draws = view.table('draws');
   const decoded: ReturnType<typeof decodeDraw>[] = [];
@@ -71,7 +77,7 @@ export function readDrawList(
   };
 }
 
-/** A window into the retained bytes — no second copy. */
+/** A window into the owned bytes — no second copy. */
 function snapshot(
   view: TextEngineRenderPlanView,
   name: 'resources' | 'buffers' | 'primitives' | 'diagnostics',

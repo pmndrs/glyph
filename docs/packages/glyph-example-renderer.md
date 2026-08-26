@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:1325247cae205ee56624d787b3ba79851eb01f234c7e3060eb34b112f99b87c0'
+source_digest: 'sha256:61f1d455afe33a608ff150dc3c44e2379434f56994a9493b48eca8224e50d553'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -51,7 +51,7 @@ generated:
 
 # Package reference: `@pmndrs/glyph-example-renderer`
 
-Status: Active external-engine proof. It drives a real loaded font through the retention protocol, portable raster
+Status: Active external-engine proof. It drives a real loaded font through the publication ownership protocol, portable raster
 registration, resource realization, and a concrete submission seam without importing Three.js.
 
 This private workspace package is a consumer proof for `@pmndrs/glyph/core` and the example technique's `/typegpu`
@@ -65,18 +65,18 @@ temporary font, while all other files remain limited to `/core` and the publishe
 
 It imports the portable example schema, plan, and `/typegpu` shader from `@pmndrs/glyph-example-raster`, and authors its own host render
 policy with `/core`'s compilers (`src/policy.ts`). Capability objects carry only actual limits and flags;
-`compileRenderPolicy()` assigns the ABI identity, and the single-profile frame omits any capability number. It then runs the retention protocol on every frame in
-`ExampleTextEngine.render`: update for the borrow,
-`assertLive` before decoding, `retain` for one contiguous host-owned copy, and decoded views over owned bytes only — dirty
+`compileRenderPolicy()` assigns the ABI identity, and the single-profile frame omits any capability number. Its asynchronous
+`ExampleTextEngine.render` path calls `update()` for the borrow, `copyPublication()` for one contiguous host-owned copy,
+and then decodes views over owned bytes only — dirty
 patch ranges and retirements included. The frame driver carries a separate device-accepted generation and plan revision;
-retaining bytes never advances that wire fence before `prepareSubmission(...).commit()` succeeds. The engine revision
+copying bytes never advances that wire fence before `prepareSubmission(...).commit()` succeeds. The engine revision
 still advances when Wasm accepts the update, so a rejected device candidate is superseded by the next frame and the old
 consumed-plan fence forces a safe checkpoint instead of a retry latch. A throw-once acceptance test pins all three wire
 values and compares the recovered buffers byte-for-byte with an oracle that observed the rejected candidate.
-`readDrawList` demands the branded `RetainedTextEnginePublication`, so passing a live-but-doomed borrow
-is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: retained
+`readDrawList` demands the branded `OwnedTextEnginePublication`, so passing a live-but-doomed borrow
+is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: owned
 plans survive three frames plus capacity growth, stale borrows throw
-`TextEnginePublicationExpiredError`, a backwards acknowledgement is refused at the wire as a revision
+`TextEnginePublicationExpiredError`, and a backwards accepted generation is refused at the wire as a revision
 conflict. `RecordingExampleRendererDevice` is the deterministic CPU oracle: it validates the complete resource, buffer,
 patch, primitive, draw, and retirement publication against the selected technique/program/variant before accepted state can
 change. Allocation, offset write, u32 fill, copy, replacement generation, exact retirement, stale candidates, and a throwing

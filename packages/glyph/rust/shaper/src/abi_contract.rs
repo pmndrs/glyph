@@ -2658,7 +2658,8 @@ pub fn json() -> String {
             "styleSplitsCluster": 16,
             "styleNestingInvalid": 17,
             "styleRootInvalid": 18,
-            "fontMetricsMissing": 19
+            "fontMetricsMissing": 19,
+            "registrationInUse": 20
         }
     })
     .to_string()

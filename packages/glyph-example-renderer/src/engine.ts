@@ -7,7 +7,7 @@ import {
   type FlowThreadId,
   type ParagraphId,
   type RegionId,
-  type RetainedTextEnginePublication,
+  type OwnedTextEnginePublication,
   type RuntimeShaper,
   type StyleId,
   type TextEngineFrameLimits,
@@ -68,15 +68,14 @@ export interface ExampleTextUpdate {
 const exampleTextConstruction: unique symbol = Symbol('ExampleText construction');
 
 /**
- * A retained host driving the engine through `@pmndrs/glyph/core` alone.
+ * An asynchronous host driving the engine through `@pmndrs/glyph/core` alone.
  *
- * `render` is the retention protocol, executed in order on every frame:
+ * `render` crosses an asynchronous device boundary, so it owns the publication first:
  *
  * ```ts
- * const publication = session.update(request); // borrow, valid until the next call
- * session.assertLive(publication);             // cheap liveness gate before decoding
- * const owned = session.retain(publication);   // one contiguous owned copy
- * readDrawList(owned);                         // decode views over owned bytes only
+ * const borrowed = session.update(request);
+ * const owned = session.copyPublication(borrowed);
+ * readDrawList(owned);
  * ```
  *
  * Engine acceptance advances the engine revision. Device acceptance advances the consumed
@@ -229,7 +228,7 @@ export class ExampleTextEngine {
     });
   }
 
-  /** Runs one real frame and returns its plan, retained into host-owned memory. */
+  /** Runs one real frame and returns its plan in host-owned memory. */
   render(input: ExampleFrameInput): Promise<ExampleDrawList> {
     return this.#startRender(input);
   }
@@ -268,10 +267,8 @@ export class ExampleTextEngine {
   #planRevision = 0;
 
   /** Copy a raw borrow before any device operation can invalidate Wasm memory. */
-  #copyPublication(publication: TextEnginePublication): RetainedTextEnginePublication {
-    const session = this.session;
-    session.assertLive(publication);
-    return session.retain(publication);
+  #copyPublication(publication: TextEnginePublication): OwnedTextEnginePublication {
+    return this.session.copyPublication(publication);
   }
 
   dispose(): void {
@@ -290,7 +287,7 @@ export class ExampleTextEngine {
   }
 }
 
-/** A small retained text façade that emits validated frame mutations only when its desired state changes. */
+/** A small stateful text façade that emits validated frame mutations only when its desired state changes. */
 export class ExampleText {
   readonly #renderFrame: (input: ExampleFrameInput, engineAccepted: () => void) => Promise<ExampleDrawList>;
   readonly #releaseOrdinal: () => void;

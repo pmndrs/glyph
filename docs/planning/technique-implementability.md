@@ -6,8 +6,8 @@ documentation_type: explanation
 tags: [planning, public-api, techniques, bakers, extensibility]
 status: stable
 generated:
-  by: anthropic-claude/opus-5
-  at: '2026-08-24T00:00:00Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-26T18:18:53Z'
 ---
 
 # Making a technique reusable across engines
@@ -62,7 +62,7 @@ topology-aware conversion, and reuse keys.
 
 The current Slug path is analytic: its curve, band, header, and reference data are evaluated by the shader. It still consumes the unit quad's `positionLocal`; it does not currently emit baked hull vertices. “Hull” may describe the analytic outline representation, but it is not the current draw primitive.
 
-The portable contract must therefore declare a geometry kind rather than hard-code one universal shape. `synthetic-quad` is the implicit/generated unit-quad path; `quad` is an explicit quad geometry supplied by the technique. They must remain distinct because the former needs no geometry payload while the latter follows the supplied-buffer contract. A technique may also supply other geometry and describe it with a constrained GLB-like geometry contract: vertex attribute semantics, accessors and component layout, optional indices, topology, vertex count, and draw range. A `hull` kind is one possible supplied-geometry implementation and does not change the font binding or retention protocol. This vocabulary is separate from the wire primitive enum, whose `glyph` and `decoration` values describe engine command meaning.
+The portable contract must therefore declare a geometry kind rather than hard-code one universal shape. `synthetic-quad` is the implicit/generated unit-quad path; `quad` is an explicit quad geometry supplied by the technique. They must remain distinct because the former needs no geometry payload while the latter follows the supplied-buffer contract. A technique may also supply other geometry and describe it with a constrained GLB-like geometry contract: vertex attribute semantics, accessors and component layout, optional indices, topology, vertex count, and draw range. A `hull` kind is one possible supplied-geometry implementation and does not change the font binding or resource ownership protocol. This vocabulary is separate from the wire primitive enum, whose `glyph` and `decoration` values describe engine command meaning.
 
 ### Three material helpers are valid
 
@@ -125,6 +125,12 @@ renderer package
   generic resource realization and named binding
   primitive realization, material creation, transforms, submission
 ```
+
+The compiled font owns immutable portable payloads; it does not own their GPU lifetime. A renderer realizes those
+payloads in a device-scoped pool keyed by the plan's stable resource identity and leases the same texture, buffer, or
+geometry to compatible sessions. `TextEngineHost` owns Wasm registrations and `TextEngineSession` owns one revisioned
+plan lifetime; neither is a scene, device, pass, or implicit global batch. This lets a TypeGPU, TSL, WGSL, or GLSL host
+reuse the same portable plan without moving renderer concepts into `/core`.
 
 The portable plan does not carry shader source. The technique package publishes shader realizations as optional subpath modules; each realization consumes the same logical contract regardless of whether it was authored in TypeGPU, TSL, WGSL, or GLSL.
 

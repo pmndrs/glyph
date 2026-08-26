@@ -64,25 +64,25 @@ This plan is the deliverable named by the [API surface audit](api-surface-audit.
 
 The complaint is drift, and drift has a specific cause here. Every timing number in the repository is a **median of correlated samples from one process**.
 
-[`glyph:rust-layout-benchmark`](../../packages/glyph/scripts/benchmark-rust-layout-engine.mjs) defaults to `--warmup 8 --reps 31`: thirty-one repetitions inside a single Node process, sorted into a median, p95, and a relative standard deviation. Those thirty-one samples share one JIT state, one heap layout, and one GC history. Their spread measures how much the *loop* varies once warm. It does not measure how much the *number* varies when you run the command again — which is the only variance a reader actually cares about, because that is the variance a code change has to beat.
+[`glyph:rust-layout-benchmark`](../../packages/glyph/scripts/benchmark-rust-layout-engine.mjs) defaults to `--warmup 8 --reps 31`: thirty-one repetitions inside a single Node process, sorted into a median, p95, and a relative standard deviation. Those thirty-one samples share one JIT state, one heap layout, and one GC history. Their spread measures how much the _loop_ varies once warm. It does not measure how much the _number_ varies when you run the command again — which is the only variance a reader actually cares about, because that is the variance a code change has to beat.
 
 So `rsdPercent` reads low, the median looks precise to four decimals, and the number still moves between runs. The statistic is answering a different question than the one being asked of it.
 
 The rest of the surface is weaker still:
 
-| Path | Samples | Dispersion reported | Gate |
-| --- | --- | --- | --- |
-| [`runner.ts`](../../apps/benchmarks/src/benchmark/runner.ts) via CI | 3, warmup 1 | median, p95 | none |
-| `runtime-fallback-parity`, `source-outline-fidelity` probes | 1, warmup 0 | none possible | none |
-| `benchmark:presentation-performance` | 1.5 s rAF window per cell | p95, max, slow-frame count | none — the 20 ms counter is printed, never asserted |
-| `glyph:layout-benchmark` | 31, warmup 8 | median, p95, RSD | none |
-| `glyph:kernel-lab*` | 101, warmup 40 | median | none |
+| Path                                                                | Samples                   | Dispersion reported        | Gate                                                |
+| ------------------------------------------------------------------- | ------------------------- | -------------------------- | --------------------------------------------------- |
+| [`runner.ts`](../../apps/benchmarks/src/benchmark/runner.ts) via CI | 3, warmup 1               | median, p95                | none                                                |
+| `runtime-fallback-parity`, `source-outline-fidelity` probes         | 1, warmup 0               | none possible              | none                                                |
+| `benchmark:presentation-performance`                                | 1.5 s rAF window per cell | p95, max, slow-frame count | none — the 20 ms counter is printed, never asserted |
+| `glyph:layout-benchmark`                                            | 31, warmup 8              | median, p95, RSD           | none                                                |
+| `glyph:kernel-lab*`                                                 | 101, warmup 40            | median                     | none                                                |
 
 Three facts follow, and all three are load-bearing:
 
 1. **No timing threshold is asserted anywhere.** No probe, scenario, or test fails on a duration.
 2. **No performance workflow runs in CI.** [`ci.yml`](../../.github/workflows/ci.yml) runs static checks, the package-size lane, and the conformance suite. Every performance number in this repository was produced by a human running a command locally.
-3. **The one test that looks like a regression gate is not one.** [`fixture-contracts.test.ts`](../../apps/benchmarks/src/benchmark/fixture-contracts.test.ts) asserts `rustReport.medianMs < baselineReport.medianMs` between two *checked-in JSON files*. It measures nothing at test time and passes forever regardless of the current code.
+3. **The one test that looks like a regression gate is not one.** [`fixture-contracts.test.ts`](../../apps/benchmarks/src/benchmark/fixture-contracts.test.ts) asserts `rustReport.medianMs < baselineReport.medianMs` between two _checked-in JSON files_. It measures nothing at test time and passes forever regardless of the current code.
 
 [`statistics.ts`](../../apps/benchmarks/src/benchmark/statistics.ts) is fourteen lines exporting `median` and `percentile`. There is no code in this repository that answers "is this difference real?"
 
@@ -114,31 +114,31 @@ Inner samples are still collected and still useful for distribution shape and p9
 
 ### The rest of the guarantees
 
-| Guarantee | Mechanism | Verified |
-| --- | --- | --- |
-| Bench isolation | each bench runs in its own worker process; reordering cannot skew results | `isolate: true` default |
-| GC control | each sample starts from a GC reset; per-sample GC time and heap bytes reported separately | `--expose-gc` in default `nodeFlags` |
-| Timing-overhead control | measurements too fast to time directly are batched automatically | `plan.batch`, observed `batch_samples: 4096, batch_unroll: 4` |
-| Dead-code-elimination detection | samples matching an empty call are flagged; returning a value from the measured function defeats it | reported in the run summary |
-| Adaptive stopping | Welford update in log space to a 2.5 % relative standard-error target, floor `minSamples: 20` and `minCpuTime: 0.642 s`, bailout `maxCpuTime: 5 s` | `config.ts` |
-| Machine-stability detection | CPU clock probed before and after each file and before each block; drift > 5 % warns | run summary reported `Stable clock: readings ranged 2.77–2.84 GHz` |
+| Guarantee                       | Mechanism                                                                                                                                          | Verified                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Bench isolation                 | each bench runs in its own worker process; reordering cannot skew results                                                                          | `isolate: true` default                                            |
+| GC control                      | each sample starts from a GC reset; per-sample GC time and heap bytes reported separately                                                          | `--expose-gc` in default `nodeFlags`                               |
+| Timing-overhead control         | measurements too fast to time directly are batched automatically                                                                                   | `plan.batch`, observed `batch_samples: 4096, batch_unroll: 4`      |
+| Dead-code-elimination detection | samples matching an empty call are flagged; returning a value from the measured function defeats it                                                | reported in the run summary                                        |
+| Adaptive stopping               | Welford update in log space to a 2.5 % relative standard-error target, floor `minSamples: 20` and `minCpuTime: 0.642 s`, bailout `maxCpuTime: 5 s` | `config.ts`                                                        |
+| Machine-stability detection     | CPU clock probed before and after each file and before each block; drift > 5 % warns                                                               | run summary reported `Stable clock: readings ranged 2.77–2.84 GHz` |
 
 ### What a benchmark looks like
 
 Setup precedes `yield`, the yielded function is measured, teardown follows. Async setup works, which matters because Wasm instantiation and font loading are async:
 
 ```ts
-import { bench, group } from '@pmndrs/labs'
+import { bench, group } from '@pmndrs/labs';
 
 group('paragraph @core', () => {
   bench('measure, metrics only @measure', async function* () {
-    const session = await coldSession({ glyphs: 22_000 })   // untimed
+    const session = await coldSession({ glyphs: 22_000 }); // untimed
     yield () => {
-      const m = session.paragraph.layout()
-      return m.contentWidth                                  // consumed: defeats DCE
-    }
-  })
-})
+      const m = session.paragraph.layout();
+      return m.contentWidth; // consumed: defeats DCE
+    };
+  });
+});
 ```
 
 `@tags` in the name filter runs. Verified: the async generator body executes before the timed region and its cost is excluded.
@@ -163,18 +163,18 @@ Two further protections apply automatically:
 
 Blocks are the sample. With the default `blocks: 8` per side:
 
-| Blocks per side | Smallest attainable two-sided exact p | Eligible at α = 0.05 |
-| ---: | ---: | :--- |
-| 2 | 0.333 | no |
-| 3 | 0.100 | no |
-| 4 | 0.0286 | yes — the floor |
-| 6 | 0.00216 | yes |
-| **8** | **0.000155** | **yes, with headroom** |
-| 16 | 3.33 × 10⁻⁹ | yes |
+| Blocks per side | Smallest attainable two-sided exact p | Eligible at α = 0.05   |
+| --------------: | ------------------------------------: | :--------------------- |
+|               2 |                                 0.333 | no                     |
+|               3 |                                 0.100 | no                     |
+|               4 |                                0.0286 | yes — the floor        |
+|               6 |                               0.00216 | yes                    |
+|           **8** |                          **0.000155** | **yes, with headroom** |
+|              16 |                           3.33 × 10⁻⁹ | yes                    |
 
 Labs enforces this: a comparison whose block counts cannot reach the configured alpha is skipped with a reason rather than reported.
 
-Significance is necessary but not sufficient — the run also has to be able to *resolve* a 5 % effect. Labs summarizes each run's block medians as a robust relative spread, `1.4826 × MAD / median`, and converts it to an approximate minimum detectable effect:
+Significance is necessary but not sufficient — the run also has to be able to _resolve_ a 5 % effect. Labs summarizes each run's block medians as a robust relative spread, `1.4826 × MAD / median`, and converts it to an approximate minimum detectable effect:
 
 ```
 MDE ≈ 2.8 × spread × √(2 / blocks)          at blocks = 8:  MDE ≈ 1.40 × spread
@@ -183,12 +183,12 @@ MDE ≈ 2.8 × spread × √(2 / blocks)          at blocks = 8:  MDE ≈ 1.40 �
 So **the 5 % threshold is resolvable only while between-block spread stays at or under about 3.6 %.**
 
 | Blocks per side | MDE as a multiple of spread | Spread budget to resolve 5 % |
-| ---: | ---: | ---: |
-| 4 | 1.98 × | 2.5 % |
-| **8** | **1.40 ×** | **3.6 %** |
-| 12 | 1.14 × | 4.4 % |
-| 16 | 0.99 × | 5.1 % |
-| 24 | 0.81 × | 6.2 % |
+| --------------: | --------------------------: | ---------------------------: |
+|               4 |                      1.98 × |                        2.5 % |
+|           **8** |                  **1.40 ×** |                    **3.6 %** |
+|              12 |                      1.14 × |                        4.4 % |
+|              16 |                      0.99 × |                        5.1 % |
+|              24 |                      0.81 × |                        6.2 % |
 
 This is the knob for a noisy machine: hold the threshold and add blocks. A bench whose resolution is coarser than `minDelta` is annotated `⚠ ~±N%` and still judged, not hidden — a neutral verdict there means "could not establish a change at this scale", which is different from "no change" and must be read that way.
 
@@ -196,10 +196,10 @@ This is the knob for a noisy machine: hold the threshold and add blocks. A bench
 
 On an Apple M2 Pro, one bench, 8 blocks per side. The baseline and the two candidates ran the same file; only an environment variable scaled the work.
 
-| Comparison | Between-block spread | Reported resolution | Δp50 | Δp99 | p | Verdict |
-| --- | ---: | ---: | ---: | ---: | ---: | :--- |
-| identical code vs. baseline | 2.1 % / 3.2 % | ~±3.0 % / ~±4.5 % | +1.5 % | +38.3 % | .279 | **neutral** |
-| +12 % injected work | — | — | +15.9 % | +24.1 % | <.001 | **slower**, CI +12.7…+20.1 % |
+| Comparison                  | Between-block spread | Reported resolution |    Δp50 |    Δp99 |     p | Verdict                      |
+| --------------------------- | -------------------: | ------------------: | ------: | ------: | ----: | :--------------------------- |
+| identical code vs. baseline |        2.1 % / 3.2 % |   ~±3.0 % / ~±4.5 % |  +1.5 % | +38.3 % |  .279 | **neutral**                  |
+| +12 % injected work         |                    — |                   — | +15.9 % | +24.1 % | <.001 | **slower**, CI +12.7…+20.1 % |
 
 The first row is the property the team is asking for. The candidate's median was 1.5 % higher and its p99 was 38 % higher, and the tool still declined to call it a change — which is correct, because the code was identical. Today's harness has no mechanism that could reach that conclusion; it would have reported the +1.5 % median move as data.
 
@@ -207,14 +207,14 @@ The measured spread also confirms the planning formula: 1.40 × 2.1 % = 2.9 % ag
 
 ### Chosen parameters
 
-| Parameter | Value | Reason |
-| --- | --- | --- |
-| `blocks` | 8 locally, **16 in CI** | shared runners are noisier; buying resolution with blocks keeps the threshold honest |
-| `alpha` | 0.05 | labs default; exact test makes it attainable from 4 blocks |
-| `minDelta` | 0.05 | below the 3.6 % spread typical of a quiet machine there is no point claiming finer |
-| `adaptive` | `true` (2.5 % target) | default |
-| `maxCpuTime` | 5 s | default; divided across blocks |
-| `isolate` | `true` | required — block sampling is disabled without it |
+| Parameter    | Value                   | Reason                                                                               |
+| ------------ | ----------------------- | ------------------------------------------------------------------------------------ |
+| `blocks`     | 8 locally, **16 in CI** | shared runners are noisier; buying resolution with blocks keeps the threshold honest |
+| `alpha`      | 0.05                    | labs default; exact test makes it attainable from 4 blocks                           |
+| `minDelta`   | 0.05                    | below the 3.6 % spread typical of a quiet machine there is no point claiming finer   |
+| `adaptive`   | `true` (2.5 % target)   | default                                                                              |
+| `maxCpuTime` | 5 s                     | default; divided across blocks                                                       |
+| `isolate`    | `true`                  | required — block sampling is disabled without it                                     |
 
 ## What is measured
 
@@ -226,17 +226,17 @@ All eight paths run in plain Node against the packaged Wasm with no browser, can
 
 Every bench states its unit of work. The fixture is the existing `paragraphTextForGlyphs` corpus at a pinned glyph count so the numbers stay comparable to the records being replaced, and the invalidation classes are kept apart rather than averaged — a principle already established in [`glyph:layout-benchmark`](../../packages/glyph/scripts/benchmark-paragraph-layout.mts) and worth preserving verbatim: they invalidate different caches, so averaging them hides whichever one is slow.
 
-| # | Path | Entry point | Unit of work | Counts as a regression |
-| --- | --- | --- | --- | --- |
-| 1 | Shaping | `textRuntimeShaper`, `text_update` text mutation | one full reshape of the pinned paragraph, per script class (Latin, Arabic, Devanagari, CJK) | +5 % on any script class; a Latin-only win that costs a complex script is a regression, not a trade |
-| 2 | Line breaking | greedy fitting in `engine/line_composition.rs`, over break bits set during `prepare_unicode` / `prepare_clusters` | one re-break at a new column width, shaping retained — Latin and CJK as separate benches | +5 % on either corpus; also any change in break count for the fixture, which is a correctness failure not a slowdown |
-| 3 | Layout and positioning | `text_update` style/geometry transaction | one reposition of retained clusters: `font-size` (metrics rebuild) and `column-resize` (reflow only) as separate benches | +5 % on either class |
-| 4a | Measurement, metrics only | `Paragraph.layout()`, `readTextEngineMeasurements` | one `layout()` reading sizes, baselines, ascent/descent and intrinsic widths, touching **no** positioned column | +5 %, **or any nonzero column materialization** — see below |
-| 4b | Measurement, materialized | `Paragraph.glyphs()` | one `glyphs()` call copying the positioned columns out of Wasm at a fresh constraint | +5 % |
-| 5 | Frame wire compile | `compileTextEngineFrameUpdate(frame): Uint8Array` | one encode of a complete frame update to its wire bytes | +5 %, or any growth in emitted byte length for a fixed frame |
-| 6 | Render plan read | `TextEngineRenderPlanView`, `readTextEnginePatch` / `Resource` / `Buffer` / `Retirement`, via the GPU-free `readDrawList` reference host | one full traversal of a published plan's tables for the pinned paragraph | +5 %, or any growth in patch count or write bytes for an unchanged frame |
-| 7 | Retention and publication handoff | `session.retain()` / `assertLive()` / `acknowledge()` in `core/retention.ts` | `no-op` (unchanged frame), `suffix-edit`, `localized-edit`, `localized-splice`, plus `retain` priced against borrow-and-decode-in-place | +5 % on any class; **`no-op` is special — see below** |
-| 8 | Font binding | `compileFontBinding(descriptor): Uint8Array`, `loadedFontBindingBytes`, `RuntimeShaper.registerFont` | one bind of a validated artifact: the JS table compile and the Wasm registration as separate benches | +5 %; the JS compile is `glyphCount × strikeCount` scalar writes, so a large-coverage CJK font with several strikes is the case that matters |
+| #   | Path                          | Entry point                                                                                                                              | Unit of work                                                                                                                        | Counts as a regression                                                                                                                       |
+| --- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Shaping                       | `textRuntimeShaper`, `text_update` text mutation                                                                                         | one full reshape of the pinned paragraph, per script class (Latin, Arabic, Devanagari, CJK)                                         | +5 % on any script class; a Latin-only win that costs a complex script is a regression, not a trade                                          |
+| 2   | Line breaking                 | greedy fitting in `engine/line_composition.rs`, over break bits set during `prepare_unicode` / `prepare_clusters`                        | one re-break at a new column width, shaping retained — Latin and CJK as separate benches                                            | +5 % on either corpus; also any change in break count for the fixture, which is a correctness failure not a slowdown                         |
+| 3   | Layout and positioning        | `text_update` style/geometry transaction                                                                                                 | one reposition of retained clusters: `font-size` (metrics rebuild) and `column-resize` (reflow only) as separate benches            | +5 % on either class                                                                                                                         |
+| 4a  | Measurement, metrics only     | `Paragraph.layout()`, `readTextEngineMeasurements`                                                                                       | one `layout()` reading sizes, baselines, ascent/descent and intrinsic widths, touching **no** positioned column                     | +5 %, **or any nonzero column materialization** — see below                                                                                  |
+| 4b  | Measurement, materialized     | `Paragraph.glyphs()`                                                                                                                     | one `glyphs()` call copying the positioned columns out of Wasm at a fresh constraint                                                | +5 %                                                                                                                                         |
+| 5   | Frame wire compile            | `compileTextEngineFrameUpdate(frame): Uint8Array`                                                                                        | one encode of a complete frame update to its wire bytes                                                                             | +5 %, or any growth in emitted byte length for a fixed frame                                                                                 |
+| 6   | Render plan read              | `TextEngineRenderPlanView`, `readTextEnginePatch` / `Resource` / `Buffer` / `Retirement`, via the GPU-free `readDrawList` reference host | one full traversal of a published plan's tables for the pinned paragraph                                                            | +5 %, or any growth in patch count or write bytes for an unchanged frame                                                                     |
+| 7   | Publication ownership handoff | borrowed in-place decode versus `session.copyPublication()`                                                                              | `no-op` (unchanged frame), `suffix-edit`, `localized-edit`, `localized-splice`, plus copy priced against borrow-and-decode-in-place | +5 % on any class; **`no-op` is special — see below**                                                                                        |
+| 8   | Font binding                  | `compileFontBinding(descriptor): Uint8Array`, `loadedFontBindingBytes`, `RuntimeShaper.registerFont`                                     | one bind of a validated artifact: the JS table compile and the Wasm registration as separate benches                                | +5 %; the JS compile is `glyphCount × strikeCount` scalar writes, so a large-coverage CJK font with several strikes is the case that matters |
 
 Four of these are not merely being re-implemented — **they are unmeasured today at any level**, and finding that out is part of what this exercise bought:
 
@@ -249,11 +249,11 @@ Four of these are not merely being re-implemented — **they are unmeasured toda
 
 These are the reasons a benchmark of this API can report a confident number that means nothing. Each has to be designed against, not discovered later.
 
-**Two cache layers sit between the bench and the engine.** `Paragraph` memoizes measurements and inspections in `Map`s keyed by the constraint, and returns the *identical object* for a repeated equal constraint without touching Wasm at all. Behind that, Rust keeps one speculative transaction that survives a *different* constraint and dies on a text or style change. Labs calls the yielded function thousands of times, so a bench written as `p.layout(sameConstraints)` or `p.glyphs(sameConstraints)` measures a `Map` lookup after its first iteration and will report picosecond-class timings with excellent stability. Every layout and glyphs bench must therefore invalidate deliberately — the existing [`glyph:layout-benchmark`](../../packages/glyph/scripts/benchmark-paragraph-layout.mts) already does this correctly by using a constraint value no earlier repetition used, and that discipline carries over. Where invalidation is not possible without also measuring `update()`, the bench measures the pair and says so in its name.
+**Two cache layers sit between the bench and the engine.** `Paragraph` memoizes measurements and inspections in `Map`s keyed by the constraint, and returns the _identical object_ for a repeated equal constraint without touching Wasm at all. Behind that, Rust keeps one speculative transaction that survives a _different_ constraint and dies on a text or style change. Labs calls the yielded function thousands of times, so a bench written as `p.layout(sameConstraints)` or `p.glyphs(sameConstraints)` measures a `Map` lookup after its first iteration and will report picosecond-class timings with excellent stability. Every layout and glyphs bench must therefore invalidate deliberately — the existing [`glyph:layout-benchmark`](../../packages/glyph/scripts/benchmark-paragraph-layout.mts) already does this correctly by using a constraint value no earlier repetition used, and that discipline carries over. Where invalidation is not possible without also measuring `update()`, the bench measures the pair and says so in its name.
 
 **The positioned columns are expensive to even hold.** The inspection `glyphs()` returns carries twenty-one positioned properties — `inkBounds`, `x`, `y`, `glyphIds`, `clusters`, the per-line arrays. Any spread, `Object.keys`, `JSON.stringify`, deep-equal, or console log of one copies all of them. Since labs requires the measured function to return a value to defeat dead-code elimination, the returned sink must be a single eager scalar such as `m.contentWidth`, never the query result object itself. A bench that returns the object measures the opposite of what its name claims.
 
-**4a is a shape assertion, not only a timing one.** The reason two calls exist is that a flexbox host probing many widths for sizes alone never pays to copy arrays it does not touch: `layout()` takes the paragraph-scoped synchronous query, and only `glyphs()` asks the engine for per-glyph records. The benchmark protecting that must assert the *absence* of positioned work, not merely that the call is fast: a regression here would appear as a modest constant factor that a 5 % threshold could plausibly miss on one paragraph, while being catastrophic for a host probing a hundred candidate widths. Assert `layoutRevision` is unchanged after a metrics-only `layout()` and fail on any advance. Reading `layoutRevision` is itself safe — it does not materialize.
+**4a is a shape assertion, not only a timing one.** The reason two calls exist is that a flexbox host probing many widths for sizes alone never pays to copy arrays it does not touch: `layout()` takes the paragraph-scoped synchronous query, and only `glyphs()` asks the engine for per-glyph records. The benchmark protecting that must assert the _absence_ of positioned work, not merely that the call is fast: a regression here would appear as a modest constant factor that a 5 % threshold could plausibly miss on one paragraph, while being catastrophic for a host probing a hundred candidate widths. Assert `layoutRevision` is unchanged after a metrics-only `layout()` and fail on any advance. Reading `layoutRevision` is itself safe — it does not materialize.
 
 Two further absolutes, because a ratio test cannot express them:
 
@@ -272,13 +272,13 @@ This kills the obvious design — commit a blessed baseline JSON, compare every 
 
 ### Two baselines, for two different jobs
 
-| | CI gate | Reviewed record |
-| --- | --- | --- |
-| **What** | the merge-base commit, measured in the same job on the same runner | the numbers quoted in `docs/` and the decision register |
-| **Where** | nowhere — built and discarded within the job | `apps/benchmarks/fixtures/results/`, and the decision-register entry that cites it |
-| **Compared by** | the two-gate classifier over both runs' block medians | human review |
-| **Updated** | never; it is recomputed every run | by the rules below |
-| **Storage** | `.labs/` is gitignored | committed, one record per subject, named `<subject>-<sha>-<platform>-<arch>.json` |
+|                 | CI gate                                                            | Reviewed record                                                                    |
+| --------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| **What**        | the merge-base commit, measured in the same job on the same runner | the numbers quoted in `docs/` and the decision register                            |
+| **Where**       | nowhere — built and discarded within the job                       | `apps/benchmarks/fixtures/results/`, and the decision-register entry that cites it |
+| **Compared by** | the two-gate classifier over both runs' block medians              | human review                                                                       |
+| **Updated**     | never; it is recomputed every run                                  | by the rules below                                                                 |
+| **Storage**     | `.labs/` is gitignored                                             | committed, one record per subject, named `<subject>-<sha>-<platform>-<arch>.json`  |
 
 Local development uses a third, ephemeral baseline: `.labs/baseline` is a pointer file naming one result in `.labs/results/`, managed by `bench --baseline` and `bench compare`. It is a working tool, gitignored, and never authoritative.
 
@@ -310,23 +310,23 @@ This is not a novel idea in this repository — it is exactly what the existing 
 
 It also disposes of the hard problem rather than mitigating it. The hardware-match gate is satisfied by construction. Runner-to-runner variation — the dominant noise source on shared infrastructure, and the one that no amount of sampling can remove — cancels, because both numbers come from the same machine within minutes of each other. What remains is within-machine drift, which is what block interleaving and the clock cross-check are built for.
 
-The residual risks are real and bounded: the two builds are sequential, so a thermal ramp across the job biases the second half. Interleaving blocks *between* the two checkouts would remove that too, but it requires both builds resident simultaneously and is deferred until the simple version proves insufficient.
+The residual risks are real and bounded: the two builds are sequential, so a thermal ramp across the job biases the second half. Interleaving blocks _between_ the two checkouts would remove that too, but it requires both builds resident simultaneously and is deferred until the simple version proves insufficient.
 
 ### Cost
 
 Measured on an M2 Pro with a 300 ms setup per bench, 8 blocks:
 
-| Shape | Wall clock |
-| --- | ---: |
-| 1 bench, single block (`bench run`) | 10.8 s |
-| 1 bench, 8 blocks (saved) | 18.3 s |
-| 4 benches, 8 blocks (saved) | 44.9 s |
+| Shape                               | Wall clock |
+| ----------------------------------- | ---------: |
+| 1 bench, single block (`bench run`) |     10.8 s |
+| 1 bench, 8 blocks (saved)           |     18.3 s |
+| 4 benches, 8 blocks (saved)         |     44.9 s |
 
 That is roughly **7 s fixed plus 11 s per bench** at 8 blocks. The ~14 benches above cost about 2.7 minutes per side at 8 blocks, so a two-sided CI run at 16 blocks lands near 10–11 minutes plus two builds. It belongs in its own job, not bolted onto the 30-minute `check` job.
 
 ### The failure condition
 
-**A bench fails when its verdict is `slower`: p ≤ 0.05 on the exact Mann-Whitney U over block medians *and* Hodges-Lehmann relative effect ≥ +5 %.** Neutral passes. Faster passes. A bench skipped as clock-confounded or for insufficient block replication passes, and is reported as skipped — an unmeasurable bench must not be silently green, but it also must not fail a pull request for a property of the runner.
+**A bench fails when its verdict is `slower`: p ≤ 0.05 on the exact Mann-Whitney U over block medians _and_ Hodges-Lehmann relative effect ≥ +5 %.** Neutral passes. Faster passes. A bench skipped as clock-confounded or for insufficient block replication passes, and is reported as skipped — an unmeasurable bench must not be silently green, but it also must not fail a pull request for a property of the runner.
 
 The exact-equality assertions carried in bench teardown — wire byte length, patch count, break count, `layoutRevision` — fail independently and unconditionally. They are not subject to any threshold.
 
@@ -340,34 +340,34 @@ One implementation fact must be planned around: **`labs compare` always exits 0.
 
 ### Replaced by labs benches
 
-| Today | Why it moves |
-| --- | --- |
-| `glyph:rust-layout-benchmark` | 31 in-process reps → block medians; its eight invalidation cases map directly onto benches 1–7 |
-| `glyph:layout-benchmark` | same, for the public path; its invalidation-class separation is preserved. Its `/three` call site has already been re-pointed at the settled `Text.layout()`/`Text.glyphs()` split, and rewriting it onto `Paragraph` and labs together is still cheaper than repairing it twice |
-| `glyph:kernel-lab` (Node) | 101 in-process samples with no significance test; scalar/auto/explicit SIMD variants become three benches compared pairwise |
+| Today                         | Why it moves                                                                                                                                                                                                                                                                     |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `glyph:rust-layout-benchmark` | 31 in-process reps → block medians; its eight invalidation cases map directly onto benches 1–7                                                                                                                                                                                   |
+| `glyph:layout-benchmark`      | same, for the public path; its invalidation-class separation is preserved. Its `/three` call site has already been re-pointed at the settled `Text.layout()`/`Text.glyphs()` split, and rewriting it onto `Paragraph` and labs together is still cheaper than repairing it twice |
+| `glyph:kernel-lab` (Node)     | 101 in-process samples with no significance test; scalar/auto/explicit SIMD variants become three benches compared pairwise                                                                                                                                                      |
 
 The fixture and corpus helpers (`paragraphTextForGlyphs`, `paragraph-benchmark-fixture.mts`) are reused unchanged. The workflows are retired only once their replacements produce records; the scripts are not deleted on the same commit that adds the benches.
 
 ### Kept unchanged
 
-| Kept | Why |
-| --- | --- |
-| The package-size lane in full | genuinely deterministic — no timer, fixed compression levels, SHA-256 identity, production defines — and already gated on-host by identity and off-host by budget. It is the one thing in the repository that already works, and labs has nothing to offer it. |
-| `benchmark:presentation-performance`, `benchmark:paragraph-stress-timing`, `probe:live-update-latency` | GPU, vsync, and frame pacing. Labs is Node-only; these cannot move and must not be deleted for failing to be statistical. |
-| `glyph:kernel-lab-browser` | measures Wasm SIMD under the browser's engine, which the Node sibling cannot substitute for |
-| Every conformance probe and scenario | they assert correctness — hashes, pixel envelopes, exact byte equality — and are unaffected |
-| The interactive lab | it is a human control plane, not a regression gate |
+| Kept                                                                                                   | Why                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The package-size lane in full                                                                          | genuinely deterministic — no timer, fixed compression levels, SHA-256 identity, production defines — and already gated on-host by identity and off-host by budget. It is the one thing in the repository that already works, and labs has nothing to offer it. |
+| `benchmark:presentation-performance`, `benchmark:paragraph-stress-timing`, `probe:live-update-latency` | GPU, vsync, and frame pacing. Labs is Node-only; these cannot move and must not be deleted for failing to be statistical.                                                                                                                                      |
+| `glyph:kernel-lab-browser`                                                                             | measures Wasm SIMD under the browser's engine, which the Node sibling cannot substitute for                                                                                                                                                                    |
+| Every conformance probe and scenario                                                                   | they assert correctness — hashes, pixel envelopes, exact byte equality — and are unaffected                                                                                                                                                                    |
+| The interactive lab                                                                                    | it is a human control plane, not a regression gate                                                                                                                                                                                                             |
 
 The kept browser probes should stop being called benchmarks in prose. They are observations. Naming them accurately is most of the fix for people trusting them too much.
 
 ### Deleted
 
-| Deleted | Why |
-| --- | --- |
-| `fixture-contracts.test.ts` lines 104–148, the `comparableCases` block | compares two frozen JSON files to each other and passes forever; it is worse than no gate because it looks like one |
-| The pinned float medians in the same file (`medianMs: 58.32441699999981` and siblings) | full float equality on wall-clock medians, only possible because the file is static |
-| `fixtures/results/bake-host-baseline-v0.json` | three samples, `performance.now()` clamped to 0.1 ms, and zero consumers anywhere in the repository |
-| Superseded `rust-layout-*` records at stale commits | keep one current record per subject; the rest are noise that makes "which is the baseline" unanswerable |
+| Deleted                                                                                | Why                                                                                                                 |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `fixture-contracts.test.ts` lines 104–148, the `comparableCases` block                 | compares two frozen JSON files to each other and passes forever; it is worse than no gate because it looks like one |
+| The pinned float medians in the same file (`medianMs: 58.32441699999981` and siblings) | full float equality on wall-clock medians, only possible because the file is static                                 |
+| `fixtures/results/bake-host-baseline-v0.json`                                          | three samples, `performance.now()` clamped to 0.1 ms, and zero consumers anywhere in the repository                 |
+| Superseded `rust-layout-*` records at stale commits                                    | keep one current record per subject; the rest are noise that makes "which is the baseline" unanswerable             |
 
 Two cleanups are adjacent and cheap. There are **four independent percentile implementations** — three ceiling-based, one floor-based returning `NaN` on empty — so p95 in a sweep record and p95 in a runner summary are not computed by the same rule and are not comparable. And [`runner.ts`](../../apps/benchmarks/src/benchmark/runner.ts) passes a hard-coded sample index `0` to every warmup iteration while the measured loop passes the real index, so a target whose work varies by index is warmed on a different path than it is measured on. Neither blocks this plan; both should be fixed while the surface is being touched.
 

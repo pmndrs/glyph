@@ -1,12 +1,7 @@
-import {
-  retainedPublicationBrand,
-  textShaperAbi,
-  type RetainedTextEnginePublication,
-  type TextEnginePublication,
-} from '@pmndrs/glyph/core';
+import { textShaperAbi, type OwnedTextEnginePublication, type TextEnginePublication } from '@pmndrs/glyph/core';
 import { describe, expect, test } from 'vitest';
 
-import { readDrawList } from '../src/plan-reader.js';
+import { readDrawList, readPublication } from '../src/plan-reader.js';
 
 const result = textShaperAbi.layouts.engineResult;
 const draw = textShaperAbi.layouts.engineDraw;
@@ -121,24 +116,21 @@ function publication(rows: number): TextEnginePublication {
 }
 
 /**
- * Simulates `TextEngineSession.retain` for a fixture: one contiguous owned copy carrying
- * the retained brand — exactly what a real session hands back.
+ * Copies a fixture once so the pure decoder's returned views do not alias the source.
  */
-function retainFixture(source: TextEnginePublication): RetainedTextEnginePublication {
+function copyFixture(source: TextEnginePublication): TextEnginePublication {
   const bytes = source.bytes.slice();
-  const retained: RetainedTextEnginePublication = {
+  return Object.freeze({
     ...source,
     bytes,
     memoryBuffer: bytes.buffer,
     memoryGrew: false,
-    [retainedPublicationBrand]: true,
-  };
-  return Object.freeze(retained);
+  });
 }
 
 describe('render-plan reader', () => {
   test('decodes the draw table the engine published', () => {
-    const list = readDrawList(retainFixture(publication(2)));
+    const list = readPublication(copyFixture(publication(2)));
     expect(list.draws.map((entry) => entry.id)).toEqual([100, 101]);
     expect(list.draws.map((entry) => entry.orderToken)).toEqual([900, 899]);
     expect(list.draws[0]!.clipId).toBe(7);
@@ -148,7 +140,7 @@ describe('render-plan reader', () => {
   });
 
   test('surfaces dirty ranges as decoded patch records, not opaque bytes', () => {
-    const list = readDrawList(retainFixture(publication(2)));
+    const list = readPublication(copyFixture(publication(2)));
     expect(list.patches.map((record) => record.bufferId)).toEqual([30, 31]);
     for (const [index, record] of list.patches.entries()) {
       expect(record.opcode).toBe(textShaperAbi.engine.patchOpcodes.write);
@@ -165,7 +157,7 @@ describe('render-plan reader', () => {
     // the whole encoded result. The reader only carves views into that copy, so nothing
     // aliases engine memory and no second copy is paid at read time.
     const source = publication(3);
-    const list = readDrawList(retainFixture(source));
+    const list = readPublication(copyFixture(source));
     const snapshots = [list.resources, list.buffers, list.primitives, list.diagnostics];
     for (const table of snapshots) {
       expect(table.count).toBe(3);
@@ -179,10 +171,9 @@ describe('render-plan reader', () => {
   });
 
   test('rejects borrowed publications: a draw list is built to outlive the next call', () => {
-    // The brand is the type-system boundary. A plain publication expires when the
-    // session answers its next call, so handing one to a retaining reader is a type
-    // error; at runtime the missing brand is still caught.
-    const fixture = publication(1) as unknown as RetainedTextEnginePublication;
+    // A plain publication expires when the session answers its next call. A cast can
+    // bypass TypeScript, but cannot forge the package-private runtime provenance.
+    const fixture = publication(1) as unknown as OwnedTextEnginePublication;
     expect(() => readDrawList(fixture)).toThrow();
   });
 });
