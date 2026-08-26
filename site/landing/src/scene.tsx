@@ -63,6 +63,13 @@ export function Scene() {
   const hero = useMemo(
     () =>
       defineTextMaterial((context) => {
+        // The context is a union now: each known technique carries its own typed
+        // `shader`, and a generic arm carries an untyped `outputs` map for
+        // techniques this build does not know. Narrowing on the technique is
+        // what recovers the typed Slug output, and the fallback is honest rather
+        // than a cast.
+        if (context.technique !== 'pmndrs.slug') return context.createDefaultMaterial();
+
         // The technique's own base material is the contract to match: text quads
         // are double-sided and draw in authored order without depth writes, so a
         // front-side depth-tested material is culled outright and renders
@@ -112,7 +119,7 @@ export function Scene() {
     roughness.value = live.roughness;
     emissive.value = live.emissive;
 
-    const summary = mark.current?.measureLayout();
+    const summary = mark.current?.layout();
     if (summary && summary.contentHeight > 0) {
       if (summary.contentHeight !== lineBox) setLineBox(summary.contentHeight);
       // positionLocal runs from the box's top-left with +Y down, so the ink sits

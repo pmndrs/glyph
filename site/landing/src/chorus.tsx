@@ -152,7 +152,7 @@ export function Chorus() {
   const reported = useRef(false);
   useFrame(() => {
     if (reported.current) return;
-    const summary = field.current?.measureLayout();
+    const summary = field.current?.layout();
     if (!summary || summary.glyphCount === 0) return;
     reported.current = true;
     if (import.meta.env.DEV) {
