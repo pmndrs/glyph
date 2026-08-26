@@ -23,14 +23,10 @@ export async function embedTypeGpuMetadata(stagingDirectory) {
     'typegpu.js',
     ...(await readdir(moduleDirectory)).filter((name) => name.endsWith('.js')).map((name) => join('typegpu', name)),
   ];
-  await embedTypeGpuMetadataFiles(entries.map((entry) => join(stagingDirectory, entry)));
-}
-
-/** Applies and verifies TypeGPU metadata for explicit emitted JavaScript files. */
-export async function embedTypeGpuMetadataFiles(files) {
   const { default: typegpuPlugin } = await import('unplugin-typegpu/rollup');
   const plugin = typegpuPlugin();
-  for (const file of files) {
+  for (const entry of entries) {
+    const file = join(stagingDirectory, entry);
     const source = await readFile(file, 'utf8');
     if (!source.includes('use gpu')) continue;
     const transformed = await plugin.transform.handler.call({}, source, file);
