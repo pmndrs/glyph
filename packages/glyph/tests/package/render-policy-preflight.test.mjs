@@ -83,7 +83,15 @@ function fullDescriptor() {
           { scope: 'resource', field: 10 },
         ],
         buffers: [
-          { id: F32_BUFFER_ID, scalar: scalarTypes.f32, vectorWidth: 4, alignment: 16, stride: 64, usage: 7, capacityClass: 3 },
+          {
+            id: F32_BUFFER_ID,
+            scalar: scalarTypes.f32,
+            vectorWidth: 4,
+            alignment: 16,
+            stride: 64,
+            usage: 7,
+            capacityClass: 3,
+          },
           { id: U16_BUFFER_ID, scalar: scalarTypes.u16, vectorWidth: 2 },
           { id: U32_BUFFER_ID, scalar: scalarTypes.u32, vectorWidth: 1 },
         ],
@@ -586,11 +594,7 @@ const semanticRejections = [
       }))),
     /more than 16 buffers/,
   ],
-  [
-    'a zero buffer id',
-    (d) => (d.programs[1].buffers[0].id = 0),
-    /buffer 0 id must come from id\('buffer', name\)/,
-  ],
+  ['a zero buffer id', (d) => (d.programs[1].buffers[0].id = 0), /buffer 0 id must come from id\('buffer', name\)/],
   ['a zero vector width', (d) => (d.programs[1].buffers[0].vectorWidth = 0), /vectorWidth needs 1\.\.4/],
   ['a five-lane vector width', (d) => (d.programs[0].buffers[0].vectorWidth = 5), /vectorWidth needs 1\.\.4/],
   [
