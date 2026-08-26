@@ -168,37 +168,41 @@ oversight.
 **Recommendation.** Retain entries whose disposal failed rather than clearing unconditionally, or
 state that host teardown is best-effort and that a failed stage is unrecoverable by design.
 
-### C4 — The plan reader cannot enforce the retention protocol
+### C4 — The two publication flows are correct, but the types cannot tell them apart
 
-**Severity: medium. Status: open, unchanged in #120. Sharpens D-267. Verified read.**
+**Severity: medium. Status: open, unchanged in #120. Corrected framing. Verified read.**
 
-`TextEngineRenderPlanView.bind()` accepts a borrowed `TextEnginePublication` and holds no
-reference to the session ([`core/plan-view.ts:54`](../../packages/glyph/src/core/plan-view.ts)).
-It validates structure thoroughly — buffer identity, header byte length, every table's alignment
-and bounds — then cannot re-check liveness on any later read, because it has nothing to ask.
+An earlier revision of this finding treated `/three` not calling `assertLive` as a gap. That was wrong:
+**both flows are sanctioned, and `/three` is deliberately taking the zero-copy one.**
 
-So `assertLive` is a separate, opt-in call the integrator must remember at the right moment every
-frame. The protocol is documented four times over; documentation is carrying weight the type
-system could carry. The engine call contract's rule is *"Prefer a shape that cannot express the
-mistake over a check that catches it."*
+There is no async engine API. `update`, `measureParagraph`, `reserve` and the whole plan reader are
+synchronous; a grep of `/core`'s engine path finds no `async` and no `Promise`. A borrow expires only
+when *its own session* is called again — exactly `update`, `measureParagraph`, `reserve`, `dispose`
+([`core/host.ts:358`](../../packages/glyph/src/core/host.ts)) — or when the Wasm heap grows underneath
+it, caught by the `memoryBuffer` identity check. Writing to a GPU does not expire anything.
 
-Consumer evidence, which is the interesting part:
+That yields two correct flows:
 
-| Consumer | `assertLive` | `retain` | `acknowledge` |
-| --- | --- | --- | --- |
-| `glyph-example-renderer` | yes, `engine.ts:157` | yes | via `retain` |
-| `/three` | **never called** | only on the failure path | **never called** |
+| Flow | Who | Why |
+| --- | --- | --- |
+| **Synchronous, zero-copy** | `/three` | Reads the borrow in place and writes lanes straight into its buffers inside one non-reentrant frame. The plan is never copied whole. `retain` appears only on the failure path, to hold a publication for retry. |
+| **Deferred, retained** | `glyph-example-renderer` | `await`s a device commit, and its decoded draw list holds *views* over the publication that must outlive the yield. `assertLive` + `retain` is what makes crossing the yield legal. |
 
-`/three` is not unsafe — it reads the borrow inside the same synchronous frame with no intervening
-session call — but its safety rests on a whole-program argument rather than a local one, and it is
-the reference integration.
+The finding is what the two have in common. `TextEngineRenderPlanView.bind()` accepts a borrowed
+publication ([`core/plan-view.ts:54`](../../packages/glyph/src/core/plan-view.ts)) because the
+synchronous flow requires that — so the deferred flow can pass one too, and nothing objects until the
+bytes are gone. The retained brand exists to mark the second mode, but only an API that *demands* the
+brand enforces anything, and `bind()` cannot demand it without breaking the first mode.
 
-D-267 already records the underlying edge as *"a publication valid only until the next Wasm call,
-which no retained host can honour."* This ledger adds the mechanism: the reader is the natural
-enforcement point and is not given the means.
+So this is not "retention is opt-in". It is: **the mode is load-bearing and invisible to the type
+system.** D-267 records the underlying edge as "a publication valid only until the next Wasm call,
+which no retained host can honour"; the addition here is that the honourable path already exists and is
+simply indistinguishable from the dishonourable one at the call site.
 
-**Recommendation.** Let `bind()` take the session, or have `session.update()` return a reader
-already bound to itself, so a stale read is impossible rather than merely detectable.
+**Recommendation.** Give each mode its own entry point rather than making one mandatory. A scoped
+borrow — `session.publish(request, view => …)` — cannot escape its callback, making the synchronous
+flow safe by construction *and* keeping it copy-free. A separate `updateRetained()` returns the branded
+copy for callers crossing a yield. `assertLive` then stops being a discipline and becomes a shape.
 
 ### C5 — `session.acknowledgedGeneration` is a second, non-authoritative source of truth
 
@@ -280,6 +284,152 @@ the Wasm export exists and host teardown calls it. Four registration calls, thre
 
 **Recommendation.** Publish `disposePolicy`, or state in `core.ts` that policies are
 host-lifetime by design.
+
+### C9 — Resource identity is host-scoped; resource realization is not
+
+**Severity: high. Status: open. Verified live.**
+
+`/core` mints resource identities on the host — `host.wireIdentities.resourceId(key)` — so a
+`referenceId` in a plan only means anything inside that host. Realization is the integrator's, and
+`/core` never says where to keep it. `/three` keeps GPU objects on the per-batch plan executor
+([`three/engine-plan-target.ts:216`](../../packages/glyph/src/three/engine-plan-target.ts)), so the
+name is scoped to the host and the thing is scoped to the session.
+
+Measured with one 16px Inter bitmap font:
+
+```
+two batches, one host, one font  =>  1,391,808 bytes
+same two texts inside ONE batch  =>    696,512 bytes   (2.00x)
+
+8 loose <Text>                   =>  gpu 5.31 MB       (8.0x)
+one TextGroup of 8               =>  gpu 0.67 MB
+```
+
+Nothing violates the stated contract, because there is no stated contract about where resources live.
+That is the finding: **the API scopes the identity and declines to scope the object**, and the two
+shipped answers disagree.
+
+### Where the flaw sits, by layer
+
+Policies are **not** the problem, and moving them would be the wrong fix. A policy already lives on the
+host and many sessions bind to one — `/three` passes `this.#coordinator.policyHandle` from every
+session ([`three/text.ts:740`](../../packages/glyph/src/three/text.ts), `:948`, `:1205`). Session to
+policy is N:1 and it works. The same is already true of font bindings, font stacks and resource
+identities: all host-scoped, all shared.
+
+Both measured multipliers are **`/three` choices**, and either can be fixed there with no core change:
+
+| Multiplier | Cause | Fixable in |
+| --- | --- | --- |
+| 3.5x Wasm | one session per standalone `Text` rather than a shared batch | `/three` — see C11 |
+| 8x GPU | textures cached on the per-batch plan executor rather than on the coordinator | `/three` — the coordinator already holds the decoded payloads in `#resources` |
+
+Nothing in `/core` requires either. A `THREE.DataArrayTexture` is derived deterministically from the
+resource payload, so the coordinator could hold it and refcount by session today.
+
+The **core-level flaw is an asymmetry that invites the mistake**. `compileRasterFont` returns
+`{ binding, resources, declaredResources }`
+([`core/raster-plan-program.ts:52`](../../packages/glyph/src/core/raster-plan-program.ts)). The binding
+has a home — `host.registerFontBinding` — and the resources do not: the host exposes
+`registerFontBinding`, `registerFontStack` and `registerPolicy`, and nothing for resources. So `/core`
+mints a host-scoped *name* for every resource, creates a scope shaped exactly like "shared across
+sessions, refcounted, released at teardown", and then hands the payloads back loose for the integrator
+to store wherever. Three stored them one level too low.
+
+**Recommendation.** Give resources the same treatment their bindings already get: a host-side
+registration that owns the lifetime, refcounted by session and released at teardown, with the
+integrator supplying the realized object. That closes C9 and C10 together and removes the slot where
+`/three` guessed wrong — without touching policies, which are already correct.
+
+### C10 — No device, scene, or render-pass concept, and the device is the one the GPU enforces
+
+**Severity: medium. Status: open. Verified read + live.**
+
+A grep of `/core` finds no device, canvas, scene, or pass vocabulary. The nearest neighbours:
+
+| GPU concept | What `/core` offers | Gap |
+| --- | --- | --- |
+| device / canvas | nothing; the host is the only candidate | resource sharing has no boundary |
+| scene | `session`, which is one *batch* | a scene holds several |
+| render pass | `clipId`, `depthKey`, `orderToken` lanes on every draw | `clipId` is never populated |
+
+`createRasterPolicyProgram` includes `batch.clip` in every program's `drawKeyMask`
+([`core/render-policy.ts:539`](../../packages/glyph/src/core/render-policy.ts)) while nothing in the
+repository ever sets a nonzero `clipId`. That is a reserved capability rather than a defect — a
+constant key never splits a batch — but it means the pass dimension is declared and unused.
+
+The device gap is the substantive one: a texture cannot cross a device, so "a second canvas cannot
+reach these resources" is a real constraint with nowhere to live. Making the host device-scoped gives
+it a home and resolves C9, C1 and this entry together.
+
+**Verified clean — do not re-investigate.** Three plausible defects in this area were probed and are
+correct: repeated `updateMatrixWorld` traversals (21 in a row) re-publish nothing and grow the heap by
+zero bytes, so two canvases rendering one scene is not double work; moving a `TextGroup` between scenes
+preserves its realized GPU state and republishes cleanly; and `visible = false` hides text in both
+paths — by scene-graph culling for a standalone `Text`, and by the zero-transform lane for a grouped
+one.
+
+### C11 — A session has a ~2.2 MB floor, and `/three` opens one per standalone `Text`
+
+**Severity: high. Status: open. Verified live.**
+
+`TextEngineSession` carries retained paragraphs, glyph identity across reflow, incremental shaping
+state, revision counters and two output slots. That is genuinely session-shaped, and it is expensive.
+Per-session Wasm cost, isolated by varying arena size:
+
+```
+arenas at ABI minimum      ->  2,248K per session
+16K / 64K                  ->  2,400K
+Three default (256 glyphs) ->  2,824K
+capacity 2048 glyphs       ->  2,952K
+```
+
+The floor is ~2.2 MB and arena sizing cannot reduce it. `/three` constructs one binding — hence one
+session — per `TextGroup` *and* per standalone `Text`
+([`three/text.ts:407`](../../packages/glyph/src/three/text.ts)). Eight paragraphs:
+
+```
+8 loose <Text>       wasm +26.75 MB   gpu 5.31 MB
+one TextGroup of 8   wasm + 7.69 MB   gpu 0.67 MB
+```
+
+This is **not a regression**: `git show 4213dfa6^:packages/text/src/three/text.ts:310` has the
+identical construction before the package rename, and no commit in history contains a shared standalone
+batch. D-129's "standalone text derives an implicit batch" is ambiguous about how many, and the
+implementation has always read it as one per text.
+
+**Latent hazard for whoever changes this.** `#drawRoot()` returns the *first paragraph's* `Text` when
+there is no group ([`three/text.ts:1178`](../../packages/glyph/src/three/text.ts)), and
+`visibleBelowRoot(object, root)` never checks the root's own `visible` flag. Both are harmless today
+because a standalone batch holds exactly one paragraph and its meshes hang under it. In a shared
+standalone batch both become wrong: the draw root would be an arbitrary member, and per-text visibility
+would have to come from the zero-transform lane rather than scene-graph culling.
+
+**Recommendation.** Resolve D-129's ambiguity and make the code match, per the task prompt written for
+this. Either outcome needs a test asserting how many sessions N standalone texts create; none exists.
+
+### C12 — Handle IDs are refcounted by derivation, not by use
+
+**Severity: medium. Status: open (new in #120). Verified live.**
+
+`id(kind, name)` at module scope registers permanently; `host.id(kind, name)` registers refcounted and
+releases at host teardown ([`core/render-policy.ts:79`](../../packages/glyph/src/core/render-policy.ts)
+and `:90`). `assertGlyphId` checks only that a number is *currently registered* — it cannot check who
+registered it. So a host that registers under an id another host minted loses the ability to name its
+own live registration when the minting host disposes:
+
+```
+b registers a policy under the id a minted:      WORKS
+after a.dispose(), b re-validating that same id:
+  THROWS: policy handle must come from id('policy', name) or host.id('policy', name)
+```
+
+B's registration is still live in the engine and now unaddressable. Following D-280's rule — authored
+constants via `id()`, runtime-created via `host.id()` — avoids it, and `/three` does follow it. Nothing
+enforces which minter produced a value, and crossing them fails only at teardown.
+
+**Recommendation.** Either refcount by registration rather than derivation, or make the two minters
+return distinct types so a permanent-lifetime handle cannot be supplied where a scoped one is expected.
 
 ## Fixed in #120
 
