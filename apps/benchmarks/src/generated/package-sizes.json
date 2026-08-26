@@ -10,11 +10,11 @@
       "label": "Renderer-neutral core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "203e5ca6a93c564246b6490f616120e6f41b2692cb1df81187123162f0d3f208",
-      "rawBytes": 335334,
-      "minifiedBytes": 212440,
-      "gzipBytes": 55729,
-      "brotliBytes": 46575
+      "sha256": "a31e160e43cd546c8f530ff47d637e48a6d87d2f87219435e099de580487d7e4",
+      "rawBytes": 335623,
+      "minifiedBytes": 212706,
+      "gzipBytes": 55789,
+      "brotliBytes": 46613
     },
     {
       "id": "tsl-subpath-js",
@@ -43,11 +43,11 @@
       "label": "Core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "815cfb2d737cbf57a2373148baec5d67d3509184c722b4b2d59b9a8510460379",
-      "rawBytes": 114037,
-      "minifiedBytes": 75829,
-      "gzipBytes": 23116,
-      "brotliBytes": 19910
+      "sha256": "567335f2862d3cfbc3ae044deaf7265bb88ddee31c0e0516f988c743c38449c4",
+      "rawBytes": 114238,
+      "minifiedBytes": 76040,
+      "gzipBytes": 23166,
+      "brotliBytes": 19926
     },
     {
       "id": "text-shaper-wasm",
@@ -65,11 +65,11 @@
       "label": "Three.js adapter JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "4f909198b1d283388bf957d2f27195047c82d685ec79c18a3af358413e6124e6",
-      "rawBytes": 585340,
-      "minifiedBytes": 366208,
-      "gzipBytes": 94782,
-      "brotliBytes": 78950
+      "sha256": "a8d723da6f4f0aa0ed19f3d58597b4f299857d8203a8d71ee701130697acf2bc",
+      "rawBytes": 587184,
+      "minifiedBytes": 367570,
+      "gzipBytes": 95146,
+      "brotliBytes": 79233
     },
     {
       "id": "font-inter-bitmap-16-32",
@@ -175,33 +175,33 @@
       "label": "Bitmap runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "sha256": "40f9ef7d025770ec5a51b13b9a318f5681ab486f3e169a44a361503b8fae4ace",
-      "rawBytes": 563448,
-      "minifiedBytes": 352601,
-      "gzipBytes": 91700,
-      "brotliBytes": 76507
+      "sha256": "fcb9d6f727acb35de8549e0d17f059ab1a9366cbaec1f9cc40e2963a8a3c2da4",
+      "rawBytes": 565216,
+      "minifiedBytes": 353917,
+      "gzipBytes": 92053,
+      "brotliBytes": 76840
     },
     {
       "id": "mtsdf-runtime-js",
       "label": "MSDF runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "sha256": "c279ad5104260ebdf6a1de2e7be310352b1535f65fdb3e6d5aef13ce9ad56a50",
-      "rawBytes": 563440,
-      "minifiedBytes": 352599,
-      "gzipBytes": 91669,
-      "brotliBytes": 76525
+      "sha256": "0604292103071bd0283abf500301e6435e463a9f4a447393dac4c4acd9727395",
+      "rawBytes": 565208,
+      "minifiedBytes": 353915,
+      "gzipBytes": 92030,
+      "brotliBytes": 76839
     },
     {
       "id": "slug-runtime-js",
       "label": "Slug runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "sha256": "a15d11f076f09d888c95c0c4de8051943fa01c959cf2a6654bc383d20a8e904d",
-      "rawBytes": 563446,
-      "minifiedBytes": 352599,
-      "gzipBytes": 91764,
-      "brotliBytes": 76552
+      "sha256": "df4037e5d048d4f724a5fbe0265d9a5c113ff7b5fd15c530967504a4e4dc381d",
+      "rawBytes": 565214,
+      "minifiedBytes": 353915,
+      "gzipBytes": 92117,
+      "brotliBytes": 76837
     },
     {
       "id": "bitmap-baker-wasm",
