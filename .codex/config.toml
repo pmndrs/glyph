@@ -1,6 +1,11 @@
 # Project-scoped Codex MCP configuration. The project must be trusted before
 # Codex Desktop or Codex CLI will load this file.
 
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true
+
 [mcp_servers.ai-cli]
 command = "mise"
 args = ["exec", "--", "pnpm", "exec", "ai-cli-mcp"]
