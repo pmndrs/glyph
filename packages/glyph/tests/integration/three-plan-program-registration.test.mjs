@@ -42,11 +42,11 @@ const TRANSFORM_BUFFER_ID = id('buffer', 'test.three-plan-program/system/transfo
 import { ThreeTextEngineCoordinator, threeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 
 const portablePrograms = new Map();
-const planProgram = (id, declaration = {}) => {
-  let portable = portablePrograms.get(id);
+const planProgram = (techniqueIdentity, declaration = {}) => {
+  let portable = portablePrograms.get(techniqueIdentity);
   if (portable === undefined) {
     const technique = defineRasterTechnique({
-      id,
+      id: techniqueIdentity,
       kind: 'test',
       extension: 'TEST_raster',
       version: 0,
@@ -63,7 +63,7 @@ const planProgram = (id, declaration = {}) => {
       ...declaration.render,
     };
     const schema = defineTechniqueSchema({
-      technique: id,
+      technique: techniqueIdentity,
       scope: 'glyph',
       binding: {},
       buffers: {},
@@ -90,7 +90,7 @@ const planProgram = (id, declaration = {}) => {
       },
       compileFont() {},
     });
-    portablePrograms.set(id, portable);
+    portablePrograms.set(techniqueIdentity, portable);
   }
   const buffers = Object.fromEntries(
     Object.entries(portable.schema.buffers).map(([name, buffer]) => [
