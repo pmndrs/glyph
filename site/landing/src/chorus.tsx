@@ -11,7 +11,7 @@ const PIXEL_RANGE = 6;
 
 import { CHORUS_URLS } from './chorus-stack';
 import { RTL_WORDS, WORDS } from './chorus-words';
-import { live } from './controls';
+import { live } from './look';
 
 /**
  * One continuous stream, long enough to overflow three full-height columns at
