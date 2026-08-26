@@ -14,7 +14,7 @@ import { live } from './controls';
 import { useDebugVisible } from './debug-visibility';
 import { publishMarkBottom } from './anchor';
 import { Effects } from './effects';
-import { shake } from './drift';
+import { envelope, shake } from './drift';
 import { trackKey } from './lens';
 
 const FONT = { input: { baked: fontUrl }, raster: { technique: slug } } as const;
@@ -155,28 +155,29 @@ export function Scene() {
 
     elapsed.current += delta;
 
-    // Parallax by orbiting, not by sliding. A lateral camera move shifts the
-    // *nearer* object further across the frame, so translating alone would swing
-    // the mark and leave the field behind it almost still — the wrong way round.
-    // Keeping the aim near the origin puts the mark on the pivot: it barely
-    // moves, while the chorus several units behind it travels.
-    //
-    // The aim is jittered separately and by a fraction of the body movement.
-    // Translation alone reads as a dolly however small it is; it is the tiny
-    // rotation riding on top that makes it read as a camera being held rather
-    // than a camera being moved.
+    // Each axis runs on its own clock as well as its own noise. Sharing one
+    // rate is the other half of what made the sway diagonal: decorrelated
+    // sequences sampled at the same speed still turn over together. The
+    // multipliers are deliberately unrelated so the axes never come back into
+    // step, and the aim runs slower than the body because a head turns less
+    // often than it drifts.
     const t = elapsed.current * live.shakeSpeed;
+    const breathe = envelope(t, 17);
+    const reach = live.shakeAmount * breathe;
+
     // Frame-rate independent: the coefficient comes from the elapsed time and
-    // the time constant, so the same damping holds at 30fps and at 120.
-    const alpha = 1 - Math.exp(-delta / Math.max(live.shakeDamping, 1e-3));
-    const ease = (from: number, to: number) => from + (to - from) * alpha;
+    // the time constant, so the same damping holds at 30fps and at 120. Each
+    // axis settles a little differently, which keeps the filter itself from
+    // imposing a rhythm the noise no longer has.
+    const ease = (from: number, to: number, scale: number) =>
+      from + (to - from) * (1 - Math.exp(-delta / Math.max(live.shakeDamping * scale, 1e-3)));
 
     const eye = eased.current;
-    eye.x = ease(eye.x, shake(t, 0) * live.shakeAmount);
-    eye.y = ease(eye.y, shake(t, 101) * live.shakeAmount * 0.7);
-    eye.z = ease(eye.z, 6 + shake(t, 211) * live.shakeAmount * 0.25);
-    eye.aimX = ease(eye.aimX, shake(t * 1.6, 307) * live.shakeAim);
-    eye.aimY = ease(eye.aimY, shake(t * 1.6, 401) * live.shakeAim * 0.7);
+    eye.x = ease(eye.x, shake(t * 1.0, 0) * reach, 1);
+    eye.y = ease(eye.y, shake(t * 0.79, 101) * reach * 0.7, 1.23);
+    eye.z = ease(eye.z, 6 + shake(t * 0.61, 211) * reach * 0.25, 1.51);
+    eye.aimX = ease(eye.aimX, shake(t * 0.47, 307) * live.shakeAim * breathe, 1.37);
+    eye.aimY = ease(eye.aimY, shake(t * 0.38, 401) * live.shakeAim * breathe * 0.7, 1.61);
 
     camera.position.set(eye.x, eye.y, eye.z);
     camera.lookAt(eye.aimX, eye.aimY, 0);
