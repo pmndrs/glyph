@@ -603,7 +603,8 @@ resource or command is substituted for it.
 The example-renderer browser lab runtime-bakes Inter, compiles the portable binding, realizes the supplied indexed
 geometry and policy buffers, renders an initial `ExampleText`, updates its content and color, renders again, and reads the
 offscreen RGBA target after each submission. The reviewed run produced one draw in each frame, 7,740 then 6,588 visible
-pixels, 10,287 changed pixels, and zero additional GPU submissions for the following idle frame. The recording device remains a second CPU oracle for malformed-plan and transactional
+pixels, 10,287 changed pixels, zero additional GPU submissions for the following idle frame, and one clear-only submission
+when the text was disposed. The recording device remains a second CPU oracle for malformed-plan and transactional
 failure tests; it is not counted as pixel acceptance. The Three browser proof renders the same external technique on
 WebGPU and forced WebGL2 and rejects within- or cross-backend hash divergence.
 

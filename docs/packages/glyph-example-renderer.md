@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:f25bd7983091e7095b7756cb08fcb88edefacd813af1888821552f82d91a3379'
+source_digest: 'sha256:52b769fd38b00571556327badcd023ad5817f8d44f1b07a53409476734ac02c4'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -89,8 +89,8 @@ fences. A rejected stage releases its unowned buffers and cannot restore or expo
 changed. The offscreen `rgba8unorm` target supports padded asynchronous readback; an all-empty delta skips GPU allocation
 and submission, while an accepted removal still encodes the clear pass.
 The browser lab runtime-bakes Inter, creates one retained `ExampleText`, proves one initial and one updated draw, and observes
-7,740 then 6,588 non-transparent pixels with 10,287 changed pixels and zero GPU submissions for the following idle frame.
-Disposal publishes an empty scene and performs a real clear-only GPU submission without retaining retired instance buffers.
+7,740 then 6,588 non-transparent pixels with 10,287 changed pixels, zero GPU submissions for the following idle frame, and
+one clear-only submission on disposal. Disposal publishes an empty scene without retaining retired instance buffers.
 
 `ExampleTextEngine.createText()` supplies the application lifecycle that raw frame fixtures intentionally expose but do not
 recommend as the ordinary path. `ExampleText.render()` emits the initial paragraph/text/style/constraint/region state,
