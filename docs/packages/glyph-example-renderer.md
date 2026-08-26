@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:0b8bccfe2e1ac8f6e9725939e051f104e8f8a10472f3a13aa076602b2c635376'
+source_digest: 'sha256:2c653d35ad45cee5a5d45b4bdd7648c1a90ddb1b6524c160a2743317931917d1'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -97,8 +97,11 @@ empty scene without retaining retired instance buffers. A same-host 101-sample A
 `ExampleTextEngine.createText()` supplies the application lifecycle that raw frame fixtures intentionally expose but do not
 recommend as the ordinary path. `ExampleText.render()` emits the initial paragraph/text/style/constraint/region state,
 `update()` changes desired content/style/layout and advances geometry revisions when dimensions change, and `dispose()`
-publishes paragraph removal. The engine still exposes its session and raw `render(frame)` method for integrators implementing
-their own retained object model.
+publishes paragraph removal and returns its identity slot for later reuse. Live texts remain unique while process-wide ID
+collision tracking grows with peak concurrent slots rather than create/dispose churn. The engine still exposes its session
+and raw `render(frame)` method for integrators implementing their own retained object model.
+The raw frame surface and managed `ExampleText` façade are alternative paragraph owners; callers do not interleave both
+ownership models inside one session.
 
 The package still does not make font loading part of `/core`: `createTextRuntime` remains a root API. The acceptance uses
 the root loader only to obtain a `LoadedFont`, then hands that value to the core-facing engine registration method. This

@@ -332,6 +332,9 @@ state intact.
 | Binding, stack, session handles     | engine                       | Domain-branded `id()` results are reused across the corresponding calls   |
 | Resource generation                 | engine/device                | Distinguishes replacement and exact retirement lifetimes                  |
 
+`id()` retains each stable name in its module instance to reject forged numbers and hash collisions at call time. Dynamic
+entities therefore reuse a bounded slot namespace after disposal; `ExampleTextEngine` demonstrates that lifecycle.
+
 ## 1. Implementing a portable technique plan
 
 The portable technique owns identity, artifact decoding, data ownership, its physical schema, and the cold font compiler. It must not import Three or put a material factory in `/core`.
