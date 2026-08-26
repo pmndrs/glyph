@@ -5,8 +5,9 @@
 - **GPU publication is serialized through its acceptance fence** — The example renderer rejects resource or buffer
   mutation while an asynchronous submission is in flight, derives idle-frame classification once in the recording
   oracle, scopes readback validation errors, and always closes an abandoned render pass. Its named workflow now requests
-  WebGPU explicitly and proves two visible submissions, zero idle submissions, and one clear-only disposal submission.
-  Package-local shader transforms replace a private cross-package build-script import.
+  WebGPU explicitly and proves two visible submissions, zero idle submissions, one clear-only disposal submission, and
+  zero pixels after that clear. Validation acceptance commits without a per-frame queue-completion stall; readback supplies
+  the completion fence only where evidence needs it. Package-local shader transforms replace a private cross-package import.
 
 - **The external renderer now proves hardware pixels and retained text updates** — `glyph-example-raster` supplies one
   indexed GLB-like quad through the portable resource contract. `glyph-example-renderer` realizes that geometry and the

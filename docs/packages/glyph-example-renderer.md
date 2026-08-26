@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:52b769fd38b00571556327badcd023ad5817f8d44f1b07a53409476734ac02c4'
+source_digest: 'sha256:0b8bccfe2e1ac8f6e9725939e051f104e8f8a10472f3a13aa076602b2c635376'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -86,11 +86,12 @@ backend publication callback have direct negative coverage.
 vertex/index buffers, stages the per-draw policy instance buffers, and commits through an awaited WebGPU validation scope.
 Only a successfully submitted indexed pass publishes the same candidate to the CPU oracle and advances engine device
 fences. A rejected stage releases its unowned buffers and cannot restore or expose older bytes because live state was never
-changed. The offscreen `rgba8unorm` target supports padded asynchronous readback; an all-empty delta skips GPU allocation
+changed. Commit awaits validation acceptance while queue completion remains pipelined. The offscreen `rgba8unorm` target supports padded asynchronous readback; an all-empty delta skips GPU allocation
 and submission, while an accepted removal still encodes the clear pass.
 The browser lab runtime-bakes Inter, creates one retained `ExampleText`, proves one initial and one updated draw, and observes
 7,740 then 6,588 non-transparent pixels with 10,287 changed pixels, zero GPU submissions for the following idle frame, and
-one clear-only submission on disposal. Disposal publishes an empty scene without retaining retired instance buffers.
+one clear-only submission on disposal. Ordered readback observes zero visible pixels after the clear. Disposal publishes an
+empty scene without retaining retired instance buffers.
 
 `ExampleTextEngine.createText()` supplies the application lifecycle that raw frame fixtures intentionally expose but do not
 recommend as the ordinary path. `ExampleText.render()` emits the initial paragraph/text/style/constraint/region state,
