@@ -8,9 +8,12 @@ import {
 } from './retention.js';
 import {
   assertGlyphId,
+  GlyphIdScope,
   RenderWireIdentityRegistry,
   type FontBindingHandle,
   type FontStackHandle,
+  type GlyphId,
+  type GlyphIdKind,
   type ParagraphId,
   type PolicyHandle,
   type StyleId,
@@ -104,6 +107,7 @@ function headerFault(header: DataView): TextEngineFault {
 /** Lifecycle owner for retained policy, font-stack, and session state in a RuntimeShaper's Wasm instance. */
 export class TextEngineHost {
   readonly wireIdentities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry();
+  readonly #ids = new GlyphIdScope();
   readonly #exports;
   readonly #sessions = new Set<TextEngineSession>();
   readonly #policies = new Set<PolicyHandle>();
@@ -113,6 +117,12 @@ export class TextEngineHost {
   constructor(shaper: RuntimeShaper) {
     this.#exports = runtimeShaperEngineExports(shaper);
   }
+
+  /** Derive one branded ID whose provenance lives exactly as long as this host. */
+  readonly id = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
+    this.#assertActive();
+    return this.#ids.id(kind, name);
+  };
 
   registerFontBinding(bindingHandle: FontBindingHandle, shapingFontHandle: FontHandle, bytes: Uint8Array): void {
     this.#assertActive();
@@ -177,12 +187,27 @@ export class TextEngineHost {
 
   dispose(): void {
     if (this.#disposed) return;
-    for (const session of [...this.#sessions]) session.dispose();
-    for (const handle of this.#fontStacks) requireStatus(this.#exports.disposeFontStack(handle), 'dispose font stack');
-    for (const handle of this.#policies) requireStatus(this.#exports.disposePolicy(handle), 'dispose render policy');
+    let failure: unknown;
+    const attempt = (dispose: () => void): void => {
+      try {
+        dispose();
+      } catch (error) {
+        failure ??= error;
+      }
+    };
+    for (const session of [...this.#sessions]) attempt(() => session.dispose());
+    for (const handle of this.#fontStacks) {
+      attempt(() => requireStatus(this.#exports.disposeFontStack(handle), 'dispose font stack'));
+    }
+    for (const handle of this.#policies) {
+      attempt(() => requireStatus(this.#exports.disposePolicy(handle), 'dispose render policy'));
+    }
     this.#fontStacks.clear();
     this.#policies.clear();
+    this.#sessions.clear();
+    attempt(() => this.#ids.dispose());
     this.#disposed = true;
+    if (failure !== undefined) throw failure;
   }
 
   #withBytes(bytes: Uint8Array, call: (pointer: number, length: number) => void): void {
@@ -472,9 +497,12 @@ export class TextEngineSession {
   dispose(): void {
     if (this.#disposed) return;
     this.#invalidate();
-    requireStatus(this.#exports.disposeSession(this.#handle), 'dispose text session');
-    this.#disposed = true;
-    this.#onDispose();
+    try {
+      requireStatus(this.#exports.disposeSession(this.#handle), 'dispose text session');
+    } finally {
+      this.#disposed = true;
+      this.#onDispose();
+    }
   }
 
   #assertActive(): void {

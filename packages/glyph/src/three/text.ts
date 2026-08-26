@@ -25,7 +25,6 @@ import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import {
   compileTextEngineFrameUpdate,
-  id,
   readTextEngineLayouts,
   readTextEngineMeasurements,
   TextEngineRenderPlanView,
@@ -727,6 +726,7 @@ class ThreeTextBatchBinding {
     const properties = reconciler.properties(text);
     const content = properties.text as string;
     const geometry = compileEngineGeometry(
+      this.#coordinator.host.id,
       paragraph.id,
       paragraph.transformIndex,
       paragraph.geometryRevision + 1,
@@ -902,12 +902,13 @@ class ThreeTextBatchBinding {
             styleMutations.push({
               opcode: 'remove',
               paragraphId: paragraph.id,
-              styleId: engineStyleId(paragraph.id, styleId),
+              styleId: engineStyleId(this.#coordinator.host.id, paragraph.id, styleId),
             });
           }
         }
         if (semanticChanges & GEOMETRY_CHANGE) {
           const geometry = compileEngineGeometry(
+            this.#coordinator.host.id,
             paragraph.id,
             paragraph.transformIndex,
             paragraph.geometryRevision + 1,
@@ -1152,7 +1153,10 @@ class ThreeTextBatchBinding {
     let paragraph = this.#paragraphs.get(text);
     if (paragraph === undefined) {
       const transformIndex = this.#freeParagraphIds.pop() ?? this.#nextParagraphId++;
-      const paragraphId = id('paragraph', `glyph-three/${this.#session.handle}/${transformIndex}`);
+      const paragraphId = this.#coordinator.host.id(
+        'paragraph',
+        `glyph-three/${this.#session.handle}/${transformIndex}`,
+      );
       paragraph = {
         id: paragraphId,
         transformIndex,
@@ -1273,7 +1277,7 @@ function compileEngineStyles<Technique extends AnyRasterTechnique>(
     {
       opcode: 'upsert',
       paragraphId,
-      styleId: engineStyleId(paragraphId, 1),
+      styleId: engineStyleId(coordinator.host.id, paragraphId, 1),
       cascadeOrder: 0,
       start: 0,
       end: text.length,
@@ -1292,7 +1296,7 @@ function compileEngineStyles<Technique extends AnyRasterTechnique>(
     styles.push({
       opcode: 'upsert',
       paragraphId,
-      styleId: engineStyleId(paragraphId, index + 2),
+      styleId: engineStyleId(coordinator.host.id, paragraphId, index + 2),
       cascadeOrder: index + 1,
       start: span.start,
       end: span.end,

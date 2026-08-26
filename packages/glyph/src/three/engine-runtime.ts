@@ -311,7 +311,7 @@ export class ThreeTextEngineCoordinator {
     }
     const binding = compiled.binding;
     this.#assertResourcesCompatible(prepared);
-    const handle = namedHandle('font-binding', 'glyph-three', this.#nextBindingHandle);
+    const handle = this.#namedHandle('font-binding', 'glyph-three', this.#nextBindingHandle);
     this.#observeFont(font);
     try {
       for (const { key, resource } of prepared) this.#retainResource(font, key, resource);
@@ -396,9 +396,16 @@ export class ThreeTextEngineCoordinator {
     ordinal: number,
     setNext: (next: number) => void,
   ): GlyphId<Kind> {
-    const handle = namedHandle(kind, 'glyph-three', ordinal);
+    const handle = this.#namedHandle(kind, 'glyph-three', ordinal);
     setNext(nextOrdinal(ordinal));
     return handle;
+  }
+
+  #namedHandle<const Kind extends GlyphIdKind>(kind: Kind, namespace: string, ordinal: number): GlyphId<Kind> {
+    if (!Number.isSafeInteger(ordinal) || ordinal <= 0 || ordinal > MAX_U32) {
+      throw new RangeError(`${kind} handles are exhausted`);
+    }
+    return this.host.id(kind, `${namespace}/${ordinal}`);
   }
 
   #assertActive(): void {
@@ -422,13 +429,6 @@ export function threeTextEngineCoordinator(runtime: TextRuntime): ThreeTextEngin
     );
   }
   return coordinator;
-}
-
-function namedHandle<const Kind extends GlyphIdKind>(kind: Kind, namespace: string, ordinal: number): GlyphId<Kind> {
-  if (!Number.isSafeInteger(ordinal) || ordinal <= 0 || ordinal > MAX_U32) {
-    throw new RangeError(`${kind} handles are exhausted`);
-  }
-  return id(kind, `${namespace}/${ordinal}`);
 }
 
 function nextOrdinal(current: number): number {

@@ -77,9 +77,8 @@ const font = await runtime.loadFont({
   raster: { technique: glyphExample, options: { paletteSeed: 7 } },
 });
 const binding = engine.registerFont(font);
-const stack = id('font-stack', 'my-renderer/body');
-engine.registerFontStack(stack, [binding]);
-engine.openSession(id('session', 'my-renderer/main-view'));
+const stack = engine.registerFontStack([binding]);
+engine.openSession();
 const text = engine.createText({
   fontStack: stack,
   text: 'Portable TypeGPU',
@@ -166,6 +165,7 @@ sequenceDiagram
 ```ts
 import {
   compileRenderPolicy,
+  compileTextEngineFrameUpdate,
   createRasterPolicyProgram,
   definePolicyBuffers,
   id,
@@ -217,8 +217,8 @@ the policy program stores a value into that slot, so the engine and its shader/d
 ### 2. Compile one loaded font and realize every declared resource
 
 ```ts
-const bindingHandle = id('font-binding', `my-renderer/${font.font.handle}`);
-const fontStackHandle = id('font-stack', 'my-renderer/body');
+const bindingHandle = host.id('font-binding', `my-renderer/${font.font.handle}`);
+const fontStackHandle = host.id('font-stack', 'my-renderer/body');
 const compiled = compileRasterFont(font, host.wireIdentities);
 if (compiled === undefined) {
   throw new TypeError(`no portable raster plan program for ${font.technique.id}`);
@@ -246,58 +246,109 @@ host.registerFontStack(fontStackHandle, [bindingHandle]);
 
 `compileRasterFont()` is cold work: the same `LoadedFont` is compiled and copied once, then cached. A resource role with
 `cardinality: 'many'` yields several keys; a `group` payload keeps synchronized texture/buffer members under one key.
-The renderer maps each constrained payload onto its own GPU objects during `prepareResources()`. `id()` is the only
-authoring path for renderer-owned wire IDs: its domain brand prevents passing a stack ID as a session ID at typecheck,
-while call-time validation rejects empty names, unsupported domains, and observed hash collisions.
+The renderer maps each constrained payload onto its own GPU objects during `prepareResources()`. `host.id()` derives
+runtime-owned wire IDs whose provenance is released with the host: its domain brand prevents passing a stack ID as a
+session ID at typecheck, while call-time validation rejects empty names, unsupported domains, forged numbers, and
+observed hash collisions. Top-level `id()` is reserved for authored module-lifetime constants such as policy buffer slots.
 
 ### 3. Open a session and publish a frame
 
 ```ts
-const sessionHandle = id('session', 'my-renderer/main-view');
-engine.openSession(sessionHandle);
-
-const text = engine.createText({
-  fontStack: fontStackHandle,
-  text: 'Hello Glyph',
-  fontSize: 48,
-  width: 800,
-  height: 200,
+const sessionHandle = host.id('session', 'my-renderer/main-view');
+const paragraphId = host.id('paragraph', 'my-renderer/title');
+const styleId = host.id('style', 'my-renderer/title/root');
+const flowThreadId = host.id('flow-thread', 'my-renderer/main-flow');
+const regionId = host.id('region', 'my-renderer/main-region');
+const session = host.createSession({
+  handle: sessionHandle,
+  requestCapacity: 4 * 1024,
+  resultCapacity: 128 * 1024,
 });
-const first = await text.render();
-
-text.update({ text: 'Hello retained Glyph', width: 640 });
-const updated = await text.render();
-```
-
-`ExampleText` owns its paragraph, style, flow-thread, and region identities. `render()` sends an initial
-paragraph/text/style/constraint/region batch; later calls send a replacement only after `update()` changes desired state.
-Changing width or height advances the geometry revision. `dispose()` publishes a paragraph removal and the accepted empty
-scene clears the WebGPU target.
-
-The wrapper eventually performs this raw session protocol:
-
-```ts
+const text = 'Hello Glyph';
 const request = compileTextEngineFrameUpdate({
-  sessionId: engine.session.handle,
+  sessionId: session.handle,
   policyHandle: POLICY_HANDLE,
-  expectedEngineRevision,
-  consumedPlanRevision,
-  acknowledgedPublicationGeneration,
-  limits,
-  paragraphMutations,
-  textMutations,
-  styleMutations,
-  constraints,
-  regions,
+  expectedEngineRevision: 0,
+  consumedPlanRevision: 0,
+  acknowledgedPublicationGeneration: 0,
+  limits: {
+    maxParagraphs: 8,
+    maxClusters: 256,
+    maxLines: 32,
+    maxRegions: 4,
+    maxExclusions: 4,
+    maxInlineObjects: 4,
+    maxSlotsPerBand: 4,
+    maxOutputBytes: 128 * 1024,
+  },
+  paragraphMutations: [{ opcode: 'upsert', paragraphId, order: 0 }],
+  textMutations: [{ paragraphId, start: 0, deleteCount: 0, insert: text }],
+  styleMutations: [
+    {
+      opcode: 'upsert',
+      paragraphId,
+      styleId,
+      cascadeOrder: 0,
+      start: 0,
+      end: text.length,
+      root: true,
+      value: { fontStackHandle, fontSize: 48, rasterPixelRatio: 1, foregroundRgba: 0xffff_ffff },
+    },
+  ],
+  constraints: [
+    {
+      paragraphId,
+      flowThreadId,
+      geometryRevision: 1,
+      width: 800,
+      height: 200,
+      viewportBlockStart: 0,
+      viewportBlockEnd: 200,
+      resumeBlockOffset: 0,
+      maxLines: 32,
+      regionStart: 0,
+      resumeCluster: 0,
+      regionCount: 1,
+      resumeRegion: 0,
+      widthMode: 'at-most',
+      heightMode: 'at-most',
+      wrap: 'word',
+      align: 'start',
+      overflow: 'visible',
+      blockAlign: 'start',
+    },
+  ],
+  regions: [
+    {
+      id: regionId,
+      geometryRevision: 1,
+      transformIndex: 1,
+      shape: 'rectangle',
+      exclusionStart: 0,
+      exclusionCount: 0,
+      writingMode: 'horizontal-tb',
+      textOrientation: 'mixed',
+      inlineStart: 0,
+      blockStart: 0,
+      inlineEnd: 800,
+      blockEnd: 200,
+      clipInlineStart: 0,
+      clipBlockStart: 0,
+      clipInlineEnd: 800,
+      clipBlockEnd: 200,
+    },
+  ],
 });
-const borrowed = engine.session.update(request);
-expectedEngineRevision = borrowed.engineRevision;
-engine.session.assertLive(borrowed);
-const retained = engine.session.retain(borrowed);
+const borrowed = session.update(request);
+session.assertLive(borrowed);
+const retained = session.retain(borrowed);
 ```
 
 The frame omits `capabilitySet`; the first compiled profile is selected. `session.update()` returns a borrow into Wasm
-memory. Retain before calling code that may re-enter the runtime or before storing the publication across a frame.
+memory. Retain before calling code that may re-enter the runtime or before storing the publication across a frame. An
+application-facing text object owns these five records: `update()` changes desired text or geometry, the next frame
+replaces the prior text range and advances `geometryRevision` when dimensions change, and disposal publishes
+`{ opcode: 'remove', paragraphId }`. `ExampleText` is the complete reference for that retained update loop.
 
 ### 4. Decode, validate, and atomically submit
 
@@ -328,12 +379,14 @@ state intact.
 | Capability-set wire ID              | `compileRenderPolicy()`      | Pure ABI bookkeeping; omitted from authored capability objects            |
 | Technique/program/resource wire IDs | `RenderWireIdentityRegistry` | Derived from stable string identities and collision-checked               |
 | Policy buffer slot                  | policy/technique author      | `id('buffer', name)` is referenced by policy stores and renderer bindings |
-| Policy handle                       | engine                       | `id('policy', name)` is reused by registration and each frame request     |
-| Binding, stack, session handles     | engine                       | Domain-branded `id()` results are reused across the corresponding calls   |
+| Policy handle                       | engine                       | A static `id()` or host-scoped ID is reused by registration and frames    |
+| Binding, stack, session handles     | engine                       | `host.id()` results are reused across the corresponding host calls        |
 | Resource generation                 | engine/device                | Distinguishes replacement and exact retirement lifetimes                  |
 
-`id()` retains each stable name in its module instance to reject forged numbers and hash collisions at call time. Dynamic
-entities therefore reuse a bounded slot namespace after disposal; `ExampleTextEngine` demonstrates that lifecycle.
+Top-level `id()` retains authored module constants for the module lifetime. `host.id()` retains dynamic provenance only
+until `host.dispose()`, so runtime-created entities do not grow a process-global registry. `ExampleTextEngine` goes one
+step further: it allocates binding, stack, session, paragraph, style, flow, and region IDs internally, exposing only the
+returned stack handle that `createText()` must reference.
 
 ## 1. Implementing a portable technique plan
 
