@@ -164,7 +164,13 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(device.discardedResourceBatches).toBe(1);
       expect(device.resources.size).toBe(0);
 
-      const binding = engine.registerFont(font);
+      const retryFont = Object.create(font) as typeof font;
+      Object.defineProperties(retryFont, {
+        disposed: { value: false },
+        data: { value: { ...font.data, inset: font.data.inset + 0.01 } },
+      });
+      // Different bytes under the reused handle prove the failed registration left no Wasm binding behind.
+      const binding = engine.registerFont(retryFont);
       expect(binding).toBe(id('font-binding', 'glyph-example-renderer/1'));
       const stackHandle = engine.registerFontStack([binding]);
       engine.openSession();
