@@ -91,7 +91,7 @@ interface PreparedGeometry {
 /** A concrete offscreen TypeGPU renderer whose accepted submissions produce RGBA pixels. */
 export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   readonly shader: ExampleRendererShader;
-  readonly recording: RecordingExampleRendererDevice;
+  readonly #recording: RecordingExampleRendererDevice;
   readonly width: number;
   readonly height: number;
   readonly #device: GPUDevice;
@@ -101,6 +101,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   readonly #viewport;
   readonly #viewportGroup;
   readonly #pipeline;
+  // Font bindings are host-lifetime; their geometry is released with the device.
   readonly #geometries = new Map<unknown, GpuGeometry>();
   readonly #instanceBuffers: GpuInstanceBuffers = new Map();
   #submittedPasses = 0;
@@ -118,7 +119,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     }
     this.#device = options.device;
     this.shader = exampleRendererShader;
-    this.recording = new RecordingExampleRendererDevice(this.shader);
+    this.#recording = new RecordingExampleRendererDevice(this.shader);
     this.#root = tgpu.initFromDevice({ device: this.#device });
     this.#target = this.#root
       .createTexture({ size: [this.width, this.height], format: 'rgba8unorm' })
@@ -157,7 +158,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
 
   prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources {
     this.#assertLive();
-    const pending = this.recording.prepareResources(resources);
+    const pending = this.#recording.prepareResources(resources);
     const prepared = new Map<unknown, PreparedGeometry>();
     try {
       for (const input of resources) {
@@ -179,10 +180,10 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     return Object.freeze({
       commit: () => {
         if (!active) return;
-        active = false;
         pending.commit();
+        active = false;
         for (const entry of prepared.values()) {
-          if (!entry.resourceIds.some((id) => this.recording.resources.get(id) === entry.resource)) {
+          if (!entry.resourceIds.some((id) => this.#recording.resources.get(id) === entry.resource)) {
             destroyGeometry(entry.geometry);
             continue;
           }
@@ -202,8 +203,8 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
 
   prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission {
     this.#assertLive();
-    const pending = this.recording.prepareSubmission(drawList);
-    if (isNoOpDrawList(drawList)) {
+    const pending = this.#recording.prepareSubmission(drawList);
+    if (!pending.replacesRenderState) {
       let active = true;
       return Object.freeze({
         commit: async () => {
@@ -260,11 +261,14 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     this.#assertLive();
     const bytesPerRow = this.width * 4;
     const paddedBytesPerRow = Math.ceil(bytesPerRow / 256) * 256;
-    const readback = this.#device.createBuffer({
-      size: paddedBytesPerRow * this.height,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-    });
+    let readback: GPUBuffer | undefined;
+    let scopeActive = true;
+    this.#device.pushErrorScope('validation');
     try {
+      readback = this.#device.createBuffer({
+        size: paddedBytesPerRow * this.height,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
       const encoder = this.#device.createCommandEncoder();
       encoder.copyTextureToBuffer(
         { texture: this.#root.unwrap(this.#target) },
@@ -272,6 +276,10 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         { width: this.width, height: this.height },
       );
       this.#device.queue.submit([encoder.finish()]);
+      const validationResult = this.#device.popErrorScope();
+      scopeActive = false;
+      const validationError = await validationResult;
+      if (validationError !== null) throw gpuOperationError('read pixels', validationError);
       await readback.mapAsync(GPUMapMode.READ);
       const mapped = new Uint8Array(readback.getMappedRange());
       const pixels = new Uint8Array(bytesPerRow * this.height);
@@ -280,8 +288,16 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
       }
       readback.unmap();
       return pixels;
+    } catch (error) {
+      if (scopeActive) {
+        const validationResult = this.#device.popErrorScope();
+        scopeActive = false;
+        const validationError = await validationResult;
+        if (validationError !== null) throw gpuOperationError('read pixels', validationError);
+      }
+      throw error;
     } finally {
-      readback.destroy();
+      readback?.destroy();
     }
   }
 
@@ -398,36 +414,39 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         },
       ],
     });
-    for (const realized of realizedDraws) {
-      const geometryName = realized.geometry.resourceName;
-      if (geometryName === undefined) throw new Error('TypeGPU example renderer needs supplied geometry');
-      const geometryResource = realized.resources.get(geometryName);
-      const geometry = this.#geometries.get(geometryResource);
-      if (geometryResource === undefined || geometry === undefined) {
-        throw new Error(`TypeGPU example renderer has no realized "${geometryName}" geometry`);
+    try {
+      for (const realized of realizedDraws) {
+        const geometryName = realized.geometry.resourceName;
+        if (geometryName === undefined) throw new Error('TypeGPU example renderer needs supplied geometry');
+        const geometryResource = realized.resources.get(geometryName);
+        const geometry = this.#geometries.get(geometryResource);
+        if (geometryResource === undefined || geometry === undefined) {
+          throw new Error(`TypeGPU example renderer has no realized "${geometryName}" geometry`);
+        }
+        const origin = gpuBufferForDraw(buffers, realized, 'origin');
+        const size = gpuBufferForDraw(buffers, realized, 'size');
+        const color = gpuBufferForDraw(buffers, realized, 'color');
+        const drawGeometry = realized.geometry;
+        this.#pipeline
+          .with(this.#viewportGroup)
+          .with(positionLayout, geometry.position)
+          .with(uvLayout, geometry.uv)
+          .with(originLayout, origin)
+          .with(sizeLayout, size)
+          .with(colorLayout, color)
+          .with(pass)
+          .withIndexBuffer(geometry.indices, 'uint16')
+          .drawIndexed(
+            drawGeometry.indexCount,
+            drawGeometry.instanceCount,
+            drawGeometry.indexStart,
+            0,
+            realized.primitive.recordIndex,
+          );
       }
-      const origin = gpuBufferForDraw(buffers, realized, 'origin');
-      const size = gpuBufferForDraw(buffers, realized, 'size');
-      const color = gpuBufferForDraw(buffers, realized, 'color');
-      const drawGeometry = realized.geometry;
-      this.#pipeline
-        .with(this.#viewportGroup)
-        .with(positionLayout, geometry.position)
-        .with(uvLayout, geometry.uv)
-        .with(originLayout, origin)
-        .with(sizeLayout, size)
-        .with(colorLayout, color)
-        .with(pass)
-        .withIndexBuffer(geometry.indices, 'uint16')
-        .drawIndexed(
-          drawGeometry.indexCount,
-          drawGeometry.instanceCount,
-          drawGeometry.indexStart,
-          0,
-          realized.primitive.recordIndex,
-        );
+    } finally {
+      pass.end();
     }
-    pass.end();
     return encoder.finish();
   }
 
@@ -452,10 +471,10 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
       this.#device.queue.submit([command]);
     } catch (error) {
       const validationError = await this.#device.popErrorScope();
-      throw validationError ?? error;
+      throw validationError === null ? error : gpuOperationError('submit render pass', validationError);
     }
     const validationError = await this.#device.popErrorScope();
-    if (validationError !== null) throw validationError;
+    if (validationError !== null) throw gpuOperationError('submit render pass', validationError);
     await this.#device.queue.onSubmittedWorkDone();
     this.#assertLive();
     this.#submittedPasses += 1;
@@ -524,17 +543,6 @@ function positiveDimension(value: number, name: string): number {
   return value;
 }
 
-function isNoOpDrawList(drawList: ExampleDrawList): boolean {
-  return (
-    drawList.resourceRecords.length === 0 &&
-    drawList.bufferRecords.length === 0 &&
-    drawList.primitiveRecords.length === 0 &&
-    drawList.draws.length === 0 &&
-    drawList.patches.length === 0 &&
-    drawList.retirements.length === 0
-  );
-}
-
 function gpuBufferForDraw(
   buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
   realized: ExampleRealizedDraw,
@@ -544,6 +552,10 @@ function gpuBufferForDraw(
   const buffer = bytes === undefined ? undefined : buffers.get(name)?.get(bytes)?.buffer;
   if (buffer === undefined) throw new Error(`TypeGPU example renderer has no realized "${name}" buffer for this draw`);
   return buffer;
+}
+
+function gpuOperationError(operation: string, error: GPUError): Error {
+  return new Error(`TypeGPU example renderer failed to ${operation}: ${error.message}`, { cause: error });
 }
 
 function destroyGeometry(geometry: GpuGeometry): void {

@@ -100,6 +100,8 @@ export class ExampleTextEngine {
 
   /** Compile and register one loaded font through the portable raster program. */
   registerFont(font: LoadedFont<AnyRasterTechnique>): FontBindingHandle {
+    if (this.#rendering)
+      throw new Error('example engine cannot register a font while a frame submission is in progress');
     const shader = this.#device?.shader;
     if (shader !== undefined && shader.variant.techniqueId !== font.technique.id) {
       throw new TypeError(
