@@ -1232,12 +1232,16 @@ class ThreeTextBatchBinding {
   }
   #releaseMeasurementLeases(paragraph?: RetainedEngineParagraph): void {
     if (paragraph !== undefined) {
-      releaseStackLeases(this.#measurementStackLeases.get(paragraph) ?? []);
-      releaseMaterialLeases(this.#measurementMaterialLeases.get(paragraph) ?? []);
+      const stackLeases = this.#measurementStackLeases.get(paragraph);
+      const materialLeases = this.#measurementMaterialLeases.get(paragraph);
+      if (stackLeases === undefined && materialLeases === undefined) return;
+      if (stackLeases !== undefined) releaseStackLeases(stackLeases);
+      if (materialLeases !== undefined) releaseMaterialLeases(materialLeases);
       this.#measurementStackLeases.delete(paragraph);
       this.#measurementMaterialLeases.delete(paragraph);
       return;
     }
+    if (this.#measurementStackLeases.size === 0 && this.#measurementMaterialLeases.size === 0) return;
     for (const leases of this.#measurementStackLeases.values()) releaseStackLeases(leases);
     for (const leases of this.#measurementMaterialLeases.values()) releaseMaterialLeases(leases);
     this.#measurementStackLeases.clear();
