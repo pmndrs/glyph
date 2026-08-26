@@ -5,6 +5,7 @@ import { slug } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { observeTextRuntimeDispose, type TextRuntime } from '../text-runtime.js';
 import {
+  compileRenderPolicy,
   compileRasterFont,
   id,
   observeLoadedFontDispose,
@@ -16,13 +17,15 @@ import {
   type GlyphId,
   type GlyphIdKind,
   type MaterialHandle,
+  type PolicyBufferId,
   type PolicyHandle,
   type PortableGeometryPayload,
   type PortableResource,
   type TextEngineSession,
   type TextEngineSessionOptions,
+  textShaperAbi,
 } from '../core.js';
-import { threeRenderPolicyBytes, type ThreeTransformMode } from './render-policy.js';
+import { threeRenderPolicyDescriptor, type ThreeTransformMode } from './render-policy.js';
 import type { ThreeTextMaterial } from './material.js';
 import {
   assertThreeGeometryPayload,
@@ -33,6 +36,8 @@ import {
 
 const POLICY_HANDLE = id('policy', 'glyph-three/render');
 const MAX_U32 = 0xffff_ffff;
+const INTERNAL_ORDER_BUFFER_ID: typeof textShaperAbi.engine.internalBufferBindings.order =
+  textShaperAbi.engine.internalBufferBindings.order;
 const coordinators = new WeakMap<TextRuntime, ThreeTextEngineCoordinator>();
 const coordinatorDisposeObservers = new WeakMap<ThreeTextEngineCoordinator, () => void>();
 
@@ -90,6 +95,7 @@ export class ThreeTextEngineCoordinator {
   readonly #materialHandles = new WeakMap<ThreeTextMaterial, RetainedMaterial>();
   readonly #materials = new Map<number, RetainedMaterial>();
   readonly #planPrograms: ReadonlyMap<string, CompiledThreeRasterPlanProgram>;
+  readonly #policyBufferIds: ReadonlyMap<number, ReadonlyMap<number, PolicyBufferId>>;
   #nextBindingHandle = 1;
   #nextStackHandle = 1;
   #nextSessionHandle = 1;
@@ -116,14 +122,14 @@ export class ThreeTextEngineCoordinator {
       const planPrograms = compiledThreeRasterPlanPrograms(this.host.wireIdentities, transformMode);
       snapshot = true;
       this.#planPrograms = new Map(planPrograms.map((program) => [program.technique.id, program]));
-      this.host.registerPolicy(
-        POLICY_HANDLE,
-        threeRenderPolicyBytes(
-          this.host.wireIdentities,
-          transformMode,
-          planPrograms.map((program) => program.policy),
-        ),
+      const policy = threeRenderPolicyDescriptor(
+        this.host.wireIdentities,
+        transformMode,
+        planPrograms.map((program) => program.policy),
       );
+      const policyBytes = compileRenderPolicy(policy);
+      this.#policyBufferIds = policyBufferIds(policy.programs);
+      this.host.registerPolicy(POLICY_HANDLE, policyBytes);
     } catch (error) {
       if (snapshot) releaseThreeRasterPlanProgramSnapshot(this.host.wireIdentities);
       this.host.dispose();
@@ -215,6 +221,16 @@ export class ThreeTextEngineCoordinator {
     const resource = this.#resources.get(referenceId)?.owners.values().next().value;
     if (resource === undefined) throw new Error(`Three text command buffer references unknown resource ${referenceId}`);
     return resource;
+  }
+
+  /** Resolve a decoded wire value through the exact policy program that declared it. */
+  resolveBufferBindingId(programId: number, value: number): PolicyBufferId | typeof INTERNAL_ORDER_BUFFER_ID {
+    if (value === INTERNAL_ORDER_BUFFER_ID) return INTERNAL_ORDER_BUFFER_ID;
+    const bufferId = this.#policyBufferIds.get(programId)?.get(value);
+    if (bufferId === undefined) {
+      throw new TypeError(`Three policy program ${programId} does not declare buffer ${value}`);
+    }
+    return bufferId;
   }
 
   dispose(): void {
@@ -436,6 +452,17 @@ function readonlyMap<Key, Value>(source: Map<Key, Value>): ReadonlyMap<Key, Valu
     [Symbol.iterator]: source[Symbol.iterator].bind(source),
   });
   return view;
+}
+
+function policyBufferIds(
+  programs: readonly import('../core.js').PolicyProgram[],
+): ReadonlyMap<number, ReadonlyMap<number, PolicyBufferId>> {
+  return new Map(
+    programs.map((program) => [
+      program.programId,
+      new Map(program.buffers.map((buffer) => [buffer.id, buffer.id] as const)),
+    ]),
+  );
 }
 
 function sameResourceBundle(left: ThreeTextEngineResource, right: ThreeTextEngineResource): boolean {

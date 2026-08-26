@@ -336,6 +336,24 @@ test('records-sourced Three geometry retains supplied topology across instance-c
     );
     const rejectedView = new TextEngineRenderPlanView().bind(rejected);
     const rejectedBytes = new DataView(rejected.memoryBuffer);
+    const rejectedBuffer = rejectedView.record(rejectedView.table('buffers'), 0);
+    const policyBufferIdOffset =
+      rejected.bytes.byteOffset + rejectedBuffer + textShaperAbi.layouts.engineBuffer.policyBufferId;
+    const policyBufferId = rejectedBytes.getUint16(policyBufferIdOffset, true);
+    const declaredBufferIds = new Set([
+      suppliedGeometrySchema.buffers.origin.id,
+      threeSystemBuffers.stableGlyphId.id,
+      threeSystemBuffers.transformIndex.id,
+      textShaperAbi.engine.internalBufferBindings.order,
+    ]);
+    const unknownBufferId = Array.from({ length: 0xfffe }, (_, index) => index + 1).find(
+      (candidate) => !declaredBufferIds.has(candidate),
+    );
+    assert.ok(unknownBufferId !== undefined);
+    rejectedBytes.setUint16(policyBufferIdOffset, unknownBufferId, true);
+    assert.throws(() => target.apply(rejected), /does not declare buffer/u);
+    rejectedBytes.setUint16(policyBufferIdOffset, policyBufferId, true);
+
     const rejectedResource = rejectedView.record(rejectedView.table('resources'), 0);
     const resourceKindOffset =
       rejected.bytes.byteOffset + rejectedResource + textShaperAbi.layouts.engineResource.resourceKind;
