@@ -18,6 +18,11 @@
   reference also fixes the lifecycle map: compiled payloads are portable data, while each renderer owns per-device GPU
   realization and cross-session leases.
 
+- **Reviewed the final portability size delta** — Relative to the previous accepted snapshot, renderer-neutral `/core`
+  grows by 10,883 raw / 1,715 gzip / 1,344 Brotli bytes and the complete Three graph by 10,209 / 1,561 / 1,161. The
+  ordinary tree-shaken browser core changes by only 27 raw / 9 gzip / 47 Brotli bytes. Shaper Wasm grows by 1,668 raw /
+  774 gzip / 372 Brotli bytes. The reviewed evidence is regenerated at the final source head and passes the size gate.
+
 - **Attached text can measure desired layout before its first frame** — `Text.layout()` now creates or reconciles its
   batch after attachment and uses a non-publishing paragraph query without matrix traversal, material or GPU realization,
   or draw publication. Sequential group queries share one speculative lifecycle candidate that the first traversal can
