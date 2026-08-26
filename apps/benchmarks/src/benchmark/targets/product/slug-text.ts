@@ -171,11 +171,11 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
   }
 }
 
-/** `Text` reports a failed synchronize through `error` rather than a rejected promise, so read it after each commit. */
+/** `Text` reports synchronization state explicitly, so read it after each commit. */
 function assertCommitted(line: Text<typeof slug>): void {
-  const error = line.error;
-  if (error !== undefined) throw error;
-  if (line.layout() === undefined) throw new Error('Slug product Text did not commit layout metrics');
+  const state = line.commitState();
+  if (state.status === 'failed') throw state.error;
+  if (state.status !== 'committed') throw new Error(`Slug product Text is ${state.status}, not committed`);
 }
 
 async function renderSlugText(resources: SlugProductTargetResources): Promise<TargetRunOutput> {

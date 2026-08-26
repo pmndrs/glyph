@@ -85,9 +85,7 @@ export function publishWorkloadTexts(root: THREE.Object3D, entries: readonly Com
 
 /** Explicitly queries the aggregate metrics committed by the Rust Text lifecycle before scene positioning. */
 export function committedTextMetrics(text: WorkloadText): ParagraphLayoutSummary {
-  const metrics = text.layout();
-  if (metrics === undefined) throw new Error('workload Text lost its committed layout metrics');
-  return metrics;
+  return text.layout();
 }
 
 /** Target-v1 paint takes CSS colors, while the comparison palettes stay authored as 24-bit hex. */

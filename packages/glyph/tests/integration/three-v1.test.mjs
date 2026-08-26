@@ -64,7 +64,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   initiallyEmpty.text = 'A';
   emptyScene.updateMatrixWorld(true);
   assert.equal(initiallyEmpty.error, undefined, 'an initially empty paragraph must accept its first text edit');
-  assert.equal(initiallyEmpty.layout()?.glyphCount, 1);
+  assert.equal(initiallyEmpty.layout().glyphCount, 1);
   initiallyEmpty.dispose();
 
   const editedSpans = new Text({
@@ -1200,7 +1200,7 @@ test('repeated layout under changing constraints stays on the paragraph query pa
     0,
     'the committing frame proceeds from pre-layout revisions without a checkpoint rebuild',
   );
-  assert.equal(label.layout()?.contentWidth <= 240 + 1e-3, true);
+  assert.equal(label.layout().contentWidth <= 240 + 1e-3, true);
   label.dispose();
 });
 

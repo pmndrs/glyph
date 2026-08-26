@@ -121,21 +121,23 @@ export const packageSizeBudgets = {
     brotliBytes: 510_000,
   },
   // Shared Three technique graphs use one ceiling so per-technique drift remains visible.
+  // Pre-frame Text measurement added the same 3,248 raw / 2,097 minified bytes measured in
+  // three-runtime-js; the compressed graphs remain inside their existing reviewed ceilings.
   'bitmap-runtime-js': {
-    rawBytes: 566_000,
-    minifiedBytes: 354_000,
+    rawBytes: 571_000,
+    minifiedBytes: 358_000,
     gzipBytes: 93_000,
     brotliBytes: 78_000,
   },
   'mtsdf-runtime-js': {
-    rawBytes: 566_000,
-    minifiedBytes: 354_000,
+    rawBytes: 571_000,
+    minifiedBytes: 358_000,
     gzipBytes: 93_000,
     brotliBytes: 78_000,
   },
   'slug-runtime-js': {
-    rawBytes: 566_000,
-    minifiedBytes: 354_000,
+    rawBytes: 571_000,
+    minifiedBytes: 358_000,
     gzipBytes: 93_000,
     brotliBytes: 78_000,
   },

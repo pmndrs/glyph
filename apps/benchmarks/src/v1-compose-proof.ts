@@ -90,7 +90,7 @@ async function render(): Promise<TargetV1ComposeResult> {
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
       drawCount: composedText.children.filter((child) => child instanceof THREE.Mesh).length,
-      glyphCount: composedText.layout()?.glyphCount ?? 0,
+      glyphCount: composedText.layout().glyphCount,
       litPixels: composed.lit,
       redPixels: composed.red,
       greenPixels: composed.green,

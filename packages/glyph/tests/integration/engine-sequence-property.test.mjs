@@ -425,11 +425,6 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
             `${shapingCase.id} tick ${tick} p${index}: ${String(node.error?.message)}`,
           );
           const metrics = node.layout();
-          assert.notEqual(
-            metrics,
-            undefined,
-            `${shapingCase.id} tick ${tick} p${index} lost its committed layout metrics`,
-          );
           assert.equal(
             metrics.missingGlyphCount,
             0,

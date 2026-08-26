@@ -64,7 +64,7 @@ async function render(): Promise<TargetV1BitmapResult> {
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
       drawCount: text.children.filter((child) => child instanceof THREE.Mesh).length,
-      glyphCount: text.layout()?.glyphCount ?? 0,
+      glyphCount: text.layout().glyphCount,
       litPixels,
       retainedDraw: retainedDraw === firstDraw,
       retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsGlyphOrigins') === firstStorage,

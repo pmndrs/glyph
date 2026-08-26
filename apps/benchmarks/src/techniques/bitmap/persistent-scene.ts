@@ -432,11 +432,7 @@ async function activateBitmapTextPersistentScene(
     activeText.updateMatrixWorld(true);
     if (activeText.error !== undefined) throw activeText.error;
     const readyAt = performance.now();
-    const committedLayout = (): ParagraphLayoutSummary => {
-      const layout = activeText.layout();
-      if (layout === undefined) throw new Error('live bitmap Text lost its committed layout');
-      return layout;
-    };
+    const committedLayout = (): ParagraphLayoutSummary => activeText.layout();
     const initialLayout = committedLayout();
     if (expectedGlyphCount !== undefined) {
       const missing = countMissingGlyphs(initialLayout);
