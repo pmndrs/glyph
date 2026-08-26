@@ -235,11 +235,18 @@ Resolve every technique and resource string through the host's one registry:
 
 ```ts
 import { createTextRuntime } from '@pmndrs/glyph';
-import { compileRenderPolicy, createRasterPolicyProgram, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
+import {
+  compileRenderPolicy,
+  createRasterPolicyProgram,
+  id,
+  TextEngineHost,
+  textRuntimeShaper,
+} from '@pmndrs/glyph/core';
+
+const MY_RENDERER_POLICY_HANDLE = id('policy', 'my-renderer/default');
 
 const runtime = await createTextRuntime();
 const host = new TextEngineHost(textRuntimeShaper(runtime));
-const MY_RENDERER_POLICY_HANDLE = host.id('policy', 'my-renderer/default');
 const capabilitySet = rendererCapabilitySet();
 const policy = createRasterPolicyProgram(quadPlanProgram, {
   namespace: 'my-renderer',
@@ -706,6 +713,8 @@ gpuDevice.destroy();
 It registers the binding only after all CPU resource inputs validate, and a device commit failure disposes that binding
 before the pending resource batch is discarded. A binding cannot be disposed while a live font stack references it;
 dispose stacks first, or let `TextEngineHost.dispose()` tear down sessions, stacks, bindings, policies, and ID provenance.
+Three therefore marks a disposed font's cached binding for retirement and performs that disposal only when its final
+registered-stack lease releases; the last accepted draw never loses resources out from under it.
 `text.render()` performs the frame compilation, retention, decode, and submission transaction. `text.update()` only
 changes desired state; shaping and GPU work happen on the next `render()`. `text.dispose()` publishes paragraph removal,
 and the accepted empty scene clears the target. The browser lab uses this exact path with runtime-baked Inter and requires

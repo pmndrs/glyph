@@ -239,8 +239,24 @@ for (const [name, keys] of compiled.declaredResources) {
 }
 
 const pendingResources = device.prepareResources(resources);
-host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
-pendingResources.commit();
+try {
+  host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
+  try {
+    pendingResources.commit();
+  } catch (commitError) {
+    try {
+      host.disposeFontBinding(bindingHandle);
+    } catch (rollbackError) {
+      throw new AggregateError([commitError, rollbackError], 'resource commit and binding rollback failed', {
+        cause: commitError,
+      });
+    }
+    throw commitError;
+  }
+} catch (error) {
+  pendingResources.discard();
+  throw error;
+}
 host.registerFontStack(fontStackHandle, [bindingHandle]);
 ```
 
@@ -249,7 +265,8 @@ host.registerFontStack(fontStackHandle, [bindingHandle]);
 The renderer maps each constrained payload onto its own GPU objects during `prepareResources()`. `host.id()` derives
 runtime-owned wire IDs whose provenance is released with the host: its domain brand prevents passing a stack ID as a
 session ID at typecheck, while call-time validation rejects empty names, unsupported domains, forged numbers, and
-observed hash collisions. Top-level `id()` is reserved for authored module-lifetime constants such as policy buffer slots.
+observed hash collisions. Top-level `id()` is reserved for authored module-lifetime constants such as policy handles and
+policy buffer slots.
 
 ### 3. Open a session and publish a frame
 
@@ -379,7 +396,7 @@ state intact.
 | Capability-set wire ID              | `compileRenderPolicy()`      | Pure ABI bookkeeping; omitted from authored capability objects            |
 | Technique/program/resource wire IDs | `RenderWireIdentityRegistry` | Derived from stable string identities and collision-checked               |
 | Policy buffer slot                  | policy/technique author      | `id('buffer', name)` is referenced by policy stores and renderer bindings |
-| Policy handle                       | engine                       | A static `id()` or host-scoped ID is reused by registration and frames    |
+| Policy handle                       | policy module                | A static `id()` is reused by registration and every authored frame        |
 | Binding, stack, session handles     | engine                       | `host.id()` results are reused across the corresponding host calls        |
 | Resource generation                 | engine/device                | Distinguishes replacement and exact retirement lifetimes                  |
 
