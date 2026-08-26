@@ -118,7 +118,7 @@ export const packageSizeBudgets = {
   // guidance left +468 of real production behaviour, which fits the existing ceiling.
   // +22 KB over main is `unicode-segmenter`, entering every graph via internal/graphemes.ts so span
   // alignment matches the engine's cluster grid. Deliberate; both hosts measure identically.
-  // Portable grouped resources and first-party realization now measure 580,521 raw /
+  // Portable grouped resources and first-party realization now measure 580,722 raw /
   // 363,454 minified / 94,132 gzip / 78,431 Brotli.
   'three-runtime-js': {
     rawBytes: 583_000,
@@ -162,7 +162,7 @@ export const packageSizeBudgets = {
     gzipBytes: 690_000,
     brotliBytes: 510_000,
   },
-  // Shared Three technique graphs now measure at most 558,711 raw / 349,897 minified /
+  // Shared Three technique graphs now measure at most 558,912 raw / 349,897 minified /
   // 91,129 gzip / 76,045 Brotli; one ceiling keeps technique drift visible.
   'bitmap-runtime-js': {
     rawBytes: 561_000,

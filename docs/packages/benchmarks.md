@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:86ab4f94ff2da3fcafe4cf2ecece500c9ea95a08166276df48420fc554b7a086'
+source_digest: 'sha256:34ba4cdfe6f7a40811bcc85df0dc2a368414a03306a8b3991ef36c0ff9171869'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -531,9 +531,9 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 
 Roadmap item 10.3 leaves browser core, every baker host, and every Wasm artifact byte-identical. Relative to the warm-publication baseline, bounded retained capacity adds 5,155 raw / 2,779 minified / 627 gzip / 598 Brotli bytes to the optional Bitmap closure, 6,038 / 3,148 / 778 / 762 to MTSDF, and 9,309 / 4,976 / 1,238 / 1,204 to Slug. A dedicated regression bounds those increments independently from the accumulated pre-coverage baseline. All three remain below the existing absolute 425,000 raw / 325,000 minified / 95,000 gzip / 75,000 Brotli renderer ceilings, so no absolute runtime, baker-host, or Wasm budget changes.
 
-The portable grouped-resource follow-up measures the Three adapter at 580,521 raw / 363,454 minified / 94,132 gzip /
-78,431 Brotli bytes and its largest technique runtime graph at 558,711 / 349,897 / 91,129 / 76,045. The corresponding
-renderer-neutral core graph shrank to 330,508 / 209,530 / 55,042 / 46,099; TypeGPU remains an external peer.
+The portable grouped-resource follow-up measures the Three adapter at 580,722 raw / 363,454 minified / 94,132 gzip /
+78,431 Brotli bytes and its largest technique runtime graph at 558,912 / 349,897 / 91,129 / 76,045. The corresponding
+renderer-neutral core graph shrank to 330,709 / 209,530 / 55,042 / 46,099; TypeGPU remains an external peer.
 
 ## Package scripts
 
