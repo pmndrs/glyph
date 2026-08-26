@@ -298,16 +298,26 @@ name is scoped to the host and the thing is scoped to the session.
 Measured with one 16px Inter bitmap font:
 
 ```
-two batches, one host, one font  =>  1,391,808 bytes
-same two texts inside ONE batch  =>    696,512 bytes   (2.00x)
-
-8 loose <Text>                   =>  gpu 5.31 MB       (8.0x)
-one TextGroup of 8               =>  gpu 0.67 MB
+8 loose <Text>       gpuBytes 5,437K
+one TextGroup of 8   gpuBytes   684K      (~8x)
 ```
 
+**What that 8x is, precisely.** #120 already fixed half of this: `#bitmapTexture` wraps the payload's
+`data.bytes` directly rather than repacking into a fresh array
+([`three/engine-plan-target.ts:1329`](../../packages/glyph/src/three/engine-plan-target.ts)), and
+`resolveResource` hands every executor the *same* `ThreeTextEngineResource` from the coordinator
+([`three/engine-runtime.ts:265`](../../packages/glyph/src/three/engine-runtime.ts)). So the atlas
+**ArrayBuffer is shared across sessions — host RAM does not multiply**.
+
+What still multiplies is the realized object: each executor constructs its own
+`THREE.DataArrayTexture` over those shared bytes, so the driver sees N distinct textures and uploads
+the atlas N times. The 8x is **VRAM, not host RAM**. `gpuBytes` sums
+`texture.image.data.byteLength` per executor and therefore counts one shared buffer once per session —
+it over-reports host memory and correctly predicts VRAM.
+
 Nothing violates the stated contract, because there is no stated contract about where resources live.
-That is the finding: **the API scopes the identity and declines to scope the object**, and the two
-shipped answers disagree.
+That is the finding: **the API scopes the identity, #120 scoped the payload, and nothing scopes the
+realized object.**
 
 ### Where the flaw sits, by layer
 
@@ -322,10 +332,15 @@ Both measured multipliers are **`/three` choices**, and either can be fixed ther
 | Multiplier | Cause | Fixable in |
 | --- | --- | --- |
 | 3.5x Wasm | one session per standalone `Text` rather than a shared batch | `/three` — see C11 |
-| 8x GPU | textures cached on the per-batch plan executor rather than on the coordinator | `/three` — the coordinator already holds the decoded payloads in `#resources` |
+| 8x VRAM | the realized `THREE.DataArrayTexture` is built per plan executor, though the bytes under it are already shared | `/three` — the coordinator already holds the shared payload; only the texture object needs to move up |
 
 Nothing in `/core` requires either. A `THREE.DataArrayTexture` is derived deterministically from the
-resource payload, so the coordinator could hold it and refcount by session today.
+resource payload the coordinator already shares, so the coordinator could hold the texture too and
+refcount it by session today — a small change, since the payload plumbing already lands there.
+
+Note also what a host-scoped realization does **not** remove: two hosts on two devices must each
+realize their own texture, because a texture cannot cross a device. That duplication is correct, and
+making the host device-scoped is what makes it legible rather than accidental.
 
 The **core-level flaw is an asymmetry that invites the mistake**. `compileRasterFont` returns
 `{ binding, resources, declaredResources }`
