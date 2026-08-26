@@ -48,6 +48,8 @@ okf_version: '0.2'
 ## Research and governance
 
 - [Engineering house style](engineering/code-style.md) — canonical Rust, TypeScript, React, boundary, testing, and maintenance conventions.
+- [Agent router operations](guides/agent-router.md) — setup, model routing, resumable review and implementation recipes,
+  CLI fallback, and bounded trace handling for the pinned external-agent server.
 - [Shaping compilation research](planning/shaping-compilation-research.md) — static shaping, semantic bytecode, per-font specialization, MLIR, and WebGPU hypotheses and gates.
 - [Bitmap hinting research](planning/bitmap-hinting-research.md) — hinted grayscale strikes and four-phase coverage packing without distance fields or LCD rendering.
 - [MTSDF generation research](planning/mtsdf-generation-research.md) — primary literature, open implementations and licenses, repository ownership, and scalar/SIMD evidence gates.

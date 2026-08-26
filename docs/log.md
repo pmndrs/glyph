@@ -2,6 +2,11 @@
 
 ## 2026-08-26
 
+- **External-agent work now has one resumable operating guide** — The OKF guide records the pinned MCP and client setup,
+  live-catalog model routing, High-only Claude/Codex default, explicit Fable and 0x Alpha mappings, background review and
+  implementation recipes, the labeled pinned-CLI fallback, and bounded append-log handling. It separates process PIDs
+  from provider session ids and requires authoritative result retrieval rather than treating a trace sample as findings.
+
 - **Three font bindings now retire at their real ownership boundary** — A disposed loaded font keeps its cached Wasm
   binding and decoded renderer resources only while a registered stack still names it. The final shared stack lease
   disposes the binding and then releases those resources; direct Wasm-count coverage proves the cache does not grow
