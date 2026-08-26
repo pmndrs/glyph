@@ -239,13 +239,20 @@ export interface PolicyCapabilitySetSelection {
   readonly [policyCapabilitySetSelectionBrand]: true;
 }
 
-const capabilitySetSelectionIds = new WeakMap<object, number>();
+interface CapabilitySetSelectionRecord {
+  readonly id: number;
+  readonly policyHandle: PolicyHandle;
+}
+
+const capabilitySetSelections = new WeakMap<object, CapabilitySetSelectionRecord>();
 
 /** Select a declared capability profile without exposing its order-dependent wire ordinal. */
 export function selectPolicyCapabilitySet(
+  policyHandle: PolicyHandle,
   descriptor: PolicyDescriptor,
   selected: PolicyCapabilitySet,
 ): PolicyCapabilitySetSelection {
+  assertGlyphId(policyHandle, 'policy', 'capability-set policy handle');
   assertPolicyDescriptorShape(descriptor);
   if (descriptor.capabilitySets.length === 0 || descriptor.capabilitySets.length > MAX_POLICY_CAPABILITY_SETS) {
     throw new RangeError(`policy needs one to ${MAX_POLICY_CAPABILITY_SETS} capability sets`);
@@ -261,19 +268,21 @@ export function selectPolicyCapabilitySet(
   }
   if (selectedId === undefined) throw new TypeError('selected capability set is not declared by the policy');
   const selection = Object.freeze({}) as PolicyCapabilitySetSelection;
-  capabilitySetSelectionIds.set(selection, selectedId);
+  capabilitySetSelections.set(selection, Object.freeze({ id: selectedId, policyHandle }));
   return selection;
 }
 
 /** @internal Resolve only selections created by `selectPolicyCapabilitySet`. */
-export function policyCapabilitySetSelectionId(selection: unknown): number {
+export function policyCapabilitySetSelectionId(selection: unknown, policyHandle: PolicyHandle): number {
   if (typeof selection !== 'object' || selection === null) {
     throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
   }
-  const capabilitySetId = capabilitySetSelectionIds.get(selection);
-  if (capabilitySetId === undefined)
-    throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
-  return capabilitySetId;
+  const selected = capabilitySetSelections.get(selection);
+  if (selected === undefined) throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
+  if (selected.policyHandle !== policyHandle) {
+    throw new TypeError('frame capabilitySet belongs to a different policy handle');
+  }
+  return selected.id;
 }
 
 declare const techniqueWireIdBrand: unique symbol;

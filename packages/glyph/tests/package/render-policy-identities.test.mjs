@@ -91,17 +91,18 @@ test('identity registries reject colliding program names at assembly', () => {
 });
 
 test('capability profiles are selected from descriptors without exposing wire ordinals', () => {
+  const policyHandle = id('policy', 'test.identities/capability-profile');
   const first = capabilitySet();
   const second = { ...capabilitySet(), maxBufferBytes: 2 * 1024 * 1024 };
   const descriptor = {
     capabilitySets: [first, second],
     programs: [program(FIRST_TECHNIQUE_ID, SHARED_PROGRAM_ID)],
   };
-  const selection = selectPolicyCapabilitySet(descriptor, second);
+  const selection = selectPolicyCapabilitySet(policyHandle, descriptor, second);
   assert.equal(typeof selection, 'object');
   assert.ok(Object.isFrozen(selection));
   assert.throws(
-    () => selectPolicyCapabilitySet(descriptor, { ...second, maxBufferBytes: 3 * 1024 * 1024 }),
+    () => selectPolicyCapabilitySet(policyHandle, descriptor, { ...second, maxBufferBytes: 3 * 1024 * 1024 }),
     /not declared/,
   );
 });

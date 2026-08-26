@@ -104,14 +104,15 @@ function headerFault(header: DataView): TextEngineFault {
     : Object.freeze({ paragraphId: paragraphId as ParagraphId | 0, styleId: styleId as StyleId | 0 });
 }
 
-/** Lifecycle owner for retained policy, font-stack, and session state in a RuntimeShaper's Wasm instance. */
+/** Lifecycle owner for retained policies, font bindings, font stacks, and sessions in one RuntimeShaper. */
 export class TextEngineHost {
   readonly wireIdentities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry();
   readonly #ids = new GlyphIdScope();
   readonly #exports;
   readonly #sessions = new Set<TextEngineSession>();
   readonly #policies = new Set<PolicyHandle>();
-  readonly #fontStacks = new Set<FontStackHandle>();
+  readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
+  readonly #fontBindings = new Set<FontBindingHandle>();
   #disposed = false;
 
   constructor(shaper: RuntimeShaper) {
@@ -134,6 +135,22 @@ export class TextEngineHost {
         'register font binding',
       ),
     );
+    this.#fontBindings.add(bindingHandle);
+  }
+
+  disposeFontBinding(bindingHandle: FontBindingHandle): void {
+    this.#assertActive();
+    assertGlyphId(bindingHandle, 'font-binding', 'font binding handle');
+    if (!this.#fontBindings.has(bindingHandle)) {
+      throw new Error(`font binding ${bindingHandle} is not owned by this text engine host`);
+    }
+    for (const [stackHandle, fontHandles] of this.#fontStacks) {
+      if (fontHandles.includes(bindingHandle)) {
+        throw new Error(`font binding ${bindingHandle} is still used by font stack ${stackHandle}`);
+      }
+    }
+    requireStatus(this.#exports.disposeFontBinding(bindingHandle), 'dispose font binding');
+    this.#fontBindings.delete(bindingHandle);
   }
 
   registerFontStack(handle: FontStackHandle, fontHandles: readonly FontBindingHandle[]): void {
@@ -143,12 +160,16 @@ export class TextEngineHost {
     const bytes = new Uint8Array(checkedProduct(fontHandles.length, 4, 'font stack bytes'));
     const view = new DataView(bytes.buffer);
     for (const [index, fontHandle] of fontHandles.entries()) {
-      view.setUint32(index * 4, assertGlyphId(fontHandle, 'font-binding', 'font binding handle'), true);
+      const checkedHandle = assertGlyphId(fontHandle, 'font-binding', 'font binding handle');
+      if (!this.#fontBindings.has(checkedHandle)) {
+        throw new Error(`font binding ${checkedHandle} is not owned by this text engine host`);
+      }
+      view.setUint32(index * 4, checkedHandle, true);
     }
     this.#withBytes(bytes, (pointer) =>
       requireStatus(this.#exports.registerFontStack(handle, pointer, fontHandles.length), 'register font stack'),
     );
-    this.#fontStacks.add(handle);
+    this.#fontStacks.set(handle, Object.freeze([...fontHandles]));
   }
 
   disposeFontStack(handle: FontStackHandle): void {
@@ -196,13 +217,17 @@ export class TextEngineHost {
       }
     };
     for (const session of [...this.#sessions]) attempt(() => session.dispose());
-    for (const handle of this.#fontStacks) {
+    for (const handle of this.#fontStacks.keys()) {
       attempt(() => requireStatus(this.#exports.disposeFontStack(handle), 'dispose font stack'));
+    }
+    for (const handle of this.#fontBindings) {
+      attempt(() => requireStatus(this.#exports.disposeFontBinding(handle), 'dispose font binding'));
     }
     for (const handle of this.#policies) {
       attempt(() => requireStatus(this.#exports.disposePolicy(handle), 'dispose render policy'));
     }
     this.#fontStacks.clear();
+    this.#fontBindings.clear();
     this.#policies.clear();
     this.#sessions.clear();
     attempt(() => this.#ids.dispose());

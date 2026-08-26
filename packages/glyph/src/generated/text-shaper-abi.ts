@@ -199,6 +199,7 @@ export const textShaperAbi = {
     "createSession": "pmndrs_glyph_engine_create_session",
     "deallocate": "pmndrs_glyph_shaper_dealloc",
     "disposeFont": "pmndrs_glyph_shaper_dispose_font",
+    "disposeFontBinding": "pmndrs_glyph_engine_dispose_font_binding",
     "disposeFontStack": "pmndrs_glyph_engine_dispose_font_stack",
     "disposePolicy": "pmndrs_glyph_engine_dispose_policy",
     "disposeSession": "pmndrs_glyph_engine_dispose_session",

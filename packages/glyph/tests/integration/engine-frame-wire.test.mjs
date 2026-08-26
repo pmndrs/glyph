@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
-import { id } from '../../dist/core/render-policy.js';
+import { id, selectPolicyCapabilitySet } from '../../dist/core/render-policy.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const SESSION_ID = id('session', 'engine-frame-wire/session');
 const POLICY_ID = id('policy', 'engine-frame-wire/policy');
+const OTHER_POLICY_ID = id('policy', 'engine-frame-wire/other-policy');
 const FONT_STACK_ID = id('font-stack', 'engine-frame-wire/font-stack');
 const PARAGRAPH_ID = id('paragraph', 'engine-frame-wire/paragraph');
 const STYLE_ID = id('style', 'engine-frame-wire/style');
@@ -41,6 +42,27 @@ test('frame compiler rejects raw and cross-domain numeric identities before allo
   assert.throws(
     () => compileTextEngineFrameUpdate({ ...valid, capabilitySet: 1 }),
     /must come from selectPolicyCapabilitySet/,
+  );
+  const capability = {
+    flags: textShaperAbi.policy.capabilityFlags.storageBuffers | textShaperAbi.policy.capabilityFlags.orderedDirect,
+    maxBufferBytes: 1024,
+    updateAlignment: 4,
+    coalesceGapBytes: 16,
+    rangeCallPenaltyBytes: 32,
+    maxBuffersPerDraw: 1,
+    maxResourcesPerDraw: 1,
+    maxIndirectDraws: 0,
+    fragmentationBudget: 1,
+    wholeBufferThresholdBasisPoints: 7500,
+  };
+  const selection = selectPolicyCapabilitySet(
+    OTHER_POLICY_ID,
+    { capabilitySets: [capability], programs: [] },
+    capability,
+  );
+  assert.throws(
+    () => compileTextEngineFrameUpdate({ ...valid, capabilitySet: selection }),
+    /belongs to a different policy handle/,
   );
   assert.throws(
     () =>

@@ -58,6 +58,18 @@ test('resource groups own named leaf payloads and reject recursive groups', () =
     () => assertPortableResource('group', 'recursive', { kind: 'group', members: { child: source } }),
     (error) => error instanceof TypeError && error.message.includes('needs a leaf resource'),
   );
+  const declaredMembers = {
+    metadata: { kind: 'buffer' },
+    page: { kind: 'texture', format: 'rgba8unorm' },
+  };
+  assert.throws(
+    () => assertPortableResource('group', 'atlas', source, undefined, undefined, declaredMembers),
+    (error) => error instanceof TypeError && error.message.includes('does not match declared format'),
+  );
+  assert.throws(
+    () => normalizePortableResource('group', 'atlas', source, undefined, undefined, declaredMembers),
+    (error) => error instanceof TypeError && error.message.includes('does not match declared format'),
+  );
 });
 
 test('buffer payloads need byte arrays and whole record strides', () => {

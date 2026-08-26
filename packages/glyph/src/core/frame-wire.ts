@@ -316,6 +316,9 @@ function assertFrameIds(
 ): void {
   assertGlyphId(frame.sessionId, 'session', 'frame sessionId');
   assertGlyphId(frame.policyHandle, 'policy', 'frame policyHandle');
+  if (frame.capabilitySet !== undefined) {
+    policyCapabilitySetSelectionId(frame.capabilitySet, frame.policyHandle);
+  }
   for (const mutation of paragraphMutations) {
     assertGlyphId(mutation.paragraphId, 'paragraph', 'paragraph mutation paragraphId');
   }
@@ -378,7 +381,10 @@ function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: n
     ['consumedPlanRevision', frame.consumedPlanRevision],
     ['acknowledgedPublicationGeneration', frame.acknowledgedPublicationGeneration],
     ['policyHandle', frame.policyHandle],
-    ['capabilitySet', frame.capabilitySet === undefined ? 1 : policyCapabilitySetSelectionId(frame.capabilitySet)],
+    [
+      'capabilitySet',
+      frame.capabilitySet === undefined ? 1 : policyCapabilitySetSelectionId(frame.capabilitySet, frame.policyHandle),
+    ],
     ['semanticViewMask', frame.semanticViewMask ?? 0],
     ['maxParagraphs', limits.maxParagraphs],
     ['maxClusters', limits.maxClusters],

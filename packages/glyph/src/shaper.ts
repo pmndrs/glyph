@@ -58,6 +58,7 @@ interface ShaperExports {
     pointer: number,
     length: number,
   ) => number;
+  readonly disposeFontBinding: (bindingHandle: number) => number;
   readonly registerFontStack: (handle: number, pointer: number, count: number) => number;
   readonly disposeFontStack: (handle: number) => number;
   readonly registerPolicy: (handle: number, pointer: number, length: number) => number;
@@ -229,6 +230,7 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       retainedFontBytes: exportedFunction(instance, functions.retainedFontBytes),
       planCount: exportedFunction(instance, functions.planCount),
       registerFontBinding: exportedFunction(instance, functions.registerFontBinding),
+      disposeFontBinding: exportedFunction(instance, functions.disposeFontBinding),
       registerFontStack: exportedFunction(instance, functions.registerFontStack),
       disposeFontStack: exportedFunction(instance, functions.disposeFontStack),
       registerPolicy: exportedFunction(instance, functions.registerPolicy),

@@ -122,7 +122,10 @@ compileTextEngineFrameUpdate(frame);
 
 declare const descriptor: PolicyDescriptor;
 declare const capabilities: PolicyCapabilitySet;
-compileTextEngineFrameUpdate({ ...frame, capabilitySet: selectPolicyCapabilitySet(descriptor, capabilities) });
+compileTextEngineFrameUpdate({
+  ...frame,
+  capabilitySet: selectPolicyCapabilitySet(frame.policyHandle, descriptor, capabilities),
+});
 
 // @ts-expect-error Caller-owned paragraph IDs must come from id('paragraph', name).
 const rawParagraph: ParagraphId = 1;

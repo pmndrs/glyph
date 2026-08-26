@@ -1870,6 +1870,7 @@ pub fn json() -> String {
             "disposeFontStack": "pmndrs_glyph_engine_dispose_font_stack",
             "fontStackCount": "pmndrs_glyph_engine_font_stack_count",
             "registerFontBinding": "pmndrs_glyph_engine_register_font_binding",
+            "disposeFontBinding": "pmndrs_glyph_engine_dispose_font_binding",
             "fontBindingCount": "pmndrs_glyph_engine_font_binding_count",
             "registerPolicy": "pmndrs_glyph_engine_register_policy",
             "disposePolicy": "pmndrs_glyph_engine_dispose_policy",
