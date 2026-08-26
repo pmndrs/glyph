@@ -27,6 +27,9 @@ test('the published contract is ESM-only', async () => {
     './dist/raster/bitmap-technique.js',
     './dist/raster/msdf.js',
     './dist/raster/slug-technique.js',
+    './dist/three/bitmap.js',
+    './dist/three/msdf.js',
+    './dist/three/slug.js',
   ]);
   assert.equal(manifest.exports['./internal/raster-baker-profile'], undefined);
   assert.deepEqual(manifest.pmndrs, {

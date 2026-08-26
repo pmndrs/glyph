@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:8ab56a4becb03b3fd7b8d73d0375bdf3ca7c4d9b1044a1442ac44179007c808e'
+source_digest: 'sha256:32d6f43eb05146a0b89081df094f513fcd8959e2692ed29e6c47f044862a373f'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -116,6 +116,9 @@ TypeScript does not independently shape, lay out, or pack paragraphs.
 | `@pmndrs/glyph/tsl`          | Canonical TSL shader realizations of the first-party technique interfaces; no scene integration.                                 |
 | `@pmndrs/glyph/typegpu`      | Canonical TypeGPU shader realizations of the first-party technique interfaces; no scene integration, no engine driving.          |
 | `@pmndrs/glyph/bakers/*`     | Optional portable raster bakers.                                                                                                 |
+
+The three renderer-neutral raster leaves and their `three/*` compatibility barrels retain registration side effects under
+tree shaking. Shader implementations remain explicit `/tsl` or `/typegpu` imports and are not pulled in by registration.
 
 The font-baker Rust source, direct-memory wrapper, schemas, tests, build pipeline, optimized Wasm, and generated ABI are
 owned by this package. There is no separately published font-baker package. The root entry has no static edge to the

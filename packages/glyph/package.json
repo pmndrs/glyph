@@ -23,7 +23,10 @@
   "sideEffects": [
     "./dist/raster/bitmap-technique.js",
     "./dist/raster/msdf.js",
-    "./dist/raster/slug-technique.js"
+    "./dist/raster/slug-technique.js",
+    "./dist/three/bitmap.js",
+    "./dist/three/msdf.js",
+    "./dist/three/slug.js"
   ],
   "exports": {
     ".": {
