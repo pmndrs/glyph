@@ -138,10 +138,8 @@ describe('a real engine driven through the published core surface', () => {
     const engine = new ExampleTextEngine(shaper);
     try {
       engine.openSession();
-      // No shaping font exists behind this binding handle — the loader path lives outside
-      // `/core` (recorded as audit item 12) — so stack registration fails cleanly
-      // with the engine's own status instead of silently accepting a dead handle.
-      expect(() => engine.registerFontStack([MISSING_BINDING_HANDLE])).toThrowError(/status 5/);
+      // Stack registration rejects a binding this host never registered before touching Wasm.
+      expect(() => engine.registerFontStack([MISSING_BINDING_HANDLE])).toThrowError(/not owned/);
       // The policy itself registered fine: frames publish against it.
       expect((await engine.render({})).engineRevision).toBe(1);
     } finally {
