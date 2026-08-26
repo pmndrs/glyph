@@ -82,6 +82,8 @@ export interface ExamplePendingSubmission {
 
 /** Candidate recording state used by a concrete backend to stage work before publication. */
 export interface RecordingPendingSubmission extends ExamplePendingSubmission {
+  /** True when accepting the publication replaces or clears retained render state. */
+  readonly replacesRenderState: boolean;
   readonly realizedDraws: readonly ExampleRealizedDraw[];
   readonly buffersByName: ReadonlyMap<string, Uint8Array>;
   publish(beforeCommit: () => void): boolean;
@@ -150,6 +152,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   readonly #renderResourceName: string;
   #resourceRevision = 0;
   #submissionRevision = 0;
+  #asyncPublicationInFlight = false;
 
   constructor(shader: ExampleRendererShader = exampleRendererShader) {
     assertExampleRendererShader(shader);
@@ -163,6 +166,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   }
 
   prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources {
+    this.#assertMutable('prepare resources');
     if (!Array.isArray(resources)) throw new TypeError('example renderer resources must be an array');
     const revision = this.#resourceRevision;
     const state = this.#resourceState();
@@ -176,6 +180,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     return Object.freeze({
       commit: () => {
         if (!active) return;
+        this.#assertMutable('commit resources');
         active = false;
         // Another commit owns the newer state. Discard this stale batch instead of overwriting it.
         if (this.#resourceRevision !== revision) return;
@@ -189,6 +194,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   }
 
   prepareSubmission(drawList: ExampleDrawList): RecordingPendingSubmission {
+    this.#assertMutable('prepare a submission');
     assertDrawList(drawList);
     const resourceRevision = this.#resourceRevision;
     const submissionRevision = this.#submissionRevision;
@@ -203,6 +209,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       let active = true;
       const publish = (beforeCommit: () => void): boolean => {
         if (!active) return false;
+        this.#assertMutable('publish a submission');
         active = false;
         if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision)
           return false;
@@ -213,15 +220,19 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       };
       const publishAsync = async (beforeCommit: () => Promise<void>): Promise<boolean> => {
         if (!active) return false;
+        this.#assertMutable('publish a submission');
         active = false;
         if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision)
           return false;
-        await beforeCommit();
-        this.submissions.push(drawList);
-        this.#submissionRevision += 1;
-        return true;
+        return this.#publishAsync(async () => {
+          await beforeCommit();
+          this.submissions.push(drawList);
+          this.#submissionRevision += 1;
+          return true;
+        });
       };
       return Object.freeze({
+        replacesRenderState,
         realizedDraws: Object.freeze([...this.realizedDraws]),
         buffersByName: new Map(this.buffersByName),
         publish,
@@ -263,6 +274,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     let active = true;
     const publish = (beforeCommit: () => void): boolean => {
       if (!active) return false;
+      this.#assertMutable('publish a submission');
       active = false;
       if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return false;
       beforeCommit();
@@ -278,20 +290,24 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     };
     const publishAsync = async (beforeCommit: () => Promise<void>): Promise<boolean> => {
       if (!active) return false;
+      this.#assertMutable('publish a submission');
       active = false;
       if (this.#resourceRevision !== resourceRevision || this.#submissionRevision !== submissionRevision) return false;
-      await beforeCommit();
-      replaceMap(this.#retainedBuffers, buffers.retained);
-      replaceMap(this.buffers, buffers.activeById);
-      replaceMap(this.buffersByName, buffers.activeByName);
-      replaceMap(this.#planResources, planResources.retained);
-      this.retirements.push(...planResources.retiredIds);
-      this.realizedDraws.splice(0, this.realizedDraws.length, ...realized);
-      this.submissions.push(drawList);
-      this.#submissionRevision += 1;
-      return true;
+      return this.#publishAsync(async () => {
+        await beforeCommit();
+        replaceMap(this.#retainedBuffers, buffers.retained);
+        replaceMap(this.buffers, buffers.activeById);
+        replaceMap(this.buffersByName, buffers.activeByName);
+        replaceMap(this.#planResources, planResources.retained);
+        this.retirements.push(...planResources.retiredIds);
+        this.realizedDraws.splice(0, this.realizedDraws.length, ...realized);
+        this.submissions.push(drawList);
+        this.#submissionRevision += 1;
+        return true;
+      });
     };
     return Object.freeze({
+      replacesRenderState,
       realizedDraws: Object.freeze(realized),
       buffersByName: new Map(buffers.activeByName),
       publish,
@@ -312,6 +328,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     patches: readonly TextEnginePatchRecord[],
     retirements: readonly TextEngineRetirementRecord[],
   ): void {
+    this.#assertMutable('apply a buffer plan');
     if (!Array.isArray(buffers) || !Array.isArray(patches) || !Array.isArray(retirements)) {
       throw new TypeError('example renderer buffer plans require arrays');
     }
@@ -334,6 +351,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   }
 
   retireResource(id: number, generation: number): void {
+    this.#assertMutable('retire a resource');
     const state = this.#resourceState();
     const retired = retireResourceState(state, {
       kind: textShaperAbi.engine.retirementKinds.resource,
@@ -350,6 +368,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   }
 
   submit(drawList: ExampleDrawList): void {
+    this.#assertMutable('submit a draw list');
     assertDrawList(drawList);
     const buffers: ExampleBufferState = {
       retained: this.#retainedBuffers,
@@ -363,6 +382,22 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.realizedDraws.push(...realized);
     this.submissions.push(drawList);
     this.#submissionRevision += 1;
+  }
+
+  async #publishAsync<T>(publish: () => Promise<T>): Promise<T> {
+    this.#assertMutable('publish a submission');
+    this.#asyncPublicationInFlight = true;
+    try {
+      return await publish();
+    } finally {
+      this.#asyncPublicationInFlight = false;
+    }
+  }
+
+  #assertMutable(operation: string): void {
+    if (this.#asyncPublicationInFlight) {
+      throw new Error(`example renderer cannot ${operation} while an asynchronous publication is in progress`);
+    }
   }
 
   #bufferBindings(
