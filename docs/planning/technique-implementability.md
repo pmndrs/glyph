@@ -41,6 +41,10 @@ The current branch also provides:
 - a non-Three example engine with a deterministic recording oracle plus a concrete TypeGPU/WebGPU device,
   supplied-geometry realization, and changing-pixel acceptance.
 
+The closure review also binds capability selections to their registered policy handle, validates declared group members
+and texture formats through the public resource validator, and makes font-binding/resource registration one reversible
+transaction. These checks reject contradictory inputs before frame allocation or device realization.
+
 Those boundaries remain. The work below must not move Three policy numbers, Three materials, or shader-language types into `/core`.
 
 ## Source audit: closed holes
@@ -226,9 +230,9 @@ The Three example must import the portable package's `/tsl` shader subpath and m
 
 The same acceptance vocabulary must cover both:
 
-| Consumer                | Required evidence                                                         |
-| ----------------------- | ------------------------------------------------------------------------- |
-| Three reference engine  | selected variant, named bindings, material, non-empty visible draw        |
+| Consumer                | Required evidence                                                               |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| Three reference engine  | selected variant, named bindings, material, non-empty visible draw              |
 | Example external engine | selected portable contract, resource realization, non-empty changing GPU pixels |
 
 ## Sequencing and atomic commits

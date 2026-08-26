@@ -229,14 +229,17 @@ Fonts without authored glyph names still report exact glyph IDs.
 
 ## Core API
 
-Every Three primitive above is built on a renderer-neutral core with four moves: load a font into the Wasm shaper, describe text as one serialized frame, register a validated render policy, and consume the revisioned render plan each update publishes. The engine never calls back into JavaScript during shaping, layout, or packing — a renderer only encodes requests and reads fixed-record results.
+Every Three primitive above is built on the same renderer-neutral lifecycle: create a runtime and host, register a validated
+policy, load and compile each font into portable resources plus binding bytes, register stacks and a session, then create or
+update text by submitting serialized frames and consuming their revisioned render plans. The engine never calls back into
+JavaScript during shaping, layout, or packing.
 
 Load a font and own the engine lifecycle once:
 
 ```ts
 import { createTextRuntime } from '@pmndrs/glyph';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
-import { compileRenderPolicy, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
+import { compileRasterFont, compileRenderPolicy, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
 
 const runtime = await createTextRuntime();
 const inter = await runtime.loadFont({
@@ -250,7 +253,27 @@ const policyHandle = host.id('policy', 'my-renderer/default');
 const bindingHandle = host.id('font-binding', 'my-renderer/inter');
 const fontStackHandle = host.id('font-stack', 'my-renderer/body');
 host.registerPolicy(policyHandle, compileRenderPolicy(myPolicy));
-host.registerFontBinding(bindingHandle, inter.font.handle, myBindingBytes);
+const compiled = compileRasterFont(inter, host.wireIdentities);
+if (compiled === undefined) throw new Error(`no portable plan is registered for ${inter.technique.id}`);
+const pendingResources = renderer.prepareResources(compiled.resources);
+try {
+  host.registerFontBinding(bindingHandle, inter.font.handle, compiled.binding);
+  try {
+    pendingResources.commit();
+  } catch (commitError) {
+    try {
+      host.disposeFontBinding(bindingHandle);
+    } catch (rollbackError) {
+      throw new AggregateError([commitError, rollbackError], 'resource commit and binding rollback failed', {
+        cause: commitError,
+      });
+    }
+    throw commitError;
+  }
+} catch (error) {
+  pendingResources.discard();
+  throw error;
+}
 host.registerFontStack(fontStackHandle, [bindingHandle]);
 ```
 
@@ -314,8 +337,8 @@ let previous = publication;
 function frame(edits) {
   const next = session.update(
     compileTextEngineFrameUpdate({
-      sessionId: SESSION,
-      policyHandle: POLICY,
+      sessionId: sessionHandle,
+      policyHandle,
       expectedEngineRevision: previous.engineRevision,
       consumedPlanRevision: previous.planRevision,
       acknowledgedPublicationGeneration: previous.publicationGeneration,
@@ -330,7 +353,9 @@ function frame(edits) {
 }
 ```
 
-Record layouts come from the versioned ABI (`@pmndrs/glyph/shaper-abi.json`); the next section describes what policies and plans mean, and `dispose()` on the host releases every registered policy, font stack, and session.
+Record layouts come from the versioned ABI (`@pmndrs/glyph/shaper-abi.json`); the next section describes what policies and
+plans mean, and `host.dispose()` releases sessions, font stacks, font bindings, policies, and its runtime ID provenance in
+dependency order.
 
 ## Render policy and render plan
 

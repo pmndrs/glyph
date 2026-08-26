@@ -2,6 +2,11 @@
 
 ## 2026-08-26
 
+- **Portable renderer review closed lifecycle and ownership gaps** — Capability selections now belong to one policy,
+  resource groups validate exact declared member formats on every public path, and failed renderer resource commits
+  dispose the provisional Wasm font binding before discarding device candidates. Host teardown preserves the dependency
+  order from sessions through stacks and bindings to policies; no stale resource or binding is restored after failure.
+
 - **Runtime ID provenance now has an owner and a teardown** — Module-authored policy and buffer constants keep the
   top-level `id()` path, while `TextEngineHost.id()` owns dynamic binding, stack, session, material, paragraph, style,
   flow, and region registrations. Host disposal releases those collision records after attempting every Wasm teardown,
