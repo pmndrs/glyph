@@ -2,6 +2,12 @@
 
 ## 2026-08-26
 
+- **Attached text can measure desired layout before its first frame** — `Text.layout()` now creates or reconciles its
+  batch after attachment and uses a non-publishing paragraph query without matrix traversal, material or GPU realization,
+  or draw publication. Sequential group queries share one speculative lifecycle candidate that the first traversal can
+  adopt. Detached measurement remains `Paragraph`; fixed capacity reports desired metrics while retaining the last
+  accepted draw and reevaluates recovery every traversal rather than latching a rejection.
+
 - **External-agent work now has one resumable operating guide** — The OKF guide records the pinned MCP and client setup,
   live-catalog model routing, High-only Claude/Codex default, explicit Fable and 0x Alpha mappings, background review and
   implementation recipes, the labeled pinned-CLI fallback, and bounded append-log handling. It separates process PIDs

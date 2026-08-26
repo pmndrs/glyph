@@ -164,6 +164,12 @@ interface TextReconciler {
 
 let reconciler!: TextReconciler;
 
+interface TextGroupReconciler {
+  measurement(group: TextGroup, text: Text<AnyRasterTechnique>): ParagraphLayoutSummary;
+}
+
+let groupReconciler!: TextGroupReconciler;
+
 export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   static {
     reconciler = {
@@ -298,17 +304,23 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     if (this.#textGroup === undefined) this.#binding?.setCapacity(this.#standaloneCapacity);
   }
   /**
-   * The committed measurement, or `undefined` when this paragraph has not published one yet.
-   *
-   * Sizes, baselines, ascent, descent, and the glyph and line counts. This takes the
-   * paragraph-scoped engine query: no publication flip, no per-glyph records, no array copies,
-   * so a scene that measures every frame stays on the cheap path.
-   *
-   * `undefined` means no committed layout, not a failure. `commitState()` is the positive signal.
+   * Measures this paragraph synchronously after it has scene ancestry, without traversing matrices
+   * or realizing renderer resources. Use `Paragraph` when no scene ownership exists yet.
    */
-  layout(): ParagraphLayoutSummary | undefined {
+  layout(): ParagraphLayoutSummary {
     this.#assertActive();
-    return this.#binding?.measurement(eraseTextTechnique(this));
+    if (this.parent === null) {
+      throw new Error('Text.layout() requires an attached Text; use Paragraph for detached measurement');
+    }
+    const text = eraseTextTechnique(this);
+    const boundary = nearestTextGroup(this);
+    if (boundary !== undefined) return groupReconciler.measurement(boundary, text);
+    if (this.#binding === undefined || this.#textGroup !== undefined) {
+      this.#unbind();
+      this.#binding = new ThreeTextBatchBinding(this.#runtime, this.#standaloneCapacity, undefined);
+    }
+    this.#binding.reconcileStandalone(text);
+    return this.#binding.measurement(text);
   }
   /**
    * The positioned columns of the committed layout, or `undefined` when none is committed.
@@ -457,7 +469,6 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     if (this.#binding !== binding) this.#unbind();
     this.#binding = binding;
     this.#textGroup = group;
-    this.#appliedRevision = this.#desiredRevision;
   }
   #unbindFrom(binding: ThreeTextBatchBinding): void {
     if (this.#binding !== binding) return;
@@ -478,6 +489,12 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
 }
 
 export class TextGroup extends THREE.Object3D {
+  static {
+    groupReconciler = {
+      measurement: (group, text) => group.#measurement(text),
+    };
+  }
+
   #capacity: GlyphBufferCapacity;
   readonly #compositing: 'ordered' | 'independent';
   readonly #pixelSnapping: boolean;
@@ -586,6 +603,16 @@ export class TextGroup extends THREE.Object3D {
     this.#binding?.dispose();
     this.#binding = undefined;
   }
+  #measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary {
+    this.#assertActive();
+    const texts = collectTextDescendants(this, this.#texts);
+    if (!texts.includes(text)) throw new Error('Text.layout() requires the Text to remain attached to its TextGroup');
+    const runtime = reconciler.runtime(texts[0]!);
+    for (const candidate of texts) validateBinding(runtime, candidate);
+    this.#binding ??= new ThreeTextBatchBinding(runtime, this.#capacity, this);
+    this.#binding.reconcile(texts);
+    return this.#binding.measurement(text);
+  }
   #assertActive(): void {
     if (this.#disposed) throw new Error('TextGroup has been disposed');
   }
@@ -614,13 +641,15 @@ class ThreeTextBatchBinding {
   readonly #group: TextGroup | undefined;
   readonly #coordinator: ThreeTextEngineCoordinator;
   readonly #session: TextEngineSession;
-  readonly #target: ThreeTextRenderPlanExecutor;
+  #target: ThreeTextRenderPlanExecutor | undefined;
   readonly #paragraphs = new Map<Text<AnyRasterTechnique>, RetainedEngineParagraph>();
   readonly #textsByParagraph = new Map<number, Text<AnyRasterTechnique>>();
   readonly #textsByTransform = new Map<number, Text<AnyRasterTechnique>>();
   readonly #removed: RetainedEngineParagraph[] = [];
   readonly #measurements = new Map<Text<AnyRasterTechnique>, ParagraphLayoutSummary>();
   readonly #layoutInspections = new Map<Text<AnyRasterTechnique>, ParagraphLayoutInspection>();
+  readonly #measurementStackLeases = new Map<RetainedEngineParagraph, ThreeTextEngineStackLease[]>();
+  readonly #measurementMaterialLeases = new Map<RetainedEngineParagraph, ThreeTextMaterialLease[]>();
   readonly #queryPlanView = new TextEngineRenderPlanView();
   readonly #freeParagraphIds: number[] = [];
   readonly #dirtyTransformIds = new Set<number>();
@@ -650,73 +679,39 @@ class ThreeTextBatchBinding {
       requestCapacity: this.#requestCapacity,
       resultCapacity: this.#resultCapacity,
     });
-    const owner = this;
-    this.#target = new ThreeTextRenderPlanExecutor(this.#coordinator, {
-      get drawRoot() {
-        return owner.#drawRoot();
-      },
-      get pixelSnapping() {
-        return owner.#pixelSnapping();
-      },
-      get renderOrderBase() {
-        return owner.#renderOrderBase();
-      },
-      objectForTransform(transformId) {
-        const text = owner.#textsByParagraph.get(transformId) ?? owner.#textsByTransform.get(transformId);
-        if (text === undefined) throw new Error(`Three command buffer references unknown transform ${transformId}`);
-        return text;
-      },
-      transformIds() {
-        return new Set([...owner.#textsByParagraph.keys(), ...owner.#textsByTransform.keys()]);
-      },
-      transformIndices() {
-        return owner.#textsByTransform.keys();
-      },
-    });
   }
   get textCount(): number {
     return this.#paragraphs.size;
   }
   get gpuBytes(): number {
-    return this.#target.gpuBytes;
+    return this.#target?.gpuBytes ?? 0;
   }
   get renderOrderBase(): number {
     return this.#group?.renderOrder ?? 0;
   }
-  measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary | undefined {
-    if (!this.#paragraphs.has(text)) return undefined;
-    this.#assertRendererReady();
-    if (this.#measureThroughParagraphQuery(text)) return this.#measurements.get(text);
-    this.synchronize(textShaperAbi.engine.semanticViewMasks.measurement);
-    return this.#measurements.get(text);
+  measurement(text: Text<AnyRasterTechnique>): ParagraphLayoutSummary {
+    if (!this.#paragraphs.has(text)) throw new Error('Text.layout() requires a bound Text');
+    this.#coordinator.assertFrameUpdateAllowed();
+    this.#measureThroughParagraphQuery(text);
+    const measurement = this.#measurements.get(text);
+    if (measurement === undefined) throw new Error('text engine returned no paragraph measurement');
+    return measurement;
   }
 
   /**
-   * Routes an explicit layout query through the paragraph-scoped synchronous engine
-   * measure when the only pending work is a geometry change on the queried text: no
-   * publication flip, no revision burn, no checkpoint hazard, and the next ordinary
-   * frame adopts the speculative layout together with its reserved identities.
-   * Anything else answers `false` and falls back to the committing synchronize path.
+   * Measures one desired paragraph without publishing render work. The full desired lifecycle
+   * lets several new group members share one candidate that the first frame can adopt.
    */
-  #measureThroughParagraphQuery(text: Text<AnyRasterTechnique>): boolean {
-    if (this.#disposed || this.#materialInvalidated) return false;
-    if (this.#removed.length !== 0) return false;
+  #measureThroughParagraphQuery(text: Text<AnyRasterTechnique>): void {
+    if (this.#disposed) throw new Error('text batch has been disposed');
     const paragraph = this.#paragraphs.get(text);
-    if (paragraph === undefined || paragraph.created) return false;
-    const changes = reconciler.semanticChanges(text);
-    if ((changes & ~GEOMETRY_CHANGE) !== 0) return false;
-    if (changes === 0 && this.#measurements.has(text)) return true;
-    // Every other paragraph must be quiescent so the frame this query speculates
-    // ahead of is exactly the frame synchronize will later commit and adopt.
+    if (paragraph === undefined) throw new Error('Text.layout() requires a bound Text');
+    const changes = paragraph.created ? ALL_SEMANTIC_CHANGES : reconciler.semanticChanges(text);
+    if (changes === 0 && this.#measurements.has(text)) return;
     const ordered = [...this.#paragraphs.entries()].sort(
       ([leftText, left], [rightText, right]) =>
         leftText.renderOrder - rightText.renderOrder || left.transformIndex - right.transformIndex,
     );
-    for (const [order, [entry, entryParagraph]] of ordered.entries()) {
-      if (entryParagraph.order !== order || entryParagraph.created) return false;
-      if (entry !== text && (reconciler.semanticChanges(entry) !== 0 || reconciler.needsApply(entry))) return false;
-    }
-    this.#coordinator.assertFrameUpdateAllowed();
     let totalTextLength = 0;
     let maximumParagraphTextLength = 0;
     for (const entry of this.#paragraphs.keys()) {
@@ -725,17 +720,49 @@ class ThreeTextBatchBinding {
     }
     const properties = reconciler.properties(text);
     const content = properties.text as string;
-    const geometry = compileEngineGeometry(
-      this.#coordinator.host.id,
-      paragraph.id,
-      paragraph.transformIndex,
-      paragraph.geometryRevision + 1,
-      properties.contentBox,
-      0,
-      content.length,
-    );
-    const result = this.#session.measureParagraph(
-      compileTextEngineFrameUpdate({
+    const textMutations: TextEngineTextMutation[] = [];
+    if (changes & TEXT_CHANGE) {
+      const pending = paragraph.created
+        ? [{ start: 0, deleteCount: 0, insert: content }]
+        : reconciler.textMutations(text);
+      for (const mutation of pending) {
+        if (mutation.deleteCount !== 0 || mutation.insert.length !== 0) {
+          textMutations.push({ paragraphId: paragraph.id, ...mutation });
+        }
+      }
+    }
+    const stackLeases: ThreeTextEngineStackLease[] = [];
+    const materialLeases: ThreeTextMaterialLease[] = [];
+    let styleMutations: readonly TextEngineStyleMutation[] = [];
+    const constraints: TextEngineConstraint[] = [];
+    const regions: TextEngineRegion[] = [];
+    let measureAttempted = false;
+    try {
+      if (changes & STYLE_CHANGE) {
+        styleMutations = compileEngineStyles(
+          this.#coordinator,
+          paragraph.id,
+          properties,
+          this.#group?.material,
+          stackLeases,
+          materialLeases,
+        );
+      }
+      if (changes & GEOMETRY_CHANGE) {
+        const geometry = compileEngineGeometry(
+          this.#coordinator.host.id,
+          paragraph.id,
+          paragraph.transformIndex,
+          paragraph.geometryRevision + 1,
+          properties.contentBox,
+          0,
+          content.length,
+        );
+        constraints.push(geometry.constraint);
+        regions.push(...geometry.regions);
+      }
+      this.#ensureCapacity(totalTextLength, maximumParagraphTextLength);
+      const request = compileTextEngineFrameUpdate({
         sessionId: this.#session.handle,
         policyHandle: this.#coordinator.policyHandle,
         expectedEngineRevision: this.#engineRevision,
@@ -744,20 +771,40 @@ class ThreeTextBatchBinding {
         compositingIndependent: this.#group?.compositing === 'independent',
         semanticViewMask: textShaperAbi.engine.semanticViewMasks.measurement,
         limits: engineLimits(
-          this.#paragraphs.size,
+          Math.max(this.#paragraphs.size, this.#removed.length + ordered.length),
           totalTextLength,
           maximumParagraphTextLength,
-          Math.max(geometry.regions.length, this.#paragraphs.size),
+          Math.max(regions.length, this.#paragraphs.size),
           MAX_TEXT_ENGINE_OUTPUT_BYTES,
+          Math.max(textMutations.length, styleMutations.length),
         ),
-        paragraphMutations: [{ opcode: 'upsert', paragraphId: paragraph.id, order: paragraph.order }],
-        constraints: [geometry.constraint],
-        regions: geometry.regions,
-      }),
-      paragraph.id,
-    );
-    this.#retainSemanticViews(result, textShaperAbi.engine.semanticViewMasks.measurement);
-    return true;
+        paragraphMutations: [
+          ...this.#removed.map((entry) => ({ opcode: 'remove' as const, paragraphId: entry.id })),
+          ...ordered.map(([, entry], order) => ({
+            opcode: 'upsert' as const,
+            paragraphId: entry.id,
+            order,
+          })),
+        ],
+        textMutations,
+        styleMutations,
+        constraints,
+        regions,
+      });
+      measureAttempted = true;
+      const result = this.#session.measureParagraph(request, paragraph.id);
+      this.#retainSemanticViews(result, textShaperAbi.engine.semanticViewMasks.measurement);
+      if (changes & STYLE_CHANGE) {
+        this.#releaseMeasurementLeases(paragraph);
+        this.#measurementStackLeases.set(paragraph, stackLeases);
+        this.#measurementMaterialLeases.set(paragraph, materialLeases);
+      }
+    } catch (error) {
+      releaseStackLeases(stackLeases);
+      releaseMaterialLeases(materialLeases);
+      if (measureAttempted) this.#releaseMeasurementLeases();
+      throw error;
+    }
   }
   layoutInspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection | undefined {
     if (!this.#paragraphs.has(text)) return undefined;
@@ -768,7 +815,7 @@ class ThreeTextBatchBinding {
   glyphPlacements(text: Text<AnyRasterTechnique>): GlyphPlacements | undefined {
     const layout = this.layoutInspection(text);
     if (layout === undefined) return undefined;
-    const drawn = this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
+    const drawn = this.#renderTarget().snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
     return createGlyphPlacements(layout, text.text, drawn.drawnX, drawn.drawnY, drawn.incomplete);
   }
   applyGlyphPlacements(text: Text<AnyRasterTechnique>, placements: GlyphPlacements): GlyphApplication {
@@ -786,7 +833,7 @@ class ThreeTextBatchBinding {
       x[index] = glyphs[index]!.x;
       y[index] = glyphs[index]!.y;
     }
-    const unapplied = this.#target.setGlyphOriginOverrides(layout.glyphStableIds, layout.x, layout.y, x, y);
+    const unapplied = this.#renderTarget().setGlyphOriginOverrides(layout.glyphStableIds, layout.x, layout.y, x, y);
     return Object.freeze({
       requested: glyphs.length,
       applied: glyphs.length - unapplied.length,
@@ -795,7 +842,7 @@ class ThreeTextBatchBinding {
   }
   clearGlyphOrigins(text: Text<AnyRasterTechnique>): void {
     const layout = this.#layoutInspections.get(text);
-    if (layout !== undefined) this.#target.clearGlyphOriginOverrides(layout.glyphStableIds);
+    if (layout !== undefined) this.#renderTarget().clearGlyphOriginOverrides(layout.glyphStableIds);
   }
   reconcile(texts: readonly Text<AnyRasterTechnique>[]): void {
     this.#desiredTexts.clear();
@@ -843,7 +890,7 @@ class ThreeTextBatchBinding {
         this.#pendingFailureReported = true;
         throw failure;
       }
-      this.#target.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
+      this.#target?.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
       this.#dirtyTransformIds.clear();
       if (semanticViewMask !== 0 && !this.#hasSemanticViews(semanticViewMask)) {
         this.#retainSemanticViews(this.#querySemanticViews(semanticViewMask), semanticViewMask);
@@ -870,6 +917,7 @@ class ThreeTextBatchBinding {
     const pendingMaterials = new Map<RetainedEngineParagraph, ThreeTextMaterialLease[]>();
     const pendingChanges = new Map<RetainedEngineParagraph, number>();
     let committed = false;
+    let updateAttempted = false;
     try {
       for (const { text, paragraph, semanticChanges } of changed) {
         pendingChanges.set(paragraph, semanticChanges);
@@ -930,7 +978,7 @@ class ThreeTextBatchBinding {
         // The caller asked for a hard cap, so honouring it is the correct outcome rather than a
         // failure: keep the last complete revision, keep the scene running, and keep transforms
         // live so the paragraph still follows the camera.
-        this.#target.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
+        this.#target?.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
         this.#dirtyTransformIds.clear();
         return;
       }
@@ -960,6 +1008,7 @@ class ThreeTextBatchBinding {
       });
       let publication: TextEnginePublication;
       try {
+        updateAttempted = true;
         publication = this.#session.update(frame);
       } catch (error) {
         if (error instanceof TextEngineStatusError) {
@@ -996,10 +1045,11 @@ class ThreeTextBatchBinding {
       this.#materialInvalidated = false;
       this.#measurements.clear();
       this.#layoutInspections.clear();
+      this.#releaseMeasurementLeases();
       committed = true;
       let commitFailure: unknown | undefined;
       try {
-        commitFailure = this.#target.apply(publication);
+        commitFailure = this.#renderTarget().apply(publication);
       } catch (error) {
         this.#pendingPublication = {
           publication: this.#session.retain(publication),
@@ -1018,6 +1068,7 @@ class ThreeTextBatchBinding {
       if (!committed) {
         for (const leases of pendingLeases.values()) releaseStackLeases(leases);
         for (const leases of pendingMaterials.values()) releaseMaterialLeases(leases);
+        if (updateAttempted) this.#releaseMeasurementLeases();
       }
       throw rejected;
     }
@@ -1029,7 +1080,7 @@ class ThreeTextBatchBinding {
     if (pending === undefined) return undefined;
     try {
       const { publication, semanticViewMask } = pending;
-      const commitFailure = this.#target.apply(publication);
+      const commitFailure = this.#renderTarget().apply(publication);
       this.#pendingPublication = undefined;
       this.#pendingFailureReported = false;
       this.#planRevision = publication.planRevision;
@@ -1125,6 +1176,7 @@ class ThreeTextBatchBinding {
     this.#textsByParagraph.delete(paragraph.id);
     this.#textsByTransform.delete(paragraph.transformIndex);
     this.#dirtyTransformIds.delete(paragraph.transformIndex);
+    this.#releaseMeasurementLeases(paragraph);
     this.#removed.push(paragraph);
     reconciler.unbindFrom(text, this);
   }
@@ -1132,7 +1184,7 @@ class ThreeTextBatchBinding {
     if (this.#disposed) return;
     this.#disposed = true;
     for (const text of this.#paragraphs.keys()) reconciler.unbindFrom(text, this);
-    this.#target.dispose();
+    this.#target?.dispose();
     this.#session.dispose();
     for (const paragraph of this.#paragraphs.values()) releaseStackLeases(paragraph.stackLeases);
     for (const paragraph of this.#removed) releaseStackLeases(paragraph.stackLeases);
@@ -1143,10 +1195,53 @@ class ThreeTextBatchBinding {
     this.#textsByTransform.clear();
     this.#measurements.clear();
     this.#layoutInspections.clear();
+    this.#releaseMeasurementLeases();
     this.#removed.length = 0;
     this.#freeParagraphIds.length = 0;
     this.#dirtyTransformIds.clear();
     this.#desiredTexts.clear();
+  }
+  #renderTarget(): ThreeTextRenderPlanExecutor {
+    const existing = this.#target;
+    if (existing !== undefined) return existing;
+    const owner = this;
+    const target = new ThreeTextRenderPlanExecutor(this.#coordinator, {
+      get drawRoot() {
+        return owner.#drawRoot();
+      },
+      get pixelSnapping() {
+        return owner.#pixelSnapping();
+      },
+      get renderOrderBase() {
+        return owner.#renderOrderBase();
+      },
+      objectForTransform(transformId) {
+        const text = owner.#textsByParagraph.get(transformId) ?? owner.#textsByTransform.get(transformId);
+        if (text === undefined) throw new Error(`Three command buffer references unknown transform ${transformId}`);
+        return text;
+      },
+      transformIds() {
+        return new Set([...owner.#textsByParagraph.keys(), ...owner.#textsByTransform.keys()]);
+      },
+      transformIndices() {
+        return owner.#textsByTransform.keys();
+      },
+    });
+    this.#target = target;
+    return target;
+  }
+  #releaseMeasurementLeases(paragraph?: RetainedEngineParagraph): void {
+    if (paragraph !== undefined) {
+      releaseStackLeases(this.#measurementStackLeases.get(paragraph) ?? []);
+      releaseMaterialLeases(this.#measurementMaterialLeases.get(paragraph) ?? []);
+      this.#measurementStackLeases.delete(paragraph);
+      this.#measurementMaterialLeases.delete(paragraph);
+      return;
+    }
+    for (const leases of this.#measurementStackLeases.values()) releaseStackLeases(leases);
+    for (const leases of this.#measurementMaterialLeases.values()) releaseMaterialLeases(leases);
+    this.#measurementStackLeases.clear();
+    this.#measurementMaterialLeases.clear();
   }
   #ensureText(text: Text<AnyRasterTechnique>, group: TextGroup | undefined): void {
     validateBinding(this.#runtime, text);

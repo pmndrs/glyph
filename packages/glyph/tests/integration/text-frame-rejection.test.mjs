@@ -173,17 +173,25 @@ test(
     try {
       scene.updateMatrixWorld(true);
       const settled = node.layout();
-      assert.ok(settled !== undefined, 'the paragraph inside the budget must commit');
+      assert.equal(settled.glyphCount, 3);
+      const settledDraw = node.children.find((child) => child.isMesh);
+      assert.ok(settledDraw, 'the paragraph inside the budget must publish a draw');
+      assert.equal(settledDraw.geometry.instanceCount, 3);
 
-      // Past the budget: no throw, and the committed layout is still the one that fit.
+      // Past the budget: measurement still answers for desired local state, while rendering keeps
+      // the accepted draw and reports that the desired revision remains pending.
       node.set({ text: 'abcdefghijklmnopqrstuvwxyz' });
       assert.doesNotThrow(() => scene.updateMatrixWorld(true), 'a fixed budget must not break the traversal');
-      assert.deepEqual(node.layout(), settled, 'the last complete revision must stay visible');
+      const desired = node.layout();
+      assert.equal(desired.glyphCount, 26, 'measurement must not substitute stale accepted content');
+      assert.equal(settledDraw.geometry.instanceCount, 3, 'the last complete draw must stay visible');
+      assert.deepEqual(node.commitState(), { status: 'pending' });
       assert.equal(node.error, undefined, 'honouring the declared budget is not an error');
 
       // Repeated frames stay quiet and stay correct.
       for (let frame = 0; frame < 4; frame += 1) scene.updateMatrixWorld(true);
-      assert.deepEqual(node.layout(), settled);
+      assert.equal(node.layout().glyphCount, 26);
+      assert.equal(settledDraw.geometry.instanceCount, 3);
 
       // Self-healing: the comparison is recomputed, never latched.
       node.set({ text: 'ab' });

@@ -137,7 +137,8 @@
     "typegpu": "0.12.3",
     "typescript": "7.0.2",
     "unicode-property-value-aliases": "3.9.0",
-    "unplugin-typegpu": "0.12.2"
+    "unplugin-typegpu": "0.12.2",
+    "vite": "8.1.5"
   },
   "peerDependencies": {
     "@react-three/fiber": ">=10.0.0-alpha.3 <11",

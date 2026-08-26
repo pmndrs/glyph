@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:081efc5d3adbed9a7f1a6d3fdf17c655ed42e4ecf96ea93d4897fa5ee9904c66'
+source_digest: 'sha256:5d907a01a88002dcf96a4b5b1607c1041c89537ba3fb8ac6202ccfeed8d6a1c6'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -328,13 +328,13 @@ selected font binding—not a `Text` technique selector—carries the renderer p
 
 ## Semantic queries
 
-Ordinary rendering requests no layout readback. `Text.layout()` explicitly requests aggregate measurements and
-counts; `Text.glyphs()` additionally copies line and glyph arrays. Query results are cached by committed revision.
-When the only pending change is the laid-out text's geometry, `layout()` routes through the core host's
-`session.measureParagraph` — the paragraph-scoped synchronous query below — so repeated measurement under changing
-constraints performs no publication flips and no revision burns, and the next ordinary frame adopts the speculative
-work. Any other pending change synchronizes the containing Rust session once and the following render traversal reuses
-that publication.
+Ordinary rendering requests no layout readback. For an attached `Text`, `layout()` explicitly measures aggregate values
+and counts for current desired state; `Text.glyphs()` separately copies committed line and glyph arrays. `layout()` routes
+every semantic change through the core host's non-publishing `session.measureParagraph`, without matrix traversal,
+renderer realization, publication flips, or revision burns. The request carries the complete desired paragraph lifecycle
+while applying text, style, and geometry mutations only for the queried paragraph, so sequential first-frame queries
+extend one speculative batch candidate. The next ordinary traversal adopts matching prepared work and publishes the batch
+once. Unchanged measurements are cached; committed glyph inspection remains a distinct full-session query.
 
 The engine additionally exports `pmndrs_glyph_engine_measure_paragraph`, a paragraph-scoped synchronous query beside
 `pmndrs_glyph_engine_update`. It reuses the update request layout with the queried paragraph as an ABI argument, runs

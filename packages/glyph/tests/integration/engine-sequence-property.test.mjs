@@ -323,8 +323,14 @@ async function runSequence({ seed, steps, paragraphs, fonts }) {
       // Layout queries between mutations open speculative transactions that the next
       // publish either adopts or drops; interleaving them is the point of the harness.
       if (random() < 0.5) {
-        for (const candidate of subjects) {
-          if (candidate.attached && candidate.node !== undefined) candidate.node.layout();
+        for (const [candidateIndex, candidate] of subjects.entries()) {
+          if (!candidate.attached || candidate.node === undefined) continue;
+          try {
+            candidate.node.layout();
+          } catch (error) {
+            error.message = `p${candidateIndex} measurement: ${error.message}`;
+            throw error;
+          }
         }
         journal.push('layout');
       }

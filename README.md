@@ -107,14 +107,25 @@ label.position.x += 1;
 
 Assigning `text` queues the narrowest UTF-16 edit between the previous string and the new one, so an editor sends one
 narrow update per keystroke without describing the edit itself.
-`layout()` returns a compact committed paragraph summary; `glyphs()` explicitly requests line and glyph
-details. Both read a layout the scene has already committed.
+After a `Text` has scene ancestry, `layout()` synchronously measures its current desired state without traversing
+matrices, realizing renderer resources, or publishing a draw. `glyphs()` explicitly requests the committed line and
+glyph details.
 
 ## Measure before you render
 
-To place text correctly on the very first frame you need its metrics before a scene exists. `Paragraph` measures
-synchronously with no scene, no renderer, no world matrix, and no committed frame — which is also what a flexbox
-engine needs from inside its measure callback.
+An attached `Text` can be measured before its first rendered frame. Attachment supplies batch ownership; measurement
+does not require `scene.updateMatrixWorld()` and does not create renderer resources:
+
+```ts
+scene.add(label);
+const measuredLabel = label.layout();
+label.position.x = -measuredLabel.contentWidth / 2;
+renderer.render(scene, camera);
+```
+
+When no scene ownership should exist yet, use `Paragraph`. It measures synchronously with no scene, renderer, world
+matrix, or committed frame — which is also what a flexbox engine needs from inside its measure callback. Calling
+`Text.layout()` while the text is detached throws and points to this API.
 
 ```ts
 import { createTextRuntime, txt } from '@pmndrs/glyph';
@@ -264,7 +275,8 @@ for (const [name, keys] of compiled.declaredResources) {
     resources.push({ id: host.wireIdentities.resourceId(key), generation: 1, name, resource });
   }
 }
-const pendingResources = renderer.prepareResources(resources);
+// Renderer-owned prepare/commit seam; glyph-example-renderer provides one complete implementation.
+const pendingResources = myRenderer.prepareResources(resources);
 try {
   host.registerFontBinding(bindingHandle, inter.font.handle, compiled.binding);
   try {

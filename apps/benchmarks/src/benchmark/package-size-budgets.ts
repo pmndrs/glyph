@@ -76,9 +76,11 @@ export const packageSizeBudgets = {
     brotliBytes: 361_500,
   },
   // Three adapter with built-in portable technique realization and retained resource lifecycles.
+  // Pre-frame Text measurement added 3,248 raw / 2,097 minified bytes for lazy renderer
+  // realization, full batch candidates, and candidate stack/material ownership.
   'three-runtime-js': {
-    rawBytes: 588_000,
-    minifiedBytes: 368_000,
+    rawBytes: 592_000,
+    minifiedBytes: 371_000,
     gzipBytes: 96_000,
     brotliBytes: 80_000,
   },

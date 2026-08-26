@@ -674,8 +674,9 @@ impl TextEngine {
         {
             return Err(EngineError::RevisionConflict);
         }
-        // A measure query speculates content and geometry for one paragraph; lifecycle
-        // beyond upserting the queried paragraph has no measurable meaning.
+        // The lifecycle describes the desired session so creations and replacements can share one
+        // candidate, while semantic mutations still belong only to the queried paragraph.
+        let mut queried_paragraph_present = request.paragraph_mutations.len() == 0;
         for index in 0..request.paragraph_mutations.len() {
             match request
                 .paragraph_mutations
@@ -685,9 +686,12 @@ impl TextEngine {
                 super::semantic_wire::ParagraphMutation::Upsert {
                     paragraph_id: mutated,
                     ..
-                } if mutated == paragraph_id => {}
-                _ => return Err(EngineError::InvalidRequest),
+                } => queried_paragraph_present |= mutated == paragraph_id,
+                super::semantic_wire::ParagraphMutation::Remove { .. } => {}
             }
+        }
+        if !queried_paragraph_present {
+            return Err(EngineError::InvalidRequest);
         }
         let lifecycle_fingerprint = speculative_lifecycle_fingerprint(session, request)?;
         let prior_generation = session
@@ -4581,6 +4585,104 @@ mod tests {
             "the first paragraph's speculative state survives the second query"
         );
         assert!(session.paragraph(2).unwrap().state.text.is_prepared());
+    }
+
+    #[test]
+    fn one_lifecycle_retains_queries_for_different_new_paragraphs() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        engine.reserve_session_text(4, 8).unwrap();
+
+        let lifecycle_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 2),
+        ]);
+        let edit_bytes = text_mutation_bytes(&[(0, 0, &[0x61])]);
+        let mut first = update(0, 0, 0);
+        first.limits.max_paragraphs = 2;
+        first.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        first.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine.measure_paragraph(first, 1).unwrap();
+
+        let mut second_edit_bytes = edit_bytes.clone();
+        {
+            use crate::wire::write_u32;
+            let record = &mut second_edit_bytes[ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize..];
+            write_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID, 2);
+        }
+        let mut second = update(0, 0, 0);
+        second.limits.max_paragraphs = 2;
+        second.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        second.text_mutations =
+            parse_text_mutations(&second_edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        engine.measure_paragraph(second, 2).unwrap();
+
+        let session = engine.sessions.get(&4).unwrap();
+        assert!(session.speculative.is_some());
+        assert!(session.paragraph(1).unwrap().state.text.is_prepared());
+        assert!(session.paragraph(2).unwrap().state.text.is_prepared());
+    }
+
+    #[test]
+    fn replacement_lifecycle_retains_queries_after_a_paragraph_removal() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        engine.reserve_session_text(4, 8).unwrap();
+
+        let initial_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 3, 2),
+        ]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 3;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3)
+                .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let replacement_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_REMOVE, 2, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 3, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 4, 2),
+        ]);
+        let mut first = update(1, 1, 1);
+        first.limits.max_paragraphs = 3;
+        first.paragraph_mutations =
+            parse_paragraph_mutations(&replacement_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 4)
+                .unwrap();
+        engine.measure_paragraph(first, 4).unwrap();
+
+        let mut second = update(1, 1, 1);
+        second.limits.max_paragraphs = 3;
+        second.paragraph_mutations =
+            parse_paragraph_mutations(&replacement_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 4)
+                .unwrap();
+        engine.measure_paragraph(second, 3).unwrap();
+
+        let session = engine.sessions.get(&4).unwrap();
+        assert!(session.speculative.is_some());
+        assert_eq!(
+            session
+                .active_order()
+                .iter()
+                .map(|paragraph| paragraph.id)
+                .collect::<Vec<_>>(),
+            [1, 3, 4]
+        );
     }
 
     #[test]

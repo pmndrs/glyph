@@ -9,6 +9,7 @@ import {
   acquireFontSelectionForRuntime,
   assertFontSelectionForRuntime,
   concreteFonts,
+  observeLoadedFontDispose,
   releaseFontSelection,
 } from './loaded-font.js';
 import { loadedFontBindingBytes } from './core/font-binding.js';
@@ -647,11 +648,29 @@ interface ParagraphEngineStackLease {
   release(): void;
 }
 
+interface RetainedParagraphBinding {
+  readonly handle: FontBindingHandle;
+  stackReferences: number;
+  disposalRequested: boolean;
+}
+
+interface RetainedParagraphStackBinding {
+  readonly font: LoadedFont<AnyRasterTechnique>;
+  readonly binding: RetainedParagraphBinding;
+}
+
+interface RetainedParagraphStack {
+  readonly handle: FontStackHandle;
+  readonly bindings: readonly RetainedParagraphStackBinding[];
+  references: number;
+}
+
 /** Cold registrations shared by every `Paragraph` on one renderer-neutral runtime. */
 class ParagraphEngineContext {
   readonly host: TextEngineHost;
-  readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, FontBindingHandle>();
-  readonly #stacks = new Map<string, { lease: ParagraphEngineStackLease }>();
+  readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, RetainedParagraphBinding>();
+  readonly #fontDisposeObservers = new Map<LoadedFont<AnyRasterTechnique>, () => void>();
+  readonly #stacks = new Map<string, RetainedParagraphStack>();
   #nextHandle = 1;
   #disposed = false;
 
@@ -685,54 +704,120 @@ class ParagraphEngineContext {
   /** Ensures every font in the selection has a registered binding, and names the stack by its membership. */
   prepareFontStack(fonts: readonly LoadedFont<AnyRasterTechnique>[]): { readonly key: string } {
     this.#assertActive();
-    const key = fonts.map((font) => this.#bindingHandle(font)).join(',');
+    const key = fonts.map((font) => this.#bindingHandle(font).handle).join(',');
     return { key };
   }
 
   retainFontStack(key: string, fonts: readonly LoadedFont<AnyRasterTechnique>[]): ParagraphEngineStackLease {
     this.#assertActive();
-    const bindingHandles = fonts.map((font) => this.#bindingHandle(font));
+    const bindings = fonts.map((font) => ({ font, binding: this.#bindingHandle(font) }));
+    const bindingHandles = bindings.map(({ binding }) => binding.handle);
     if (bindingHandles.join(',') !== key) throw new TypeError('paragraph font stack key does not match its fonts');
     let retained = this.#stacks.get(key);
     if (retained === undefined) {
-      const handle = this.#allocateHandle('font-stack');
-      this.host.registerFontStack(handle, bindingHandles);
-      let released = false;
-      const lease: ParagraphEngineStackLease = {
-        handle,
-        key,
-        fonts,
-        release: () => {
-          if (released) return;
-          released = true;
-          const entry = this.#stacks.get(key);
-          if (entry === undefined || entry.lease !== lease) return;
-          this.#stacks.delete(key);
-          this.host.disposeFontStack(handle);
-        },
+      const unique = new Map<LoadedFont<AnyRasterTechnique>, RetainedParagraphStackBinding>();
+      for (const entry of bindings) unique.set(entry.font, entry);
+      retained = {
+        handle: this.#allocateHandle('font-stack'),
+        bindings: Object.freeze([...unique.values()]),
+        references: 0,
       };
-      retained = { lease };
+      this.host.registerFontStack(retained.handle, bindingHandles);
+      for (const { binding } of retained.bindings) binding.stackReferences += 1;
       this.#stacks.set(key, retained);
     }
-    return retained.lease;
+    retained.references += 1;
+    let released = false;
+    return {
+      handle: retained.handle,
+      key,
+      fonts,
+      release: () => {
+        if (released) return;
+        released = true;
+        if (this.#disposed) return;
+        if (retained.references > 1) {
+          retained.references -= 1;
+          return;
+        }
+        let failure: unknown;
+        try {
+          this.host.disposeFontStack(retained.handle);
+        } catch (error) {
+          failure = error;
+        }
+        this.#stacks.delete(key);
+        retained.references = 0;
+        for (const { font, binding } of retained.bindings) {
+          if (binding.stackReferences === 0) {
+            failure ??= new Error('paragraph font-binding stack ownership is inconsistent');
+            continue;
+          }
+          binding.stackReferences -= 1;
+          if (!binding.disposalRequested || binding.stackReferences !== 0) continue;
+          try {
+            this.#disposeFontRegistration(font, binding);
+          } catch (error) {
+            failure ??= error;
+          }
+        }
+        if (failure !== undefined) throw failure;
+      },
+    };
   }
 
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    // Late paragraph disposal sees no owned stack and therefore never calls a dead host.
+    let failure: unknown;
+    try {
+      this.host.dispose();
+    } catch (error) {
+      failure = error;
+    }
+    for (const stopObserving of this.#fontDisposeObservers.values()) {
+      try {
+        stopObserving();
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    this.#fontDisposeObservers.clear();
     this.#stacks.clear();
-    this.host.dispose();
+    if (failure !== undefined) throw failure;
   }
 
-  #bindingHandle(font: LoadedFont<AnyRasterTechnique>): FontBindingHandle {
-    if (font.disposed) throw new TypeError('cannot register a disposed loaded font with the paragraph engine');
+  #bindingHandle(font: LoadedFont<AnyRasterTechnique>): RetainedParagraphBinding {
     const existing = this.#bindingHandles.get(font);
     if (existing !== undefined) return existing;
+    if (font.disposed) throw new TypeError('cannot register a disposed loaded font with the paragraph engine');
     const handle = this.#allocateHandle('font-binding');
     this.host.registerFontBinding(handle, font.font.handle, loadedFontBindingBytes(font, this.host.wireIdentities));
-    this.#bindingHandles.set(font, handle);
-    return handle;
+    const retained = { handle, stackReferences: 0, disposalRequested: false };
+    this.#bindingHandles.set(font, retained);
+    const stopObserving = observeLoadedFontDispose(font, () => this.#requestFontDisposal(font));
+    this.#fontDisposeObservers.set(font, stopObserving);
+    return retained;
+  }
+
+  #requestFontDisposal(font: LoadedFont<AnyRasterTechnique>): void {
+    const binding = this.#bindingHandles.get(font);
+    if (binding === undefined) return;
+    binding.disposalRequested = true;
+    if (binding.stackReferences === 0) this.#disposeFontRegistration(font, binding);
+  }
+
+  #disposeFontRegistration(font: LoadedFont<AnyRasterTechnique>, binding: RetainedParagraphBinding): void {
+    let failure: unknown;
+    try {
+      this.host.disposeFontBinding(binding.handle);
+    } catch (error) {
+      failure = error;
+    }
+    this.#fontDisposeObservers.get(font)?.();
+    this.#fontDisposeObservers.delete(font);
+    this.#bindingHandles.delete(font);
+    if (failure !== undefined) throw failure;
   }
 
   #allocateHandle<const Kind extends GlyphIdKind>(kind: Kind): GlyphId<Kind> {

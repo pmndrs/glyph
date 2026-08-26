@@ -93,8 +93,8 @@ const label = new Text({
 scene.add(label);
 ```
 
-A standalone `Text` owns an implicit batch of one. It binds lazily when attached to a traversed scene graph; construction
-does not shape or allocate renderer buffers.
+A standalone `Text` owns an implicit batch of one. It binds lazily after attachment, on either an explicit `layout()`
+query or ordinary scene traversal; construction does not shape or allocate renderer buffers.
 
 `Text` accepts either a plain string with explicit `spans`, or a formatted value built with `txt` and `span`. Span values
 may override font selection, shaping style, paint, and material.
@@ -122,12 +122,14 @@ Capacity policy controls the instance arena:
 
 | Policy  | Behavior                                                    |
 | ------- | ----------------------------------------------------------- |
-| `grow`  | Grow retained storage to fit the group.                     |
-| `chunk` | Use bounded chunks when the group exceeds the initial size. |
+| `grow`  | Grow retained storage to fit the group.                                                    |
+| `chunk` | Use bounded chunks when the group exceeds the initial size.                                |
+| `fixed` | Keep the last accepted draw while desired text exceeds the declared pre-shape slot budget. |
 
-There is no non-resizing policy. A capacity cap could only be enforced after shaping, from inside `synchronize()` inside
-`updateMatrixWorld()`, and `layout()` routes through the same path — so a caller could not ask how many glyphs the
-content needs without already having exceeded the cap (D-267).
+`fixed` uses UTF-16 text length as a conservative pre-shape slot bound. Exceeding it is a requested renderer policy, not
+an engine failure: traversal leaves the last complete draw live, `commitState()` stays `pending`, and `layout()` still
+reports the desired paragraph. Shortening the text or increasing capacity is checked again on the next traversal, so
+recovery does not depend on a latch or unrelated input churn (D-282).
 
 The default group capacity is 4,096 glyphs with `chunk` policy. A standalone `Text` defaults to 256 glyphs with `grow`
 policy. `setCapacity()` changes the retained capacity policy without changing text semantics.
@@ -147,9 +149,9 @@ Setters change desired state. The nearest `TextGroup` applies all pending descen
 `updateMatrixWorld()` traversal. Reassigning a value that normalizes to the current state is a no-op. Transform-only
 changes update the transform buffer and do not reshape or recompose text.
 
-One group traversal performs at most one mutating `pmndrs_glyph_engine_update` transaction for that group's pending values. Calling a
-layout query with pending mutations may perform that synchronization earlier; the following traversal observes the
-committed revision and does not repeat the semantic work.
+One group traversal performs at most one mutating `pmndrs_glyph_engine_update` transaction for that group's pending
+values. An earlier `layout()` query uses the non-publishing paragraph measurement call and retains a speculative batch
+candidate; the traversal adopts matching work rather than repeating it.
 
 Editor-style changes go through the same assignment. `label.text = next` states the string the paragraph now holds, and
 the adapter derives its smallest common-prefix/common-suffix replacement without allocating a second scan buffer, so an
@@ -233,20 +235,25 @@ scene traversal. A renderer-side failure leaves the Rust publication unconsumed;
 owned bytes before another engine delta is requested. There is no public `retry()`: `synchronize()` already replays an
 unconsumed publication first, so a caller had nothing to do that the next frame did not (D-267).
 
-## Query committed layout
+## Measure desired layout and inspect committed glyphs
 
 ```ts
 const summary = label.layout();
 const glyphs = label.glyphs();
 ```
 
-`layout()` requests an allocation-light `ParagraphLayoutSummary`. `glyphs()` additionally copies per-line
-and per-glyph semantic arrays. Neither query is part of the ordinary render plan, and rendering never materializes layout
-arrays merely to draw.
+`layout()` synchronously requests an allocation-light `ParagraphLayoutSummary` for current desired state. The `Text`
+must be attached directly or beneath a `TextGroup`, because scene ancestry supplies the batch and session owner; use the
+renderer-neutral `Paragraph` API for detached measurement. The call does not traverse matrices, realize materials or GPU
+resources, publish draws, or change `commitState()` from `pending` to `committed`.
 
-Queries apply pending mutations for the containing group because the requested result must describe one coherent Rust
-revision. Every paragraph updated by that transaction becomes reusable by the next render traversal. Repeating a query on
-an unchanged committed layout returns the retained result object without another Wasm crossing.
+Sequential `layout()` calls in one group extend a full desired-lifecycle speculative transaction. Each query applies
+semantic mutations only for its paragraph; the first render traversal publishes the complete batch once and adopts the
+prepared work. Repeating an unchanged measurement returns the retained result object without another Wasm crossing.
+
+`glyphs()` is intentionally different: it inspects committed positioned output and copies per-line and per-glyph arrays.
+If semantic state is pending, that query takes the full renderer synchronization path first. Ordinary rendering never
+materializes either semantic view merely to draw.
 
 The complete field semantics are defined by the [core layout-query reference](core-api.md#layout-query-values).
 

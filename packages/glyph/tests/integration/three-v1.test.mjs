@@ -351,7 +351,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   runtime.dispose();
 });
 
-test('Three retries an unpublished renderer candidate without requiring new input', async () => {
+test('layout leaves an unpublished renderer candidate for traversal to retry', async () => {
   const registry = new FontRegistry();
   const instrumented = await createInstrumentedRuntime(registry);
   const runtime = instrumented.runtime;
@@ -382,7 +382,9 @@ test('Three retries an unpublished renderer candidate without requiring new inpu
   assert.equal(instrumented.crossings, 1);
   assert.equal(group.children.filter((child) => child.isMesh).length, 0);
   assert.equal(errors.length, 1);
-  assert.throws(() => label.layout(), /deliberate material realization failure/u);
+  assert.ok(label.layout().glyphCount > 0, 'measurement remains independent of material realization');
+  assert.equal(instrumented.crossings, 1, 'measurement must not retry or consume renderer publication');
+  assert.match(String(group.error), /deliberate material realization failure/u);
 
   failMaterial = false;
   scene.updateMatrixWorld();
@@ -840,6 +842,101 @@ async function createInstrumentedRuntime(registry) {
     WebAssembly.instantiate = originalInstantiate;
   }
 }
+
+test('Text.layout measures attached first-frame state without traversing matrices or realizing draws', async () => {
+  const registry = new FontRegistry();
+  const instrumented = await createInstrumentedRuntime(registry);
+  const font = await instrumented.runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const group = new TextGroup();
+  const first = new Text({
+    font,
+    text: 'measure me before the frame',
+    contentBox: { width: { mode: 'exact', size: 180 } },
+  });
+  const second = new Text({ font, text: 'and me too' });
+  first.position.set(12, 34, 0);
+  second.position.set(56, 78, 0);
+
+  assert.throws(
+    () => first.layout(),
+    /requires an attached Text; use Paragraph/u,
+    'detached Text has no batch ownership and must direct callers to Paragraph',
+  );
+  group.add(first, second);
+  scene.add(group);
+  const matricesBefore = [first, second, group, scene].map((object) => Array.from(object.matrix.elements));
+  instrumented.reset();
+
+  const firstMeasurement = first.layout();
+  const secondMeasurement = second.layout();
+  assert.ok(firstMeasurement.lineCount > 0);
+  assert.ok(secondMeasurement.glyphCount > 0);
+  assert.equal(instrumented.crossings, 0, 'measurement must not publish a full engine frame');
+  assert.equal(instrumented.measureCrossings, 2, 'each new paragraph uses one scoped query');
+  assert.equal(group.gpuBytes, 0, 'measurement must not realize renderer buffers');
+  assert.equal(group.children.length, 2, 'measurement must not add renderer draw objects');
+  for (const [index, object] of [first, second, group, scene].entries()) {
+    assert.deepEqual(object.matrix.elements, matricesBefore[index], 'measurement must not update local matrices');
+  }
+  assert.deepEqual(first.commitState(), { status: 'pending' });
+  assert.deepEqual(second.commitState(), { status: 'pending' });
+
+  scene.updateMatrixWorld(true);
+  assert.equal(group.error, undefined);
+  assert.equal(instrumented.crossings, 1, 'the first traversal publishes exactly one full frame');
+  assert.equal(
+    instrumented.latestUpdateFlags & textShaperAbi.engine.resultFlags.checkpoint,
+    textShaperAbi.engine.resultFlags.checkpoint,
+    "the session's first render plan is necessarily its initial checkpoint",
+  );
+  assert.equal(instrumented.measureCrossings, 2, 'publication must not repeat the host measurement query');
+  assert.equal(first.commitState().status, 'committed');
+  assert.equal(second.commitState().status, 'committed');
+
+  group.dispose();
+  first.dispose();
+  second.dispose();
+  font.dispose();
+  instrumented.runtime.dispose();
+});
+
+test('standalone Text.layout creates only its implicit measurement batch before traversal', async () => {
+  const registry = new FontRegistry();
+  const instrumented = await createInstrumentedRuntime(registry);
+  const font = await instrumented.runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const label = new Text({ font, text: 'standalone first-frame measurement' });
+  label.position.set(19, 23, 0);
+  scene.add(label);
+  const matricesBefore = [label, scene].map((object) => Array.from(object.matrix.elements));
+  instrumented.reset();
+
+  assert.ok(label.layout().glyphCount > 0);
+  assert.equal(instrumented.crossings, 0);
+  assert.equal(instrumented.measureCrossings, 1);
+  assert.equal(label.gpuBytes, 0);
+  assert.equal(label.children.length, 0);
+  for (const [index, object] of [label, scene].entries()) {
+    assert.deepEqual(object.matrix.elements, matricesBefore[index], 'measurement must not update local matrices');
+  }
+  assert.deepEqual(label.commitState(), { status: 'pending' });
+
+  scene.updateMatrixWorld(true);
+  assert.equal(instrumented.crossings, 1);
+  assert.equal(instrumented.measureCrossings, 1);
+  assert.equal(label.commitState().status, 'committed');
+
+  label.dispose();
+  font.dispose();
+  instrumented.runtime.dispose();
+});
 
 test('Bitmap strike changes fully initialize a replacement indexed batch', async () => {
   const registry = new FontRegistry();

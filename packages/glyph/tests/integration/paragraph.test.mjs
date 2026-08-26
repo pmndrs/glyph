@@ -10,6 +10,8 @@ import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
 
 import { LoadedFontImpl } from '../../dist/loaded-font.js';
+import { runtimeShaperEngineExports } from '../../dist/shaper.js';
+import { textRuntimeShaper } from '../../dist/text-runtime.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 
@@ -270,6 +272,29 @@ test('update invalidates cached measurements, and meaningless input throws where
   } finally {
     paragraph.dispose();
   }
+});
+
+test('shared Paragraph stacks retain disposed font bindings until their final lease ends', async () => {
+  await using boot = await bootstrap();
+  const exports = runtimeShaperEngineExports(textRuntimeShaper(boot.runtime));
+  const first = new Paragraph({ font: boot.font, text: 'first paragraph' });
+  const second = new Paragraph({ font: boot.font, text: 'second paragraph' });
+  first.layout();
+  second.layout();
+  assert.equal(exports.fontBindingCount(), 1, 'equal stacks share one registered font binding');
+
+  const warn = console.warn;
+  console.warn = () => undefined;
+  try {
+    boot.font.dispose();
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(exports.fontBindingCount(), 1, 'live paragraph stacks keep the disposed binding valid');
+  first.dispose();
+  assert.equal(exports.fontBindingCount(), 1, 'one remaining paragraph still owns the shared stack');
+  second.dispose();
+  assert.equal(exports.fontBindingCount(), 0, 'the final stack release retires the Wasm binding');
 });
 
 function projectMeasurement(measurement) {

@@ -260,6 +260,9 @@ importers:
       unplugin-typegpu:
         specifier: 0.12.2
         version: 0.12.2(rolldown@1.1.5)(typegpu@0.12.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
+      vite:
+        specifier: 8.1.5
+        version: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
 
   packages/glyph-example-raster:
     dependencies:

@@ -205,11 +205,15 @@ export class ThreeTextEngineCoordinator {
           released = true;
           return;
         }
-        this.host.disposeFontStack(retained.handle);
+        let failure: unknown;
+        try {
+          this.host.disposeFontStack(retained.handle);
+        } catch (error) {
+          failure = error;
+        }
         this.#stacks.delete(key);
         retained.references = 0;
         released = true;
-        let failure: unknown;
         for (const { font, binding } of retained.bindings) {
           if (binding.stackReferences === 0) {
             failure ??= new Error('Three font-binding stack ownership is inconsistent');
@@ -304,9 +308,9 @@ export class ThreeTextEngineCoordinator {
   }
 
   #bindingHandle(font: LoadedFont<AnyRasterTechnique>): RetainedFontBinding {
-    if (font.disposed) throw new TypeError('cannot register a disposed loaded font with the Three text engine');
     const existing = this.#bindingHandles.get(font);
     if (existing !== undefined) return existing;
+    if (font.disposed) throw new TypeError('cannot register a disposed loaded font with the Three text engine');
     const program = this.#planPrograms.get(font.technique.id);
     const portable = resolveRasterPlanProgram(font.technique.id);
     if (portable === undefined) {
@@ -425,8 +429,18 @@ export class ThreeTextEngineCoordinator {
   }
 
   #disposeFontRegistration(font: LoadedFont<AnyRasterTechnique>, binding: RetainedFontBinding): void {
-    this.host.disposeFontBinding(binding.handle);
-    this.#releaseFontResources(font);
+    let failure: unknown;
+    try {
+      this.host.disposeFontBinding(binding.handle);
+    } catch (error) {
+      failure = error;
+    }
+    try {
+      this.#releaseFontResources(font);
+    } catch (error) {
+      failure ??= error;
+    }
+    if (failure !== undefined) throw failure;
   }
 
   #releaseFontResources(font: LoadedFont<AnyRasterTechnique>): void {
