@@ -19,7 +19,7 @@
   realization and cross-session leases.
 
 - **Reviewed the final portability size delta** — Relative to the previous accepted snapshot, renderer-neutral `/core`
-  grows by 10,883 raw / 1,715 gzip / 1,344 Brotli bytes and the complete Three graph by 10,209 / 1,561 / 1,161. The
+  grows by 10,875 raw / 1,745 gzip / 1,337 Brotli bytes and the complete Three graph by 10,201 / 1,588 / 1,175. The
   ordinary tree-shaken browser core changes by only 27 raw / 9 gzip / 47 Brotli bytes. Shaper Wasm grows by 1,668 raw /
   774 gzip / 372 Brotli bytes. The reviewed evidence is regenerated at the final source head and passes the size gate.
 
