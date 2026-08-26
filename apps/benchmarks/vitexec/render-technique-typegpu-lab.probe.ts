@@ -15,7 +15,8 @@ if (
   report.updatedVisiblePixels < 1 ||
   report.changedPixels < 1 ||
   report.idleGpuSubmissions !== 0 ||
-  report.clearGpuSubmissions !== 1
+  report.clearGpuSubmissions !== 1 ||
+  report.clearedVisiblePixels !== 0
 ) {
   throw new Error('TypeGPU render-technique lab did not preserve its draw and pixel invariants');
 }

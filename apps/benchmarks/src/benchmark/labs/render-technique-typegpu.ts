@@ -20,6 +20,7 @@ export interface RenderTechniqueTypeGpuLabReport {
   readonly changedPixels: number;
   readonly idleGpuSubmissions: number;
   readonly clearGpuSubmissions: number;
+  readonly clearedVisiblePixels: number;
 }
 
 /** Runs the external-renderer contract through a real WebGPU device and reads its RGBA target back. */
@@ -64,6 +65,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       const submissionsBeforeDispose = renderer.submittedPasses;
       await text.dispose();
       textDisposed = true;
+      const clearedPixels = await renderer.readPixels();
       const report = Object.freeze({
         initialDraws: initial.draws.length,
         updatedDraws: updated.draws.length,
@@ -72,6 +74,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         changedPixels: changedPixelCount(initialPixels, updatedPixels),
         idleGpuSubmissions,
         clearGpuSubmissions: renderer.submittedPasses - submissionsBeforeDispose,
+        clearedVisiblePixels: visiblePixelCount(clearedPixels),
       });
       if (report.initialDraws === 0 || report.updatedDraws === 0) {
         throw new Error('the TypeGPU renderer lab produced an empty draw list');
@@ -81,7 +84,8 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         report.updatedVisiblePixels === 0 ||
         report.changedPixels === 0 ||
         report.idleGpuSubmissions !== 0 ||
-        report.clearGpuSubmissions !== 1
+        report.clearGpuSubmissions !== 1 ||
+        report.clearedVisiblePixels !== 0
       ) {
         throw new Error('the TypeGPU renderer lab did not produce changing visible pixels');
       }

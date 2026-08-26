@@ -475,7 +475,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     }
     const validationError = await this.#device.popErrorScope();
     if (validationError !== null) throw gpuOperationError('submit render pass', validationError);
-    await this.#device.queue.onSubmittedWorkDone();
+    // Validation acceptance commits the candidate; queue completion stays pipelined.
     this.#assertLive();
     this.#submittedPasses += 1;
   }
