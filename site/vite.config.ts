@@ -21,5 +21,12 @@ export default defineConfig({
   plugins: [react()],
   preview: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
   root: 'landing',
-  server: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
+  server: {
+    headers: CROSS_ORIGIN_ISOLATION_HEADERS,
+    // The docs build writes thousands of files into both of these, and the npx
+    // cache has to live inside the workspace so Next resolves its root here
+    // rather than in $HOME. Watching either turns a docs build into a reload
+    // storm the page never survives long enough to render through.
+    watch: { ignored: ['**/.npx-cache/**', '**/dist/**'] },
+  },
 });
