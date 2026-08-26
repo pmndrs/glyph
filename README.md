@@ -239,7 +239,9 @@ Load a font and own the engine lifecycle once:
 ```ts
 import { createTextRuntime } from '@pmndrs/glyph';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
-import { compileRasterFont, compileRenderPolicy, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
+import { compileRasterFont, compileRenderPolicy, id, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
+
+const POLICY_HANDLE = id('policy', 'my-renderer/default');
 
 const runtime = await createTextRuntime();
 const inter = await runtime.loadFont({
@@ -249,13 +251,20 @@ const inter = await runtime.loadFont({
 
 // Styles reference fonts through stack handles, so bind and stack the loaded font once.
 const host = new TextEngineHost(textRuntimeShaper(runtime));
-const policyHandle = host.id('policy', 'my-renderer/default');
 const bindingHandle = host.id('font-binding', 'my-renderer/inter');
 const fontStackHandle = host.id('font-stack', 'my-renderer/body');
-host.registerPolicy(policyHandle, compileRenderPolicy(myPolicy));
+host.registerPolicy(POLICY_HANDLE, compileRenderPolicy(myPolicy));
 const compiled = compileRasterFont(inter, host.wireIdentities);
 if (compiled === undefined) throw new Error(`no portable plan is registered for ${inter.technique.id}`);
-const pendingResources = renderer.prepareResources(compiled.resources);
+const resources = [];
+for (const [name, keys] of compiled.declaredResources) {
+  for (const key of keys) {
+    const resource = compiled.resources.get(key);
+    if (resource === undefined) throw new Error(`compiled font omitted ${name}`);
+    resources.push({ id: host.wireIdentities.resourceId(key), generation: 1, name, resource });
+  }
+}
+const pendingResources = renderer.prepareResources(resources);
 try {
   host.registerFontBinding(bindingHandle, inter.font.handle, compiled.binding);
   try {
@@ -277,7 +286,9 @@ try {
 host.registerFontStack(fontStackHandle, [bindingHandle]);
 ```
 
-The policy is your own declaration — `@pmndrs/glyph/core` exports the authoring toolkit (`compileRenderPolicy`, `programContext`, the wire-identity registry) that Three's first-party policy is itself built with.
+The policy is your own declaration — `@pmndrs/glyph/core` exports the authoring toolkit (`compileRenderPolicy`, `programContext`, the wire-identity registry) that Three's first-party policy is itself built with. Its handle is an authored
+module constant from `id()`; bindings, stacks, sessions, and text identities come from `host.id()` because their collision
+provenance ends with that host.
 
 Shape text — a session update is one serialized frame of mutations, constraints, and the revision handshake:
 
@@ -290,7 +301,7 @@ const session = host.createSession({ handle: sessionHandle, requestCapacity: 409
 const publication = session.update(
   compileTextEngineFrameUpdate({
     sessionId: sessionHandle,
-    policyHandle,
+    policyHandle: POLICY_HANDLE,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
     acknowledgedPublicationGeneration: 0,
@@ -338,7 +349,7 @@ function frame(edits) {
   const next = session.update(
     compileTextEngineFrameUpdate({
       sessionId: sessionHandle,
-      policyHandle,
+      policyHandle: POLICY_HANDLE,
       expectedEngineRevision: previous.engineRevision,
       consumedPlanRevision: previous.planRevision,
       acknowledgedPublicationGeneration: previous.publicationGeneration,
