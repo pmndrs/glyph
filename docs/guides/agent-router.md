@@ -77,15 +77,17 @@ An explicit user choice always wins. Query `models` before routing; do not silen
 | `0x`, `0x alpha`, `0xAlpha`   | `oc-opencode/x-preview-f-free`       | Omit for OpenCode              |
 | `opus`                        | `opus`                               | `high`                         |
 | `fable`                       | `fable`                              | `high`; explicit requests only |
-| `luna`, `tera`, or `sol`      | Explicit validated Codex model name | `high`                         |
+| `luna`                        | `gpt-5.6-luna`                       | `high`                         |
+| `tera` or `terra`             | `gpt-5.6-terra`                      | `high`                         |
+| `sol`                         | `gpt-5.6-sol`                        | `high`                         |
 | `claude:<model>`              | Validated Claude suffix              | `high`                         |
 | `codex:<model>`               | Validated Codex suffix               | `high`                         |
 | `opencode:<provider>/<model>` | `oc-<provider>/<model>`              | Omit for OpenCode              |
 
 Claude and Codex never exceed `high` unless the user explicitly requests a higher effort. Choosing Fable, asking for an
-adversarial review, or describing a hard task does not imply Max or Extra effort. Fable is an explicit Claude
-pass-through supported by the installed Claude CLI but is not advertised by the current `ai-cli models` catalog, so
-verify it at the provider surface before launching. OpenCode explicit models require the `oc-` router prefix.
+adversarial review, or describing a hard task does not imply Max or Extra effort. Fable and the Luna/Terra/Sol Codex
+models are advertised by the pinned 2.22.0 catalog. Do not use the catalog's `claude-ultra` or `codex-ultra` aliases unless
+the user explicitly requests their higher effort. OpenCode explicit models require the `oc-` router prefix.
 
 ## Run a resumable adversarial review
 

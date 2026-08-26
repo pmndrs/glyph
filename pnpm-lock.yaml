@@ -12,8 +12,8 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
       ai-cli-mcp:
-        specifier: 2.21.0
-        version: 2.21.0
+        specifier: 2.22.0
+        version: 2.22.0
       oxfmt:
         specifier: 0.35.0
         version: 0.35.0
@@ -1444,8 +1444,8 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  ai-cli-mcp@2.21.0:
-    resolution: {integrity: sha512-w3W0xE8dPO0bKv/1JWkMsl4XllCaKT1GyZZ7arnMm/GBsDcgd/n5VYhOUBEHQ+nS0nPbUpz500cNbbuziqCewg==}
+  ai-cli-mcp@2.22.0:
+    resolution: {integrity: sha512-KzlzzsJVSNicaHMB1ez3EAoaCqfd7kVV+TpUb5xC0okhWu0UZ8XGKF3m86rdKeMXT2/40tdEhgO8UJP/6wCE7g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
@@ -4203,7 +4203,7 @@ snapshots:
 
   acorn@8.17.0: {}
 
-  ai-cli-mcp@2.21.0:
+  ai-cli-mcp@2.22.0:
     dependencies:
       '@modelcontextprotocol/sdk': 1.30.0(zod@3.25.76)
       zod: 3.25.76
