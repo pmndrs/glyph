@@ -4,7 +4,7 @@ import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/three/slug';
 import { Environment, Lightformer, Stats } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import { normalize, positionLocal, uniform, vec3 } from 'three/tsl';
 import { DirectionalLight, DoubleSide, MeshPhysicalNodeMaterial, NormalBlending, Vector2 } from 'three/webgpu';
 
@@ -110,7 +110,6 @@ export function Scene() {
   // out. The key travels; fill and rim hold still and do the shaping.
   const key = useRef<DirectionalLight>(null);
 
-  const [lineBox, setLineBox] = useState(0);
   const elapsed = useRef(0);
   useFrame((_state, delta) => {
     if (built.current) built.current.envMapIntensity = live.envIntensity;
@@ -119,29 +118,39 @@ export function Scene() {
     roughness.value = live.roughness;
     emissive.value = live.emissive;
 
+    // Ink, not the advance box.
+    //
+    // `contentWidth`/`contentHeight` are advance extents — the space the text
+    // claims — and they are the right numbers for a host laying out boxes. They
+    // are the wrong ones for centring, because a cursive face overhangs its
+    // advances and Playwrite's line box is far taller than its ink: centring on
+    // it left the mark low and put the controls through the tails of g, y and p.
+    // `inkBounds` is the union of the positioned glyphs' outlines, which is what
+    // the eye actually sees, so no descender allowance has to be guessed at.
     const summary = mark.current?.layout();
-    if (summary && summary.contentHeight > 0) {
-      if (summary.contentHeight !== lineBox) setLineBox(summary.contentHeight);
-      // positionLocal runs from the box's top-left with +Y down, so the ink sits
-      // in x = [0, width] and y = [-height, 0].
-      inkCentre.value.set(width / 2, -summary.contentHeight / 2);
-      inkSpan.value.set(Math.max(summary.contentWidth, 1) / 2, Math.max(summary.contentHeight, 1) / 2);
+    const ink = summary?.inkBounds;
+    if (summary && ink !== undefined && ink.height > 0) {
+      // Paragraph space runs +Y down from the box top-left, so placing the
+      // object at the ink centre puts that centre on the origin.
+      // Set on the object, not through the prop. The measurement arrives inside
+      // the frame loop, and a prop can only change by re-rendering the scene —
+      // which is a needless render, and a frame late. Through a ref it was worse
+      // than late: nothing re-read it until an unrelated resize forced a render.
+      mark.current?.position.set(-(ink.x + ink.width / 2), ink.y + ink.height / 2, 0);
+      // A paragraph is 'pending' on the frame it is authored and 'committed' on
+      // the next, so the first frame has no measurement to place it by — not
+      // because the value is missing, but because there is no layout yet. Drawing
+      // that frame puts the mark at its unplaced origin and then snaps it. It
+      // stays hidden until it has been measured once instead.
+      if (mark.current !== null) mark.current.visible = true;
 
-      // Where the controls sit, in screen terms.
-      //
-      // Measured from the baseline, not the line box. Playwrite's line box is
-      // enormous next to its ink — a script face carries huge ascent and
-      // descent metrics — so the box bottom lands well below the tails and
-      // pushes the controls off the frame. The baseline is exact; how far the
-      // descenders hang under it is the one unknown, and it stays a dial until
-      // Text can publish ink extents (#113).
-      const baseline = summary.contentHeight / 2 - summary.firstBaseline;
-      const inkBottom = baseline - fontSize * live.descent;
-      // The gap is in ems of the type, so it holds its optical weight as the
-      // mark scales with the viewport rather than becoming a hairline on a
-      // display and a chasm on a phone.
-      const gap = fontSize * live.markGap;
-      publishMarkBottom(0.5 - (inkBottom - gap) / Math.max(viewport.height, 1e-3));
+      inkCentre.value.set(ink.x + ink.width / 2, -(ink.y + ink.height / 2));
+      inkSpan.value.set(Math.max(ink.width, 1) / 2, Math.max(ink.height, 1) / 2);
+
+      // With the ink centred on the origin its lowest point is exactly half its
+      // height below, so the controls need no allowance beyond the gap itself.
+      const below = ink.height / 2 + fontSize * live.markGap;
+      publishMarkBottom(0.5 + below / Math.max(viewport.height, 1e-3));
     }
 
     elapsed.current += delta;
@@ -199,8 +208,8 @@ export function Scene() {
         font={font}
         material={hero}
         paint={{ color: '#e7ecf6' }}
-        position={[-width / 2, lineBox / 2, 0]}
         ref={mark}
+        visible={false}
         style={{ fontSize }}
       >
         {WORDMARK}
