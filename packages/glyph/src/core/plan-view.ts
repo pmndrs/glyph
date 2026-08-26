@@ -62,10 +62,11 @@ export class TextEngineRenderPlanView {
   /** Binds copied plan bytes received across a realm boundary after validating their complete table framing. */
   bindBytes(bytes: Uint8Array): this {
     if (!(bytes instanceof Uint8Array)) throw new TypeError('text-engine plan bytes must be a Uint8Array');
-    validateResultBytes(bytes);
+    const view = this.#memoryBuffer === bytes.buffer ? this.#view! : new DataView(bytes.buffer);
+    validateResultBytes(bytes, view);
     if (this.#memoryBuffer !== bytes.buffer) {
       this.#memoryBuffer = bytes.buffer;
-      this.#view = new DataView(bytes.buffer);
+      this.#view = view;
     }
     this.#baseOffset = bytes.byteOffset;
     this.#byteLength = bytes.byteLength;
@@ -147,33 +148,38 @@ interface ResultTableLayout {
   readonly record: { readonly size: number; readonly alignment: number };
 }
 
-function validateResultBytes(bytes: Uint8Array): void {
+function validateResultBytes(bytes: Uint8Array, view: DataView): void {
   if (bytes.byteLength < resultLayout.size) {
     throw new RangeError('text-engine publication header has an invalid byte length');
   }
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (view.getUint32(resultLayout.byteLength, true) !== bytes.byteLength) {
+  const u32 = (offset: number): number => view.getUint32(bytes.byteOffset + offset, true);
+  if (u32(resultLayout.byteLength) !== bytes.byteLength) {
     throw new RangeError('text-engine publication header has an invalid byte length');
   }
-  if (view.getUint32(resultLayout.abiVersion, true) !== textShaperAbi.version) {
+  if (u32(resultLayout.abiVersion) !== textShaperAbi.version) {
     throw new RangeError('text-engine publication has an unsupported ABI version');
   }
-  if (view.getUint32(resultLayout.status, true) !== textShaperAbi.status.ok) {
+  if (u32(resultLayout.status) !== textShaperAbi.status.ok) {
     throw new RangeError('text-engine publication does not contain a successful result');
   }
   for (const name of Object.keys(tableLayouts) as TableName[]) {
-    validateResultTable(view, bytes.byteLength, name, tableLayouts[name]);
+    validateResultTable(u32, bytes.byteLength, name, tableLayouts[name]);
   }
-  validateResultTable(view, bytes.byteLength, 'semantic views', {
+  validateResultTable(u32, bytes.byteLength, 'semantic views', {
     offset: resultLayout.semanticViewsOffset,
     count: resultLayout.semanticViewCount,
     record: textShaperAbi.layouts.engineSemanticView,
   });
 }
 
-function validateResultTable(view: DataView, resultByteLength: number, name: string, layout: ResultTableLayout): void {
-  const offset = view.getUint32(layout.offset, true);
-  const count = view.getUint32(layout.count, true);
+function validateResultTable(
+  u32: (offset: number) => number,
+  resultByteLength: number,
+  name: string,
+  layout: ResultTableLayout,
+): void {
+  const offset = u32(layout.offset);
+  const count = u32(layout.count);
   if (count === 0) {
     if (offset !== 0) throw new RangeError(`empty text-engine ${name} table has a nonzero offset`);
     return;
