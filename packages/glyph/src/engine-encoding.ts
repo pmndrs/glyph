@@ -261,6 +261,7 @@ export function replacedContent<Update extends { readonly text?: unknown; readon
   update: Update,
 ): Update {
   if (!('text' in update) || 'spans' in update) return update;
+  if (typeof update.text !== 'string') return update;
   return { ...update, spans: [] };
 }
 

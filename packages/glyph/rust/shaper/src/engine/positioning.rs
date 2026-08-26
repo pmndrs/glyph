@@ -42,6 +42,7 @@ pub(crate) struct SemanticGlyph {
     pub cluster: u32,
     pub glyph_id: u16,
     pub flags: u16,
+    pub bidi_level: u8,
     pub font_size: f32,
     pub inline_origin: f32,
     pub block_origin: f32,
@@ -584,6 +585,13 @@ impl PositionedGlyphArena {
             if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
                 continue;
             }
+            let bidi_level = cluster_level(
+                cluster,
+                fragment.line.text_start,
+                clusters,
+                runs,
+                &self.line_levels,
+            )?;
             let style_index = usize::try_from(clusters.style_indexes[cluster])
                 .map_err(|_| EngineError::InvalidRequest)?;
             let style = styles
@@ -635,6 +643,7 @@ impl PositionedGlyphArena {
                     cluster: stream_clusters[adjacency],
                     glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
                     flags,
+                    bidi_level,
                     font_size: style.font_size,
                     inline_origin: finite_f32(origin_inline)?,
                     block_origin: finite_f32(origin_block)?,
@@ -844,8 +853,10 @@ impl PositionedGlyphArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<f64, EngineError> {
-        runs.get(usize::try_from(boundary.source_run).map_err(|_| EngineError::InvalidRequest)?)
-            .ok_or(EngineError::InvalidRequest)?;
+        let bidi_level = runs
+            .get(usize::try_from(boundary.source_run).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?
+            .bidi_level;
         let source_cluster =
             usize::try_from(boundary.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
         let ellipsis_cluster = usize::try_from(boundary.cluster_end)
@@ -861,6 +872,7 @@ impl PositionedGlyphArena {
             boundary.source_glyph_count,
             boundary.source_binding_handle,
             boundary.source_font_handle,
+            bidi_level,
             None,
             source_cluster,
             arena,
@@ -878,6 +890,7 @@ impl PositionedGlyphArena {
             boundary.ellipsis_glyph_count,
             boundary.ellipsis_binding_handle,
             boundary.ellipsis_font_handle,
+            bidi_level,
             Some(boundary.text_end),
             ellipsis_cluster,
             arena,
@@ -899,6 +912,7 @@ impl PositionedGlyphArena {
         glyph_count: u32,
         binding_handle: u32,
         font_handle: u32,
+        bidi_level: u8,
         cluster_override: Option<u32>,
         fallback_cluster: usize,
         arena: &BoundaryShapeArena,
@@ -1005,6 +1019,7 @@ impl PositionedGlyphArena {
                 cluster,
                 glyph_id: u16::try_from(glyph_id).map_err(|_| EngineError::ResultTooLarge)?,
                 flags,
+                bidi_level,
                 font_size: style.font_size,
                 inline_origin: finite_f32(origin_inline)?,
                 block_origin: finite_f32(origin_block)?,

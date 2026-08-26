@@ -351,6 +351,7 @@ pub(crate) fn append_measurement(
                 text_start: glyph.cluster,
                 text_end: glyph.font_handle,
                 item_start: u32::from(glyph.glyph_id),
+                item_count: u32::from(glyph.bidi_level),
                 inline_start: glyph.inline_origin,
                 block_start: glyph.block_origin,
                 inline_extent: glyph.font_size,

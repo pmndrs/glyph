@@ -42,7 +42,12 @@ import {
   type TextEngineStyleMutation,
   type TextEngineTextMutation,
 } from '../core.js';
-import type { LayoutBox, ParagraphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
+import {
+  copyParagraphLayoutInspection,
+  type LayoutBox,
+  type ParagraphLayoutInspection,
+  type ParagraphLayoutSummary,
+} from '../layout.js';
 import {
   createGlyphPlacements,
   type GlyphApplication,
@@ -648,6 +653,7 @@ class ThreeTextBatchBinding {
   readonly #removed: RetainedEngineParagraph[] = [];
   readonly #measurements = new Map<Text<AnyRasterTechnique>, ParagraphLayoutSummary>();
   readonly #layoutInspections = new Map<Text<AnyRasterTechnique>, ParagraphLayoutInspection>();
+  readonly #placementLayouts = new WeakMap<GlyphPlacements, ParagraphLayoutInspection>();
   readonly #measurementStackLeases = new Map<RetainedEngineParagraph, ThreeTextEngineStackLease[]>();
   readonly #measurementMaterialLeases = new Map<RetainedEngineParagraph, ThreeTextMaterialLease[]>();
   readonly #queryPlanView = new TextEngineRenderPlanView();
@@ -807,20 +813,26 @@ class ThreeTextBatchBinding {
     }
   }
   layoutInspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection | undefined {
-    if (!this.#paragraphs.has(text)) return undefined;
-    this.#assertRendererReady();
-    this.synchronize(textShaperAbi.engine.semanticViewMasks.layoutInspection);
-    return this.#layoutInspections.get(text);
+    const layout = this.#canonicalLayoutInspection(text);
+    return layout === undefined ? undefined : copyParagraphLayoutInspection(layout);
   }
   glyphPlacements(text: Text<AnyRasterTechnique>): GlyphPlacements | undefined {
-    const layout = this.layoutInspection(text);
+    const layout = this.#canonicalLayoutInspection(text);
     if (layout === undefined) return undefined;
     const drawn = this.#renderTarget().snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y);
-    return createGlyphPlacements(layout, text.text, drawn.drawnX, drawn.drawnY, drawn.incomplete);
+    const placements = createGlyphPlacements(
+      copyParagraphLayoutInspection(layout),
+      text.text,
+      drawn.drawnX,
+      drawn.drawnY,
+      drawn.incomplete,
+    );
+    this.#placementLayouts.set(placements, layout);
+    return placements;
   }
   applyGlyphPlacements(text: Text<AnyRasterTechnique>, placements: GlyphPlacements): GlyphApplication {
-    const layout = this.layoutInspection(text);
-    if (layout === undefined || placements.layout !== layout) {
+    const layout = this.#canonicalLayoutInspection(text);
+    if (layout === undefined || this.#placementLayouts.get(placements) !== layout) {
       throw new TypeError('glyph placements do not match the committed layout inspection');
     }
     const glyphs = placements.glyphs;
@@ -839,6 +851,12 @@ class ThreeTextBatchBinding {
       applied: glyphs.length - unapplied.length,
       unapplied: Object.freeze(unapplied),
     });
+  }
+  #canonicalLayoutInspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection | undefined {
+    if (!this.#paragraphs.has(text)) return undefined;
+    this.#assertRendererReady();
+    this.synchronize(textShaperAbi.engine.semanticViewMasks.layoutInspection);
+    return this.#layoutInspections.get(text);
   }
   clearGlyphOrigins(text: Text<AnyRasterTechnique>): void {
     const layout = this.#layoutInspections.get(text);

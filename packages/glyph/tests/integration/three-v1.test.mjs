@@ -147,11 +147,16 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(inspection.glyphIds.length, measurement.glyphCount);
   assert.equal(inspection.glyphStableIds.length, inspection.glyphIds.length);
   assert.equal(inspection.lineGlyphCounts.length, measurement.lineCount);
-  assert.equal(label.glyphs(), inspection, 'an unchanged committed layout must reuse its copied inspection');
+  const expectedFirstX = inspection.x[0];
+  inspection.x.fill(-12345);
+  const repeatedInspection = label.glyphs();
+  assert.notEqual(repeatedInspection, inspection, 'each inspection owns the mutable columns it exposes');
+  assert.equal(repeatedInspection.x[0], expectedFirstX, 'caller mutation cannot corrupt the retained inspection');
   assert.equal(group.children.filter((child) => child.isMesh)[0], firstDraws[0]);
 
   const placements = label.snapshotGlyphs();
-  assert.equal(placements.layout, inspection);
+  assert.notEqual(placements.layout, repeatedInspection);
+  assert.deepEqual(placements.layout.x, repeatedInspection.x);
   assert.equal(placements.space, 'paragraph');
   // A glyph the GPU plan omits — the non-rendering space here — has no retained record, so its
   // drawn position cannot be read. That is reported, not substituted, and the count is pinned

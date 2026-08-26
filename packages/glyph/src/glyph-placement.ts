@@ -41,6 +41,8 @@ export interface GlyphPlacement {
   readonly index: number;
   /** UTF-16 offset of the source cluster this glyph belongs to. */
   readonly cluster: number;
+  /** Resolved Unicode bidi embedding level; odd levels run right-to-left. */
+  readonly bidiLevel: number;
   /** Index into `GlyphPlacements.lines`. */
   readonly line: number;
   /** Index into `GlyphPlacements.words`. */
@@ -271,8 +273,9 @@ export function createGlyphPlacements(
     for (let index = start; index < end && index < glyphCount; index += 1) lineOfGlyph[index] = lineIndex;
   }
 
+  const clusterEnds = clusterEndsOf(layout, text.length);
   const wordOfGlyph = new Int32Array(glyphCount).fill(-1);
-  const wordSpans = wordsOf(layout, text, lineOfGlyph, wordOfGlyph);
+  const wordSpans = wordsOf(layout, text, lineOfGlyph, wordOfGlyph, clusterEnds);
 
   const glyphs: MutableGlyph[] = [];
   const keyCounts = new Map<string, number>();
@@ -289,6 +292,7 @@ export function createGlyphPlacements(
         index,
         `${base}:${occurrence}` as GlyphKey,
         cluster,
+        layout.glyphBidiLevels[index]!,
         lineOfGlyph[index]!,
         wordOfGlyph[index]!,
         displayedX[index]!,
@@ -350,8 +354,8 @@ export function createGlyphPlacements(
         glyph.y = glyph.shapedY;
       }
     },
-    caretAt: (x: number, y: number) => caretAt(lines, x, y),
-    selectionRects: (start: number, end: number) => selectionRects(lines, start, end),
+    caretAt: (x: number, y: number) => caretAt(lines, clusterEnds, x, y),
+    selectionRects: (start: number, end: number) => selectionRects(lines, clusterEnds, start, end),
   };
   return Object.freeze(placements);
 }
@@ -361,6 +365,7 @@ function glyphPlacement(
   index: number,
   key: GlyphKey,
   cluster: number,
+  bidiLevel: number,
   line: number,
   word: number,
   drawnX: number,
@@ -383,6 +388,7 @@ function glyphPlacement(
     key,
     index,
     cluster,
+    bidiLevel,
     line,
     word,
     fontSize: layout.glyphFontSizes[index]!,
@@ -452,6 +458,22 @@ interface WordSpan {
   readonly textEnd: number;
 }
 
+function clusterEndsOf(layout: ParagraphLayoutInspection, textLength: number): ReadonlyMap<number, number> {
+  const boundaries = new Set<number>([0, textLength]);
+  for (const cluster of layout.clusters) boundaries.add(cluster);
+  for (const line of layout.lines) {
+    boundaries.add(line.textStart);
+    boundaries.add(line.textEnd);
+  }
+  const ordered = [...boundaries].sort((left, right) => left - right);
+  const ends = new Map<number, number>();
+  for (let index = 0; index < ordered.length; index += 1) {
+    const start = ordered[index]!;
+    ends.set(start, ordered[index + 1] ?? textLength);
+  }
+  return ends;
+}
+
 /**
  * Groups glyphs into words: maximal runs of glyphs whose source cluster is not whitespace, never
  * crossing a line boundary.
@@ -465,6 +487,7 @@ function wordsOf(
   text: string,
   lineOfGlyph: Uint32Array,
   wordOfGlyph: Int32Array,
+  clusterEnds: ReadonlyMap<number, number>,
 ): readonly WordSpan[] {
   const spans: WordSpan[] = [];
   let start = -1;
@@ -488,7 +511,7 @@ function wordsOf(
       textEnd = cluster;
     }
     textStart = Math.min(textStart, cluster);
-    textEnd = Math.max(textEnd, cluster + 1);
+    textEnd = Math.max(textEnd, clusterEnds.get(cluster) ?? cluster);
   }
   close(layout.glyphCount);
   return spans;
@@ -522,7 +545,12 @@ function caretRect(line: GlyphLine, x: number): LayoutBox {
  * a right-to-left glyph resolves to the boundary that is logically before it even though that edge
  * is drawn on its right. That is the property a character-indexed hit test cannot have.
  */
-function caretAt(lines: readonly GlyphLine[], x: number, y: number): GlyphCaret {
+function caretAt(
+  lines: readonly GlyphLine[],
+  clusterEnds: ReadonlyMap<number, number>,
+  x: number,
+  y: number,
+): GlyphCaret {
   const line = lineAt(lines, y);
   if (line === undefined) {
     return Object.freeze({ offset: 0, line: 0, leading: true, rect: EMPTY_BOX });
@@ -535,33 +563,27 @@ function caretAt(lines: readonly GlyphLine[], x: number, y: number): GlyphCaret 
     bestDistance = distance;
     best = { offset, leading, x: edge };
   };
-  let previousCluster = -1;
-  for (const glyph of line.glyphs) {
-    // One cluster can own several glyphs; only its first contributes a caret stop, which is what
-    // keeps a ligature or a mark sequence from offering a caret position inside itself.
-    if (glyph.cluster === previousCluster) continue;
-    previousCluster = glyph.cluster;
-    consider(glyph.x, glyph.cluster, true);
-    consider(glyph.x + glyph.advance, glyph.cluster, false);
+  for (let start = 0; start < line.glyphs.length; ) {
+    const first = line.glyphs[start]!;
+    let end = start + 1;
+    let left = Math.min(first.x, first.x + first.advance);
+    let right = Math.max(first.x, first.x + first.advance);
+    while (end < line.glyphs.length && line.glyphs[end]!.cluster === first.cluster) {
+      const glyph = line.glyphs[end]!;
+      left = Math.min(left, glyph.x, glyph.x + glyph.advance);
+      right = Math.max(right, glyph.x, glyph.x + glyph.advance);
+      end += 1;
+    }
+    const rtl = (first.bidiLevel & 1) !== 0;
+    consider(rtl ? right : left, first.cluster, true);
+    const clusterEnd = clusterEnds.get(first.cluster) ?? first.cluster;
+    consider(rtl ? left : right, clusterEnd, clusterEnd < line.textEnd);
+    start = end;
   }
   if (best === undefined) {
     return Object.freeze({ offset: line.textStart, line: line.index, leading: true, rect: caretRect(line, 0) });
   }
-  return Object.freeze({
-    offset: best.leading ? best.offset : line.textEnd === best.offset ? best.offset : nextCluster(line, best.offset),
-    line: line.index,
-    leading: best.leading,
-    rect: caretRect(line, best.x),
-  });
-}
-
-/** The offset of the cluster after `offset` on this line, or the line's end when there is none. */
-function nextCluster(line: GlyphLine, offset: number): number {
-  let next = line.textEnd;
-  for (const glyph of line.glyphs) {
-    if (glyph.cluster > offset && glyph.cluster < next) next = glyph.cluster;
-  }
-  return next;
+  return Object.freeze({ offset: best.offset, line: line.index, leading: best.leading, rect: caretRect(line, best.x) });
 }
 
 /**
@@ -572,7 +594,12 @@ function nextCluster(line: GlyphLine, offset: number): number {
  * a layout-box artefact, not an ink one. A bidi line whose selected characters are drawn in two
  * separate places yields two rectangles for that line rather than one covering the gap.
  */
-function selectionRects(lines: readonly GlyphLine[], start: number, end: number): readonly LayoutBox[] {
+function selectionRects(
+  lines: readonly GlyphLine[],
+  clusterEnds: ReadonlyMap<number, number>,
+  start: number,
+  end: number,
+): readonly LayoutBox[] {
   if (!Number.isFinite(start) || !Number.isFinite(end)) throw new RangeError('selection offsets must be finite');
   const from = Math.min(start, end);
   const to = Math.max(start, end);
@@ -588,7 +615,7 @@ function selectionRects(lines: readonly GlyphLine[], start: number, end: number)
       run = undefined;
     };
     for (const glyph of line.glyphs) {
-      if (glyph.cluster < from || glyph.cluster >= to) continue;
+      if ((clusterEnds.get(glyph.cluster) ?? glyph.cluster) <= from || glyph.cluster >= to) continue;
       // A gap in glyph order is a visual gap under bidi, so it closes the rectangle rather than
       // widening one across characters that are not selected.
       if (glyph.index !== previousIndex + 1) flush();

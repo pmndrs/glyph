@@ -256,6 +256,49 @@ test('caret and selection resolve to clusters and stay inside the line box', asy
   }
 });
 
+test('word and caret ranges preserve UTF-16 clusters and bidi direction', async () => {
+  const font = await loadFont();
+  const astralText = 'A😀';
+  const astral = mount(font, astralText);
+  const combining = mount(font, 'e\u0301');
+  const rtl = mount(font, 'אב', {
+    style: { fontSize: 16, direction: 'rtl' },
+    contentBox: { width: { mode: 'exact', size: 100 } },
+  });
+  try {
+    const astralPlacements = astral.node.snapshotGlyphs();
+    assert.equal(astralPlacements.words[0].textEnd, astralText.length, 'a word end cannot split a surrogate pair');
+    assert.equal(
+      astralPlacements.selectionRects(2, 3).length,
+      1,
+      'a range inside an astral cluster still selects that cluster',
+    );
+
+    const combiningPlacements = combining.node.snapshotGlyphs();
+    assert.equal(combiningPlacements.words[0].textEnd, 2, 'a word end cannot split a combining cluster');
+
+    const ltrLine = astralPlacements.lines[0];
+    const first = ltrLine.glyphs[0];
+    const internal = astralPlacements.caretAt(first.x + first.advance, ltrLine.baseline);
+    assert.equal(internal.offset, 1);
+    assert.equal(internal.leading, true, 'an internal boundary is the leading edge of the next cluster');
+
+    const rtlPlacements = rtl.node.snapshotGlyphs();
+    const rtlLine = rtlPlacements.lines[0];
+    assert.ok(rtlLine.glyphs.every((glyph) => (glyph.bidiLevel & 1) === 1));
+    const logicalStart = rtlPlacements.caretAt(1000, rtlLine.baseline);
+    const logicalEnd = rtlPlacements.caretAt(-1000, rtlLine.baseline);
+    assert.equal(logicalStart.offset, 0, 'RTL logical start is the visually right edge');
+    assert.equal(logicalStart.leading, true);
+    assert.equal(logicalEnd.offset, 'אב'.length, 'RTL logical end is the visually left edge');
+    assert.equal(logicalEnd.leading, false);
+  } finally {
+    unmount(astral);
+    unmount(combining);
+    unmount(rtl);
+  }
+});
+
 test('glyph flags decode through exported names rather than remembered indices', async () => {
   const font = await loadFont();
   const mounted = mount(font, 'flags');

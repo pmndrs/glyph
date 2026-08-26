@@ -3,7 +3,6 @@ import {
   type FormattedText,
   type GlyphPaintInput,
   type ParagraphSpan,
-  type TextInput,
 } from './formatted-text.js';
 import {
   acquireFontSelectionForRuntime,
@@ -39,11 +38,17 @@ import type { RuntimeShaper } from './shaper.js';
 import { observeTextRuntimeDispose, textRuntimeShaper } from './text-runtime.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 import type { FontSelection, LoadedFont } from './loaded-font.js';
-import type { ParagraphLayoutInspection, ParagraphLayoutSummary, ParagraphMetrics } from './layout.js';
+import {
+  copyParagraphLayoutInspection,
+  type ParagraphLayoutInspection,
+  type ParagraphLayoutSummary,
+  type ParagraphMetrics,
+} from './layout.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 import type { TextRuntime } from './text-runtime.js';
 import type {
   ParagraphContentBox,
+  ParagraphContentProperties,
   ParagraphConstraints,
   ParagraphLayoutPolicy,
   ParagraphStyle,
@@ -93,10 +98,8 @@ const INLINE_ORIGIN_REGISTER = 0;
  * own invariant. That is a defect to report, not a state to handle, so it throws.
  */
 
-export interface ParagraphOptions<Technique extends AnyRasterTechnique> {
+interface ParagraphBaseOptions<Technique extends AnyRasterTechnique> {
   readonly font: FontSelection<Technique>;
-  readonly text: TextInput<Technique>;
-  readonly spans?: readonly ParagraphSpan<Technique>[];
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
   readonly rasterPixelRatio?: number;
@@ -104,7 +107,15 @@ export interface ParagraphOptions<Technique extends AnyRasterTechnique> {
   readonly policy?: ParagraphLayoutPolicy;
 }
 
-export type ParagraphUpdate<Technique extends AnyRasterTechnique> = Partial<ParagraphOptions<Technique>>;
+export type ParagraphOptions<Technique extends AnyRasterTechnique> = ParagraphBaseOptions<Technique> &
+  ParagraphContentProperties<Technique>;
+
+type ParagraphContentUpdate<Technique extends AnyRasterTechnique> =
+  | Readonly<{ text?: string; spans?: readonly ParagraphSpan<Technique>[] }>
+  | Readonly<{ text: FormattedText<Technique>; spans?: never }>;
+
+export type ParagraphUpdate<Technique extends AnyRasterTechnique> = Partial<ParagraphBaseOptions<Technique>> &
+  ParagraphContentUpdate<Technique>;
 
 interface ResolvedParagraphState<Technique extends AnyRasterTechnique> {
   readonly font: FontSelection<Technique>;
@@ -194,8 +205,9 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
    * successful `glyphs()` produces output whose content differs from the previous positioned output.
    * "Positioned output" is everything a renderer or interaction layer consumes: the box and
    * content extents, both baselines, the overflow flag, glyph/line/missing-glyph counts, every
-   * per-glyph record in order (glyph id, cluster, font slot, em size, x, y, flags), and every
-   * per-line record in order (text span, glyph span, baseline, advance). Stable glyph ids are
+   * per-glyph record in order (glyph id, cluster, bidi level, font slot, em size, position,
+   * advance, ink, and flags), and every per-line record in order (text span, glyph span,
+   * baseline, advance, and ink). Stable glyph ids are
    * deliberately excluded: identity bookkeeping that changes without a geometric change must
    * not force a host to read back. Equality is decided by a 96-bit digest of that content, so
    * a missed advance requires a hash collision, and equal output never advances the revision.
@@ -258,17 +270,18 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
     this.#assertActive();
     const resolved = resolveConstraints(constraints);
     const key = axisKey(resolved);
-    const cached = this.#layouts.get(key);
-    if (cached !== undefined) return cached;
-    const { inspection } = this.#query(this.#fullBox(resolved), true);
-    if (inspection === undefined) throw new Error('paragraph glyph query returned no layout inspection');
+    let inspection = this.#layouts.get(key);
+    if (inspection === undefined) {
+      inspection = this.#query(this.#fullBox(resolved), true).inspection;
+      if (inspection === undefined) throw new Error('paragraph glyph query returned no layout inspection');
+      this.#layouts.set(key, inspection);
+    }
     const digest = layoutDigest(inspection);
     if (digest !== this.#lastLayoutDigest) {
       this.#lastLayoutDigest = digest;
       this.#layoutRevision += 1;
     }
-    this.#layouts.set(key, inspection);
-    return inspection;
+    return copyParagraphLayoutInspection(inspection);
   }
 
   /**
@@ -545,6 +558,9 @@ function normalizeParagraphState<Technique extends AnyRasterTechnique>(
   previous?: ResolvedParagraphState<Technique>,
 ): ResolvedParagraphState<Technique> {
   const formatted = typeof properties.text === 'string' ? undefined : (properties.text as FormattedText<Technique>);
+  if (formatted !== undefined && properties.spans !== undefined) {
+    throw new TypeError('formatted paragraph text owns its spans; do not also pass spans');
+  }
   const text = formatted?.text ?? (properties.text as string);
   const stated = formatted?.spans ?? properties.spans ?? [];
   const resolved =
@@ -607,7 +623,7 @@ function layoutDigest(layout: ParagraphLayoutInspection): string {
       lanes[index] = Math.imul(seed ^ byte, 0x0100_0193 + index * 0x9e37_79b9) >>> 0;
     }
   };
-  const mixArray = (array: Uint16Array | Uint32Array | Float32Array): void => {
+  const mixArray = (array: Uint8Array | Uint16Array | Uint32Array | Float32Array): void => {
     const bytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
     for (let index = 0; index < bytes.length; index += 1) mixByte(bytes[index]!);
   };
@@ -620,16 +636,35 @@ function layoutDigest(layout: ParagraphLayoutInspection): string {
   mixNumber(layout.contentHeight);
   mixNumber(layout.firstBaseline);
   mixNumber(layout.lastBaseline);
+  mixNumber(layout.ascent);
+  mixNumber(layout.descent);
+  mixNumber(layout.lineHeight);
+  mixNumber(layout.minContentWidth);
+  mixNumber(layout.maxContentWidth);
   mixNumber(layout.overflowed ? 1 : 0);
   mixNumber(layout.glyphCount);
   mixNumber(layout.lineCount);
   mixNumber(layout.missingGlyphCount);
+  mixNumber(layout.inkBounds === undefined ? 0 : 1);
+  if (layout.inkBounds !== undefined) {
+    mixNumber(layout.inkBounds.x);
+    mixNumber(layout.inkBounds.y);
+    mixNumber(layout.inkBounds.width);
+    mixNumber(layout.inkBounds.height);
+  }
+  mixArray(layout.fontHandles);
   mixArray(layout.glyphIds);
   mixArray(layout.clusters);
+  mixArray(layout.glyphBidiLevels);
   mixArray(layout.glyphFontSlots);
   mixArray(layout.glyphFontSizes);
   mixArray(layout.x);
   mixArray(layout.y);
+  mixArray(layout.glyphAdvances);
+  mixArray(layout.glyphInkX);
+  mixArray(layout.glyphInkY);
+  mixArray(layout.glyphInkWidths);
+  mixArray(layout.glyphInkHeights);
   mixArray(layout.glyphFlags);
   mixArray(layout.lineTextStarts);
   mixArray(layout.lineTextEnds);
@@ -637,6 +672,17 @@ function layoutDigest(layout: ParagraphLayoutInspection): string {
   mixArray(layout.lineGlyphCounts);
   mixArray(layout.lineBaselines);
   mixArray(layout.lineAdvances);
+  for (const line of layout.lines) {
+    mixNumber(line.ascent);
+    mixNumber(line.descent);
+    mixNumber(line.lineHeight);
+    mixNumber(line.inkBounds === undefined ? 0 : 1);
+    if (line.inkBounds === undefined) continue;
+    mixNumber(line.inkBounds.x);
+    mixNumber(line.inkBounds.y);
+    mixNumber(line.inkBounds.width);
+    mixNumber(line.inkBounds.height);
+  }
   return lanes.map((lane) => lane.toString(16).padStart(8, '0')).join('');
 }
 

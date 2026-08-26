@@ -61,6 +61,10 @@ export interface BaselineMetrics {
  * so both ship under names that cannot be confused.
  */
 export interface ParagraphMeasurement extends BaselineMetrics {
+  /** Whole-paragraph baseline metrics use `firstBaseline` as their reference baseline. */
+  readonly ascent: number;
+  readonly descent: number;
+  readonly lineHeight: number;
   /** Resolved paragraph box width in local layout units. */
   readonly width: number;
   /** Resolved paragraph box height in local layout units. */
@@ -156,6 +160,8 @@ export interface ParagraphLayout extends ParagraphMeasurement {
   readonly glyphFontSlots: Uint16Array;
   readonly glyphIds: Uint16Array;
   readonly clusters: Uint32Array;
+  /** Resolved Unicode bidi embedding level per glyph; odd levels run right-to-left. */
+  readonly glyphBidiLevels: Uint8Array;
   /** Effective em size for each glyph in local layout units. */
   readonly glyphFontSizes: Float32Array;
   readonly x: Float32Array;
@@ -191,6 +197,34 @@ export interface ParagraphLayout extends ParagraphMeasurement {
  */
 export interface ParagraphLayoutInspection extends ParagraphLayout, ParagraphLayoutSummary, ParagraphIntrinsicWidths {
   readonly glyphStableIds: Uint32Array;
+}
+
+/** @internal Returns caller-owned columns while an integration keeps its canonical cached copy private. */
+export function copyParagraphLayoutInspection(layout: ParagraphLayoutInspection): ParagraphLayoutInspection {
+  return Object.freeze({
+    ...layout,
+    fontHandles: layout.fontHandles.slice(),
+    glyphStableIds: layout.glyphStableIds.slice(),
+    glyphFontSlots: layout.glyphFontSlots.slice(),
+    glyphIds: layout.glyphIds.slice(),
+    clusters: layout.clusters.slice(),
+    glyphBidiLevels: layout.glyphBidiLevels.slice(),
+    glyphFontSizes: layout.glyphFontSizes.slice(),
+    x: layout.x.slice(),
+    y: layout.y.slice(),
+    glyphAdvances: layout.glyphAdvances.slice(),
+    glyphInkX: layout.glyphInkX.slice(),
+    glyphInkY: layout.glyphInkY.slice(),
+    glyphInkWidths: layout.glyphInkWidths.slice(),
+    glyphInkHeights: layout.glyphInkHeights.slice(),
+    glyphFlags: layout.glyphFlags.slice(),
+    lineTextStarts: layout.lineTextStarts.slice(),
+    lineTextEnds: layout.lineTextEnds.slice(),
+    lineGlyphStarts: layout.lineGlyphStarts.slice(),
+    lineGlyphCounts: layout.lineGlyphCounts.slice(),
+    lineBaselines: layout.lineBaselines.slice(),
+    lineAdvances: layout.lineAdvances.slice(),
+  });
 }
 
 export interface FontSlotRecord {

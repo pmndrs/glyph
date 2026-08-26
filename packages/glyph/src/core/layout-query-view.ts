@@ -85,10 +85,9 @@ export function readTextEngineMeasurements(
         contentHeight,
         firstBaseline,
         lastBaseline,
-        // The paragraph's ascent is its box top to the first baseline; its descent is the last
-        // baseline to the bottom of the content it actually occupies.
+        // Whole-paragraph BaselineMetrics use the first baseline as their one reference.
         ascent,
-        descent: contentHeight - lastBaseline,
+        descent: contentHeight - ascent,
         lineHeight: contentHeight,
         inkBounds: inkBoundsOf(view, record, inkMeasured),
         overflowed: (flags & textShaperAbi.engine.measurementFlags.overflowed) !== 0,
@@ -134,6 +133,7 @@ export function readTextEngineLayouts(
     const glyphFontSlots = new Uint16Array(glyphCount);
     const glyphIds = new Uint16Array(glyphCount);
     const clusters = new Uint32Array(glyphCount);
+    const glyphBidiLevels = new Uint8Array(glyphCount);
     const glyphFontSizes = new Float32Array(glyphCount);
     const x = new Float32Array(glyphCount);
     const y = new Float32Array(glyphCount);
@@ -163,6 +163,9 @@ export function readTextEngineLayouts(
       glyphFontSlots[glyphIndex] = fontSlot;
       glyphIds[glyphIndex] = view.u32(glyph + recordLayout.itemStart);
       clusters[glyphIndex] = view.u32(glyph + recordLayout.textStart);
+      const bidiLevel = view.u32(glyph + recordLayout.itemCount);
+      if (bidiLevel > 125) throw new RangeError('layout inspection glyph has an invalid bidi level');
+      glyphBidiLevels[glyphIndex] = bidiLevel;
       glyphFontSizes[glyphIndex] = view.f32(glyph + recordLayout.inlineExtent);
       x[glyphIndex] = view.f32(glyph + recordLayout.inlineStart);
       y[glyphIndex] = view.f32(glyph + recordLayout.blockStart);
@@ -210,6 +213,7 @@ export function readTextEngineLayouts(
       glyphFontSlots,
       glyphIds,
       clusters,
+      glyphBidiLevels,
       glyphFontSizes,
       x,
       y,
@@ -240,6 +244,7 @@ export function readTextEngineLayouts(
         glyphFontSlots,
         glyphIds,
         clusters,
+        glyphBidiLevels,
         glyphFontSizes,
         x,
         y,

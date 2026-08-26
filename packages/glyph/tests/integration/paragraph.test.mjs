@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import * as THREE from 'three/webgpu';
 
-import { createTextRuntime, defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
+import { createTextRuntime, defineRasterResourceId, defineRasterTechnique, txt } from '@pmndrs/glyph';
 import { defineTechniqueSchema, Paragraph, registerRasterPlanProgram, techniqueProgram } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
@@ -189,6 +189,21 @@ test('intrinsic widths ride one measurement and match independent content oracle
   }
 });
 
+test('multi-line paragraph baseline metrics decompose around the first baseline', async () => {
+  await using boot = await bootstrap();
+  const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+  try {
+    const metrics = paragraph.layout({ width: { mode: 'exact', size: 120 } });
+    assert.ok(metrics.lineCount > 1, 'the fixture must wrap to distinguish first and last baselines');
+    assert.equal(metrics.ascent, metrics.firstBaseline);
+    assert.ok(Math.abs(metrics.ascent + metrics.descent - metrics.lineHeight) < 1e-6);
+    assert.equal(metrics.lineHeight, metrics.contentHeight);
+    assert.ok(metrics.lastBaseline > metrics.firstBaseline);
+  } finally {
+    paragraph.dispose();
+  }
+});
+
 test('repeated probes answer from cache and leave authored state untouched', async () => {
   await using boot = await bootstrap();
   const paragraph = new Paragraph({
@@ -234,7 +249,7 @@ test('layoutRevision advances exactly when positioned output differs', async () 
     const wideProjection = projectLayout(wide);
 
     // Asking again at the same constraints is the cached object, so nothing moves.
-    assert.equal(paragraph.glyphs({ width: { mode: 'at-most', size: 600 } }), wide);
+    assert.deepEqual(projectLayout(paragraph.glyphs({ width: { mode: 'at-most', size: 600 } })), wideProjection);
     assert.equal(paragraph.layoutRevision, 1, 'a cached answer must not advance the revision');
 
     // A wider at-most box that fits the same lines produces identical positioned output.
@@ -246,6 +261,10 @@ test('layoutRevision advances exactly when positioned output differs', async () 
     const narrow = paragraph.glyphs({ width: { mode: 'exact', size: 140 } });
     assert.equal(paragraph.layoutRevision, 2, 'changed positioned output advances by exactly one');
     assert.ok(narrow.lineCount > wide.lineCount, 'a narrower box wraps into more lines');
+
+    // Returning to a previously cached answer is still a positioned-output transition.
+    assert.deepEqual(projectLayout(paragraph.glyphs({ width: { mode: 'at-most', size: 600 } })), wideProjection);
+    assert.equal(paragraph.layoutRevision, 3, 'switching back to cached output advances the revision');
   } finally {
     paragraph.dispose();
   }
@@ -269,6 +288,38 @@ test('update invalidates cached measurements, and meaningless input throws where
     // Disposed paragraphs stop answering entirely.
     paragraph.dispose();
     assert.throws(() => paragraph.layout(), /disposed/);
+  } finally {
+    paragraph.dispose();
+  }
+});
+
+test('positioned arrays are caller-owned and cannot corrupt the cached answer', async () => {
+  await using boot = await bootstrap();
+  const paragraph = new Paragraph({ font: boot.font, text: TEXT, style: { fontSize: 16 } });
+  try {
+    const first = paragraph.glyphs({ width: { mode: 'exact', size: 300 } });
+    const expected = projectLayout(first);
+    first.x.fill(-12345);
+    first.glyphIds.fill(0);
+    const second = paragraph.glyphs({ width: { mode: 'exact', size: 300 } });
+    assert.notEqual(second, first);
+    assert.deepEqual(projectLayout(second), expected);
+  } finally {
+    paragraph.dispose();
+  }
+});
+
+test('formatted paragraph text is the only authority for its spans', async () => {
+  await using boot = await bootstrap();
+  const formatted = txt`formatted`;
+  assert.throws(
+    () => new Paragraph({ font: boot.font, text: formatted, spans: [] }),
+    /formatted paragraph text owns its spans/,
+  );
+  const paragraph = new Paragraph({ font: boot.font, text: 'plain' });
+  try {
+    assert.throws(() => paragraph.update({ text: formatted, spans: [] }), /formatted paragraph text owns its spans/);
+    assert.equal(paragraph.text, 'plain', 'a rejected update leaves desired state unchanged');
   } finally {
     paragraph.dispose();
   }
@@ -305,6 +356,11 @@ function projectMeasurement(measurement) {
     contentHeight: measurement.contentHeight,
     firstBaseline: measurement.firstBaseline,
     lastBaseline: measurement.lastBaseline,
+    ascent: measurement.ascent,
+    descent: measurement.descent,
+    lineHeight: measurement.lineHeight,
+    minContentWidth: measurement.minContentWidth,
+    maxContentWidth: measurement.maxContentWidth,
     overflowed: measurement.overflowed,
     glyphCount: measurement.glyphCount,
     lineCount: measurement.lineCount,
@@ -342,9 +398,15 @@ function projectLayout(layout) {
     glyphFontSlots: Array.from(layout.glyphFontSlots),
     glyphIds: Array.from(layout.glyphIds),
     clusters: Array.from(layout.clusters),
+    glyphBidiLevels: Array.from(layout.glyphBidiLevels),
     glyphFontSizes: Array.from(layout.glyphFontSizes),
     x: Array.from(layout.x),
     y: Array.from(layout.y),
+    glyphAdvances: Array.from(layout.glyphAdvances),
+    glyphInkX: Array.from(layout.glyphInkX),
+    glyphInkY: Array.from(layout.glyphInkY),
+    glyphInkWidths: Array.from(layout.glyphInkWidths),
+    glyphInkHeights: Array.from(layout.glyphInkHeights),
     glyphFlags: Array.from(layout.glyphFlags),
     lineTextStarts: Array.from(layout.lineTextStarts),
     lineTextEnds: Array.from(layout.lineTextEnds),

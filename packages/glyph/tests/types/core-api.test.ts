@@ -1,9 +1,16 @@
-import { createTextRuntime } from '@pmndrs/glyph';
+import {
+  createTextRuntime,
+  type AnyRasterTechnique,
+  type FontSelection,
+  type FormattedText,
+  type ParagraphSpan,
+} from '@pmndrs/glyph';
 import {
   compileFontBinding,
   compileTextEngineFrameUpdate,
   createRuntimeShaper,
   id,
+  Paragraph,
   readTextEngineLayouts,
   readTextEngineMeasurements,
   TextEngineHost,
@@ -102,3 +109,17 @@ void policyBytes;
 void techniqueId;
 void brandedTechniqueId;
 void programContext;
+
+// Paragraph content has one authority: plain text may carry explicit spans,
+// while formatted text carries its own spans and cannot be combined with another array.
+declare const paragraphFont: FontSelection<AnyRasterTechnique>;
+declare const formattedText: FormattedText<AnyRasterTechnique>;
+declare const paragraphSpans: readonly ParagraphSpan<AnyRasterTechnique>[];
+const paragraph = new Paragraph({ font: paragraphFont, text: 'plain', spans: paragraphSpans });
+new Paragraph({ font: paragraphFont, text: formattedText });
+// @ts-expect-error Formatted text already owns its spans.
+new Paragraph({ font: paragraphFont, text: formattedText, spans: paragraphSpans });
+paragraph.update({ text: 'updated', spans: paragraphSpans });
+paragraph.update({ text: formattedText });
+// @ts-expect-error Updates cannot provide two span authorities either.
+paragraph.update({ text: formattedText, spans: paragraphSpans });
