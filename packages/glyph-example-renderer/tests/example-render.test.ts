@@ -47,7 +47,7 @@ const STYLE_ID = id('style', 'glyph-example-renderer-test/style');
 const FLOW_THREAD_ID = id('flow-thread', 'glyph-example-renderer-test/flow-thread');
 const REGION_ID = id('region', 'glyph-example-renderer-test/region');
 const TRANSFORM_INDEX = 1;
-const EXPECTED_RAW_AND_RETAINED_GLYPHS = 9;
+const EXPECTED_RECOVERED_TEXT_GLYPHS = 4;
 
 class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
   readonly primary = new RecordingExampleRendererDevice();
@@ -266,18 +266,21 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 4]);
       expect(bufferSnapshot(device.primary.buffers)).toEqual(bufferSnapshot(device.oracle.buffers));
       expect(device.oracle.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 3, 4]);
+      await engine.render({ paragraphMutations: [{ opcode: 'remove', paragraphId: PARAGRAPH_ID }] });
 
       expect(() => engine.createText({ fontStack: STACK_HANDLE, text: 'invalid', fontSize: Number.NaN })).toThrow(
         'fontSize',
       );
       const text = engine.createText({ fontStack: STACK_HANDLE, text: 'retained', fontSize: 42, width: 512 });
-      expect((await text.render()).draws.length).toBeGreaterThan(0);
+      const initialText = await text.render();
+      expect(initialText.draws.length).toBeGreaterThan(0);
+      const initialTransformIds = initialText.draws.map(({ transformId }) => transformId);
       device.failNextSubmission = true;
       text.update({ text: 'WXYZ' });
       await expect(text.render()).rejects.toThrow('injected submission failure');
       const recoveredText = await text.render();
       expect(recoveredText.primitiveRecords.reduce((count, primitive) => count + primitive.recordCount, 0)).toBe(
-        EXPECTED_RAW_AND_RETAINED_GLYPHS,
+        EXPECTED_RECOVERED_TEXT_GLYPHS,
       );
       text.update({ text: 'updated', foregroundRgba: 0xff80_40ff });
       expect((await text.render()).draws.length).toBeGreaterThan(0);
@@ -287,6 +290,10 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       await inFlight;
       await text.dispose();
       expect(() => text.render()).toThrow('disposed');
+      const replacement = engine.createText({ fontStack: STACK_HANDLE, text: 'replacement', fontSize: 42, width: 512 });
+      const replacementText = await replacement.render();
+      expect(replacementText.draws.map(({ transformId }) => transformId)).toEqual(initialTransformIds);
+      await replacement.dispose();
       engine.dispose();
       expect(() => engine.registerFont(font)).toThrow('disposed');
       expect(device.discardedResourceBatches).toBe(1);
