@@ -23,6 +23,12 @@
   ordinary tree-shaken browser core changes by only 27 raw / 9 gzip / 47 Brotli bytes. Shaper Wasm grows by 1,668 raw /
   774 gzip / 372 Brotli bytes. The reviewed evidence is regenerated at the final source head and passes the size gate.
 
+- **Final layout and renderer performance gates found no material regression** — Eight matched Rust/Wasm matrices cover
+  Bitmap, MTSDF, and Slug under ordered and stable allocation plus CJK Bitmap at roughly 22,000 glyphs. Across 35
+  low-variance cases the median head-to-base change is +0.29%; 101- and 301-sample confirmations put the largest apparent
+  changes between -0.52% and +1.39%. The Three lab retains one 12-instance draw at a 0.090 ms generic warm median, while
+  TypeGPU/WebGPU produces changed visible pixels with zero idle submissions at a 0.320 ms submission median.
+
 - **Attached text can measure desired layout before its first frame** — `Text.layout()` now creates or reconciles its
   batch after attachment and uses a non-publishing paragraph query without matrix traversal, material or GPU realization,
   or draw publication. Sequential group queries share one speculative lifecycle candidate that the first traversal can
