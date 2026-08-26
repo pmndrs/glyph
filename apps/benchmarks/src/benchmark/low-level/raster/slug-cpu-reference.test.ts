@@ -155,6 +155,7 @@ function specimenLayout(
     glyphInkWidths: new Float32Array(glyphCount),
     glyphInkHeights: new Float32Array(glyphCount),
     glyphFlags: new Uint16Array(glyphCount),
+    glyphBidiLevels: new Uint8Array(glyphCount),
     lineTextStarts: new Uint32Array([0]),
     lineTextEnds: new Uint32Array([1]),
     lineGlyphStarts: new Uint32Array([0]),

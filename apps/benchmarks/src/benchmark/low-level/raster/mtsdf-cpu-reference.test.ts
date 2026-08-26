@@ -203,6 +203,7 @@ function specimenLayout(
     glyphInkWidths: new Float32Array(overrides.glyphIds?.length ?? 1),
     glyphInkHeights: new Float32Array(overrides.glyphIds?.length ?? 1),
     glyphFlags: new Uint16Array(overrides.glyphIds?.length ?? 1),
+    glyphBidiLevels: new Uint8Array(overrides.glyphIds?.length ?? 1),
     lineTextStarts: new Uint32Array([0]),
     lineTextEnds: new Uint32Array([1]),
     lineGlyphStarts: new Uint32Array([0]),
