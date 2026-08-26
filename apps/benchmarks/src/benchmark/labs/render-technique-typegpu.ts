@@ -1,5 +1,5 @@
 import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
-import { id, textRuntimeShaper } from '@pmndrs/glyph/core';
+import { textRuntimeShaper } from '@pmndrs/glyph/core';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { ExampleTextEngine, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
@@ -9,8 +9,6 @@ import {
   sourceUrlForFixture,
 } from '../../workloads/font-assets/runtime';
 
-const STACK_HANDLE = id('font-stack', 'labs/typegpu-example/font-stack');
-const SESSION_HANDLE = id('session', 'labs/typegpu-example/session');
 const SUBMISSION_WARMUP = 20;
 const SUBMISSION_SAMPLES = 101;
 
@@ -46,10 +44,10 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       raster: { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
     });
     const binding = engine.registerFont(font);
-    engine.registerFontStack(STACK_HANDLE, [binding]);
-    engine.openSession(SESSION_HANDLE);
+    const stack = engine.registerFontStack([binding]);
+    engine.openSession();
     const text = engine.createText({
-      fontStack: STACK_HANDLE,
+      fontStack: stack,
       text: 'Portable TypeGPU',
       fontSize: 64,
       width: 768,

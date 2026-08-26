@@ -145,7 +145,20 @@ export class ExampleTextEngine {
     const pending = this.#device?.prepareResources(resources);
     try {
       this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
-      pending?.commit();
+      try {
+        pending?.commit();
+      } catch (commitError) {
+        try {
+          this.#host.disposeFontBinding(bindingHandle);
+        } catch (disposeError) {
+          throw new AggregateError(
+            [commitError, disposeError],
+            'example renderer resource commit and font-binding rollback both failed',
+            { cause: commitError },
+          );
+        }
+        throw commitError;
+      }
     } catch (error) {
       pending?.discard();
       throw error;
