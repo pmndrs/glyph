@@ -2,16 +2,20 @@ import { Text, useFont } from '@pmndrs/glyph/react';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/three/slug';
-import { Environment, Lightformer, Stats } from '@react-three/drei';
+import { Environment, Lightformer } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
-import { useMemo, useRef } from 'react';
+import { Suspense, lazy, useMemo, useRef } from 'react';
 import { normalize, positionLocal, uniform, vec3 } from 'three/tsl';
 import { DirectionalLight, DoubleSide, MeshPhysicalNodeMaterial, NormalBlending, Vector2 } from 'three/webgpu';
 
 import fontUrl from '../assets/playwrite-glyph.font.glb?url';
 import { Chorus } from './chorus';
-import { live } from './controls';
-import { useDebugVisible } from './debug-visibility';
+import { live } from './look';
+
+// `import.meta.env.DEV` is a build-time constant, so in production this folds to
+// `null` and the `import()` below becomes unreachable — the counter and drei's
+// stats dependency never reach the bundle.
+const DevStats = import.meta.env.DEV ? lazy(() => import('./dev/stats')) : null;
 import { publishMarkBottom } from './anchor';
 import { Effects } from './effects';
 import { envelope, shake } from './drift';
@@ -43,7 +47,6 @@ export function Scene() {
   const font = useFont(FONT);
   const viewport = useThree((state) => state.viewport);
   const camera = useThree((state) => state.camera);
-  const debugVisible = useDebugVisible();
 
   // Filtered camera state. The noise is sampled as a target and the camera is
   // eased toward it rather than snapped onto it: stacked octaves are continuous
@@ -191,7 +194,11 @@ export function Scene() {
 
   return (
     <>
-      {import.meta.env.DEV && debugVisible && <Stats />}
+      {DevStats !== null && (
+        <Suspense fallback={null}>
+          <DevStats />
+        </Suspense>
+      )}
 
       <ambientLight color="#e7ecf6" intensity={live.ambient} />
       <directionalLight color="#f2f6ff" intensity={live.keyIntensity} ref={key} />
