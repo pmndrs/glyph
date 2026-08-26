@@ -141,25 +141,25 @@ sequenceDiagram
   App->>Text: update(...) then render()
 ```
 
-| Step | Call | What enters | What comes back / changes |
-| --- | --- | --- | --- |
-| Runtime | `createTextRuntime()` | text-shaper Wasm | `TextRuntime` |
-| Host | `new TextEngineHost(textRuntimeShaper(runtime))` | synchronous shaper bridge | host registries and wire identities |
-| Policy | `host.registerPolicy(handle, bytes)` | host-owned handle and compiled policy | policy installed in the shaper |
-| Font load | `runtime.loadFont(request)` | baked/source font and raster technique | typed `LoadedFont` |
-| Font compile | `compileRasterFont(font, identities)` | loaded font and host identity registry | binding bytes plus immutable portable resources |
-| Resource prepare | `device.prepareResources(inputs)` | named portable resources | validated candidate with `commit()` |
-| Binding | `host.registerFontBinding(...)` | host binding handle, shaping-font handle, bytes | font binding installed |
-| Stack | `host.registerFontStack(handle, bindings)` | host stack handle and binding handles | selectable shaping/raster stack |
-| Session | `host.createSession(options)` | session handle and capacities | `TextEngineSession` |
-| Text create | `engine.createText(options)` | font stack, text, style, and layout box | retained application text with compiler-managed paragraph/style/region identities |
-| Text update | `text.update(changes)` | changed content, style, or dimensions | desired state marked dirty; no shaping occurs yet |
-| Text render | `text.render()` | current desired state | minimal frame mutations sent through the existing session |
-| Frame | `session.update(requestBytes)` | validated mutations, constraints, and revision fences | borrowed render-plan publication |
-| Ownership | `session.assertLive()` then `session.retain()` | borrowed publication | owned publication safe across later calls |
-| Decode | `readDrawList(retained)` | retained plan bytes | draws, primitives, buffers, resources, patches, retirements |
-| Submit | `device.prepareSubmission(list).commit()` | complete candidate plan | staged GPU buffers and commands become one accepted renderer state |
-| Pixel proof | `await device.readPixels()` | accepted offscreen WebGPU target | tightly packed RGBA bytes |
+| Step             | Call                                             | What enters                                           | What comes back / changes                                                         |
+| ---------------- | ------------------------------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Runtime          | `createTextRuntime()`                            | text-shaper Wasm                                      | `TextRuntime`                                                                     |
+| Host             | `new TextEngineHost(textRuntimeShaper(runtime))` | synchronous shaper bridge                             | host registries and wire identities                                               |
+| Policy           | `host.registerPolicy(handle, bytes)`             | host-owned handle and compiled policy                 | policy installed in the shaper                                                    |
+| Font load        | `runtime.loadFont(request)`                      | baked/source font and raster technique                | typed `LoadedFont`                                                                |
+| Font compile     | `compileRasterFont(font, identities)`            | loaded font and host identity registry                | binding bytes plus immutable portable resources                                   |
+| Resource prepare | `device.prepareResources(inputs)`                | named portable resources                              | validated candidate with `commit()`                                               |
+| Binding          | `host.registerFontBinding(...)`                  | host binding handle, shaping-font handle, bytes       | font binding installed                                                            |
+| Stack            | `host.registerFontStack(handle, bindings)`       | host stack handle and binding handles                 | selectable shaping/raster stack                                                   |
+| Session          | `host.createSession(options)`                    | session handle and capacities                         | `TextEngineSession`                                                               |
+| Text create      | `engine.createText(options)`                     | font stack, text, style, and layout box               | retained application text with compiler-managed paragraph/style/region identities |
+| Text update      | `text.update(changes)`                           | changed content, style, or dimensions                 | desired state marked dirty; no shaping occurs yet                                 |
+| Text render      | `text.render()`                                  | current desired state                                 | minimal frame mutations sent through the existing session                         |
+| Frame            | `session.update(requestBytes)`                   | validated mutations, constraints, and revision fences | borrowed render-plan publication                                                  |
+| Ownership        | `session.assertLive()` then `session.retain()`   | borrowed publication                                  | owned publication safe across later calls                                         |
+| Decode           | `readDrawList(retained)`                         | retained plan bytes                                   | draws, primitives, buffers, resources, patches, retirements                       |
+| Submit           | `device.prepareSubmission(list).commit()`        | complete candidate plan                               | staged GPU buffers and commands become one accepted renderer state                |
+| Pixel proof      | `await device.readPixels()`                      | accepted offscreen WebGPU target                      | tightly packed RGBA bytes                                                         |
 
 ### 1. Assemble and register the host policy
 
@@ -207,10 +207,7 @@ const program = createRasterPolicyProgram(glyphExamplePlanProgram, {
   allocationMode: 'ordered',
   identityRegistry: host.wireIdentities,
 });
-host.registerPolicy(
-  POLICY_HANDLE,
-  compileRenderPolicy({ capabilitySets: [capabilities], programs: [program] }),
-);
+host.registerPolicy(POLICY_HANDLE, compileRenderPolicy({ capabilitySets: [capabilities], programs: [program] }));
 ```
 
 `compileRenderPolicy()` validates the entire descriptor before allocating output and assigns capability-set wire IDs by
@@ -319,20 +316,21 @@ helper as a model or decode directly from those `/core` readers.
 
 The device validates into candidate owned state before `commit()`: buffer generations and dirty patches, resource
 generations, primitive record spans, program/technique identity, required named bindings, geometry, draw order, and exact
-retirements. The TypeGPU commit then awaits a WebGPU validation scope and submitted work before publishing the CPU oracle
-state. Only a successful commit advances the consumed-plan and publication-generation fences. A rejected candidate releases
-its staged objects and leaves the last accepted renderer state intact.
+retirements. The TypeGPU commit awaits its WebGPU validation scope before publishing the CPU oracle state, but it does not
+wait for queue completion on every frame. Only a successful commit advances the consumed-plan and
+publication-generation fences. A rejected candidate releases its staged objects and leaves the last accepted renderer
+state intact.
 
 ### Which numeric identities remain
 
-| Identity | Who chooses it | Why it remains visible |
-| --- | --- | --- |
-| Capability-set wire ID | `compileRenderPolicy()` | Pure ABI bookkeeping; omitted from authored capability objects |
-| Technique/program/resource wire IDs | `RenderWireIdentityRegistry` | Derived from stable string identities and collision-checked |
-| Policy buffer slot | policy/technique author | `id('buffer', name)` is referenced by policy stores and renderer bindings |
-| Policy handle | engine | `id('policy', name)` is reused by registration and each frame request |
-| Binding, stack, session handles | engine | Domain-branded `id()` results are reused across the corresponding calls |
-| Resource generation | engine/device | Distinguishes replacement and exact retirement lifetimes |
+| Identity                            | Who chooses it               | Why it remains visible                                                    |
+| ----------------------------------- | ---------------------------- | ------------------------------------------------------------------------- |
+| Capability-set wire ID              | `compileRenderPolicy()`      | Pure ABI bookkeeping; omitted from authored capability objects            |
+| Technique/program/resource wire IDs | `RenderWireIdentityRegistry` | Derived from stable string identities and collision-checked               |
+| Policy buffer slot                  | policy/technique author      | `id('buffer', name)` is referenced by policy stores and renderer bindings |
+| Policy handle                       | engine                       | `id('policy', name)` is reused by registration and each frame request     |
+| Binding, stack, session handles     | engine                       | Domain-branded `id()` results are reused across the corresponding calls   |
+| Resource generation                 | engine/device                | Distinguishes replacement and exact retirement lifetimes                  |
 
 ## 1. Implementing a portable technique plan
 
