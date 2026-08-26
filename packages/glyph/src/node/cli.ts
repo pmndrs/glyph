@@ -344,7 +344,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
             fontFaceIndex,
             ...(bitmapStrikes === undefined ? {} : { bitmapStrikes }),
             msdf,
-    ...(msdfOptions === undefined ? {} : { msdfOptions }),
+            ...(msdfOptions === undefined ? {} : { msdfOptions }),
             slug,
             ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
             check,
