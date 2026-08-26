@@ -374,7 +374,9 @@ the last accepted scene. (`docs/planning/session-handoff.md`)
 Use the last engine-accepted publication's `engineRevision`, but the last device-accepted publication's `planRevision` and
 `publicationGeneration`, for the next update. Copying owns bytes; it does not prove that their patches and resources became
 live. If a renderer rejects a candidate, keep the device-accepted values unchanged. The next update then publishes a safe
-checkpoint instead of replaying copied bytes or latching stale renderer state.
+checkpoint instead of replaying copied bytes or latching stale renderer state. Schedule that update only after an explicit
+recoverable renderer transition, such as rebuilding a lost device; an invalid plan is an engine defect and an unchanged
+frame must not retry it.
 (`packages/glyph-example-renderer/src/engine.ts`, `docs/planning/decision-register.md`, D-279)
 
 ## 6. Read the plan
@@ -543,9 +545,10 @@ not prove that storage associated with an earlier publication can be reused or r
 retirement while renderer work still depended on that storage. (`docs/planning/decision-register.md:235`)
 
 Three consumes the borrow synchronously. If material or resource realization throws, it keeps the last accepted plan
-revision and generation and requests a fresh checkpoint on the next engine call. It does not copy or replay the rejected
-publication. Device-loss recovery follows the same shape: discard device-owned resources, create a replacement resource
-pool, then realize a complete checkpoint on the new device. (`packages/glyph/src/three/text.ts`)
+revision and generation, preserves the error, and does not retry an unchanged frame. Assigning new material or other
+renderer-relevant state requests a fresh checkpoint without copying the rejected publication. Three's plan target does not
+own the GPU device; a device-owning renderer instead discards its lost-device resource pool, creates a replacement, and
+then explicitly requests and realizes a complete checkpoint. (`packages/glyph/src/three/text.ts`)
 
 ## 8. Apply patches instead of uploading whole buffers
 

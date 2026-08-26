@@ -120,8 +120,8 @@ application asserts that blending order is irrelevant.
 
 Capacity policy controls the instance arena:
 
-| Policy  | Behavior                                                    |
-| ------- | ----------------------------------------------------------- |
+| Policy  | Behavior                                                                                   |
+| ------- | ------------------------------------------------------------------------------------------ |
 | `grow`  | Grow retained storage to fit the group.                                                    |
 | `chunk` | Use bounded chunks when the group exceeds the initial size.                                |
 | `fixed` | Keep the last accepted draw while desired text exceeds the declared pre-shape slot budget. |
@@ -231,9 +231,9 @@ if (resolved !== spans) editor.reportOffsetsThatSplitACluster(resolved);
 ```
 
 Errors are retained on `text.error` and the owning `group.error`, then forwarded to `onError`. They do not escape Three.js
-scene traversal. A renderer-side failure leaves the Rust publication unconsumed; the next group traversal reapplies its
-owned bytes before another engine delta is requested. There is no public `retry()`: `synchronize()` already replays an
-unconsumed publication first, so a caller had nothing to do that the next frame did not (D-267).
+scene traversal. A renderer-side failure leaves the last accepted draw state live and the error visible. Unchanged group
+traversals do not retry it. Assigning new material or other renderer-relevant state requests a checkpoint from the last
+accepted plan revision; malformed engine output remains a defect rather than a supported recovery state (D-285).
 
 ## Measure desired layout and inspect committed glyphs
 

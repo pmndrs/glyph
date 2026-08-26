@@ -6,8 +6,9 @@
   cross-host frame references fail before invalidating the last publication, and scoped ID provenance follows a
   successful registration. Live sessions retain their policy and font stacks; failed disposal remains retryable.
   Owned publication copies now use package-private runtime provenance instead of an exported forgeable symbol. Copying
-  does not advance renderer acceptance. Three consumes the A/B borrow directly and recovers realization failure through
-  a fresh checkpoint rather than retaining and replaying rejected bytes. The core
+  does not advance renderer acceptance. Three consumes the A/B borrow directly, preserves realization errors without
+  retrying unchanged frames, and requests a fresh checkpoint only after explicit renderer-relevant invalidation. Malformed
+  emitted plans remain engine defects rather than recovery input. The core
   reference also fixes the lifecycle map: compiled payloads are portable data, while each renderer owns per-device GPU
   realization and cross-session leases.
 

@@ -357,7 +357,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   runtime.dispose();
 });
 
-test('renderer rejection recovers through a fresh engine checkpoint without replaying copied bytes', async (t) => {
+test('renderer rejection waits for explicit invalidation and then checkpoints without copied bytes', async (t) => {
   const copyPublication = TextEngineSession.prototype.copyPublication;
   let publicationCopies = 0;
   TextEngineSession.prototype.copyPublication = function (publication) {
@@ -403,14 +403,20 @@ test('renderer rejection recovers through a fresh engine checkpoint without repl
 
   failMaterial = false;
   scene.updateMatrixWorld();
+  assert.match(String(group.error), /deliberate material realization failure/u);
+  assert.equal(instrumented.crossings, 1, 'an unchanged frame must not retry a renderer implementation failure');
+  assert.equal(group.children.filter((child) => child.isMesh).length, 0);
+
+  label.material = material;
+  scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
   assert.equal(label.error, undefined);
-  assert.equal(instrumented.crossings, 2, 'recovery must request a checkpoint from the engine');
+  assert.equal(instrumented.crossings, 2, 'explicit material invalidation must request a checkpoint from the engine');
   assert.equal(publicationCopies, 0, 'Three must not copy a borrowed publication for renderer recovery');
   assert.equal(errors.length, 1, 'a successful checkpoint must not repeat the old failure');
   assert.equal(group.children.filter((child) => child.isMesh).length, 1);
 
-  label.material = material;
+  label.text = 'New input after recovery';
   scene.updateMatrixWorld();
   assert.equal(group.error, undefined);
   assert.equal(label.error, undefined);

@@ -428,8 +428,8 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
       this.#binding.reconcileStandalone(eraseTextTechnique(this));
       try {
         this.#binding.synchronize();
-        // Keep a renderer failure visible until checkpoint recovery commits.
-        if (!this.#binding.failed) this.#error = undefined;
+        // Keep a renderer failure visible until new authored renderer state commits.
+        if (!this.#binding.hasRejectedRendererUpdate) this.#error = undefined;
       } catch (error) {
         this.#error = error;
         this.onError?.(error);
@@ -582,8 +582,8 @@ export class TextGroup extends THREE.Object3D {
             if (this.#transformTracker.pathChanged(text, this)) this.#binding.markTransformDirty(text);
           }
           this.#binding.synchronize();
-          // Keep a renderer failure visible until checkpoint recovery commits.
-          if (!this.#binding.failed) this.#error = undefined;
+          // Keep a renderer failure visible until new authored renderer state commits.
+          if (!this.#binding.hasRejectedRendererUpdate) this.#error = undefined;
         } catch (error) {
           this.#error = error;
           this.onError?.(error);
@@ -592,7 +592,7 @@ export class TextGroup extends THREE.Object3D {
         this.#binding.reconcile([]);
         try {
           this.#binding.synchronize();
-          if (!this.#binding.failed) this.#error = undefined;
+          if (!this.#binding.hasRejectedRendererUpdate) this.#error = undefined;
         } catch (error) {
           this.#error = error;
           this.onError?.(error);
@@ -663,7 +663,7 @@ class ThreeTextBatchBinding {
   #textCapacity = 0;
   #capacity: GlyphBufferCapacity;
   #materialInvalidated = false;
-  #needsCheckpoint = false;
+  #rendererUpdateRejected = false;
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #disposed = false;
 
@@ -875,8 +875,8 @@ class ThreeTextBatchBinding {
   get capacityExceeded(): { readonly required: number; readonly size: number } | undefined {
     return this.#capacityExceeded;
   }
-  get failed(): boolean {
-    return this.#needsCheckpoint;
+  get hasRejectedRendererUpdate(): boolean {
+    return this.#rendererUpdateRejected;
   }
   synchronize(semanticViewMask = 0): void {
     if (this.#disposed) return;
@@ -893,7 +893,7 @@ class ThreeTextBatchBinding {
         ? [{ text, paragraph, order, semanticChanges }]
         : [];
     });
-    if (changed.length === 0 && this.#removed.length === 0 && !this.#needsCheckpoint) {
+    if (changed.length === 0 && this.#removed.length === 0) {
       this.#target?.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
       this.#dirtyTransformIds.clear();
       if (semanticViewMask !== 0 && !this.#hasSemanticViews(semanticViewMask)) {
@@ -1051,14 +1051,14 @@ class ThreeTextBatchBinding {
       try {
         commitFailure = this.#renderTarget().apply(publication);
       } catch (error) {
-        this.#needsCheckpoint = true;
+        this.#rendererUpdateRejected = true;
         throw error;
       }
       this.#dirtyTransformIds.clear();
       this.#planRevision = publication.planRevision;
       this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
       this.#retainSemanticViews(publication, semanticViewMask);
-      this.#needsCheckpoint = false;
+      this.#rendererUpdateRejected = false;
       if (commitFailure !== undefined) throw commitFailure;
     } catch (error) {
       const rejected = textFrameError(error, (fault) => this.#faultSubject(fault));

@@ -304,8 +304,9 @@ gate for an API that stores the publication.
 
 A renderer carries its last device-accepted `consumedPlanRevision` and `acknowledgedPublicationGeneration` in the next
 frame request; copying a candidate is not the same event as committing it to the device. If realization fails, those values
-stay unchanged and the next engine call publishes a checkpoint. Three uses this path instead of retaining and replaying a
-failed publication.
+stay unchanged. A device-owning renderer requests a checkpoint after it has rebuilt its resource pool. Three waits for an
+explicit material or other renderer-relevant invalidation before requesting that checkpoint; it neither retains the failed
+publication nor retries unchanged frames.
 
 ### Disposal and failed calls
 
@@ -316,8 +317,9 @@ and ID provenance intact so the owner can release the dependency and retry. Succ
 registration ID provenance; repeated host and session disposal is a no-op.
 
 Malformed or foreign frame input throws at the TypeScript call before the previous publication expires. Rust performs the
-complete wire and semantic validation before committing state. A renderer-realization failure advances engine state but
-not device acceptance; the next call uses the last accepted plan revision and generation to request a complete checkpoint.
+complete wire and semantic validation before committing state. A malformed emitted plan is an engine defect, not a
+recoverable renderer condition. A renderer-realization failure advances engine state but not device acceptance; an explicit
+renderer-state update uses the last accepted plan revision and generation to request a complete checkpoint.
 
 The [Rust engine plan](rust-layout-engine.md) remains the authority for the ABI, memory-growth discipline, SIMD layout,
 and render-plan transaction.

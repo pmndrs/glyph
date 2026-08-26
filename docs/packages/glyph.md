@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:b4318ac970e9884092200c57c3b7e2c45e38478952662814bf4d72dfb996b6db'
+source_digest: 'sha256:efd58616fff0468cfea5d09eebf39b4a1316baf9226b9d23a128849e997d8383'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -193,10 +193,10 @@ that span and its index in `Text.spans`.
 Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, `Paragraph`, policy assembly, or
 font registration; malformed data never waits for scene traversal to fail. A residual engine rejection therefore names an
 internal invariant defect through `TextFrameError` while the last committed draw state remains live. Renderer preparation is
-separate: if an engine-accepted publication cannot yet realize its resources or material, Three retains that exact
-publication and retries it on the next frame without another engine call. It neither restores an older snapshot nor waits
-for unrelated input to move. New desired input supersedes an unpublished candidate and requests a checkpoint from the last
-consumed plan revision (D-279).
+separate: if an engine-accepted publication cannot realize its resources or material, Three discards the candidate, keeps
+the last accepted draw state and fences, and retains the error. It does not retry unchanged frames. Explicit material or
+other renderer-relevant invalidation requests a checkpoint from the last consumed plan revision. A malformed emitted plan
+is an engine defect and never enters this recovery path (D-285).
 
 `registerThreeRasterPlanProgram` refuses a technique registered after a runtime has read the registry (D-271), naming the
 technique instead of applying to nothing. Snapshot tracking uses weak registry references, so an abandoned runtime cannot
