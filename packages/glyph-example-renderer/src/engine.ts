@@ -89,6 +89,7 @@ export class ExampleTextEngine {
   readonly #device: ExampleRendererDevice | undefined;
   #nextBindingOrdinal = 1;
   #nextTextOrdinal = 1;
+  readonly #freeTextOrdinals: number[] = [];
   #session: TextEngineSession | undefined;
   #rendering = false;
 
@@ -155,14 +156,20 @@ export class ExampleTextEngine {
   /** Creates one retained application text after its font stack and session exist. */
   createText(options: ExampleTextOptions): ExampleText {
     void this.session;
-    const ordinal = this.#nextTextOrdinal;
-    this.#nextTextOrdinal += 1;
-    return new ExampleText(
-      exampleTextConstruction,
-      (input, accepted) => this.#startRender(input, accepted),
-      ordinal,
-      options,
-    );
+    const recycledOrdinal = this.#freeTextOrdinals.pop();
+    const ordinal = recycledOrdinal ?? this.#nextTextOrdinal++;
+    try {
+      return new ExampleText(
+        exampleTextConstruction,
+        (input, accepted) => this.#startRender(input, accepted),
+        () => this.#freeTextOrdinals.push(ordinal),
+        ordinal,
+        options,
+      );
+    } catch (error) {
+      this.#freeTextOrdinals.push(ordinal);
+      throw error;
+    }
   }
 
   /** Serializes one frame request, carrying the acknowledged generation automatically. */
@@ -237,6 +244,7 @@ export class ExampleTextEngine {
 /** A small retained text façade that emits validated frame mutations only when its desired state changes. */
 export class ExampleText {
   readonly #renderFrame: (input: ExampleFrameInput, engineAccepted: () => void) => Promise<ExampleDrawList>;
+  readonly #releaseOrdinal: () => void;
   readonly #paragraphId: ParagraphId;
   readonly #styleId: StyleId;
   readonly #flowThreadId: FlowThreadId;
@@ -253,11 +261,13 @@ export class ExampleText {
   constructor(
     construction: typeof exampleTextConstruction,
     renderFrame: (input: ExampleFrameInput, engineAccepted: () => void) => Promise<ExampleDrawList>,
+    releaseOrdinal: () => void,
     ordinal: number,
     options: ExampleTextOptions,
   ) {
     if (construction !== exampleTextConstruction) throw new TypeError('create example text through its engine');
     this.#renderFrame = renderFrame;
+    this.#releaseOrdinal = releaseOrdinal;
     this.#order = ordinal - 1;
     this.#transformIndex = ordinal;
     const namespace = `glyph-example-renderer/text/${ordinal}`;
@@ -333,11 +343,11 @@ export class ExampleText {
     if (this.#disposed) return;
     if (this.#created) {
       await this.#renderFrame({ paragraphMutations: [{ opcode: 'remove', paragraphId: this.#paragraphId }] }, () => {
-        this.#disposed = true;
+        this.#acceptDisposal();
       });
       return;
     }
-    this.#disposed = true;
+    this.#acceptDisposal();
   }
 
   #constraint(): TextEngineConstraint {
@@ -387,6 +397,11 @@ export class ExampleText {
 
   #assertLive(): void {
     if (this.#disposed) throw new Error('example text is disposed');
+  }
+
+  #acceptDisposal(): void {
+    this.#disposed = true;
+    this.#releaseOrdinal();
   }
 }
 
