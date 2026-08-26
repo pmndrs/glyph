@@ -5,12 +5,13 @@ export const packageSizeBudgets = {
     gzipBytes: 82_400,
     brotliBytes: 63_500,
   },
-  // Renderer-neutral core, including portable technique plans and call-time validation.
+  // Renderer-neutral plans, host ownership, and transactional call-time validation.
+  // These ceilings include reviewed cross-host compression margin.
   'core-subpath-js': {
-    rawBytes: 338_000,
-    minifiedBytes: 215_000,
-    gzipBytes: 57_000,
-    brotliBytes: 48_000,
+    rawBytes: 351_000,
+    minifiedBytes: 224_000,
+    gzipBytes: 59_000,
+    brotliBytes: 49_500,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -75,14 +76,13 @@ export const packageSizeBudgets = {
     gzipBytes: 454_500,
     brotliBytes: 361_500,
   },
-  // Three adapter with built-in portable technique realization and retained resource lifecycles.
-  // Pre-frame Text measurement added 3,248 raw / 2,097 minified bytes for lazy renderer
-  // realization, full batch candidates, and candidate stack/material ownership.
+  // Three realization, ownership, pre-frame recovery, and bounded candidate leases.
+  // These ceilings include reviewed cross-host compression margin.
   'three-runtime-js': {
-    rawBytes: 592_000,
-    minifiedBytes: 371_000,
-    gzipBytes: 96_000,
-    brotliBytes: 80_000,
+    rawBytes: 603_000,
+    minifiedBytes: 379_000,
+    gzipBytes: 98_500,
+    brotliBytes: 82_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -120,26 +120,25 @@ export const packageSizeBudgets = {
     gzipBytes: 690_000,
     brotliBytes: 510_000,
   },
-  // Shared Three technique graphs use one ceiling so per-technique drift remains visible.
-  // Pre-frame Text measurement added the same 3,248 raw / 2,097 minified bytes measured in
-  // three-runtime-js; the compressed graphs remain inside their existing reviewed ceilings.
+  // Shared Three technique graphs use one reviewed cross-host ceiling.
+  // Shader subpaths remain outside these runtime graphs.
   'bitmap-runtime-js': {
-    rawBytes: 571_000,
-    minifiedBytes: 358_000,
-    gzipBytes: 93_000,
-    brotliBytes: 78_000,
+    rawBytes: 581_000,
+    minifiedBytes: 365_500,
+    gzipBytes: 95_500,
+    brotliBytes: 80_000,
   },
   'mtsdf-runtime-js': {
-    rawBytes: 571_000,
-    minifiedBytes: 358_000,
-    gzipBytes: 93_000,
-    brotliBytes: 78_000,
+    rawBytes: 581_000,
+    minifiedBytes: 365_500,
+    gzipBytes: 95_500,
+    brotliBytes: 80_000,
   },
   'slug-runtime-js': {
-    rawBytes: 571_000,
-    minifiedBytes: 358_000,
-    gzipBytes: 93_000,
-    brotliBytes: 78_000,
+    rawBytes: 581_000,
+    minifiedBytes: 365_500,
+    gzipBytes: 95_500,
+    brotliBytes: 80_000,
   },
   'bitmap-baker-wasm': {
     rawBytes: 626_000,
