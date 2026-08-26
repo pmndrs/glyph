@@ -177,6 +177,15 @@ export function assertPortableResource(
   payload: unknown,
   declaredFormat?: PortableTextureFormat,
   declaredVertexInputs?: readonly PortableVertexInput[],
+  declaredMembers?: Readonly<
+    Record<
+      string,
+      {
+        readonly kind: 'buffer' | 'texture' | 'texture-array';
+        readonly format?: PortableTextureFormat;
+      }
+    >
+  >,
 ): void {
   if (kind === 'buffer') return assertPortableBuffer(name, payload);
   if (kind === 'texture' || kind === 'texture-array') return assertPortableTexture(kind, name, payload, declaredFormat);
@@ -185,7 +194,7 @@ export function assertPortableResource(
     if (declaredVertexInputs !== undefined) assertGeometryVertexInputs(name, payload, declaredVertexInputs);
     return;
   }
-  if (kind === 'group') return assertPortableResourceGroup(name, payload);
+  if (kind === 'group') return assertPortableResourceGroup(name, payload, declaredMembers);
   throw new TypeError(`portable resource kind "${kind}" is not reserved by the core contract`);
 }
 
@@ -196,6 +205,15 @@ export function normalizePortableResource(
   payload: unknown,
   declaredFormat?: PortableTextureFormat,
   declaredVertexInputs?: readonly PortableVertexInput[],
+  declaredMembers?: Readonly<
+    Record<
+      string,
+      {
+        readonly kind: 'buffer' | 'texture' | 'texture-array';
+        readonly format?: PortableTextureFormat;
+      }
+    >
+  >,
 ): PortableResource {
   if (kind === 'buffer') {
     assertPayload(payload, name, 'buffer');
@@ -269,14 +287,16 @@ export function normalizePortableResource(
     return Object.freeze({ ...candidate, bytes: new Uint8Array(bytes) });
   }
   if (kind === 'group') {
-    assertPortableResourceGroup(name, payload);
+    assertPortableResourceGroup(name, payload, declaredMembers);
     const source = payload as PortableResourceGroupPayload;
     const members: Record<string, PortableLeafResource> = Object.create(null);
     for (const [memberName, member] of Object.entries(source.members)) {
+      const declaration = declaredMembers?.[memberName];
       members[memberName] = normalizePortableResource(
-        member.kind,
+        declaration?.kind ?? member.kind,
         `${name}.${memberName}`,
         member,
+        declaration?.format,
       ) as PortableLeafResource;
     }
     return Object.freeze({ kind, members: Object.freeze(members) });
@@ -284,11 +304,33 @@ export function normalizePortableResource(
   throw new TypeError(`portable resource kind "${kind}" is not reserved by the core contract`);
 }
 
-function assertPortableResourceGroup(name: string, payload: unknown): asserts payload is PortableResourceGroupPayload {
+function assertPortableResourceGroup(
+  name: string,
+  payload: unknown,
+  declaredMembers?: Readonly<
+    Record<
+      string,
+      {
+        readonly kind: 'buffer' | 'texture' | 'texture-array';
+        readonly format?: PortableTextureFormat;
+      }
+    >
+  >,
+): asserts payload is PortableResourceGroupPayload {
   assertPayload(payload, name, 'group');
   const members = payload.members;
   if (!isNonArrayObject(members) || Object.keys(members).length === 0) {
     throw new TypeError(`portable resource group "${name}" needs named members`);
+  }
+  if (declaredMembers !== undefined) {
+    const declaredNames = Object.keys(declaredMembers);
+    const actualNames = Object.keys(members);
+    if (
+      declaredNames.length !== actualNames.length ||
+      actualNames.some((memberName) => !Object.hasOwn(declaredMembers, memberName))
+    ) {
+      throw new TypeError(`portable resource group "${name}" members do not match its declaration`);
+    }
   }
   for (const [memberName, member] of Object.entries(members)) {
     if (memberName.length === 0) throw new TypeError(`portable resource group "${name}" has an empty member name`);
@@ -299,7 +341,11 @@ function assertPortableResourceGroup(name: string, payload: unknown): asserts pa
     if (memberKind === 'group') {
       throw new TypeError(`portable resource group "${name}" member "${memberName}" needs a leaf resource`);
     }
-    assertPortableResource(memberKind as PortableResourceKind, `${name}.${memberName}`, member);
+    const declaration = declaredMembers?.[memberName];
+    if (declaration !== undefined && memberKind !== declaration.kind) {
+      throw new TypeError(`portable resource group "${name}" member "${memberName}" has the wrong payload kind`);
+    }
+    assertPortableResource(memberKind as PortableResourceKind, `${name}.${memberName}`, member, declaration?.format);
   }
 }
 

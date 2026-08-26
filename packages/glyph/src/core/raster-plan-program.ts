@@ -274,6 +274,7 @@ function registerRasterPlanProgramOwned<
   }) as unknown as ErasedProgram;
   programs.set(techniqueId, snapshot);
   registeredSources.set(source, snapshot);
+  registeredSources.set(snapshot, snapshot);
   return snapshot as unknown as RasterPlanProgram<Technique, Schema>;
 }
 
@@ -465,30 +466,7 @@ function normalizeDeclaredResource(
       declaration.kind === 'geometry' ? declaration.attributes : undefined,
     );
   }
-  if (!isRecord(resource) || resource.kind !== 'group' || !isRecord(resource.members)) {
-    throw new TypeError(`portable resource group "${name}" needs its declared members`);
-  }
-  const declaredNames = Object.keys(declaration.members);
-  const actualNames = Object.keys(resource.members);
-  if (
-    declaredNames.length !== actualNames.length ||
-    actualNames.some((member) => !Object.hasOwn(declaration.members, member))
-  ) {
-    throw new TypeError(`portable resource group "${name}" members do not match its declaration`);
-  }
-  const members: Record<string, PortableResource> = Object.create(null);
-  for (const memberName of declaredNames) {
-    const memberDeclaration = declaration.members[memberName]!;
-    members[memberName] = normalizePortableResource(
-      memberDeclaration.kind,
-      `${name}.${memberName}`,
-      resource.members[memberName],
-      memberDeclaration.kind === 'texture' || memberDeclaration.kind === 'texture-array'
-        ? memberDeclaration.format
-        : undefined,
-    );
-  }
-  return Object.freeze({ kind: 'group', members: Object.freeze(members) }) as PortableResourceGroupPayload;
+  return normalizePortableResource('group', name, resource, undefined, undefined, declaration.members);
 }
 
 function readers(value: unknown, names: readonly string[], scalar: 'f32' | 'u32') {

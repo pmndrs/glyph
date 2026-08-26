@@ -76,6 +76,7 @@ test('registration preserves authenticated technique and schema witnesses', () =
   assert.equal(registered.schema, schema);
   assert.equal(resolveRasterPlanProgram(value.id), registered);
   assert.equal(registerRasterPlanProgram(source), registered);
+  assert.equal(registerRasterPlanProgram(registered), registered);
   assert.throws(() => registerRasterPlanProgram({ ...source }), /different raster plan program/);
   assert.throws(
     () => registerRasterPlanProgram({ ...source, schema: { ...schema } }),
