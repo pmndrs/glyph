@@ -19,9 +19,9 @@ import {
   type AnyTechniqueSchema,
   type TechniqueSchema,
 } from '../core.js';
-import { bitmap, bitmapPlanProgram } from '../raster/bitmap-technique.js';
-import { msdf, msdfPlanProgram } from '../raster/msdf.js';
-import { slug, slugPlanProgram } from '../raster/slug-technique.js';
+import { bitmapPlanProgram } from '../raster/bitmap-technique.js';
+import { msdfPlanProgram } from '../raster/msdf.js';
+import { slugPlanProgram } from '../raster/slug-technique.js';
 import { textShaperAbi } from '../core.js';
 
 const THREE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/stable-glyph');

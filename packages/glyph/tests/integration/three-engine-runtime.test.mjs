@@ -1228,7 +1228,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.ok(
     Array.from({ length: stableDraws.count }, (_, index) =>
       stablePlan.u32(stablePlan.record(stableDraws, index) + drawLayout.indirectBufferId),
-    ).every((id) => id === orderBufferId),
+    ).every((bufferId) => bufferId === orderBufferId),
     'every stable draw must address physical records through the published order buffer',
   );
   const stableTarget = new ThreeTextRenderPlanExecutor(coordinator, {
@@ -1280,7 +1280,7 @@ test('Three coordinator shares shaping data across technique bindings and refere
   assert.ok(
     Array.from({ length: stablePatches.count }, (_, index) =>
       stableReorderedPlan.u32(stableReorderedPlan.record(stablePatches, index) + patchLayout.bufferId),
-    ).every((id) => id === orderBufferId),
+    ).every((bufferId) => bufferId === orderBufferId),
     'lifecycle-only reorder must leave stable physical glyph records untouched',
   );
   stableTarget.apply(stableReorderedPublication);
