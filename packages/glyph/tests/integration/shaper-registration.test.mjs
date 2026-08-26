@@ -140,6 +140,8 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   );
   fn.deallocate(binding.pointer, binding.length);
   assert.equal(fn.fontBindingCount(), 2, 'binding state must not borrow the registration allocation');
+  assert.equal(fn.disposeFontBinding(102), abi.status.ok);
+  assert.equal(fn.fontBindingCount(), 1);
 
   const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(101, 0, 0, 0));
   assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);

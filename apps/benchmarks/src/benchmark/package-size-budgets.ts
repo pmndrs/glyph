@@ -5,38 +5,12 @@ export const packageSizeBudgets = {
     gzipBytes: 82_400,
     brotliBytes: 63_500,
   },
-  // The renderer-neutral core subpath (D-249) must stay integration-free; the graph
-  // assertion in measure-package-sizes.mts already rejects any three/tsl/react pull.
-  // Grew with the technique-schema authority layer (D-251): declarations, validation,
-  // and the schema-typed store path. The review-closure pass added +3,525 raw /
-  // +1,686 minified / +351 Brotli of real validation, provenance, and derivation
-  // code (schema normalization and freezing, DSL session provenance,
-  // schemaPolicyBuffers/schemaFieldTable). Re-based when tsdown bundling lands per
-  // the technique contract plan.
-  // The external-raster routing around the Worker font-bake plan added +1,786 raw /
-  // +919 minified of unrecorded growth (the evidence refold rides this branch), and
-  // the 11.17 measure tier added +2,481 raw / +1,258 minified / +211 gzip for the
-  // synchronous measure entry, the retained speculative transaction, and the host
-  // fast path. Measured byte-identical on linux-x64 and darwin; the integer-units
-  // slices above ride within the remaining headroom (+360 raw at their tip).
-  // These ceilings now price the PRODUCTION graph: the size harness defines
-  // process.env.NODE_ENV="production" so development-only `if (DEV)` diagnostics fold
-  // away exactly as they do in a consumer's build, and asserts that none of their text
-  // survives. Total teardown (D-255) cost +1,295 raw measured unstripped; guarding its
-  // guidance left +468 of real production behaviour, which fits the existing ceiling.
-  // The ceiling had no room for the cross-host gap: this host measures 231,670 raw and the Linux
-  // runner measures 232,558, so CI failed on a 558-byte overage that is host difference rather than
-  // growth. Raised to clear the foreign-host measurement with headroom.
-  // The measure/layout re-split priced +398 raw: the measurement lane answers from its own
-  // cache again instead of sharing the positioned one, so the fast path is two small maps
-  // rather than one lazy-resolution layer.
-  // Technique plans, exact binding/policy preflight, and portable geometry now measure
-  // 382,392 raw / 244,375 minified / 63,538 gzip / 52,804 Brotli.
+  // Renderer-neutral core, including portable technique plans and call-time validation.
   'core-subpath-js': {
-    rawBytes: 390_000,
-    minifiedBytes: 250_000,
-    gzipBytes: 65_000,
-    brotliBytes: 54_000,
+    rawBytes: 338_000,
+    minifiedBytes: 215_000,
+    gzipBytes: 57_000,
+    brotliBytes: 48_000,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -101,30 +75,12 @@ export const packageSizeBudgets = {
     gzipBytes: 454_500,
     brotliBytes: 361_500,
   },
-  // Raw rose for the policy-DSL authoring layer riding the Three bundle (D-250),
-  // then the review-closure pass added +3,535 raw / +1,711 minified / +439 Brotli
-  // of schema-derived executor lookups, program buffer derivation, and the
-  // glyph-origin schema map replacing literal id ranges. Real code, not comments;
-  // the compressed ceilings hold with tight headroom by design.
-  // Column flow (contentBox columns over ordered regions) added ~+1.7 KB raw of
-  // geometry derivation and validation in the Three adapter.
-  // The external-raster routing rode into the Three bundle too (+1,786 raw /
-  // +914 minified), then the 11.17 frame adoption and measure host fast
-  // path added +5,310 raw / +2,690 minified in the Three adapter.
-  // These ceilings now price the PRODUCTION graph: the size harness defines
-  // process.env.NODE_ENV="production" so development-only `if (DEV)` diagnostics fold
-  // away exactly as they do in a consumer's build, and asserts that none of their text
-  // survives. Total teardown (D-255) cost +1,295 raw measured unstripped; guarding its
-  // guidance left +468 of real production behaviour, which fits the existing ceiling.
-  // +22 KB over main is `unicode-segmenter`, entering every graph via internal/graphemes.ts so span
-  // alignment matches the engine's cluster grid. Deliberate; both hosts measure identically.
-  // Portable grouped resources and validated policy-buffer realization now measure 581,779 raw /
-  // 363,980 minified / 94,281 gzip / 78,517 Brotli.
+  // Three adapter with built-in portable technique realization and retained resource lifecycles.
   'three-runtime-js': {
-    rawBytes: 583_000,
-    minifiedBytes: 366_000,
-    gzipBytes: 95_500,
-    brotliBytes: 79_500,
+    rawBytes: 588_000,
+    minifiedBytes: 368_000,
+    gzipBytes: 96_000,
+    brotliBytes: 80_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -162,25 +118,24 @@ export const packageSizeBudgets = {
     gzipBytes: 690_000,
     brotliBytes: 510_000,
   },
-  // Shared Three technique graphs now measure at most 559,969 raw / 350,423 minified /
-  // 91,290 gzip / 76,152 Brotli; one ceiling keeps technique drift visible.
+  // Shared Three technique graphs use one ceiling so per-technique drift remains visible.
   'bitmap-runtime-js': {
-    rawBytes: 561_000,
-    minifiedBytes: 352_000,
-    gzipBytes: 92_500,
-    brotliBytes: 77_000,
+    rawBytes: 566_000,
+    minifiedBytes: 354_000,
+    gzipBytes: 93_000,
+    brotliBytes: 78_000,
   },
   'mtsdf-runtime-js': {
-    rawBytes: 561_000,
-    minifiedBytes: 352_000,
-    gzipBytes: 92_500,
-    brotliBytes: 77_000,
+    rawBytes: 566_000,
+    minifiedBytes: 354_000,
+    gzipBytes: 93_000,
+    brotliBytes: 78_000,
   },
   'slug-runtime-js': {
-    rawBytes: 561_000,
-    minifiedBytes: 352_000,
-    gzipBytes: 92_500,
-    brotliBytes: 77_000,
+    rawBytes: 566_000,
+    minifiedBytes: 354_000,
+    gzipBytes: 93_000,
+    brotliBytes: 78_000,
   },
   'bitmap-baker-wasm': {
     rawBytes: 626_000,

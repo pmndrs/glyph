@@ -198,6 +198,17 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_register_font_binding(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_dispose_font_binding(handle: u32) -> u32 {
+    if handle == 0 {
+        return STATUS_INVALID_HANDLE;
+    }
+    with_state(|state| {
+        state.engine.dispose_font_binding(handle);
+        STATUS_OK
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_engine_font_binding_count() -> u32 {
     with_state(|state| state.engine.font_binding_count())
 }
