@@ -113,17 +113,21 @@ requires serving the MDX folder, so the emoji form is used until there is a publ
 
 | dependency | version | evidence |
 | --- | --- | --- |
-| `@react-three/fiber` | `10.0.0-alpha.4` | current `alpha` tag; see the bump note below |
+| `@react-three/fiber` | `10.0.0-alpha.3` | the repository pin; see the note below |
 | `@react-three/drei` | `11.0.0-alpha.5` | peers `@react-three/fiber: >=10.0.0-0`; ships a `./webgpu` entry |
 | `three` | `0.185.1` | repository pin |
 | `@pmndrs/glyph` | `workspace:*` | this repository |
 
-paris-site and `apps/r3f-hello-world` both pin `@react-three/fiber@10.0.0-alpha.3`, so alpha.3 is the proven
-combination and alpha.4 is one step past it. r3f published release notes only for `10.0.0-alpha.1`, so nothing
-documents the alpha.2 through alpha.4 delta and the bump is verified rather than assumed. It moves the whole
-workspace at once — leaving the example on alpha.3 and the landing on alpha.4 would install two copies of the
-reconciler — and it is gated by the existing `apps/r3f-hello-world` check, whose GPU Chromium probe already
-exercises all three raster techniques through the public API.
+The site tracks the repository's existing `@react-three/fiber` pin rather than setting its own. paris-site,
+`packages/glyph`, and `apps/r3f-hello-world` all sit on `10.0.0-alpha.3`, so that is the proven combination,
+and drei's alpha.5 peers `>=10.0.0-0`, so nothing here requires moving past it. A single pin also keeps one
+reconciler in the install; two versions in one workspace would install two copies.
+
+Bumping the alpha is deliberately **not** part of this work. It is a core change with a core blast radius —
+`packages/glyph`, `apps/benchmarks`, and `apps/r3f-hello-world` all move together, `tests/package/r3f-webgpu.test.mjs`
+asserts the pin by exact version, and alpha.4 was measured to break `<Text paint={...}>` type-checking in
+`tests/types/r3f-v1-api.test.ts`. That belongs in its own pull request, reviewed as an upgrade, not as a
+passenger in a documentation-site branch.
 
 Post-processing does **not** use `@react-three/postprocessing`, which wraps the WebGL `EffectComposer` and is
 incompatible with `three/webgpu` node materials. paris-site carries no such dependency. The WebGPU path is
