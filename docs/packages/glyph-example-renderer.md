@@ -91,7 +91,8 @@ and submission, while an accepted removal still encodes the clear pass.
 The browser lab runtime-bakes Inter, creates one retained `ExampleText`, proves one initial and one updated draw, and observes
 7,740 then 6,588 non-transparent pixels with 10,287 changed pixels, zero GPU submissions for the following idle frame, and
 one clear-only submission on disposal. Ordered readback observes zero visible pixels after the clear. Disposal publishes an
-empty scene without retaining retired instance buffers.
+empty scene without retaining retired instance buffers. A same-host 101-sample A/B measured changed-frame `render()` at
+0.300 ms median / 0.645 ms p95 when pipelined versus 0.760 / 1.585 ms with the rejected per-frame queue-completion fence.
 
 `ExampleTextEngine.createText()` supplies the application lifecycle that raw frame fixtures intentionally expose but do not
 recommend as the ordinary path. `ExampleText.render()` emits the initial paragraph/text/style/constraint/region state,
