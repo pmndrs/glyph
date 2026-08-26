@@ -12,12 +12,7 @@ import {
   releaseFontSelection,
 } from './loaded-font.js';
 import { loadedFontBindingBytes } from './core/font-binding.js';
-import {
-  TextEngineHost,
-  TextEngineStatusError,
-  type TextEnginePublication,
-  type TextEngineSession,
-} from './core/host.js';
+import { TextEngineHost, type TextEngineSession } from './core/host.js';
 import { compileTextEngineFrameUpdate, type TextEngineStyleMutation } from './core/frame-wire.js';
 import { readTextEngineLayouts, readTextEngineMeasurements } from './core/layout-query-view.js';
 import { definePolicyBuffers } from './core/technique-schema.js';
@@ -384,13 +379,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
       constraints: [geometry.constraint],
       regions: geometry.regions,
     });
-    let publication: TextEnginePublication;
-    try {
-      publication = session.measureParagraph(request, PARAGRAPH_ID);
-    } catch (error) {
-      if (error instanceof TextEngineStatusError) throw error;
-      throw error;
-    }
+    const publication = session.measureParagraph(request, PARAGRAPH_ID);
     this.#engineRevision = publication.engineRevision;
     this.#planRevision = publication.planRevision;
     this.#acknowledgedGeneration = publication.publicationGeneration;

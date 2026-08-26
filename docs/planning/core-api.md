@@ -297,10 +297,12 @@ emits a paragraph removal before its IDs are recycled. `packages/glyph-example-r
 reference for this loop.
 
 The returned publication borrows Wasm A/B memory. A synchronous renderer applies the plan before its next session call
-without copying. A renderer that crosses an async submission, later engine call, retained scene handoff, or worker boundary uses
+without copying. A renderer that crosses an async submission, later engine call, or retained same-realm scene handoff uses
 `session.copyPublication(publication)` once and passes the returned `OwnedTextEnginePublication`; package-private provenance
-prevents JavaScript from forging that ownership by copying fields. `assertOwnedTextEnginePublication()` is the runtime
-gate for an API that stores the publication.
+prevents JavaScript from forging that ownership by copying fields. `assertOwnedTextEnginePublication()` is the runtime gate
+for a same-realm API that stores the publication. For a worker boundary, copy before posting and transfer the self-owned
+buffer; the receiving realm validates the untrusted bytes with `TextEngineRenderPlanView.bindBytes()` because the runtime
+ownership witness is deliberately realm-local.
 
 A renderer carries its last device-accepted `consumedPlanRevision` and `acknowledgedPublicationGeneration` in the next
 frame request; copying a candidate is not the same event as committing it to the device. If realization fails, those values

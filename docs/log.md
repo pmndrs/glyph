@@ -8,7 +8,11 @@
   Owned publication copies now use package-private runtime provenance instead of an exported forgeable symbol. Copying
   does not advance renderer acceptance. Three consumes the A/B borrow directly, preserves realization errors without
   retrying unchanged frames, and requests a fresh checkpoint only after explicit renderer-relevant invalidation. Malformed
-  emitted plans remain engine defects rather than recovery input. The core
+  emitted plans remain engine defects rather than recovery input. Semantic measurement no longer advances the device
+  acceptance fence after a failed realization, and same-session owned copies now answer `isExpired()` as permanently live.
+  Owned-publication runtime provenance is documented as realm-local; worker receivers call
+  `TextEngineRenderPlanView.bindBytes()` on transferred self-owned bytes instead of pretending a WeakSet witness survives
+  structured cloning. The core
   reference also fixes the lifecycle map: compiled payloads are portable data, while each renderer owns per-device GPU
   realization and cross-session leases.
 

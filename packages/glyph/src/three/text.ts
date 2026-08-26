@@ -1305,6 +1305,7 @@ class ThreeTextBatchBinding {
       }
     }
     this.#planRevision = publication.planRevision;
+    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
     return publication;
   }
 
@@ -1336,7 +1337,6 @@ class ThreeTextBatchBinding {
     } else {
       throw new RangeError(`unsupported semantic view mask ${semanticViewMask}`);
     }
-    this.#acknowledgedPublicationGeneration = publication.publicationGeneration;
   }
 }
 

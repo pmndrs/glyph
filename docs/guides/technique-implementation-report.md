@@ -361,7 +361,10 @@ const owned = session.copyPublication(borrowed);
 
 The frame omits `capabilitySet`; the first compiled profile is selected. `session.update()` returns a borrow into Wasm
 memory. A synchronous renderer decodes and applies it before the next session call. Copy before an `await`, a later
-session call, a retained scene handoff, or a worker transfer. Copying does not advance renderer acceptance. An
+session call, or a retained same-realm scene handoff. Before a worker transfer, copy and transfer the self-owned bytes;
+the receiving realm treats the bytes as untrusted boundary data and calls
+`new TextEngineRenderPlanView().bindBytes(bytes)`. The `OwnedTextEnginePublication` runtime witness is realm-local.
+Copying does not advance renderer acceptance. An
 application-facing text object owns these five records: `update()` changes desired text or geometry, the next frame
 replaces the prior text range and advances `geometryRevision` when dimensions change, and disposal publishes
 `{ opcode: 'remove', paragraphId }`. `ExampleText` is the complete reference for that owned asynchronous update loop.

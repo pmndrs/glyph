@@ -395,6 +395,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   assert.match(String(group.error), /deliberate material realization failure/u);
   assert.equal(label.error, group.error, 'group-owned failures must remain visible from the child Text');
   assert.equal(instrumented.crossings, 1);
+  const rejectedGeneration = instrumented.latestUpdateGeneration;
   assert.equal(group.children.filter((child) => child.isMesh).length, 0);
   assert.equal(errors.length, 1);
   assert.ok(label.layout().glyphCount > 0, 'measurement remains independent of material realization');
@@ -412,6 +413,11 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   assert.equal(group.error, undefined);
   assert.equal(label.error, undefined);
   assert.equal(instrumented.crossings, 2, 'explicit material invalidation must request a checkpoint from the engine');
+  assert.equal(
+    instrumented.latestAcknowledgedGeneration,
+    rejectedGeneration - 1,
+    'measurement must not acknowledge the renderer-rejected publication',
+  );
   assert.equal(publicationCopies, 0, 'Three must not copy a borrowed publication for renderer recovery');
   assert.equal(errors.length, 1, 'a successful checkpoint must not repeat the old failure');
   assert.equal(group.children.filter((child) => child.isMesh).length, 1);
@@ -833,6 +839,14 @@ async function createInstrumentedRuntime(registry) {
       },
       get latestUpdateGeneration() {
         return latestUpdateGeneration;
+      },
+      get latestAcknowledgedGeneration() {
+        assert.ok(latestRequest, 'a text update request must have been captured');
+        const request = abi.layouts.engineUpdateRequest;
+        return new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength).getUint32(
+          request.acknowledgedPublicationGeneration,
+          true,
+        );
       },
       reset() {
         crossings = 0;

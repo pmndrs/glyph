@@ -144,7 +144,7 @@ export class TextEngineHost {
     this.#owners = ownersFor(this.#exports);
   }
 
-  /** Derive one branded ID whose provenance lives exactly as long as this host. */
+  /** Derive one branded ID retained until its registration or this host is disposed. */
   readonly id = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
     this.#assertActive();
     return this.#ids.id(kind, name);
@@ -390,6 +390,8 @@ export class TextEngineSession {
   #epoch = 0;
   /** The epoch each issued borrow was published under, keyed by publication identity. */
   readonly #issued = new WeakMap<TextEnginePublication, number>();
+  /** Owned copies made by this session; unlike borrows, they never expire. */
+  readonly #owned = new WeakSet<TextEnginePublication>();
   #latestGeneration = 0;
 
   /** @internal Sessions are created through {@link TextEngineHost.createSession}. */
@@ -416,11 +418,12 @@ export class TextEngineSession {
   }
 
   /**
-   * Whether a borrowed publication's bytes are gone. Two integer compares: the borrow
-   * expires when the session answers any later call (including failed attempts that
-   * reserve capacity), when Wasm memory has grown past its buffer, or on disposal.
+   * Whether this session's publication has expired. An owned copy always answers false.
+   * A borrow expires when the session answers another call, Wasm memory grows, or the
+   * session is disposed.
    */
   isExpired(publication: TextEnginePublication): boolean {
+    if (this.#owned.has(publication)) return false;
     if (this.#issued.get(publication) === undefined) {
       throw new TypeError('publication was not issued by this text engine session');
     }
@@ -434,12 +437,13 @@ export class TextEngineSession {
   /**
    * Takes ownership with one contiguous copy of the whole encoded result — header,
    * every plan table, and every patch payload. Never expires; safe to hold across
-   * asynchronous work, later engine calls, and worker transfers.
+   * asynchronous work and later engine calls in this JavaScript realm. Transfer its
+   * self-owned bytes to a worker as untrusted boundary data; runtime provenance is realm-local.
    */
   copyPublication(publication: TextEnginePublication): OwnedTextEnginePublication {
     this.#assertPublicationCurrent(publication);
     const bytes = publication.bytes.slice();
-    return markOwnedTextEnginePublication(
+    const owned = markOwnedTextEnginePublication(
       Object.freeze({
         ...publication,
         bytes,
@@ -447,6 +451,8 @@ export class TextEngineSession {
         memoryGrew: false,
       }),
     );
+    this.#owned.add(owned);
+    return owned;
   }
 
   #assertPublicationCurrent(publication: TextEnginePublication): void {

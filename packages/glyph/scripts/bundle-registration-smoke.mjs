@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'vite';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
-const smokeRoot = await mkdtemp(join(packageRoot, '.bundle-registration-'));
+const smokeRoot = await mkdtemp(join(tmpdir(), 'glyph-bundle-registration-'));
 const techniqueIds = ['pmndrs.bitmap', 'pmndrs.msdf', 'pmndrs.slug'];
 
 try {

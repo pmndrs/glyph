@@ -38,7 +38,8 @@ import type { TextEnginePublication } from './host.js';
  * — header, every table, and every patch payload — and never expires. The distinction is in
  * the type system: an API that stores plan data across frames declares the owned brand in
  * its parameter, so passing a borrowed publication is a compile error rather than a latent
- * read of freed memory.
+ * read of freed memory. Runtime provenance is local to one JavaScript realm and is not
+ * preserved by structured cloning.
  */
 export interface OwnedTextEnginePublication extends TextEnginePublication {
   readonly [ownedPublicationBrand]: true;

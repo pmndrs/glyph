@@ -530,11 +530,14 @@ Choose one handoff:
 - Keep plan bytes or views: call `session.copyPublication(publication)`. It makes one contiguous copy of the header, all
   tables, and patch payloads and records package-private provenance as `OwnedTextEnginePublication`. The owned copy never
   expires, and `assertOwnedTextEnginePublication()` rejects a visible-field copy or JavaScript cast. Copy before an
-  asynchronous operation, later session call, retained scene handoff, or worker transfer.
+  asynchronous operation, later session call, or retained same-realm scene handoff. For a worker, copy before posting and
+  transfer the self-owned buffer; the receiving realm treats the bytes as untrusted boundary data and calls
+  `new TextEngineRenderPlanView().bindBytes(bytes)`. The runtime ownership witness itself is not structured-cloneable.
   (`packages/glyph/src/core/host.ts`, `packages/glyph/src/core/retention.ts`)
 
-`session.isExpired()` is an optional diagnostic for a borrowed publication. `copyPublication()` performs the throwing
-currentness check itself and rejects a publication issued by another session. (`packages/glyph/src/core/host.ts`)
+`session.isExpired()` is an optional diagnostic: it reports currentness for this session's borrows, always returns `false`
+for this session's owned copies, and rejects a publication issued or copied by another session. `copyPublication()`
+performs the throwing currentness check itself. (`packages/glyph/src/core/host.ts`)
 
 Acceptance is load-bearing, not bookkeeping. The engine delays retirements until the renderer reports the required
 publication generation; reporting late retains old GPU storage, never advancing leaks it, and sending a generation that

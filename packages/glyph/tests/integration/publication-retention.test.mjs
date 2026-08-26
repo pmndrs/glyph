@@ -10,6 +10,7 @@ import {
   id,
   TextEngineHost,
   TextEnginePublicationExpiredError,
+  TextEngineRenderPlanView,
 } from '../../dist/core.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 
@@ -77,8 +78,24 @@ test('a borrowed publication expires at the next call, and an owned copy survive
   // Copying establishes JavaScript ownership but does not claim renderer acceptance.
   const owned = session.copyPublication(first);
   assert.doesNotThrow(() => assertOwnedTextEnginePublication(owned));
+  assert.equal(session.isExpired(owned), false, 'a session-owned copy never expires');
   assert.equal(owned.bytes.byteLength, first.bytes.byteLength);
   assert.notEqual(owned.bytes.buffer, first.memoryBuffer, 'the copy never aliases Wasm memory');
+  const transferred = structuredClone(owned);
+  assert.throws(
+    () => assertOwnedTextEnginePublication(transferred),
+    /was not copied/u,
+    'structured cloning cannot transfer same-realm runtime provenance',
+  );
+  assert.doesNotThrow(
+    () => new TextEngineRenderPlanView().bindBytes(transferred.bytes),
+    'the receiving realm can validate and read the transferred self-owned bytes',
+  );
+  assert.throws(
+    () => new TextEngineRenderPlanView().bindBytes(transferred.bytes.subarray(0, 8)),
+    /invalid byte length/u,
+    'cross-realm bytes are validated at the worker-facing call',
+  );
   const forged = Object.freeze({ ...owned, bytes: first.bytes, memoryBuffer: first.memoryBuffer });
   assert.throws(
     () => assertOwnedTextEnginePublication(forged),
@@ -106,6 +123,7 @@ test('a borrowed publication expires at the next call, and an owned copy survive
   assert.equal(owned.bytes.byteLength > 0 && owned.bytes[0] !== undefined, true, 'the owned copy outlives every slot');
 
   session.dispose();
+  assert.equal(session.isExpired(owned), false, 'session disposal does not expire owned bytes');
 });
 
 test('expiry covers capacity growth and disposal, and foreign publications are rejected', async () => {
@@ -119,6 +137,10 @@ test('expiry covers capacity growth and disposal, and foreign publications are r
   // live-looking one is rejected instead of silently accepted.
   const other = await drivenSession();
   assert.throws(() => other.session.isExpired(published), TypeError);
+  const owned = other.session.copyPublication(other.publish());
+  const foreign = await drivenSession();
+  assert.throws(() => foreign.session.isExpired(owned), TypeError, 'owned copies remain associated with their session');
+  foreign.session.dispose();
   other.session.dispose();
 });
 

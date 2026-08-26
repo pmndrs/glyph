@@ -242,7 +242,7 @@ Four of these are not merely being re-implemented — **they are unmeasured toda
 
 - **4b, materialized measurement.** No existing benchmark requests the layout-inspection semantic view. `glyph:rust-layout-benchmark`'s `measure-query` case runs at the measurement mask only, so the metrics-versus-materialization split that commit `ffe65e11` created has never been measured.
 - **5, the frame wire compile.** It is pure, synchronous, and touches no Wasm, so it is trivially isolatable — and it has only ever been timed inside a window that also contained a Wasm call.
-- **7, the cost of `retain()`.** Nothing prices the contiguous copy against borrowing and decoding in place, and nothing varies acknowledgement lag.
+- **7, the cost of `copyPublication()`.** Nothing prices the contiguous copy against borrowing and decoding in place, and nothing varies acknowledgement lag.
 - **2 on CJK.** Line breaking is only swept per corpus by the Rust script; the break-heavy CJK path is where a quadratic scan once hid, and it deserves a standing bench.
 
 ### Three hazards that would make these benches lie

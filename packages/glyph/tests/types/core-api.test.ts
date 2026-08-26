@@ -77,6 +77,8 @@ session.acknowledge(publication);
 void session.acknowledgedGeneration;
 
 const plan = new TextEngineRenderPlanView().bind(publication);
+const transferredPlan = new TextEngineRenderPlanView().bindBytes(ownedPublication.bytes);
+void transferredPlan;
 const draws = plan.table('draws');
 void plan.record(draws, 0);
 void readTextEngineMeasurements;

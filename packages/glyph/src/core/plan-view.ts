@@ -56,9 +56,17 @@ export class TextEngineRenderPlanView {
     if (bytes.buffer !== publication.memoryBuffer) {
       throw new TypeError('text-engine publication bytes do not belong to the reported Wasm memory');
     }
-    if (this.#memoryBuffer !== publication.memoryBuffer) {
-      this.#memoryBuffer = publication.memoryBuffer;
-      this.#view = new DataView(publication.memoryBuffer);
+    return this.bindBytes(bytes);
+  }
+
+  /** Binds copied plan bytes received across a realm boundary after validating their complete table framing. */
+  bindBytes(bytes: Uint8Array): this {
+    if (!(bytes instanceof Uint8Array) || !(bytes.buffer instanceof ArrayBuffer)) {
+      throw new TypeError('text-engine plan bytes must be a Uint8Array backed by an ArrayBuffer');
+    }
+    if (this.#memoryBuffer !== bytes.buffer) {
+      this.#memoryBuffer = bytes.buffer;
+      this.#view = new DataView(bytes.buffer);
     }
     this.#baseOffset = bytes.byteOffset;
     this.#byteLength = bytes.byteLength;
