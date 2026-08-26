@@ -28,6 +28,7 @@ interface LoadedFontState {
   readonly disposeListeners: Set<() => void>;
   leases: number;
   disposed: boolean;
+  released: boolean;
 }
 
 const loadedFontState = new WeakMap<LoadedFont<AnyRasterTechnique>, LoadedFontState>();
@@ -75,6 +76,7 @@ export class LoadedFontImpl<Technique extends AnyRasterTechnique> implements Loa
       disposeListeners: new Set(),
       leases: 0,
       disposed: false,
+      released: false,
     });
   }
 
@@ -90,27 +92,26 @@ export class LoadedFontImpl<Technique extends AnyRasterTechnique> implements Loa
 /**
  * Disposal is total: it always completes, it is safe to repeat, and it never throws.
  *
- * Teardown runs in `finally` blocks and in unmount paths that are already handling an
- * earlier failure. A throw there destroys the original error and leaves the resource
- * half-released, so outstanding leases are reported and force-released rather than
- * refused. A paragraph that outlives the font it leased still fails loudly at its next
- * use, which is the correct place to notice it.
+ * Manual disposal makes the font unavailable immediately and defers its underlying
+ * resources until the final live consumer lease ends. Runtime teardown force-closes the
+ * lease ledger so deferred React cleanup remains a safe no-op.
  */
 function disposeLoadedFont(state: LoadedFontState, owner: 'font' | 'runtime'): void {
-  if (state.disposed) return;
-  if (state.leases !== 0) {
+  if (!state.disposed && state.leases !== 0) {
     if (DEV) {
       console.warn(
         `loaded font is retained by ${state.leases} live paragraph lease${state.leases === 1 ? '' : 's'};` +
-          ` disposing anyway during ${owner} teardown. ` +
+          (owner === 'runtime'
+            ? ' disposing anyway during runtime teardown. '
+            : ' deferring release until its final lease ends. ') +
           'Dispose every Text that leased it first — a TextGroup does not dispose its children.',
       );
     }
-    state.leases = 0;
   }
   state.disposed = true;
-  state.release();
   notifyDisposed(state);
+  if (owner === 'runtime') state.leases = 0;
+  if (state.leases === 0) releaseLoadedFont(state);
 }
 
 /** @internal Acquire one retained paragraph lease on every concrete font. */
@@ -154,14 +155,12 @@ export function acquireFontSelectionForRuntime(
 export function releaseFontSelection<Technique extends AnyRasterTechnique>(selection: FontSelection<Technique>): void {
   for (const font of concreteFonts(selection)) {
     const state = stateOf(font);
-    // A disposed font's lease ledger is closed: teardown already force-released whatever
-    // was outstanding, so a late release is not a double release. Teardown order is not
-    // ours to choose — react-three-fiber defers dispose to idle priority, so a paragraph
-    // routinely disposes after the runtime an application tore down on unmount. The
-    // underflow check still guards live fonts, where a double release is a real defect.
-    if (state.disposed) continue;
+    // Runtime teardown closes the ledger before deferred React disposal arrives. Manual
+    // font disposal keeps the ledger open so its final live Text releases the resource.
+    if (state.disposed && state.released) continue;
     if (state.leases <= 0) throw new Error('font lease underflow');
     state.leases -= 1;
+    if (state.disposed && state.leases === 0) releaseLoadedFont(state);
   }
 }
 
@@ -206,8 +205,28 @@ export function observeLoadedFontDispose(font: LoadedFont<AnyRasterTechnique>, l
 }
 
 function notifyDisposed(state: LoadedFontState): void {
-  for (const listener of state.disposeListeners) listener();
-  state.disposeListeners.clear();
+  for (const listener of state.disposeListeners) {
+    try {
+      listener();
+      state.disposeListeners.delete(listener);
+    } catch (error) {
+      reportDisposalFailure('notifying a loaded-font disposal observer', error);
+    }
+  }
+}
+
+function releaseLoadedFont(state: LoadedFontState): void {
+  if (state.released) return;
+  try {
+    state.release();
+    state.released = true;
+  } catch (error) {
+    reportDisposalFailure('releasing loaded-font resources', error);
+  }
+}
+
+function reportDisposalFailure(stage: string, error: unknown): void {
+  if (DEV) console.warn(`loaded-font teardown continued after ${stage} failed: ${String(error)}`);
 }
 
 function isFontStack<Technique extends AnyRasterTechnique>(

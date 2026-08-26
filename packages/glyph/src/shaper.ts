@@ -59,6 +59,7 @@ interface ShaperExports {
     length: number,
   ) => number;
   readonly disposeFontBinding: (bindingHandle: number) => number;
+  readonly fontBindingCount: () => number;
   readonly registerFontStack: (handle: number, pointer: number, count: number) => number;
   readonly disposeFontStack: (handle: number) => number;
   readonly registerPolicy: (handle: number, pointer: number, length: number) => number;
@@ -194,9 +195,10 @@ class RuntimeShaperImpl implements RuntimeShaper {
   }
 
   #disposeHandle(handle: FontHandle): void {
-    if (!this.#registered.delete(handle)) return;
+    if (!this.#registered.has(handle)) return;
     const status = this.#exports.disposeFont(handle);
     if (status !== 0 && status !== 5) throw shaperStatusError(status, 'dispose font');
+    this.#registered.delete(handle);
   }
 
   #assertActive(): void {
@@ -231,6 +233,7 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       planCount: exportedFunction(instance, functions.planCount),
       registerFontBinding: exportedFunction(instance, functions.registerFontBinding),
       disposeFontBinding: exportedFunction(instance, functions.disposeFontBinding),
+      fontBindingCount: exportedFunction(instance, functions.fontBindingCount),
       registerFontStack: exportedFunction(instance, functions.registerFontStack),
       disposeFontStack: exportedFunction(instance, functions.disposeFontStack),
       registerPolicy: exportedFunction(instance, functions.registerPolicy),

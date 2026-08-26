@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:a2289ed860503b3b21a8456dfe12883e12eb0df966d9f3b7860d834ba303deca'
+source_digest: 'sha256:081efc5d3adbed9a7f1a6d3fdf17c655ed42e4ecf96ea93d4897fa5ee9904c66'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -518,8 +518,10 @@ workload markers and the direct Wasm timer remain outside the shipped library.
 After the final plan-application lifecycle audit, Three sizes indexed transforms from live paragraph IDs instead of
 scanning every glyph record in JavaScript. A renderer failure retains an unconsumed owned plan for zero-crossing retry;
 dirty upload ranges accumulate across presentation restoration and Rust patches; buffer/resource generations dispose
-only their exact dependent materials; direct materials survive indexed transform-table growth; and loaded-font disposal
-removes its decoded renderer resources. The unchanged eight-warmup/31-sample public 25,515-glyph lane measures
+only their exact dependent materials; and direct materials survive indexed transform-table growth. A loaded font owns one
+cached Three binding and decoded resource set: disposal marks them for retirement, while the final registered-stack lease
+keeps them valid and then disposes the Wasm binding before removing renderer resources. The unchanged
+eight-warmup/31-sample public 25,515-glyph lane measures
 17.84/6.32/3.04/13.84 ms medians and 18.99/6.64/4.60/14.01 ms p95 for cold/font-size/width/text. The adjacent recorded
 run was 19.42/6.59/3.10/14.24 ms median; process-separated samples support no regression and a plausible cold-path
 reduction, not causal attribution.

@@ -2,6 +2,11 @@
 
 ## 2026-08-26
 
+- **Three font bindings now retire at their real ownership boundary** — A disposed loaded font keeps its cached Wasm
+  binding and decoded renderer resources only while a registered stack still names it. The final shared stack lease
+  disposes the binding and then releases those resources; direct Wasm-count coverage proves the cache does not grow
+  across disposed-font churn, and host coverage rejects premature binding disposal while a stack is live.
+
 - **Portable renderer review closed lifecycle and ownership gaps** — Capability selections now belong to one policy,
   resource groups validate exact declared member formats on every public path, and failed renderer resource commits
   dispose the provisional Wasm font binding before discarding device candidates. Host teardown preserves the dependency

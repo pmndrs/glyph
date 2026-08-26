@@ -53,7 +53,19 @@ export interface ThreeTextMaterialLease {
 
 interface RetainedStack {
   readonly handle: FontStackHandle;
+  readonly bindings: readonly RetainedStackBinding[];
   references: number;
+}
+
+interface RetainedStackBinding {
+  readonly font: LoadedFont<AnyRasterTechnique>;
+  readonly binding: RetainedFontBinding;
+}
+
+interface RetainedFontBinding {
+  readonly handle: FontBindingHandle;
+  stackReferences: number;
+  disposalRequested: boolean;
 }
 
 interface RetainedMaterial {
@@ -87,7 +99,7 @@ export interface ThreeTextEngineCoordinatorOptions {
 /** Three-owned cold registrations shared by every text batch using one renderer-neutral runtime. */
 export class ThreeTextEngineCoordinator {
   readonly host: TextEngineHost;
-  readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, FontBindingHandle>();
+  readonly #bindingHandles = new WeakMap<LoadedFont<AnyRasterTechnique>, RetainedFontBinding>();
   readonly #resources = new Map<number, RetainedResourceOwners>();
   readonly #fontResourceReferences = new Map<LoadedFont<AnyRasterTechnique>, Set<number>>();
   readonly #fontDisposeObservers = new Map<LoadedFont<AnyRasterTechnique>, () => void>();
@@ -159,12 +171,23 @@ export class ThreeTextEngineCoordinator {
     fonts: readonly [LoadedFont<AnyRasterTechnique>, ...LoadedFont<AnyRasterTechnique>[]],
   ): ThreeTextEngineStackLease {
     this.#assertActive();
-    const bindingHandles = fonts.map((font) => this.#bindingHandle(font));
+    const stackBindings: RetainedStackBinding[] = [];
+    const bindingHandles: FontBindingHandle[] = [];
+    const seen = new Set<LoadedFont<AnyRasterTechnique>>();
+    for (const font of fonts) {
+      const binding = this.#bindingHandle(font);
+      bindingHandles.push(binding.handle);
+      if (!seen.has(font)) {
+        seen.add(font);
+        stackBindings.push({ font, binding });
+      }
+    }
     const key = bindingHandles.join(',');
     let retained = this.#stacks.get(key);
     if (retained === undefined) {
-      retained = { handle: this.#allocateStackHandle(), references: 0 };
+      retained = { handle: this.#allocateStackHandle(), bindings: Object.freeze(stackBindings), references: 0 };
       this.host.registerFontStack(retained.handle, bindingHandles);
+      for (const { binding } of retained.bindings) binding.stackReferences += 1;
       this.#stacks.set(key, retained);
     }
     retained.references += 1;
@@ -173,12 +196,34 @@ export class ThreeTextEngineCoordinator {
       handle: retained.handle,
       release: () => {
         if (released) return;
-        released = true;
-        if (this.#disposed) return;
-        retained.references -= 1;
-        if (retained.references !== 0) return;
-        this.#stacks.delete(key);
+        if (this.#disposed) {
+          released = true;
+          return;
+        }
+        if (retained.references > 1) {
+          retained.references -= 1;
+          released = true;
+          return;
+        }
         this.host.disposeFontStack(retained.handle);
+        this.#stacks.delete(key);
+        retained.references = 0;
+        released = true;
+        let failure: unknown;
+        for (const { font, binding } of retained.bindings) {
+          if (binding.stackReferences === 0) {
+            failure ??= new Error('Three font-binding stack ownership is inconsistent');
+            continue;
+          }
+          binding.stackReferences -= 1;
+          if (!binding.disposalRequested || binding.stackReferences !== 0) continue;
+          try {
+            this.#disposeFontRegistration(font, binding);
+          } catch (error) {
+            failure ??= error;
+          }
+        }
+        if (failure !== undefined) throw failure;
       },
     };
   }
@@ -258,7 +303,7 @@ export class ThreeTextEngineCoordinator {
     if (failure !== undefined) throw failure;
   }
 
-  #bindingHandle(font: LoadedFont<AnyRasterTechnique>): FontBindingHandle {
+  #bindingHandle(font: LoadedFont<AnyRasterTechnique>): RetainedFontBinding {
     if (font.disposed) throw new TypeError('cannot register a disposed loaded font with the Three text engine');
     const existing = this.#bindingHandles.get(font);
     if (existing !== undefined) return existing;
@@ -311,7 +356,9 @@ export class ThreeTextEngineCoordinator {
     }
     const binding = compiled.binding;
     this.#assertResourcesCompatible(prepared);
-    const handle = this.#namedHandle('font-binding', 'glyph-three', this.#nextBindingHandle);
+    const ordinal = this.#nextBindingHandle;
+    const handle = this.#namedHandle('font-binding', 'glyph-three', ordinal);
+    const nextBindingHandle = nextOrdinal(ordinal);
     this.#observeFont(font);
     try {
       for (const { key, resource } of prepared) this.#retainResource(font, key, resource);
@@ -320,9 +367,10 @@ export class ThreeTextEngineCoordinator {
       this.#rollbackFontRegistration(font);
       throw error;
     }
-    this.#nextBindingHandle = nextOrdinal(this.#nextBindingHandle);
-    this.#bindingHandles.set(font, handle);
-    return handle;
+    this.#nextBindingHandle = nextBindingHandle;
+    const retained: RetainedFontBinding = { handle, stackReferences: 0, disposalRequested: false };
+    this.#bindingHandles.set(font, retained);
+    return retained;
   }
 
   #assertResourcesCompatible(resources: readonly PreparedResource[]): void {
@@ -357,12 +405,27 @@ export class ThreeTextEngineCoordinator {
 
   #observeFont(font: LoadedFont<AnyRasterTechnique>): void {
     if (this.#fontDisposeObservers.has(font)) return;
-    const stopObserving = observeLoadedFontDispose(font, () => this.#releaseFontResources(font));
+    const stopObserving = observeLoadedFontDispose(font, () => this.#requestFontDisposal(font));
     this.#fontDisposeObservers.set(font, stopObserving);
   }
 
   #rollbackFontRegistration(font: LoadedFont<AnyRasterTechnique>): void {
     this.#fontDisposeObservers.get(font)?.();
+    this.#releaseFontResources(font);
+  }
+
+  #requestFontDisposal(font: LoadedFont<AnyRasterTechnique>): void {
+    const binding = this.#bindingHandles.get(font);
+    if (binding === undefined) {
+      this.#releaseFontResources(font);
+      return;
+    }
+    binding.disposalRequested = true;
+    if (binding.stackReferences === 0) this.#disposeFontRegistration(font, binding);
+  }
+
+  #disposeFontRegistration(font: LoadedFont<AnyRasterTechnique>, binding: RetainedFontBinding): void {
+    this.host.disposeFontBinding(binding.handle);
     this.#releaseFontResources(font);
   }
 

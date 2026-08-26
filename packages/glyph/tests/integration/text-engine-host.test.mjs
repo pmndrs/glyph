@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { FontRegistry } from '@pmndrs/glyph';
+import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { TextEngineHost } from '../../dist/core/host.js';
 import { assertGlyphId, id, programId, techniqueId } from '../../dist/core/render-policy.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
-import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
+import { engineUpdateBytes, fontBindingBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
@@ -74,6 +76,46 @@ test('host-scoped ID provenance expires with its owning host', async () => {
   assert.throws(() => assertGlyphId(handle, 'session', 'session handle'), /must come from id/);
   assert.throws(() => host.id('session', 'test.text-engine-host/after-dispose'), /disposed/);
   shaper.dispose();
+});
+
+test('font bindings cannot be disposed while an owned stack still references them', async () => {
+  const [artifact, wasm] = await Promise.all([
+    readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+    readFile(wasmUrl),
+  ]);
+  const validated = await validateFontArtifact(artifact);
+  const registry = new FontRegistry();
+  const font = await registry.registerAsset(artifact);
+  const shaper = await createRuntimeShaper({ registry, wasm });
+  shaper.registerFont(font);
+  const host = new TextEngineHost(shaper);
+  const bindingHandle = host.id('font-binding', 'test.text-engine-host/lifecycle-binding');
+  const stackHandle = host.id('font-stack', 'test.text-engine-host/lifecycle-stack');
+  const glyphCount = validated.glyphExtents.byteLength / 8;
+  const binding = fontBindingBytes(textShaperAbi, {
+    techniqueId: 1,
+    glyphCount,
+    strikes: [0],
+    resources: [{ id: 1, generation: 1, kind: 1, reference: 1 }],
+    resourceIndices: new Array(glyphCount).fill(0),
+    glyphF32: [new Array(glyphCount).fill(1)],
+  });
+  try {
+    host.registerFontBinding(bindingHandle, font.handle, binding);
+    host.registerFontStack(stackHandle, [bindingHandle]);
+    assert.throws(() => host.disposeFontBinding(bindingHandle), /still used by font stack/u);
+    assert.throws(() => shaper.disposeFont(font), /retained by a registered font stack/u);
+    assert.equal(shaper.memoryReport().fontCount, 1, 'a refused disposal must keep the shaper registration owned');
+    host.disposeFontStack(stackHandle);
+    host.disposeFontBinding(bindingHandle);
+    assert.throws(() => host.disposeFontBinding(bindingHandle), /not owned/u);
+    shaper.disposeFont(font);
+    assert.equal(shaper.memoryReport().fontCount, 0);
+  } finally {
+    host.dispose();
+    font.dispose();
+    shaper.dispose();
+  }
 });
 
 test('one deterministic Three policy registers Bitmap, MSDF, and Slug with material-directed draws', async () => {
