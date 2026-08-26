@@ -118,13 +118,13 @@ export const packageSizeBudgets = {
   // guidance left +468 of real production behaviour, which fits the existing ceiling.
   // +22 KB over main is `unicode-segmenter`, entering every graph via internal/graphemes.ts so span
   // alignment matches the engine's cluster grid. Deliberate; both hosts measure identically.
-  // Generic variants plus prepare/commit plan realization measure 556,648 raw /
-  // 347,520 minified / 90,397 gzip / 75,445 Brotli.
+  // Portable grouped resources and first-party realization now measure 580,521 raw /
+  // 363,454 minified / 94,132 gzip / 78,431 Brotli.
   'three-runtime-js': {
-    rawBytes: 565_000,
-    minifiedBytes: 354_000,
-    gzipBytes: 92_500,
-    brotliBytes: 77_000,
+    rawBytes: 583_000,
+    minifiedBytes: 366_000,
+    gzipBytes: 95_500,
+    brotliBytes: 79_500,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,
@@ -162,25 +162,25 @@ export const packageSizeBudgets = {
     gzipBytes: 690_000,
     brotliBytes: 510_000,
   },
-  // Shared Three runtime graphs measure at most 537,892 raw / 335,736 minified /
-  // 88,187 gzip / 73,280 Brotli; one ceiling keeps technique drift visible.
+  // Shared Three technique graphs now measure at most 558,711 raw / 349,897 minified /
+  // 91,129 gzip / 76,045 Brotli; one ceiling keeps technique drift visible.
   'bitmap-runtime-js': {
-    rawBytes: 545_000,
-    minifiedBytes: 342_000,
-    gzipBytes: 90_000,
-    brotliBytes: 75_000,
+    rawBytes: 561_000,
+    minifiedBytes: 352_000,
+    gzipBytes: 92_500,
+    brotliBytes: 77_000,
   },
   'mtsdf-runtime-js': {
-    rawBytes: 545_000,
-    minifiedBytes: 342_000,
-    gzipBytes: 90_000,
-    brotliBytes: 75_000,
+    rawBytes: 561_000,
+    minifiedBytes: 352_000,
+    gzipBytes: 92_500,
+    brotliBytes: 77_000,
   },
   'slug-runtime-js': {
-    rawBytes: 545_000,
-    minifiedBytes: 342_000,
-    gzipBytes: 90_000,
-    brotliBytes: 75_000,
+    rawBytes: 561_000,
+    minifiedBytes: 352_000,
+    gzipBytes: 92_500,
+    brotliBytes: 77_000,
   },
   'bitmap-baker-wasm': {
     rawBytes: 626_000,
