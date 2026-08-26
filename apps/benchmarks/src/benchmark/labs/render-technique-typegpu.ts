@@ -11,6 +11,8 @@ import {
 
 const STACK_HANDLE = id('font-stack', 'labs/typegpu-example/font-stack');
 const SESSION_HANDLE = id('session', 'labs/typegpu-example/session');
+const SUBMISSION_WARMUP = 20;
+const SUBMISSION_SAMPLES = 101;
 
 export interface RenderTechniqueTypeGpuLabReport {
   readonly initialDraws: number;
@@ -21,6 +23,8 @@ export interface RenderTechniqueTypeGpuLabReport {
   readonly idleGpuSubmissions: number;
   readonly clearGpuSubmissions: number;
   readonly clearedVisiblePixels: number;
+  readonly submissionMedianMs: number;
+  readonly submissionP95Ms: number;
 }
 
 /** Runs the external-renderer contract through a real WebGPU device and reads its RGBA target back. */
@@ -58,8 +62,20 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       text.update({ text: 'Updated WebGPU', foregroundRgba: 0xff40_a0ff });
       const updated = await text.render();
       const updatedPixels = await renderer.readPixels();
+      const submissionSamples: number[] = [];
+      for (let index = 0; index < SUBMISSION_WARMUP + SUBMISSION_SAMPLES; index += 1) {
+        text.update({ text: index % 2 === 0 ? 'Pipeline WebGPU' : 'Updated WebGPU' });
+        const started = performance.now();
+        const sampled = await text.render();
+        const duration = performance.now() - started;
+        if (sampled.draws.length === 0) throw new Error('the TypeGPU submission benchmark produced no draw');
+        if (index >= SUBMISSION_WARMUP) submissionSamples.push(duration);
+      }
+      submissionSamples.sort((left, right) => left - right);
       const submissionsBeforeIdle = renderer.submittedPasses;
-      if (submissionsBeforeIdle !== 2) throw new Error('the TypeGPU renderer lab expected two visible GPU submissions');
+      if (submissionsBeforeIdle !== 2 + SUBMISSION_WARMUP + SUBMISSION_SAMPLES) {
+        throw new Error('the TypeGPU renderer lab did not submit every measured frame');
+      }
       await text.render();
       const idleGpuSubmissions = renderer.submittedPasses - submissionsBeforeIdle;
       const submissionsBeforeDispose = renderer.submittedPasses;
@@ -75,6 +91,8 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         idleGpuSubmissions,
         clearGpuSubmissions: renderer.submittedPasses - submissionsBeforeDispose,
         clearedVisiblePixels: visiblePixelCount(clearedPixels),
+        submissionMedianMs: percentile(submissionSamples, 0.5),
+        submissionP95Ms: percentile(submissionSamples, 0.95),
       });
       if (report.initialDraws === 0 || report.updatedDraws === 0) {
         throw new Error('the TypeGPU renderer lab produced an empty draw list');
@@ -85,7 +103,11 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         report.changedPixels === 0 ||
         report.idleGpuSubmissions !== 0 ||
         report.clearGpuSubmissions !== 1 ||
-        report.clearedVisiblePixels !== 0
+        report.clearedVisiblePixels !== 0 ||
+        !Number.isFinite(report.submissionMedianMs) ||
+        !Number.isFinite(report.submissionP95Ms) ||
+        report.submissionMedianMs <= 0 ||
+        report.submissionP95Ms < report.submissionMedianMs
       ) {
         throw new Error('the TypeGPU renderer lab did not produce changing visible pixels');
       }
@@ -100,6 +122,13 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
     runtime.dispose();
     gpuDevice.destroy();
   }
+}
+
+function percentile(sorted: readonly number[], quantile: number): number {
+  const index = Math.min(sorted.length - 1, Math.floor(sorted.length * quantile));
+  const value = sorted[index];
+  if (value === undefined) throw new Error('TypeGPU submission benchmark produced no samples');
+  return value;
 }
 
 function visiblePixelCount(pixels: Uint8Array): number {
