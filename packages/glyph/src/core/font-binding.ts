@@ -332,10 +332,6 @@ export function emptyFontBindingTable(rows: number): FontBindingFieldTable {
   return { rows, fields: [] };
 }
 
-function recordView(bytes: Uint8Array): DataView {
-  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-}
-
 function align(value: number, alignment: number): number {
   return Math.ceil(value / alignment) * alignment;
 }

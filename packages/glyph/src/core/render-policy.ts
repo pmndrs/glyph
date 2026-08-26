@@ -209,9 +209,10 @@ export function policyCapabilitySetSelectionId(selection: unknown): number {
   if (typeof selection !== 'object' || selection === null) {
     throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
   }
-  const id = capabilitySetSelectionIds.get(selection);
-  if (id === undefined) throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
-  return id;
+  const capabilitySetId = capabilitySetSelectionIds.get(selection);
+  if (capabilitySetId === undefined)
+    throw new TypeError('frame capabilitySet must come from selectPolicyCapabilitySet()');
+  return capabilitySetId;
 }
 
 declare const techniqueWireIdBrand: unique symbol;
@@ -223,10 +224,12 @@ export type RenderProgramId = number & { readonly [programWireIdBrand]: true };
 export type RenderResourceId = number & { readonly [resourceWireIdBrand]: true };
 
 /** Deterministic UTF-8 FNV-1a mapping used by both policy and font-binding compilers. */
-export function renderWireId(id: string): number {
-  if (typeof id !== 'string' || id.length === 0) throw new TypeError('render identity must be a nonempty string');
+export function renderWireId(identity: string): number {
+  if (typeof identity !== 'string' || identity.length === 0) {
+    throw new TypeError('render identity must be a nonempty string');
+  }
   let hash = 0x811c_9dc5;
-  for (const byte of encoder.encode(id)) hash = Math.imul(hash ^ byte, 0x0100_0193) >>> 0;
+  for (const byte of encoder.encode(identity)) hash = Math.imul(hash ^ byte, 0x0100_0193) >>> 0;
   if (hash === 0) throw new RangeError('raster technique ID hashes to the reserved zero wire identity');
   return hash;
 }
@@ -235,13 +238,13 @@ export function renderWireId(id: string): number {
 export class RenderWireIdentityRegistry {
   readonly #strings = new Map<number, string>();
 
-  idFor(id: string): number {
-    const wireId = renderWireId(id);
+  idFor(identity: string): number {
+    const wireId = renderWireId(identity);
     const collision = this.#strings.get(wireId);
-    if (collision !== undefined && collision !== id) {
-      throw new TypeError(`render wire identity collision between "${collision}" and "${id}"`);
+    if (collision !== undefined && collision !== identity) {
+      throw new TypeError(`render wire identity collision between "${collision}" and "${identity}"`);
     }
-    this.#strings.set(wireId, id);
+    this.#strings.set(wireId, identity);
     return wireId;
   }
 
@@ -288,11 +291,11 @@ function programWireKey(technique: AnyRasterTechnique | string, namespace: strin
 }
 
 function rasterTechniqueIdentity(technique: AnyRasterTechnique | string): string {
-  const id = typeof technique === 'string' ? technique : technique?.id;
-  if (typeof id !== 'string' || id.length === 0) {
+  const identity = typeof technique === 'string' ? technique : technique?.id;
+  if (typeof identity !== 'string' || identity.length === 0) {
     throw new TypeError('render technique identity must be a nonempty string');
   }
-  return id;
+  return identity;
 }
 
 export type PolicyTransformMode = 'direct' | 'indexed';
@@ -541,9 +544,9 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     const bufferIds = new Set<number>();
     for (const [index, buffer] of program.buffers.entries()) {
       const bufferLabel = `policy program ${program.programId} buffer ${index}`;
-      const id = u16(assertGlyphId(buffer.id, 'buffer', `${bufferLabel} id`), `${bufferLabel} id`);
-      if (bufferIds.has(id)) throw new TypeError(`policy repeats buffer id ${id} within a program`);
-      bufferIds.add(id);
+      const bufferId = u16(assertGlyphId(buffer.id, 'buffer', `${bufferLabel} id`), `${bufferLabel} id`);
+      if (bufferIds.has(bufferId)) throw new TypeError(`policy repeats buffer id ${bufferId} within a program`);
+      bufferIds.add(bufferId);
       u8(buffer.scalar, `${bufferLabel} scalar`);
       u8(buffer.vectorWidth, `${bufferLabel} vectorWidth`);
       if (buffer.alignment !== undefined) u16(buffer.alignment, `${bufferLabel} alignment`);
@@ -589,7 +592,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   // (unset) program reference covers all of them.
   for (const [index] of capabilitySets.entries()) {
     const wireId = index + 1;
-    const referenced = programCapabilityIds.some((id) => id === 0 || id === wireId);
+    const referenced = programCapabilityIds.some((capabilityId) => capabilityId === 0 || capabilityId === wireId);
     if (!referenced) {
       throw new TypeError(`policy capability set ${index} is declared but referenced by no program`);
     }
@@ -937,9 +940,9 @@ function resolveCapabilitySetId(
 ): number {
   if (capabilitySet === undefined) return 0;
   const normalized = normalizePolicyCapabilitySet(capabilitySet, `${programLabel} capability set`);
-  const id = capabilityIds.get(capabilitySetKey(normalized));
-  if (id === undefined) throw new TypeError(`${programLabel} references an undeclared capability set`);
-  return id;
+  const capabilityId = capabilityIds.get(capabilitySetKey(normalized));
+  if (capabilityId === undefined) throw new TypeError(`${programLabel} references an undeclared capability set`);
+  return capabilityId;
 }
 
 function capabilitySetKey(set: PolicyCapabilitySet): string {
