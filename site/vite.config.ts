@@ -27,6 +27,10 @@ export default defineConfig({
   plugins: [react()],
   root: 'landing',
   server: {
+    // Bind every interface, not just loopback. Vite's default is `localhost`,
+    // which listens on `[::1]` alone — another device on the LAN gets a refused
+    // connection, with no server-side trace of the attempt at all.
+    host: true,
     // The docs build writes thousands of files into both of these, and the npx
     // cache has to live inside the workspace so Next resolves its root here
     // rather than in $HOME. Watching either turns a docs build into a reload
