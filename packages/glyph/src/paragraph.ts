@@ -663,7 +663,14 @@ class ParagraphEngineContext {
       try {
         host.dispose();
       } catch (disposeError) {
-        throw new AggregateError([error, disposeError], 'paragraph engine construction and teardown both failed');
+        const failure = new AggregateError(
+          [error, disposeError],
+          'paragraph engine construction and teardown both failed',
+          {
+            cause: error,
+          },
+        );
+        throw failure;
       }
       throw error;
     }
