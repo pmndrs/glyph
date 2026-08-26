@@ -24,14 +24,49 @@ function noise(x: number, seed: number): number {
 }
 
 /**
+ * Per-axis octave ratios and phase.
+ *
+ * Sampling every axis at the same time with the same octave ratios is what made
+ * the motion read as one diagonal sway: the axes stay in phase, so their sum has
+ * a direction, and shared harmonics realign on a period the eye learns. Each
+ * axis gets its own ratios and its own offset into the sequence instead, derived
+ * from the seed so it stays deterministic. Nothing is rational against anything
+ * else, so nothing ever comes back into step.
+ */
+function axis(seed: number): { offset: number; ratios: readonly [number, number, number] } {
+  const jitter = (n: number) => 0.82 + hash(seed * 7.3 + n) * 0.44;
+  return {
+    offset: hash(seed * 3.1) * 128,
+    ratios: [1 * jitter(1), 3.17 * jitter(2), 7.41 * jitter(3)],
+  };
+}
+
+/**
  * Weighted toward the faster octaves.
  *
  * A slow octave carrying most of the amplitude reads as floating — the frame
  * wanders somewhere and stays there. Shake is the opposite shape: the camera
- * never travels far, but it is never quite still either, so the weight belongs
- * on the detail and the amplitude stays small. The octave ratios are irrational
- * so the three never line up into a visible beat.
+ * never travels far, but it is never quite still either.
  */
 export function shake(time: number, seed: number): number {
-  return noise(time, seed) * 0.3 + noise(time * 3.17, seed + 31) * 0.42 + noise(time * 7.41, seed + 67) * 0.28;
+  const { offset, ratios } = axis(seed);
+  const t = time + offset;
+  return (
+    noise(t * ratios[0], seed) * 0.3 + noise(t * ratios[1], seed + 31) * 0.42 + noise(t * ratios[2], seed + 67) * 0.28
+  );
+}
+
+/**
+ * How much the camera is moving at all, right now.
+ *
+ * Constant-amplitude noise is still relentless — it never rests, and relentless
+ * is what turns small movement into motion sickness. A slow envelope gates it so
+ * the camera drifts, settles for a few seconds, and picks up again. Biased
+ * toward the low end and floored just above zero: mostly quiet, never frozen,
+ * and its period is unrelated to any of the axes above.
+ */
+export function envelope(time: number, seed: number): number {
+  const slow = noise(time * 0.23 + hash(seed) * 64, seed + 991);
+  const shaped = (slow + 1) / 2;
+  return 0.16 + shaped * shaped * 0.84;
 }
