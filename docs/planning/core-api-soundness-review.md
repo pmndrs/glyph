@@ -446,6 +446,41 @@ enforces which minter produced a value, and crossing them fails only at teardown
 **Recommendation.** Either refcount by registration rather than derivation, or make the two minters
 return distinct types so a permanent-lifetime handle cannot be supplied where a scoped one is expected.
 
+### C13 — A font stack can be disposed while a live session names it
+
+**Severity: medium. Status: open. Verified live.**
+
+#120 added ownership checks one level deep and stopped there. Against a host with a live session:
+
+```
+disposing a font binding a STACK still uses:
+  rejected: font binding 3699529736 is still used by font stack 3889297988
+disposing a font stack while a SESSION is live:
+  ACCEPTED
+disposing a policy the session is bound to:
+  no public disposePolicy
+```
+
+`dispose_font_stack` removes the entry unconditionally
+([`state.rs:434`](../../packages/glyph/rust/shaper/src/engine/state.rs)) and the JS side checks only
+host ownership, not session use. The next frame naming that stack fails `fontStackMissing`. `/three`
+never reaches this because it refcounts stacks with leases (`acquireFontStack` / `release`), but
+nothing in `/core` requires an integrator to do the same.
+
+| Disposing | while | Today |
+| --- | --- | --- |
+| a font binding | a font stack references it | refused (D-281) |
+| a font stack | a live session names it | **allowed** |
+| a policy | a session is bound to it | no public call; only at host teardown |
+| a host | its sessions are live | sessions disposed first |
+
+Each layer protects the one directly below it and stops. This also corrects a claim made earlier in
+this review: a session *can* outlive a registration it draws on — it cannot outlive its host, but a
+stack or (cross-host) a policy can vanish underneath it.
+
+**Recommendation.** Extend the same check one level up: refuse to dispose a stack a live session
+names. Cheap, and it closes the last place a registration disappears under something using it.
+
 ## Fixed in #120
 
 ### C2 — `TextEngineHost.dispose()` is now total and idempotent
