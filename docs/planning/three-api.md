@@ -253,7 +253,9 @@ prepared work. Repeating an unchanged measurement returns the retained result ob
 
 `glyphs()` is intentionally different: it inspects committed positioned output and copies per-line and per-glyph arrays.
 If semantic state is pending, that query takes the full renderer synchronization path first. Ordinary rendering never
-materializes either semantic view merely to draw.
+materializes either semantic view merely to draw. If renderer realization rejects the current update, `glyphs()`,
+`snapshotGlyphs()`, caret lookup, and selection lookup return `undefined` until explicit renderer-relevant invalidation
+successfully realizes a checkpoint; inspection never retries the rejected unchanged frame.
 
 The complete field semantics are defined by the [core layout-query reference](core-api.md#layout-query-values).
 

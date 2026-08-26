@@ -4,7 +4,7 @@ import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
 import { createFontStack, createTextRuntime, FontRegistry } from '@pmndrs/glyph';
-import { TextEngineSession } from '@pmndrs/glyph/core';
+import { TextEngineHost, TextEngineSession } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -401,6 +401,13 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   assert.ok(label.layout().glyphCount > 0, 'measurement remains independent of material realization');
   assert.equal(instrumented.crossings, 1, 'measurement must not retry or consume renderer publication');
   assert.match(String(group.error), /deliberate material realization failure/u);
+  assert.equal(label.glyphs(), undefined, 'positioned inspection is unavailable while the renderer update is rejected');
+  assert.equal(
+    label.snapshotGlyphs(),
+    undefined,
+    'drawn placement is unavailable while the renderer update is rejected',
+  );
+  assert.equal(instrumented.crossings, 1, 'inspection must not turn a rejected unchanged frame into a retry');
 
   failMaterial = false;
   scene.updateMatrixWorld();
@@ -433,6 +440,46 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   label.dispose();
   font.dispose();
   runtime.dispose();
+});
+
+test('a rejected fixed-capacity candidate releases its provisional font-stack lease', async (t) => {
+  const registerFontStack = TextEngineHost.prototype.registerFontStack;
+  const disposeFontStack = TextEngineHost.prototype.disposeFontStack;
+  let registrations = 0;
+  let disposals = 0;
+  TextEngineHost.prototype.registerFontStack = function (...args) {
+    registrations += 1;
+    return registerFontStack.apply(this, args);
+  };
+  TextEngineHost.prototype.disposeFontStack = function (...args) {
+    disposals += 1;
+    return disposeFontStack.apply(this, args);
+  };
+  t.after(() => {
+    TextEngineHost.prototype.registerFontStack = registerFontStack;
+    TextEngineHost.prototype.disposeFontStack = disposeFontStack;
+  });
+
+  const runtime = await createTextRuntime({
+    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
+  });
+  const font = await runtime.loadFont({
+    input: { baked: dataUrl(await readFile(fontUrl)) },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  });
+  const scene = new THREE.Scene();
+  const label = new Text({ font, text: 'over budget', capacity: { size: 1, policy: 'fixed' } });
+  try {
+    scene.add(label);
+    scene.updateMatrixWorld();
+    assert.deepEqual(label.commitState(), { status: 'pending' });
+    label.dispose();
+    assert.equal(disposals, registrations, 'a skipped candidate must not retain its compiled font stack');
+  } finally {
+    label.dispose();
+    font.dispose();
+    runtime.dispose();
+  }
 });
 
 test('TextGroup drops disposed descendants and reuses their committed transform identities', async () => {

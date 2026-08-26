@@ -848,6 +848,7 @@ class ThreeTextBatchBinding {
   #canonicalLayoutInspection(text: Text<AnyRasterTechnique>): ParagraphLayoutInspection | undefined {
     if (!this.#paragraphs.has(text)) return undefined;
     this.#assertRendererReady();
+    if (this.#rendererUpdateRejected) return undefined;
     this.synchronize(textShaperAbi.engine.semanticViewMasks.layoutInspection);
     return this.#layoutInspections.get(text);
   }
@@ -980,6 +981,8 @@ class ThreeTextBatchBinding {
         // live so the paragraph still follows the camera.
         this.#target?.syncTransforms(this.#dirtyTransformIds, this.#group !== undefined);
         this.#dirtyTransformIds.clear();
+        for (const leases of pendingLeases.values()) releaseStackLeases(leases);
+        for (const leases of pendingMaterials.values()) releaseMaterialLeases(leases);
         return;
       }
       this.#ensureCapacity(totalTextLength, maximumParagraphTextLength);

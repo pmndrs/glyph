@@ -44,9 +44,9 @@ const tableLayouts = {
   },
 } as const;
 
-/** Reusable zero-copy reader over one borrowed Rust render-plan publication. */
+/** Reusable zero-copy reader over one validated Rust render-plan publication. */
 export class TextEngineRenderPlanView {
-  #memoryBuffer: ArrayBuffer | undefined;
+  #memoryBuffer: ArrayBufferLike | undefined;
   #view: DataView | undefined;
   #baseOffset = 0;
   #byteLength = 0;
@@ -61,19 +61,14 @@ export class TextEngineRenderPlanView {
 
   /** Binds copied plan bytes received across a realm boundary after validating their complete table framing. */
   bindBytes(bytes: Uint8Array): this {
-    if (!(bytes instanceof Uint8Array) || !(bytes.buffer instanceof ArrayBuffer)) {
-      throw new TypeError('text-engine plan bytes must be a Uint8Array backed by an ArrayBuffer');
-    }
+    if (!(bytes instanceof Uint8Array)) throw new TypeError('text-engine plan bytes must be a Uint8Array');
+    validateResultBytes(bytes);
     if (this.#memoryBuffer !== bytes.buffer) {
       this.#memoryBuffer = bytes.buffer;
       this.#view = new DataView(bytes.buffer);
     }
     this.#baseOffset = bytes.byteOffset;
     this.#byteLength = bytes.byteLength;
-    if (this.#byteLength < resultLayout.size || this.u32(resultLayout.byteLength) !== this.#byteLength) {
-      throw new RangeError('text-engine publication header has an invalid byte length');
-    }
-    for (const name of Object.keys(tableLayouts) as TableName[]) this.table(name);
     return this;
   }
 
@@ -144,6 +139,50 @@ function checkedProduct(left: number, right: number, label: string): number {
   if (!Number.isSafeInteger(value))
     throw new RangeError(`${label} byte length exceeds JavaScript's safe integer range`);
   return value;
+}
+
+interface ResultTableLayout {
+  readonly offset: number;
+  readonly count: number;
+  readonly record: { readonly size: number; readonly alignment: number };
+}
+
+function validateResultBytes(bytes: Uint8Array): void {
+  if (bytes.byteLength < resultLayout.size) {
+    throw new RangeError('text-engine publication header has an invalid byte length');
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(resultLayout.byteLength, true) !== bytes.byteLength) {
+    throw new RangeError('text-engine publication header has an invalid byte length');
+  }
+  if (view.getUint32(resultLayout.abiVersion, true) !== textShaperAbi.version) {
+    throw new RangeError('text-engine publication has an unsupported ABI version');
+  }
+  if (view.getUint32(resultLayout.status, true) !== textShaperAbi.status.ok) {
+    throw new RangeError('text-engine publication does not contain a successful result');
+  }
+  for (const name of Object.keys(tableLayouts) as TableName[]) {
+    validateResultTable(view, bytes.byteLength, name, tableLayouts[name]);
+  }
+  validateResultTable(view, bytes.byteLength, 'semantic views', {
+    offset: resultLayout.semanticViewsOffset,
+    count: resultLayout.semanticViewCount,
+    record: textShaperAbi.layouts.engineSemanticView,
+  });
+}
+
+function validateResultTable(view: DataView, resultByteLength: number, name: string, layout: ResultTableLayout): void {
+  const offset = view.getUint32(layout.offset, true);
+  const count = view.getUint32(layout.count, true);
+  if (count === 0) {
+    if (offset !== 0) throw new RangeError(`empty text-engine ${name} table has a nonzero offset`);
+    return;
+  }
+  if (offset % layout.record.alignment !== 0) throw new RangeError(`text-engine ${name} table is misaligned`);
+  const byteLength = checkedProduct(count, layout.record.size, `${name} table`);
+  if (offset < resultLayout.size || offset + byteLength > resultByteLength) {
+    throw new RangeError(`text-engine ${name} table is outside the publication`);
+  }
 }
 
 /** One decoded row of the plan's `patches` table: a dirty range on one retained buffer. */

@@ -13,6 +13,7 @@ import {
   TextEngineRenderPlanView,
 } from '../../dist/core.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
+import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const POLICY_HANDLE = id('policy', 'publication-retention/policy');
@@ -87,15 +88,48 @@ test('a borrowed publication expires at the next call, and an owned copy survive
     /was not copied/u,
     'structured cloning cannot transfer same-realm runtime provenance',
   );
+  const transferredView = new TextEngineRenderPlanView();
   assert.doesNotThrow(
-    () => new TextEngineRenderPlanView().bindBytes(transferred.bytes),
+    () => transferredView.bindBytes(transferred.bytes),
     'the receiving realm can validate and read the transferred self-owned bytes',
+  );
+  assert.throws(
+    () => transferredView.bindBytes(new Uint16Array(8)),
+    /must be a Uint8Array/u,
+    'the boundary rejects a different typed-array element width',
   );
   assert.throws(
     () => new TextEngineRenderPlanView().bindBytes(transferred.bytes.subarray(0, 8)),
     /invalid byte length/u,
     'cross-realm bytes are validated at the worker-facing call',
   );
+  const abiMismatch = transferred.bytes.slice();
+  new DataView(abiMismatch.buffer).setUint32(textShaperAbi.layouts.engineResult.abiVersion, 1, true);
+  assert.throws(() => transferredView.bindBytes(abiMismatch), /unsupported ABI version/u);
+  assert.deepEqual(
+    transferredView.table('draws'),
+    new TextEngineRenderPlanView().bindBytes(transferred.bytes).table('draws'),
+    'a rejected bind must leave the reader on its prior valid publication',
+  );
+  const failedResult = transferred.bytes.slice();
+  new DataView(failedResult.buffer).setUint32(
+    textShaperAbi.layouts.engineResult.status,
+    textShaperAbi.status.invalidRequest,
+    true,
+  );
+  assert.throws(() => transferredView.bindBytes(failedResult), /does not contain a successful result/u);
+  const malformedSemanticTable = transferred.bytes.slice();
+  new DataView(malformedSemanticTable.buffer).setUint32(
+    textShaperAbi.layouts.engineResult.semanticViewsOffset,
+    textShaperAbi.layouts.engineResult.size,
+    true,
+  );
+  assert.throws(() => transferredView.bindBytes(malformedSemanticTable), /empty text-engine semantic views table/u);
+  if (typeof SharedArrayBuffer !== 'undefined') {
+    const sharedBytes = new Uint8Array(new SharedArrayBuffer(transferred.bytes.byteLength));
+    sharedBytes.set(transferred.bytes);
+    assert.doesNotThrow(() => transferredView.bindBytes(sharedBytes), 'shared Wasm memory remains readable');
+  }
   const forged = Object.freeze({ ...owned, bytes: first.bytes, memoryBuffer: first.memoryBuffer });
   assert.throws(
     () => assertOwnedTextEnginePublication(forged),

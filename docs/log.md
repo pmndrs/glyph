@@ -12,7 +12,9 @@
   acceptance fence after a failed realization, and same-session owned copies now answer `isExpired()` as permanently live.
   Owned-publication runtime provenance is documented as realm-local; worker receivers call
   `TextEngineRenderPlanView.bindBytes()` on transferred self-owned bytes instead of pretending a WeakSet witness survives
-  structured cloning. The core
+  structured cloning. That call now rejects ABI, status, and every render or semantic table framing mismatch before
+  transactionally rebinding its reader. Rejected Three realization makes positioned inspection return `undefined` without
+  an engine retry, and fixed-capacity candidate rejection releases its provisional stack and material leases. The core
   reference also fixes the lifecycle map: compiled payloads are portable data, while each renderer owns per-device GPU
   realization and cross-session leases.
 

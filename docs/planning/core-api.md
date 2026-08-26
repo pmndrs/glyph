@@ -302,7 +302,8 @@ without copying. A renderer that crosses an async submission, later engine call,
 prevents JavaScript from forging that ownership by copying fields. `assertOwnedTextEnginePublication()` is the runtime gate
 for a same-realm API that stores the publication. For a worker boundary, copy before posting and transfer the self-owned
 buffer; the receiving realm validates the untrusted bytes with `TextEngineRenderPlanView.bindBytes()` because the runtime
-ownership witness is deliberately realm-local.
+ownership witness is deliberately realm-local. Binding is transactional and rejects an ABI mismatch, a non-success status,
+and malformed render or semantic table framing before replacing the reader's prior valid publication.
 
 A renderer carries its last device-accepted `consumedPlanRevision` and `acknowledgedPublicationGeneration` in the next
 frame request; copying a candidate is not the same event as committing it to the device. If realization fails, those values

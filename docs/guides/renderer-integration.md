@@ -532,7 +532,9 @@ Choose one handoff:
   expires, and `assertOwnedTextEnginePublication()` rejects a visible-field copy or JavaScript cast. Copy before an
   asynchronous operation, later session call, or retained same-realm scene handoff. For a worker, copy before posting and
   transfer the self-owned buffer; the receiving realm treats the bytes as untrusted boundary data and calls
-  `new TextEngineRenderPlanView().bindBytes(bytes)`. The runtime ownership witness itself is not structured-cloneable.
+  `new TextEngineRenderPlanView().bindBytes(bytes)`. That call rejects an ABI mismatch, a failed-result header, and every
+  malformed render or semantic table span before binding the reusable reader. The runtime ownership witness itself is not
+  structured-cloneable.
   (`packages/glyph/src/core/host.ts`, `packages/glyph/src/core/retention.ts`)
 
 `session.isExpired()` is an optional diagnostic: it reports currentness for this session's borrows, always returns `false`
@@ -551,7 +553,9 @@ Three consumes the borrow synchronously. If material or resource realization thr
 revision and generation, preserves the error, and does not retry an unchanged frame. Assigning new material or other
 renderer-relevant state requests a fresh checkpoint without copying the rejected publication. Three's plan target does not
 own the GPU device; a device-owning renderer instead discards its lost-device resource pool, creates a replacement, and
-then explicitly requests and realizes a complete checkpoint. (`packages/glyph/src/three/text.ts`)
+then explicitly requests and realizes a complete checkpoint. While that failure remains active, positioned inspection and
+drawn-placement queries return `undefined` instead of crossing the engine or exposing candidate data as committed.
+(`packages/glyph/src/three/text.ts`)
 
 ## 8. Apply patches instead of uploading whole buffers
 
