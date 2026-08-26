@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:d31459845783f84d7ac5e98f58446bd4c88ff7ede1006825342384e060cdf193'
+source_digest: 'sha256:a2289ed860503b3b21a8456dfe12883e12eb0df966d9f3b7860d834ba303deca'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -400,7 +400,13 @@ previously lived in core internals. Three's first-party policy is authored with 
 `three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any import from `internal/`
 or `generated/`, so the first-party integrations consume exactly the layering a third party would.
 
-Both layers publish as npm subpaths. They are how a renderer integrates without our `Object3D`s, and `@pmndrs/glyph/three` is itself built on `/core`, so the earlier finding that they had no consumers was wrong. `packages/glyph-example-renderer` is the standing proof that a second engine consumer can be written against `/core` alone, and it now drives real frames through the item 11 retention protocol: publications are borrowed by default but expire loudly (`isExpired`/`assertLive`), `retain` makes one contiguous host-owned copy branded in the type system, a renderer-owned fence advances only after device commit, patches surface dirty ranges, and storage generations retire through `(kind, id, generation)` records (`core/retention.ts`). `/core`'s contract still has sharp edges -- caller-chosen raw `u32` handles where branded `FontHandle`/`RasterHandle` already exist, caller-supplied opaque byte blobs, no published path from host-owned bytes to a registered shaping font (audit item 12; the example renderer's real-frame test records the clean `fontMissing` rejection), and a manual acquire/release refcount pair -- and those are tracked as hardening in the API surface audit rather than as a reason to withdraw the entry point.
+Both layers publish as npm subpaths. They are how a renderer integrates without our `Object3D`s, and
+`@pmndrs/glyph/three` is itself built on `/core`. `packages/glyph-example-renderer` is the standing second-engine proof:
+borrowed publications expire loudly, `retain` makes one contiguous owned copy, renderer fences advance only after device
+commit, and storage generations retire by exact identity. Public wire identities are branded numeric hashes; runtime IDs
+come from `TextEngineHost.id()` and expire with that host. The host owns bindings, stacks, policies, and sessions, rejects
+foreign or dependency-breaking disposal, and tears them down in dependency order. Portable font compilation retains only
+validated buffer, texture, grouped-resource, and GLB-like geometry payloads, never renderer objects.
 
 The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. The ABI subpaths existed to publish struct
 offsets for pointer arithmetic, which is an internal representation handed to a caller who then owns keeping it valid;

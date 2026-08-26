@@ -235,17 +235,11 @@ Resolve every technique and resource string through the host's one registry:
 
 ```ts
 import { createTextRuntime } from '@pmndrs/glyph';
-import {
-  compileRenderPolicy,
-  createRasterPolicyProgram,
-  id,
-  TextEngineHost,
-  textRuntimeShaper,
-} from '@pmndrs/glyph/core';
+import { compileRenderPolicy, createRasterPolicyProgram, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
 
 const runtime = await createTextRuntime();
 const host = new TextEngineHost(textRuntimeShaper(runtime));
-const MY_RENDERER_POLICY_HANDLE = id('policy', 'my-renderer/default');
+const MY_RENDERER_POLICY_HANDLE = host.id('policy', 'my-renderer/default');
 const capabilitySet = rendererCapabilitySet();
 const policy = createRasterPolicyProgram(quadPlanProgram, {
   namespace: 'my-renderer',
@@ -304,7 +298,6 @@ result arenas, and optionally retained UTF-16 text storage:
 import { compileTextEngineFrameUpdate, type TextEngineFrameLimits } from '@pmndrs/glyph/core';
 
 const SESSION_HANDLE = host.id('session', 'my-renderer/main-view');
-const POLICY_HANDLE = host.id('policy', 'my-renderer/default');
 
 const session = host.createSession({
   handle: SESSION_HANDLE,
@@ -326,7 +319,7 @@ const limits: TextEngineFrameLimits = {
 
 const request = compileTextEngineFrameUpdate({
   sessionId: session.handle,
-  policyHandle: POLICY_HANDLE,
+  policyHandle: MY_RENDERER_POLICY_HANDLE,
   expectedEngineRevision: 0,
   consumedPlanRevision: 0,
   acknowledgedPublicationGeneration: acceptedPublicationGeneration,
@@ -348,7 +341,9 @@ exclusion, inline-object, semantic-view, compositing, and policy-parameter secti
 layout, policy execution, and packing remain in Rust. (`packages/glyph/src/core/frame-wire.ts`)
 
 Capability-set wire IDs are assigned from descriptor order by `compileRenderPolicy()`. Omit `capabilitySet` to select the
-first or only profile; only a renderer that deliberately publishes several profiles needs the low-level one-based selector.
+first or only profile. A renderer publishing several profiles calls
+`selectPolicyCapabilitySet(MY_RENDERER_POLICY_HANDLE, descriptor, selectedProfile)`; the returned opaque selection is
+bound to that policy handle, so the frame compiler rejects cross-policy reuse before allocating request bytes.
 
 Session arena capacity and frame limits are different controls. If a serialized request exceeds the request arena,
 `update()` reserves more space. If a valid result reports a larger required result capacity, it grows the A/B result arenas
@@ -708,6 +703,9 @@ gpuDevice.destroy();
 ```
 
 `engine.registerFont()` performs the cold `compileRasterFont()` and resource-realization transaction described above.
+It registers the binding only after all CPU resource inputs validate, and a device commit failure disposes that binding
+before the pending resource batch is discarded. A binding cannot be disposed while a live font stack references it;
+dispose stacks first, or let `TextEngineHost.dispose()` tear down sessions, stacks, bindings, policies, and ID provenance.
 `text.render()` performs the frame compilation, retention, decode, and submission transaction. `text.update()` only
 changes desired state; shaping and GPU work happen on the next `render()`. `text.dispose()` publishes paragraph removal,
 and the accepted empty scene clears the target. The browser lab uses this exact path with runtime-baked Inter and requires
