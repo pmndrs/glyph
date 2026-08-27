@@ -2,6 +2,21 @@
 
 ## 2026-08-27
 
+- **Closed the ownership plan's input, measurement, and entry-point gaps** — Opus High verified the font/runtime ownership
+  thesis but found the draft had hidden the renderer-neutral text mutation path, omitted target-less Paragraph measurement,
+  `defineFont` bake discovery, app migrations, and target-construction cleanup, and left borrowed expiry and worker payload
+  ownership unenforced. The corrected plan gives render sessions retained text handles, adds async root
+  `createParagraph()` over a private measurement service, preserves existing `FontInput`/`FontToken`/`defineFont`, reuses
+  the bounded transfer pool, and prevents canonical Font backing from entering a transfer list. The root remains the
+  canonical barrel for portable application/provider names; runtime-driving names live only in `/core`, and integrations
+  re-export only signature-required root types.
+
+- **Moved runtime construction to the integrator surface** — Runtime-independent root `loadFont()` means applications no
+  longer encounter `TextRuntime`. The accepted plan moves runtime and host construction to `/core` and uses
+  `runtime.createTextEngineHost()` so the owner constructs and disposes its children directly. Core keeps `bindFont()` for
+  engine registration and rejects a vague `realizeFont()` API; renderer helpers use `initFont()` only when they actually
+  initialize a pooled physical resource set.
+
 - **Kept zero-copy publication as the default target path** — `PlanTarget` consumes the borrowed A/B publication and
   accepts synchronously after renderer submission and state commit. Only `AsyncPlanTarget` receives a package-created copy
   and returns a Promise, for worker round trips or another genuinely deferred acceptance boundary. A worker transfers that

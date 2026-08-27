@@ -176,18 +176,18 @@
         <div class="mini-flow">
           <div class="topo-node"><strong>1 · Load portable font</strong><span>Root <code>loadFont()</code> validates one immutable GLB backing without creating a runtime.</span></div>
           <div class="topo-node"><strong>2 · Compose font stack</strong><span><code>createFontStack()</code> records fallback order as application data.</span></div>
-          <div class="topo-node"><strong>3 · Create runtime</strong><span><code>createTextRuntime()</code> creates one private registration domain and Wasm shaper.</span></div>
+          <div class="topo-node"><strong>3 · Create runtime</strong><span><code>@pmndrs/glyph/core</code> creates one private registration domain and Wasm shaper.</span></div>
           <div class="topo-node"><strong>4 · Keep font lease</strong><span>The font may outlive this runtime and bind to another one later.</span></div>
         </div>
       </div>
       <div class="swimlane-row">
         <div class="lane-title">Host registration</div>
         <div class="mini-flow">
-          <div class="topo-node host"><strong>5 · Attach host</strong><span><code>createTextEngineHost({ owner: runtime })</code> records the permanent lifetime edge.</span></div>
+          <div class="topo-node host"><strong>5 · Create host</strong><span><code>runtime.createTextEngineHost()</code> constructs and records its permanent child.</span></div>
           <div class="topo-node host"><strong>6 · Install policy</strong><span>The host wraps portable technique bodies with renderer lanes and capabilities.</span></div>
           <div class="topo-node host"><strong>7 · Bind font</strong><span><code>host.bindFont(font)</code> deduplicates runtime shaping and host portable binding state.</span></div>
           <div class="topo-node host"><strong>8 · Bind stack</strong><span><code>host.bindFontStack(stack)</code> returns one opaque host-owned fallback token.</span></div>
-          <div class="topo-node host"><strong>9 · Realize lazily</strong><span>The renderer pools immutable resources per GPU device when a plan references them.</span></div>
+          <div class="topo-node host"><strong>9 · Initialize lazily</strong><span>The renderer reuses or allocates immutable GPU resources when a plan first references them.</span></div>
         </div>
       </div>
       <div class="swimlane-row">
@@ -436,7 +436,7 @@
       <thead><tr><th>Severity</th><th>Observed API condition</th><th>Concrete failure mode</th><th>Smallest credible correction</th><th>Regression evidence to add</th></tr></thead>
       <tbody>
         <tr class="finding-high"><td><strong>High</strong></td><td><code>TextRuntimeOptions.registry</code> lets two runtimes own mutable <code>RegisteredFont</code> and raster handles without per-runtime leases.</td><td>Disposing one runtime-bound font can drop shaping state while another <code>LoadedFont</code> still reports live.</td><td>Remove the public mutable runtime registry. Root <code>loadFont()</code> returns an immutable refcounted Font; each runtime privately registers it.</td><td>One Font binds to two runtimes and survives either disposal order; each runtime has exactly one shaping registration.</td></tr>
-        <tr class="finding-high"><td><strong>High</strong></td><td><code>new TextEngineHost(textRuntimeShaper(runtime))</code> captures raw exports but loses the public runtime-lifetime edge.</td><td>After <code>runtime.dispose()</code>, an external host can continue against orphaned exports because only first-party integrations install private observers.</td><td>Expose only <code>createTextEngineHost({ owner: runtime })</code>; attach before return, cascade teardown, and provide no raw or rebind constructor.</td><td>Runtime disposal closes every host/session before Wasm; all later calls fail as disposed.</td></tr>
+        <tr class="finding-high"><td><strong>High</strong></td><td><code>new TextEngineHost(textRuntimeShaper(runtime))</code> captures raw exports but loses the public runtime-lifetime edge.</td><td>After <code>runtime.dispose()</code>, an external host can continue against orphaned exports because only first-party integrations install private observers.</td><td>Move runtime construction to <code>/core</code> and expose only <code>runtime.createTextEngineHost()</code>; attach before return, cascade teardown, and provide no raw or rebind constructor.</td><td>Runtime disposal closes every host/session before Wasm; all later calls fail as disposed.</td></tr>
         <tr class="finding-high"><td><strong>High</strong></td><td>A session exposes acknowledgment numbers but does not own the renderer endpoint whose commit gives those numbers meaning.</td><td>One session can acknowledge a fast canvas while a slower canvas still uses retired storage.</td><td>Require exactly one abstract borrowed-or-owned target at session creation. A renderer may implement one lockstep composite target.</td><td>Independent canvases require separate sessions; a composite target cannot accept before every member commits.</td></tr>
         <tr class="finding-high"><td><strong>High</strong></td><td>A content-keyed runtime registration map can become a lifetime owner instead of a lookup index.</td><td>A long-lived runtime can retain every once-bound font's Wasm copy and backing after its final host lease ends.</td><td>Retain the runtime entry only through counted host-binding leases and dispose the Wasm registration at lease zero.</td><td>Hundreds of bind/release cycles return counters to baseline without disposing the runtime.</td></tr>
         <tr class="finding-high"><td><strong>High</strong></td><td>One lost device may serve many sessions, but a target method cannot signal the session that owns it.</td><td>Only one session checkpoints; sibling sessions submit deltas against resources discarded with the old device.</td><td>Session creation passes an opaque checkpoint control into the target factory; the device pool tracks every attached control and fans loss out to all.</td><td>Each session rejects its own deltas until its checkpoint commits; an idle sibling cannot block it.</td></tr>
@@ -485,22 +485,38 @@
       </tbody>
     </table></div>
 
+    <h3>Opus High ownership-plan review: implementability closure</h3>
+    <p>Opus reviewed committed target <code>ff4cbea0</code> against the complete source tree. It agreed with the ownership thesis but found the plan could not yet be implemented because it had hidden the text-input protocol, omitted renderer-free Paragraph measurement, bake discovery, applications, and target-construction cleanup, and left several transport lifetimes unenforced. The source-validated correction now requires:</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Gap</th><th>Closed shape</th></tr></thead>
+      <tbody>
+        <tr><td>Text input disappeared with the raw compiler.</td><td>Session-owned retained <code>createText</code>/<code>update</code>/<code>dispose</code>; core authors all IDs, revisions, and cursors.</td></tr>
+        <tr><td>Paragraph had no place in the exactly-one-target rule.</td><td>Only render sessions require a target. Async root <code>createParagraph()</code> acquires a private target-less measurement service; later queries remain synchronous.</td></tr>
+        <tr><td><code>defineFont</code> AOT discovery and <code>FontInput</code> were omitted.</td><td>Preserve the existing names and discovery anchor; <code>loadFont(defineFont(...))</code> is supported and bake fixtures are a merge gate.</td></tr>
+        <tr><td>Worker transfer could detach canonical payload backing.</td><td>Canonical views never transfer. A receiving-cache miss receives one dedicated payload-range copy; the plan still has exactly one plan-byte copy.</td></tr>
+        <tr><td>Borrow expiry, payload release, delivery mismatch, and factory failure were only implied.</td><td>Lease-bound reader checks every access; explicit payload disposal; runtime delivery validation; newly claimed targets are disposed on construction failure without touching reused live targets.</td></tr>
+        <tr><td>Worker termination and WebGPU asynchronous errors lacked a bound response.</td><td>Core disposal settles pending publication; worker lifecycle events reject deterministically; later WebGPU errors enter lost/checkpoint recovery rather than retroactively changing acceptance.</td></tr>
+        <tr><td>App migration and current transfer machinery were absent.</td><td>Every <code>apps/</code> consumer is in scope, React preload is library-bound, and the existing bounded frame-transfer pool is adapted rather than replaced.</td></tr>
+      </tbody>
+    </table></div>
+
     <h3>Recommended public ownership shape</h3>
     <p>Load the portable font before a runtime exists. Attach the integrator-only host to a runtime owner, bind the font through leases, and bind one renderer-owned target to each session. Canvas and GPU objects stay behind the target.</p>
+    <p class="callout"><strong>Root remains the useful application barrel.</strong> Portable names such as <code>Font</code>, <code>FontStack</code>, <code>defineFont</code>, <code>loadFont</code>, <code>txt</code>, <code>span</code>, paint, layout, measurement, technique, and baker contracts remain available from <code>@pmndrs/glyph</code>. Runtime, host, session, policy, plan-reader, and renderer-implementation types live in <code>/core</code>. An integration may re-export a root type only when its own signatures use it; it does not mirror the barrel. Mutable <code>FontRegistry</code>, <code>RegisteredFont</code>/<code>RegisteredRaster</code>, runtime-bound <code>LoadedFont</code>, and raw dynamic handles leave the application surface.</p>
 <pre><code>// Proposed high-level shape — illustrative, not current API.
 const font = await loadFont({
   input: { baked: fontUrl },
   raster: { technique: glyphExample, options: { paletteSeed: 7 } },
 });
 const fontStack = createFontStack(font);
+// Runtime and host construction are integrator-only /core APIs.
 const runtime = await createTextRuntime();
-const host = createTextEngineHost({
-  owner: runtime,
+const host = runtime.createTextEngineHost({
   integration: 'my-renderer',
 });
 
 const policy = host.installPolicy(rendererPolicy);
-using stack = host.bindFontStack(fontStack); // binds every Font and owns those leases
+const stack = host.bindFontStack(fontStack); // binds every Font and owns those leases
 const pool = renderer.devicePool(device);
 const session = host.createSession({
   policy,
@@ -515,16 +531,21 @@ const session = host.createSession({
   textCapacity: SESSION_TEXT_BYTES,
 });
 
-const text = session.createText({ font: stack, value: 'Hello' });
+const text = session.createText({ font: stack, text: 'Hello' });
 session.publish();
 
 text.update({ value: 'Hello, world' });
 session.publish(); // target commit advances the cursor internally
 
 text.dispose();
-session.publish(); // emits removal before recycling internal IDs</code></pre>
+session.publish(); // emits removal before recycling internal IDs
+session.dispose();
+stack.dispose();
+policy.dispose();
+host.dispose();
+runtime.dispose();</code></pre>
     <p>This removes runtime ownership from Font, and removes IDs and revision arithmetic from the public integration path without changing the compact numeric wire format. The raw frame compiler becomes package-internal test/fuzz infrastructure; a worker uses <code>AsyncPlanTarget</code> and returns its plan buffer with the commit answer to the same target-bound session.</p>
-    <p class="callout"><strong>Zero-copy is the default.</strong> <code>PlanTarget</code> consumes the borrowed A/B publication and makes <code>publish()</code> synchronous. Only <code>AsyncPlanTarget</code> receives a package-created copy and returns a Promise. The host infers the session return type from the target factory and rejects target reuse before allocating Wasm state.</p>
+    <p class="callout"><strong>Zero-copy is the default.</strong> <code>PlanTarget</code> consumes the borrowed A/B publication and makes <code>publish()</code> synchronous. Only <code>AsyncPlanTarget</code> receives one exact-range standalone copy and returns a Promise. That buffer is transferred—not cloned—to the worker and returned with acceptance. Before the async call, the session resolves every referenced portable payload; canonical Font backing is never detached. The host infers the session return type from the target factory and rejects target reuse before allocating Wasm state.</p>
 
     <h3>What the renderer's target actually does</h3>
 <pre><code>// Renderer-owned target; illustrative target API.
@@ -539,7 +560,7 @@ function createPlanTarget({ control, pool, canvas }) {
       // candidate.origin namespaces mutable session buffers.
       // Font payload identity pools immutable resources across sessions.
       const pending = pool.prepare(candidate, {
-        resolvePayload: candidate.resolvePayload,
+        acquirePayload: candidate.acquirePayload,
       });
 
       try {
@@ -568,7 +589,7 @@ pool.onDeviceLost(() =&gt; {
   pool.resumeCheckpointRequired(); // required state is tracked per control
   for (const control of pool.controls) control.requestCheckpoint();
 });</code></pre>
-    <p>A plan resource retirement releases the session's lease. The pool destroys a texture, supplied geometry buffer, or other immutable realization only after its final device-local lease ends. This ordinary target reads the borrowed publication, prepares and submits renderer work, commits renderer state, and answers before returning. GPU execution may finish later; that does not require copying the plan. A worker round trip instead uses <code>AsyncPlanTarget</code>: transfer its package-created plan buffer and resource manifest out, validate and commit remotely, then transfer the buffer back with the correlated result. The returned acceptance advances the session fence; a lost worker leaves it unchanged. For a lockstep target, every surface prepares before any accepted-state commit; partial backend commit makes the whole group lost.</p>
+    <p>A plan resource retirement releases the session's lease. The pool destroys a texture, supplied geometry buffer, or other immutable realization only after its final device-local lease ends. This ordinary target reads a lease-bound borrowed publication whose methods throw after <code>accept()</code>, prepares and submits renderer work, commits renderer state, and answers before returning. GPU execution may finish later; that does not require copying the plan or awaiting <code>popErrorScope()</code>; later WebGPU validation/device faults enter the renderer's lost/checkpoint path. A worker round trip instead uses <code>AsyncPlanTarget</code>: core copies only the exact Wasm publication range, the target transfers that standalone buffer and its pre-resolved resource manifest without another clone, the receiver validates and commits, and then transfers the same allocation back with the correlated result. A missing payload uses a separate exact-range transfer copy; a canonical Font backing view is never detached. The returned acceptance advances the session fence; a lost worker leaves it unchanged. For a lockstep target, every surface prepares before any accepted-state commit; partial backend commit makes the whole group lost.</p>
 
     <h3>Disposal without finalizers</h3>
     <p>Runtime disposal deterministically cascades sessions and hosts; stack and binding leases protect Font backing and renderer resources. An unused Font needs no finalizer: when its wrapper becomes unreachable, its backing is unreachable too and ordinary GC collects both. Runtime lookup maps are weak and release Wasm registration at lease zero; a strong cache exists only inside an explicit application-owned <code>FontLibrary</code>. <code>font.dispose()</code> provides deterministic early release while the wrapper remains reachable and rejects new bindings.</p>
@@ -580,7 +601,7 @@ pool.onDeviceLost(() =&gt; {
 
     <div class="flow" role="img" aria-label="Renderer integration lifecycle from process setup through teardown">
       <div class="node"><strong>1 · Portable font</strong><span><code>loadFont()</code><br>one immutable GLB backing</span></div>
-      <div class="node"><strong>2 · Runtime + host</strong><span><code>createTextRuntime()</code><br><code>createTextEngineHost({ owner })</code></span></div>
+      <div class="node"><strong>2 · Runtime + host</strong><span><code>@pmndrs/glyph/core</code><br><code>runtime.createTextEngineHost()</code></span></div>
       <div class="node"><strong>3 · Policy + binding</strong><span><code>installPolicy()</code><br><code>bindFont()</code> + stack lease</span></div>
       <div class="node"><strong>4 · Target + session</strong><span><code>createPlanTarget()</code><br><code>host.createSession()</code></span></div>
       <div class="node"><strong>5 · Text instance</strong><span><code>session.createText()</code><br>IDs remain internal</span></div>
@@ -591,15 +612,16 @@ pool.onDeviceLost(() =&gt; {
     <div class="table-wrap"><table>
       <thead><tr><th>Object</th><th>Create it when</th><th>Keep it for</th><th>Why it exists</th></tr></thead>
       <tbody>
-        <tr><td><code>Font&lt;Technique&gt;</code></td><td>When the application requests one portable raster selection, before or after a runtime exists</td><td>Across runtime/device replacement while any user or engine lease exists</td><td>Owns one immutable GLB backing lease, one typed technique payload, metrics, and internal views</td></tr>
-        <tr><td><code>TextRuntime</code></td><td>Application or worker initialization</td><td>Usually the application/worker lifetime</td><td>Owns one Wasm shaper, lease-counted font registration lookup, every attached host, and the runtime-wide borrow gate</td></tr>
+        <tr><td><code>Font&lt;Technique&gt;</code></td><td>When the application requests one portable raster selection, before or after a runtime exists</td><td>Across runtime/device replacement while any user or engine lease exists</td><td>Owns one immutable GLB backing lease, technique witness, metrics, and hidden internal payload views; root exposes no mutable <code>data</code></td></tr>
+        <tr><td><code>TextRuntime</code></td><td>Renderer integration or worker initialization through <code>/core</code></td><td>Usually the integration/worker lifetime</td><td>Owns one Wasm shaper, lease-counted font registration lookup, every attached host, and the runtime-wide borrow gate</td></tr>
         <tr><td>Renderer device</td><td>Renderer/backend initialization</td><td>The GPU device/context lifetime</td><td>Owns shaders, pipelines/materials, GPU resources, uploads, and submission</td></tr>
-        <tr><td><code>TextEngineHost</code></td><td>After runtime creation, through <code>createTextEngineHost({ owner: runtime })</code></td><td>The integration lifetime; runtime disposal closes it</td><td>Owns policy, host bindings, stack leases, identity, and sessions; it delegates Wasm borrowing to the runtime gate</td></tr>
+        <tr><td><code>TextEngineHost</code></td><td>Through <code>runtime.createTextEngineHost()</code></td><td>The integration lifetime; runtime disposal closes it</td><td>Owns policy, host bindings, stack leases, identity, and sessions; it delegates Wasm borrowing to the runtime gate</td></tr>
         <tr><td>Policy</td><td>During host construction, before the first frame</td><td>Register once per host capability/program configuration</td><td>Combines renderer-owned capabilities/system lanes with portable technique bodies</td></tr>
         <tr><td>Font binding lease</td><td>When this integration first needs the portable Font</td><td>Until the final host stack/device lease releases it</td><td>Deduplicates one runtime shaping registration and one host portable binding without exposing IDs</td></tr>
         <tr><td>Bound font stack</td><td>After its portable Font values exist</td><td>Until that fallback order is unused</td><td>Retains ordered host bindings and gives styles one opaque host-owned token</td></tr>
         <tr><td>Plan target</td><td>After a renderer device/surface exists</td><td>One acceptance domain lifetime</td><td>Consumes the borrowed publication synchronously; only <code>AsyncPlanTarget</code> copies for deferred acceptance</td></tr>
         <tr><td><code>TextEngineSession</code></td><td>After policy, target, and required bindings exist</td><td>Across all frames for that independently revisioned scene</td><td>Retains paragraphs, plan state, one target, and its opaque accepted cursor</td></tr>
+        <tr><td>Root <code>Paragraph</code></td><td><code>await createParagraph(options)</code> when renderer-free measurement is needed</td><td>Across synchronous measure/layout calls until disposal</td><td>Hides a package-private per-realm measurement runtime and target-less session; the final Paragraph releases the service</td></tr>
         <tr><td>Application text instance</td><td>When text enters the retained scene</td><td>Until removal is published</td><td>Owns desired content/style/layout; internal IDs and minimal mutations belong to the session façade</td></tr>
         <tr><td>Plan candidate</td><td>On <code>session.publish()</code></td><td>Borrowed callback only, or one copied pending async transaction</td><td>Applies changes; only target commit advances the session's cursor</td></tr>
       </tbody>
