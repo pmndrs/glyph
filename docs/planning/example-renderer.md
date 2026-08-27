@@ -50,7 +50,7 @@ CPU objects; the TypeGPU device creates real WebGPU buffers, textures, bind grou
 normally scopes that pool to its GPU device and shares immutable realizations across all sessions that lease the same
 `(referenceId, generation)`.
 
-Font acquisition remains outside `/core`: `createTextRuntime` is a root API and a core-only host cannot itself load a shaping font. The acceptance uses that root API only to obtain a `LoadedFont`, then hands it to the core-facing engine registration method. This keeps font loading and engine execution separate while proving that the published core surface is sufficient for a non-Three host to render a real text frame.
+Font acquisition remains root vocabulary while runtime construction belongs to `/core`. During the immutable-font migration, the acceptance uses the runtime compatibility loader to obtain a `LoadedFont`, then hands it to the core-facing engine registration method. This keeps font loading and engine execution separate while proving that the published core surface is sufficient for a non-Three host to render a real text frame.
 
 | Surface                           | Owns                                                                                   | Status                                                                                                                                                                 |
 | --------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

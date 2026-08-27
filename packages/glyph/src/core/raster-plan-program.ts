@@ -300,7 +300,7 @@ export function compileRasterFont(
   return compileRasterFontSource(font, font.technique, fontResources.font.glyphCount, fontResources.data, identities);
 }
 
-/** @internal Temporary bridge while first-party integrations migrate from runtime-bound fonts. */
+/** Temporary bridge while first-party integrations migrate from runtime-bound fonts. */
 export function compileLoadedRasterFont(
   font: LoadedFont<AnyRasterTechnique>,
   identities: RenderWireIdentityRegistry,

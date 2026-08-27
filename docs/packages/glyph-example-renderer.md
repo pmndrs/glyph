@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:61f1d455afe33a608ff150dc3c44e2379434f56994a9493b48eca8224e50d553'
+source_digest: 'sha256:5777c9aa9aaaf3e510319aec60cf22ecae7b1d5e61c40828b5bebb8f447e1786'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -105,9 +105,10 @@ and raw `render(frame)` method for integrators implementing their own retained o
 The raw frame surface and managed `ExampleText` façade are alternative paragraph owners; callers do not interleave both
 ownership models inside one session.
 
-The package still does not make font loading part of `/core`: `createTextRuntime` remains a root API. The acceptance uses
-the root loader only to obtain a `LoadedFont`, then hands that value to the core-facing engine registration method. This
-keeps font acquisition and engine execution separate while proving that a non-Three host can render a real text frame.
+Runtime construction comes from `/core`; portable font acquisition remains root vocabulary. The example still uses the
+temporary runtime-bound loader to obtain a `LoadedFont`, then hands that value to the core-facing engine registration
+method. This keeps font acquisition and engine execution separate while proving that a non-Three host can render a real
+text frame during the immutable-font migration.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides
 work with the technique-owned `/typegpu` shader subpath.

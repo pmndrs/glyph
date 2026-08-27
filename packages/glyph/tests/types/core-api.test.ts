@@ -1,12 +1,7 @@
-import {
-  createTextRuntime,
-  type AnyRasterTechnique,
-  type FontSelection,
-  type FormattedText,
-  type ParagraphSpan,
-} from '@pmndrs/glyph';
+import { type AnyRasterTechnique, type FontSelection, type FormattedText, type ParagraphSpan } from '@pmndrs/glyph';
 import {
   assertOwnedTextEnginePublication,
+  createTextRuntime,
   compileFontBinding,
   compileTextEngineFrameUpdate,
   createRuntimeShaper,
@@ -32,8 +27,8 @@ import {
 const shaper: Promise<RuntimeShaper> = createRuntimeShaper();
 void shaper;
 
-declare const runtimeShaper: RuntimeShaper;
-const host = new TextEngineHost(runtimeShaper);
+const runtime = await createTextRuntime();
+const host: TextEngineHost = runtime.createTextEngineHost({ integration: 'core-api-test' });
 const policyHandle = id('policy', 'core-api-test/default');
 host.registerPolicy(policyHandle, new Uint8Array(8));
 host.disposePolicy(policyHandle);
@@ -89,7 +84,6 @@ const bindingBytes: Uint8Array = compileFontBinding(binding);
 void bindingBytes;
 
 // The runtime bridge is public: integrations reach the shaper without private access.
-const runtime = await createTextRuntime();
 const bridged: RuntimeShaper = textRuntimeShaper(runtime);
 void bridged;
 

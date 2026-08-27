@@ -1,7 +1,7 @@
-import { txt, type LoadedFont } from '../../src/index.js';
+import { span, txt, type LoadedFont } from '../../src/index.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
-import { FontLoader, span, Text, TextGroup } from '../../src/three.js';
+import { FontLoader, Text, TextGroup } from '../../src/three.js';
 
 declare const bitmapFont: LoadedFont<typeof bitmap>;
 declare const mtsdfFont: LoadedFont<typeof msdf>;

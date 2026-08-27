@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
+import { FontRegistry } from '@pmndrs/glyph';
+import { createTextRuntime } from '@pmndrs/glyph/core';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { TextEngineHost } from '../../dist/core/host.js';
 import { assertGlyphId, id, programId, techniqueId } from '../../dist/core/render-policy.js';

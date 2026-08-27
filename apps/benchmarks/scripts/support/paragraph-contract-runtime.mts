@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
 import {
-  createTextRuntime,
   FontRegistry,
   type LoadedFont,
   type ParagraphContentBox,
@@ -9,6 +8,7 @@ import {
   type ParagraphLayoutPolicy,
   type ParagraphStyle,
 } from '@pmndrs/glyph';
+import { createTextRuntime } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { Text, TextGroup } from '@pmndrs/glyph/three';
 

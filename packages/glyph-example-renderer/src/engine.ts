@@ -1,6 +1,6 @@
 import {
   compileTextEngineFrameUpdate,
-  compileRasterFont,
+  compileLoadedRasterFont,
   TextEngineHost,
   type FontBindingHandle,
   type FontStackHandle,
@@ -8,7 +8,7 @@ import {
   type ParagraphId,
   type RegionId,
   type OwnedTextEnginePublication,
-  type RuntimeShaper,
+  type TextRuntime,
   type StyleId,
   type TextEngineFrameLimits,
   type TextEngineParagraphMutation,
@@ -92,8 +92,8 @@ export class ExampleTextEngine {
   #rendering = false;
   #disposed = false;
 
-  constructor(shaper: RuntimeShaper, device?: ExampleRendererDevice) {
-    this.#host = new TextEngineHost(shaper);
+  constructor(runtime: TextRuntime, device?: ExampleRendererDevice) {
+    this.#host = runtime.createTextEngineHost({ integration: '@pmndrs/glyph-example-renderer' });
     this.#device = device;
     try {
       this.#host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes(this.#host.wireIdentities));
@@ -125,7 +125,7 @@ export class ExampleTextEngine {
         `example renderer shader "${shader.variant.techniqueId}" cannot render "${font.technique.id}"`,
       );
     }
-    const compiled = compileRasterFont(font, this.#host.wireIdentities);
+    const compiled = compileLoadedRasterFont(font, this.#host.wireIdentities);
     if (compiled === undefined)
       throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
     const bindingHandle = this.#host.id('font-binding', `glyph-example-renderer/${this.#nextBindingOrdinal}`);

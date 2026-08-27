@@ -46,7 +46,7 @@ import { TextEngineHost, type TextEngineHostOptions } from './core/host.js';
 import type { FontHandle } from './identity.js';
 
 export interface TextRuntimeOptions {
-  /** @internal Compatibility for integrations that have not migrated to root `loadFont()`. */
+  /** Compatibility for integrations migrating to immutable root `loadFont()`. */
   readonly registry?: FontRegistry;
   readonly wasm?: BufferSource | WebAssembly.Module;
 }
@@ -84,13 +84,13 @@ export interface TextRuntime {
 
   createTextEngineHost(options: TextEngineHostOptions): TextEngineHost;
 
-  /** @internal Compatibility for integrations that have not migrated to root `loadFont()`. */
+  /** Compatibility for integrations migrating to immutable root `loadFont()`. */
   loadFont<Technique extends AnyRasterTechnique>(
     request: LoadedFontRequest<Technique>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<LoadedFont<Technique>>;
 
-  /** @internal Compatibility for integrations that have not migrated to root `loadFont()`. */
+  /** Compatibility for integrations migrating to immutable root `loadFont()`. */
   loadFont<const Techniques extends LoadedFontTechniques>(
     request: LoadedFontsRequest<Techniques>,
     options?: { readonly signal?: AbortSignal },

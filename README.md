@@ -128,7 +128,7 @@ matrix, or committed frame — which is also what a flexbox engine needs from in
 `Text.layout()` while the text is detached throws and points to this API.
 
 ```ts
-import { createTextRuntime, txt } from '@pmndrs/glyph';
+import { txt } from '@pmndrs/glyph';
 import { Paragraph } from '@pmndrs/glyph/core';
 
 const paragraph = new Paragraph({ font: inter, text: txt`Hello world`, policy: { wrap: 'word' } });
@@ -252,9 +252,15 @@ buffers, and geometry per device by the plan's stable resource identity.
 Load a font and own the engine lifecycle once:
 
 ```ts
-import { createTextRuntime } from '@pmndrs/glyph';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
-import { compileRasterFont, compileRenderPolicy, id, TextEngineHost, textRuntimeShaper } from '@pmndrs/glyph/core';
+import {
+  compileRasterFont,
+  compileRenderPolicy,
+  createTextRuntime,
+  id,
+  TextEngineHost,
+  textRuntimeShaper,
+} from '@pmndrs/glyph/core';
 
 const POLICY_HANDLE = id('policy', 'my-renderer/default');
 

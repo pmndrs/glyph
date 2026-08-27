@@ -239,9 +239,9 @@ program namespace, wire identities, system buffers, capability set, transform mo
 Resolve every technique and resource string through the host's one registry:
 
 ```ts
-import { createTextRuntime } from '@pmndrs/glyph';
 import {
   compileRenderPolicy,
+  createTextRuntime,
   createRasterPolicyProgram,
   id,
   TextEngineHost,
@@ -292,13 +292,13 @@ Three also reserves attribute widths: `position` and `normal` are three-componen
 four-component, and `color` is three- or four-component. Variant registration validates declared attributes, and font
 registration validates every retained payload attribute before Three can claim those names.
 
-### Font loading comes from the root entry
+### Font assets come from the root entry
 
-A font cannot be loaded through `/core` alone. Create the `TextRuntime` and call `loadFont()` through `@pmndrs/glyph`, then
-use the `/core` bridge `textRuntimeShaper(runtime)` to construct the host. The runtime registers shaping data before it
-returns a loaded raster font. (`packages/glyph/src/index.ts`, `packages/glyph/src/text-runtime.ts`,
-`packages/glyph/src/text-runtime.ts`, `packages/glyph/src/text-runtime.ts`) This is by design: `/core` adds the
-renderer integration surface to the root font and text vocabulary; it does not duplicate that vocabulary.
+Runtime construction is integrator machinery and therefore comes from `/core`; portable font assets and their loading
+contracts come from the root. The temporary runtime-bound loader registers shaping data before returning its loaded
+raster font, while the immutable root loader is migrated into host binding. (`packages/glyph/src/index.ts`,
+`packages/glyph/src/text-runtime.ts`) `/core` remains additive to the root font and text vocabulary; it does not duplicate
+that vocabulary.
 (`.agents/skills/engine-call-contract/SKILL.md:63`)
 
 ## 5. Drive a session

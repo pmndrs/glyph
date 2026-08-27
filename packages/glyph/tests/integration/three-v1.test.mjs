@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { createFontStack, createTextRuntime, FontRegistry } from '@pmndrs/glyph';
-import { TextEngineHost, TextEngineSession } from '@pmndrs/glyph/core';
+import { createFontStack, FontRegistry } from '@pmndrs/glyph';
+import { createTextRuntime, TextEngineHost, TextEngineSession } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';

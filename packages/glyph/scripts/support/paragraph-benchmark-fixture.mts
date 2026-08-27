@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
-import { createTextRuntime, FontRegistry } from '../../dist/index.js';
+import { FontRegistry } from '../../dist/index.js';
+import { createTextRuntime } from '../../dist/core.js';
 import { Text, TextGroup } from '../../dist/three.js';
 import { bitmap } from '../../dist/three/bitmap.js';
 

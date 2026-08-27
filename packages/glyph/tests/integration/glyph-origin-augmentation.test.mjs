@@ -32,7 +32,8 @@ import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
+import { FontRegistry } from '@pmndrs/glyph';
+import { createTextRuntime } from '@pmndrs/glyph/core';
 import { Text, TextGroup } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/three/slug';
 import * as THREE from 'three/webgpu';

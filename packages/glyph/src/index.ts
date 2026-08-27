@@ -162,7 +162,4 @@ export type {
   LoadedFontTechniques,
   LoadedFonts,
   LoadedFontsRequest,
-  TextRuntime,
-  TextRuntimeOptions,
 } from './text-runtime.js';
-export { createTextRuntime } from './text-runtime.js';

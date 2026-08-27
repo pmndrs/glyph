@@ -1,10 +1,12 @@
-import { createTextRuntime, type TextRuntime } from '../../src/index.js';
+import { createTextRuntime, type TextRuntime } from '../../src/core.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
 import { slug } from '../../src/raster/slug-technique.js';
 
 declare const runtime: TextRuntime;
-runtime.registry satisfies TextRuntime['registry'];
+runtime.disposed satisfies boolean;
+// @ts-expect-error The runtime registry is private engine state.
+void runtime.registry;
 
 async function loadTargetV1Fonts(): Promise<void> {
   const created = await createTextRuntime();

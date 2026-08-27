@@ -2,10 +2,10 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { createTextRuntime, defineRasterTechnique, rasterBake } from '@pmndrs/glyph';
+import { defineRasterTechnique, rasterBake } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import {
-  textRuntimeShaper,
+  createTextRuntime,
   textShaperAbi,
   defineTechniqueSchema,
   id,
@@ -139,7 +139,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
 
   const runtime = await createTextRuntime({ wasm: await readFile(shaperWasm) });
   const device = new ThrowOnceExampleRendererDevice();
-  const engine = new ExampleTextEngine(textRuntimeShaper(runtime), device);
+  const engine = new ExampleTextEngine(runtime, device);
   try {
     const bytes = await readFile(output);
     const font = await runtime.loadFont({

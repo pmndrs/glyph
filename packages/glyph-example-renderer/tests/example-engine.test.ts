@@ -3,10 +3,9 @@ import { createRequire } from 'node:module';
 
 import {
   compileTextEngineFrameUpdate,
-  createRuntimeShaper,
+  createTextRuntime,
   id,
   textShaperAbi,
-  TextEngineHost,
   TextEnginePublicationExpiredError,
   type TextEngineFrameLimits,
 } from '@pmndrs/glyph/core';
@@ -42,8 +41,8 @@ const LIMITS: TextEngineFrameLimits = {
 
 describe('a real engine driven through the published core surface', () => {
   test('publishes real frames whose owned plans outlive borrows, growth, and slots', async () => {
-    const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
-    const engine = new ExampleTextEngine(shaper);
+    const runtime = await createTextRuntime({ wasm: await wasmBytes() });
+    const engine = new ExampleTextEngine(runtime);
     try {
       engine.openSession();
       const firstPending = engine.render({});
@@ -71,12 +70,13 @@ describe('a real engine driven through the published core surface', () => {
       expect(afterGrowth.buffers.count).toBe(0);
     } finally {
       engine.dispose();
+      runtime.dispose();
     }
   });
 
   test('makes a stale borrow loud instead of silently re-reading freed bytes', async () => {
-    const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
-    const engine = new ExampleTextEngine(shaper);
+    const runtime = await createTextRuntime({ wasm: await wasmBytes() });
+    const engine = new ExampleTextEngine(runtime);
     try {
       engine.openSession();
       // One raw frame through the session, then a second raw frame built from the
@@ -101,12 +101,13 @@ describe('a real engine driven through the published core surface', () => {
       expect(() => engine.session.isExpired({ ...stale })).toThrowError(TypeError);
     } finally {
       engine.dispose();
+      runtime.dispose();
     }
   });
 
   test('carries the acknowledged generation on the wire, and the engine enforces it', async () => {
-    const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
-    const engine = new ExampleTextEngine(shaper);
+    const runtime = await createTextRuntime({ wasm: await wasmBytes() });
+    const engine = new ExampleTextEngine(runtime);
     try {
       engine.openSession();
       await engine.render({});
@@ -132,12 +133,13 @@ describe('a real engine driven through the published core surface', () => {
       expect((await engine.render({})).publicationGeneration).toBe(3);
     } finally {
       engine.dispose();
+      runtime.dispose();
     }
   });
 
   test('hosts its own policy and font-stack registration through core handles', async () => {
-    const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
-    const engine = new ExampleTextEngine(shaper);
+    const runtime = await createTextRuntime({ wasm: await wasmBytes() });
+    const engine = new ExampleTextEngine(runtime);
     try {
       engine.openSession();
       // Stack registration rejects a binding this host never registered before touching Wasm.
@@ -146,6 +148,7 @@ describe('a real engine driven through the published core surface', () => {
       expect((await engine.render({})).engineRevision).toBe(1);
     } finally {
       engine.dispose();
+      runtime.dispose();
     }
   });
 });
@@ -153,8 +156,8 @@ describe('a real engine driven through the published core surface', () => {
 // The raw host/session pair stays reachable for hosts that compose protocol steps
 // themselves; this keeps that path proven too.
 test('TextEngineHost remains directly drivable', async () => {
-  const shaper = await createRuntimeShaper({ wasm: await wasmBytes() });
-  const host = new TextEngineHost(shaper);
+  const runtime = await createTextRuntime({ wasm: await wasmBytes() });
+  const host = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/direct' });
   host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes());
   const session = host.createSession({
     handle: DIRECT_SESSION_HANDLE,
@@ -174,4 +177,5 @@ test('TextEngineHost remains directly drivable', async () => {
   expect(publication.flags & 1).toBe(1); // checkpoint publication
   session.dispose();
   host.dispose();
+  runtime.dispose();
 });

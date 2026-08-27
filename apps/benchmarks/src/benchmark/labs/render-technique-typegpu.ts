@@ -1,5 +1,5 @@
-import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
-import { textRuntimeShaper } from '@pmndrs/glyph/core';
+import { FontRegistry } from '@pmndrs/glyph';
+import { createTextRuntime } from '@pmndrs/glyph/core';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { ExampleTextEngine, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
@@ -33,7 +33,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
   const gpuDevice = await adapter.requestDevice();
   const runtime = await createTextRuntime({ registry: new FontRegistry() });
   const renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
-  const engine = new ExampleTextEngine(textRuntimeShaper(runtime), renderer);
+  const engine = new ExampleTextEngine(runtime, renderer);
   let font;
   try {
     font = await runtime.loadFont({

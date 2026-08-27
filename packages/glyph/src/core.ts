@@ -11,6 +11,7 @@ export {
   type TextShaperWasmSource,
 } from './shaper.js';
 export { textRuntimeShaper } from './text-runtime.js';
+export { createTextRuntime, type TextRuntime, type TextRuntimeOptions } from './text-runtime.js';
 export {
   acquireFontSelectionForRuntime,
   assertFontSelectionForRuntime,
@@ -86,7 +87,6 @@ export {
   type RasterPolicyProgramOptions,
   type RasterPolicySystem,
 } from './core/raster-plan-program.js';
-/** @internal Compatibility bridge removed with runtime-bound fonts. */
 export { compileLoadedRasterFont } from './core/raster-plan-program.js';
 export {
   compileRenderPolicy,

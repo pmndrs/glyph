@@ -5,7 +5,6 @@ import { join } from 'node:path';
 
 import {
   FontRegistry,
-  createTextRuntime,
   defineRasterResourceId,
   defineRasterTechnique,
   rasterBake,
@@ -18,6 +17,7 @@ import {
 import { bakeFont } from '@pmndrs/glyph/bake';
 import {
   defineTechniqueSchema,
+  createTextRuntime,
   f32,
   registerRasterPlanProgram,
   techniqueProgram,

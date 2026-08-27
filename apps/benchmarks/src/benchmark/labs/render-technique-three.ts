@@ -1,4 +1,5 @@
-import { createTextRuntime, FontRegistry, type AnyRasterTechnique, type LoadedFont } from '@pmndrs/glyph';
+import { FontRegistry, type AnyRasterTechnique, type LoadedFont } from '@pmndrs/glyph';
+import { createTextRuntime } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 import { Text, TextGroup } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';

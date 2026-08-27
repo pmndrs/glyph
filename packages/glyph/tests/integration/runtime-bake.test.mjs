@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createTextRuntime, FontLoader } from '@pmndrs/glyph';
+import { FontLoader } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
+import { createTextRuntime } from '@pmndrs/glyph/core';
 import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 import { fontBakerWasmUrl } from '@pmndrs/glyph/bake';
