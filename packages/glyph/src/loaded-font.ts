@@ -196,6 +196,70 @@ export function immutableFontResources<Technique extends AnyRasterTechnique>(
   return { font: variant.backing.font, raster: variant.raster, data: variant.data };
 }
 
+/** @internal A retained package-private view used while an engine binding is live. */
+export interface ImmutableFontResourceLease<Technique extends AnyRasterTechnique> {
+  readonly font: RegisteredFont;
+  readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
+  readonly data: RasterDataOf<Technique>;
+  readonly disposed: boolean;
+  dispose(): void;
+}
+
+/** @internal Return the stable identity of a live immutable technique variant. */
+export function immutableFontVariantIdentity(font: Font<AnyRasterTechnique>): object {
+  assertImmutableFont(font);
+  return immutableStateOf(font).variant;
+}
+
+/** @internal Retain one immutable technique variant independently of its user Font wrapper. */
+export function acquireImmutableFontResources<Technique extends AnyRasterTechnique>(
+  font: Font<Technique>,
+): ImmutableFontResourceLease<Technique> {
+  assertImmutableFont(font);
+  return new ImmutableFontResourceLeaseImpl(immutableStateOf(font).variant as ImmutableFontVariant<Technique>);
+}
+
+class ImmutableFontResourceLeaseImpl<
+  Technique extends AnyRasterTechnique,
+> implements ImmutableFontResourceLease<Technique> {
+  readonly #variant: ImmutableFontVariant<Technique>;
+  #disposed = false;
+
+  constructor(variant: ImmutableFontVariant<Technique>) {
+    retainImmutableFontVariant(variant);
+    this.#variant = variant;
+  }
+
+  get font(): RegisteredFont {
+    this.#assertActive();
+    return this.#variant.backing.font;
+  }
+
+  get raster(): RegisteredRaster<RasterKindOf<Technique>> {
+    this.#assertActive();
+    return this.#variant.raster;
+  }
+
+  get data(): RasterDataOf<Technique> {
+    this.#assertActive();
+    return this.#variant.data;
+  }
+
+  get disposed(): boolean {
+    return this.#disposed;
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    releaseImmutableFontVariant(this.#variant);
+  }
+
+  #assertActive(): void {
+    if (this.#disposed) throw new Error('immutable font resource lease has been disposed');
+  }
+}
+
 function releaseImmutableFontBacking(backing: ImmutableFontBacking): void {
   if (backing.leases <= 0) throw new Error('immutable font backing lease underflow');
   backing.leases -= 1;

@@ -1,8 +1,16 @@
 import { DEV } from './internal/dev.js';
 
 import type { RasterBakeArtifact } from './bake.js';
-import type { RegisteredFont } from './font.js';
-import { disposeLoadedFontFromRuntime, LoadedFontImpl, type LoadedFont } from './loaded-font.js';
+import type { Font, RegisteredFont } from './font.js';
+import {
+  acquireImmutableFontResources,
+  disposeLoadedFontFromRuntime,
+  immutableFontResources,
+  immutableFontVariantIdentity,
+  LoadedFontImpl,
+  type ImmutableFontResourceLease,
+  type LoadedFont,
+} from './loaded-font.js';
 import {
   FontLoader,
   FontLoadError,
@@ -35,8 +43,10 @@ import type {
 } from './raster.js';
 import { createRuntimeShaper, type RuntimeShaper } from './shaper.js';
 import { TextEngineHost, type TextEngineHostOptions } from './core/host.js';
+import type { FontHandle } from './identity.js';
 
 export interface TextRuntimeOptions {
+  /** @internal Compatibility for integrations that have not migrated to root `loadFont()`. */
   readonly registry?: FontRegistry;
   readonly wasm?: BufferSource | WebAssembly.Module;
 }
@@ -70,16 +80,17 @@ export type LoadedFonts<Techniques extends LoadedFontTechniques> = {
 };
 
 export interface TextRuntime {
-  readonly registry: FontRegistry;
   readonly disposed: boolean;
 
   createTextEngineHost(options: TextEngineHostOptions): TextEngineHost;
 
+  /** @internal Compatibility for integrations that have not migrated to root `loadFont()`. */
   loadFont<Technique extends AnyRasterTechnique>(
     request: LoadedFontRequest<Technique>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<LoadedFont<Technique>>;
 
+  /** @internal Compatibility for integrations that have not migrated to root `loadFont()`. */
   loadFont<const Techniques extends LoadedFontTechniques>(
     request: LoadedFontsRequest<Techniques>,
     options?: { readonly signal?: AbortSignal },
@@ -93,11 +104,79 @@ interface PendingTechniqueLoad {
   readonly promise: Promise<LoadedFont<AnyRasterTechnique>>;
 }
 
+interface RuntimeFontRegistration {
+  readonly font: RegisteredFont;
+  readonly variants: Map<object, RuntimeFontVariantRegistration>;
+  leases: number;
+  disposed: boolean;
+}
+
+interface RuntimeFontVariantRegistration<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+  readonly identity: object;
+  readonly technique: Technique;
+  readonly resources: ImmutableFontResourceLease<Technique>;
+  leases: number;
+}
+
+/** @internal An independent claim on one runtime-local shaping registration. */
+export interface RuntimeFontBindingLease<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+  readonly disposed: boolean;
+  readonly technique: Technique;
+  dispose(): void;
+}
+
+/** @internal The retained portable resources associated with one runtime binding lease. */
+export interface RuntimeFontBindingResources<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+  readonly font: RegisteredFont;
+  readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
+  readonly data: RasterDataOf<Technique>;
+}
+
+interface RuntimeFontRegistryLike {
+  getByHandle(handle: FontHandle): RegisteredFont | undefined;
+  _onFontDispose(listener: (font: RegisteredFont) => void): () => void;
+}
+
+class RuntimeFontRegistry implements RuntimeFontRegistryLike {
+  readonly #fonts = new Map<FontHandle, RegisteredFont>();
+  readonly #disposeListeners = new Set<(font: RegisteredFont) => void>();
+
+  getByHandle(handle: FontHandle): RegisteredFont | undefined {
+    return this.#fonts.get(handle);
+  }
+
+  add(font: RegisteredFont): void {
+    const existing = this.#fonts.get(font.handle);
+    if (existing !== undefined && existing !== font) {
+      throw new Error('runtime shaping font handle conflict');
+    }
+    this.#fonts.set(font.handle, font);
+  }
+
+  delete(font: RegisteredFont): void {
+    if (this.#fonts.get(font.handle) !== font) return;
+    this.#fonts.delete(font.handle);
+    for (const listener of this.#disposeListeners) listener(font);
+  }
+
+  _onFontDispose(listener: (font: RegisteredFont) => void): () => void {
+    this.#disposeListeners.add(listener);
+    return () => this.#disposeListeners.delete(listener);
+  }
+}
+
 export async function createTextRuntime(options: TextRuntimeOptions = {}): Promise<TextRuntime> {
-  const registry = options.registry ?? new FontRegistry();
-  const shaper = await createRuntimeShaper({ registry, ...(options.wasm === undefined ? {} : { wasm: options.wasm }) });
+  if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError('text runtime options must be an object');
+  }
+  const legacyRegistry = options.registry ?? new FontRegistry();
+  const runtimeRegistry = new RuntimeFontRegistry();
+  const shaper = await createRuntimeShaper({
+    registry: runtimeRegistry as unknown as FontRegistry,
+    ...(options.wasm === undefined ? {} : { wasm: options.wasm }),
+  });
   try {
-    return new TextRuntimeImpl(registry, shaper);
+    return new TextRuntimeImpl(legacyRegistry, runtimeRegistry, shaper);
   } catch (error) {
     shaper.dispose();
     throw error;
@@ -119,8 +198,36 @@ export function observeTextRuntimeDispose(runtime: TextRuntime, dispose: () => v
   return runtime._observeDispose(dispose);
 }
 
+/** @internal Acquire one counted runtime-local Wasm shaping registration. */
+export function acquireRuntimeFontBinding<Technique extends AnyRasterTechnique>(
+  runtime: TextRuntime,
+  font: Font<Technique>,
+): RuntimeFontBindingLease<Technique> {
+  if (!(runtime instanceof TextRuntimeImpl)) throw new TypeError('text runtime was not created by this package');
+  return runtime._acquireFont(font);
+}
+
+/** @internal Read the hidden shaping handle while the binding lease is live. */
+export function runtimeFontBindingHandle(binding: RuntimeFontBindingLease<AnyRasterTechnique>): FontHandle {
+  if (!(binding instanceof RuntimeFontBindingLeaseImpl)) {
+    throw new TypeError('runtime font binding was not created by this package');
+  }
+  return binding._handle();
+}
+
+/** @internal Read retained portable resources while the runtime binding lease is live. */
+export function runtimeFontBindingResources<Technique extends AnyRasterTechnique>(
+  binding: RuntimeFontBindingLease<Technique>,
+): RuntimeFontBindingResources<Technique> {
+  if (!(binding instanceof RuntimeFontBindingLeaseImpl)) {
+    throw new TypeError('runtime font binding was not created by this package');
+  }
+  return binding._resources();
+}
+
 class TextRuntimeImpl implements TextRuntime {
-  readonly registry: FontRegistry;
+  readonly #legacyRegistry: FontRegistry;
+  readonly #runtimeRegistry: RuntimeFontRegistry;
   readonly #shaper: RuntimeShaper;
   readonly #defaultLoader: FontLoader;
   readonly #sourceLoaders = new Map<RuntimeFontBake, Map<string, FontLoader>>();
@@ -128,12 +235,16 @@ class TextRuntimeImpl implements TextRuntime {
   readonly #pending = new Map<RegisteredFont, Map<AnyRasterTechnique, Map<string, PendingTechniqueLoad>>>();
   readonly #disposeObservers = new Set<() => void>();
   readonly #hosts = new Set<TextEngineHost>();
+  readonly #fontRegistrations = new WeakMap<RegisteredFont, RuntimeFontRegistration>();
+  readonly #liveFontRegistrations = new Set<RuntimeFontRegistration>();
+  readonly #legacyShaperFonts = new Set<RegisteredFont>();
   #disposed = false;
 
-  constructor(registry: FontRegistry, shaper: RuntimeShaper) {
-    this.registry = registry;
+  constructor(legacyRegistry: FontRegistry, runtimeRegistry: RuntimeFontRegistry, shaper: RuntimeShaper) {
+    this.#legacyRegistry = legacyRegistry;
+    this.#runtimeRegistry = runtimeRegistry;
     this.#shaper = shaper;
-    this.#defaultLoader = new FontLoader({ registry });
+    this.#defaultLoader = new FontLoader({ registry: legacyRegistry });
   }
 
   get disposed(): boolean {
@@ -166,7 +277,7 @@ class TextRuntimeImpl implements TextRuntime {
     const font = await this.#loadRegisteredFont(request.input, rasterRequests, options.signal);
     this.#assertActive();
     options.signal?.throwIfAborted();
-    this.#shaper.registerFont(font);
+    this.#registerLegacyFont(font);
     if ('rasters' in request) {
       return Promise.all(
         request.rasters.map((raster) => this.#loadFontRaster(font, raster, options.signal)),
@@ -263,6 +374,21 @@ class TextRuntimeImpl implements TextRuntime {
       }
     }
     this.#loaded.clear();
+    for (const font of [...this.#legacyShaperFonts]) {
+      try {
+        this.#runtimeRegistry.delete(font);
+      } catch (error) {
+        report('disposing a legacy shaping registration', error);
+      }
+    }
+    this.#legacyShaperFonts.clear();
+    for (const registration of [...this.#liveFontRegistrations]) {
+      try {
+        this.#disposeFontRegistration(registration);
+      } catch (error) {
+        report('disposing a runtime font binding', error);
+      }
+    }
     try {
       this.#shaper.dispose();
     } catch (error) {
@@ -302,7 +428,7 @@ class TextRuntimeImpl implements TextRuntime {
           rasters,
         });
       loader = new FontLoader({
-        registry: this.registry,
+        registry: this.#legacyRegistry,
         runtimeBake,
         ...(unicodeRanges === undefined ? {} : { runtimeSourceIdentity: 'transformed' }),
       });
@@ -391,7 +517,7 @@ class TextRuntimeImpl implements TextRuntime {
       throw new FontLoadError('INVALID_RASTER_ASSET', 'runtime raster generation must return one raster artifact');
     }
     const artifact = artifacts[0]!;
-    const raster = await this.registry._attachGeneratedRaster(font, artifact.bytes, {
+    const raster = await this.#legacyRegistry._attachGeneratedRaster(font, artifact.bytes, {
       rasterKey,
       kind: baked.kind,
       extension: baked.extension,
@@ -409,7 +535,107 @@ class TextRuntimeImpl implements TextRuntime {
     if (fonts?.size === 0) techniques?.delete(font.technique);
     if (techniques?.size === 0) {
       this.#loaded.delete(font.font);
-      if (!this.#pending.has(font.font)) font.font.dispose();
+      if (!this.#pending.has(font.font)) {
+        this.#runtimeRegistry.delete(font.font);
+        this.#legacyShaperFonts.delete(font.font);
+        font.font.dispose();
+      }
+    }
+  }
+
+  #registerLegacyFont(font: RegisteredFont): void {
+    this.#runtimeRegistry.add(font);
+    try {
+      this.#shaper.registerFont(font);
+      this.#legacyShaperFonts.add(font);
+    } catch (error) {
+      this.#runtimeRegistry.delete(font);
+      throw error;
+    }
+  }
+
+  /** @internal */
+  _acquireFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): RuntimeFontBindingLease<Technique> {
+    this.#assertActive();
+    const registered = immutableFontResources(font).font;
+    const variantIdentity = immutableFontVariantIdentity(font);
+    let registration = this.#fontRegistrations.get(registered);
+    let variant = registration?.variants.get(variantIdentity) as RuntimeFontVariantRegistration<Technique> | undefined;
+    if (registration === undefined || registration.disposed) {
+      const resources = acquireImmutableFontResources(font);
+      const createdVariant: RuntimeFontVariantRegistration<Technique> = {
+        identity: variantIdentity,
+        technique: font.technique,
+        resources,
+        leases: 0,
+      };
+      const created: RuntimeFontRegistration = {
+        font: registered,
+        variants: new Map([[variantIdentity, createdVariant]]),
+        leases: 0,
+        disposed: false,
+      };
+      let registryAdded = false;
+      try {
+        this.#runtimeRegistry.add(registered);
+        registryAdded = true;
+        this.#shaper.registerFont(registered);
+      } catch (error) {
+        try {
+          if (registryAdded) this.#runtimeRegistry.delete(registered);
+        } finally {
+          resources.dispose();
+        }
+        throw error;
+      }
+      registration = created;
+      variant = createdVariant;
+      this.#fontRegistrations.set(registered, created);
+      this.#liveFontRegistrations.add(created);
+    } else if (variant === undefined) {
+      variant = {
+        identity: variantIdentity,
+        technique: font.technique,
+        resources: acquireImmutableFontResources(font),
+        leases: 0,
+      };
+      registration.variants.set(variantIdentity, variant);
+    }
+    registration.leases += 1;
+    variant.leases += 1;
+    return new RuntimeFontBindingLeaseImpl(this, registration, variant);
+  }
+
+  _releaseFont(registration: RuntimeFontRegistration, variant: RuntimeFontVariantRegistration): void {
+    if (registration.disposed) return;
+    if (registration.leases <= 0) throw new Error('runtime font binding lease underflow');
+    if (variant.leases <= 0) throw new Error('runtime font variant lease underflow');
+    registration.leases -= 1;
+    variant.leases -= 1;
+    if (registration.leases === 0) {
+      this.#disposeFontRegistration(registration);
+      return;
+    }
+    if (variant.leases === 0) {
+      registration.variants.delete(variant.identity);
+      variant.resources.dispose();
+    }
+  }
+
+  #disposeFontRegistration(registration: RuntimeFontRegistration): void {
+    if (registration.disposed) return;
+    registration.disposed = true;
+    registration.leases = 0;
+    this.#liveFontRegistrations.delete(registration);
+    this.#fontRegistrations.delete(registration.font);
+    try {
+      this.#runtimeRegistry.delete(registration.font);
+    } finally {
+      for (const variant of registration.variants.values()) {
+        variant.leases = 0;
+        variant.resources.dispose();
+      }
+      registration.variants.clear();
     }
   }
 
@@ -473,6 +699,53 @@ class TextRuntimeImpl implements TextRuntime {
       if (!active) return;
       active = false;
       this.#disposeObservers.delete(dispose);
+    };
+  }
+}
+
+class RuntimeFontBindingLeaseImpl<Technique extends AnyRasterTechnique> implements RuntimeFontBindingLease<Technique> {
+  readonly #runtime: TextRuntimeImpl;
+  readonly #registration: RuntimeFontRegistration;
+  readonly #variant: RuntimeFontVariantRegistration<Technique>;
+  #disposed = false;
+
+  constructor(
+    runtime: TextRuntimeImpl,
+    registration: RuntimeFontRegistration,
+    variant: RuntimeFontVariantRegistration<Technique>,
+  ) {
+    this.#runtime = runtime;
+    this.#registration = registration;
+    this.#variant = variant;
+  }
+
+  get disposed(): boolean {
+    return this.#disposed || this.#registration.disposed;
+  }
+
+  get technique(): Technique {
+    return this.#variant.technique;
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#runtime._releaseFont(this.#registration, this.#variant);
+  }
+
+  /** @internal */
+  _handle(): FontHandle {
+    if (this.disposed) throw new Error('runtime font binding has been disposed');
+    return this.#registration.font.handle;
+  }
+
+  /** @internal */
+  _resources(): RuntimeFontBindingResources<Technique> {
+    if (this.disposed) throw new Error('runtime font binding has been disposed');
+    return {
+      font: this.#variant.resources.font,
+      raster: this.#variant.resources.raster,
+      data: this.#variant.resources.data,
     };
   }
 }
