@@ -94,7 +94,7 @@ flowchart LR
 
   subgraph Renderer[Renderer-owned domain]
     T[PlanTarget\none acceptance frontier]
-    P[Device realization pool\none pool per GPUDevice]
+    P[Renderer-private realization pool\none per GPUDevice or WebGL context]
     C[Canvas, texture, or\nlockstep target group]
     S -->|publishes| T
     HB -->|portable payload lease| P
@@ -111,7 +111,34 @@ The arrows define lifetime direction:
 - a host is permanently attached to one runtime and cannot rebind;
 - a session is permanently attached to one host, one policy, and one abstract target;
 - Canvas, WebGPU, Three.js, render passes, and GPU resources remain renderer-owned;
-- a renderer may pool one immutable realization across any sessions using the same authenticated font payload and device.
+- a renderer may pool one immutable realization across sessions using the same authenticated payload and renderer
+  resource domain.
+
+### Host, target, and device are different boundaries
+
+`TextEngineHost` and `TextPlanTarget` are `/core` integrator concepts. A GPU device is not:
+
+- the host owns one runtime attachment, portable policy registrations, portable font-binding leases, IDs, and sessions;
+  it owns no Canvas, `GPUDevice`, `GPUCanvasContext`, WebGL context, texture, buffer, bind group, material, or pipeline;
+- the target is a renderer-implemented acceptance callback owned by one session; it tells core whether one candidate was
+  actually committed so core can advance retention safely;
+- a renderer-private realization pool owns physical resources and keys them by its own resource domain plus authenticated
+  payload identity and variant. Core never constructs, stores, or names that pool or device.
+
+The host's “font binding” is therefore an engine binding, not a GPU bind group. It installs compact policy bytes and a
+portable resource resolver. Each target asks its renderer pool to realize those payloads for the target's device/context.
+Two targets may share the host binding while sharing or duplicating physical resources according to their renderer domain.
+
+| Renderer topology                                   | Host and session shape                                                                         | Physical resource rule                                                                                                                          |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Two canvases configured with one WebGPU `GPUDevice` | One host; normally one session per independently advancing canvas                              | One renderer pool may share buffers, textures, samplers, bind groups, and pipelines; each canvas supplies its own current presentation texture. |
+| Two canvases using different WebGPU devices         | One host remains valid when they share a portable policy ABI; use independent sessions/targets | Separate realization pools; no GPU object crosses devices.                                                                                      |
+| Two WebGL canvases/contexts                         | One host is still valid when policy ownership is shared                                        | Separate context-local realization pools; WebGL objects do not cross contexts.                                                                  |
+| One canvas switching device/context                 | Keep or replace the session according to acceptance ownership                                  | Discard the old physical pool and checkpoint that session against the replacement.                                                              |
+
+A canvas alone is not the host boundary. Create another host when renderer integration, policy ownership, plugin trust,
+or teardown must be independent. Creating one host per canvas is valid, but duplicates host registrations and is not
+required for resource safety.
 
 ## Font memory and lease model
 
@@ -372,8 +399,6 @@ const session = host.createSession({
   target: (control) =>
     renderer.createPlanTarget({
       control,
-      device,
-      surfaces: [canvas],
       delivery: 'owned',
     }),
   requestCapacity: SESSION_REQUEST_BYTES,
@@ -381,6 +406,9 @@ const session = host.createSession({
   textCapacity: SESSION_TEXT_BYTES,
 });
 ```
+
+In this example, `renderer` already owns its surface and physical device/context. Neither enters `createSession()` or any
+other core signature.
 
 The session constructs one opaque `PlanTargetControl` and passes it to the target factory. This resolves the lifecycle
 cycle without a raw setter or manual registration: the renderer's device pool retains controls for its attached live
@@ -547,8 +575,9 @@ but runtime registrations and host tokens never cross realms.
 ### Several renderer integrations
 
 Use one host per integration or policy ownership boundary. Two hosts can share one runtime shaping registration through
-the runtime-private binding cache, while each owns its own policy, portable binding, sessions, and renderer resources.
-Never create a host per canvas merely to get another target.
+the runtime-private binding cache, while each owns its own policy, portable binding, and sessions. Targets and renderer
+pools—not hosts—own physical resources. A second canvas alone does not require another host, though separate policy or
+teardown ownership may justify one.
 
 Cross-host realization sharing never uses `referenceId`, which is only a compact host-scoped wire identity. Candidate
 resource resolution returns a package-created `PortablePayloadIdentity` tied to the exact validated backing slice and
@@ -574,16 +603,16 @@ session cannot block an active one. Portable payload leases survive; physical GP
 
 ## Cardinality and rules
 
-| Relationship               | Allowed cardinality    | Rule                                                                                                 |
-| -------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| `Font` → runtime           | many-to-many over time | Each live runtime binding holds an independent lease and one Wasm registration.                      |
-| runtime → host             | one-to-many            | Runtime owns and cascades disposal; host cannot rebind.                                              |
-| host → session             | one-to-many            | Session cannot move between hosts.                                                                   |
-| host → policy              | one-to-many            | Session chooses one policy at construction.                                                          |
-| session → target           | exactly one            | Target defines the one acceptance frontier.                                                          |
-| target → surface           | one or lockstep-many   | Independent surfaces require independent sessions.                                                   |
-| device → realization       | one pool per device    | Pool by package-supplied payload identity and variant; wire reference IDs are never cross-host keys. |
-| runtime → JavaScript realm | exactly one            | Runtime/Wasm memory and borrowed views do not cross realms.                                          |
+| Relationship                           | Allowed cardinality    | Rule                                                                                                 |
+| -------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| `Font` → runtime                       | many-to-many over time | Each live runtime binding holds an independent lease and one Wasm registration.                      |
+| runtime → host                         | one-to-many            | Runtime owns and cascades disposal; host cannot rebind.                                              |
+| host → session                         | one-to-many            | Session cannot move between hosts.                                                                   |
+| host → policy                          | one-to-many            | Session chooses one policy at construction.                                                          |
+| session → target                       | exactly one            | Target defines the one acceptance frontier.                                                          |
+| target → surface                       | one or lockstep-many   | Independent surfaces require independent sessions.                                                   |
+| renderer resource domain → realization | one pool per domain    | Pool by package-supplied payload identity and variant; wire reference IDs are never cross-host keys. |
+| runtime → JavaScript realm             | exactly one            | Runtime/Wasm memory and borrowed views do not cross realms.                                          |
 
 Use another runtime for another realm, Wasm build, hard memory/failure boundary, or independent teardown. Use another host
 for another renderer integration, policy ownership domain, or plugin trust boundary. Use another session for another

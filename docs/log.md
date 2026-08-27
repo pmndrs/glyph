@@ -25,6 +25,11 @@
   session factory maps target delivery to the correct session return type and rejects a reused target object before Wasm
   allocation. These are contract corrections, not a second integration mode.
 
+- **Clarified host versus renderer resource ownership** — The host owns portable policy/font registrations and sessions,
+  not Canvas, device, context, bind-group, material, or pipeline objects. WebGPU canvases configured with one device may
+  share one renderer realization pool; different WebGPU devices and WebGL contexts require separate pools while still
+  consuming one host's portable bindings. The reviewed HTML implementation report now lives durably under `docs/reports`.
+
 ## 2026-08-26
 
 - **Core host and session ownership are now enforceable** — Registrations are claimed per Wasm instance and host,
