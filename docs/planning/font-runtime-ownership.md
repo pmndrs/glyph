@@ -40,7 +40,7 @@ sources:
     title: Architectural decision register
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-27T21:03:06Z'
+  at: '2026-08-27T21:05:54Z'
 ---
 
 # Font, runtime, host, session, and render-target ownership
@@ -1394,7 +1394,10 @@ eviction/counter-performance contract. This revision adds `HostTransformBinding`
 choice, `maximumPlanBytes >= limits.maxOutputBytes` validation, deterministic least-recently-returned eviction, and
 stable/variable trace gates. No finding changes the ownership graph.
 
-The resulting commit receives one final diff-only verification before implementation begins.
+Opus High performed the final diff-only verification at exact commit
+`c94f30933333ec85110dc59b0bf933f92bcee02a` under session `276d7607-e9bd-419c-a168-b25ed4fd10a5`. It verified all four
+items closed against source and reported: **no actionable blocker; the implementation plan is implementable.** This final
+evidence-only note does not alter the reviewed contract.
 
 No compatibility adapter may keep both ownership models alive. The migration may stage private implementation pieces, but
 the published package changes from the old surface to the new surface atomically.
