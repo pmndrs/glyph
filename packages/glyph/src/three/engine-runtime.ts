@@ -11,7 +11,6 @@ import {
   observeLoadedFontDispose,
   resolveRasterPlanProgram,
   TextEngineHost,
-  textRuntimeShaper,
   type FontBindingHandle,
   type FontStackHandle,
   type GlyphId,
@@ -116,7 +115,7 @@ export class ThreeTextEngineCoordinator {
   #disposed = false;
 
   constructor(
-    shaper: ConstructorParameters<typeof TextEngineHost>[0],
+    runtime: TextRuntime | ConstructorParameters<typeof TextEngineHost>[0],
     options: ThreeTextEngineCoordinatorOptions = {},
   ) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
@@ -128,7 +127,10 @@ export class ThreeTextEngineCoordinator {
         `Three text engine transform mode must be "indexed" or "direct", not "${String(transformMode)}"`,
       );
     }
-    this.host = new TextEngineHost(shaper);
+    this.host =
+      'createTextEngineHost' in runtime
+        ? runtime.createTextEngineHost({ integration: '@pmndrs/glyph/three' })
+        : new TextEngineHost(runtime, { integration: '@pmndrs/glyph/three:test' });
     let snapshot = false;
     try {
       const planPrograms = compiledThreeRasterPlanPrograms(this.host.wireIdentities, transformMode);
@@ -494,7 +496,7 @@ export class ThreeTextEngineCoordinator {
 export function threeTextEngineCoordinator(runtime: TextRuntime): ThreeTextEngineCoordinator {
   let coordinator = coordinators.get(runtime);
   if (coordinator === undefined) {
-    coordinator = new ThreeTextEngineCoordinator(textRuntimeShaper(runtime));
+    coordinator = new ThreeTextEngineCoordinator(runtime);
     coordinators.set(runtime, coordinator);
     const owned = coordinator;
     coordinatorDisposeObservers.set(

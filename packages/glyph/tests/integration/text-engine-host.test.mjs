@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { FontRegistry } from '@pmndrs/glyph';
+import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { TextEngineHost } from '../../dist/core/host.js';
 import { assertGlyphId, id, programId, techniqueId } from '../../dist/core/render-policy.js';
@@ -20,6 +20,31 @@ const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const TEST_POLICY_HANDLE = id('policy', 'test.text-engine-host/default');
 const TEST_SESSION_HANDLE = id('session', 'test.text-engine-host/default');
 const THREE_POLICY_HANDLE = id('policy', 'test.text-engine-host/three');
+
+test('a text runtime owns every host it creates', async () => {
+  const runtime = await createTextRuntime({ wasm: await readFile(wasmUrl) });
+  assert.throws(() => runtime.createTextEngineHost({ integration: '' }), /nonempty string/u);
+  const host = runtime.createTextEngineHost({ integration: 'test.runtime-owner' });
+  const sessionHandle = host.id('session', 'test.runtime-owner/session');
+  const policyHandle = host.id('policy', 'test.runtime-owner/policy');
+  host.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
+  const request = engineUpdateBytes(textShaperAbi, {
+    sessionId: sessionHandle,
+    policyHandle,
+    expectedEngineRevision: 0,
+    consumedPlanRevision: 0,
+  });
+  const session = host.createSession({
+    handle: sessionHandle,
+    requestCapacity: request.byteLength,
+    resultCapacity: textShaperAbi.layouts.engineResult.size,
+  });
+
+  assert.equal(host.integration, 'test.runtime-owner');
+  runtime.dispose();
+  assert.throws(() => host.id('session', 'test.runtime-owner/stale'), /disposed/u);
+  assert.throws(() => session.update(request), /disposed/u);
+});
 
 test('production text-engine host publishes borrowed A/B plans through the runtime shaper instance', async () => {
   const wasm = await readFile(wasmUrl);

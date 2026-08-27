@@ -23,6 +23,7 @@ export {
   TextEngineSession,
   TextEngineStatusError,
   type TextEngineFault,
+  type TextEngineHostOptions,
   type TextEnginePublication,
   type TextEngineSessionOptions,
 } from './core/host.js';

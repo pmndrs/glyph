@@ -34,6 +34,7 @@ import type {
   RuntimeRasterBakerModule,
 } from './raster.js';
 import { createRuntimeShaper, type RuntimeShaper } from './shaper.js';
+import { TextEngineHost, type TextEngineHostOptions } from './core/host.js';
 
 export interface TextRuntimeOptions {
   readonly registry?: FontRegistry;
@@ -71,6 +72,8 @@ export type LoadedFonts<Techniques extends LoadedFontTechniques> = {
 export interface TextRuntime {
   readonly registry: FontRegistry;
   readonly disposed: boolean;
+
+  createTextEngineHost(options: TextEngineHostOptions): TextEngineHost;
 
   loadFont<Technique extends AnyRasterTechnique>(
     request: LoadedFontRequest<Technique>,
@@ -124,6 +127,7 @@ class TextRuntimeImpl implements TextRuntime {
   readonly #loaded = new Map<RegisteredFont, Map<AnyRasterTechnique, Map<string, LoadedFont<AnyRasterTechnique>>>>();
   readonly #pending = new Map<RegisteredFont, Map<AnyRasterTechnique, Map<string, PendingTechniqueLoad>>>();
   readonly #disposeObservers = new Set<() => void>();
+  readonly #hosts = new Set<TextEngineHost>();
   #disposed = false;
 
   constructor(registry: FontRegistry, shaper: RuntimeShaper) {
@@ -134,6 +138,14 @@ class TextRuntimeImpl implements TextRuntime {
 
   get disposed(): boolean {
     return this.#disposed;
+  }
+
+  createTextEngineHost(options: TextEngineHostOptions): TextEngineHost {
+    this.#assertActive();
+    let host!: TextEngineHost;
+    host = new TextEngineHost(this.#shaper, options, () => this.#hosts.delete(host));
+    this.#hosts.add(host);
+    return host;
   }
 
   loadFont<Technique extends AnyRasterTechnique>(
@@ -219,6 +231,14 @@ class TextRuntimeImpl implements TextRuntime {
       }
     }
     this.#disposeObservers.clear();
+    for (const host of [...this.#hosts]) {
+      try {
+        host.dispose();
+      } catch (error) {
+        report('disposing a text engine host', error);
+      }
+    }
+    this.#hosts.clear();
     for (const techniques of this.#pending.values()) {
       for (const loads of techniques.values()) {
         for (const pending of loads.values()) {

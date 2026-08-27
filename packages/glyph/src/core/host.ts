@@ -29,6 +29,11 @@ export interface TextEngineSessionOptions {
   readonly textCapacity?: number;
 }
 
+export interface TextEngineHostOptions {
+  /** Stable diagnostic namespace; never a wire ID or lookup key. */
+  readonly integration: string;
+}
+
 /**
  * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
  * this session answers any later call; see `core/retention.ts` for the protocol.
@@ -129,6 +134,7 @@ function headerFault(header: DataView): TextEngineFault {
 
 /** Lifecycle owner for retained policies, font bindings, font stacks, and sessions in one RuntimeShaper. */
 export class TextEngineHost {
+  readonly integration: string;
   readonly wireIdentities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry();
   readonly #ids = new GlyphIdScope();
   readonly #exports;
@@ -137,11 +143,25 @@ export class TextEngineHost {
   readonly #policies = new Set<PolicyHandle>();
   readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
   readonly #fontBindings = new Set<FontBindingHandle>();
+  readonly #onDispose: (() => void) | undefined;
   #disposed = false;
 
-  constructor(shaper: RuntimeShaper) {
+  /** @internal Hosts are owned and normally created by TextRuntime. */
+  constructor(
+    shaper: RuntimeShaper,
+    options: TextEngineHostOptions = { integration: 'internal' },
+    onDispose?: () => void,
+  ) {
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new TypeError('text engine host options need an object');
+    }
+    if (typeof options.integration !== 'string' || options.integration.length === 0) {
+      throw new TypeError('text engine host integration must be a nonempty string');
+    }
+    this.integration = options.integration;
     this.#exports = runtimeShaperEngineExports(shaper);
     this.#owners = ownersFor(this.#exports);
+    this.#onDispose = onDispose;
   }
 
   /** Derive one branded ID retained until its registration or this host is disposed. */
@@ -319,6 +339,7 @@ export class TextEngineHost {
         failure ??= error;
       } finally {
         this.#disposed = true;
+        this.#onDispose?.();
       }
     }
     if (failure !== undefined) throw failure;
