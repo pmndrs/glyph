@@ -1,6 +1,6 @@
 import { DEV } from './internal/dev.js';
 
-import type { RegisteredFont } from './font.js';
+import type { Font, FontMetrics, RegisteredFont } from './font.js';
 import type { RegisteredRaster, RasterKindOf } from './raster.js';
 import type { AnyRasterTechnique, RasterDataOf } from './raster-technique.js';
 import type { TextRuntime } from './text-runtime.js';
@@ -15,13 +15,19 @@ export interface LoadedFont<Technique extends AnyRasterTechnique> {
   dispose(): void;
 }
 
-export type FontSelection<Technique extends AnyRasterTechnique> = LoadedFont<Technique> | FontStack<Technique>;
+export type FontSelection<Technique extends AnyRasterTechnique> =
+  | LoadedFont<Technique>
+  | FontStack<Technique, LoadedFont<Technique>>;
 
-export interface FontStack<Technique extends AnyRasterTechnique> {
-  readonly fonts: readonly [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
+export interface FontStack<
+  Technique extends AnyRasterTechnique,
+  Member extends Font<Technique> | LoadedFont<Technique> = LoadedFont<Technique>,
+> {
+  readonly fonts: readonly [Member, ...Member[]];
 }
 
-type TechniqueOfLoadedFont<Font> = Font extends LoadedFont<infer Technique> ? Technique : never;
+type TechniqueOfLoadedFont<Value> = Value extends LoadedFont<infer Technique> ? Technique : never;
+type TechniqueOfFont<Value> = Value extends Font<infer Technique> ? Technique : never;
 
 interface LoadedFontState {
   readonly release: () => void;
@@ -33,22 +39,185 @@ interface LoadedFontState {
 
 const loadedFontState = new WeakMap<LoadedFont<AnyRasterTechnique>, LoadedFontState>();
 
+interface ImmutableFontBacking {
+  readonly font: RegisteredFont;
+  leases: number;
+  released: boolean;
+}
+
+export interface ImmutableFontVariant<Technique extends AnyRasterTechnique> {
+  readonly backing: ImmutableFontBacking;
+  readonly technique: Technique;
+  readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
+  readonly data: RasterDataOf<Technique>;
+  leases: number;
+  released: boolean;
+}
+
+interface ImmutableFontState {
+  readonly variant: ImmutableFontVariant<AnyRasterTechnique>;
+  disposed: boolean;
+}
+
+const immutableFontState = new WeakMap<Font<AnyRasterTechnique>, ImmutableFontState>();
+
+export function createFontStack<
+  const Primary extends Font<AnyRasterTechnique>,
+  const Fallback extends readonly Font<AnyRasterTechnique>[],
+>(
+  primary: Primary,
+  ...fallback: Fallback
+): FontStack<TechniqueOfFont<Primary | Fallback[number]>, Font<TechniqueOfFont<Primary | Fallback[number]>>>;
+
 export function createFontStack<
   Primary extends AnyRasterTechnique,
   const Fallback extends readonly LoadedFont<AnyRasterTechnique>[],
->(primary: LoadedFont<Primary>, ...fallback: Fallback): FontStack<Primary | TechniqueOfLoadedFont<Fallback[number]>> {
-  type Technique = Primary | TechniqueOfLoadedFont<Fallback[number]>;
-  const fonts = [primary, ...fallback] as unknown as [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
-  assertLoadedFont(primary);
-  const unique = new Set<LoadedFont<AnyRasterTechnique>>([primary]);
+>(
+  primary: LoadedFont<Primary>,
+  ...fallback: Fallback
+): FontStack<
+  Primary | TechniqueOfLoadedFont<Fallback[number]>,
+  LoadedFont<Primary | TechniqueOfLoadedFont<Fallback[number]>>
+>;
+
+export function createFontStack(
+  primary: Font<AnyRasterTechnique> | LoadedFont<AnyRasterTechnique>,
+  ...fallback: readonly (Font<AnyRasterTechnique> | LoadedFont<AnyRasterTechnique>)[]
+): FontStack<AnyRasterTechnique, Font<AnyRasterTechnique> | LoadedFont<AnyRasterTechnique>> {
+  const fonts = [primary, ...fallback];
+  const immutable = immutableFontState.has(primary as Font<AnyRasterTechnique>);
+  if (immutable) assertImmutableFont(primary as Font<AnyRasterTechnique>);
+  else assertLoadedFont(primary as LoadedFont<AnyRasterTechnique>);
+  const unique = new Set<Font<AnyRasterTechnique> | LoadedFont<AnyRasterTechnique>>([primary]);
   for (const font of fallback) {
-    assertLoadedFont(font);
-    if (unique.has(font)) throw new TypeError('font stack cannot contain the same loaded font more than once');
+    if (immutable !== immutableFontState.has(font as Font<AnyRasterTechnique>)) {
+      throw new TypeError('font stack cannot mix immutable and runtime-bound fonts');
+    }
+    if (immutable) assertImmutableFont(font as Font<AnyRasterTechnique>);
+    else assertLoadedFont(font as LoadedFont<AnyRasterTechnique>);
+    if (unique.has(font)) throw new TypeError('font stack cannot contain the same font more than once');
     unique.add(font);
-    if (font.runtime !== primary.runtime)
+    if (
+      !immutable &&
+      (font as LoadedFont<AnyRasterTechnique>).runtime !== (primary as LoadedFont<AnyRasterTechnique>).runtime
+    )
       throw new TypeError('font stack members must belong to the same text runtime');
   }
-  return Object.freeze({ fonts: Object.freeze(fonts) });
+  return Object.freeze({ fonts: Object.freeze(fonts) }) as FontStack<
+    AnyRasterTechnique,
+    Font<AnyRasterTechnique> | LoadedFont<AnyRasterTechnique>
+  >;
+}
+
+class FontImpl<Technique extends AnyRasterTechnique> implements Font<Technique> {
+  readonly metrics: FontMetrics;
+  readonly glyphCount: number;
+  readonly technique: Technique;
+
+  constructor(variant: ImmutableFontVariant<Technique>) {
+    retainImmutableFontVariant(variant);
+    this.metrics = variant.backing.font.metrics;
+    this.glyphCount = variant.backing.font.glyphCount;
+    this.technique = variant.technique;
+    immutableFontState.set(this, { variant, disposed: false });
+  }
+
+  get disposed(): boolean {
+    return immutableStateOf(this).disposed;
+  }
+
+  dispose(): void {
+    const state = immutableStateOf(this);
+    if (state.disposed) return;
+    state.disposed = true;
+    releaseImmutableFontVariant(state.variant);
+  }
+}
+
+/** @internal Create the one backing state retained by all technique variants and leases. */
+export function createImmutableFontBacking(font: RegisteredFont): ImmutableFontBacking {
+  return { font, leases: 0, released: false };
+}
+
+/** @internal Create one technique-specific immutable value over a shared backing. */
+export function createImmutableFontVariant<Technique extends AnyRasterTechnique>(init: {
+  readonly backing: ImmutableFontBacking;
+  readonly technique: Technique;
+  readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
+  readonly data: RasterDataOf<Technique>;
+}): ImmutableFontVariant<Technique> {
+  if (init.backing.released) throw new TypeError('font backing has been released');
+  init.backing.leases += 1;
+  return { ...init, leases: 0, released: false };
+}
+
+/** @internal Return an independent application lease. */
+export function createImmutableFontLease<Technique extends AnyRasterTechnique>(
+  variant: ImmutableFontVariant<Technique>,
+): Font<Technique> {
+  return new FontImpl(variant);
+}
+
+/** @internal Retain a library, pending-load, runtime, or renderer lease. */
+export function retainImmutableFontVariant(variant: ImmutableFontVariant<AnyRasterTechnique>): void {
+  if (variant.released) throw new TypeError('font variant has been released');
+  variant.leases += 1;
+}
+
+/** @internal Release a library, pending-load, runtime, or renderer lease. */
+export function releaseImmutableFontVariant(variant: ImmutableFontVariant<AnyRasterTechnique>): void {
+  if (variant.leases <= 0) throw new Error('immutable font lease underflow');
+  variant.leases -= 1;
+  if (variant.leases !== 0 || variant.released) return;
+  variant.released = true;
+  try {
+    (variant.technique as unknown as { dispose(data: unknown): void }).dispose(variant.data);
+  } catch (error) {
+    reportDisposalFailure('releasing immutable technique data', error);
+  }
+  try {
+    variant.raster.dispose();
+  } catch (error) {
+    reportDisposalFailure('releasing immutable raster data', error);
+  }
+  releaseImmutableFontBacking(variant.backing);
+}
+
+/** @internal Read package-private resources while proving the user lease is live. */
+export function immutableFontResources<Technique extends AnyRasterTechnique>(
+  font: Font<Technique>,
+): {
+  readonly font: RegisteredFont;
+  readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
+  readonly data: RasterDataOf<Technique>;
+} {
+  assertImmutableFont(font);
+  const variant = immutableStateOf(font).variant as ImmutableFontVariant<Technique>;
+  return { font: variant.backing.font, raster: variant.raster, data: variant.data };
+}
+
+function releaseImmutableFontBacking(backing: ImmutableFontBacking): void {
+  if (backing.leases <= 0) throw new Error('immutable font backing lease underflow');
+  backing.leases -= 1;
+  if (backing.leases !== 0 || backing.released) return;
+  backing.released = true;
+  try {
+    backing.font.dispose();
+  } catch (error) {
+    reportDisposalFailure('releasing immutable font backing', error);
+  }
+}
+
+function assertImmutableFont(font: Font<AnyRasterTechnique>): void {
+  const state = immutableFontState.get(font);
+  if (state === undefined) throw new TypeError('font was not created by this package');
+  if (state.disposed) throw new TypeError('font has been disposed');
+}
+
+function immutableStateOf(font: Font<AnyRasterTechnique>): ImmutableFontState {
+  const state = immutableFontState.get(font);
+  if (state === undefined) throw new TypeError('invalid immutable font');
+  return state;
 }
 
 export class LoadedFontImpl<Technique extends AnyRasterTechnique> implements LoadedFont<Technique> {
@@ -231,7 +400,7 @@ function reportDisposalFailure(stage: string, error: unknown): void {
 
 function isFontStack<Technique extends AnyRasterTechnique>(
   selection: FontSelection<Technique>,
-): selection is FontStack<Technique> {
+): selection is FontStack<Technique, LoadedFont<Technique>> {
   return 'fonts' in selection;
 }
 

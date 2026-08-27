@@ -34,14 +34,26 @@ export interface RegisteredFont {
   dispose(): void;
 }
 
+export type FontBytesInput =
+  | { readonly bytes: ArrayBufferView; readonly ownership?: 'copy' }
+  | { readonly bytes: ArrayBufferView; readonly ownership: 'transfer' };
+
+export interface Font<Technique extends AnyRasterTechnique> {
+  readonly metrics: FontMetrics;
+  readonly glyphCount: number;
+  readonly technique: Technique;
+  readonly disposed: boolean;
+  dispose(): void;
+}
+
 export interface FontSourceOverride {
-  readonly source: string | URL;
+  readonly source: string | URL | FontBytesInput;
   /** Explicitly set null to skip baked-sibling discovery for this load. */
-  readonly baked?: string | URL | null;
+  readonly baked?: string | URL | FontBytesInput | null;
 }
 
 export interface BakedFontSource {
-  readonly baked: string | URL;
+  readonly baked: string | URL | FontBytesInput;
   readonly source?: never;
 }
 
