@@ -1,4 +1,3 @@
-export { span } from './formatted-text.js';
 export type { FormattedText, GlyphPaintInput, TextInput } from './formatted-text.js';
 export type { FontSelection, LoadedFont } from './loaded-font.js';
 export type { GlyphBufferCapacity, ParagraphContentBox, ParagraphStyle } from './text-properties.js';

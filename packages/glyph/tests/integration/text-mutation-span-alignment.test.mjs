@@ -42,7 +42,7 @@ import '../support/browser-globals.mjs';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { txt } from '@pmndrs/glyph';
 import { alignSpansToClusters } from '../../dist/formatted-text.js';
-import { span } from '@pmndrs/glyph/three';
+import { span } from '@pmndrs/glyph';
 import { Text as R3fText, TextSpan as R3fTextSpan } from '@pmndrs/glyph/react';
 
 import { createFontCache, mount, seededRandom, timeout, unmount } from '../support/text-mutation-lanes.mjs';
