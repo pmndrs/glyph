@@ -52,22 +52,38 @@ test('the root vocabulary and the engine surface share no name', async () => {
   );
 });
 
-test('an integration re-exports a root name only when its own signatures use it', async () => {
+test('integrations re-export root names only when their own signatures use them', async () => {
   const root = published(await declaration('index.d.ts'));
-  const entry = await declaration('three.d.ts');
-  const signatures = await Promise.all(
-    ['three/text.d.ts', 'three/font-loader.d.ts', 'three/material.d.ts', 'three/frame-error.d.ts'].map(declaration),
-  );
-  const body = signatures.join('\n');
-  const gratuitous = [...published(entry)]
-    .filter((name) => root.has(name))
-    .filter((name) => !new RegExp(`\\b${name.replaceAll(/[$]/g, '\\$')}\\b`).test(body))
-    .sort();
-  assert.deepEqual(
-    gratuitous,
-    [],
-    `\`./three\` re-exports these root names without naming them in any of its own signatures, so ` +
-      `they are a second home for the same vocabulary. Import them from \`@pmndrs/glyph\` instead: ` +
-      gratuitous.join(', '),
-  );
+  const entries = [
+    {
+      name: './three',
+      entry: await declaration('three.d.ts'),
+      body: (
+        await Promise.all(
+          ['three/text.d.ts', 'three/font-loader.d.ts', 'three/material.d.ts', 'three/frame-error.d.ts'].map(
+            declaration,
+          ),
+        )
+      ).join('\n'),
+    },
+    {
+      name: './react',
+      entry: await declaration('react.d.ts'),
+      body: (await declaration('react.d.ts')).replaceAll(/export\s+(?:type\s+)?\{[^}]*\}\s+from\s+[^;]+;/gs, ''),
+    },
+  ];
+
+  for (const { name, entry, body } of entries) {
+    const gratuitous = [...published(entry)]
+      .filter((exported) => root.has(exported))
+      .filter((exported) => !new RegExp(`\\b${exported.replaceAll(/[$]/g, '\\$')}\\b`).test(body))
+      .sort();
+    assert.deepEqual(
+      gratuitous,
+      [],
+      `\`${name}\` re-exports these root names without naming them in any of its own signatures, so ` +
+        `they are a second home for the same vocabulary. Import them from \`@pmndrs/glyph\` instead: ` +
+        gratuitous.join(', '),
+    );
+  }
 });

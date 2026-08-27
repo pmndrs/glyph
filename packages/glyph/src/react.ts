@@ -498,9 +498,6 @@ function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementP
   return object as TextGroupElementProps;
 }
 
-export { span, txt } from './formatted-text.js';
-export type { SpanFormat, SpanStyle, SpanTag, UnboundSpanTag } from './formatted-text.js';
-
 function sameCapacity(
   capacity: NonNullable<StandaloneTextProperties<AnyRasterTechnique>['capacity']>,
   owner:
