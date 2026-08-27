@@ -351,6 +351,22 @@ interface OwnedTextEngineSession extends Disposable {
   publish(): Promise<PlanAcceptance>;
 }
 
+type SessionFor<Target extends TextPlanTarget> = Target extends BorrowedPlanTarget
+  ? BorrowedTextEngineSession
+  : OwnedTextEngineSession;
+
+interface TextEngineSessionOptions<Target extends TextPlanTarget> {
+  readonly policy: HostPolicy;
+  readonly target: (control: PlanTargetControl) => Target;
+  readonly requestCapacity: number;
+  readonly resultCapacity: number;
+  readonly textCapacity: number;
+}
+
+interface TextEngineHost {
+  createSession<Target extends TextPlanTarget>(options: TextEngineSessionOptions<Target>): SessionFor<Target>;
+}
+
 const session = host.createSession({
   policy,
   target: (control) =>
@@ -370,6 +386,11 @@ The session constructs one opaque `PlanTargetControl` and passes it to the targe
 cycle without a raw setter or manual registration: the renderer's device pool retains controls for its attached live
 targets, calls `control.requestCheckpoint()` on loss, and releases the control when the target/session disposes. A target
 factory is invoked exactly once, and a returned target cannot attach to another session.
+
+The host keeps a private `WeakSet` of claimed target objects. Returning a target already claimed by another live or
+disposed session throws from `createSession()` before any Wasm session is allocated. Type inference maps the factory's
+`delivery` discriminant to the only valid synchronous or asynchronous session return type; callers do not select that
+type independently.
 
 Every target has an idempotent `dispose()`. Session disposal aborts pending acceptance, calls `target.dispose()` so the
 renderer detaches the control from its pool, invalidates the control, and then releases session state. A later
@@ -624,7 +645,7 @@ Each step is one coherent commit and remains green before the next.
 - a Font handle carries exactly one technique type, while a multi-raster load returns a position-preserving typed tuple;
 - a host can be created only from a package-created live runtime;
 - a session requires one host-owned policy and one target;
-- every target is idempotently disposable and cannot outlive or attach to another session;
+- every target is idempotently disposable, and its factory delivery discriminant infers the matching session return type;
 - borrowed and owned targets expose different update return types;
 - a target, policy, font binding, stack, acceptance cursor, or session from another owner is not assignable;
 - a target-bound session exposes no raw update accepting caller-authored revisions or acknowledgments;
@@ -645,6 +666,7 @@ Each step is one coherent commit and remains green before the next.
 - no call through a sibling session or sibling host can re-enter Wasm while a borrowed target callback is active;
 - a second update while one owned-target acceptance is pending throws without crossing into Wasm;
 - disposing a session aborts its pending target transaction and ignores a late accepted answer;
+- returning one target object from two session factories throws before the second Wasm session allocation;
 - disposing a session disposes its target exactly once, removes its checkpoint control from the device pool, and does not
   interrupt loss fan-out to a live sibling;
 - an owned publication survives later calls and worker transfer but is revalidated in the receiving realm;
@@ -723,6 +745,10 @@ The follow-up verification at `457e0495deeb05718e0b97fd52182f9b3a6d1799` found t
 control machinery. They are accepted here: targets are explicitly disposable so sessions can detach pool controls;
 device-loss barriers are per session rather than pool-wide; and cross-realm owned targets transport an authenticated
 resource manifest because a realm-local resolver closure cannot cross `postMessage`.
+
+Opus re-reviewed the exact corrected target `ffbe16642ab2e1c64768fff7113c9208622bafda` and reported no remaining
+actionable blocker. The implementation must still make the delivery-to-session conditional return and target claim check
+concrete as specified above; they are acceptance details, not alternate ownership choices.
 
 No compatibility adapter may keep both ownership models alive. The migration may stage private implementation pieces, but
 the published package changes from the old surface to the new surface atomically.
