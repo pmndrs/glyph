@@ -17,6 +17,12 @@
   atomic lockstep preparation. The finalizer proposal remains rejected: it cannot order bound teardown and adds nothing
   for an unbound Font whose wrapper and ordinary JS backing are already unreachable together.
 
+- **Closed the target-control follow-up** — Opus verified all original ownership findings, then exposed three omissions in
+  the new target contract. Targets are now explicitly disposable so session teardown detaches device-pool controls;
+  replacement-device checkpoint barriers are per session so an idle canvas cannot deadlock an active sibling; and the
+  worker target resolves referenced resources into an authenticated digest/descriptor manifest because a realm-local
+  resolver closure cannot cross `postMessage`. These are contract corrections, not a second integration mode.
+
 ## 2026-08-26
 
 - **Core host and session ownership are now enforceable** — Registrations are claimed per Wasm instance and host,

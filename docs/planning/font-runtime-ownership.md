@@ -333,12 +333,12 @@ interface PlanTargetControl {
   requestCheckpoint(): void;
 }
 
-interface BorrowedPlanTarget {
+interface BorrowedPlanTarget extends Disposable {
   readonly delivery: 'borrowed';
   accept(candidate: BorrowedPlanCandidate, signal: AbortSignal): PlanAcceptance;
 }
 
-interface OwnedPlanTarget {
+interface OwnedPlanTarget extends Disposable {
   readonly delivery: 'owned';
   accept(candidate: OwnedPlanCandidate, signal: AbortSignal): Promise<PlanAcceptance>;
 }
@@ -371,8 +371,10 @@ cycle without a raw setter or manual registration: the renderer's device pool re
 targets, calls `control.requestCheckpoint()` on loss, and releases the control when the target/session disposes. A target
 factory is invoked exactly once, and a returned target cannot attach to another session.
 
-`requestCheckpoint()` throws when called after its target/session has been disposed. That call-time failure identifies a
-renderer pool that failed to detach its control; it is not converted into a recoverable render result.
+Every target has an idempotent `dispose()`. Session disposal aborts pending acceptance, calls `target.dispose()` so the
+renderer detaches the control from its pool, invalidates the control, and then releases session state. A later
+`requestCheckpoint()` throws; that call-time failure identifies a renderer pool that violated the detach contract and is
+not converted into a recoverable render result.
 
 A borrowed target must validate, prepare, submit, and answer before the callback returns and before any host call can grow
 the shared Wasm memory. An owned target receives one package-created copy and may cross an `await` or worker boundary.
@@ -396,10 +398,20 @@ acceptance cursor unchanged. Recoverable renderer transitions such as device rep
 `PlanTargetControl.requestCheckpoint()` after rebuilding the device pool. Invalid plan bytes are never a recoverable target
 result; they throw as an implementation defect at the decoding call.
 
-An owned worker target transfers its package-created publication buffer and validates it with
-`TextEngineRenderPlanView.bindBytes()` in the receiving realm. The worker session remains target-bound and keeps its
-acceptance cursor private; the target returns the renderer's commit answer over the message channel. Same-realm ownership
-provenance is not serialized.
+An owned worker target remains one target with two renderer-owned endpoints. Its worker endpoint resolves every resource
+referenced by the candidate before posting a transport envelope containing the package-created plan bytes and a manifest
+from host-scoped `referenceId` to package-authenticated payload digest, descriptor metadata, and either transferred payload
+bytes or a renderer-defined fetch key. Its receiving endpoint validates the plan with `TextEngineRenderPlanView.bindBytes()`
+and validates every supplied payload against that manifest before realization. A cache hit may omit payload bytes only
+when the receiving endpoint already holds the same authenticated digest and descriptor.
+
+`PortablePayloadIdentity` equality is content-derived from a collision-resistant digest over the technique identity,
+canonical descriptor/format metadata, and payload bytes; it is not JavaScript backing-object identity and is never the
+compact wire `referenceId`. The package creates and validates identities in each realm. This lets independently loaded or
+transferred copies of the same artifact share a receiving-realm device realization without treating equal host-local
+numbers as equal resources. The worker session remains target-bound and keeps its acceptance cursor private; the target
+returns the receiving renderer's commit answer over the message channel. Same-realm ownership provenance is not
+serialized.
 
 Disposing a session aborts an in-flight owned target signal, invalidates that transaction, and ignores every late answer.
 A late `{ accepted: true }` can never advance a disposed session's cursor. The owned bytes remain valid long enough for the
@@ -534,9 +546,10 @@ portable backing deduplication; renderer runtimes remain per realm/integration a
 ### Device-loss fan-out
 
 A device realization pool tracks every target/session attached to that device. On loss it stops accepting candidates,
-aborts pending target transactions, rebuilds physical state, and calls `control.requestCheckpoint()` exactly once for each
-attached live target/session. No candidate from the replacement pool may commit until every attached session has supplied
-and the target has accepted its complete checkpoint. Portable payload leases survive; physical GPU objects do not.
+aborts pending target transactions, rebuilds physical state, resumes in checkpoint-required mode, and calls
+`control.requestCheckpoint()` exactly once for each attached live target/session. Each target then blocks only its own
+session's deltas until that session has supplied and the target has accepted its complete checkpoint; an idle sibling
+session cannot block an active one. Portable payload leases survive; physical GPU objects do not.
 
 ## Cardinality and rules
 
@@ -611,6 +624,7 @@ Each step is one coherent commit and remains green before the next.
 - a Font handle carries exactly one technique type, while a multi-raster load returns a position-preserving typed tuple;
 - a host can be created only from a package-created live runtime;
 - a session requires one host-owned policy and one target;
+- every target is idempotently disposable and cannot outlive or attach to another session;
 - borrowed and owned targets expose different update return types;
 - a target, policy, font binding, stack, acceptance cursor, or session from another owner is not assignable;
 - a target-bound session exposes no raw update accepting caller-authored revisions or acknowledgments;
@@ -631,12 +645,17 @@ Each step is one coherent commit and remains green before the next.
 - no call through a sibling session or sibling host can re-enter Wasm while a borrowed target callback is active;
 - a second update while one owned-target acceptance is pending throws without crossing into Wasm;
 - disposing a session aborts its pending target transaction and ignores a late accepted answer;
+- disposing a session disposes its target exactly once, removes its checkpoint control from the device pool, and does not
+  interrupt loss fan-out to a live sibling;
 - an owned publication survives later calls and worker transfer but is revalidated in the receiving realm;
+- a worker transport resolves every referenced payload before transfer, validates its digest/descriptor manifest in the
+  receiving realm, and never treats a wire `referenceId` as a cross-realm identity;
 - two independent canvases cannot acknowledge through one session; a lockstep composite target cannot advance past its
   slowest member;
 - a lockstep target prepares every member before any commit; a post-prepare partial backend failure marks the group lost;
 - device loss discards physical realizations, preserves portable payload leases, and requests exactly one checkpoint from
-  every session attached to the pool before accepting replacement-device candidates;
+  every session attached to the pool; each session independently resumes after its own checkpoint commits;
+- an active session completes replacement-device recovery while an attached idle sibling publishes nothing;
 - equal numeric resource references from different hosts cannot alias in a shared pool, while an identical
   package-authenticated payload may share one realization;
 - concurrent top-level loads coalesce while pending and retain no settled global entry;
@@ -687,7 +706,7 @@ result. Every finding was checked against this source before changing the plan.
 | F1 runtime cache could retain every once-bound font               | Accepted                                      | Runtime lookup is weak/non-owning; Wasm registration is released at final binding lease even while runtime stays live.                           |
 | F2 `/react` owns module-scope strong loader/promise caches        | Accepted, failure example narrowed            | Migrate React to an explicit provider/library resource with independent mounted leases and StrictMode coverage.                                  |
 | F3 target checkpoint direction is impossible and absent from type | Accepted with a factory-bound control         | Session construction passes one opaque `PlanTargetControl`; the device pool signals that control rather than calling a method on its own target. |
-| F4 one device loss has no multi-session fan-out                   | Accepted                                      | Device pool enumerates attached sessions and blocks acceptance until every checkpoint commits.                                                   |
+| F4 one device loss has no multi-session fan-out                   | Accepted                                      | Device pool enumerates attached sessions; each session independently blocks until its own checkpoint commits.                                    |
 | F5 raw update preserves caller-authored acceptance                | Accepted with stronger correction             | Remove the public raw session path; workers use an owned target message transport, not a second session model.                                   |
 | F6 host-local gate cannot protect runtime-wide Wasm memory        | Accepted                                      | Borrow gate belongs to runtime and covers every attached host.                                                                                   |
 | F7 cross-host device-pool key was undefined                       | Accepted                                      | Candidate resolution supplies an opaque authenticated payload identity; wire IDs are never pool keys.                                            |
@@ -699,6 +718,11 @@ result. Every finding was checked against this source before changing the plan.
 | F13 normative target/library types were incomplete                | Accepted                                      | Define candidate origin, payload lease/identity, FontLibrary, error payload, and `textCapacity`.                                                 |
 | F14 plan `draft` versus accepted decision                         | Rejected as a defect                          | OKF `draft` is implementation-document lifecycle; D-286 records the accepted decision with implementation pending.                               |
 | F15 dated report path/head creates provenance ambiguity           | Accepted as presentation only                 | Report footer distinguishes the portability evidence head and ownership review target; the final handoff records the report hash.                |
+
+The follow-up verification at `457e0495deeb05718e0b97fd52182f9b3a6d1799` found three gaps in the newly introduced
+control machinery. They are accepted here: targets are explicitly disposable so sessions can detach pool controls;
+device-loss barriers are per session rather than pool-wide; and cross-realm owned targets transport an authenticated
+resource manifest because a realm-local resolver closure cannot cross `postMessage`.
 
 No compatibility adapter may keep both ownership models alive. The migration may stage private implementation pieces, but
 the published package changes from the old surface to the new surface atomically.
