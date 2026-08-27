@@ -60,6 +60,7 @@ interface ImmutableFontState {
 }
 
 const immutableFontState = new WeakMap<Font<AnyRasterTechnique>, ImmutableFontState>();
+const immutableFontStacks = new WeakSet<object>();
 
 export function createFontStack<
   const Primary extends Font<AnyRasterTechnique>,
@@ -103,10 +104,23 @@ export function createFontStack(
     )
       throw new TypeError('font stack members must belong to the same text runtime');
   }
-  return Object.freeze({ fonts: Object.freeze(fonts) }) as FontStack<
+  const stack = Object.freeze({ fonts: Object.freeze(fonts) }) as FontStack<
     AnyRasterTechnique,
     Font<AnyRasterTechnique> | LoadedFont<AnyRasterTechnique>
   >;
+  if (immutable) immutableFontStacks.add(stack);
+  return stack;
+}
+
+/** @internal Authenticate one immutable stack and prove every member is live at this call. */
+export function immutableFontStackFonts(
+  stack: FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>,
+): readonly [Font<AnyRasterTechnique>, ...Font<AnyRasterTechnique>[]] {
+  if (typeof stack !== 'object' || stack === null || !immutableFontStacks.has(stack)) {
+    throw new TypeError('font stack was not created by this package');
+  }
+  for (const font of stack.fonts) assertImmutableFont(font);
+  return stack.fonts;
 }
 
 class FontImpl<Technique extends AnyRasterTechnique> implements Font<Technique> {

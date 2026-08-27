@@ -1,6 +1,10 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import type { Font } from '../font.js';
 import type { FontHandle } from '../identity.js';
+import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
+import type { AnyRasterTechnique } from '../raster-technique.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
+import { compileRasterFont, type CompiledRasterFont } from './raster-plan-program.js';
 import {
   markOwnedTextEnginePublication,
   TextEnginePublicationExpiredError,
@@ -8,6 +12,7 @@ import {
 } from './retention.js';
 import {
   assertGlyphId,
+  compileRenderPolicy,
   GlyphIdScope,
   RenderWireIdentityRegistry,
   type FontBindingHandle,
@@ -15,6 +20,7 @@ import {
   type GlyphId,
   type GlyphIdKind,
   type ParagraphId,
+  type PolicyDescriptor,
   type PolicyHandle,
   type StyleId,
   type TextEngineSessionHandle,
@@ -33,6 +39,36 @@ export interface TextEngineHostOptions {
   /** Stable diagnostic namespace; never a wire ID or lookup key. */
   readonly integration: string;
 }
+
+export interface HostPolicy {
+  readonly disposed: boolean;
+  dispose(): void;
+}
+
+export interface HostFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+  readonly technique: Technique;
+  readonly disposed: boolean;
+  dispose(): void;
+}
+
+export interface HostFontStackBinding {
+  readonly disposed: boolean;
+  dispose(): void;
+}
+
+/** @internal Runtime-owned shaping registration supplied only by TextRuntime. */
+export interface HostRuntimeFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+  readonly technique: Technique;
+  readonly handle: FontHandle;
+  readonly identity: object;
+  readonly disposed: boolean;
+  dispose(): void;
+}
+
+/** @internal Runtime callback installed by TextRuntime when it constructs a host. */
+export type HostRuntimeFontBinder = <Technique extends AnyRasterTechnique>(
+  font: Font<Technique>,
+) => HostRuntimeFontBinding<Technique>;
 
 /**
  * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
@@ -132,6 +168,30 @@ function headerFault(header: DataView): TextEngineFault {
     : Object.freeze({ paragraphId: paragraphId as ParagraphId | 0, styleId: styleId as StyleId | 0 });
 }
 
+interface InstalledHostPolicy {
+  readonly handle: PolicyHandle;
+  readonly techniqueIds: ReadonlySet<number>;
+  disposed: boolean;
+}
+
+interface RetainedHostFontBinding {
+  readonly identity: object;
+  readonly technique: AnyRasterTechnique;
+  readonly handle: FontBindingHandle;
+  readonly runtime: HostRuntimeFontBinding;
+  readonly compiled: CompiledRasterFont;
+  leases: number;
+  disposed: boolean;
+}
+
+interface RetainedHostFontStackBinding {
+  readonly identity: object;
+  readonly handle: FontStackHandle;
+  readonly bindings: readonly HostFontBindingImpl<AnyRasterTechnique>[];
+  leases: number;
+  disposed: boolean;
+}
+
 /** Lifecycle owner for retained policies, font bindings, font stacks, and sessions in one RuntimeShaper. */
 export class TextEngineHost {
   readonly integration: string;
@@ -143,7 +203,16 @@ export class TextEngineHost {
   readonly #policies = new Set<PolicyHandle>();
   readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
   readonly #fontBindings = new Set<FontBindingHandle>();
+  readonly #installedPolicies = new Set<InstalledHostPolicy>();
+  readonly #retainedFontBindings = new WeakMap<object, RetainedHostFontBinding>();
+  readonly #liveRetainedFontBindings = new Set<RetainedHostFontBinding>();
+  readonly #retainedFontStacks = new WeakMap<object, RetainedHostFontStackBinding>();
+  readonly #liveRetainedFontStacks = new Set<RetainedHostFontStackBinding>();
   readonly #onDispose: (() => void) | undefined;
+  readonly #bindRuntimeFont: HostRuntimeFontBinder | undefined;
+  #nextPolicyOrdinal = 1;
+  #nextFontBindingOrdinal = 1;
+  #nextFontStackOrdinal = 1;
   #disposed = false;
 
   /** @internal Hosts are owned and normally created by TextRuntime. */
@@ -151,6 +220,7 @@ export class TextEngineHost {
     shaper: RuntimeShaper,
     options: TextEngineHostOptions = { integration: 'internal' },
     onDispose?: () => void,
+    bindRuntimeFont?: HostRuntimeFontBinder,
   ) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new TypeError('text engine host options need an object');
@@ -162,6 +232,7 @@ export class TextEngineHost {
     this.#exports = runtimeShaperEngineExports(shaper);
     this.#owners = ownersFor(this.#exports);
     this.#onDispose = onDispose;
+    this.#bindRuntimeFont = bindRuntimeFont;
   }
 
   /** Derive one branded ID retained until its registration or this host is disposed. */
@@ -169,6 +240,141 @@ export class TextEngineHost {
     this.#assertActive();
     return this.#ids.id(kind, name);
   };
+
+  installPolicy(descriptor: PolicyDescriptor): HostPolicy {
+    this.#assertActive();
+    const snapshot = snapshotPolicyDescriptor(descriptor);
+    const bytes = compileRenderPolicy(snapshot);
+    const ordinal = this.#nextPolicyOrdinal;
+    const handle = this.id('policy', `${this.integration}/policy/${ordinal}`);
+    this.registerPolicy(handle, bytes);
+    this.#nextPolicyOrdinal = ordinal + 1;
+    const state: InstalledHostPolicy = {
+      handle,
+      techniqueIds: new Set(snapshot.programs.map((program) => program.techniqueId)),
+      disposed: false,
+    };
+    this.#installedPolicies.add(state);
+    return new HostPolicyImpl(this, state);
+  }
+
+  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): HostFontBinding<Technique> {
+    this.#assertActive();
+    if (this.#bindRuntimeFont === undefined) {
+      throw new Error('text engine host was not created by a text runtime');
+    }
+    const runtime = this.#bindRuntimeFont(font);
+    try {
+      const techniqueId = this.wireIdentities.techniqueId(font.technique);
+      if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
+        throw new TypeError(`text engine host has no installed policy for "${font.technique.id}"`);
+      }
+      const existing = this.#retainedFontBindings.get(runtime.identity);
+      if (existing !== undefined && !existing.disposed) {
+        if (existing.technique !== font.technique) throw new Error('runtime font identity changed raster technique');
+        runtime.dispose();
+        existing.leases += 1;
+        return new HostFontBindingImpl(this, existing) as HostFontBinding<Technique>;
+      }
+      const compiled = compileRasterFont(font, this.wireIdentities);
+      if (compiled === undefined) {
+        throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
+      }
+      const ordinal = this.#nextFontBindingOrdinal;
+      const handle = this.id('font-binding', `${this.integration}/font/${ordinal}`);
+      this.registerFontBinding(handle, runtime.handle, compiled.binding);
+      this.#nextFontBindingOrdinal = ordinal + 1;
+      const state: RetainedHostFontBinding = {
+        identity: runtime.identity,
+        technique: font.technique,
+        handle,
+        runtime,
+        compiled,
+        leases: 1,
+        disposed: false,
+      };
+      this.#retainedFontBindings.set(runtime.identity, state);
+      this.#liveRetainedFontBindings.add(state);
+      return new HostFontBindingImpl(this, state) as HostFontBinding<Technique>;
+    } catch (error) {
+      runtime.dispose();
+      throw error;
+    }
+  }
+
+  bindFontStack<Technique extends AnyRasterTechnique>(
+    stack: FontStack<Technique, Font<Technique>>,
+  ): HostFontStackBinding {
+    this.#assertActive();
+    const fonts = immutableFontStackFonts(stack as FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>);
+    for (const font of fonts) {
+      const techniqueId = this.wireIdentities.techniqueId(font.technique);
+      if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
+        throw new TypeError(`text engine host has no installed policy for "${font.technique.id}"`);
+      }
+    }
+    const existing = this.#retainedFontStacks.get(stack);
+    if (existing !== undefined && !existing.disposed) {
+      existing.leases += 1;
+      return new HostFontStackBindingImpl(this, existing);
+    }
+    const bindings: HostFontBindingImpl<AnyRasterTechnique>[] = [];
+    try {
+      for (const font of fonts) {
+        bindings.push(this.bindFont(font) as HostFontBindingImpl<AnyRasterTechnique>);
+      }
+      const ordinal = this.#nextFontStackOrdinal;
+      const handle = this.id('font-stack', `${this.integration}/font-stack/${ordinal}`);
+      this.registerFontStack(
+        handle,
+        bindings.map((binding) => binding._state().handle),
+      );
+      this.#nextFontStackOrdinal = ordinal + 1;
+      const state: RetainedHostFontStackBinding = {
+        identity: stack,
+        handle,
+        bindings: Object.freeze(bindings),
+        leases: 1,
+        disposed: false,
+      };
+      this.#retainedFontStacks.set(stack, state);
+      this.#liveRetainedFontStacks.add(state);
+      return new HostFontStackBindingImpl(this, state);
+    } catch (error) {
+      for (const binding of bindings.reverse()) binding.dispose();
+      throw error;
+    }
+  }
+
+  /** @internal */
+  _disposeInstalledPolicy(state: InstalledHostPolicy): void {
+    if (state.disposed) return;
+    this.disposePolicy(state.handle);
+    state.disposed = true;
+    this.#installedPolicies.delete(state);
+  }
+
+  /** @internal */
+  _disposeRetainedFontBinding(state: RetainedHostFontBinding): void {
+    if (state.disposed) return;
+    if (state.leases <= 0) throw new Error('host font binding lease underflow');
+    if (state.leases > 1) {
+      state.leases -= 1;
+      return;
+    }
+    this.#disposeRetainedFontBinding(state);
+  }
+
+  /** @internal */
+  _disposeRetainedFontStack(state: RetainedHostFontStackBinding): void {
+    if (state.disposed) return;
+    if (state.leases <= 0) throw new Error('host font stack lease underflow');
+    if (state.leases > 1) {
+      state.leases -= 1;
+      return;
+    }
+    this.#disposeRetainedFontStack(state);
+  }
 
   registerFontBinding(bindingHandle: FontBindingHandle, shapingFontHandle: FontHandle, bytes: Uint8Array): void {
     this.#assertActive();
@@ -322,9 +528,21 @@ export class TextEngineHost {
       }
     };
     for (const session of [...this.#sessions]) attempt(() => session.dispose());
-    for (const handle of [...this.#fontStacks.keys()]) attempt(() => this.disposeFontStack(handle));
-    for (const handle of [...this.#fontBindings]) attempt(() => this.disposeFontBinding(handle));
-    for (const handle of [...this.#policies]) attempt(() => this.disposePolicy(handle));
+    const retainedStackHandles = new Set([...this.#liveRetainedFontStacks].map((stack) => stack.handle));
+    for (const stack of [...this.#liveRetainedFontStacks]) attempt(() => this.#disposeRetainedFontStack(stack));
+    for (const handle of [...this.#fontStacks.keys()]) {
+      if (!retainedStackHandles.has(handle)) attempt(() => this.disposeFontStack(handle));
+    }
+    const retainedFontHandles = new Set([...this.#liveRetainedFontBindings].map((binding) => binding.handle));
+    for (const binding of [...this.#liveRetainedFontBindings]) attempt(() => this.#disposeRetainedFontBinding(binding));
+    for (const handle of [...this.#fontBindings]) {
+      if (!retainedFontHandles.has(handle)) attempt(() => this.disposeFontBinding(handle));
+    }
+    const installedPolicyHandles = new Set([...this.#installedPolicies].map((policy) => policy.handle));
+    for (const policy of [...this.#installedPolicies]) attempt(() => this._disposeInstalledPolicy(policy));
+    for (const handle of [...this.#policies]) {
+      if (!installedPolicyHandles.has(handle)) attempt(() => this.disposePolicy(handle));
+    }
     if (
       this.#sessions.size !== 0 ||
       this.#fontStacks.size !== 0 ||
@@ -358,6 +576,34 @@ export class TextEngineHost {
         throw new TypeError(`font stack ${handle} is not owned by this text engine host`);
       }
     }
+  }
+
+  #disposeRetainedFontBinding(state: RetainedHostFontBinding): void {
+    if (state.disposed) return;
+    this.disposeFontBinding(state.handle);
+    state.leases = 0;
+    state.disposed = true;
+    this.#retainedFontBindings.delete(state.identity);
+    this.#liveRetainedFontBindings.delete(state);
+    state.runtime.dispose();
+  }
+
+  #disposeRetainedFontStack(state: RetainedHostFontStackBinding): void {
+    if (state.disposed) return;
+    this.disposeFontStack(state.handle);
+    state.leases = 0;
+    state.disposed = true;
+    this.#retainedFontStacks.delete(state.identity);
+    this.#liveRetainedFontStacks.delete(state);
+    let failure: unknown;
+    for (const binding of [...state.bindings].reverse()) {
+      try {
+        binding.dispose();
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    if (failure !== undefined) throw failure;
   }
 
   #claim(owners: Map<number, TextEngineHost>, handle: number, label: string): boolean {
@@ -395,6 +641,84 @@ export class TextEngineHost {
 
   #assertActive(): void {
     if (this.#disposed) throw new Error('text engine host is disposed');
+  }
+}
+
+class HostPolicyImpl implements HostPolicy {
+  readonly #host: TextEngineHost;
+  readonly #state: InstalledHostPolicy;
+
+  constructor(host: TextEngineHost, state: InstalledHostPolicy) {
+    this.#host = host;
+    this.#state = state;
+  }
+
+  get disposed(): boolean {
+    return this.#state.disposed;
+  }
+
+  dispose(): void {
+    this.#host._disposeInstalledPolicy(this.#state);
+  }
+}
+
+class HostFontBindingImpl<Technique extends AnyRasterTechnique> implements HostFontBinding<Technique> {
+  readonly #host: TextEngineHost;
+  readonly #state: RetainedHostFontBinding;
+  #disposed = false;
+
+  constructor(host: TextEngineHost, state: RetainedHostFontBinding) {
+    this.#host = host;
+    this.#state = state;
+  }
+
+  get technique(): Technique {
+    return this.#state.technique as Technique;
+  }
+
+  get disposed(): boolean {
+    return this.#disposed || this.#state.disposed;
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.#host._disposeRetainedFontBinding(this.#state);
+    this.#disposed = true;
+  }
+
+  /** @internal */
+  _state(): RetainedHostFontBinding {
+    if (this.disposed) throw new Error('host font binding has been disposed');
+    return this.#state;
+  }
+}
+
+class HostFontStackBindingImpl implements HostFontStackBinding {
+  readonly #host: TextEngineHost;
+  readonly #state: RetainedHostFontStackBinding;
+  #disposed = false;
+
+  constructor(host: TextEngineHost, state: RetainedHostFontStackBinding) {
+    this.#host = host;
+    this.#state = state;
+  }
+
+  get disposed(): boolean {
+    return this.#disposed || this.#state.disposed;
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.#host._disposeRetainedFontStack(this.#state);
+    this.#disposed = true;
+  }
+}
+
+function snapshotPolicyDescriptor(descriptor: PolicyDescriptor): PolicyDescriptor {
+  try {
+    return structuredClone(descriptor) as PolicyDescriptor;
+  } catch (cause) {
+    throw new TypeError('policy descriptor must contain cloneable data', { cause });
   }
 }
 

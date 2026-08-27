@@ -4,8 +4,9 @@ import test from 'node:test';
 
 import { bitmap } from '../../dist/raster/bitmap-technique.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
-import { immutableFontResources } from '../../dist/loaded-font.js';
+import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
 import { loadFont } from '../../dist/loader.js';
+import { threeRenderPolicyDescriptor } from '../../dist/three/render-policy.js';
 import {
   acquireRuntimeFontBinding,
   createTextRuntime,
@@ -110,4 +111,52 @@ test('runtime font binding inputs are rejected at their calls', async () => {
   runtime.dispose();
   assert.throws(() => acquireRuntimeFontBinding(runtime, font), /runtime has been disposed/);
   font.dispose();
+});
+
+test('a runtime-owned host installs complete policies and deduplicates opaque font bindings', async () => {
+  const font = await fixtureFont();
+  const runtime = await fixtureRuntime();
+  const shaper = textRuntimeShaper(runtime);
+  const host = runtime.createTextEngineHost({ integration: 'test.host-font-binding' });
+
+  assert.throws(() => host.bindFont(font), /no installed policy/);
+  assert.equal(shaper.memoryReport().fontCount, 0);
+  const policy = host.installPolicy(threeRenderPolicyDescriptor(host.wireIdentities));
+  const first = host.bindFont(font);
+  const second = host.bindFont(font);
+  assert.equal(first.technique, bitmap);
+  assert.equal(second.technique, bitmap);
+  assert.equal(shaper.memoryReport().fontCount, 1);
+
+  font.dispose();
+  first.dispose();
+  assert.equal(shaper.memoryReport().fontCount, 1);
+  second.dispose();
+  assert.equal(shaper.memoryReport().fontCount, 0);
+  policy.dispose();
+  host.dispose();
+  runtime.dispose();
+});
+
+test('a runtime-owned host binds immutable font stacks and retains their fonts', async () => {
+  const font = await fixtureFont();
+  const stack = createFontStack(font);
+  const runtime = await fixtureRuntime();
+  const shaper = textRuntimeShaper(runtime);
+  const host = runtime.createTextEngineHost({ integration: 'test.host-font-stack-binding' });
+  const policy = host.installPolicy(threeRenderPolicyDescriptor(host.wireIdentities));
+
+  assert.throws(() => host.bindFontStack({ fonts: [font] }), /font stack was not created by this package/);
+  const first = host.bindFontStack(stack);
+  const second = host.bindFontStack(stack);
+  assert.equal(shaper.memoryReport().fontCount, 1);
+
+  font.dispose();
+  first.dispose();
+  assert.equal(shaper.memoryReport().fontCount, 1);
+  second.dispose();
+  assert.equal(shaper.memoryReport().fontCount, 0);
+  policy.dispose();
+  host.dispose();
+  runtime.dispose();
 });

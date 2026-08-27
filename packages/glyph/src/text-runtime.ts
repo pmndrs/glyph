@@ -122,6 +122,8 @@ interface RuntimeFontVariantRegistration<Technique extends AnyRasterTechnique = 
 export interface RuntimeFontBindingLease<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
   readonly disposed: boolean;
   readonly technique: Technique;
+  readonly handle: FontHandle;
+  readonly identity: object;
   dispose(): void;
 }
 
@@ -212,7 +214,7 @@ export function runtimeFontBindingHandle(binding: RuntimeFontBindingLease<AnyRas
   if (!(binding instanceof RuntimeFontBindingLeaseImpl)) {
     throw new TypeError('runtime font binding was not created by this package');
   }
-  return binding._handle();
+  return binding.handle;
 }
 
 /** @internal Read retained portable resources while the runtime binding lease is live. */
@@ -254,7 +256,12 @@ class TextRuntimeImpl implements TextRuntime {
   createTextEngineHost(options: TextEngineHostOptions): TextEngineHost {
     this.#assertActive();
     let host!: TextEngineHost;
-    host = new TextEngineHost(this.#shaper, options, () => this.#hosts.delete(host));
+    host = new TextEngineHost(
+      this.#shaper,
+      options,
+      () => this.#hosts.delete(host),
+      (font) => this._acquireFont(font),
+    );
     this.#hosts.add(host);
     return host;
   }
@@ -727,6 +734,16 @@ class RuntimeFontBindingLeaseImpl<Technique extends AnyRasterTechnique> implemen
     return this.#variant.technique;
   }
 
+  get handle(): FontHandle {
+    if (this.disposed) throw new Error('runtime font binding has been disposed');
+    return this.#registration.font.handle;
+  }
+
+  get identity(): object {
+    if (this.disposed) throw new Error('runtime font binding has been disposed');
+    return this.#variant.identity;
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -735,8 +752,7 @@ class RuntimeFontBindingLeaseImpl<Technique extends AnyRasterTechnique> implemen
 
   /** @internal */
   _handle(): FontHandle {
-    if (this.disposed) throw new Error('runtime font binding has been disposed');
-    return this.#registration.font.handle;
+    return this.handle;
   }
 
   /** @internal */
