@@ -23,6 +23,8 @@ export { defineRasterBaker, rasterBake } from './bake.js';
 export type {
   AnyFontToken,
   BakedFontSource,
+  Font,
+  FontBytesInput,
   FontInput,
   FontInputOf,
   FontMetrics,
@@ -66,13 +68,21 @@ export type {
 export type {
   FontLoadDiagnostic,
   FontLoadOptions,
+  FontLibrary,
+  FontLibraryOptions,
   FontLoaderOptions,
+  FontRasterRequests,
+  FontRequest,
+  Fonts,
+  FontTechniques,
+  LoadFontInput,
+  MultiRasterFontRequest,
   FontRegistryOptions,
   RasterAttachOptions,
   RuntimeFontBake,
   RuntimeFontBakeRequest,
 } from './loader.js';
-export { FontLoader, FontLoadError, FontRegistry } from './loader.js';
+export { createFontLibrary, FontLoader, FontLoadError, FontRegistry, loadFont } from './loader.js';
 
 export type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
 export { createFontStack } from './loaded-font.js';

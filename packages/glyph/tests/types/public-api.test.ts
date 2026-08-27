@@ -1,12 +1,16 @@
 import {
+  createFontLibrary,
   defineFont,
   defineRasterBaker,
   defineRasterTechnique,
   FontLoader,
   FontRegistry,
+  loadFont,
   rasterBake,
   type AnyRasterTechnique,
   type FontInputOf,
+  type Font,
+  type FontBytesInput,
   type FontRasterTechniqueOf,
   type RasterBakeDescriptorOf,
   type RasterBakeRequest,
@@ -100,6 +104,22 @@ msdf.decode(font, slugArtifact);
 const titleFont = defineFont('/fonts/Inter-Regular.ttf', msdf);
 type _TitleInput = Expect<Equal<FontInputOf<typeof titleFont>, '/fonts/Inter-Regular.ttf'>>;
 type _TitleRaster = Expect<Equal<FontRasterTechniqueOf<typeof titleFont>, typeof msdf>>;
+const loadedTitle: Promise<Font<typeof msdf>> = loadFont(titleFont);
+void loadedTitle;
+
+const library = createFontLibrary({ maximumEntries: 8 });
+const cachedTitle: Promise<Font<typeof msdf>> = library.loadFont(titleFont);
+void cachedTitle;
+library.clear(titleFont);
+library.dispose();
+
+declare const fontBytes: Uint8Array<ArrayBuffer>;
+const copiedBytes: FontBytesInput = { bytes: fontBytes };
+const transferredBytes: FontBytesInput = { bytes: fontBytes, ownership: 'transfer' };
+void copiedBytes;
+void transferredBytes;
+// @ts-expect-error Byte input is explicit; a bare typed array is not a font location.
+loadFont({ input: { baked: fontBytes }, raster: { technique: msdf } });
 
 const configuredFont = defineFont('/fonts/Inter-Regular.ttf', {
   technique: configurable,
