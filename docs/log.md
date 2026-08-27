@@ -2,6 +2,12 @@
 
 ## 2026-08-27
 
+- **Kept zero-copy publication as the default target path** — `PlanTarget` consumes the borrowed A/B publication and
+  accepts synchronously after renderer submission and state commit. Only `AsyncPlanTarget` receives a package-created copy
+  and returns a Promise, for worker round trips or another genuinely deferred acceptance boundary. A worker transfers that
+  buffer back with its correlated commit result before the Promise resolves and the session advances its retirement fence.
+  No owned synchronous mode duplicates the plan merely because GPU execution completes later.
+
 - **Accepted the font/runtime ownership correction** — The implementation plan separates immutable, refcounted font
   assets from runtime-private Wasm registrations; attaches every renderer host to one runtime owner; binds each session to
   one policy and one abstract acceptance target; and retains Canvas, device, render-pass, and GPU realization ownership in

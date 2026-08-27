@@ -258,7 +258,7 @@
         <text class="node-title" x="594" y="462">TextEngineSession</text><text class="node-copy" x="594" y="483">one retained batch + policy</text><text class="node-copy" x="594" y="501">one target + acceptance cursor</text><text class="node-copy" x="594" y="519">A/B plan storage</text>
 
         <rect class="node-box target-box" x="854" y="112" width="252" height="92"/>
-        <text class="node-title" x="874" y="144">PlanTarget</text><text class="node-copy" x="874" y="165">borrowed inline or owned async</text><text class="node-copy" x="874" y="183">prepare → commit → accept</text>
+        <text class="node-title" x="874" y="144">PlanTarget</text><text class="node-copy" x="874" y="165">borrowed sync · async target copies</text><text class="node-copy" x="874" y="183">prepare → commit → accept</text>
         <rect class="node-box" x="854" y="278" width="252" height="92"/>
         <text class="node-title" x="874" y="310">GPUDevice realization pool</text><text class="node-copy" x="874" y="331">textures · geometry · pipelines</text><text class="node-copy" x="874" y="349">one immutable payload realization</text>
         <rect class="node-box" x="854" y="446" width="252" height="84"/>
@@ -338,14 +338,16 @@
       </div>
       <div class="card">
         <h3>Worker shaping, main-thread rendering</h3>
-        <svg class="scenario-diagram" viewBox="0 0 420 160" role="img" aria-label="Worker session transfers owned publication bytes to a main-thread target and canvas">
+        <svg class="scenario-diagram" viewBox="0 0 420 170" role="img" aria-label="Worker session transfers owned publication bytes to a main-thread target, which returns the buffer with acceptance">
           <defs><marker id="scenario-arrow-transfer" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="var(--muted)"/></marker></defs>
           <rect class="node core" x="14" y="48" width="112" height="64"/><text x="34" y="75">Worker session</text><text class="minor" x="34" y="94">owned delivery</text>
           <rect class="node" x="154" y="48" width="104" height="64"/><text x="173" y="75">Transferred</text><text class="minor" x="165" y="94">plan + manifest</text>
           <rect class="node target" x="286" y="48" width="118" height="64"/><text x="304" y="75">Main target</text><text class="minor" x="304" y="94">bindBytes + Canvas</text>
           <path class="edge" style="marker-end:url(#scenario-arrow-transfer)" d="M126 80H154M258 80H286"/>
+          <path class="edge accept" style="marker-end:url(#scenario-arrow-transfer)" d="M286 106C270 146 144 146 126 106"/>
+          <text class="minor" x="158" y="158">commit + buffer return</text>
         </svg>
-        <p>The worker resolves every referenced resource, then transfers owned plan bytes plus an authenticated digest/descriptor manifest. The receiving endpoint validates both before realization and may omit payload bytes already cached by digest.</p>
+        <p>The source endpoint resolves every referenced resource, then transfers owned plan bytes plus an authenticated digest/descriptor manifest. The receiving endpoint validates both, realizes and commits the renderer transaction, and transfers the plan buffer back with its correlated result. Only then does the target resolve acceptance and advance the session fence.</p>
       </div>
       <div class="card">
         <h3>Two renderer integrations</h3>
@@ -506,7 +508,7 @@ const session = host.createSession({
     control,              // session-owned checkpoint signal
     pool,
     canvas,
-    delivery: 'owned',
+    delivery: 'borrowed',
   }),
   requestCapacity: SESSION_REQUEST_BYTES,
   resultCapacity: SESSION_RESULT_BYTES,
@@ -514,15 +516,15 @@ const session = host.createSession({
 });
 
 const text = session.createText({ font: stack, value: 'Hello' });
-await session.publish();
+session.publish();
 
 text.update({ value: 'Hello, world' });
-await session.publish(); // target commit advances the cursor internally
+session.publish(); // target commit advances the cursor internally
 
 text.dispose();
-await session.publish(); // emits removal before recycling internal IDs</code></pre>
-    <p>This removes runtime ownership from Font, and removes IDs and revision arithmetic from the public integration path without changing the compact numeric wire format. The raw frame compiler becomes package-internal test/fuzz infrastructure; a worker uses an owned target and returns its commit answer to the same target-bound session.</p>
-    <p class="callout"><strong>Delivery is inferred.</strong> <code>host.createSession()</code> maps the target factory's <code>delivery</code> discriminant to a synchronous borrowed session or asynchronous owned session. The host claims the returned target object before allocating Wasm state and rejects reuse, so callers cannot independently pair the wrong session mode or attach one target twice.</p>
+session.publish(); // emits removal before recycling internal IDs</code></pre>
+    <p>This removes runtime ownership from Font, and removes IDs and revision arithmetic from the public integration path without changing the compact numeric wire format. The raw frame compiler becomes package-internal test/fuzz infrastructure; a worker uses <code>AsyncPlanTarget</code> and returns its plan buffer with the commit answer to the same target-bound session.</p>
+    <p class="callout"><strong>Zero-copy is the default.</strong> <code>PlanTarget</code> consumes the borrowed A/B publication and makes <code>publish()</code> synchronous. Only <code>AsyncPlanTarget</code> receives a package-created copy and returns a Promise. The host infers the session return type from the target factory and rejects target reuse before allocating Wasm state.</p>
 
     <h3>What the renderer's target actually does</h3>
 <pre><code>// Renderer-owned target; illustrative target API.
@@ -531,9 +533,9 @@ function createPlanTarget({ control, pool, canvas }) {
   pool.attach(control); // one device pool tracks every attached session
 
   return {
-    delivery: 'owned',
+    delivery: 'borrowed',
 
-    async accept(candidate, signal) {
+    accept(candidate, signal) {
       // candidate.origin namespaces mutable session buffers.
       // Font payload identity pools immutable resources across sessions.
       const pending = pool.prepare(candidate, {
@@ -543,7 +545,7 @@ function createPlanTarget({ control, pool, canvas }) {
       try {
         const pass = device.beginCanvasPass(canvas);
         pending.encode(pass); // uploads, resources, geometry, pipelines, draws
-        await device.submit(pass);
+        device.submit(pass);  // synchronous enqueue/transaction boundary
         signal.throwIfAborted();
         pending.commit();     // swaps live state only after complete success
         return { accepted: true };
@@ -566,7 +568,7 @@ pool.onDeviceLost(() =&gt; {
   pool.resumeCheckpointRequired(); // required state is tracked per control
   for (const control of pool.controls) control.requestCheckpoint();
 });</code></pre>
-    <p>A plan resource retirement releases the session's lease. The pool destroys a texture, supplied geometry buffer, or other immutable realization only after its final device-local lease ends. A borrowed target performs the same transaction synchronously inside its callback; it cannot await or overlap any call into the same runtime. For a lockstep target, every surface prepares before any accepted-state commit; partial backend commit makes the whole group lost. For a worker/main split, the worker-side target resolves the candidate closure before <code>postMessage</code> and sends a content-authenticated manifest because closures and host-scoped wire IDs cannot cross realms.</p>
+    <p>A plan resource retirement releases the session's lease. The pool destroys a texture, supplied geometry buffer, or other immutable realization only after its final device-local lease ends. This ordinary target reads the borrowed publication, prepares and submits renderer work, commits renderer state, and answers before returning. GPU execution may finish later; that does not require copying the plan. A worker round trip instead uses <code>AsyncPlanTarget</code>: transfer its package-created plan buffer and resource manifest out, validate and commit remotely, then transfer the buffer back with the correlated result. The returned acceptance advances the session fence; a lost worker leaves it unchanged. For a lockstep target, every surface prepares before any accepted-state commit; partial backend commit makes the whole group lost.</p>
 
     <h3>Disposal without finalizers</h3>
     <p>Runtime disposal deterministically cascades sessions and hosts; stack and binding leases protect Font backing and renderer resources. An unused Font needs no finalizer: when its wrapper becomes unreachable, its backing is unreachable too and ordinary GC collects both. Runtime lookup maps are weak and release Wasm registration at lease zero; a strong cache exists only inside an explicit application-owned <code>FontLibrary</code>. <code>font.dispose()</code> provides deterministic early release while the wrapper remains reachable and rejects new bindings.</p>
@@ -596,10 +598,10 @@ pool.onDeviceLost(() =&gt; {
         <tr><td>Policy</td><td>During host construction, before the first frame</td><td>Register once per host capability/program configuration</td><td>Combines renderer-owned capabilities/system lanes with portable technique bodies</td></tr>
         <tr><td>Font binding lease</td><td>When this integration first needs the portable Font</td><td>Until the final host stack/device lease releases it</td><td>Deduplicates one runtime shaping registration and one host portable binding without exposing IDs</td></tr>
         <tr><td>Bound font stack</td><td>After its portable Font values exist</td><td>Until that fallback order is unused</td><td>Retains ordered host bindings and gives styles one opaque host-owned token</td></tr>
-        <tr><td>Plan target</td><td>After a renderer device/surface exists</td><td>One acceptance domain lifetime</td><td>Owns borrowed-inline or owned-async delivery, renderer transaction, and commit answer</td></tr>
+        <tr><td>Plan target</td><td>After a renderer device/surface exists</td><td>One acceptance domain lifetime</td><td>Consumes the borrowed publication synchronously; only <code>AsyncPlanTarget</code> copies for deferred acceptance</td></tr>
         <tr><td><code>TextEngineSession</code></td><td>After policy, target, and required bindings exist</td><td>Across all frames for that independently revisioned scene</td><td>Retains paragraphs, plan state, one target, and its opaque accepted cursor</td></tr>
         <tr><td>Application text instance</td><td>When text enters the retained scene</td><td>Until removal is published</td><td>Owns desired content/style/layout; internal IDs and minimal mutations belong to the session façade</td></tr>
-        <tr><td>Plan candidate</td><td>On <code>session.publish()</code></td><td>Borrowed callback only, or one owned async transaction</td><td>Applies changes; only target commit advances the session's cursor</td></tr>
+        <tr><td>Plan candidate</td><td>On <code>session.publish()</code></td><td>Borrowed callback only, or one copied pending async transaction</td><td>Applies changes; only target commit advances the session's cursor</td></tr>
       </tbody>
     </table></div>
 

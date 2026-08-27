@@ -28,7 +28,7 @@ sources:
     title: Architectural decision register
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-27T13:55:06Z'
+  at: '2026-08-27T20:09:19Z'
 ---
 
 # Font, runtime, host, session, and render-target ownership
@@ -329,7 +329,7 @@ One session owns one retained text batch and exactly one acceptance target. A ta
 Canvas or GPU object:
 
 ```ts
-type TextPlanTarget = BorrowedPlanTarget | OwnedPlanTarget;
+type TextPlanTarget = PlanTarget | AsyncPlanTarget;
 
 declare const planOriginBrand: unique symbol;
 interface PlanOrigin {
@@ -346,41 +346,44 @@ interface PortablePayloadLease {
   readonly payload: PortableResourcePayload;
 }
 
-interface BorrowedPlanCandidate {
+interface PlanCandidate {
   readonly origin: PlanOrigin;
   readonly plan: TextEngineRenderPlanView;
   resolvePayload(referenceId: ResourceHandle): PortablePayloadLease;
 }
 
-interface OwnedPlanCandidate extends BorrowedPlanCandidate {
-  readonly bytes: Uint8Array;
+interface AsyncPlanCandidate {
+  readonly origin: PlanOrigin;
+  readonly plan: TextEngineRenderPlanView;
+  readonly bytes: Uint8Array<ArrayBuffer>;
+  resolvePayload(referenceId: ResourceHandle): PortablePayloadLease;
 }
 
 interface PlanTargetControl {
   requestCheckpoint(): void;
 }
 
-interface BorrowedPlanTarget extends Disposable {
+interface PlanTarget extends Disposable {
   readonly delivery: 'borrowed';
-  accept(candidate: BorrowedPlanCandidate, signal: AbortSignal): PlanAcceptance;
+  accept(candidate: PlanCandidate, signal: AbortSignal): PlanAcceptance;
 }
 
-interface OwnedPlanTarget extends Disposable {
+interface AsyncPlanTarget extends Disposable {
   readonly delivery: 'owned';
-  accept(candidate: OwnedPlanCandidate, signal: AbortSignal): Promise<PlanAcceptance>;
+  accept(candidate: AsyncPlanCandidate, signal: AbortSignal): Promise<PlanAcceptance>;
 }
 
-interface BorrowedTextEngineSession extends Disposable {
+interface SynchronousTextEngineSession extends Disposable {
   publish(): PlanAcceptance;
 }
 
-interface OwnedTextEngineSession extends Disposable {
+interface AsyncTextEngineSession extends Disposable {
   publish(): Promise<PlanAcceptance>;
 }
 
-type SessionFor<Target extends TextPlanTarget> = Target extends BorrowedPlanTarget
-  ? BorrowedTextEngineSession
-  : OwnedTextEngineSession;
+type SessionFor<Target extends TextPlanTarget> = Target extends AsyncPlanTarget
+  ? AsyncTextEngineSession
+  : SynchronousTextEngineSession;
 
 interface TextEngineSessionOptions<Target extends TextPlanTarget> {
   readonly policy: HostPolicy;
@@ -399,7 +402,7 @@ const session = host.createSession({
   target: (control) =>
     renderer.createPlanTarget({
       control,
-      delivery: 'owned',
+      delivery: 'borrowed',
     }),
   requestCapacity: SESSION_REQUEST_BYTES,
   resultCapacity: SESSION_RESULT_BYTES,
@@ -417,24 +420,31 @@ factory is invoked exactly once, and a returned target cannot attach to another 
 
 The host keeps a private `WeakSet` of claimed target objects. Returning a target already claimed by another live or
 disposed session throws from `createSession()` before any Wasm session is allocated. Type inference maps the factory's
-`delivery` discriminant to the only valid synchronous or asynchronous session return type; callers do not select that
-type independently.
+delivery discriminant to the only valid synchronous or asynchronous session return type; callers do not select that type
+independently.
 
 Every target has an idempotent `dispose()`. Session disposal aborts pending acceptance, calls `target.dispose()` so the
 renderer detaches the control from its pool, invalidates the control, and then releases session state. A later
 `requestCheckpoint()` throws; that call-time failure identifies a renderer pool that violated the detach contract and is
 not converted into a recoverable render result.
 
-A borrowed target must validate, prepare, submit, and answer before the callback returns and before any host call can grow
-the shared Wasm memory. An owned target receives one package-created copy and may cross an `await` or worker boundary.
-The session type exposes only the publish method valid for its target delivery mode. The runtime coordinates one
-Wasm-memory-wide borrow gate across every attached host, because a call through any sibling host/session can grow memory
-and expire every view into the old buffer. Re-entering any call on that runtime from a borrowed target callback throws
-before crossing into Wasm.
+`PlanTarget` is the ordinary zero-copy path. It must validate, prepare, enqueue, commit, and answer before its callback
+returns and before any host call can grow the shared Wasm memory. GPU execution may complete later; renderer acceptance is
+the synchronous CPU transaction that publishes renderer state after submission. `AsyncPlanTarget` is only for a genuinely
+deferred boundary such as a worker round trip. It receives one package-created copy and returns a Promise. The runtime
+coordinates one Wasm-memory-wide borrow gate across every attached host, because a call through any sibling host/session
+can grow memory and expire every view into the old buffer. Re-entering any call on that runtime from a `PlanTarget`
+callback throws before crossing into Wasm.
 
-A session permits at most one publication/acceptance transaction in flight. A second update while an owned target is
-pending throws at that call. Independent sessions may progress concurrently, subject to the renderer's own device-pool
-synchronization.
+`PlanCandidate.plan` is a read-only view over the current Wasm A/B result slot and expires when `accept()` returns.
+`AsyncPlanCandidate.bytes` is one package-created, full-span, non-shared `ArrayBuffer` view; its `plan` is bound to those
+same owned bytes. The async target may transfer `bytes.buffer`, which detaches both views in the source realm until the
+buffer returns. It must resolve every `referenceId` it needs before that transfer. No public constructor allows a caller to
+forge either candidate mode.
+
+A session permits at most one asynchronous publication/acceptance transaction in flight. A second update while an
+`AsyncPlanTarget` is pending throws at that call. Ordinary `PlanTarget` acceptance completes within `publish()`.
+Independent sessions may progress concurrently, subject to the renderer's own device-pool synchronization.
 
 The target answers one of two call-bound results:
 
@@ -447,24 +457,41 @@ acceptance cursor unchanged. Recoverable renderer transitions such as device rep
 `PlanTargetControl.requestCheckpoint()` after rebuilding the device pool. Invalid plan bytes are never a recoverable target
 result; they throw as an implementation defect at the decoding call.
 
-An owned worker target remains one target with two renderer-owned endpoints. Its worker endpoint resolves every resource
-referenced by the candidate before posting a transport envelope containing the package-created plan bytes and a manifest
-from host-scoped `referenceId` to package-authenticated payload digest, descriptor metadata, and either transferred payload
-bytes or a renderer-defined fetch key. Its receiving endpoint validates the plan with `TextEngineRenderPlanView.bindBytes()`
-and validates every supplied payload against that manifest before realization. A cache hit may omit payload bytes only
-when the receiving endpoint already holds the same authenticated digest and descriptor.
+An `AsyncPlanTarget` that crosses a worker remains one target with two renderer-owned endpoints. Its source endpoint
+resolves every resource referenced by the candidate and transfers an envelope containing the package-created plan buffer,
+a transaction token, and a manifest from host-scoped `referenceId` to package-authenticated payload digest, descriptor
+metadata, and either transferred payload bytes or a renderer-defined fetch key. The receiving endpoint validates the plan
+with `TextEngineRenderPlanView.bindBytes()` and validates every supplied payload against that manifest before realization.
+A cache hit may omit payload bytes only when the receiving endpoint already holds the same authenticated digest and
+descriptor.
 
 `PortablePayloadIdentity` equality is content-derived from a collision-resistant digest over the technique identity,
 canonical descriptor/format metadata, and payload bytes; it is not JavaScript backing-object identity and is never the
 compact wire `referenceId`. The package creates and validates identities in each realm. This lets independently loaded or
 transferred copies of the same artifact share a receiving-realm device realization without treating equal host-local
-numbers as equal resources. The worker session remains target-bound and keeps its acceptance cursor private; the target
-returns the receiving renderer's commit answer over the message channel. Same-realm ownership provenance is not
-serialized.
+numbers as equal resources. After commit or rejection, the receiving endpoint transfers the plan buffer back with the
+transaction token and result. The source endpoint correlates that return to its one pending candidate, reclaims or recycles
+the returned buffer, and resolves `accept()`. Only an accepted result advances the session's private cursor and makes older
+engine storage eligible for retirement. Same-realm ownership provenance is not serialized.
 
-Disposing a session aborts an in-flight owned target signal, invalidates that transaction, and ignores every late answer.
-A late `{ accepted: true }` can never advance a disposed session's cursor. The owned bytes remain valid long enough for the
-renderer target to discard its candidate without touching freed Wasm memory.
+Disposing a session aborts an in-flight async target signal, invalidates that transaction, and ignores every late answer.
+A late `{ accepted: true }` can never advance a disposed session's cursor. If the worker terminates without returning the
+buffer, the transport copy is lost but no engine or renderer acceptance fence advances; the previous accepted publication
+remains authoritative.
+
+The worker transport has one explicit ownership state machine:
+
+| State | Buffer owner | Permitted action |
+| --- | --- | --- |
+| candidate created | source `AsyncPlanTarget` | resolve the payload manifest, install abort/response correlation, then transfer |
+| request in flight | receiving endpoint | validate bytes and manifest, realize resources, prepare and commit renderer state |
+| response in flight | source endpoint after transfer completes | validate the transaction/result envelope and recover the returned buffer |
+| settled accepted | source target or its buffer pool | resolve `{ accepted: true }`; session advances its cursor and retirement fence |
+| settled rejected | source target or its buffer pool | resolve `{ accepted: false, error }`; session keeps its previous cursor |
+
+The transaction token is renderer-private correlation state created inside the target; it is not a session ID, wire ID,
+or acknowledgment supplied by the application. A malformed response throws as an integration defect. Worker termination,
+device loss, or an explicit renderer rejection settles as not accepted and leaves the previous renderer publication live.
 
 ## Application update loop
 
@@ -640,6 +667,19 @@ its explicit leases are released.
 
 ## Implementation sequence
 
+### Repository work map
+
+| Area | Primary implementation owners | Required outcome |
+| --- | --- | --- |
+| immutable Font and loading | `packages/glyph/src/loader.ts`, `loaded-font.ts`, `text-runtime.ts`, and internal registered-font/cache modules | Replace runtime-bound `LoadedFont` with one canonical root `Font` backing, explicit library leases, and runtime-independent loading. |
+| runtime and host ownership | `packages/glyph/src/text-runtime.ts`, `core/host.ts`, `core/retention.ts`, and `core/plan-view.ts` | Runtime-owned host factory, hidden registrations, target-bound sessions, runtime-wide borrow gate, and unforgeable candidate modes. |
+| retained engine and ABI | `packages/glyph/rust/shaper/src/engine`, generated ABI, and TypeScript frame/compiler internals | Keep the numeric wire format and A/B publication; privatize raw caller-authored session/acknowledgment inputs without creating a second protocol. |
+| Three reference integration | `packages/glyph/src/three/engine-runtime.ts`, `engine-plan-target.ts`, `font-loader.ts`, and `text.ts` | Consume public root plus `/core`, keep `PlanTarget` zero-copy, pool immutable resources per WebGPU device or WebGL context, and batch compatible font-stack members without reordering. |
+| React integration | `packages/glyph/src/react.ts` | Replace module-global loader/promise ownership with provider or application `FontLibrary` leases and prove StrictMode lifecycle safety. |
+| external renderer proof | `packages/glyph-example-renderer/src` and its tests | Keep TypeGPU/WebGPU device ownership external, implement ordinary zero-copy `PlanTarget`, and add a real worker-backed `AsyncPlanTarget` round trip. |
+| package cleanup | package manifests, exports, boundary tests, and obsolete example adapters | Remove runtime-bound and renderer-leaking compatibility surfaces; never introduce a Three dependency into the neutral example raster or renderer. |
+| docs and evidence | README, package concepts, renderer guide, this plan, HTML report, benchmark workflows, and size evidence | Make current APIs, ownership graphs, worker transfer, performance, and deferred work agree at the final source head. |
+
 Each step is one coherent commit and remains green before the next.
 
 1. **Introduce immutable font backing.** Add root `Font`/`loadFont`, optional application-owned `FontLibrary`, one canonical
@@ -653,8 +693,9 @@ Each step is one coherent commit and remains green before the next.
 4. **Add host binding leases.** Implement idempotent underlying `bindFont`/`bindFontStack`, independent caller leases,
    hidden dynamic IDs, exact technique/policy validation, and runtime/host/device reference chains.
 5. **Bind sessions to policy and target.** Move policy selection and one abstract target into session construction; add
-   opaque acceptance cursors and delivery-mode-specific session methods; enforce the runtime-wide borrowed-view gate,
-   pending-acceptance cancellation, session-owned checkpoint control, and per-device session fan-out.
+   opaque acceptance cursors and delivery-specific session methods; enforce the runtime-wide borrowed-view gate,
+   pending-acceptance cancellation, the transferable-buffer return state machine, session-owned checkpoint control, and
+   per-device session fan-out.
 6. **Migrate every maintained integration.** Make Paragraph, Three, React, and the example renderer consume only the public
    root and `/core` paths. React moves Suspense caching into an explicit FontLibrary. Three pools immutable font
    realizations per device and batches compatible font-stack members without changing visual order. The example renderer
@@ -675,7 +716,8 @@ Each step is one coherent commit and remains green before the next.
 - a host can be created only from a package-created live runtime;
 - a session requires one host-owned policy and one target;
 - every target is idempotently disposable, and its factory delivery discriminant infers the matching session return type;
-- borrowed and owned targets expose different update return types;
+- `PlanTarget` publishes synchronously from the borrowed A/B slot, while only `AsyncPlanTarget` copies and returns a Promise;
+- `AsyncPlanCandidate` exposes a full-span `Uint8Array<ArrayBuffer>` while `PlanCandidate` exposes no transferable bytes;
 - a target, policy, font binding, stack, acceptance cursor, or session from another owner is not assignable;
 - a target-bound session exposes no raw update accepting caller-authored revisions or acknowledgments;
 - convenience APIs never accept raw numeric registration IDs;
@@ -693,8 +735,10 @@ Each step is one coherent commit and remains green before the next.
 - host disposal cannot invalidate another host's binding to the same font;
 - sessions cannot cross hosts, targets, policies, acceptance cursors, or storage namespaces;
 - no call through a sibling session or sibling host can re-enter Wasm while a borrowed target callback is active;
-- a second update while one owned-target acceptance is pending throws without crossing into Wasm;
+- a second update while one async-target acceptance is pending throws without crossing into Wasm;
 - disposing a session aborts its pending target transaction and ignores a late accepted answer;
+- an async worker target transfers one package-created plan buffer out and back, then resolves acceptance; worker
+  termination before the return leaves the cursor unchanged and requires no borrowed-memory recovery;
 - returning one target object from two session factories throws before the second Wasm session allocation;
 - disposing a session disposes its target exactly once, removes its checkpoint control from the device pool, and does not
   interrupt loss fan-out to a live sibling;
