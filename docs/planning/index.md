@@ -6,6 +6,7 @@
 - [Merged v0 runtime and bake API](api-shapes.md) — superseded migration fixture; describes the merged v0 surface deleted by the Rust render-plan cutover.
 - [Three.js text API](three-api.md) — authoritative `FontLoader`, `TextGroup`, and `Text` surface, including late binding, group disposal/rebinding, font leases, retained non-throwing errors, ordering, and render-loop synchronization.
 - [Core text API](core-api.md) — authoritative API and rationale for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, font leases, fixed-capacity failure, physical batching, and cascading disposal.
+- [Font/runtime ownership plan](font-runtime-ownership.md) — accepted breaking migration from runtime-bound loaded fonts and raw shaper hosts to immutable font assets, runtime-owned hosts, target-bound sessions, deterministic leases, and renderer-owned device pools.
 - [Rust layout engine contract](rust-layout-engine.md) — authoritative engine ABI, render-plan policy, and publication boundary for custom renderers.
 - [Engine integration contract](engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
 - [Raster technique and engine resource API](raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.

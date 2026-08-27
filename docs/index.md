@@ -12,6 +12,7 @@ okf_version: '0.2'
 - [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
 - [Core text API](planning/core-api.md) — authoritative API for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, fixed-capacity failure, synchronized updates, and renderer-ready glyph batches.
+- [Font/runtime ownership plan](planning/font-runtime-ownership.md) — accepted migration that separates immutable font assets from runtime registration and binds hosts, sessions, targets, leases, and renderer acceptance to explicit lifetimes.
 - [Rust layout engine contract](planning/rust-layout-engine.md) — authoritative engine ABI, render-plan policy, and publication boundary for custom renderers.
 - [Engine integration contract](planning/engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
 - [Raster technique and engine resource API](planning/raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.

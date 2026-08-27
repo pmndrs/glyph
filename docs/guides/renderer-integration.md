@@ -54,6 +54,11 @@ This guide is for an implementor adding a renderer to `pmndrs/glyph`. The result
 per-glyph values to produce, registers that contract, turns application mutations into frame updates, and realizes the
 returned plan without retaining invalid Wasm views.
 
+> This guide documents the current integration surface. The accepted breaking ownership migration is planned in
+> [Font, runtime, host, session, and render-target ownership](../planning/font-runtime-ownership.md). It separates portable
+> font assets from runtime registration and makes host ownership, session targets, acceptance, and leases explicit rather
+> than layering compatibility adapters over this API.
+
 Import application vocabulary and font loading from `@pmndrs/glyph`; import the machinery an integration constructs from
 `@pmndrs/glyph/core`. `/core` is additive to the root entry, not an alternative root. That boundary exists so renderer
 objects do not enter the shared text vocabulary, and it is enforced as a zero-name-overlap contract.

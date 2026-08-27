@@ -47,6 +47,12 @@ command buffer. A renderer integration owns synchronization and GPU realization.
 Applications using Three.js normally import scene objects from `@pmndrs/glyph/three` or React components from
 `@pmndrs/glyph/react`; they do not drive the Rust engine directly.
 
+> **Accepted ownership migration:** this reference describes the currently implemented API. The next breaking migration
+> is specified in [Font, runtime, host, session, and render-target ownership](font-runtime-ownership.md): root font loading
+> becomes runtime-independent, `/core` attaches hosts to runtime owners, sessions bind one abstract acceptance target, and
+> explicit leases remain the correctness mechanism. Finalizers are unnecessary: unused fonts are not strongly cached,
+> while deterministic owners retain and release backing state directly.
+
 ## Runtime and font loading
 
 ```ts
