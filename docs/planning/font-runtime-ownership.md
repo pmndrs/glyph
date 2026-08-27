@@ -40,7 +40,7 @@ sources:
     title: Architectural decision register
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-27T20:55:11Z'
+  at: '2026-08-27T21:03:06Z'
 ---
 
 # Font, runtime, host, session, and render-target ownership
@@ -459,8 +459,12 @@ bindings implement the documented ABI rather than preserving a second JavaScript
 `TextEngineTextOptions` is the renderer-neutral authored model, not a geometry or material API. Existing root `TextInput`,
 `ParagraphContentBox`, `ParagraphStyle`, and `GlyphPaintInput` cover formatted spans, columns, ordinary layout, paint,
 `order`, and `rasterPixelRatio`. Flow regions, exclusions, and inline objects currently exist only as raw `/core` frame
-records, so the retained surface strips every caller-authored ID/revision/index and replaces material/resource numbers
-with host-issued opaque bindings. A host stack binding similarly replaces every font/stack number. The implementation
+records, so the retained surface strips every engine-owned ID/revision/index and replaces material/resource numbers with
+host-issued opaque bindings. The region's renderer-owned transform-table slot is preserved through
+`HostTransformBinding`: core encodes its compact wire index, while a target resolves that index back to the binding and
+the integration's private transform object. Async candidates pre-resolve those bindings for the source endpoint, which
+maps them to its renderer-defined transport keys just as it builds the payload manifest. A host stack binding similarly
+replaces every font/stack number. The implementation
 must expose every currently supported authored frame field through these ID-free retained inputs before privatizing
 `compileTextEngineFrameUpdate`; no feature may disappear into an unreachable ABI field.
 
@@ -510,6 +514,11 @@ interface ResolvedPlanPayload {
   readonly payload: PortableResource;
 }
 
+interface ResolvedPlanTransform {
+  readonly transformIndex: number;
+  readonly binding: HostTransformBinding;
+}
+
 interface TextEngineRenderPlanReader {
   table(name: RenderPlanTableName): RenderPlanTable;
   record(table: RenderPlanTable, index: number): number;
@@ -532,6 +541,7 @@ interface PlanCandidate {
   readonly origin: PlanOrigin;
   readonly plan: BorrowedTextEngineRenderPlan;
   acquirePayload(referenceId: ResourceHandle): PortablePayloadLease;
+  resolveTransform(transformIndex: number): HostTransformBinding;
 }
 
 interface AsyncPlanCandidate {
@@ -539,6 +549,7 @@ interface AsyncPlanCandidate {
   readonly plan: OwnedTextEngineRenderPlan;
   readonly bytes: Uint8Array<ArrayBuffer>;
   readonly payloads: readonly ResolvedPlanPayload[];
+  readonly transforms: readonly ResolvedPlanTransform[];
 }
 
 interface PlanTargetControl {
@@ -553,6 +564,7 @@ interface PlanTarget {
 
 interface AsyncPlanTarget {
   readonly delivery: 'owned';
+  readonly maximumPlanBytes: number;
   accept(candidate: AsyncPlanCandidate, signal: AbortSignal): Promise<AsyncPlanTargetResult>;
   dispose(): void;
 }
@@ -578,6 +590,11 @@ interface HostResourceBinding {
   dispose(): void;
 }
 
+interface HostTransformBinding {
+  readonly disposed: boolean;
+  dispose(): void;
+}
+
 interface HostPolicy {
   readonly disposed: boolean;
   dispose(): void;
@@ -586,7 +603,9 @@ interface HostPolicy {
 type TextEngineRegionInput = Omit<
   TextEngineRegion,
   'id' | 'geometryRevision' | 'transformIndex' | 'exclusionStart' | 'exclusionCount'
->;
+> & {
+  readonly transform: HostTransformBinding;
+};
 
 type TextEngineExclusionInput = Omit<TextEngineExclusion, 'id' | 'regionId' | 'geometryRevision'>;
 
@@ -649,7 +668,7 @@ interface TextEngineText {
 }
 
 interface TextEnginePublishOptions {
-  readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection';
+  readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
   readonly compositing?: 'ordered' | 'independent';
   readonly policyParameters?: Uint8Array;
 }
@@ -686,6 +705,7 @@ interface TextEngineHost {
   bindFontStack<Technique extends AnyRasterTechnique>(stack: FontStack<Technique>): HostFontStackBinding;
   createMaterialBinding(): HostMaterialBinding;
   createResourceBinding(): HostResourceBinding;
+  createTransformBinding(): HostTransformBinding;
   createSession<Target extends TextPlanTarget>(options: TextEngineSessionOptions<Target>): SessionFor<Target>;
   dispose(): void;
 }
@@ -753,6 +773,11 @@ before rethrowing. Type inference maps the factory's delivery discriminant to th
 only valid synchronous or asynchronous session return type; callers do not select that type independently, and runtime
 validation prevents an `any` cast or widened discriminant from selecting the wrong call path.
 
+An `AsyncPlanTarget` reports the exact transfer-pool ceiling as `maximumPlanBytes`. `createSession()` requires it to be a
+positive safe integer at least as large as `limits.maxOutputBytes`; otherwise it disposes the newly claimed target and
+throws before Wasm allocation. Result-capacity growth can therefore never produce a valid plan that the attached target
+is permanently unable to transfer.
+
 Every target has an idempotent `dispose()`. Session disposal aborts pending acceptance, calls `target.dispose()` so the
 renderer detaches the control from its pool, invalidates the control, and then releases session state. A later
 `requestCheckpoint()` throws; that call-time failure identifies a renderer pool that violated the detach contract and is
@@ -797,14 +822,21 @@ This is exactly one plan-byte copy. The source publication is a range inside eng
 backing would detach the runtime's whole memory, and a shared Wasm backing is not transferable. The package therefore
 copies only the publication range into an exact-size standalone buffer. The existing bounded transfer pool is adapted
 from power-of-two/best-fit capacities to exact-byte-length buckets: `minimumCapacity` is removed, and it may reuse only a
-returned allocation whose `byteLength` equals the next publication length. Backpressure, pooled-count, and pooled-byte limits remain; oversized
-allocations are rejected. Thus the candidate view always spans its complete backing, repeated stable-size frames still
+returned allocation whose `byteLength` equals the next publication length. Backpressure, pooled-count, and pooled-byte
+limits remain; oversized allocations are rejected. Thus the candidate view always spans its complete backing, repeated stable-size frames still
 reuse allocations, and no helper can silently copy an oversized subview. The target must pass that buffer in the `postMessage`
 transfer list; structured-cloning it or copying it again is a contract violation. The receiving endpoint transfers the same
 allocation back. A successful result requires `returnedBytes`; the session validates its full-span backing and original
 publication identity, consumes the acceptance, and may recycle the allocation for a later async copy. A rejected result
 returns the allocation when the endpoint still owns it; worker termination may lose that transport allocation without
 affecting Wasm storage or the previous acceptance fence.
+
+Returned exact-size buffers enter a least-recently-returned queue. The pool evicts from the oldest end until both
+`maximumPooledBuffers` and `maximumPooledBytes` hold; an allocation used for one unusual frame cannot pin capacity ahead of
+hot sizes forever. Package tests drive stable-size and deliberately variable-size traces through the pool and assert
+full-span ownership, bounded pooled bytes, deterministic LRU eviction, allocation/pool-hit/discard counters, and no more
+allocations than an exact-size fresh-buffer baseline. A worker microbenchmark records copy, transfer, return, allocation,
+and hit-rate evidence separately from shaping/render-plan benchmarks.
 
 `acquirePayload()` returns an independent disposable backing lease owned by the synchronous target. It transfers that
 lease into its realization pool or disposes it before returning. For async delivery, the session acquires and privately
@@ -1160,8 +1192,10 @@ Each step is one coherent commit and remains green before the next.
 - a target-bound session exposes no raw update accepting caller-authored revisions or acknowledgments;
 - retained text options include `order` and `rasterPixelRatio`; advanced regions, exclusions, and inline objects cannot
   accept IDs/revisions/indices or raw material/resource numbers;
+- renderer-owned region transforms use an opaque HostTransformBinding that targets can resolve; a raw transform-table
+  index is not accepted or lost;
 - publish options accept named semantic/compositing choices and policy bytes, never a numeric mask or ownerless capability
-  selection;
+  selection, and can request measurement plus layout inspection together through `semanticViews: 'all'`;
 - convenience APIs never accept raw numeric registration IDs;
 - renderer-specific Canvas, Three.js, TypeGPU, WebGPU, material, and device types do not enter root or portable policy
   declarations.
@@ -1187,11 +1221,14 @@ Each step is one coherent commit and remains green before the next.
   publication identity on success, and lets the session reuse or release the returned allocation;
 - the bounded pool reuses only an exact-length returned buffer; non-bucket publication sizes remain full-span and never
   route through a subview-copy helper;
+- exact-size pooling obeys deterministic least-recently-returned eviction and bounded allocation/hit/discard counters for
+  stable and variable publication traces;
 - returning one target object from two session factories throws before the second Wasm session allocation;
 - a factory throw invalidates its control; a newly returned target is claimed before Wasm allocation and disposed exactly
   once if later construction fails, while a reused target is rejected without disposing the first session's live target;
 - an `any`-cast target whose runtime `delivery` or `accept()` shape contradicts the inferred session type throws before
   Wasm allocation;
+- async target creation rejects a non-safe or insufficient `maximumPlanBytes` before Wasm allocation;
 - disposing a session disposes its target exactly once, removes its checkpoint control from the device pool, and does not
   interrupt loss fan-out to a live sibling;
 - an owned publication survives later calls and worker transfer but is revalidated in the receiving realm;
@@ -1244,6 +1281,8 @@ Each step is one coherent commit and remains green before the next.
 - one font used by many sessions on one device realizes each immutable payload once;
 - disposed runtime/host/session churn returns registrations, caches, and device leases to baseline;
 - hot unchanged and incremental shaping/render-plan benchmarks remain within the existing noise envelope;
+- worker-transfer microbenchmarks record copy/transfer/return time, allocations, pool hits, and bounded pooled bytes for
+  stable-size and variable-size publication traces;
 - WebGPU/Three lab benchmarks retain draw count, visible-pixel, idle-submit, CPU-submit, and GPU-time gates;
 - size entries are rewritten around stable feature scenarios rather than historical export homes: portable root
   application use, `/core` integrator use, each built-in runtime technique, Three, and root-plus-core combined. The
@@ -1348,7 +1387,14 @@ medium inventory/documentation gaps. Their source-validated disposition is:
 | Report extracted `candidate.acquirePayload` unbound | Accepted | Use an owning closure in the worked target example. |
 | Redundant token union and post-disposal checkpoint fan-out | Not blockers | The token union may simplify during implementation; loss fan-out must continue across a stale-control defect and report it after signaling live siblings. |
 
-The corrected commit receives one bounded follow-up verification before implementation begins.
+The bounded verification of `1825fb735` confirmed BL1-BL3 and M1-M7 closed. It found one final renderer-ownership gap and
+three bounded transport details: renderer-owned `transformIndex` needed an opaque replacement, semantic views needed the
+combined `all` case, async transfer capacity needed construction-time compatibility, and exact-size pooling needed an
+eviction/counter-performance contract. This revision adds `HostTransformBinding` plus candidate resolution, the `all`
+choice, `maximumPlanBytes >= limits.maxOutputBytes` validation, deterministic least-recently-returned eviction, and
+stable/variable trace gates. No finding changes the ownership graph.
+
+The resulting commit receives one final diff-only verification before implementation begins.
 
 No compatibility adapter may keep both ownership models alive. The migration may stage private implementation pieces, but
 the published package changes from the old surface to the new surface atomically.
