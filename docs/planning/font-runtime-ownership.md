@@ -40,7 +40,7 @@ sources:
     title: Architectural decision register
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-27T20:36:45Z'
+  at: '2026-08-27T20:55:11Z'
 ---
 
 # Font, runtime, host, session, and render-target ownership
@@ -241,10 +241,19 @@ declare function createFontStack<
   const Fallback extends readonly Font<AnyRasterTechnique>[],
 >(primary: Primary, ...fallback: Fallback): FontStack<TechniqueOfFont<Primary | Fallback[number]>>;
 
-// The existing root FontInput, FontToken, and defineFont names remain the AOT discovery contract.
+// Existing names remain the AOT discovery contract; source/baked objects gain explicit byte forms.
+interface BakedFontSource {
+  readonly baked: string | URL | FontBytesInput;
+  readonly source?: never;
+}
+
+interface FontSourceOverride {
+  readonly source: string | URL | FontBytesInput;
+  readonly baked?: string | URL | FontBytesInput | null;
+}
+
 type LoadFontInput =
   | FontInput
-  | FontBytesInput
   | {
       readonly source: string | URL | FontBytesInput;
       readonly runtimeBake: RuntimeFontBake;
@@ -291,7 +300,14 @@ still retained by its user or an engine.
 ```ts
 interface FontLibraryOptions {
   readonly fetch?: typeof fetch;
-  readonly maximumArtifactBytes?: number;
+  readonly baseUrl?: string | URL;
+  readonly development?: boolean;
+  readonly runtimeBake?: RuntimeFontBake;
+  readonly onDiagnostic?: (diagnostic: FontLoadDiagnostic) => void;
+  readonly onWarning?: (diagnostic: FontLoadDiagnostic) => void;
+  readonly maxArtifactBytes?: number;
+  readonly maxBufferViews?: number;
+  readonly maxRasters?: number;
   readonly maximumEntries?: number;
 }
 
@@ -334,9 +350,11 @@ preserves the existing `AbortSignal` boundary.
 `FontRequest` preserves both current input modes. A baked request validates an existing GLB. A source request carries the
 existing runtime-baker function, Unicode ranges, and all requested raster technique/options. Baking completes one immutable
 artifact before `Font` publication; the source buffer is released after the artifact is owned, and late raster attachment
-is not supported. The existing `FontInput`, `FontToken`, and `defineFont(input, raster)` names survive unchanged as the
-static `glyph bake` discovery anchor. `loadFont(defineFont(...))` is the direct runtime-loading form. There is no second
-type named `FontInput`, and the discovery traversal is migrated and tested in the same commit as any source-file move.
+is not supported. The existing `FontInput`, `FontToken`, and `defineFont(input, raster)` names and source/baked
+discriminants survive as the static `glyph bake` discovery anchor. `BakedFontSource.baked` and
+`FontSourceOverride.source`/`baked` widen to explicit `FontBytesInput`; a bare byte object is never sniffed or guessed.
+`loadFont(defineFont(...))` is the direct runtime-loading form. There is no second type named `FontInput`, and the
+discovery traversal is migrated and tested in the same commit as any source-file move.
 External raster artifacts remain separately authenticated owned backings rather than copies of the primary GLB.
 
 ### Entry-point ownership audit
@@ -352,15 +370,17 @@ when that name appears in its own public signatures; it does not mirror the root
 | `@pmndrs/glyph/three` and `/react` | Three/R3F objects, materials, loaders, hooks, props, and integration errors | Re-export only root names actually present in those signatures, such as `Font`/`FontStack` where needed. Root remains their canonical home. |
 | raster, shader, baker, and runtime-bake subpaths | technique-owned side effects, shader-language modules, baker modules, and explicit runtime-bake tooling | Remain explicit tree-shakable capability entries; they do not become alternate homes for root application vocabulary. |
 
-The current root groups have these explicit dispositions:
+The current and target entry groups have these explicit dispositions:
 
-| Current root group | Disposition | Reason |
+| API group | Disposition | Reason |
 | --- | --- | --- |
 | `Font`, `FontStack`, `FontMetrics`, `FontInput`, `FontToken`, `defineFont`, `loadFont`, `createFontStack`, `FontLibrary`, and load errors/options | Keep or replace in place at root | These are portable assets, declarative bake inputs, and failures an application encounters. `defineFont` remains the static baker anchor. |
-| `txt`, `span`, formatted text, paint, paragraph properties, measurements, layouts, placements, carets, and root `Paragraph`/`createParagraph` | Keep at root | Applications author or receive these values without implementing a renderer. |
+| Root `txt`, `span`, formatted text, paint, paragraph properties, measurements, layouts, placements, and carets | Keep at root | Applications author or receive these values without implementing a renderer. |
+| Current `/core` `Paragraph`, `ParagraphOptions`, and `ParagraphUpdate` | Move their application-facing forms to root and add async `createParagraph`; make direct construction private | Detached measurement is application vocabulary even though its engine session remains private. |
 | raster-technique, raster-resource, coverage, feature, and baker contracts | Keep at root or their existing explicit capability subpath | Technique and baker providers author them; they are renderer neutral. Shader-language implementations remain explicit subpaths. |
 | `FontRegistry`, `RegisteredFont`, `RegisteredRaster`, `LoadedFont`, runtime-bound `FontLoader`, and their mutable handles/options | Withdraw or replace | They expose mutable registration internals rather than portable application assets. |
 | `TextRuntime`, `createTextRuntime`, host/session/plan/policy types, policy/wire IDs, and portable realization readers | Move or remain in `/core` | Only an integration constructs or drives them. Root types may appear in their signatures, but `/core` does not re-export the root barrel. |
+| `/core` `acquireFontSelectionForRuntime`, `assertFontSelectionForRuntime`, `concreteFonts`, `observeLoadedFontDispose`, and `releaseFontSelection` | Withdraw from declarations and make any surviving mechanics package-private | They expose the runtime-bound `LoadedFont` model being removed and are not integrator contracts. |
 | `FontHandle`, `RasterHandle`, `FontKey`, and `RasterKey` | Withdraw unless a surviving root output still exposes one | Dynamic registration identity is package-managed. Output identities such as `FontSlot` or `LocalGlyphId` remain root only when an application-visible layout type names them. |
 
 The packed declaration test is the authority: root and `/core` export-name sets are disjoint, and an integration may
@@ -395,13 +415,17 @@ const host = runtime.createTextEngineHost({
   integration: 'my-webgpu-renderer',
 });
 
+const rendererPolicy = {
+  capabilitySets: [rendererCapabilities],
+  programs: rendererPrograms,
+} satisfies PolicyDescriptor;
 const policy = host.installPolicy(rendererPolicy);
 const stackBinding = host.bindFontStack(ui);
 ```
 
 The method states the lifetime direction in the only surface where either object is public: the runtime constructs, claims,
-and later disposes the host before returning it. `createTextRuntime`, `TextRuntime`, and `TextEngineHost` leave the root
-entry and live in `/core`; first-party renderer entries construct them internally. There is no raw-shaper constructor,
+and later disposes the host before returning it. `createTextRuntime` and `TextRuntime` move from root to `/core`, where
+`TextEngineHost` already lives; first-party renderer entries construct them internally. There is no raw-shaper constructor,
 detached host factory, public owner parameter, or host rebind operation.
 
 `host.bindFont(font)` performs two deduplicated steps:
@@ -432,12 +456,19 @@ compiles the one wire update internally. Three and the neutral example wrap thes
 second request shape. The old raw frame compiler remains package-internal test/fuzz infrastructure; alternate language
 bindings implement the documented ABI rather than preserving a second JavaScript ownership model.
 
-`TextEngineTextOptions` is the renderer-neutral authored model, not a geometry or material API. Its final declaration
-uses the existing root `TextInput`, `ParagraphContentBox`, `ParagraphStyle`, and `GlyphPaintInput` contracts, including
-their formatted spans, columns, flow regions, exclusions, and inline-object forms. A host stack binding replaces every
-caller-authored numeric font/stack handle. The implementation must expose every currently supported authored frame field
-through this retained surface before privatizing `compileTextEngineFrameUpdate`; no feature may disappear into an
-unreachable ABI field.
+`TextEngineTextOptions` is the renderer-neutral authored model, not a geometry or material API. Existing root `TextInput`,
+`ParagraphContentBox`, `ParagraphStyle`, and `GlyphPaintInput` cover formatted spans, columns, ordinary layout, paint,
+`order`, and `rasterPixelRatio`. Flow regions, exclusions, and inline objects currently exist only as raw `/core` frame
+records, so the retained surface strips every caller-authored ID/revision/index and replaces material/resource numbers
+with host-issued opaque bindings. A host stack binding similarly replaces every font/stack number. The implementation
+must expose every currently supported authored frame field through these ID-free retained inputs before privatizing
+`compileTextEngineFrameUpdate`; no feature may disappear into an unreachable ABI field.
+
+Policy installation takes the complete renderer-owned `PolicyDescriptor`, not one `PolicyProgram`. Session creation
+receives the selected descriptor-owned `PolicyCapabilitySet` object and validated maximum limits; the host verifies set
+membership and creates the D-281 owner-bound wire selection internally. `publish()` maps named semantic-view and
+compositing options to internal masks and derives exact per-frame counts from retained state. Callers never author a
+capability ID, raw semantic mask, frame revision, or acknowledgment.
 
 ### Session and target surface
 
@@ -537,17 +568,66 @@ interface HostFontBinding<Technique extends AnyRasterTechnique> {
   dispose(): void;
 }
 
+interface HostMaterialBinding {
+  readonly disposed: boolean;
+  dispose(): void;
+}
+
+interface HostResourceBinding {
+  readonly disposed: boolean;
+  dispose(): void;
+}
+
 interface HostPolicy {
   readonly disposed: boolean;
   dispose(): void;
 }
 
+type TextEngineRegionInput = Omit<
+  TextEngineRegion,
+  'id' | 'geometryRevision' | 'transformIndex' | 'exclusionStart' | 'exclusionCount'
+>;
+
+type TextEngineExclusionInput = Omit<TextEngineExclusion, 'id' | 'regionId' | 'geometryRevision'>;
+
+interface TextEngineFlowRegionInput {
+  readonly region: TextEngineRegionInput;
+  readonly exclusions?: readonly TextEngineExclusionInput[];
+}
+
+interface TextEngineFlowInput {
+  readonly regions: readonly TextEngineFlowRegionInput[];
+}
+
+type TextEngineInlineObjectInput = Omit<
+  TextEngineInlineObject,
+  'paragraphId' | 'id' | 'contentRevision' | 'materialId' | 'resourceId' | 'resourceGeneration'
+> & {
+  readonly material: HostMaterialBinding;
+  readonly resource: HostResourceBinding;
+};
+
+interface TextEngineLimits {
+  readonly maxParagraphs: number;
+  readonly maxClusters: number;
+  readonly maxLines: number;
+  readonly maxRegions: number;
+  readonly maxExclusions: number;
+  readonly maxInlineObjects: number;
+  readonly maxSlotsPerBand: number;
+  readonly maxOutputBytes: number;
+}
+
 interface TextEngineTextOptions {
   readonly font: HostFontStackBinding;
   readonly text: TextInput;
+  readonly order?: number;
+  readonly rasterPixelRatio?: number;
   readonly contentBox?: ParagraphContentBox;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
+  readonly flow?: TextEngineFlowInput;
+  readonly inlineObjects?: readonly TextEngineInlineObjectInput[];
 }
 
 type TextEngineTextUpdate = Partial<Omit<TextEngineTextOptions, 'font'>> & {
@@ -568,15 +648,21 @@ interface TextEngineText {
   dispose(): void;
 }
 
+interface TextEnginePublishOptions {
+  readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection';
+  readonly compositing?: 'ordered' | 'independent';
+  readonly policyParameters?: Uint8Array;
+}
+
 interface SynchronousTextEngineSession {
   createText(options: TextEngineTextOptions): TextEngineText;
-  publish(): PlanAcceptance;
+  publish(options?: TextEnginePublishOptions): PlanAcceptance;
   dispose(): void;
 }
 
 interface AsyncTextEngineSession {
   createText(options: TextEngineTextOptions): TextEngineText;
-  publish(): Promise<PlanAcceptance>;
+  publish(options?: TextEnginePublishOptions): Promise<PlanAcceptance>;
   dispose(): void;
 }
 
@@ -586,16 +672,20 @@ type SessionFor<Target extends TextPlanTarget> = Target extends AsyncPlanTarget
 
 interface TextEngineSessionOptions<Target extends TextPlanTarget> {
   readonly policy: HostPolicy;
+  readonly capabilitySet?: PolicyCapabilitySet;
   readonly target: (control: PlanTargetControl) => Target;
+  readonly limits: TextEngineLimits;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
   readonly textCapacity: number;
 }
 
 interface TextEngineHost {
-  installPolicy(program: PolicyProgram): HostPolicy;
+  installPolicy(descriptor: PolicyDescriptor): HostPolicy;
   bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): HostFontBinding<Technique>;
   bindFontStack<Technique extends AnyRasterTechnique>(stack: FontStack<Technique>): HostFontStackBinding;
+  createMaterialBinding(): HostMaterialBinding;
+  createResourceBinding(): HostResourceBinding;
   createSession<Target extends TextPlanTarget>(options: TextEngineSessionOptions<Target>): SessionFor<Target>;
   dispose(): void;
 }
@@ -606,13 +696,25 @@ interface TextRuntime {
   dispose(): void;
 }
 
+interface TextEngineHostOptions {
+  /** Stable diagnostic namespace; never a wire ID or lookup key. */
+  readonly integration: string;
+}
+
+declare class TextEngineSessionDisposedError extends Error {}
+declare class TextEngineBackpressureError extends Error {}
+declare class TextEngineTransportCapacityError extends Error {}
+declare class TextEngineTransportError extends Error {}
+
 const session = host.createSession({
   policy,
+  capabilitySet: rendererCapabilities,
   target: (control) =>
     renderer.createPlanTarget({
       control,
       delivery: 'borrowed',
     }),
+  limits: rendererLimits,
   requestCapacity: SESSION_REQUEST_BYTES,
   resultCapacity: SESSION_RESULT_BYTES,
   textCapacity: SESSION_TEXT_BYTES,
@@ -654,7 +756,9 @@ validation prevents an `any` cast or widened discriminant from selecting the wro
 Every target has an idempotent `dispose()`. Session disposal aborts pending acceptance, calls `target.dispose()` so the
 renderer detaches the control from its pool, invalidates the control, and then releases session state. A later
 `requestCheckpoint()` throws; that call-time failure identifies a renderer pool that violated the detach contract and is
-not converted into a recoverable render result.
+not converted into a recoverable render result. Device-loss fan-out iterates a stable control snapshot, records a stale
+control defect, continues signaling every live sibling, then reports the integration defect after fan-out; one bad entry
+cannot strand unrelated sessions.
 
 Session capacities are validated initial reservations, not permanent public identities. Request growth happens before the
 Wasm call. If the engine returns its non-publishing `resultTooLarge` capacity header, core may reserve the exact reported
@@ -691,7 +795,11 @@ mode.
 
 This is exactly one plan-byte copy. The source publication is a range inside engine-owned Wasm memory: transferring its
 backing would detach the runtime's whole memory, and a shared Wasm backing is not transferable. The package therefore
-copies only the publication range into the standalone buffer. The target must pass that buffer in the `postMessage`
+copies only the publication range into an exact-size standalone buffer. The existing bounded transfer pool is adapted
+from power-of-two/best-fit capacities to exact-byte-length buckets: `minimumCapacity` is removed, and it may reuse only a
+returned allocation whose `byteLength` equals the next publication length. Backpressure, pooled-count, and pooled-byte limits remain; oversized
+allocations are rejected. Thus the candidate view always spans its complete backing, repeated stable-size frames still
+reuse allocations, and no helper can silently copy an oversized subview. The target must pass that buffer in the `postMessage`
 transfer list; structured-cloning it or copying it again is a contract violation. The receiving endpoint transfers the same
 allocation back. A successful result requires `returnedBytes`; the session validates its full-span backing and original
 publication identity, consumes the acceptance, and may recycle the allocation for a later async copy. A rejected result
@@ -707,6 +815,13 @@ candidate-scoped resolver closure or source lease survives a worker yield accide
 A session permits at most one asynchronous publication/acceptance transaction in flight. A second update while an
 `AsyncPlanTarget` is pending throws at that call. Ordinary `PlanTarget` acceptance completes within `publish()`.
 Independent sessions may progress concurrently, subject to the renderer's own device-pool synchronization.
+
+Transfer-pool outcomes are call-bound and never retried automatically. Bounded shared-pool backpressure returns
+`{ accepted: false, error: TextEngineBackpressureError }` with the cursor unchanged; the caller may publish the still-dirty
+desired state later. An exact-size publication above the configured maximum rejects `publish()` with
+`TextEngineTransportCapacityError` before the target is called. Sender failure, failure to detach, malformed return, and
+lost correlation reject `publish()` with `TextEngineTransportError`; they invalidate that transaction and leave the prior
+cursor authoritative. A detached buffer may be lost, but no hidden retry or second copy occurs.
 
 The target answers one of two call-bound results:
 
@@ -980,7 +1095,7 @@ its explicit leases are released.
 | Three reference integration | `packages/glyph/src/three/engine-runtime.ts`, `engine-plan-target.ts`, `font-loader.ts`, and `text.ts` | Consume public root plus `/core`, keep `PlanTarget` zero-copy, pool immutable resources per WebGPU device or WebGL context, and batch compatible font-stack members without reordering. |
 | React integration | `packages/glyph/src/react.ts` | Replace module-global loader/promise ownership with provider or application `FontLibrary` leases and prove StrictMode lifecycle safety. |
 | external renderer proof | `packages/glyph-example-renderer/src` and its tests | Keep TypeGPU/WebGPU device ownership external, implement ordinary zero-copy `PlanTarget`, and add a real worker-backed `AsyncPlanTarget` round trip. |
-| applications and labs | every consumer under `apps/`, including module-scope `useFont.preload`, benchmark labs, conformance targets, and proof routes | Migrate all call sites in the same atomic package change; preserve module-scope preload through an explicit default/provider library contract and keep the root `check` lane reachable. |
+| applications, labs, and size entries | every consumer under `apps/`, including module-scope `useFont.preload`, benchmark labs, conformance targets, proof routes, and `apps/benchmarks/size-entries` | Migrate all call sites in the same atomic package change; preserve module-scope preload through an explicit library-bound contract, replace withdrawn export anchors, and keep root checks plus comparable size graphs reachable. |
 | package cleanup | package manifests, exports, boundary tests, and obsolete example adapters | Remove runtime-bound and renderer-leaking compatibility surfaces; permit Three only in `glyph-example-raster`'s explicit `/tsl` implementation subpath and never in its neutral entry or in `glyph-example-renderer`. |
 | docs and evidence | README, package concepts, renderer guide, this plan, HTML report, benchmark workflows, and size evidence | Make current APIs, ownership graphs, worker transfer, performance, and deferred work agree at the final source head. |
 
@@ -1025,12 +1140,15 @@ Each step is one coherent commit and remains green before the next.
 - a root application can load and compose fonts without importing `/core` or constructing a runtime;
 - existing `defineFont` calls remain valid, statically discoverable bake inputs, and `loadFont(token)` preserves their
   technique type without introducing a second `FontInput` declaration;
+- baked byte input requires `{ baked: { bytes, ownership } }`, source bytes require the source discriminant, and a bare
+  byte object is not assignable;
 - the root declaration contains the reviewed renderer-neutral barrel and excludes runtime, host, session, mutable registry,
   runtime-bound loaded-font, and application-invisible engine-handle names;
 - an optional root `FontLibrary` owns only explicit cache leases and cannot dispose a returned live Font;
 - a Font handle carries exactly one technique type, while a multi-raster load returns a position-preserving typed tuple;
 - root exports no runtime or host construction API; `/core` creates a host only through a package-created live runtime;
-- a render session requires one host-owned policy and one target;
+- a host installs one complete multi-program `PolicyDescriptor`; a render session requires that HostPolicy, one
+  descriptor-member capability set, validated limits, and one target;
 - a render session exposes retained `createText`/`update`/`dispose` input handles but no raw session, policy, numeric-ID,
   revision, acknowledgment, or frame-byte fields;
 - root `createParagraph()` returns a ready Paragraph without exposing `/core`; no public target-less session is nameable;
@@ -1040,6 +1158,10 @@ Each step is one coherent commit and remains green before the next.
 - `AsyncPlanCandidate` contains every resolved payload referenced by its copied plan and exposes no deferred resolver;
 - a target, policy, font binding, stack, acceptance cursor, or session from another owner is not assignable;
 - a target-bound session exposes no raw update accepting caller-authored revisions or acknowledgments;
+- retained text options include `order` and `rasterPixelRatio`; advanced regions, exclusions, and inline objects cannot
+  accept IDs/revisions/indices or raw material/resource numbers;
+- publish options accept named semantic/compositing choices and policy bytes, never a numeric mask or ownerless capability
+  selection;
 - convenience APIs never accept raw numeric registration IDs;
 - renderer-specific Canvas, Three.js, TypeGPU, WebGPU, material, and device types do not enter root or portable policy
   declarations.
@@ -1063,6 +1185,8 @@ Each step is one coherent commit and remains green before the next.
   termination before the return leaves the cursor unchanged and requires no borrowed-memory recovery;
 - the worker transfer detaches the source buffer, performs no structured-clone or second plan copy, returns the same
   publication identity on success, and lets the session reuse or release the returned allocation;
+- the bounded pool reuses only an exact-length returned buffer; non-bucket publication sizes remain full-span and never
+  route through a subview-copy helper;
 - returning one target object from two session factories throws before the second Wasm session allocation;
 - a factory throw invalidates its control; a newly returned target is claimed before Wasm allocation and disposed exactly
   once if later construction fails, while a reused target is rejected without disposing the first session's live target;
@@ -1093,6 +1217,8 @@ Each step is one coherent commit and remains green before the next.
   while cache hits and authenticated fetch keys transfer no payload bytes;
 - worker `error`, `messageerror`, exit, and session disposal deterministically settle pending publication without a retry
   or timer; late success cannot advance a disposed session;
+- transfer backpressure returns a typed rejection with the cursor unchanged; oversize and transfer/correlation defects
+  reject the publish call, and none retries automatically;
 - synchronous WebGPU acceptance does not await an error scope; a later device/validation fault enters the documented lost
   path and requests a checkpoint without corrupting an unrelated session;
 - root Paragraph creation, measurement, disposal, and service recreation prove the target-less path; measurement never
@@ -1103,6 +1229,8 @@ Each step is one coherent commit and remains green before the next.
 - one engine-reported result-capacity growth reserves the exact size and republishes before any cursor exists; a second
   sizing failure throws and no renderer rejection is retried;
 - explicit disposal is idempotent and ordered;
+- one stale checkpoint control cannot interrupt device-loss fan-out to live siblings; the integration defect is reported
+  only after the remaining controls are signaled;
 - no package-, runtime-, host-, React-, or renderer-scoped lookup cache retains Font backing after its final explicit lease,
   while every live runtime, host, stack, and device lease retains exactly the backing state it needs.
 
@@ -1117,8 +1245,13 @@ Each step is one coherent commit and remains green before the next.
 - disposed runtime/host/session churn returns registrations, caches, and device leases to baseline;
 - hot unchanged and incremental shaping/render-plan benchmarks remain within the existing noise envelope;
 - WebGPU/Three lab benchmarks retain draw count, visible-pixel, idle-submit, CPU-submit, and GPU-time gates;
+- size entries are rewritten around stable feature scenarios rather than historical export homes: portable root
+  application use, `/core` integrator use, each built-in runtime technique, Three, and root-plus-core combined. The
+  pre-migration equivalents are measured before changing entries, and moving a name from root to `/core` cannot reset the
+  comparable combined or feature baseline;
 - Wasm, renderer-neutral, and complete Three package-size gates are measured. Correct code is reviewed and the recorded
-  ceiling is updated when a justified ownership implementation exceeds it.
+  ceiling is updated when a justified ownership implementation exceeds it; no baseline is silently replaced by a
+  different import graph.
 
 ## Documentation and migration acceptance
 
@@ -1196,6 +1329,26 @@ implementable. Each finding was checked against the cited source before this cor
 
 The same Opus session must review the next committed target. Implementation starts only after every new blocker is either
 fixed in the contract or rejected with source evidence.
+
+The resumed Opus High pass reviewed exact commit `904063b67fd9e5e015a7b888d24508b680464973` under session
+`d6c50b1b-f6c5-429a-ab2f-7f245e3faaef`. It confirmed ten prior findings closed and found three local blockers plus seven
+medium inventory/documentation gaps. Their source-validated disposition is:
+
+| Finding | Disposition | Correction |
+| --- | --- | --- |
+| Full-span exact copy contradicted the power-of-two/best-fit transfer pool | Accepted | Adapt the existing bounded pool to exact-length buckets; full-span ownership, one copy, return validation, and stable-size reuse now agree. |
+| `installPolicy(PolicyProgram)` could not express maintained multi-program policies; capability selection and limits disappeared | Accepted | Install a full `PolicyDescriptor`; session creation receives one descriptor-member capability object and maximum limits, while core owns the D-281 wire selection. |
+| Bare `FontBytesInput` could not distinguish a baked GLB from source bytes | Accepted | Widen existing source/baked object discriminants to byte inputs; bare byte sniffing is forbidden. |
+| Root text options falsely claimed flow/inline coverage and omitted `order`/`rasterPixelRatio` | Accepted | Add the live fields and explicit ID-free `/core` flow/exclusion/inline forms with opaque host bindings. |
+| Export moves made size-entry graphs incomparable | Accepted | Migrate size entries and gate stable feature graphs plus the combined root/core graph against pre-migration equivalents. |
+| Entry inventory put current Paragraph at root and omitted dying LoadedFont helpers | Accepted | Record the actual `/core` origin, move Paragraph application types to root, and withdraw five runtime-bound helper exports. |
+| Host options/errors were unnamed | Accepted | Declare host options and session/transport errors in the normative surface. |
+| FontLibrary options dropped loader/registry capabilities | Accepted | Classify and retain base URL, development, runtime bake, diagnostics/warnings, and resource bounds under the library owner. |
+| Transfer-pool failure outcomes had no call-bound result | Accepted | Backpressure rejects acceptance without advancing; oversize and transport defects reject the publish call; no retry or second copy occurs. |
+| Report extracted `candidate.acquirePayload` unbound | Accepted | Use an owning closure in the worked target example. |
+| Redundant token union and post-disposal checkpoint fan-out | Not blockers | The token union may simplify during implementation; loss fan-out must continue across a stale-control defect and report it after signaling live siblings. |
+
+The corrected commit receives one bounded follow-up verification before implementation begins.
 
 No compatibility adapter may keep both ownership models alive. The migration may stage private implementation pieces, but
 the published package changes from the old surface to the new surface atomically.

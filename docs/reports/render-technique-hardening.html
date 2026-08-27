@@ -500,6 +500,8 @@
       </tbody>
     </table></div>
 
+    <p class="callout"><strong>Follow-up contract corrections.</strong> The worker pool now reuses only exact-byte-length returned allocations, preserving both a full-span candidate and one plan copy. <code>host.installPolicy()</code> consumes a complete multi-program <code>PolicyDescriptor</code>; session construction selects one descriptor-owned capability object and validated limits, while core owns numeric selection IDs. Supplied font bytes always retain an explicit <code>baked</code> or <code>source</code> discriminant. Size gates compare stable feature graphs and a combined root/core graph, so moving exports cannot reset the baseline.</p>
+
     <h3>Recommended public ownership shape</h3>
     <p>Load the portable font before a runtime exists. Attach the integrator-only host to a runtime owner, bind the font through leases, and bind one renderer-owned target to each session. Canvas and GPU objects stay behind the target.</p>
     <p class="callout"><strong>Root remains the useful application barrel.</strong> Portable names such as <code>Font</code>, <code>FontStack</code>, <code>defineFont</code>, <code>loadFont</code>, <code>txt</code>, <code>span</code>, paint, layout, measurement, technique, and baker contracts remain available from <code>@pmndrs/glyph</code>. Runtime, host, session, policy, plan-reader, and renderer-implementation types live in <code>/core</code>. An integration may re-export a root type only when its own signatures use it; it does not mirror the barrel. Mutable <code>FontRegistry</code>, <code>RegisteredFont</code>/<code>RegisteredRaster</code>, runtime-bound <code>LoadedFont</code>, and raw dynamic handles leave the application surface.</p>
@@ -515,17 +517,23 @@ const host = runtime.createTextEngineHost({
   integration: 'my-renderer',
 });
 
+const rendererPolicy = {
+  capabilitySets: [rendererCapabilities],
+  programs: rendererPrograms,
+};
 const policy = host.installPolicy(rendererPolicy);
 const stack = host.bindFontStack(fontStack); // binds every Font and owns those leases
 const pool = renderer.devicePool(device);
 const session = host.createSession({
   policy,
+  capabilitySet: rendererCapabilities,
   target: (control) =&gt; renderer.createPlanTarget({
     control,              // session-owned checkpoint signal
     pool,
     canvas,
     delivery: 'borrowed',
   }),
+  limits: rendererLimits,
   requestCapacity: SESSION_REQUEST_BYTES,
   resultCapacity: SESSION_RESULT_BYTES,
   textCapacity: SESSION_TEXT_BYTES,
@@ -545,7 +553,7 @@ policy.dispose();
 host.dispose();
 runtime.dispose();</code></pre>
     <p>This removes runtime ownership from Font, and removes IDs and revision arithmetic from the public integration path without changing the compact numeric wire format. The raw frame compiler becomes package-internal test/fuzz infrastructure; a worker uses <code>AsyncPlanTarget</code> and returns its plan buffer with the commit answer to the same target-bound session.</p>
-    <p class="callout"><strong>Zero-copy is the default.</strong> <code>PlanTarget</code> consumes the borrowed A/B publication and makes <code>publish()</code> synchronous. Only <code>AsyncPlanTarget</code> receives one exact-range standalone copy and returns a Promise. That buffer is transferred—not cloned—to the worker and returned with acceptance. Before the async call, the session resolves every referenced portable payload; canonical Font backing is never detached. The host infers the session return type from the target factory and rejects target reuse before allocating Wasm state.</p>
+    <p class="callout"><strong>Zero-copy is the default.</strong> <code>PlanTarget</code> consumes the borrowed A/B publication and makes <code>publish()</code> synchronous. Only <code>AsyncPlanTarget</code> receives one exact-range standalone copy and returns a Promise. The bounded transfer pool reuses only exact-byte-length returned allocations, so the candidate always spans its complete backing and no oversized subview helper can create a second copy. That buffer is transferred—not cloned—to the worker and returned with acceptance. Before the async call, the session resolves every referenced portable payload; canonical Font backing is never detached. The host infers the session return type from the target factory and rejects target reuse before allocating Wasm state.</p>
 
     <h3>What the renderer's target actually does</h3>
 <pre><code>// Renderer-owned target; illustrative target API.
@@ -560,7 +568,7 @@ function createPlanTarget({ control, pool, canvas }) {
       // candidate.origin namespaces mutable session buffers.
       // Font payload identity pools immutable resources across sessions.
       const pending = pool.prepare(candidate, {
-        acquirePayload: candidate.acquirePayload,
+        acquirePayload: (referenceId) =&gt; candidate.acquirePayload(referenceId),
       });
 
       try {

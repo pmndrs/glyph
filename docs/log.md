@@ -9,7 +9,9 @@
   `createParagraph()` over a private measurement service, preserves existing `FontInput`/`FontToken`/`defineFont`, reuses
   the bounded transfer pool, and prevents canonical Font backing from entering a transfer list. The root remains the
   canonical barrel for portable application/provider names; runtime-driving names live only in `/core`, and integrations
-  re-export only signature-required root types.
+  re-export only signature-required root types. Follow-up review aligned the pool with full-span ownership by requiring
+  exact-length reuse, changed policy installation to consume a complete descriptor with session-owned capability/limit
+  selection, restored explicit baked-byte loading, and made package-size scenarios stable across entry-point moves.
 
 - **Moved runtime construction to the integrator surface** — Runtime-independent root `loadFont()` means applications no
   longer encounter `TextRuntime`. The accepted plan moves runtime and host construction to `/core` and uses
