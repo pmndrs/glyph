@@ -11,6 +11,7 @@ import {
 } from '../../dist/core.js';
 import { RenderWireIdentityRegistry } from '../../dist/core/render-policy.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
+import { immutableTestFont } from '../support/immutable-font.mjs';
 
 const COLORS = defineRasterResourceId('test/colors');
 const MESH = defineRasterResourceId('test/mesh');
@@ -52,7 +53,7 @@ function schemaFor(value) {
 }
 
 function loaded(value, glyphCount = 2) {
-  return { technique: value, font: { glyphCount }, data: {} };
+  return immutableTestFont(value, {}, glyphCount);
 }
 
 function validCompile(compiler, colorBytes = new Uint8Array([1, 2, 3, 4])) {
@@ -143,6 +144,33 @@ test('the same string ID cannot substitute a different technique data witness', 
     () => compileRasterFont(loaded(second), new RenderWireIdentityRegistry()),
     /does not match the registered program/,
   );
+});
+
+test('font compilation accepts only live package fonts and exposes a constrained reader', () => {
+  const value = technique('test.plan-authentic-font');
+  let reader;
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      reader = compiler.font;
+      assert.deepEqual(Object.keys(reader).sort(), ['data', 'glyphCount', 'technique']);
+      assert.equal(reader.technique, value);
+      assert.equal(reader.glyphCount, 3);
+      return validCompile(compiler);
+    },
+  });
+
+  assert.throws(
+    () => compileRasterFont({ technique: value, disposed: false }, new RenderWireIdentityRegistry()),
+    /not created by this package/,
+  );
+  const font = loaded(value, 3);
+  assert.ok(compileRasterFont(font, new RenderWireIdentityRegistry()));
+  assert.throws(() => reader.data, /no longer active/);
+  font.dispose();
+  assert.throws(() => compileRasterFont(font, new RenderWireIdentityRegistry()), /disposed/);
 });
 
 test('font compilation owns binding metadata and normalizes retained payloads', () => {

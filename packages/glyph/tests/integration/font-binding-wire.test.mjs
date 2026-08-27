@@ -9,13 +9,14 @@ import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateMsdfArtifact } from '../../dist/bakers/msdf-validator.js';
 import { validateSlugArtifact } from '../../dist/bakers/slug-validator.js';
-import { loadedFontBindingBytes } from '../../dist/core/font-binding.js';
+import { fontBindingBytes } from '../../dist/core/font-binding.js';
 import { bitmap, bitmapDescriptor } from '../../dist/raster/bitmap-technique.js';
 import { msdf, msdfDescriptor } from '../../dist/raster/msdf.js';
 import { slug, slugDescriptor } from '../../dist/raster/slug-technique.js';
 import { defineRasterResourceId } from '../../dist/raster-technique.js';
 import { techniqueProof } from '../../scripts/support/render-technique-proof.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
+import { immutableTestFont } from '../support/immutable-font.mjs';
 
 const fixtureRoot = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 
@@ -23,7 +24,7 @@ test('production first-party bindings preserve every proven field-major raster l
   const abi = textShaperAbi;
   for (const name of ['bitmap', 'mtsdf', 'slug']) {
     const { core, raster, loaded } = await fixture(name);
-    const actual = loadedFontBindingBytes(loaded);
+    const actual = fontBindingBytes(loaded);
     const expected = techniqueProof(abi, name, raster).bindingBytes;
     const strikeRows = core.glyphCount * (name === 'bitmap' ? raster.strikes.length : 1);
     for (const [table, rows] of [
@@ -72,7 +73,7 @@ async function fixture(name) {
         })),
       })),
     };
-    return { core, raster, loaded: { font: core, technique: bitmap, data } };
+    return { core, raster, loaded: immutableTestFont(bitmap, data, core.glyphCount) };
   }
   if (name === 'mtsdf') {
     const raster = await validateMsdfArtifact(bytes, { ...context, descriptor: msdfDescriptor() });
@@ -90,7 +91,7 @@ async function fixture(name) {
       records: raster.records,
       pages: raster.pages,
     };
-    return { core, raster, loaded: { font: core, technique: msdf, data } };
+    return { core, raster, loaded: immutableTestFont(msdf, data, core.glyphCount) };
   }
   const raster = await validateSlugArtifact(bytes, { ...context, descriptor: slugDescriptor() });
   const extension = raster.document.extensions.PMNDRS_font_slug;
@@ -112,7 +113,7 @@ async function fixture(name) {
       referenceBytes: page.references.bytes.slice(),
     })),
   };
-  return { core, raster, loaded: { font: core, technique: slug, data } };
+  return { core, raster, loaded: immutableTestFont(slug, data, core.glyphCount) };
 }
 
 function resourceCount(bytes, abi) {

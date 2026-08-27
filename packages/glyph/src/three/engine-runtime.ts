@@ -5,8 +5,8 @@ import { slug } from '../raster/slug-technique.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { observeTextRuntimeDispose, type TextRuntime } from '../text-runtime.js';
 import {
+  compileLoadedRasterFont,
   compileRenderPolicy,
-  compileRasterFont,
   id,
   observeLoadedFontDispose,
   resolveRasterPlanProgram,
@@ -326,7 +326,7 @@ export class ThreeTextEngineCoordinator {
     ) {
       throw new TypeError(`Three has no registered renderer variant for portable technique "${font.technique.id}"`);
     }
-    const compiled = compileRasterFont(font, this.host.wireIdentities);
+    const compiled = compileLoadedRasterFont(font, this.host.wireIdentities);
     if (compiled === undefined) throw new Error(`portable raster plan program "${font.technique.id}" did not compile`);
     const resourceNames = new Map<string, string>();
     const singletonResources = new Map<string, PortableResource>();

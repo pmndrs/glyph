@@ -1,4 +1,5 @@
-import type { LoadedFont } from '../loaded-font.js';
+import type { Font } from '../font.js';
+import { immutableFontResources, type LoadedFont } from '../loaded-font.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { isRasterTechnique, type AnyRasterTechnique, type RasterResourceId } from '../raster-technique.js';
 import { compileFontBinding, emptyFontBindingTable, fontBindingResources, schemaFieldTable } from './font-binding.js';
@@ -90,7 +91,7 @@ export interface RasterPlanProgramFontCompiler<
   Technique extends AnyRasterTechnique,
   Schema extends AnyTechniqueSchema,
 > {
-  readonly font: LoadedFont<Technique>;
+  readonly font: RasterPlanFont<Technique>;
   readonly compile: (binding: RasterFontBinding<Schema['binding']>) => CompiledRasterFont;
   /**
    * Retain one immutable portable payload under a schema-declared resource name
@@ -103,6 +104,13 @@ export interface RasterPlanProgramFontCompiler<
     key: RasterResourceId,
     resource: ResourcePayload<SchemaResources<Schema>[Name]>,
   ) => void;
+}
+
+/** Technique data exposed only while its registered portable font compiler is active. */
+export interface RasterPlanFont<Technique extends AnyRasterTechnique> {
+  readonly technique: Technique;
+  readonly glyphCount: number;
+  readonly data: import('../raster-technique.js').RasterDataOf<Technique>;
 }
 
 /** Portable technique data shared by every engine that consumes a raster plan. */
@@ -179,7 +187,7 @@ type ErasedProgram = RasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>;
 const programs = new Map<string, ErasedProgram>();
 const registeredSources = new WeakMap<object, ErasedProgram>();
 const compiledRasterFonts = new WeakSet<object>();
-const compiledFonts = new WeakMap<LoadedFont<AnyRasterTechnique>, CompiledRasterFont>();
+const compiledFonts = new WeakMap<object, CompiledRasterFont>();
 const MISSING_RESOURCE = 0xffff_ffff;
 
 /** Register one portable technique program by its technique id. */
@@ -283,18 +291,37 @@ export function resolveRasterPlanProgram(id: string): ErasedProgram | undefined 
   return programs.get(id);
 }
 
-/** Compile a loaded font through the registered portable program, if it has one. */
+/** Compile an immutable font through the registered portable program, if it has one. */
 export function compileRasterFont(
+  font: Font<AnyRasterTechnique>,
+  identities: RenderWireIdentityRegistry,
+): CompiledRasterFont | undefined {
+  const fontResources = immutableFontResources(font);
+  return compileRasterFontSource(font, font.technique, fontResources.font.glyphCount, fontResources.data, identities);
+}
+
+/** @internal Temporary bridge while first-party integrations migrate from runtime-bound fonts. */
+export function compileLoadedRasterFont(
   font: LoadedFont<AnyRasterTechnique>,
   identities: RenderWireIdentityRegistry,
 ): CompiledRasterFont | undefined {
-  const program = programs.get(font.technique.id);
+  if (font.disposed) throw new TypeError('cannot compile a disposed loaded font');
+  return compileRasterFontSource(font, font.technique, font.font.glyphCount, font.data, identities);
+}
+
+function compileRasterFontSource(
+  cacheKey: object,
+  technique: AnyRasterTechnique,
+  glyphCount: number,
+  data: unknown,
+  identities: RenderWireIdentityRegistry,
+): CompiledRasterFont | undefined {
+  const program = programs.get(technique.id);
   if (program === undefined) return undefined;
-  if (font.technique !== program.technique) {
-    throw new TypeError(`loaded font technique does not match the registered program for "${font.technique.id}"`);
+  if (technique !== program.technique) {
+    throw new TypeError(`font technique does not match the registered program for "${technique.id}"`);
   }
-  if (font.disposed === true) throw new Error('cannot compile a disposed font');
-  const cached = compiledFonts.get(font);
+  const cached = compiledFonts.get(cacheKey);
   if (cached !== undefined) {
     identities.techniqueId(program.technique);
     for (const key of cached.resources.keys()) identities.resourceId(key);
@@ -314,14 +341,27 @@ export function compileRasterFont(
   const compiler = Object.freeze({
     get font() {
       assertActive();
-      return font;
+      return Object.freeze({
+        get technique() {
+          assertActive();
+          return technique;
+        },
+        get glyphCount() {
+          assertActive();
+          return glyphCount;
+        },
+        get data() {
+          assertActive();
+          return data;
+        },
+      });
     },
     compile(input: RasterFontBinding<TechniqueBindingDeclaration>) {
       assertActive();
       try {
         if (compileStarted) throw new Error('raster plan font compiler already attempted a binding');
         compileStarted = true;
-        const result = compileFont(program, font.font.glyphCount, identities, resources, declaredResources, input);
+        const result = compileFont(program, glyphCount, identities, resources, declaredResources, input);
         compiled = result;
         compiledRasterFonts.add(result);
         return result;
@@ -372,7 +412,7 @@ export function compileRasterFont(
   if (compiled === undefined || returned !== compiled || !compiledRasterFonts.has(compiled)) {
     throw new Error('raster plan compileFont must return the result of compiler.compile');
   }
-  compiledFonts.set(font, compiled);
+  compiledFonts.set(cacheKey, compiled);
   return compiled;
 }
 

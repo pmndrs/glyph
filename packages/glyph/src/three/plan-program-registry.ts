@@ -2,7 +2,7 @@ import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/
 
 import { textShaperAbi } from '../core.js';
 import {
-  compileRasterFont,
+  compileLoadedRasterFont,
   createRasterPolicyProgram,
   RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
@@ -328,7 +328,7 @@ function compileProgram(
       if (font.technique.id !== program.technique.id) {
         throw new TypeError('Three raster plan program received an incompatible loaded font');
       }
-      const compiled = compileRasterFont(font, bindingIdentities);
+      const compiled = compileLoadedRasterFont(font, bindingIdentities);
       if (compiled === undefined)
         throw new Error(`no portable raster plan program is registered for "${font.technique.id}"`);
       return compiled;

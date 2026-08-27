@@ -64,7 +64,7 @@ export {
   compileFontBinding,
   schemaFieldTable,
   emptyFontBindingTable,
-  loadedFontBindingBytes,
+  fontBindingBytes,
   fontBindingResources,
   type BindingResource,
   type FontBindingDescriptor,
@@ -83,6 +83,8 @@ export {
   type RasterPolicyProgramOptions,
   type RasterPolicySystem,
 } from './core/raster-plan-program.js';
+/** @internal Compatibility bridge removed with runtime-bound fonts. */
+export { compileLoadedRasterFont } from './core/raster-plan-program.js';
 export {
   compileRenderPolicy,
   createProgram,

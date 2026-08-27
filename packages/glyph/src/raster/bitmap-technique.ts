@@ -294,7 +294,7 @@ export const bitmapPlanProgram: RasterPlanProgram<typeof bitmap, typeof bitmapSc
   },
   compileFont(compiler) {
     const data = compiler.font.data;
-    const glyphCount = compiler.font.font.glyphCount;
+    const glyphCount = compiler.font.glyphCount;
     const views = data.strikes.map((strike) => new DataView(strike.records.buffer, strike.records.byteOffset));
     const dimensions = data.strikes.map((strike, strikeIndex) => {
       const key = strike.pages[0]?.resource;
