@@ -142,10 +142,10 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
     glyphs.page[glyph] = u16(selectedPage, 'Slug page index');
     glyphs.horizontalBands[glyph] = u16(view.u32('horizontalBands', glyph), 'Slug horizontal bands');
     glyphs.verticalBands[glyph] = u16(view.u32('verticalBands', glyph), 'Slug vertical bands');
-    glyphs.curveBase[glyph] = view.u32('curveStart', glyph);
-    glyphs.horizontalHeaderBase[glyph] = view.u32('headerStart', glyph);
-    glyphs.verticalHeaderBase[glyph] = view.u32('referenceStart', glyph);
-    glyphs.referenceBase[glyph] = view.u32('bandStart', glyph);
+    glyphs.curveBase[glyph] = view.u32('curveBase', glyph);
+    glyphs.horizontalHeaderBase[glyph] = view.u32('horizontalHeaderBase', glyph);
+    glyphs.verticalHeaderBase[glyph] = view.u32('verticalHeaderBase', glyph);
+    glyphs.referenceBase[glyph] = view.u32('referenceBase', glyph);
   }
   return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }

@@ -151,10 +151,14 @@ const title = session.createText({
 });
 
 title.update({ text: 'Hello, Glyph' });
+const metrics = title.layout();
+const positioned = title.glyphs();
 const acceptance = session.publish();
 if (!acceptance.accepted) reportRendererError(acceptance.error);</code></pre>
 
 <code>update()</code> validates and records desired state. Shaping is deferred until <code>layout()</code>, <code>glyphs()</code>, or <code>publish()</code> needs a current answer. <code>publish()</code> compiles a candidate, calls the target, and advances the accepted revision and retirement fence only after target commit.
+
+<code>layout()</code> and <code>glyphs()</code> are synchronous, on-demand queries over current desired state. A cache miss may incur font/layout or glyph-positioning lookup work; <code>glyphs()</code> returns copied caller-owned columns. Neither query publishes a renderer plan.
 
 Use another session for an independently accepted scene, viewport, render target, or worker. Sessions may share their host's policies and font bindings but never share revision cursors.
 

@@ -392,7 +392,7 @@ export const slugSchema: TechniqueSchema<
     readonly tableStarts: {
       readonly id: typeof SLUG_TABLE_STARTS_BUFFER_ID;
       readonly scalar: 'u32';
-      readonly lanes: readonly ['curveStart', 'headerStart', 'referenceStart', 'bandStart'];
+      readonly lanes: readonly ['curveBase', 'horizontalHeaderBase', 'verticalHeaderBase', 'referenceBase'];
     };
     readonly bandCounts: {
       readonly id: typeof SLUG_BAND_COUNTS_BUFFER_ID;
@@ -412,10 +412,10 @@ export const slugSchema: TechniqueSchema<
       'bandOffsetY',
     ];
     readonly u32: readonly [
-      'curveStart',
-      'headerStart',
-      'referenceStart',
-      'bandStart',
+      'curveBase',
+      'horizontalHeaderBase',
+      'verticalHeaderBase',
+      'referenceBase',
       'horizontalBands',
       'verticalBands',
     ];
@@ -438,7 +438,14 @@ export const slugSchema: TechniqueSchema<
   glyphOrigin: { buffer: 'rect' },
   binding: {
     f32: ['bearingX', 'bearingY', 'width', 'height', 'bandScaleX', 'bandScaleY', 'bandOffsetX', 'bandOffsetY'],
-    u32: ['curveStart', 'headerStart', 'referenceStart', 'bandStart', 'horizontalBands', 'verticalBands'],
+    u32: [
+      'curveBase',
+      'horizontalHeaderBase',
+      'verticalHeaderBase',
+      'referenceBase',
+      'horizontalBands',
+      'verticalBands',
+    ],
   },
   buffers: {
     rect: { id: SLUG_RECT_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
@@ -457,7 +464,7 @@ export const slugSchema: TechniqueSchema<
     tableStarts: {
       id: SLUG_TABLE_STARTS_BUFFER_ID,
       scalar: 'u32',
-      lanes: ['curveStart', 'headerStart', 'referenceStart', 'bandStart'],
+      lanes: ['curveBase', 'horizontalHeaderBase', 'verticalHeaderBase', 'referenceBase'],
     },
     bandCounts: {
       id: SLUG_BAND_COUNTS_BUFFER_ID,
@@ -495,10 +502,10 @@ export const slugPlanProgram: RasterPlanProgram<typeof slug, typeof slugSchema> 
       bandScaleY,
       bandOffsetX,
       bandOffsetY,
-      curveStart,
-      headerStart,
-      referenceStart,
-      bandStart,
+      curveBase,
+      horizontalHeaderBase,
+      verticalHeaderBase,
+      referenceBase,
       horizontalBands,
       verticalBands,
     } = p.binding;
@@ -515,7 +522,7 @@ export const slugPlanProgram: RasterPlanProgram<typeof slug, typeof slugSchema> 
       bandTransform: [bandScaleX, bandScaleY, bandOffsetX, bandOffsetY],
       color: [color.red, color.green, color.blue, color.alpha],
       inverseFontSize: [inverseFontSize, zeroF32, zeroF32, zeroF32],
-      tableStarts: [curveStart, headerStart, referenceStart, bandStart],
+      tableStarts: [curveBase, horizontalHeaderBase, verticalHeaderBase, referenceBase],
       bandCounts: [horizontalBands, verticalBands, zeroU32, zeroU32],
     });
   },
@@ -550,10 +557,10 @@ export const slugPlanProgram: RasterPlanProgram<typeof slug, typeof slugSchema> 
         bandOffsetY: (row) => -normalized(row, 2) * bandScaleY(row),
       },
       u32: {
-        curveStart: (row) => view.getUint32(record(row) + 16, true),
-        headerStart: (row) => view.getUint32(record(row) + 24, true),
-        referenceStart: (row) => view.getUint32(record(row) + 28, true),
-        bandStart: (row) => view.getUint32(record(row) + 32, true),
+        curveBase: (row) => view.getUint32(record(row) + 16, true),
+        horizontalHeaderBase: (row) => view.getUint32(record(row) + 24, true),
+        verticalHeaderBase: (row) => view.getUint32(record(row) + 28, true),
+        referenceBase: (row) => view.getUint32(record(row) + 32, true),
         horizontalBands,
         verticalBands,
       },

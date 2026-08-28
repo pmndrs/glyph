@@ -163,6 +163,15 @@ test('first-party techniques declare where their glyph origin lives', () => {
   assert.equal(slugSchema.glyphOrigin?.buffer, 'rect');
 });
 
+test('Slug table-start lanes name the table each value indexes', () => {
+  assert.deepEqual(slugSchema.buffers.tableStarts.lanes, [
+    'curveBase',
+    'horizontalHeaderBase',
+    'verticalHeaderBase',
+    'referenceBase',
+  ]);
+});
+
 test('schemaPolicyBuffers derives the wire buffer list from each authoritative schema', () => {
   for (const schema of [bitmapSchema, msdfSchema, slugSchema]) {
     assert.deepEqual(
