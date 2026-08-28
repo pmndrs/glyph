@@ -67,6 +67,14 @@ describe('conformance flat Slug CPU reference', () => {
     expect(() => renderFlatSlugCpuReference(ragged, specimenLayout(), { width: 4, height: 4 })).toThrow(
       'glyph columns must have equal lengths',
     );
+
+    const uncounted = {
+      ...data,
+      glyphs: { ...data.glyphs, curveBase: new DataView(new ArrayBuffer(4)) as unknown as Uint32Array },
+    };
+    expect(() => renderFlatSlugCpuReference(uncounted, specimenLayout(), { width: 4, height: 4 })).toThrow(
+      'glyph columns must have equal lengths',
+    );
   });
 });
 
