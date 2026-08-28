@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { f32, id, policyProgram } from '../../dist/core.js';
+import { f32, policyProgram, id } from '../../dist/core.js';
 
 const OPTIONS = { scope: 'glyph', bindingF32: ['bearingX'] };
-const BUFFER = { id: id('buffer', 'test.policy-provenance/position'), scalar: 'f32', lanes: ['x', 'y'] };
+const BUFFER = { id: id.buffer('test.policy-provenance/position'), scalar: 'f32', lanes: ['x', 'y'] };
 
 /**
  * A value loaded from one program's input table means nothing inside another

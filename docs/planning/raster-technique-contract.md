@@ -84,8 +84,8 @@ The rule this plan adopts: **you can reason about the software path by path, and
 point.** A subpath owns its concepts, exports its contracts, and consumes other subpaths only through their public
 entries — enforced by lint (D-249) and measured by per-subpath size entries.
 
-| subpath                   | owns                                                                   | must never know                           |
-| ------------------------- | ---------------------------------------------------------------------- | ----------------------------------------- |
+| subpath                    | owns                                                                   | must never know                           |
+| -------------------------- | ---------------------------------------------------------------------- | ----------------------------------------- |
 | `@pmndrs/glyph`            | fonts, text, styles, runtime                                           | GPUs, shaders, plans                      |
 | `@pmndrs/glyph/core`       | engine host, frame wire, plan view, policy authoring, binding compiler | any renderer, any shader language         |
 | `@pmndrs/glyph/raster/<t>` | **the technique declaration** (this plan's construct)                  | Three, TSL node graphs                    |
@@ -112,12 +112,12 @@ export const bitmapSchema = defineTechniqueSchema({
     u32: ['page'],
   },
   buffers: {
-    origin: { id: id('buffer', 'pmndrs.bitmap/origin'), scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
-    size: { id: id('buffer', 'pmndrs.bitmap/size'), scalar: 'f32', lanes: ['width', 'height'] },
-    uvOrigin: { id: id('buffer', 'pmndrs.bitmap/uv-origin'), scalar: 'f32', lanes: ['u', 'v'] },
-    uvSize: { id: id('buffer', 'pmndrs.bitmap/uv-size'), scalar: 'f32', lanes: ['uSpan', 'vSpan'] },
-    color: { id: id('buffer', 'pmndrs.bitmap/color'), scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
-    page: { id: id('buffer', 'pmndrs.bitmap/page'), scalar: 'u32', lanes: ['page'] },
+    origin: { id: id.buffer('pmndrs.bitmap/origin'), scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
+    size: { id: id.buffer('pmndrs.bitmap/size'), scalar: 'f32', lanes: ['width', 'height'] },
+    uvOrigin: { id: id.buffer('pmndrs.bitmap/uv-origin'), scalar: 'f32', lanes: ['u', 'v'] },
+    uvSize: { id: id.buffer('pmndrs.bitmap/uv-size'), scalar: 'f32', lanes: ['uSpan', 'vSpan'] },
+    color: { id: id.buffer('pmndrs.bitmap/color'), scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    page: { id: id.buffer('pmndrs.bitmap/page'), scalar: 'u32', lanes: ['page'] },
   },
   resources: { atlas: { kind: 'texture-array', format: 'r8unorm' } },
 });

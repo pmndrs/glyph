@@ -26,16 +26,17 @@ import {
   type TechniqueResourceDeclaration,
 } from './technique-schema.js';
 import {
+  assertRenderIdFactory,
   createProgram,
   normalizePolicyCapabilitySet,
-  RenderWireIdentityRegistry,
+  RenderIdScope,
   type PolicyAllocationMode,
   type PolicyBuffer,
   type PolicyCapabilitySet,
   type PolicyProgram,
   type PolicyTransformMode,
+  type RenderIdFactory,
 } from './render-policy.js';
-
 /** System buffers are owned by the engine and are deliberately absent from a technique schema. */
 export type RasterPolicySystem = PolicyProgramSystemBuffers;
 
@@ -158,7 +159,7 @@ export interface RasterPolicyProgramOptions {
   readonly capabilitySet: PolicyCapabilitySet;
   readonly transformMode: PolicyTransformMode;
   readonly allocationMode: PolicyAllocationMode;
-  readonly identityRegistry?: RenderWireIdentityRegistry;
+  readonly ids?: RenderIdFactory;
 }
 
 /** Assemble one engine PolicyProgram from a registered renderer-neutral plan. */
@@ -171,6 +172,9 @@ export function createRasterPolicyProgram<Technique extends AnyRasterTechnique, 
     throw new TypeError('raster policy assembly needs the registered portable plan program');
   }
   if (!isRecord(options)) throw new TypeError('raster policy assembly options need an object');
+  if ('identityRegistry' in options) {
+    throw new TypeError('raster policy identityRegistry was renamed to ids');
+  }
   if (typeof options.namespace !== 'string' || options.namespace.length === 0) {
     throw new TypeError('raster policy namespace must be a nonempty string');
   }
@@ -186,14 +190,14 @@ export function createRasterPolicyProgram<Technique extends AnyRasterTechnique, 
   if (options.allocationMode !== 'ordered' && options.allocationMode !== 'stable') {
     throw new TypeError('raster policy allocation mode must be "ordered" or "stable"');
   }
-  if (options.identityRegistry !== undefined && !(options.identityRegistry instanceof RenderWireIdentityRegistry)) {
-    throw new TypeError('raster policy identityRegistry must be a RenderWireIdentityRegistry');
+  if (options.ids !== undefined) {
+    assertRenderIdFactory(options.ids, 'raster policy ids');
   }
   const system = normalizePolicyProgramSystemBuffers(program.schema.buffers, options.system);
   const capabilitySet = normalizePolicyCapabilitySet(options.capabilitySet, 'raster policy capability set');
-  const identities = options.identityRegistry ?? new RenderWireIdentityRegistry();
-  const compiledTechniqueId = identities.techniqueId(program.technique);
-  const compiledProgramId = identities.programId(program.technique, options.namespace, options.programName);
+  const ids = options.ids ?? new RenderIdScope();
+  const compiledTechniqueId = ids.technique(program.technique);
+  const compiledProgramId = ids.program(program.technique, options.namespace, options.programName);
   const body = program.policyBody(system, capabilitySet);
   assertTechniquePolicyBody(body, program.schema, system);
   return Object.freeze({
@@ -322,15 +326,16 @@ export function resolveRasterPlanProgram(id: string): ErasedProgram | undefined 
 /** Compile an immutable font through the registered portable program, if it has one. */
 export function compileRasterFont(
   font: Font<AnyRasterTechnique>,
-  identities: RenderWireIdentityRegistry,
+  ids: RenderIdFactory = new RenderIdScope(),
 ): CompiledRasterFont | undefined {
+  assertRenderIdFactory(ids, 'raster font compiler ids');
   const fontResources = immutableFontResources(font);
   return compileRasterFontSource(
     immutableFontVariantIdentity(font),
     font.technique,
     fontResources.font.glyphCount,
     fontResources.data,
-    identities,
+    ids,
   );
 }
 
@@ -341,7 +346,7 @@ export function compileRasterFont(
 export function readCompiledRasterFont<Technique extends AnyRasterTechnique, Schema extends AnyTechniqueSchema>(
   compiled: CompiledRasterFont,
   program: RasterPlanProgram<Technique, Schema> & { readonly technique: Technique; readonly schema: Schema },
-  identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
+  ids: RenderIdFactory = new RenderIdScope(),
 ): CompiledRasterFontView<Schema> {
   if (!compiledRasterFonts.has(compiled)) throw new TypeError('compiled raster font was not created by this package');
   if (!isRecord(program) || !isRasterTechnique(program.technique)) {
@@ -350,9 +355,7 @@ export function readCompiledRasterFont<Technique extends AnyRasterTechnique, Sch
   if (programs.get(program.technique.id) !== (program as unknown as ErasedProgram)) {
     throw new TypeError('compiled raster font reader needs the registered portable plan program');
   }
-  if (!(identities instanceof RenderWireIdentityRegistry)) {
-    throw new TypeError('compiled raster font reader identities must be a RenderWireIdentityRegistry');
-  }
+  assertRenderIdFactory(ids, 'compiled raster font reader ids');
   const bytes = compiled.binding;
   const request = textShaperAbi.layouts.fontBindingRequest;
   const strikeLayout = textShaperAbi.layouts.fontBindingStrike;
@@ -367,7 +370,7 @@ export function readCompiledRasterFont<Technique extends AnyRasterTechnique, Sch
   if (view.getUint32(request.byteLength, true) !== bytes.byteLength) {
     throw new TypeError('compiled raster font binding byte length is invalid');
   }
-  const techniqueId = identities.techniqueId(program.technique);
+  const techniqueId = ids.technique(program.technique);
   if (view.getUint32(request.techniqueId, true) !== techniqueId) {
     throw new TypeError('compiled raster font binding technique does not match its program');
   }
@@ -406,7 +409,7 @@ export function readCompiledRasterFont<Technique extends AnyRasterTechnique, Sch
   );
   const resourcesById = new Map<number, CompiledRasterFontResource>();
   for (const [key, payload] of compiled.resources) {
-    const id = identities.resourceId(key);
+    const id = ids.resource(key);
     if (resourcesById.has(id)) throw new TypeError(`compiled raster font has duplicate resource identity ${id}`);
     resourcesById.set(id, Object.freeze({ key, payload }));
   }
@@ -502,7 +505,7 @@ function compileRasterFontSource(
   technique: AnyRasterTechnique,
   glyphCount: number,
   data: unknown,
-  identities: RenderWireIdentityRegistry,
+  identities: RenderIdFactory,
 ): CompiledRasterFont | undefined {
   const program = programs.get(technique.id);
   if (program === undefined) return undefined;
@@ -511,8 +514,8 @@ function compileRasterFontSource(
   }
   const cached = compiledFonts.get(cacheKey);
   if (cached !== undefined) {
-    identities.techniqueId(program.technique);
-    for (const key of cached.resources.keys()) identities.resourceId(key);
+    identities.technique(program.technique);
+    for (const key of cached.resources.keys()) identities.resource(key);
     return cached;
   }
   let compiled: CompiledRasterFont | undefined;
@@ -607,7 +610,7 @@ function compileRasterFontSource(
 function compileFont(
   program: ErasedProgram,
   glyphCount: number,
-  identities: RenderWireIdentityRegistry,
+  identities: RenderIdFactory,
   retained: Map<RasterResourceId, PortableResource>,
   declaredResources: Map<string, RasterResourceId[]>,
   input: RasterFontBinding<TechniqueBindingDeclaration>,
@@ -647,7 +650,7 @@ function compileFont(
   const emptyStrike = emptyFontBindingTable(strikeRows);
   const emptyResource = emptyFontBindingTable(resourceRows);
   const binding = compileFontBinding({
-    techniqueId: identities.techniqueId(program.technique),
+    techniqueId: identities.technique(program.technique),
     programVariant: program.programVariant ?? 0,
     glyphCount,
     strikes,

@@ -27,6 +27,7 @@ interface NamedGlyphId {
 const namedIds = new Map<string, NamedGlyphId>();
 
 const glyphIdKinds = new Set([
+  'generic',
   'buffer',
   'policy',
   'font-binding',
@@ -43,6 +44,7 @@ const glyphIdKinds = new Set([
 ] as const);
 
 export type GlyphIdKind =
+  | 'generic'
   | 'buffer'
   | 'policy'
   | 'font-binding'
@@ -60,6 +62,8 @@ declare const glyphIdBrand: unique symbol;
 
 /** A deterministic, domain-branded wire identity. Buffer IDs occupy the non-reserved u16 range; others are u32. */
 export type GlyphId<Kind extends GlyphIdKind = GlyphIdKind> = number & { readonly [glyphIdBrand]: Kind };
+/** A deterministic domainless identity. Prefer a domain method on `id` when a protocol field has one. */
+export type Id = GlyphId<'generic'>;
 export type PolicyBufferId = GlyphId<'buffer'>;
 export type PolicyHandle = GlyphId<'policy'>;
 export type FontBindingHandle = GlyphId<'font-binding'>;
@@ -75,13 +79,22 @@ export type ExclusionId = GlyphId<'exclusion'>;
 export type InlineObjectId = GlyphId<'inline-object'>;
 /** Host-local resource identity carried by inline objects and renderer callbacks. */
 export type ResourceHandle = GlyphId<'resource'>;
-export type GlyphIdFactory = <const Kind extends GlyphIdKind>(kind: Kind, name: string) => GlyphId<Kind>;
-
-/** Derive a branded module-lifetime ID from a domain and stable name, rejecting collisions. */
-export function id<const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> {
-  const derived = deriveGlyphId(kind, name);
-  registerGlyphId(derived, true);
-  return derived.value;
+/** @internal Backend-scoped identity minting with explicit wire domains. */
+export interface BackendIdFactory {
+  <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind>;
+  buffer(name: string): PolicyBufferId;
+  policy(name: string): PolicyHandle;
+  fontBinding(name: string): FontBindingHandle;
+  fontStack(name: string): FontStackHandle;
+  retainedPlan(name: string): RetainedPlanHandle;
+  material(name: string): MaterialHandle;
+  paragraph(name: string): ParagraphId;
+  style(name: string): StyleId;
+  flowThread(name: string): FlowThreadId;
+  region(name: string): RegionId;
+  exclusion(name: string): ExclusionId;
+  inlineObject(name: string): InlineObjectId;
+  resourceHandle(name: string): ResourceHandle;
 }
 
 /** @internal Runtime-owned ID provenance released with its host. */
@@ -142,6 +155,31 @@ export class GlyphIdScope {
   }
 }
 
+/** @internal Bind the method-based ID vocabulary to one backend-owned provenance scope. */
+export function createBackendIdFactory(scope: GlyphIdScope, assertActive: () => void): BackendIdFactory {
+  const mint = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
+    assertActive();
+    return scope.id(kind, name);
+  };
+  return Object.freeze(
+    Object.assign(mint, {
+      buffer: (name: string) => mint('buffer', name),
+      policy: (name: string) => mint('policy', name),
+      fontBinding: (name: string) => mint('font-binding', name),
+      fontStack: (name: string) => mint('font-stack', name),
+      retainedPlan: (name: string) => mint('retained-plan', name),
+      material: (name: string) => mint('material', name),
+      paragraph: (name: string) => mint('paragraph', name),
+      style: (name: string) => mint('style', name),
+      flowThread: (name: string) => mint('flow-thread', name),
+      region: (name: string) => mint('region', name),
+      exclusion: (name: string) => mint('exclusion', name),
+      inlineObject: (name: string) => mint('inline-object', name),
+      resourceHandle: (name: string) => mint('resource', name),
+    }),
+  );
+}
+
 /** @internal Reject values that did not come from this module instance's ID utility. */
 export function assertGlyphId<const Kind extends GlyphIdKind>(
   value: unknown,
@@ -149,13 +187,35 @@ export function assertGlyphId<const Kind extends GlyphIdKind>(
   label: string,
 ): GlyphId<Kind> {
   if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > MAX_U32) {
-    throw new TypeError(`${label} must come from id('${kind}', name) or host.id('${kind}', name)`);
+    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a backend-managed ID`);
   }
   if (!namedIds.has(`${kind}:${value as number}`)) {
-    throw new TypeError(`${label} must come from id('${kind}', name) or host.id('${kind}', name)`);
+    throw new TypeError(`${label} must come from ${glyphIdFactoryLabel(kind)} or a backend-managed ID`);
   }
   return value as GlyphId<Kind>;
 }
+
+function glyphIdFactoryLabel(kind: GlyphIdKind): string {
+  if (kind === 'generic') return 'id(name)';
+  const method = glyphIdMethods[kind];
+  return `id.${method}(name)`;
+}
+
+const glyphIdMethods = {
+  buffer: 'buffer',
+  policy: 'policy',
+  'font-binding': 'fontBinding',
+  'font-stack': 'fontStack',
+  'retained-plan': 'retainedPlan',
+  material: 'material',
+  paragraph: 'paragraph',
+  style: 'style',
+  'flow-thread': 'flowThread',
+  region: 'region',
+  exclusion: 'exclusion',
+  'inline-object': 'inlineObject',
+  resource: 'resourceHandle',
+} as const satisfies Partial<Record<GlyphIdKind, string>>;
 
 interface DerivedGlyphId<Kind extends GlyphIdKind> {
   readonly canonical: string;
@@ -338,7 +398,7 @@ export type RenderProgramId = number & { readonly [programWireIdBrand]: true };
 export type RenderResourceId = number & { readonly [resourceWireIdBrand]: true };
 
 /** Deterministic UTF-8 FNV-1a mapping used by both policy and font-binding compilers. */
-export function renderWireId(identity: string): number {
+function renderWireId(identity: string): number {
   if (typeof identity !== 'string' || identity.length === 0) {
     throw new TypeError('render identity must be a nonempty string');
   }
@@ -348,9 +408,25 @@ export function renderWireId(identity: string): number {
   return hash;
 }
 
-/** Runtime-scoped collision proof for every string identity lowered into the shared u32 wire namespace. */
-export class RenderWireIdentityRegistry {
+/** Collision-checked render identities used while assembling policy programs and font bindings. */
+export interface RenderIdFactory {
+  /** Derive the stable wire identity of one portable raster technique. */
+  technique(technique: AnyRasterTechnique | string): RenderTechniqueId;
+  /** Derive one renderer program identity, optionally naming a variant. */
+  program(technique: AnyRasterTechnique | string, namespace: string, variant?: string): RenderProgramId;
+  /** Derive the wire identity of one authored baked-resource key. */
+  resource(resource: RasterResourceId): RenderResourceId;
+}
+
+const renderIdFactories = new WeakSet<object>();
+
+/** @internal Runtime-scoped collision proof for identities lowered into the shared u32 render namespace. */
+export class RenderIdScope implements RenderIdFactory {
   readonly #strings = new Map<number, string>();
+
+  constructor() {
+    renderIdFactories.add(this);
+  }
 
   idFor(identity: string): number {
     const wireId = renderWireId(identity);
@@ -362,37 +438,94 @@ export class RenderWireIdentityRegistry {
     return wireId;
   }
 
-  techniqueId(technique: AnyRasterTechnique | string): RenderTechniqueId {
+  technique(technique: AnyRasterTechnique | string): RenderTechniqueId {
     return this.idFor(rasterTechniqueIdentity(technique)) as RenderTechniqueId;
   }
 
-  programId(technique: AnyRasterTechnique | string, namespace: string, variant = 'default'): RenderProgramId {
+  program(technique: AnyRasterTechnique | string, namespace: string, variant = 'default'): RenderProgramId {
     return this.idFor(programWireKey(technique, namespace, variant)) as RenderProgramId;
   }
 
-  resourceId(resource: RasterResourceId): RenderResourceId {
+  resource(resource: RasterResourceId): RenderResourceId {
     return this.idFor(resource) as RenderResourceId;
   }
 }
 
-/** Derive one pure technique ID from its portable identity. */
-export function techniqueId(technique: AnyRasterTechnique | string): RenderTechniqueId {
-  return renderWireId(rasterTechniqueIdentity(technique)) as RenderTechniqueId;
+/** @internal Reject render-ID providers not created or supplied by this module instance. */
+export function assertRenderIdFactory(value: unknown, label: string): RenderIdFactory {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null || !renderIdFactories.has(value)) {
+    throw new TypeError(`${label} must be the id utility or a backend-supplied RenderIdFactory`);
+  }
+  return value as RenderIdFactory;
 }
 
-/** Derive one pure resource ID from its stable authored key. */
-export function resourceId(resource: RasterResourceId): RenderResourceId {
-  return renderWireId(resource) as RenderResourceId;
+/** Callable authored-ID utility with a distinct method for every protocol domain. */
+export interface IdFactory extends RenderIdFactory {
+  /** Derive a domainless identity when no protocol-specific brand applies. */
+  (name: string): Id;
+  /** Derive an authored policy-buffer identity. */
+  buffer(name: string): PolicyBufferId;
+  /** Derive an authored render-policy identity. */
+  policy(name: string): PolicyHandle;
+  /** Derive an authored font-binding identity. */
+  fontBinding(name: string): FontBindingHandle;
+  /** Derive an authored font-stack identity. */
+  fontStack(name: string): FontStackHandle;
+  /** Derive an authored retained-plan identity. */
+  retainedPlan(name: string): RetainedPlanHandle;
+  /** Derive an authored renderer-material identity. */
+  material(name: string): MaterialHandle;
+  /** Derive an authored paragraph identity. */
+  paragraph(name: string): ParagraphId;
+  /** Derive an authored paragraph-style identity. */
+  style(name: string): StyleId;
+  /** Derive an authored flow-thread identity. */
+  flowThread(name: string): FlowThreadId;
+  /** Derive an authored layout-region identity. */
+  region(name: string): RegionId;
+  /** Derive an authored exclusion identity. */
+  exclusion(name: string): ExclusionId;
+  /** Derive an authored inline-object identity. */
+  inlineObject(name: string): InlineObjectId;
+  /** Derive a live backend resource handle; baked resource keys use `id.resource`. */
+  resourceHandle(name: string): ResourceHandle;
 }
 
-/** Derive one pure program ID without exposing its canonical wire key. */
-export function programId(
-  technique: AnyRasterTechnique | string,
-  namespace: string,
-  variant = 'default',
-): RenderProgramId {
-  return renderWireId(programWireKey(technique, namespace, variant)) as RenderProgramId;
-}
+const permanentRenderIds = new RenderIdScope();
+const permanentGlyphId = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
+  const derived = deriveGlyphId(kind, name);
+  registerGlyphId(derived, true);
+  return derived.value;
+};
+const authoredId = Object.assign(
+  function domainlessId(name: string): Id {
+    if (arguments.length !== 1) throw new TypeError('id(name) accepts exactly one stable name');
+    return permanentGlyphId('generic', name);
+  },
+  {
+    buffer: (name: string) => permanentGlyphId('buffer', name),
+    policy: (name: string) => permanentGlyphId('policy', name),
+    fontBinding: (name: string) => permanentGlyphId('font-binding', name),
+    fontStack: (name: string) => permanentGlyphId('font-stack', name),
+    retainedPlan: (name: string) => permanentGlyphId('retained-plan', name),
+    material: (name: string) => permanentGlyphId('material', name),
+    paragraph: (name: string) => permanentGlyphId('paragraph', name),
+    style: (name: string) => permanentGlyphId('style', name),
+    flowThread: (name: string) => permanentGlyphId('flow-thread', name),
+    region: (name: string) => permanentGlyphId('region', name),
+    exclusion: (name: string) => permanentGlyphId('exclusion', name),
+    inlineObject: (name: string) => permanentGlyphId('inline-object', name),
+    resourceHandle: (name: string) => permanentGlyphId('resource', name),
+    technique: (technique: AnyRasterTechnique | string) => permanentRenderIds.technique(technique),
+    program: (technique: AnyRasterTechnique | string, namespace: string, variant = 'default') =>
+      permanentRenderIds.program(technique, namespace, variant),
+    resource: (resource: RasterResourceId) => permanentRenderIds.resource(resource),
+  },
+) as IdFactory;
+renderIdFactories.add(authoredId);
+
+/** Derive a collision-checked, branded numeric ID from a stable authored name. */
+export const id: IdFactory = Object.freeze(authoredId);
 
 function programWireKey(technique: AnyRasterTechnique | string, namespace: string, variant: string): string {
   if (typeof namespace !== 'string' || namespace.length === 0) {

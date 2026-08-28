@@ -199,17 +199,17 @@ function validateMsdfPageDirectory(value: JsonValue, pageIndex: number): void {
   }
 }
 
-import { f32, id, techniqueProgram, u32, type PolicyBufferId, type RasterPlanProgram } from '../core.js';
+import { f32, techniqueProgram, u32, type PolicyBufferId, type RasterPlanProgram, id } from '../core.js';
 import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
 
-const MSDF_RECT_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.msdf/rect');
-const MSDF_UV_RECT_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.msdf/uv-rect');
-const MSDF_UV_BOUNDS_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.msdf/uv-bounds');
-const MSDF_COLOR_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.msdf/color');
-const MSDF_EFFECT_A_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.msdf/effect-a');
-const MSDF_EFFECT_B_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.msdf/effect-b');
-const MSDF_PAGE_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.msdf/page');
+const MSDF_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/rect');
+const MSDF_UV_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/uv-rect');
+const MSDF_UV_BOUNDS_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/uv-bounds');
+const MSDF_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/color');
+const MSDF_EFFECT_A_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/effect-a');
+const MSDF_EFFECT_B_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/effect-b');
+const MSDF_PAGE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.msdf/page');
 
 /**
  * The authoritative physical shape of the MSDF technique.

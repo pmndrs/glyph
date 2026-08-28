@@ -17,8 +17,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-
-import '../support/browser-globals.mjs';
 import { defineRasterTechnique } from '@pmndrs/glyph';
 import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
 import {
@@ -26,10 +24,10 @@ import {
   createGlyphEngine,
   defineTechniqueSchema,
   f32,
-  id,
   registerRasterPlanProgram,
   techniqueProgram,
   u32,
+  id,
 } from '@pmndrs/glyph/core';
 import {
   createImmutableFontBacking,
@@ -40,9 +38,9 @@ import { FontRegistry } from '../../dist/loader.js';
 
 const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
-const RECT_BUFFER_ID = id('buffer', 'test.three-plan-program/rect');
-const STABLE_GLYPH_BUFFER_ID = id('buffer', 'test.three-plan-program/system/stable-glyph-id');
-const TRANSFORM_BUFFER_ID = id('buffer', 'test.three-plan-program/system/transform-index');
+const RECT_BUFFER_ID = id.buffer('test.three-plan-program/rect');
+const STABLE_GLYPH_BUFFER_ID = id.buffer('test.three-plan-program/system/stable-glyph-id');
+const TRANSFORM_BUFFER_ID = id.buffer('test.three-plan-program/system/transform-index');
 // The coordinator is what takes the snapshot, so the lifecycle is asserted against it directly
 // rather than through a mounted scene that would only reach it incidentally.
 import { ThreeTextEngineCoordinator } from '../../dist/three/engine-coordinator.js';

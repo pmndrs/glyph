@@ -194,16 +194,16 @@ async function decodeBitmapData(font: RasterDecodeFont, raster: RasterDecodeArti
   return { strikes, ...(coverage === undefined ? {} : { coverage: coverage.bits }) };
 }
 
-import { f32, id, techniqueProgram, type PolicyBufferId, type RasterPlanProgram } from '../core.js';
+import { f32, techniqueProgram, type PolicyBufferId, type RasterPlanProgram, id } from '../core.js';
 import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
 
-const BITMAP_ORIGIN_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.bitmap/origin');
-const BITMAP_SIZE_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.bitmap/size');
-const BITMAP_UV_ORIGIN_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.bitmap/uv-origin');
-const BITMAP_UV_SIZE_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.bitmap/uv-size');
-const BITMAP_COLOR_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.bitmap/color');
-const BITMAP_PAGE_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.bitmap/page');
+const BITMAP_ORIGIN_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/origin');
+const BITMAP_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/size');
+const BITMAP_UV_ORIGIN_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/uv-origin');
+const BITMAP_UV_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/uv-size');
+const BITMAP_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/color');
+const BITMAP_PAGE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.bitmap/page');
 
 /**
  * The authoritative physical shape of the Bitmap technique: binding field order matches

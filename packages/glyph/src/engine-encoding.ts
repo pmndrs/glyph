@@ -8,7 +8,7 @@ import type {
   TextEngineRegion,
   TextEngineStyleValue,
 } from './core/frame-wire.js';
-import type { GlyphIdFactory, ParagraphId, StyleId } from './core/render-policy.js';
+import type { BackendIdFactory, ParagraphId, StyleId } from './core/render-policy.js';
 
 /**
  * The single implementation of the paragraph-to-engine encodings shared by every host:
@@ -44,7 +44,7 @@ export function normalizedColumns(contentBox: ParagraphContentBox | undefined): 
 }
 
 export function compileEngineGeometry(
-  id: GlyphIdFactory,
+  id: BackendIdFactory,
   paragraphId: ParagraphId,
   transformIndex: number,
   geometryRevision: number,
@@ -65,7 +65,7 @@ export function compileEngineGeometry(
   return {
     constraint: {
       paragraphId,
-      flowThreadId: id('flow-thread', `paragraph/${paragraphId}`),
+      flowThreadId: id.flowThread(`paragraph/${paragraphId}`),
       geometryRevision,
       width: width.size,
       height: height.size,
@@ -93,7 +93,7 @@ export function compileEngineGeometry(
       const inlineStart = column * (columnWidth + columns.gap);
       const columnInlineEnd = column === columns.count - 1 ? inlineEnd : inlineStart + columnWidth;
       return {
-        id: id('region', `paragraph/${paragraphId}/column/${column}`),
+        id: id.region(`paragraph/${paragraphId}/column/${column}`),
         geometryRevision,
         transformIndex,
         shape: 'rectangle' as const,
@@ -114,9 +114,9 @@ export function compileEngineGeometry(
   };
 }
 
-export function engineStyleId(id: GlyphIdFactory, paragraphId: ParagraphId, index: number): StyleId {
+export function engineStyleId(id: BackendIdFactory, paragraphId: ParagraphId, index: number): StyleId {
   if (!Number.isSafeInteger(index) || index < 1) throw new RangeError('style index must be a positive integer');
-  return id('style', `paragraph/${paragraphId}/style/${index}`);
+  return id.style(`paragraph/${paragraphId}/style/${index}`);
 }
 
 export function axis(value: ParagraphContentBox['width'] | undefined): {

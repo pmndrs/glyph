@@ -1,22 +1,20 @@
 import {
   createProgram,
-  id,
-  programId,
-  resourceId,
   selectPolicyCapabilitySet,
-  techniqueId,
   type PolicyCapabilitySet,
   type PolicyDescriptor,
+  id,
 } from '../../src/core/render-policy.js';
 import { compileTextEngineFrameUpdate, type TextEngineFrameUpdate } from '../../src/core/frame-wire.js';
 import type { ParagraphId, RetainedPlanHandle } from '../../src/core/render-policy.js';
 import { textShaperAbi } from '../../src/generated/text-shaper-abi.js';
 import { defineRasterResourceId } from '../../src/raster-technique.js';
 
-const technique = techniqueId('vendor.example');
-const program = programId('vendor.example', 'renderer');
-const resource = resourceId(defineRasterResourceId('vendor.example/resource'));
-const buffer = id('buffer', 'vendor.example/value');
+const technique = id.technique('vendor.example');
+const program = id.program('vendor.example', 'renderer');
+const resource = id.resource(defineRasterResourceId('vendor.example/resource'));
+const buffer = id.buffer('vendor.example/value');
+const generic = id('vendor.example/local');
 const body = {
   inputs: [],
   operations: [
@@ -58,13 +56,13 @@ createProgram(resource, program, body, buffers, 'direct', 'ordered');
 const retainedPlan: RetainedPlanHandle = buffer;
 void retainedPlan;
 
-const paragraph = id('paragraph', 'vendor.example/body');
-const style = id('style', 'vendor.example/body/root');
-const flowThread = id('flow-thread', 'vendor.example/article');
-const region = id('region', 'vendor.example/page/1');
+const paragraph = id.paragraph('vendor.example/body');
+const style = id.style('vendor.example/body/root');
+const flowThread = id.flowThread('vendor.example/article');
+const region = id.region('vendor.example/page/1');
 const frame: TextEngineFrameUpdate = {
-  retainedPlanId: id('retained-plan', 'vendor.example/scene'),
-  policyHandle: id('policy', 'vendor.example/render'),
+  retainedPlanId: id.retainedPlan('vendor.example/scene'),
+  policyHandle: id.policy('vendor.example/render'),
   expectedEngineRevision: 0,
   consumedPlanRevision: 0,
   acknowledgedPublicationGeneration: 0,
@@ -88,7 +86,7 @@ const frame: TextEngineFrameUpdate = {
       start: 0,
       end: 0,
       root: true,
-      value: { fontStackHandle: id('font-stack', 'vendor.example/body') },
+      value: { fontStackHandle: id.fontStack('vendor.example/body') },
     },
   ],
   constraints: [
@@ -144,12 +142,20 @@ compileTextEngineFrameUpdate({
   capabilitySet: selectPolicyCapabilitySet(frame.policyHandle, descriptor, capabilities),
 });
 
-// @ts-expect-error Caller-owned paragraph IDs must come from id('paragraph', name).
+// @ts-expect-error Caller-owned paragraph IDs must come from id.paragraph(name).
 const rawParagraph: ParagraphId = 1;
 void rawParagraph;
 // @ts-expect-error Identity domains cannot be interchanged.
 const wrongParagraph: ParagraphId = style;
 void wrongParagraph;
+// @ts-expect-error Domainless IDs cannot enter a paragraph protocol field.
+const genericParagraph: ParagraphId = generic;
+void genericParagraph;
+// @ts-expect-error The old kind-string API is gone; domains are methods.
+const oldIdArguments: Parameters<typeof id> = ['paragraph', 'vendor.example/body'];
+void oldIdArguments;
+// @ts-expect-error ID names are strings, never caller-authored numbers.
+id.buffer(20);
 // @ts-expect-error Frame retained-plan IDs require the retained-plan brand.
 compileTextEngineFrameUpdate({ ...frame, retainedPlanId: 1 });
 // @ts-expect-error Frame paragraph IDs require the paragraph brand.

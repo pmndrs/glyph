@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { defineTechniqueGeometryKind, defineTechniqueSchema, id, schemaPolicyBuffers } from '../../dist/core.js';
+import { defineTechniqueGeometryKind, defineTechniqueSchema, schemaPolicyBuffers, id } from '../../dist/core.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 import { msdfSchema } from '@pmndrs/glyph/raster/msdf';
 import { slugSchema } from '@pmndrs/glyph/raster/slug';
 
-const ORIGIN_BUFFER_ID = id('buffer', 'test.technique/origin');
-const FLAGS_BUFFER_ID = id('buffer', 'test.technique/flags');
-const THIN_BUFFER_ID = id('buffer', 'test.technique/thin');
+const ORIGIN_BUFFER_ID = id.buffer('test.technique/origin');
+const FLAGS_BUFFER_ID = id.buffer('test.technique/flags');
+const THIN_BUFFER_ID = id.buffer('test.technique/thin');
 
 function declaration() {
   return {

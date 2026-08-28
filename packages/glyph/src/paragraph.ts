@@ -29,12 +29,7 @@ import {
   type RetainedText,
   type RetainedTextOptions,
 } from './core/retained-plan.js';
-import {
-  id,
-  type PolicyCapabilitySet,
-  type PolicyDescriptor,
-  type RenderWireIdentityRegistry,
-} from './core/render-policy.js';
+import { type PolicyCapabilitySet, type PolicyDescriptor, type RenderIdFactory, id } from './core/render-policy.js';
 import { definePolicyBuffers, type AnyTechniqueSchema } from './core/technique-schema.js';
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -45,7 +40,7 @@ const PLAN_TEXT_UNITS = 256;
 const MEASUREMENT_PROGRAM_NAMESPACE = 'paragraph-measurement';
 /** Unconstrained, at-most, and exact probes cover the normal layout negotiation cycle. */
 const MAX_CACHED_PARAGRAPH_CONSTRAINTS = 3;
-const MEASUREMENT_STABLE_GLYPH_BUFFER_ID = id('buffer', 'glyph-paragraph/stable-glyph');
+const MEASUREMENT_STABLE_GLYPH_BUFFER_ID = id.buffer('glyph-paragraph/stable-glyph');
 
 const measurementSystemBuffers = definePolicyBuffers({
   stableGlyphId: {
@@ -455,7 +450,7 @@ function disposeBindings(bindings: readonly BackendFontStackBinding[]): void {
 }
 
 function measurementPolicyDescriptor(
-  identities: RenderWireIdentityRegistry,
+  identities: RenderIdFactory,
   desired: ResolvedParagraphState<AnyRasterTechnique>,
 ): PolicyDescriptor {
   const programs = uniqueTechniques(desired).map((technique) => {
@@ -469,7 +464,7 @@ function measurementPolicyDescriptor(
       capabilitySet: measurementCapabilities,
       transformMode: 'direct',
       allocationMode: 'ordered',
-      identityRegistry: identities,
+      ids: identities,
     });
   });
   return { capabilitySets: [measurementCapabilities], programs };

@@ -7,9 +7,7 @@ import { bakeFont } from '@pmndrs/glyph/bake';
 import {
   createGlyphEngine,
   defineTechniqueSchema,
-  programId,
   registerRasterPlanProgram,
-  techniqueId,
   type AsyncPlanTarget,
   type PolicyBufferId,
   type RenderPlanBufferId,
@@ -23,6 +21,7 @@ import {
   type TextEngineRetirementRecord,
   type PlanTarget,
   type PlanTargetControl,
+  id as glyphId,
 } from '@pmndrs/glyph/core';
 import { afterEach, expect, test } from 'vitest';
 
@@ -540,8 +539,8 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
   });
   device.createResource(portableResourceId(42), 'glyphGeometry', glyphExampleIndexedQuadGeometry);
   const bufferRecords = bindShaderContract(device);
-  const techniqueWireId = techniqueId(shader.variant.techniqueId);
-  const programWireId = programId(shader.variant.techniqueId, shader.programNamespace, shader.programName);
+  const techniqueWireId = glyphId.technique(shader.variant.techniqueId);
+  const programWireId = glyphId.program(shader.variant.techniqueId, shader.programNamespace, shader.programName);
 
   const drawList: ExampleDrawList = {
     engineRevision: 1,
@@ -711,7 +710,7 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
   const first = bufferRecord(1, 1, 16, 1);
   const second = bufferRecord(2, 1, 16, 2);
   expect(() =>
-    device.applyBufferPlan([{ ...first, programId: programId('foreign-program', 'example-renderer') }], [], []),
+    device.applyBufferPlan([{ ...first, programId: glyphId.program('foreign-program', 'example-renderer') }], [], []),
   ).toThrow('belongs to a different renderer program');
   expect(() => device.applyBufferPlan([], [], [retirement('invalid' as TextEngineRetirementKind, 1, 1)])).toThrow(
     'unsupported text-engine retirement kind',
@@ -796,7 +795,7 @@ function portableGeometry(marker: number) {
 }
 
 function bindShaderContract(device: RecordingExampleRendererDevice): readonly TextEngineBufferRecord[] {
-  const selectedProgramId = programId(
+  const selectedProgramId = glyphId.program(
     device.shader.variant.techniqueId,
     device.shader.programNamespace,
     device.shader.programName,
@@ -829,7 +828,7 @@ function bufferRecord(id: number, generation: number, byteLength: number, buffer
   return {
     id: planBufferId(id),
     generation,
-    programId: programId(
+    programId: glyphId.program(
       exampleRendererShader.variant.techniqueId,
       exampleRendererShader.programNamespace,
       exampleRendererShader.programName,

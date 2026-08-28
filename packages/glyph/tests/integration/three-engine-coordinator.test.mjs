@@ -6,12 +6,12 @@ import * as THREE from 'three/webgpu';
 
 import {
   defineTechniqueSchema,
-  id,
   registerRasterPlanProgram,
   techniqueProgram,
   TextEngineBackpressureError,
   RetainedPlanDisposedError,
   TextEngineTransportError,
+  id,
 } from '../../dist/core.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import {
@@ -29,7 +29,7 @@ import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 
 const fixtureUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const ORIGIN_BUFFER_ID = id('buffer', 'test.three-supplied-geometry/origin');
+const ORIGIN_BUFFER_ID = id.buffer('test.three-supplied-geometry/origin');
 
 const suppliedGeometryTechnique = defineRasterTechnique({
   id: 'test.three-supplied-geometry',
@@ -219,7 +219,7 @@ test('equal portable resource identities share ownership and conflicts reject at
   try {
     originalBinding = renderer.coordinator.bindFontStack(original);
     equalBinding = renderer.coordinator.bindFontStack(equal);
-    const reference = renderer.coordinator.identities.resourceId(resource);
+    const reference = renderer.coordinator.identities.resource(resource);
     const retained = renderer.coordinator.backend._acquirePortablePayload(reference);
     try {
       assert.equal(retained.techniqueId, suppliedGeometryTechnique.id);

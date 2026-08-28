@@ -4,8 +4,6 @@ import {
   createRasterPolicyProgram,
   definePolicyBuffers,
   defineTechniqueSchema,
-  id,
-  RenderWireIdentityRegistry,
   schemaPolicyBuffers,
   techniqueProgram,
   type PolicyAllocationMode,
@@ -16,18 +14,20 @@ import {
   type PolicyProgram,
   type PolicyTransformMode,
   type RenderProgramId,
+  type RenderIdFactory,
   type RenderTechniqueId,
   type AnyTechniqueSchema,
   type TechniqueSchema,
 } from '../core.js';
+import { assertRenderIdFactory, RenderIdScope, id } from '../core/render-policy.js';
 import { bitmapPlanProgram } from '../raster/bitmap-technique.js';
 import { msdfPlanProgram } from '../raster/msdf.js';
 import { slugPlanProgram } from '../raster/slug-technique.js';
 
-const THREE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/stable-glyph');
-const THREE_TRANSFORM_INDEX_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/transform-index');
-const DECORATION_RECT_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/decoration/rect');
-const DECORATION_PACKED_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/decoration/packed');
+const THREE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id.buffer('glyph-three/stable-glyph');
+const THREE_TRANSFORM_INDEX_BUFFER_ID: PolicyBufferId = id.buffer('glyph-three/transform-index');
+const DECORATION_RECT_BUFFER_ID: PolicyBufferId = id.buffer('glyph-three/decoration/rect');
+const DECORATION_PACKED_BUFFER_ID: PolicyBufferId = id.buffer('glyph-three/decoration/packed');
 
 /** Buffers the Three policy itself owns, shared by every program in it. */
 export const threeSystemBuffers: {
@@ -92,26 +92,22 @@ const THREE_PROGRAM_NAMESPACE = 'three';
 
 /** Compiler-mapped Three policy covering every first-party raster technique in one registration. */
 export function threeRenderPolicyBytes(
-  identityRegistry: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
+  ids: RenderIdFactory = new RenderIdScope(),
   transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
   additionalPrograms: readonly PolicyProgram[] = [],
   allocationMode: ThreeAllocationMode = 'ordered',
 ): Uint8Array {
-  return compileRenderPolicy(
-    threeRenderPolicyDescriptor(identityRegistry, transformMode, additionalPrograms, allocationMode),
-  );
+  return compileRenderPolicy(threeRenderPolicyDescriptor(ids, transformMode, additionalPrograms, allocationMode));
 }
 
 /** @internal Assemble the descriptor retained by the Three adapter alongside its compiled wire policy. */
 export function threeRenderPolicyDescriptor(
-  identityRegistry: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
+  ids: RenderIdFactory = new RenderIdScope(),
   transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
   additionalPrograms: readonly PolicyProgram[] = [],
   allocationMode: ThreeAllocationMode = 'ordered',
 ): PolicyDescriptor {
-  if (!(identityRegistry instanceof RenderWireIdentityRegistry)) {
-    throw new TypeError('Three render policy identityRegistry must be a RenderWireIdentityRegistry');
-  }
+  assertRenderIdFactory(ids, 'Three render policy ids');
   if (!Array.isArray(additionalPrograms)) throw new TypeError('Three additional policy programs need an array');
   if (allocationMode !== 'ordered' && allocationMode !== 'stable') {
     throw new TypeError('Three allocation mode must be "ordered" or "stable"');
@@ -125,8 +121,8 @@ export function threeRenderPolicyDescriptor(
       throw new TypeError(`Three ${name} transform mode must be "direct" or "indexed"`);
     }
   }
-  const DECORATION_TECHNIQUE_ID = identityRegistry.techniqueId(decorationSchema.technique);
-  const DECORATION_PROGRAM_ID = identityRegistry.programId(decorationSchema.technique, THREE_PROGRAM_NAMESPACE);
+  const DECORATION_TECHNIQUE_ID = ids.technique(decorationSchema.technique);
+  const DECORATION_PROGRAM_ID = ids.program(decorationSchema.technique, THREE_PROGRAM_NAMESPACE);
   const capabilitySet = threePolicyCapabilitySet();
   const programs: PolicyProgram[] = [
     createRasterPolicyProgram(bitmapPlanProgram, {
@@ -135,7 +131,7 @@ export function threeRenderPolicyDescriptor(
       capabilitySet,
       transformMode: modes.bitmap,
       allocationMode,
-      identityRegistry,
+      ids,
     }),
     createRasterPolicyProgram(msdfPlanProgram, {
       namespace: THREE_PROGRAM_NAMESPACE,
@@ -143,7 +139,7 @@ export function threeRenderPolicyDescriptor(
       capabilitySet,
       transformMode: modes.msdf,
       allocationMode,
-      identityRegistry,
+      ids,
     }),
     createRasterPolicyProgram(slugPlanProgram, {
       namespace: THREE_PROGRAM_NAMESPACE,
@@ -151,7 +147,7 @@ export function threeRenderPolicyDescriptor(
       capabilitySet,
       transformMode: modes.slug,
       allocationMode,
-      identityRegistry,
+      ids,
     }),
     decorationProgram(DECORATION_TECHNIQUE_ID, DECORATION_PROGRAM_ID, modes.bitmap, allocationMode),
     ...additionalPrograms,

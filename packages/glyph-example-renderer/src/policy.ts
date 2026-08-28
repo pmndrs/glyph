@@ -8,15 +8,15 @@ import {
   compileRenderPolicy,
   createRasterPolicyProgram,
   definePolicyBuffers,
-  id,
-  RenderWireIdentityRegistry,
+  type RenderIdFactory,
   type PolicyBufferId,
   type PolicyCapabilitySet,
   type PolicyDescriptor,
+  id,
 } from '@pmndrs/glyph/core';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 
-const EXAMPLE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-example-renderer/stable-glyph');
+const EXAMPLE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-renderer/stable-glyph');
 
 /** The policy's own system lane: glyph identity that survives reflow within a paragraph. */
 export const exampleSystemBuffers: {
@@ -33,16 +33,12 @@ export const exampleSystemBuffers: {
 export const EXAMPLE_RENDERER_PROGRAM_NAMESPACE = 'example-renderer';
 
 /** Assemble the portable glyph-example body with this engine's own policy numbers. */
-export function exampleRenderPolicyBytes(
-  identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
-): Uint8Array {
-  return compileRenderPolicy(exampleRenderPolicyDescriptor(identities));
+export function exampleRenderPolicyBytes(ids?: RenderIdFactory): Uint8Array {
+  return compileRenderPolicy(exampleRenderPolicyDescriptor(ids));
 }
 
 /** Builds this renderer's policy descriptor from portable technique metadata. */
-export function exampleRenderPolicyDescriptor(
-  identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
-): PolicyDescriptor {
+export function exampleRenderPolicyDescriptor(ids?: RenderIdFactory): PolicyDescriptor {
   const capabilitySet = exampleCapabilitySet;
   return Object.freeze({
     capabilitySets: [capabilitySet],
@@ -53,7 +49,7 @@ export function exampleRenderPolicyDescriptor(
         capabilitySet,
         transformMode: 'direct',
         allocationMode: 'ordered',
-        identityRegistry: identities,
+        ...(ids === undefined ? {} : { ids }),
       }),
     ],
   });

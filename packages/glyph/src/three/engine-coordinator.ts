@@ -13,7 +13,7 @@ import {
   type PolicyBufferId,
   type PolicyCapabilitySet,
   type PortableResource,
-  type RenderWireIdentityRegistry,
+  type RenderIdFactory,
   type TextEngineBufferBinding,
   type GlyphBackend,
 } from '../core.js';
@@ -59,7 +59,7 @@ export class ThreeTextEngineCoordinator {
   readonly policy: BackendPolicy;
   readonly capabilitySet: PolicyCapabilitySet;
   /** @internal Collision-checked static identities captured while installing this renderer policy. */
-  readonly identities: RenderWireIdentityRegistry;
+  readonly identities: RenderIdFactory;
   readonly #planPrograms: ReadonlyMap<string, CompiledThreeRasterPlanProgram>;
   readonly #policyBufferIds: ReadonlyMap<number, ReadonlyMap<number, PolicyBufferId>>;
   readonly #singleFontStacks = new WeakMap<
@@ -83,7 +83,7 @@ export class ThreeTextEngineCoordinator {
     const backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph/three' });
     let snapshot = false;
     let policy: BackendPolicy | undefined;
-    let identities: RenderWireIdentityRegistry | undefined;
+    let identities: RenderIdFactory | undefined;
     let planPrograms: readonly CompiledThreeRasterPlanProgram[] | undefined;
     let descriptor: ReturnType<typeof threeRenderPolicyDescriptor> | undefined;
     try {

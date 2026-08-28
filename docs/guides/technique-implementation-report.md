@@ -144,17 +144,17 @@ export const exampleSchema = defineTechniqueSchema({
   binding: { f32: ['inset', 'red', 'green', 'blue', 'alpha'] },
   buffers: {
     origin: {
-      id: id('buffer', 'studio.example/origin'),
+      id: id.buffer('studio.example/origin'),
       scalar: 'f32',
       lanes: ['left', 'top'],
     },
     size: {
-      id: id('buffer', 'studio.example/size'),
+      id: id.buffer('studio.example/size'),
       scalar: 'f32',
       lanes: ['widthX', 'heightY'],
     },
     color: {
-      id: id('buffer', 'studio.example/color'),
+      id: id.buffer('studio.example/color'),
       scalar: 'f32',
       lanes: ['red', 'green', 'blue', 'alpha'],
     },
@@ -292,7 +292,7 @@ The renderer parameterizes the portable body with its system lanes and supported
 ```ts
 const system = definePolicyBuffers({
   stableGlyphId: {
-    id: id('buffer', 'studio.renderer/stable-glyph'),
+    id: id.buffer('studio.renderer/stable-glyph'),
     scalar: 'u32',
     lanes: ['stableGlyphId'],
   },
@@ -311,7 +311,7 @@ const capabilitySet = {
   wholeBufferThresholdBasisPoints: 7_500,
 } as const;
 
-const policyFactory = (identities: RenderWireIdentityRegistry) => ({
+const policyFactory = (ids: RenderIdFactory) => ({
   capabilitySets: [capabilitySet],
   programs: [
     createRasterPolicyProgram(examplePlan, {
@@ -320,7 +320,7 @@ const policyFactory = (identities: RenderWireIdentityRegistry) => ({
       capabilitySet,
       transformMode: 'direct',
       allocationMode: 'ordered',
-      identityRegistry: identities,
+      ids,
     }),
   ],
 });
@@ -377,7 +377,13 @@ const glyphEngine = await createGlyphEngine();
 const backend = glyphEngine.createBackend({ integration: 'studio.renderer' });
 const policy = backend.installPolicy(policyFactory);
 const stack = backend.bindFontStack(createFontStack(font));
-const retainedPlan = backend.createRetainedPlan({ policy, target: () => planTarget, capabilitySet, limits, ...capacities });
+const retainedPlan = backend.createRetainedPlan({
+  policy,
+  target: () => planTarget,
+  capabilitySet,
+  limits,
+  ...capacities,
+});
 const text = retainedPlan.createText({ font: stack, text: 'Portable', style: { fontSize: 64 } });
 
 text.update({ text: 'Portable renderer' });

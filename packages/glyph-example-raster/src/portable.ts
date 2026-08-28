@@ -1,19 +1,19 @@
 import {
   defineTechniqueSchema,
   f32,
-  id,
   techniqueProgram,
   type PolicyBufferId,
   type RasterPlanProgram,
   type TechniqueSchema,
+  id,
 } from '@pmndrs/glyph/core';
 
 import { glyphExampleIndexedQuadGeometry, glyphExampleSuppliedGeometryDeclaration } from './geometry-fixture.js';
 import { glyphExample } from './raster.js';
 
-const GLYPH_EXAMPLE_ORIGIN_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-example-raster/origin');
-const GLYPH_EXAMPLE_SIZE_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-example-raster/size');
-const GLYPH_EXAMPLE_COLOR_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-example-raster/color');
+const GLYPH_EXAMPLE_ORIGIN_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-raster/origin');
+const GLYPH_EXAMPLE_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-raster/size');
+const GLYPH_EXAMPLE_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('glyph-example-raster/color');
 
 export const glyphExampleSchema: TechniqueSchema<
   {

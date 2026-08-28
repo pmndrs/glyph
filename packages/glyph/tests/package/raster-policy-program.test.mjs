@@ -6,18 +6,16 @@ import {
   createRasterPolicyProgram,
   definePolicyBuffers,
   defineTechniqueSchema,
-  id,
-  programId,
   registerRasterPlanProgram,
-  techniqueId,
   techniqueProgram,
+  id,
 } from '../../dist/core.js';
 
 const TEST_PROGRAM_VARIANT = 3;
 const TEST_PROGRAM_NAMESPACE = 'test-renderer';
-const ORIGIN_BUFFER_ID = id('buffer', 'test.raster-policy-program/origin');
-const SYSTEM_BUFFER_ID = id('buffer', 'test.raster-policy-program/system/stable-glyph-id');
-const OTHER_SYSTEM_BUFFER_ID = id('buffer', 'test.raster-policy-program/system/other-stable-glyph-id');
+const ORIGIN_BUFFER_ID = id.buffer('test.raster-policy-program/origin');
+const SYSTEM_BUFFER_ID = id.buffer('test.raster-policy-program/system/stable-glyph-id');
+const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.raster-policy-program/system/other-stable-glyph-id');
 
 const technique = defineRasterTechnique({
   id: 'test.raster-policy-program',
@@ -119,7 +117,8 @@ test('portable policy assembly rejects host inputs before invoking technique cod
     [{ ...valid, allocationMode: 'recycling' }, /allocation mode/],
     [{ ...valid, system: {} }, /stableGlyphId system buffer/],
     [{ ...valid, capabilitySet: { ...capabilitySet, capabilities: [] } }, /supports no allocation strategy/],
-    [{ ...valid, identityRegistry: {} }, /identityRegistry/],
+    [{ ...valid, ids: {} }, /ids/],
+    [{ ...valid, identityRegistry: id }, /renamed to ids/],
   ];
   for (const [options, message] of invalid) {
     assert.throws(() => createRasterPolicyProgram(portable, options), message);
@@ -135,8 +134,8 @@ test('portable policy assembly owns host identities, system buffers, and variant
     transformMode: 'direct',
     allocationMode: 'ordered',
   });
-  assert.equal(compiled.techniqueId, techniqueId(technique));
-  assert.equal(compiled.programId, programId(technique, TEST_PROGRAM_NAMESPACE));
+  assert.equal(compiled.techniqueId, id.technique(technique));
+  assert.equal(compiled.programId, id.program(technique, TEST_PROGRAM_NAMESPACE));
   assert.deepEqual(compiled.capabilitySet, capabilitySet);
   assert.equal(Object.isFrozen(compiled.capabilitySet), true);
   assert.equal(compiled.variant, TEST_PROGRAM_VARIANT);

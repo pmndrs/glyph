@@ -2,23 +2,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { compileTextEngineFrameUpdate, validateTextEngineFrameRecords } from '../../dist/core/frame-wire.js';
-import { id, selectPolicyCapabilitySet } from '../../dist/core/render-policy.js';
+import { selectPolicyCapabilitySet, id } from '../../dist/core/render-policy.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
-const RETAINED_PLAN_ID = id('retained-plan', 'engine-frame-wire/retainedPlan');
-const POLICY_ID = id('policy', 'engine-frame-wire/policy');
-const OTHER_POLICY_ID = id('policy', 'engine-frame-wire/other-policy');
-const FONT_STACK_ID = id('font-stack', 'engine-frame-wire/font-stack');
-const PARAGRAPH_ID = id('paragraph', 'engine-frame-wire/paragraph');
-const OTHER_PARAGRAPH_ID = id('paragraph', 'engine-frame-wire/other-paragraph');
-const STYLE_ID = id('style', 'engine-frame-wire/style');
-const FLOW_THREAD_ID = id('flow-thread', 'engine-frame-wire/flow-thread');
-const REGION_ID = id('region', 'engine-frame-wire/region');
-const EXCLUSION_ID = id('exclusion', 'engine-frame-wire/exclusion');
-const INLINE_OBJECT_ID = id('inline-object', 'engine-frame-wire/inline-object');
-const MATERIAL_ID = id('material', 'engine-frame-wire/material');
-const RESOURCE_ID = id('resource', 'engine-frame-wire/resource');
+const RETAINED_PLAN_ID = id.retainedPlan('engine-frame-wire/retainedPlan');
+const POLICY_ID = id.policy('engine-frame-wire/policy');
+const OTHER_POLICY_ID = id.policy('engine-frame-wire/other-policy');
+const FONT_STACK_ID = id.fontStack('engine-frame-wire/font-stack');
+const PARAGRAPH_ID = id.paragraph('engine-frame-wire/paragraph');
+const OTHER_PARAGRAPH_ID = id.paragraph('engine-frame-wire/other-paragraph');
+const STYLE_ID = id.style('engine-frame-wire/style');
+const FLOW_THREAD_ID = id.flowThread('engine-frame-wire/flow-thread');
+const REGION_ID = id.region('engine-frame-wire/region');
+const EXCLUSION_ID = id.exclusion('engine-frame-wire/exclusion');
+const INLINE_OBJECT_ID = id.inlineObject('engine-frame-wire/inline-object');
+const MATERIAL_ID = id.material('engine-frame-wire/material');
+const RESOURCE_ID = id.resourceHandle('engine-frame-wire/resource');
 
 test('frame compiler rejects raw and cross-domain numeric identities before allocation', () => {
   const valid = {
@@ -38,13 +38,10 @@ test('frame compiler rejects raw and cross-domain numeric identities before allo
       maxOutputBytes: 1024,
     },
   };
-  assert.throws(
-    () => compileTextEngineFrameUpdate({ ...valid, retainedPlanId: 1 }),
-    /must come from id\('retained-plan'/,
-  );
+  assert.throws(() => compileTextEngineFrameUpdate({ ...valid, retainedPlanId: 1 }), /must come from id\.retainedPlan/);
   assert.throws(
     () => compileTextEngineFrameUpdate({ ...valid, retainedPlanId: POLICY_ID }),
-    /must come from id\('retained-plan'/,
+    /must come from id\.retainedPlan/,
   );
   assert.throws(
     () => compileTextEngineFrameUpdate({ ...valid, capabilitySet: 1 }),
@@ -77,7 +74,7 @@ test('frame compiler rejects raw and cross-domain numeric identities before allo
         ...valid,
         paragraphMutations: [{ opcode: 'remove', paragraphId: 1 }],
       }),
-    /must come from id\('paragraph'/,
+    /must come from id\.paragraph/,
   );
 });
 
@@ -445,7 +442,7 @@ test('style payloads stay in per-record order when several paragraphs carry lang
   const styleMutation = (paragraphId) => ({
     opcode: 'upsert',
     paragraphId,
-    styleId: id('style', `engine-frame-wire/style/${paragraphId}`),
+    styleId: id.style(`engine-frame-wire/style/${paragraphId}`),
     cascadeOrder: 0,
     start: 0,
     end: 5,
@@ -462,7 +459,7 @@ test('style payloads stay in per-record order when several paragraphs carry lang
       rasterPixelRatio: 1,
     },
   });
-  const paragraphIds = Array.from({ length: 4 }, (_, index) => id('paragraph', `engine-frame-wire/paragraph/${index}`));
+  const paragraphIds = Array.from({ length: 4 }, (_, index) => id.paragraph(`engine-frame-wire/paragraph/${index}`));
   const bytes = compileTextEngineFrameUpdate({
     retainedPlanId: RETAINED_PLAN_ID,
     policyHandle: POLICY_ID,

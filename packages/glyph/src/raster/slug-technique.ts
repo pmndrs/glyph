@@ -347,17 +347,17 @@ function checkedBytes(left: number, right: number): number {
   return total;
 }
 
-import { f32, id, techniqueProgram, u32, type PolicyBufferId, type RasterPlanProgram } from '../core.js';
+import { f32, techniqueProgram, u32, type PolicyBufferId, type RasterPlanProgram, id } from '../core.js';
 import { registerGlyphRasterPlanProgram } from '../core/raster-plan-program.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../core/technique-schema.js';
 
-const SLUG_RECT_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/rect');
-const SLUG_PLANE_RECT_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/plane-rect');
-const SLUG_BAND_TRANSFORM_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/band-transform');
-const SLUG_COLOR_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/color');
-const SLUG_INVERSE_FONT_SIZE_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/inverse-font-size');
-const SLUG_TABLE_STARTS_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/table-starts');
-const SLUG_BAND_COUNTS_BUFFER_ID: PolicyBufferId = id('buffer', 'pmndrs.slug/band-counts');
+const SLUG_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/rect');
+const SLUG_PLANE_RECT_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/plane-rect');
+const SLUG_BAND_TRANSFORM_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/band-transform');
+const SLUG_COLOR_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/color');
+const SLUG_INVERSE_FONT_SIZE_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/inverse-font-size');
+const SLUG_TABLE_STARTS_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/table-starts');
+const SLUG_BAND_COUNTS_BUFFER_ID: PolicyBufferId = id.buffer('pmndrs.slug/band-counts');
 
 /**
  * The authoritative physical shape of the Slug technique.

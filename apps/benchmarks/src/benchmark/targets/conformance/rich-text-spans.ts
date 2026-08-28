@@ -33,8 +33,8 @@ const CONTENT_WIDTH = 700;
 const BODY_FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
 const BITMAP_COLOR_ATTRIBUTE = policyAttributeName(bitmapSchema.buffers.color.id);
-const DECORATION_RECT_ATTRIBUTE = policyAttributeName(hashId('buffer', 'glyph-three/decoration/rect'));
-const DECORATION_PACKED_ATTRIBUTE = policyAttributeName(hashId('buffer', 'glyph-three/decoration/packed'));
+const DECORATION_RECT_ATTRIBUTE = policyAttributeName(hashId.buffer('glyph-three/decoration/rect'));
+const DECORATION_PACKED_ATTRIBUTE = policyAttributeName(hashId.buffer('glyph-three/decoration/packed'));
 // Decoration gather convention (D-248): buffer 2 packs [color, flags | style << 8] per instance. The bit values are
 // the shaper ABI's `engine.decorationFlags` / `engine.decorationStyles`, pinned here because a silent renumbering
 // must fail this lane rather than shift what the probe counts.

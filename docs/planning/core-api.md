@@ -107,7 +107,7 @@ Several backends may share one engine when their policy or device lifetimes diff
 
 A renderer combines technique-owned portable policy bodies with renderer-owned system lanes and capabilities:
 
-<pre><code>const policy = backend.installPolicy((identities) =&gt; ({
+<pre><code>const policy = backend.installPolicy((ids) =&gt; ({
   capabilitySets: [capabilitySet],
   programs: [
     createRasterPolicyProgram(examplePlan, {
@@ -116,7 +116,7 @@ A renderer combines technique-owned portable policy bodies with renderer-owned s
       capabilitySet,
       transformMode: 'direct',
       allocationMode: 'ordered',
-      identityRegistry: identities,
+      ids,
     }),
   ],
 }));
@@ -201,15 +201,15 @@ Synchronous and asynchronous retained plans may coexist under one backend. The e
 
 <code>TextEngineRenderPlanView</code> validates publication framing. Integrations consume records through semantic readers:
 
-| Table | Reader | Meaning |
-| --- | --- | --- |
-| resources | <code>readTextEngineResource()</code> | Create, update, or retain a portable resource realization. |
-| buffers | <code>readTextEngineBuffer()</code> | Declare renderer storage and semantic policy binding. |
-| patches | <code>readTextEnginePatch()</code> | Allocate/resize, write, fill, copy, or retire byte ranges. |
-| primitives | <code>readTextEnginePrimitive()</code> | Map record spans to technique, resource, geometry, and order. |
-| draws | <code>readTextEngineDraw()</code> | Submit ordered program/material/transform spans. |
-| retirements | <code>readTextEngineRetirement()</code> | Release exact generations after the acknowledged fence. |
-| diagnostics | table access only | Optional telemetry; it does not define renderer behavior. |
+| Table       | Reader                                  | Meaning                                                       |
+| ----------- | --------------------------------------- | ------------------------------------------------------------- |
+| resources   | <code>readTextEngineResource()</code>   | Create, update, or retain a portable resource realization.    |
+| buffers     | <code>readTextEngineBuffer()</code>     | Declare renderer storage and semantic policy binding.         |
+| patches     | <code>readTextEnginePatch()</code>      | Allocate/resize, write, fill, copy, or retire byte ranges.    |
+| primitives  | <code>readTextEnginePrimitive()</code>  | Map record spans to technique, resource, geometry, and order. |
+| draws       | <code>readTextEngineDraw()</code>       | Submit ordered program/material/transform spans.              |
+| retirements | <code>readTextEngineRetirement()</code> | Release exact generations after the acknowledged fence.       |
+| diagnostics | table access only                       | Optional telemetry; it does not define renderer behavior.     |
 
 Readers return semantic discriminated unions and branded numeric identities. Raw shaper ABI layouts, offsets, enum ordinals, and internal handles are package-private.
 

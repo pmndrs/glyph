@@ -6,7 +6,7 @@ import { FontRegistry } from '../../dist/loader.js';
 import { createGlyphEngine } from '@pmndrs/glyph/core';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { GlyphBackend } from '../../dist/core/backend.js';
-import { assertGlyphId, id, programId, techniqueId } from '../../dist/core/render-policy.js';
+import { assertGlyphId, id } from '../../dist/core/render-policy.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import {
@@ -18,9 +18,9 @@ import {
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const TEST_POLICY_HANDLE = id('policy', 'test.text-engine-backend/default');
-const TEST_RETAINED_PLAN_HANDLE = id('retained-plan', 'test.text-engine-backend/default');
-const THREE_POLICY_HANDLE = id('policy', 'test.text-engine-backend/three');
+const TEST_POLICY_HANDLE = id.policy('test.text-engine-backend/default');
+const TEST_RETAINED_PLAN_HANDLE = id.retainedPlan('test.text-engine-backend/default');
+const THREE_POLICY_HANDLE = id.policy('test.text-engine-backend/three');
 
 test('a glyph engine owns every backend it creates', async () => {
   const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });
@@ -190,10 +190,10 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
   const wasm = await readFile(wasmUrl);
   const abi = textShaperAbi;
   const wireIds = {
-    bitmap: techniqueId('pmndrs.bitmap'),
-    msdf: techniqueId('pmndrs.msdf'),
-    slug: techniqueId('pmndrs.slug'),
-    decoration: techniqueId('pmndrs.decoration'),
+    bitmap: id.technique('pmndrs.bitmap'),
+    msdf: id.technique('pmndrs.msdf'),
+    slug: id.technique('pmndrs.slug'),
+    decoration: id.technique('pmndrs.decoration'),
   };
   assert.deepEqual(wireIds, {
     bitmap: 0x1775_3b8c,
@@ -209,10 +209,10 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
   const programsOffset = view.getUint32(request.programsOffset, true);
   const expectedTechniques = [wireIds.bitmap, wireIds.msdf, wireIds.slug, wireIds.decoration];
   const expectedPrograms = [
-    programId('pmndrs.bitmap', 'three'),
-    programId('pmndrs.msdf', 'three'),
-    programId('pmndrs.slug', 'three'),
-    programId('pmndrs.decoration', 'three'),
+    id.program('pmndrs.bitmap', 'three'),
+    id.program('pmndrs.msdf', 'three'),
+    id.program('pmndrs.slug', 'three'),
+    id.program('pmndrs.decoration', 'three'),
   ];
   for (const [index, wireTechniqueId] of expectedTechniques.entries()) {
     const offset = programsOffset + index * program.size;

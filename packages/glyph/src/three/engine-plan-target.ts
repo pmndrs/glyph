@@ -635,7 +635,7 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
       }
       const lease = candidate.acquirePayload(referenceId);
       try {
-        const expectedTechniqueId = this.#coordinator.identities.techniqueId(lease.techniqueId);
+        const expectedTechniqueId = this.#coordinator.identities.technique(lease.techniqueId);
         if (techniqueId !== expectedTechniqueId) {
           throw new Error(`resource ${id}:${generation} contradicts its registered technique`);
         }
@@ -922,11 +922,11 @@ export class ThreeTextRenderPlanExecutor implements PlanTarget {
         const transform = this.#transformRealization(byPolicyId, transformId);
         const resolvedResource = resource?.resolved;
         const expectedTechnique = resolvedResource?.technique ?? decorationSchema.technique;
-        const expectedTechniqueId = this.#coordinator.identities.techniqueId(expectedTechnique);
+        const expectedTechniqueId = this.#coordinator.identities.technique(expectedTechnique);
         const expectedProgramId =
           resolvedResource?.program !== undefined
             ? resolvedResource.program.programId
-            : this.#coordinator.identities.programId(expectedTechnique, 'three');
+            : this.#coordinator.identities.program(expectedTechnique, 'three');
         const expectedProgramVariant =
           resolvedResource?.program !== undefined ? (resolvedResource.program.policy.variant ?? 0) : 0;
         if (

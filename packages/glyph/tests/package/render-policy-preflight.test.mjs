@@ -1,21 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileRenderPolicy, id, programId, techniqueId } from '../../dist/core.js';
+import { compileRenderPolicy, id } from '../../dist/core.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
 const layouts = textShaperAbi.layouts;
 const policy = textShaperAbi.policy;
 const { batchFields, capabilityFlags, scalarTypes, opcodes } = policy;
-const PRIMARY_TECHNIQUE_ID = techniqueId('test.policy-preflight/primary');
-const SECONDARY_TECHNIQUE_ID = techniqueId('test.policy-preflight/secondary');
-const PRIMARY_PROGRAM_ID = programId('test.policy-preflight/primary', 'test');
-const SECONDARY_PROGRAM_ID = programId('test.policy-preflight/secondary', 'test');
-const F32_BUFFER_ID = id('buffer', 'test.policy-preflight/f32');
-const U16_BUFFER_ID = id('buffer', 'test.policy-preflight/u16');
-const U32_BUFFER_ID = id('buffer', 'test.policy-preflight/u32');
-const SECONDARY_BUFFER_ID = id('buffer', 'test.policy-preflight/secondary-u32');
-const UNKNOWN_BUFFER_ID = id('buffer', 'test.policy-preflight/unknown');
+const PRIMARY_TECHNIQUE_ID = id.technique('test.policy-preflight/primary');
+const SECONDARY_TECHNIQUE_ID = id.technique('test.policy-preflight/secondary');
+const PRIMARY_PROGRAM_ID = id.program('test.policy-preflight/primary', 'test');
+const SECONDARY_PROGRAM_ID = id.program('test.policy-preflight/secondary', 'test');
+const F32_BUFFER_ID = id.buffer('test.policy-preflight/f32');
+const U16_BUFFER_ID = id.buffer('test.policy-preflight/u16');
+const U32_BUFFER_ID = id.buffer('test.policy-preflight/u32');
+const SECONDARY_BUFFER_ID = id.buffer('test.policy-preflight/secondary-u32');
+const UNKNOWN_BUFFER_ID = id.buffer('test.policy-preflight/unknown');
 
 function capabilitySet(overrides = {}) {
   return {
@@ -350,7 +350,7 @@ const numericRejections = [
   [
     'a fractional buffer id',
     (d) => (d.programs[0].buffers[0].id = 1.5),
-    /buffer 0 id must come from id\('buffer', name\)/,
+    /buffer 0 id must come from id\.buffer\(name\)/,
   ],
   [
     'an infinite stride',
@@ -532,8 +532,8 @@ const semanticRejections = [
     (d) =>
       (d.programs = Array.from({ length: 33 }, (_, index) => ({
         ...d.programs[1],
-        techniqueId: techniqueId(`test.policy-preflight/many/${index}`),
-        programId: programId(`test.policy-preflight/many/${index}`, 'test'),
+        techniqueId: id.technique(`test.policy-preflight/many/${index}`),
+        programId: id.program(`test.policy-preflight/many/${index}`, 'test'),
         buffers: [...d.programs[1].buffers],
         operations: [...d.programs[1].operations],
         inputs: [...d.programs[1].inputs],
@@ -594,13 +594,13 @@ const semanticRejections = [
     'more than sixteen buffers',
     (d) =>
       (d.programs[1].buffers = Array.from({ length: 17 }, (_, index) => ({
-        id: id('buffer', `test.policy-preflight/many/${index}`),
+        id: id.buffer(`test.policy-preflight/many/${index}`),
         scalar: 'u32',
         vectorWidth: 1,
       }))),
     /more than 16 buffers/,
   ],
-  ['a zero buffer id', (d) => (d.programs[1].buffers[0].id = 0), /buffer 0 id must come from id\('buffer', name\)/],
+  ['a zero buffer id', (d) => (d.programs[1].buffers[0].id = 0), /buffer 0 id must come from id\.buffer\(name\)/],
   ['a zero vector width', (d) => (d.programs[1].buffers[0].vectorWidth = 0), /vectorWidth needs 1\.\.4/],
   ['a five-lane vector width', (d) => (d.programs[0].buffers[0].vectorWidth = 5), /vectorWidth needs 1\.\.4/],
   [

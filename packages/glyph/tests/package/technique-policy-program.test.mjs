@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { definePolicyBuffers, defineTechniqueSchema, id, techniqueProgram } from '../../dist/core.js';
+import { definePolicyBuffers, defineTechniqueSchema, techniqueProgram, id } from '../../dist/core.js';
 
-const ORIGIN_BUFFER_ID = id('buffer', 'test.policy-contract/origin');
-const PAGE_BUFFER_ID = id('buffer', 'test.policy-contract/page');
-const SYSTEM_BUFFER_ID = id('buffer', 'test.policy-contract/system/stable-glyph-id');
-const OTHER_SYSTEM_BUFFER_ID = id('buffer', 'test.policy-contract/system/other-stable-glyph-id');
+const ORIGIN_BUFFER_ID = id.buffer('test.policy-contract/origin');
+const PAGE_BUFFER_ID = id.buffer('test.policy-contract/page');
+const SYSTEM_BUFFER_ID = id.buffer('test.policy-contract/system/stable-glyph-id');
+const OTHER_SYSTEM_BUFFER_ID = id.buffer('test.policy-contract/system/other-stable-glyph-id');
 
 const schema = defineTechniqueSchema({
   technique: 'test.policy-contract',

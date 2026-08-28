@@ -28,6 +28,7 @@ import {
   type RenderPlanTransformId,
   type ResourceHandle,
   type SynchronousRetainedPlan,
+  id,
 } from '@pmndrs/glyph/core';
 import { bitmapPlanProgram } from '@pmndrs/glyph/raster/bitmap';
 // @ts-expect-error Dynamic engine plan IDs are package-managed implementation state.
@@ -210,17 +211,15 @@ void code;
 import {
   compileRenderPolicy,
   programContext,
-  renderWireId,
-  RenderWireIdentityRegistry,
-  techniqueId as renderTechniqueId,
+  type RenderIdFactory,
   type PolicyCapabilitySet,
   type PolicyDescriptor,
   type PolicyProgram,
 } from '@pmndrs/glyph/core';
 
-const techniqueId: number = renderWireId('example.technique');
-const brandedTechniqueId: number = renderTechniqueId('example.technique');
-const registry = new RenderWireIdentityRegistry();
+const techniqueId: number = id.technique('example.technique');
+const brandedTechniqueId: number = id.technique('example.technique');
+const registry: RenderIdFactory = id;
 void registry;
 
 declare const capability: PolicyCapabilitySet;

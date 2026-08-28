@@ -5,7 +5,6 @@ import { SLUG_PLANE_UNITS_PER_EM, type slug, type SlugPageData } from '@pmndrs/g
 import {
   compileRasterFont,
   readCompiledRasterFont,
-  RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
   type CompiledRasterFont,
   type CompiledRasterFontResource,
@@ -154,12 +153,11 @@ function compiledView(font: Font<typeof bitmap | typeof msdf | typeof slug>): {
   readonly compiled: CompiledRasterFont;
   readonly view: CompiledRasterFontView;
 } {
-  const identities = new RenderWireIdentityRegistry();
-  const compiled = compileRasterFont(font, identities);
+  const compiled = compileRasterFont(font);
   if (compiled === undefined) throw new TypeError(`no portable program is registered for "${font.technique.id}"`);
   const program = resolveRasterPlanProgram(font.technique.id);
   if (program === undefined) throw new TypeError(`no portable program is registered for "${font.technique.id}"`);
-  return { compiled, view: readCompiledRasterFont(compiled, program, identities) };
+  return { compiled, view: readCompiledRasterFont(compiled, program) };
 }
 
 function declaredResource(

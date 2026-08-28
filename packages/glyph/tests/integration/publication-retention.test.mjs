@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 import test from 'node:test';
 
-import { id, GlyphBackend, TextEngineRenderPlanView } from '../../dist/core.js';
+import { GlyphBackend, TextEngineRenderPlanView, id } from '../../dist/core.js';
 import { assertOwnedPlanPublication, PlanPublicationExpiredError } from '../../dist/core/retention.js';
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
@@ -11,7 +11,7 @@ import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const POLICY_HANDLE = id('policy', 'publication-retention/policy');
+const POLICY_HANDLE = id.policy('publication-retention/policy');
 
 const LIMITS = {
   maxParagraphs: 8,
@@ -42,7 +42,7 @@ async function drivenTransport() {
   const backend = new GlyphBackend(shaper);
   backend.registerPolicy(POLICY_HANDLE, threeRenderPolicyBytes());
   const transport = backend._createPlanTransport({
-    handle: id('retained-plan', 'publication-retention/transport'),
+    handle: id.retainedPlan('publication-retention/transport'),
     requestCapacity: 4096,
     resultCapacity: 128 * 1024,
   });

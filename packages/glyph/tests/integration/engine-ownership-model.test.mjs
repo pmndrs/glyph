@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { id, GlyphBackend } from '../../dist/core.js';
-import { assertGlyphId } from '../../dist/core/render-policy.js';
+import { GlyphBackend } from '../../dist/core.js';
+import { assertGlyphId, id } from '../../dist/core/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { engineUpdateBytes, renderPolicyBytes } from '../support/engine-abi.mjs';
@@ -14,7 +14,7 @@ test('one Wasm engine rejects double ownership and cross-backend policy resoluti
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
   const first = new GlyphBackend(shaper);
   const second = new GlyphBackend(shaper);
-  const sharedPolicy = id('policy', 'engine-ownership/shared-policy');
+  const sharedPolicy = id.policy('engine-ownership/shared-policy');
   const firstPolicy = first.id('policy', 'engine-ownership/first-policy');
   const secondPolicy = second.id('policy', 'engine-ownership/second-policy');
   const retainedPlanHandle = first.id('retained-plan', 'engine-ownership/first-transport');

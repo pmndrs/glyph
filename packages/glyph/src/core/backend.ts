@@ -16,15 +16,16 @@ import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPu
 import {
   assertGlyphId,
   compileRenderPolicy,
+  createBackendIdFactory,
   GlyphIdScope,
-  RenderWireIdentityRegistry,
+  RenderIdScope,
   type FontBindingHandle,
   type FontStackHandle,
-  type GlyphId,
-  type GlyphIdKind,
+  type BackendIdFactory,
   type ParagraphId,
   type PolicyDescriptor,
   type PolicyHandle,
+  type RenderIdFactory,
   type StyleId,
   type RetainedPlanHandle,
 } from './render-policy.js';
@@ -53,7 +54,7 @@ export interface BackendPolicy {
 }
 
 /** Builds one policy descriptor using the backend's collision-checked wire identities. */
-export type BackendPolicyFactory = (identities: RenderWireIdentityRegistry) => PolicyDescriptor;
+export type BackendPolicyFactory = (ids: RenderIdFactory) => PolicyDescriptor;
 
 /** A counted backend-local binding of one immutable font. */
 export interface BackendFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
@@ -350,7 +351,7 @@ const backendOpaqueBindings = new WeakMap<
 export class GlyphBackend {
   readonly integration: string;
   readonly #identityNamespace: string;
-  readonly #wireIdentities = new RenderWireIdentityRegistry();
+  readonly #wireIdentities = new RenderIdScope();
   readonly #ids = new GlyphIdScope();
   readonly #exports;
   readonly #owners: EngineRegistrationOwners;
@@ -412,10 +413,7 @@ export class GlyphBackend {
   }
 
   /** @internal Derive one branded ID retained until its registration or this backend is disposed. */
-  readonly id = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
-    this.#assertActive();
-    return this.#ids.id(kind, name);
-  };
+  readonly id: BackendIdFactory = createBackendIdFactory(this.#ids, () => this.#assertActive());
 
   /** Installs one renderer policy for this backend and returns its counted lease. */
   installPolicy(factory: BackendPolicyFactory): BackendPolicy {
@@ -448,7 +446,7 @@ export class GlyphBackend {
     }
     const engineBinding = this.#bindEngineFont(font);
     try {
-      const techniqueId = this.#wireIdentities.techniqueId(font.technique);
+      const techniqueId = this.#wireIdentities.technique(font.technique);
       if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
         throw new TypeError(`glyph backend has no installed policy for "${font.technique.id}"`);
       }
@@ -498,7 +496,7 @@ export class GlyphBackend {
     this.#assertActive();
     const fonts = immutableFontStackFonts(stack as FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>);
     for (const font of fonts) {
-      const techniqueId = this.#wireIdentities.techniqueId(font.technique);
+      const techniqueId = this.#wireIdentities.technique(font.technique);
       if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
         throw new TypeError(`glyph backend has no installed policy for "${font.technique.id}"`);
       }
@@ -986,7 +984,7 @@ export class GlyphBackend {
       for (const [key, payload] of compiled.resources) {
         const resourceName = resourceNames.get(key);
         if (resourceName === undefined) throw new Error(`compiled font retained an unnamed resource "${key}"`);
-        const referenceId = this.#wireIdentities.resourceId(key);
+        const referenceId = this.#wireIdentities.resource(key);
         let retained = this.#portablePayloads.get(referenceId);
         if (retained === undefined) {
           retained = {
@@ -1031,12 +1029,12 @@ export class GlyphBackend {
     for (const [name, keys] of compiled.declaredResources) {
       if (name === selectedName || program.schema.resources[name]?.cardinality === 'many') continue;
       if (keys.length !== 1) throw new Error(`singleton resource "${name}" does not have exactly one payload`);
-      const companion = payloads.get(this.#wireIdentities.resourceId(keys[0]!));
+      const companion = payloads.get(this.#wireIdentities.resource(keys[0]!));
       if (companion === undefined) throw new Error(`compiled font does not own companion resource "${name}"`);
       companions.push(companion);
     }
     for (const key of compiled.declaredResources.get(selectedName) ?? []) {
-      const selected = payloads.get(this.#wireIdentities.resourceId(key));
+      const selected = payloads.get(this.#wireIdentities.resource(key));
       if (selected === undefined) throw new Error(`compiled font does not own selected resource "${key}"`);
       const group = Object.freeze([selected, ...companions]);
       if (selected.group !== undefined && !samePortablePayloadGroup(selected.group, group)) {

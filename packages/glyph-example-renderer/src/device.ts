@@ -2,7 +2,6 @@ import tgpu from 'typegpu';
 
 import {
   assertPortableResource,
-  RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
   type PortableGeometryPayload,
   type PolicyBufferId,
@@ -19,6 +18,7 @@ import {
   type TextEnginePatchRecord,
   type TextEngineRetirementRecord,
   type TextEngineScalarType,
+  id,
 } from '@pmndrs/glyph/core';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 import {
@@ -169,11 +169,11 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   constructor(shader: ExampleRendererShader = exampleRendererShader) {
     assertExampleRendererShader(shader);
     this.shader = shader;
-    const identities = new RenderWireIdentityRegistry();
+    const identities = id;
     const portable = resolveRasterPlanProgram(shader.variant.techniqueId)!;
     this.#renderResourceName = portable.schema.render.resource!;
-    this.#techniqueWireId = identities.techniqueId(shader.variant.techniqueId);
-    this.#programWireId = identities.programId(shader.variant.techniqueId, shader.programNamespace, shader.programName);
+    this.#techniqueWireId = identities.technique(shader.variant.techniqueId);
+    this.#programWireId = identities.program(shader.variant.techniqueId, shader.programNamespace, shader.programName);
     this.#programVariant = unsignedInteger(shader.programVariant, 0xffff, 'shader program variant');
   }
 

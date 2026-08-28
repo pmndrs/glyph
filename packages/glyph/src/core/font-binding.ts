@@ -1,9 +1,14 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { Font } from '../font.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
-import { RenderWireIdentityRegistry, type RenderResourceId, type RenderTechniqueId } from './render-policy.js';
+import {
+  assertRenderIdFactory,
+  RenderIdScope,
+  type RenderIdFactory,
+  type RenderResourceId,
+  type RenderTechniqueId,
+} from './render-policy.js';
 import { compileRasterFont } from './raster-plan-program.js';
-
 const MAX_U32 = 0xffff_ffff;
 const MAX_U16 = 0xffff;
 const MISSING_RESOURCE = 0xffff_ffff;
@@ -55,7 +60,7 @@ export interface FontBindingDescriptor {
 /** Compile one immutable font's binding bytes; portable resources are dropped from this byte-only projection. */
 export function fontBindingBytes(
   font: Font<AnyRasterTechnique>,
-  identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
+  identities: RenderIdFactory = new RenderIdScope(),
 ): Uint8Array {
   const compiled = compileRasterFont(font, identities);
   if (compiled !== undefined) return compiled.binding;
@@ -68,16 +73,17 @@ function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
 
 export function fontBindingResources(
   keys: readonly RasterResourceId[],
-  identities: RenderWireIdentityRegistry,
+  identities: RenderIdFactory,
 ): {
   readonly resources: readonly BindingResource[];
   readonly indexFor: (key: RasterResourceId) => number;
 } {
+  assertRenderIdFactory(identities, 'font binding resource ids');
   const byKey = new Map<RasterResourceId, BindingResource>();
   const byId = new Map<number, RasterResourceId>();
   for (const key of keys) {
     if (byKey.has(key)) continue;
-    const id = identities.resourceId(key);
+    const id = identities.resource(key);
     const collision = byId.get(id);
     if (collision !== undefined && collision !== key) {
       throw new TypeError(`raster resource wire identity collision between "${collision}" and "${key}"`);

@@ -3,13 +3,13 @@ import {
   defineTechniqueGeometryKind,
   defineTechniqueSchema,
   f32,
-  id,
   schemaFieldTable,
   schemaPolicyBuffers,
   techniqueProgram,
   type FontBindingFieldTable,
   type PolicyBuffer,
   type PolicyF32Value,
+  id,
 } from '../../dist/core.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 
@@ -20,8 +20,8 @@ const schema = defineTechniqueSchema({
   scope: 'glyph',
   binding: { f32: ['bearingX', 'size'] as const, u32: ['page'] as const },
   buffers: {
-    rect: { id: id('buffer', 'type-schema/rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    page: { id: id('buffer', 'type-schema/page'), scalar: 'u32', lanes: ['page'] },
+    rect: { id: id.buffer('type-schema/rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+    page: { id: id.buffer('type-schema/page'), scalar: 'u32', lanes: ['page'] },
   } as const,
 });
 
@@ -113,7 +113,7 @@ defineTechniqueSchema({
 });
 
 const system = definePolicyBuffers({
-  stableGlyphId: { id: id('buffer', 'type-schema/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
+  stableGlyphId: { id: id.buffer('type-schema/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
 } as const);
 const p = techniqueProgram(schema, { system });
 const { fontSize } = p.semantics;
@@ -131,7 +131,7 @@ p.compile({
 });
 
 const foreignBuffers = definePolicyBuffers({
-  rect: { id: id('buffer', 'type-schema/foreign-rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
+  rect: { id: id.buffer('type-schema/foreign-rect'), scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
 } as const);
 void foreignBuffers;
 // @ts-expect-error Policy buffer declarations reject arbitrary numeric IDs.

@@ -2,11 +2,11 @@ import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/
 
 import {
   createRasterPolicyProgram,
-  RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
   type AnyTechniqueSchema,
   type PolicyBufferDeclarations,
   type PolicyScalarKind,
+  type RenderIdFactory,
   type PortableResource,
   type PortableTextureFormat,
   type TechniqueGeometryDeclaration,
@@ -112,9 +112,9 @@ export interface CompiledThreeRasterPlanProgram {
 
 const programs = new Map<string, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
 const registeredSources = new WeakMap<object, ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>>();
-const snapshotsByRegistry = new WeakMap<RenderWireIdentityRegistry, WeakRef<RenderWireIdentityRegistry>[]>();
-const snapshotReferences = new Set<WeakRef<RenderWireIdentityRegistry>>();
-const snapshotFinalizer = new FinalizationRegistry<WeakRef<RenderWireIdentityRegistry>>((reference) => {
+const snapshotsByRegistry = new WeakMap<RenderIdFactory, WeakRef<RenderIdFactory>[]>();
+const snapshotReferences = new Set<WeakRef<RenderIdFactory>>();
+const snapshotFinalizer = new FinalizationRegistry<WeakRef<RenderIdFactory>>((reference) => {
   snapshotReferences.delete(reference);
 });
 const THREE_RESERVED_ATTRIBUTE_WIDTHS: Readonly<Record<string, readonly number[]>> = Object.freeze({
@@ -212,7 +212,7 @@ export function registerThreeRasterPlanProgram<
 
 /** @internal Compile the cold registry snapshot into policy, binding, and material factories. */
 export function compiledThreeRasterPlanPrograms(
-  identities: RenderWireIdentityRegistry,
+  identities: RenderIdFactory,
   transformMode: 'indexed' | 'direct' = 'indexed',
 ): readonly CompiledThreeRasterPlanProgram[] {
   const selected = [...programs.values()].sort((left, right) => left.technique.id.localeCompare(right.technique.id));
@@ -255,7 +255,7 @@ export function assertThreeGeometryPayload(
 }
 
 /** @internal Forget a disposed Three coordinator's renderer snapshot. */
-export function releaseThreeRasterPlanProgramSnapshot(identities: RenderWireIdentityRegistry): void {
+export function releaseThreeRasterPlanProgramSnapshot(identities: RenderIdFactory): void {
   const references = snapshotsByRegistry.get(identities);
   if (references === undefined) return;
   const reference = references.pop();
@@ -288,7 +288,7 @@ export const threePolicyAbi: ThreePolicyAbi = Object.freeze({
 
 function compileProgram(
   program: ThreeRasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>,
-  identities: RenderWireIdentityRegistry,
+  identities: RenderIdFactory,
   transformMode: 'indexed' | 'direct',
 ): CompiledThreeRasterPlanProgram {
   const portable = resolveRasterPlanProgram(program.technique.id);
@@ -301,7 +301,7 @@ function compileProgram(
     capabilitySet: threePolicyCapabilitySet(),
     transformMode,
     allocationMode: 'ordered',
-    identityRegistry: identities,
+    ids: identities,
   });
   return {
     technique: program.technique,

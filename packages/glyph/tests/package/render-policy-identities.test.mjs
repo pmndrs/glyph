@@ -1,16 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  compileRenderPolicy,
-  createProgram,
-  id,
-  programId,
-  RenderWireIdentityRegistry,
-  selectPolicyCapabilitySet,
-  techniqueId,
-} from '../../dist/core.js';
-import { assertGlyphId, GlyphIdScope } from '../../dist/core/render-policy.js';
+import { compileRenderPolicy, createProgram, selectPolicyCapabilitySet } from '../../dist/core.js';
+import { assertGlyphId, GlyphIdScope, id } from '../../dist/core/render-policy.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
 const opcodes = textShaperAbi.policy.opcodes;
@@ -30,10 +22,10 @@ function capabilitySet() {
   };
 }
 
-const FIRST_TECHNIQUE_ID = techniqueId('test.identities.first');
-const SECOND_TECHNIQUE_ID = techniqueId('test.identities.second');
-const SHARED_PROGRAM_ID = programId('test.identities.shared', 'test');
-const BUFFER_ID = id('buffer', 'test.identities.value');
+const FIRST_TECHNIQUE_ID = id.technique('test.identities.first');
+const SECOND_TECHNIQUE_ID = id.technique('test.identities.second');
+const SHARED_PROGRAM_ID = id.program('test.identities.shared', 'test');
+const BUFFER_ID = id.buffer('test.identities.value');
 const ZERO_WIRE_ID = 0;
 // Smallest engine-valid body: one u32 lane written by one constant store.
 const body = {
@@ -48,23 +40,23 @@ const body = {
 const buffers = [{ id: BUFFER_ID, scalar: 'u32', vectorWidth: 1 }];
 
 test('semantic ID helpers are stable and namespace program variants', () => {
-  const MSDF_TECHNIQUE_ID = techniqueId('pmndrs.msdf');
-  const MSDF_PROGRAM_ID = programId('pmndrs.msdf', 'three');
-  const MSDF_SHADOW_PROGRAM_ID = programId('pmndrs.msdf', 'three', 'shadow');
-  assert.equal(techniqueId('pmndrs.msdf'), MSDF_TECHNIQUE_ID);
-  assert.equal(programId('pmndrs.msdf', 'three'), MSDF_PROGRAM_ID);
+  const MSDF_TECHNIQUE_ID = id.technique('pmndrs.msdf');
+  const MSDF_PROGRAM_ID = id.program('pmndrs.msdf', 'three');
+  const MSDF_SHADOW_PROGRAM_ID = id.program('pmndrs.msdf', 'three', 'shadow');
+  assert.equal(id.technique('pmndrs.msdf'), MSDF_TECHNIQUE_ID);
+  assert.equal(id.program('pmndrs.msdf', 'three'), MSDF_PROGRAM_ID);
   assert.notEqual(MSDF_PROGRAM_ID, MSDF_SHADOW_PROGRAM_ID);
   assert.notEqual(MSDF_TECHNIQUE_ID, MSDF_PROGRAM_ID);
 });
 
 test('host ID helpers are stable, nonzero, domain-separated, and collision-checked', () => {
-  assert.equal(id('policy', 'example/default'), id('policy', 'example/default'));
-  assert.notEqual(id('policy', 'example/default'), id('retained-plan', 'example/default'));
-  assert.ok(id('buffer', 'example/origin') > 0 && id('buffer', 'example/origin') <= 0xffff);
-  assert.throws(() => id('policy', ''), /nonempty string/);
-  assert.throws(() => id('unknown', 'example'), /kind is not supported/);
-  id('buffer', 'collision-36');
-  assert.throws(() => id('buffer', 'collision-326'), /ID collision/);
+  assert.equal(id.policy('example/default'), id.policy('example/default'));
+  assert.notEqual(id.policy('example/default'), id.retainedPlan('example/default'));
+  assert.ok(id.buffer('example/origin') > 0 && id.buffer('example/origin') <= 0xffff);
+  assert.throws(() => id.policy(''), /nonempty string/);
+  assert.throws(() => id('unknown', 'example'), /exactly one stable name/);
+  id.buffer('collision-36');
+  assert.throws(() => id.buffer('collision-326'), /ID collision/);
 });
 
 test('runtime ID scopes retain shared provenance until their last owner is disposed', () => {
@@ -81,15 +73,13 @@ test('runtime ID scopes retain shared provenance until their last owner is dispo
 });
 
 test('identity registries reject colliding program names at assembly', () => {
-  const identities = new RenderWireIdentityRegistry();
-  const first = identities.programId('v4gawj', 'three', '1y4hsl2');
-  assert.equal(first, programId('v4gawj', 'three', '1y4hsl2'));
-  assert.equal(first, programId('3boc7l', 'three', '74ae4c'));
-  assert.throws(() => identities.programId('3boc7l', 'three', '74ae4c'), /render wire identity collision/);
+  const first = id.program('v4gawj', 'three', '1y4hsl2');
+  assert.equal(first, id.program('v4gawj', 'three', '1y4hsl2'));
+  assert.throws(() => id.program('3boc7l', 'three', '74ae4c'), /render wire identity collision/);
 });
 
 test('capability profiles are selected from descriptors without exposing wire ordinals', () => {
-  const policyHandle = id('policy', 'test.identities/capability-profile');
+  const policyHandle = id.policy('test.identities/capability-profile');
   const first = capabilitySet();
   const second = { ...capabilitySet(), maxBufferBytes: 2 * 1024 * 1024 };
   const descriptor = {

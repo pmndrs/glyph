@@ -116,13 +116,13 @@ import {
   id,
   type PolicyCapabilitySet,
   type PolicyDescriptor,
-  type RenderWireIdentityRegistry,
+  type RenderIdFactory,
 } from '@pmndrs/glyph/core';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 
 const system = definePolicyBuffers({
   stableGlyphId: {
-    id: id('buffer', 'studio.webgpu-text/stable-glyph'),
+    id: id.buffer('studio.webgpu-text/stable-glyph'),
     scalar: 'u32',
     lanes: ['stableGlyphId'],
   },
@@ -141,7 +141,7 @@ const capabilitySet: PolicyCapabilitySet = {
   wholeBufferThresholdBasisPoints: 7_500,
 };
 
-function rendererPolicy(identities: RenderWireIdentityRegistry): PolicyDescriptor {
+function rendererPolicy(ids: RenderIdFactory): PolicyDescriptor {
   return {
     capabilitySets: [capabilitySet],
     programs: [
@@ -151,7 +151,7 @@ function rendererPolicy(identities: RenderWireIdentityRegistry): PolicyDescripto
         capabilitySet,
         transformMode: 'direct',
         allocationMode: 'ordered',
-        identityRegistry: identities,
+        ids,
       }),
     ],
   };
