@@ -30,7 +30,8 @@ are at the root, while runtime, host, session, policy, and plan-target construct
 ## Render text with React Three Fiber
 
 ```tsx
-import { Text, TextGroup, TextSpan, useFont } from '@pmndrs/glyph/react';
+import { createFontLibrary } from '@pmndrs/glyph';
+import { createUseFont, Text, TextGroup, TextSpan } from '@pmndrs/glyph/react';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 
 const fontRequest = {
@@ -38,7 +39,9 @@ const fontRequest = {
   raster: { technique: msdf },
 } as const;
 
-useFont.preload(fontRequest);
+const fontLibrary = createFontLibrary();
+const useFont = createUseFont(fontLibrary);
+void useFont.preload(fontRequest);
 
 function Labels() {
   const inter = useFont(fontRequest);
@@ -56,6 +59,25 @@ function Labels() {
     </TextGroup>
   );
 }
+```
+
+For a single built-in technique, the typed convenience hooks use the same `GlyphProvider` and `useFont` cache:
+
+```tsx
+import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
+import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
+
+function Fonts() {
+  const bitmap = useBitmapFont('/fonts/inter.font.glb', { strikes: [16, 32] });
+  const msdf = useMSDF('/fonts/inter.font.glb');
+  const slug = useSlug('/fonts/inter.font.glb');
+  // These hooks use the nearest GlyphProvider and the same cache as useFont.
+}
+
+void useBitmapFont.preload(fontLibrary, '/fonts/inter.font.glb', { strikes: [16, 32] });
+void useMSDF.preload(fontLibrary, '/fonts/inter.font.glb');
+void useSlug.preload(fontLibrary, '/fonts/inter.font.glb');
 ```
 
 `Text` is a retained paragraph and a Three `Object3D`. `TextSpan` is an inline run inside one: it inherits the surrounding font, style, paint, and material unless it overrides them, and it accepts nothing else, because a span is not an object in the scene and has no transform, capacity, error handler, or instance to hold a ref to. Spans may not always land in the same draw if they cannot be batched with their parent.

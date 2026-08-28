@@ -129,13 +129,27 @@ type DesiredR3fTextProperties<Technique extends AnyRasterTechnique> = Partial<St
   readonly text: string;
 };
 
-interface UseFont {
+interface FontHook {
   <Technique extends AnyRasterTechnique>(request: FontRequest<Technique>): Font<Technique>;
   <const Techniques extends FontTechniques>(request: MultiRasterFontRequest<Techniques>): Fonts<Techniques>;
 }
 
+/** A provider-scoped Suspense hook with explicit library-owned preload and cache-release operations. */
+export interface UseFont extends FontHook {
+  preload<Technique extends AnyRasterTechnique>(library: FontLibrary, request: FontRequest<Technique>): Promise<void>;
+  preload<const Techniques extends FontTechniques>(
+    library: FontLibrary,
+    request: MultiRasterFontRequest<Techniques>,
+  ): Promise<void>;
+  clear<Technique extends AnyRasterTechnique>(library: FontLibrary, request: FontRequest<Technique>): void;
+  clear<const Techniques extends FontTechniques>(
+    library: FontLibrary,
+    request: MultiRasterFontRequest<Techniques>,
+  ): void;
+}
+
 /** A FontLibrary-bound Suspense hook with explicit preload and cache-release operations. */
-export interface BoundUseFont extends UseFont {
+export interface BoundUseFont extends FontHook {
   preload<Technique extends AnyRasterTechnique>(request: FontRequest<Technique>): Promise<void>;
   preload<const Techniques extends FontTechniques>(request: MultiRasterFontRequest<Techniques>): Promise<void>;
   clear<Technique extends AnyRasterTechnique>(request: FontRequest<Technique>): void;
@@ -357,6 +371,22 @@ export const useFont = ((
   if (scope === undefined) throw new Error('useFont requires a GlyphProvider or createUseFont(FontLibrary)');
   return useScopedFont(scope, request);
 }) as UseFont;
+useFont.preload = (
+  library: FontLibrary,
+  request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>,
+) => {
+  assertFontLibrary(library, 'useFont.preload');
+  return fontScope(library)
+    .load(request)
+    .then(() => undefined);
+};
+useFont.clear = (
+  library: FontLibrary,
+  request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>,
+) => {
+  assertFontLibrary(library, 'useFont.clear');
+  fontScope(library).clear(request);
+};
 
 interface ObjectStore<Value> {
   readonly subscribe: (listener: () => void) => () => void;

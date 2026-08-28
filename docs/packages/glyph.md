@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:4a4e12026b798a5aa952d1771fa5331f667eaeb5b71443feb8795abdb5140746'
+source_digest: 'sha256:a3f7e6d69772905e3a6299d90cee33ae7be1de7a669ecc9820d3eaaf23433d90'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -116,6 +116,9 @@ that turns those payloads into textures, buffers, and geometry and leases them a
 | `@pmndrs/glyph/three/msdf`   | Compatibility alias re-exporting the renderer-neutral MSDF raster module.                                                           |
 | `@pmndrs/glyph/three/slug`   | Compatibility alias re-exporting the renderer-neutral Slug raster module.                                                           |
 | `@pmndrs/glyph/react`        | React `<Text>`, `<TextGroup>`, and `useFont`, reconciled through React Three Fiber.                                                 |
+| `@pmndrs/glyph/react/bitmap` | Typed `useBitmapFont(input, options)` convenience over `useFont`.                                                                   |
+| `@pmndrs/glyph/react/msdf`   | Typed `useMSDF(input, options?)` convenience over `useFont`.                                                                        |
+| `@pmndrs/glyph/react/slug`   | Typed `useSlug(input)` convenience over `useFont`.                                                                                  |
 | `@pmndrs/glyph/bake`         | Node programmatic font baking, glyph selection, and font inspection used by the `glyph` CLI.                                        |
 | `@pmndrs/glyph/runtime-bake` | Explicit browser Worker host for optional runtime baking.                                                                           |
 | `@pmndrs/glyph/raster/*`     | Renderer-neutral Bitmap, MSDF, and Slug decoding and raster-technique contracts.                                                    |
@@ -205,10 +208,17 @@ keep its identity registry alive or permanently poison later registration after 
 `Text.layout()`, `Text.glyphs()`, and `ParagraphStyle.features` give it.
 
 One baked GLB may expose several raster techniques without repeating its input identity. Root `loadFont()` and
-R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The
+R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `Font` values. The
 artifact is fetched, validated, registered with the shaper, and retained once; each requested technique still derives
 its exact descriptor, resolves and decodes its own raster resource, and retains its associated data type. A mapped tuple
 keeps required Bitmap options and custom third-party technique types enforceable at every position.
+
+Single-technique React consumers may import `useBitmapFont`, `useMSDF`, or `useSlug` from the matching `/react/*`
+subpath. Each hook only constructs that technique's typed request and delegates to `useFont`; provider scope, Suspense,
+cache leases, and disposal therefore have one implementation. Technique-specific subpaths preserve the registration and
+bundle boundary instead of making the main React entry import every built-in raster. Every hook carries `preload()` and
+`clear()`; the unbound hooks take the owning `FontLibrary`, while `createUseFont(library)` returns a hook with that owner
+already bound.
 
 Artifact metrics carry text decoration from bake time (D-246): required `underlinePosition`/`underlineThickness` from
 `post` and `strikeoutPosition`/`strikeoutSize` from `OS/2`, with a conservative derived fallback when a source font

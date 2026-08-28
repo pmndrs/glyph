@@ -2,6 +2,9 @@ import { createElement, type ReactElement } from 'react';
 
 import { createFontLibrary, type Font, type FontStack } from '../../src/index.js';
 import { createUseFont, GlyphProvider, Text, TextGroup, TextSpan, useFont } from '../../src/react.js';
+import { useBitmapFont } from '../../src/react/bitmap.js';
+import { useMSDF } from '../../src/react/msdf.js';
+import { useSlug } from '../../src/react/slug.js';
 import type { R3fTextChild, R3fTextProps, R3fTextSpanProps } from '../../src/react.js';
 import type { ThreeTextMaterial } from '../../src/three.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
@@ -28,6 +31,10 @@ const selected = createElement(Text, { font: selectedStack }, 'Selected at runti
 
 function FontConsumer(): null {
   const loaded: Font<typeof bitmap> = useFont(bitmapRequest);
+  useBitmapFont({ baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Font<typeof bitmap>;
+  useMSDF({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof msdf>;
+  useMSDF({ baked: '/fonts/Inter.font.glb' }, { emSize: 64, pixelRange: 8 }) satisfies Font<typeof msdf>;
+  useSlug({ baked: '/fonts/Inter.font.glb' }) satisfies Font<typeof slug>;
   void loaded;
   const [loadedBitmap, loadedMsdf, loadedSlug] = useFont({
     input: { baked: '/fonts/Inter.font.glb' },
@@ -48,6 +55,14 @@ function BoundFontConsumer(): null {
 const provider = createElement(GlyphProvider, { library: fontLibrary }, createElement(FontConsumer));
 const preloaded: Promise<void> = useAppFont.preload(bitmapRequest);
 useAppFont.clear(bitmapRequest);
+useFont.preload(fontLibrary, bitmapRequest) satisfies Promise<void>;
+useFont.clear(fontLibrary, bitmapRequest);
+useBitmapFont.preload(fontLibrary, { baked: '/fonts/Inter.font.glb' }, { strikes: [16] }) satisfies Promise<void>;
+useBitmapFont.clear(fontLibrary, { baked: '/fonts/Inter.font.glb' }, { strikes: [16] });
+useMSDF.preload(fontLibrary, { baked: '/fonts/Inter.font.glb' }) satisfies Promise<void>;
+useMSDF.clear(fontLibrary, { baked: '/fonts/Inter.font.glb' });
+useSlug.preload(fontLibrary, { baked: '/fonts/Inter.font.glb' }) satisfies Promise<void>;
+useSlug.clear(fontLibrary, { baked: '/fonts/Inter.font.glb' });
 
 // @ts-expect-error The selected font technique must match the Text technique.
 createElement(Text<typeof bitmap>, { font: mtsdfFont }, 'wrong technique');

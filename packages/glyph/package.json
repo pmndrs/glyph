@@ -65,6 +65,18 @@
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
     },
+    "./react/bitmap": {
+      "types": "./dist/react/bitmap.d.ts",
+      "import": "./dist/react/bitmap.js"
+    },
+    "./react/msdf": {
+      "types": "./dist/react/msdf.d.ts",
+      "import": "./dist/react/msdf.js"
+    },
+    "./react/slug": {
+      "types": "./dist/react/slug.d.ts",
+      "import": "./dist/react/slug.js"
+    },
     "./raster/bitmap": {
       "types": "./dist/raster/bitmap-technique.d.ts",
       "import": "./dist/raster/bitmap-technique.js"

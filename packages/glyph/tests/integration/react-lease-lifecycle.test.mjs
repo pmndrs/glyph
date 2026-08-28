@@ -25,6 +25,7 @@ import { FontLoader } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
 import { createUseFont, GlyphProvider, Text, useFont } from '@pmndrs/glyph/react';
+import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
 import { threeRuntimeDomainReport } from '../../dist/three/runtime-domain.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -218,6 +219,34 @@ test('a provider-scoped library survives StrictMode replay and releases its runt
   assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
+test('technique convenience preload and hook share one provider-owned resource', async () => {
+  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const library = createFontLibrary();
+  const input = { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } };
+  const options = { strikes: [16] };
+  const observed = new Map();
+  await useBitmapFont.preload(library, input, options);
+  const renderer = await create(
+    createElement(
+      GlyphProvider,
+      { library },
+      createElement(ProviderBitmapFontText, { input, name: 'bitmap', observed, options }),
+    ),
+  );
+  try {
+    await waitFor(() => observed.has('bitmap'));
+    const mounted = observed.get('bitmap');
+    assert.ok(mounted !== undefined);
+    useBitmapFont.clear(library, input, options);
+    await Promise.resolve();
+    assert.equal(mounted.disposed, false, 'clear releases the preload owner, not the mounted hook lease');
+  } finally {
+    await renderer.unmount();
+    library.dispose();
+  }
+  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+});
+
 function hookFontTree(fontHook, request, observed, names) {
   return createElement(
     StrictMode,
@@ -264,4 +293,15 @@ function ProviderFontText({ name, observed, request }) {
     },
     name,
   );
+}
+
+function ProviderBitmapFontText({ input, name, observed, options }) {
+  const font = useBitmapFont(input, options);
+  useLayoutEffect(() => {
+    observed.set(name, font);
+    return () => {
+      if (observed.get(name) === font) observed.delete(name);
+    };
+  }, [font, name, observed]);
+  return createElement(Text, { font, name }, name);
 }
