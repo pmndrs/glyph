@@ -30,21 +30,15 @@ are at the root, while runtime, host, session, policy, and plan-target construct
 ## Render text with React Three Fiber
 
 ```tsx
-import { createFontLibrary } from '@pmndrs/glyph';
-import { createUseFont, Text, TextGroup, TextSpan } from '@pmndrs/glyph/react';
+import { Text, TextGroup, useFont } from '@pmndrs/glyph/react';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 
-const fontRequest = {
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: msdf },
-} as const;
+const interFont = { baked: '/fonts/Inter.font.glb' } as const;
 
-const fontLibrary = createFontLibrary();
-const useFont = createUseFont(fontLibrary);
-void useFont.preload(fontRequest);
+useFont.preload(interFont, msdf);
 
 function Labels() {
-  const inter = useFont(fontRequest);
+  const inter = useFont(interFont, msdf);
 
   return (
     <TextGroup compositing="independent">
@@ -54,14 +48,14 @@ function Labels() {
         style={{ fontSize: 32, lineHeight: 1.2 }}
         paint={{ color: '#f4f7ff' }}
       >
-        Hello <TextSpan paint={{ color: '#70d6ff' }}>world</TextSpan>
+        Hello <Text paint={{ color: '#70d6ff' }}>world</Text>
       </Text>
     </TextGroup>
   );
 }
 ```
 
-For a single built-in technique, the typed convenience hooks use the same `GlyphProvider` and `useFont` cache:
+For a built-in technique, typed convenience hooks use the same R3F loader cache as generic `useFont`:
 
 ```tsx
 import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
@@ -69,18 +63,17 @@ import { useMSDF } from '@pmndrs/glyph/react/msdf';
 import { useSlug } from '@pmndrs/glyph/react/slug';
 
 function Fonts() {
-  const bitmap = useBitmapFont('/fonts/inter.font.glb', { strikes: [16, 32] });
-  const msdf = useMSDF('/fonts/inter.font.glb');
-  const slug = useSlug('/fonts/inter.font.glb');
-  // These hooks use the nearest GlyphProvider and the same cache as useFont.
+  const bitmap = useBitmapFont({ baked: '/fonts/inter.font.glb' }, { strikes: [16, 32] });
+  const msdf = useMSDF({ baked: '/fonts/inter.font.glb' });
+  const slug = useSlug({ baked: '/fonts/inter.font.glb' });
 }
 
-void useBitmapFont.preload(fontLibrary, '/fonts/inter.font.glb', { strikes: [16, 32] });
-void useMSDF.preload(fontLibrary, '/fonts/inter.font.glb');
-void useSlug.preload(fontLibrary, '/fonts/inter.font.glb');
+useBitmapFont.preload({ baked: '/fonts/inter.font.glb' }, { strikes: [16, 32] });
+useMSDF.preload({ baked: '/fonts/inter.font.glb' });
+useSlug.preload({ baked: '/fonts/inter.font.glb' });
 ```
 
-`Text` is a retained paragraph and a Three `Object3D`. `TextSpan` is an inline run inside one: it inherits the surrounding font, style, paint, and material unless it overrides them, and it accepts nothing else, because a span is not an object in the scene and has no transform, capacity, error handler, or instance to hold a ref to. Spans may not always land in the same draw if they cannot be batched with their parent.
+An outer `Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is an inline run: it inherits the surrounding font, style, paint, and material unless it overrides them, and creates no scene object. The runtime rejects box-level props on nested text because JSX does not preserve enough generic element identity for TypeScript to enforce that distinction at every composition boundary. Runs may not always land in the same draw if they cannot be batched with their parent.
 
 `TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text semantics and lazily owns an implicit batch of one.
 

@@ -5,7 +5,7 @@ description: Demonstrates the public React Three Fiber API with Bitmap, MSDF, Sl
 resource: ../../apps/r3f-hello-world
 workspace_package: '@pmndrs/glyph-r3f-hello-world'
 documentation_type: reference
-source_digest: 'sha256:7c7b51f75dc84b7fd8b63b2102a183be7d3ebe69608c70ffc2f06d3d2c370e9a'
+source_digest: 'sha256:549efebb95ed78bc2062870cd536c144ac0b0ff8c06d60ee386b8700815c38c1'
 tags: [package, example, react, react-three-fiber, vite]
 sources:
   - id: manifest
@@ -22,7 +22,7 @@ generated:
 # Package reference: `@pmndrs/glyph-r3f-hello-world`
 
 This private Vite application is the minimal product-shaped React Three Fiber example. One full-page canvas renders
-`Hello world` through the public `@pmndrs/glyph/react` `Text` component. The globe is an inline `TextSpan` bound directly
+`Hello world` through the public `@pmndrs/glyph/react` `Text` component. The globe is a nested inline `Text` bound directly
 to the matching subsetted Font Awesome raster rather than an automatically resolved font-stack fallback. Public
 `useFont.preload()` calls start both multi-raster asset requests before the scene suspends on the same cache entries.
 One `App` component owns the loaded fonts, technique state, three React `Activity` branches, and its in-canvas Slug

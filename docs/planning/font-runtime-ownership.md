@@ -1156,16 +1156,15 @@ hosts therefore cannot alias; two hosts bound to the same backing may deliberate
 
 ### React and Suspense ownership
 
-`/react` is part of the migration. It no longer owns a module-scope `FontLoader` or resolved-font promise map. A Glyph
-provider requires an explicit root `FontLibrary`; `useFont` keys its stable Suspense and Three-initialization resource
-inside that library. A provider cannot safely create this resource during its own first render: if a child suspends before
-the provider commits, React retries with new hook state and a new promise indefinitely. Module-scope preload uses an
-explicitly created library-bound helper, for example `const useAppFont = createUseFont(fontLibrary)` then
-`useAppFont.preload(request)`; a no-owner global `useFont.preload(request)` is withdrawn. The library retains resolved
-backing and owns the adapter scope until `clear()` or library disposal; the bound helper therefore has no second disposal
-lifetime. Each mounted consumer receives its own Font lease, and StrictMode mount/unmount/remount cannot dispose a sibling
-consumer's lease or attempt to bind a disposed wrapper. Applications may pass one FontLibrary to several canvases when
-they want portable backing deduplication; renderer runtimes remain per realm/integration as otherwise specified.
+`/react` delegates promise and resolved-value caching to R3F's canonical `useLoader`/`suspend-react` cache. Generic
+`useFont(input, technique, options?)` is the extension point; `useBitmapFont`, `useMSDF`, and `useSlug` are thin typed
+wrappers over that same key. Their `.preload()` methods populate the same cache and `.clear()` removes that cache entry.
+Glyph keeps only a deterministic resource-ownership ledger beside it: a cached font owns one lease, each mounted consumer
+clones an independent lease, and clearing the cache cannot dispose a mounted font. The memoized R3F loader delegates each
+request to a disposable child Three loader so a cache entry does not pin its shaping runtime after release. StrictMode
+mount/unmount/remount therefore cannot dispose a sibling consumer's lease or attempt to bind a disposed wrapper. Root
+`FontLibrary` remains available to imperative applications, but is not a second React cache and is not required by these
+hooks.
 
 ### Device-loss fan-out
 

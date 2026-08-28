@@ -2,6 +2,11 @@
 
 ## 2026-08-28
 
+- **Aligned React font loading with R3F's cache and nested Text API** — Generic `useFont` now accepts a technique directly,
+  while `useBitmapFont`, `useMSDF`, and `useSlug` are typed wrappers with matching preload and clear methods. R3F remains
+  the sole promise/result cache; Glyph owns only abort and font-lease disposal. Nested `Text` authors inline runs, and its
+  call-time boundary rejects box properties that JSX cannot reliably exclude statically.
+
 - **Balanced retained style-mutation accounting across shrinking commits** — The pending-style ledger now subtracts a
   dirty text's old published span count before publishing its replacement count. A regression repeatedly expands one
   text to four styles and shrinks it to one, then proves a valid second two-style text still fits the unchanged

@@ -1,21 +1,19 @@
 import type { Font } from '../font.js';
-import type { FontLibrary, LoadFontInput } from '../loader.js';
+import type { LoadFontInput } from '../loader.js';
 import { bitmap, type BitmapTechniqueOptions } from '../three/bitmap.js';
 import { useFont } from '../react.js';
 
-/** Bitmap convenience hook over the shared provider-scoped `useFont` cache. */
+/** Bitmap convenience hook over the shared R3F `useFont` cache. */
 export interface UseBitmapFont {
   (input: LoadFontInput, options: BitmapTechniqueOptions): Font<typeof bitmap>;
-  preload(library: FontLibrary, input: LoadFontInput, options: BitmapTechniqueOptions): Promise<void>;
-  clear(library: FontLibrary, input: LoadFontInput, options: BitmapTechniqueOptions): void;
+  /** Start the same cached Bitmap load before a component requests it. */
+  preload(input: LoadFontInput, options: BitmapTechniqueOptions): void;
+  /** Release the cached Bitmap lease without invalidating mounted consumers. */
+  clear(input: LoadFontInput, options: BitmapTechniqueOptions): void;
 }
 
-/** Loads one Bitmap font through the nearest GlyphProvider using the shared React font cache. */
+/** Load one Bitmap font through the shared R3F cache. */
 export const useBitmapFont = ((input: LoadFontInput, options: BitmapTechniqueOptions): Font<typeof bitmap> =>
-  useFont(bitmapRequest(input, options))) as UseBitmapFont;
-useBitmapFont.preload = (library, input, options) => useFont.preload(library, bitmapRequest(input, options));
-useBitmapFont.clear = (library, input, options) => useFont.clear(library, bitmapRequest(input, options));
-
-function bitmapRequest(input: LoadFontInput, options: BitmapTechniqueOptions) {
-  return { input, raster: { technique: bitmap, options } } as const;
-}
+  useFont(input, bitmap, options)) as UseBitmapFont;
+useBitmapFont.preload = (input, options) => useFont.preload(input, bitmap, options);
+useBitmapFont.clear = (input, options) => useFont.clear(input, bitmap, options);

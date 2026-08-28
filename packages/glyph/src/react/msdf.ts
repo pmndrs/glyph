@@ -1,24 +1,19 @@
 import type { Font } from '../font.js';
-import type { FontLibrary, LoadFontInput } from '../loader.js';
+import type { LoadFontInput } from '../loader.js';
 import { useFont } from '../react.js';
 import { msdf, type MsdfOptions } from '../three/msdf.js';
 
-/** MSDF convenience hook over the shared provider-scoped `useFont` cache. */
+/** MSDF convenience hook over the shared R3F `useFont` cache. */
 export interface UseMSDF {
   (input: LoadFontInput, options?: MsdfOptions): Font<typeof msdf>;
-  preload(library: FontLibrary, input: LoadFontInput, options?: MsdfOptions): Promise<void>;
-  clear(library: FontLibrary, input: LoadFontInput, options?: MsdfOptions): void;
+  /** Start the same cached MSDF load before a component requests it. */
+  preload(input: LoadFontInput, options?: MsdfOptions): void;
+  /** Release the cached MSDF lease without invalidating mounted consumers. */
+  clear(input: LoadFontInput, options?: MsdfOptions): void;
 }
 
-/** Loads one MSDF font through the nearest GlyphProvider using the shared React font cache. */
+/** Load one MSDF font through the shared R3F cache. */
 export const useMSDF = ((input: LoadFontInput, options?: MsdfOptions): Font<typeof msdf> =>
-  useFont(msdfRequest(input, options))) as UseMSDF;
-useMSDF.preload = (library, input, options) => useFont.preload(library, msdfRequest(input, options));
-useMSDF.clear = (library, input, options) => useFont.clear(library, msdfRequest(input, options));
-
-function msdfRequest(input: LoadFontInput, options?: MsdfOptions) {
-  return {
-    input,
-    raster: options === undefined ? { technique: msdf } : { technique: msdf, options },
-  } as const;
-}
+  useFont(input, msdf, options)) as UseMSDF;
+useMSDF.preload = (input, options) => useFont.preload(input, msdf, options);
+useMSDF.clear = (input, options) => useFont.clear(input, msdf, options);

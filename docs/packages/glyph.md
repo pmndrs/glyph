@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:a3f7e6d69772905e3a6299d90cee33ae7be1de7a669ecc9820d3eaaf23433d90'
+source_digest: 'sha256:f25b6e23fd46ecda0511a7941a3e350b163e8445e271978f629650ab752b4450'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -156,13 +156,12 @@ compressed `--unicode-set` accepted by `glyph bake --unicodes`. Fonts without au
 than invented semantic labels. Rich vendor labels and aliases remain external catalog data.
 
 The R3F `Text` component infers the technique union from a required outer font selection, including a font stack chosen
-from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. An inline `TextSpan` may omit
-`font` because it is flattened into a styled run and inherits from its enclosing paragraph; a rendered `Text` without a
-font is invalid. The two are separate components because they are separate kinds of thing: `Text` is a paragraph box and
-a Three `Object3D`, while `TextSpan` is never mounted and its props are exactly the five the flattener reads. Every
-box-level prop is a type error on a span rather than a value silently discarded, and a `ref` on a span — which could
-never fire, because no object exists — no longer type-checks. Flutter separates `RichText` from `TextSpan` on the same
-line. `TextGroup` owns batching and compositing policy, never font inheritance. Both components register their Three
+from runtime state. Callers do not widen dynamic selections to `AnyRasterTechnique`. A nested `Text` is flattened into
+an inline styled run and may omit `font` because it inherits from its enclosing paragraph; a rendered outer `Text`
+without a font is invalid. Nested text creates no Three object and accepts only `children`, `font`, `style`, `paint`, and
+`material`. Because JSX erases the generic element identity needed to reject every box-only prop statically, the
+flattener validates this boundary synchronously and names any invalid property instead of silently discarding it.
+`TextGroup` owns batching and compositing policy, never font inheritance. Both mounted components register their Three
 objects with the R3F host and are constructed during its commit rather than in a layout effect. React `Activity` can
 therefore pre-render a hidden text or whole text group, while R3F retains visibility and eventual disposal ownership.
 
@@ -207,18 +206,19 @@ keep its identity registry alive or permanently poison later registration after 
 `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name what
 `Text.layout()`, `Text.glyphs()`, and `ParagraphStyle.features` give it.
 
-One baked GLB may expose several raster techniques without repeating its input identity. Root `loadFont()` and
-R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `Font` values. The
-artifact is fetched, validated, registered with the shaper, and retained once; each requested technique still derives
-its exact descriptor, resolves and decodes its own raster resource, and retains its associated data type. A mapped tuple
-keeps required Bitmap options and custom third-party technique types enforceable at every position.
+One baked GLB may expose several raster techniques without repeating its input identity. Root `loadFont()` accepts a
+nonempty `rasters` tuple and returns a position-preserving tuple of `Font` values, fetching and validating the artifact
+once while retaining each technique's exact data type. R3F's generic `useFont(input, technique, options?)` intentionally
+loads one typed technique; a component that renders several calls the corresponding hooks, which R3F caches under their
+canonical per-technique keys.
 
 Single-technique React consumers may import `useBitmapFont`, `useMSDF`, or `useSlug` from the matching `/react/*`
-subpath. Each hook only constructs that technique's typed request and delegates to `useFont`; provider scope, Suspense,
-cache leases, and disposal therefore have one implementation. Technique-specific subpaths preserve the registration and
+subpath. Each hook only constructs that technique's typed request and delegates to `useFont`; Suspense, cache identity,
+and disposal therefore have one implementation. Technique-specific subpaths preserve the registration and
 bundle boundary instead of making the main React entry import every built-in raster. Every hook carries `preload()` and
-`clear()`; the unbound hooks take the owning `FontLibrary`, while `createUseFont(library)` returns a hook with that owner
-already bound.
+`clear()`. Generic `useFont(input, technique, options?)` is the extension point for third-party techniques. R3F's
+`useLoader` cache owns the shared promise and resolved value; Glyph adds only deterministic font-lease disposal so
+clearing a preload does not dispose an independently mounted consumer.
 
 Artifact metrics carry text decoration from bake time (D-246): required `underlinePosition`/`underlineThickness` from
 `post` and `strikeoutPosition`/`strikeoutSize` from `OS/2`, with a conservative derived fallback when a source font

@@ -17,14 +17,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { StrictMode, createElement, useLayoutEffect } from 'react';
+import { StrictMode, Suspense, createElement, useLayoutEffect } from 'react';
+import { DefaultLoadingManager } from 'three/webgpu';
 
-import { createFontLibrary } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
-import { createUseFont, GlyphProvider, Text, useFont } from '@pmndrs/glyph/react';
+import { Text, useFont } from '@pmndrs/glyph/react';
 import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
 import { threeRuntimeDomainReport } from '../../dist/three/runtime-domain.js';
 
@@ -138,17 +138,15 @@ test('user font and loader handles may dispose before React releases its Text le
   assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
-test('library-bound React consumers receive independent Font leases under StrictMode', async () => {
+test('R3F-cached React consumers receive independent Font leases under StrictMode', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const library = createFontLibrary();
-  const fontHook = createUseFont(library);
   const request = {
     input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
     raster: { technique: bitmap, options: { strikes: [16] } },
   };
   const observed = new Map();
-  await fontHook.preload(request);
-  const renderer = await create(hookFontTree(fontHook, request, observed, ['first', 'second']));
+  await preloadRequest(request);
+  const renderer = await create(hookFontTree(request, observed, ['first', 'second']));
   try {
     await waitFor(() => observed.size === 2 && observed.get('first') !== observed.get('second'));
     const first = observed.get('first');
@@ -157,106 +155,111 @@ test('library-bound React consumers receive independent Font leases under Strict
     assert.equal(first.disposed, false);
     assert.equal(second.disposed, false);
 
-    await renderer.update(hookFontTree(fontHook, request, observed, ['second']));
+    await renderer.update(hookFontTree(request, observed, ['second']));
     await waitFor(() => first.disposed && observed.get('second') === second);
     assert.equal(second.disposed, false, 'unmounting one consumer must not dispose its sibling lease');
   } finally {
     await renderer.unmount();
-    library.dispose();
+    clearRequest(request);
   }
   assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 test('clearing a React font resource leaves its mounted consumer lease live', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const library = createFontLibrary();
-  const fontHook = createUseFont(library);
   const request = {
     input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
     raster: { technique: bitmap, options: { strikes: [16] } },
   };
   const observed = new Map();
-  await fontHook.preload(request);
-  const renderer = await create(hookFontTree(fontHook, request, observed, ['mounted']));
+  await preloadRequest(request);
+  const renderer = await create(hookFontTree(request, observed, ['mounted']));
   try {
     await waitFor(() => observed.has('mounted'));
     const mounted = observed.get('mounted');
     assert.ok(mounted !== undefined);
-    fontHook.clear(request);
+    clearRequest(request);
     await Promise.resolve();
     assert.equal(mounted.disposed, false, 'clear releases the Suspense owner, not mounted leases');
   } finally {
     await renderer.unmount();
-    library.dispose();
   }
   assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
-test('a provider-scoped library survives StrictMode replay and releases its runtime domain', async () => {
+test('the generic useFont cache survives StrictMode replay and releases its runtime domain', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const library = createFontLibrary();
   const request = {
     input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
     raster: { technique: bitmap, options: { strikes: [16] } },
   };
   const observed = new Map();
-  await createUseFont(library).preload(request);
+  await preloadRequest(request);
   const renderer = await create(
     createElement(
       StrictMode,
       null,
-      createElement(
-        GlyphProvider,
-        { library },
-        createElement(ProviderFontText, { name: 'provider', observed, request }),
-      ),
+      createElement(Suspense, { fallback: null }, createElement(HookFontText, { name: 'generic', observed, request })),
     ),
   );
-  await waitFor(() => observed.has('provider'));
-  assert.equal(observed.get('provider')?.disposed, false);
+  await waitFor(() => observed.has('generic'));
+  assert.equal(observed.get('generic')?.disposed, false);
   await renderer.unmount();
-  library.dispose();
+  clearRequest(request);
   assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
-test('technique convenience preload and hook share one provider-owned resource', async () => {
+test('technique convenience preload and hook share the R3F resource', async () => {
   const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
-  const library = createFontLibrary();
   const input = { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } };
   const options = { strikes: [16] };
   const observed = new Map();
-  await useBitmapFont.preload(library, input, options);
+  await preload(() => useBitmapFont.preload(input, options));
   const renderer = await create(
     createElement(
-      GlyphProvider,
-      { library },
-      createElement(ProviderBitmapFontText, { input, name: 'bitmap', observed, options }),
+      Suspense,
+      { fallback: null },
+      createElement(BitmapFontText, { input, name: 'bitmap', observed, options }),
     ),
   );
   try {
     await waitFor(() => observed.has('bitmap'));
     const mounted = observed.get('bitmap');
     assert.ok(mounted !== undefined);
-    useBitmapFont.clear(library, input, options);
+    useBitmapFont.clear(input, options);
     await Promise.resolve();
     assert.equal(mounted.disposed, false, 'clear releases the preload owner, not the mounted hook lease');
   } finally {
     await renderer.unmount();
-    library.dispose();
   }
   assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
-function hookFontTree(fontHook, request, observed, names) {
+test('clearing a pending R3F font load cannot resurrect its cache lease', async () => {
+  const input = { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } };
+  const options = { strikes: [16] };
+  const errors = await settleLoading(() => {
+    useFont.preload(input, bitmap, options);
+    useFont.clear(input, bitmap, options);
+  });
+  assert.equal(errors.length, 1);
+  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+});
+
+function hookFontTree(request, observed, names) {
   return createElement(
     StrictMode,
     null,
-    names.map((name) => createElement(HookFontText, { fontHook, key: name, name, observed, request })),
+    createElement(
+      Suspense,
+      { fallback: null },
+      names.map((name) => createElement(HookFontText, { key: name, name, observed, request })),
+    ),
   );
 }
 
-function HookFontText({ fontHook, name, observed, request }) {
-  const font = fontHook(request);
+function HookFontText({ name, observed, request }) {
+  const font = useFont(request.input, request.raster.technique, request.raster.options);
   useLayoutEffect(() => {
     observed.set(name, font);
     return () => {
@@ -275,27 +278,50 @@ function HookFontText({ fontHook, name, observed, request }) {
   );
 }
 
-function ProviderFontText({ name, observed, request }) {
-  const font = useFont(request);
-  useLayoutEffect(() => {
-    observed.set(name, font);
-    return () => {
-      if (observed.get(name) === font) observed.delete(name);
-    };
-  }, [font, name, observed]);
-  return createElement(
-    Text,
-    {
-      font,
-      name,
-      style: { fontSize: 20, lineHeight: 1.25 },
-      contentBox: { width: { mode: 'exact', size: 300 }, wrap: 'word' },
-    },
-    name,
-  );
+function preloadRequest(request) {
+  return preload(() => useFont.preload(request.input, request.raster.technique, request.raster.options));
 }
 
-function ProviderBitmapFontText({ input, name, observed, options }) {
+function preload(start) {
+  return new Promise((resolve, reject) => {
+    const previousLoad = DefaultLoadingManager.onLoad;
+    const previousError = DefaultLoadingManager.onError;
+    const restore = () => {
+      DefaultLoadingManager.onLoad = previousLoad;
+      DefaultLoadingManager.onError = previousError;
+    };
+    DefaultLoadingManager.onLoad = () => {
+      restore();
+      resolve();
+    };
+    DefaultLoadingManager.onError = (url) => {
+      restore();
+      reject(new Error(`React font preload failed: ${url}`));
+    };
+    start();
+  });
+}
+
+function settleLoading(start) {
+  return new Promise((resolve) => {
+    const errors = [];
+    const previousLoad = DefaultLoadingManager.onLoad;
+    const previousError = DefaultLoadingManager.onError;
+    DefaultLoadingManager.onError = (url) => errors.push(url);
+    DefaultLoadingManager.onLoad = () => {
+      DefaultLoadingManager.onLoad = previousLoad;
+      DefaultLoadingManager.onError = previousError;
+      resolve(errors);
+    };
+    start();
+  });
+}
+
+function clearRequest(request) {
+  useFont.clear(request.input, request.raster.technique, request.raster.options);
+}
+
+function BitmapFontText({ input, name, observed, options }) {
   const font = useBitmapFont(input, options);
   useLayoutEffect(() => {
     observed.set(name, font);

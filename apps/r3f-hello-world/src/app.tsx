@@ -1,5 +1,8 @@
-import { createFontLibrary, type Font } from '@pmndrs/glyph';
-import { createUseFont, Text, TextGroup, TextSpan } from '@pmndrs/glyph/react';
+import { type Font } from '@pmndrs/glyph';
+import { Text, TextGroup } from '@pmndrs/glyph/react';
+import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
+import { useMSDF } from '@pmndrs/glyph/react/msdf';
+import { useSlug } from '@pmndrs/glyph/react/slug';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -17,31 +20,31 @@ const TECHNIQUES = ['bitmap', 'msdf', 'slug'] as const;
 const COLORS = { bitmap: '#f59e0b', msdf: '#fb7185', slug: '#ff4dc4' } as const;
 
 // Multiple techniques can be baked into a single glb, or alternatively you can bake each technique into its own glb.
-const latinFontRequest = {
-  input: { baked: latinFontUrl },
-  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
-} as const;
+const latinFont = { baked: latinFontUrl } as const;
 
 // This icon font only bakes a few glyphs from the full Font Awesome set. You can bake any subset of glyphs into a glb.
-const iconFontRequest = {
-  input: { baked: iconFontUrl },
-  rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
-} as const;
-
-const fontLibrary = createFontLibrary();
-const useAppFont = createUseFont(fontLibrary);
+const iconFont = { baked: iconFontUrl } as const;
+const bitmapOptions = { strikes: [32] } as const;
 
 // You can preload font assets to reduce loading waterfalls.
 // This is especially useful for fonts that are used in the initial scene.
-void useAppFont.preload(latinFontRequest);
-void useAppFont.preload(iconFontRequest);
+useBitmapFont.preload(latinFont, bitmapOptions);
+useMSDF.preload(latinFont);
+useSlug.preload(latinFont);
+useBitmapFont.preload(iconFont, bitmapOptions);
+useMSDF.preload(iconFont);
+useSlug.preload(iconFont);
 
 export function App() {
   const viewport = useThree((state) => state.viewport);
   const [activeTechnique, setActiveTechnique] = useState<Technique>('msdf');
 
-  const [bitmapLatin, msdfLatin, slugLatin] = useAppFont(latinFontRequest);
-  const [bitmapIcons, msdfIcons, slugIcons] = useAppFont(iconFontRequest);
+  const bitmapLatin = useBitmapFont(latinFont, bitmapOptions);
+  const msdfLatin = useMSDF(latinFont);
+  const slugLatin = useSlug(latinFont);
+  const bitmapIcons = useBitmapFont(iconFont, bitmapOptions);
+  const msdfIcons = useMSDF(iconFont);
+  const slugIcons = useSlug(iconFont);
 
   const fonts = [
     { font: bitmapLatin, icon: bitmapIcons, technique: 'bitmap' },
@@ -55,7 +58,7 @@ export function App() {
       <group name="world-text">
         {fonts.map(({ font, icon, technique }) => (
           <Activity key={technique} mode={activeTechnique === technique ? 'visible' : 'hidden'}>
-            {/* A TextSpan is an inline run: it inherits the paragraph's font, style, and paint unless it
+            {/* A nested Text is an inline run: it inherits the paragraph's font, style, and paint unless it
                 overrides them, and carries no transform of its own because it is not an object in the scene. */}
             <Text
               contentBox={{
@@ -70,9 +73,9 @@ export function App() {
               style={{ fontSize: 64, lineHeight: 1 }}
             >
               Hello world{' '}
-              <TextSpan font={icon} paint={{ color: COLORS[technique] }}>
+              <Text font={icon} paint={{ color: COLORS[technique] }}>
                 {WORLD_ICON}
-              </TextSpan>
+              </Text>
             </Text>
           </Activity>
         ))}

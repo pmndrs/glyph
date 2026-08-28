@@ -1220,6 +1220,11 @@ function prepareImmutableRequest(
   };
 }
 
+/** @internal Validate a font request and return the loader's canonical cache identity. */
+export function immutableFontRequestKey<Technique extends AnyRasterTechnique>(request: FontRequest<Technique>): string {
+  return prepareImmutableRequest(request, {}).key;
+}
+
 function ownPreparedRequestBytes(prepared: PreparedFontRequest): PreparedFontRequest {
   return { ...prepared, input: ownFontInputBytes(prepared.input) };
 }

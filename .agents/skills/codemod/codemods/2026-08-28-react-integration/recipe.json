@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-08-28-react-integration",
+  "created": "2026-08-28",
+  "package": "@pmndrs/glyph",
+  "from": "canary before feat/render-technique-portability",
+  "to": "canary at or after feat/render-technique-portability",
+  "summary": "Use the shared R3F font cache and nested Text runs.",
+  "instructions": "./instructions.md",
+  "transform": "./transform.mjs",
+  "changes": [
+    {
+      "kind": "call-rewrite",
+      "from": "useFont(request)",
+      "to": "useFont(input, technique, options)",
+      "automatic": true
+    },
+    {
+      "kind": "remove",
+      "from": "createUseFont(library)",
+      "to": "useFont",
+      "automatic": true
+    },
+    {
+      "kind": "remove",
+      "from": "GlyphProvider",
+      "to": "R3F shared loader cache",
+      "automatic": false
+    },
+    {
+      "kind": "symbol-rename",
+      "from": "React TextSpan",
+      "to": "nested React Text",
+      "automatic": true
+    },
+    {
+      "kind": "call-rewrite",
+      "from": "useBitmapFont/useMSDF/useSlug.preload(library, input, options)",
+      "to": "useBitmapFont/useMSDF/useSlug.preload(input, options)",
+      "automatic": true
+    }
+  ],
+  "verification": [
+    "mise exec -- pnpm --filter @pmndrs/glyph check",
+    "mise exec -- pnpm --filter @pmndrs/glyph-r3f-hello-world check",
+    "mise exec -- pnpm --filter @pmndrs/glyph-benchmarks check"
+  ]
+}
