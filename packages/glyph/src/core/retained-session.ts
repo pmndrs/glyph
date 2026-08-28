@@ -1047,10 +1047,10 @@ class RetainedTextEngineSession {
       }
       state.published = true;
       state.publishedText = state.desired.text;
-      state.publishedStyleCount = compiledStyleCount(state);
       state.geometryRevision += 1;
       this.#dirtyTextCount -= 1;
       this.#pendingStyleCount -= pendingStyleMutationCount(state);
+      state.publishedStyleCount = compiledStyleCount(state);
       state.dirty = false;
     }
   }

@@ -298,6 +298,27 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(flowSession.publish()).toEqual({ accepted: true });
       expect(flowSession.publish()).toEqual({ accepted: true });
       expect(flowCheckpoints.at(-1)).toBe(true);
+      const expandedStyles = {
+        text: 'abc',
+        spans: [
+          { start: 0, end: 1, style: { fontSize: 24 } },
+          { start: 1, end: 2, style: { fontSize: 28 } },
+          { start: 2, end: 3, style: { fontSize: 32 } },
+        ],
+      } as const;
+      // A stale-ledger regression leaked three styles per cycle and exhausted the 64-entry budget here.
+      for (let index = 0; index < 21; index += 1) {
+        flowText.update({ text: expandedStyles });
+        expect(flowSession.publish()).toEqual({ accepted: true });
+        flowText.update({ text: 'abc' });
+        expect(flowSession.publish()).toEqual({ accepted: true });
+      }
+      const styleBudgetProbe = flowSession.createText({
+        font: flowFont,
+        text: { text: 'x', spans: [{ start: 0, end: 1, style: { fontSize: 24 } }] },
+        order: 1,
+      });
+      styleBudgetProbe.dispose();
       flowText.dispose();
       expect(() => flowText.layout()).toThrow('disposed');
       const sessionOwnedText = flowSession.createText({ font: flowFont, text: 'session-owned' });

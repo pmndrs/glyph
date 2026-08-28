@@ -2,6 +2,11 @@
 
 ## 2026-08-28
 
+- **Balanced retained style-mutation accounting across shrinking commits** — The pending-style ledger now subtracts a
+  dirty text's old published span count before publishing its replacement count. A regression repeatedly expands one
+  text to four styles and shrinks it to one, then proves a valid second two-style text still fits the unchanged
+  `maxClusters` budget instead of being rejected by leaked historical deltas.
+
 - **Kept renderer oracles on the authenticated portable technique path** — Benchmark font assets now compile and read
   the exact registered Bitmap, MSDF, or Slug technique instead of cloning a same-ID wrapper to capture private decoded
   data. The validated read-only compiled-font view resolves named fields, strikes, resource selections, and portable

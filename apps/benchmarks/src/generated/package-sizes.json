@@ -10,11 +10,11 @@
       "label": "Renderer-neutral core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "d034bf30219416b51baf013e84c41771bcdd18f9a5aeb89a62f79e121d746862",
+      "sha256": "bfc58308c425aa27bfbe28cb42a4f2e1f01c3aa2c8ba1562230246c558ce55cc",
       "rawBytes": 409434,
       "minifiedBytes": 267990,
-      "gzipBytes": 66483,
-      "brotliBytes": 55698
+      "gzipBytes": 66484,
+      "brotliBytes": 55691
     },
     {
       "id": "tsl-subpath-js",
@@ -43,11 +43,11 @@
       "label": "Core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "cdd7ad706a41faff924031a15fd0efb17c23c2492fd244907176244d965450d3",
+      "sha256": "0e8d433f1325ced6facd586f382a404a38598a22f8948b55f7ff4914596ddc63",
       "rawBytes": 428598,
       "minifiedBytes": 277451,
       "gzipBytes": 70424,
-      "brotliBytes": 58727
+      "brotliBytes": 58743
     },
     {
       "id": "text-shaper-wasm",
@@ -65,11 +65,11 @@
       "label": "Three.js adapter JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "a231a57701706e644a119b17fcc4ab61cd95dce6c0e22b8bfa7cc4ae0bef7069",
+      "sha256": "1ae210e1fede346ee9321af488632b2cba8b7409df074b13b68af1157247bdd4",
       "rawBytes": 686633,
       "minifiedBytes": 442978,
-      "gzipBytes": 111428,
-      "brotliBytes": 92391
+      "gzipBytes": 111430,
+      "brotliBytes": 92368
     },
     {
       "id": "font-inter-bitmap-16-32",
