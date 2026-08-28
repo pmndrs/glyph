@@ -1,285 +1,137 @@
+import type { AnyRasterTechnique, ColorInput, Font, FontStack, GlyphPaintInput } from '@pmndrs/glyph';
 import {
-  compileTextEngineFrameUpdate,
-  compileLoadedRasterFont,
-  TextEngineHost,
-  type FontBindingHandle,
-  type FontStackHandle,
-  type FlowThreadId,
-  type ParagraphId,
-  type RegionId,
-  type OwnedTextEnginePublication,
+  type HostFontBinding,
+  type HostFontStackBinding,
+  type HostPolicy,
+  type PlanCandidate,
+  type PlanTarget,
+  type ResourceHandle,
+  type SynchronousTextEngineSession,
+  type TextEngineText,
   type TextRuntime,
-  type StyleId,
-  type TextEngineFrameLimits,
-  type TextEngineParagraphMutation,
-  type TextEnginePublication,
-  type TextEngineSession,
-  type TextEngineStyleMutation,
-  type TextEngineTextMutation,
-  type TextEngineConstraint,
-  type TextEngineRegion,
 } from '@pmndrs/glyph/core';
-import type { AnyRasterTechnique, LoadedFont } from '@pmndrs/glyph';
 
 import type { ExampleDrawList } from './draw-list.js';
-import { readDrawList } from './plan-reader.js';
-import { EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes } from './policy.js';
 import type { ExampleRendererDevice, ExampleRendererResourceInput } from './device.js';
+import { readCandidate } from './plan-reader.js';
+import { exampleCapabilitySet, exampleRenderPolicyDescriptor } from './policy.js';
 
-/** The frame limits this host runs under. The engine rejects zero limits outright. */
-const EXAMPLE_LIMITS: TextEngineFrameLimits = {
-  maxParagraphs: 8,
-  maxClusters: 256,
-  maxLines: 32,
-  maxRegions: 4,
-  maxExclusions: 4,
-  maxInlineObjects: 4,
-  maxSlotsPerBand: 4,
-  maxOutputBytes: 128 * 1024,
-};
-
-export interface ExampleFrameInput {
-  readonly paragraphMutations?: readonly TextEngineParagraphMutation[];
-  readonly textMutations?: readonly TextEngineTextMutation[];
-  readonly styleMutations?: readonly TextEngineStyleMutation[];
-  readonly constraints?: readonly TextEngineConstraint[];
-  readonly regions?: readonly TextEngineRegion[];
-}
+const EXAMPLE_LIMITS = Object.freeze({
+  maxParagraphs: 64,
+  maxClusters: 16_384,
+  maxLines: 4_096,
+  maxRegions: 256,
+  maxExclusions: 256,
+  maxInlineObjects: 256,
+  maxSlotsPerBand: 32,
+  maxOutputBytes: 16 * 1024 * 1024,
+});
 
 export interface ExampleTextOptions {
-  readonly fontStack: FontStackHandle;
+  readonly font: HostFontStackBinding;
   readonly text: string;
   readonly fontSize?: number;
   readonly width?: number;
   readonly height?: number;
   readonly rasterPixelRatio?: number;
-  readonly foregroundRgba?: number;
+  readonly color?: ColorInput;
+  readonly opacity?: number;
 }
 
 export interface ExampleTextUpdate {
+  readonly font?: HostFontStackBinding;
   readonly text?: string;
   readonly fontSize?: number;
   readonly width?: number;
   readonly height?: number;
   readonly rasterPixelRatio?: number;
-  readonly foregroundRgba?: number;
+  readonly color?: ColorInput;
+  readonly opacity?: number;
 }
 
-const exampleTextConstruction: unique symbol = Symbol('ExampleText construction');
-
-/**
- * An asynchronous host driving the engine through `@pmndrs/glyph/core` alone.
- *
- * `render` crosses an asynchronous device boundary, so it owns the publication first:
- *
- * ```ts
- * const borrowed = session.update(request);
- * const owned = session.copyPublication(borrowed);
- * readDrawList(owned);
- * ```
- *
- * Engine acceptance advances the engine revision. Device acceptance advances the consumed
- * plan revision and acknowledgment; rejection leaves the last rendered state authoritative.
- */
+/** A complete third-party integration using only root assets and the public `/core` host contract. */
 export class ExampleTextEngine {
-  readonly #host: TextEngineHost;
-  readonly #device: ExampleRendererDevice | undefined;
-  #nextBindingOrdinal = 1;
-  #nextStackOrdinal = 1;
-  #nextTextOrdinal = 1;
-  readonly #freeTextOrdinals: number[] = [];
-  #session: TextEngineSession | undefined;
-  #rendering = false;
+  readonly #host;
+  readonly #policy: HostPolicy;
+  readonly #target: ExamplePlanTarget;
+  #session: SynchronousTextEngineSession | undefined;
   #disposed = false;
 
   constructor(runtime: TextRuntime, device?: ExampleRendererDevice) {
     this.#host = runtime.createTextEngineHost({ integration: '@pmndrs/glyph-example-renderer' });
-    this.#device = device;
+    this.#target = new ExamplePlanTarget(device);
     try {
-      this.#host.registerPolicy(EXAMPLE_POLICY_HANDLE, exampleRenderPolicyBytes(this.#host.wireIdentities));
+      this.#policy = this.#host.installPolicy(exampleRenderPolicyDescriptor(this.#host.wireIdentities));
     } catch (error) {
-      try {
-        this.#host.dispose();
-      } catch (disposeError) {
-        const failure = new AggregateError(
-          [error, disposeError],
-          'example engine construction and teardown both failed',
-          {
-            cause: error,
-          },
-        );
-        throw failure;
-      }
+      this.#host.dispose();
       throw error;
     }
   }
 
-  /** Compile and register one loaded font through the portable raster program. */
-  registerFont(font: LoadedFont<AnyRasterTechnique>): FontBindingHandle {
+  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): HostFontBinding<Technique> {
     this.#assertActive();
-    if (this.#rendering)
-      throw new Error('example engine cannot register a font while a frame submission is in progress');
-    const shader = this.#device?.shader;
+    const shader = this.#target.shader;
     if (shader !== undefined && shader.variant.techniqueId !== font.technique.id) {
       throw new TypeError(
         `example renderer shader "${shader.variant.techniqueId}" cannot render "${font.technique.id}"`,
       );
     }
-    const compiled = compileLoadedRasterFont(font, this.#host.wireIdentities);
-    if (compiled === undefined)
-      throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
-    const bindingHandle = this.#host.id('font-binding', `glyph-example-renderer/${this.#nextBindingOrdinal}`);
-    const requiredNames =
-      shader === undefined ? [...compiled.declaredResources.keys()] : Object.keys(shader.variant.resources);
-    const resources: ExampleRendererResourceInput[] = [];
-    for (const name of requiredNames) {
-      const keys = compiled.declaredResources.get(name);
-      if (keys === undefined || keys.length === 0) throw new Error(`compiled font omitted declared resource "${name}"`);
-      for (const key of keys) {
-        const resource = compiled.resources.get(key);
-        if (resource === undefined) throw new Error(`compiled font omitted declared resource "${name}"`);
-        resources.push({ id: this.#host.wireIdentities.resourceId(key), generation: 1, name, resource });
-      }
-    }
-    const pending = this.#device?.prepareResources(resources);
-    try {
-      this.#host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
-      try {
-        pending?.commit();
-      } catch (commitError) {
-        try {
-          this.#host.disposeFontBinding(bindingHandle);
-        } catch (disposeError) {
-          throw new AggregateError(
-            [commitError, disposeError],
-            'example renderer resource commit and font-binding rollback both failed',
-            { cause: commitError },
+    return this.#host.bindFont(font);
+  }
+
+  bindFontStack<Technique extends AnyRasterTechnique>(
+    stack: FontStack<Technique, Font<Technique>>,
+  ): HostFontStackBinding {
+    this.#assertActive();
+    const shader = this.#target.shader;
+    if (shader !== undefined) {
+      for (const font of stack.fonts) {
+        if (font.technique.id !== shader.variant.techniqueId) {
+          throw new TypeError(
+            `example renderer shader "${shader.variant.techniqueId}" cannot render "${font.technique.id}"`,
           );
         }
-        throw commitError;
       }
-    } catch (error) {
-      pending?.discard();
-      throw error;
     }
-    this.#nextBindingOrdinal += 1;
-    return bindingHandle;
+    return this.#host.bindFontStack(stack);
   }
 
-  /** The live session, for hosts that compose raw protocol steps themselves. */
-  get session(): TextEngineSession {
+  openSession(): SynchronousTextEngineSession {
     this.#assertActive();
-    if (this.#session === undefined) throw new Error('example engine has no open frame session');
-    return this.#session;
-  }
-
-  /** Register a selectable font stack and return the handle later text options reference. */
-  registerFontStack(fontHandles: readonly FontBindingHandle[]): FontStackHandle {
-    this.#assertActive();
-    const handle = this.#host.id('font-stack', `glyph-example-renderer/${this.#nextStackOrdinal}`);
-    this.#host.registerFontStack(handle, fontHandles);
-    this.#nextStackOrdinal += 1;
-    return handle;
-  }
-
-  openSession(): TextEngineSession {
-    this.#assertActive();
-    if (this.#session !== undefined) throw new Error('example engine already has an open frame session');
-    const handle = this.#host.id('session', 'glyph-example-renderer/main');
-    this.#session = this.#host.createSession({ handle, requestCapacity: 4096, resultCapacity: 128 * 1024 });
-    return this.#session;
-  }
-
-  /** Creates one retained application text after its font stack and session exist. */
-  createText(options: ExampleTextOptions): ExampleText {
-    void this.session;
-    const recycledOrdinal = this.#freeTextOrdinals.pop();
-    const ordinal = recycledOrdinal ?? this.#nextTextOrdinal++;
-    try {
-      return new ExampleText(
-        exampleTextConstruction,
-        this.#host.id,
-        (input, accepted) => this.#startRender(input, accepted),
-        () => this.#freeTextOrdinals.push(ordinal),
-        ordinal,
-        options,
-      );
-    } catch (error) {
-      this.#freeTextOrdinals.push(ordinal);
-      throw error;
-    }
-  }
-
-  /** Serializes one frame request, carrying the acknowledged generation automatically. */
-  frameRequest(input: ExampleFrameInput): Uint8Array {
-    const session = this.session;
-    return compileTextEngineFrameUpdate({
-      sessionId: session.handle,
-      policyHandle: EXAMPLE_POLICY_HANDLE,
-      expectedEngineRevision: this.#engineRevision,
-      consumedPlanRevision: this.#planRevision,
-      acknowledgedPublicationGeneration: this.#acknowledgedPublicationGeneration,
+    if (this.#session !== undefined) throw new Error('example engine already has an open text session');
+    this.#session = this.#host.createSession({
+      policy: this.#policy,
+      capabilitySet: exampleCapabilitySet,
+      target: () => this.#target,
       limits: EXAMPLE_LIMITS,
-      ...(input.paragraphMutations === undefined ? {} : { paragraphMutations: input.paragraphMutations }),
-      ...(input.textMutations === undefined ? {} : { textMutations: input.textMutations }),
-      ...(input.styleMutations === undefined ? {} : { styleMutations: input.styleMutations }),
-      ...(input.constraints === undefined ? {} : { constraints: input.constraints }),
-      ...(input.regions === undefined ? {} : { regions: input.regions }),
+      requestCapacity: 64 * 1024,
+      resultCapacity: 256 * 1024,
+      textCapacity: 16 * 1024,
     });
+    return this.#session;
   }
 
-  /** Runs one real frame and returns its plan in host-owned memory. */
-  render(input: ExampleFrameInput): Promise<ExampleDrawList> {
-    return this.#startRender(input);
+  createText(options: ExampleTextOptions): ExampleText {
+    const session = this.#requireSession();
+    return new ExampleText(session, () => this.publish(), options);
   }
 
-  #startRender(input: ExampleFrameInput, engineAccepted?: () => void): Promise<ExampleDrawList> {
-    this.#assertActive();
-    if (this.#rendering) throw new Error('example engine already has a frame submission in progress');
-    this.#rendering = true;
-    return this.#render(input, engineAccepted).finally(() => {
-      this.#rendering = false;
-    });
-  }
-
-  async #render(input: ExampleFrameInput, engineAccepted?: () => void): Promise<ExampleDrawList> {
-    const device = this.#device;
-    const borrowed = this.session.update(this.frameRequest(input));
-    this.#engineRevision = borrowed.engineRevision;
-    engineAccepted?.();
-    const publication = this.#copyPublication(borrowed);
-    const list = readDrawList(publication);
-    const pending = device?.prepareSubmission(list);
-    try {
-      const accepted = await pending?.commit();
-      if (accepted === false) throw new Error('example renderer rejected a superseded frame submission');
-    } catch (error) {
-      pending?.discard();
-      throw error;
-    }
-    this.#planRevision = list.planRevision;
-    this.#acknowledgedPublicationGeneration = list.publicationGeneration;
-    return list;
-  }
-
-  #acknowledgedPublicationGeneration = 0;
-  #engineRevision = 0;
-  #planRevision = 0;
-
-  /** Copy a raw borrow before any device operation can invalidate Wasm memory. */
-  #copyPublication(publication: TextEnginePublication): OwnedTextEnginePublication {
-    return this.session.copyPublication(publication);
+  publish(): ExampleDrawList {
+    const result = this.#requireSession().publish();
+    if (!result.accepted) throw result.error;
+    return this.#target.lastDrawList;
   }
 
   dispose(): void {
     if (this.#disposed) return;
-    if (this.#rendering) throw new Error('example engine cannot dispose while a frame submission is in progress');
     this.#disposed = true;
-    try {
-      this.#host.dispose();
-    } finally {
-      this.#session = undefined;
-    }
+    this.#host.dispose();
+    this.#session = undefined;
+  }
+
+  #requireSession(): SynchronousTextEngineSession {
+    this.#assertActive();
+    return this.#session ?? this.openSession();
   }
 
   #assertActive(): void {
@@ -287,42 +139,16 @@ export class ExampleTextEngine {
   }
 }
 
-/** A small stateful text façade that emits validated frame mutations only when its desired state changes. */
 export class ExampleText {
-  readonly #renderFrame: (input: ExampleFrameInput, engineAccepted: () => void) => Promise<ExampleDrawList>;
-  readonly #releaseOrdinal: () => void;
-  readonly #paragraphId: ParagraphId;
-  readonly #styleId: StyleId;
-  readonly #flowThreadId: FlowThreadId;
-  readonly #regionId: RegionId;
-  readonly #order: number;
-  readonly #transformIndex: number;
-  #state: Required<Omit<ExampleTextOptions, 'fontStack'>> & Pick<ExampleTextOptions, 'fontStack'>;
-  #publishedText = '';
-  #geometryRevision = 1;
-  #created = false;
-  #dirty = true;
+  readonly #text: TextEngineText;
+  readonly #publish: () => ExampleDrawList;
+  #state: NormalizedExampleTextOptions;
   #disposed = false;
 
-  constructor(
-    construction: typeof exampleTextConstruction,
-    id: TextEngineHost['id'],
-    renderFrame: (input: ExampleFrameInput, engineAccepted: () => void) => Promise<ExampleDrawList>,
-    releaseOrdinal: () => void,
-    ordinal: number,
-    options: ExampleTextOptions,
-  ) {
-    if (construction !== exampleTextConstruction) throw new TypeError('create example text through its engine');
-    this.#renderFrame = renderFrame;
-    this.#releaseOrdinal = releaseOrdinal;
-    this.#order = ordinal - 1;
-    this.#transformIndex = ordinal;
-    const namespace = `glyph-example-renderer/text/${ordinal}`;
-    this.#paragraphId = id('paragraph', namespace);
-    this.#styleId = id('style', `${namespace}/style`);
-    this.#flowThreadId = id('flow-thread', `${namespace}/flow`);
-    this.#regionId = id('region', `${namespace}/region`);
+  constructor(session: SynchronousTextEngineSession, publish: () => ExampleDrawList, options: ExampleTextOptions) {
+    this.#publish = publish;
     this.#state = normalizeTextOptions(options);
+    this.#text = session.createText(coreTextOptions(this.#state));
   }
 
   get text(): string {
@@ -334,165 +160,156 @@ export class ExampleText {
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('example text updates must be objects');
     }
-    const next = normalizeTextOptions({ ...this.#state, ...update });
-    if (sameTextState(this.#state, next)) return;
-    if (next.width !== this.#state.width || next.height !== this.#state.height) this.#geometryRevision += 1;
-    this.#state = next;
-    this.#dirty = true;
+    const state = normalizeTextOptions({ ...this.#state, ...update });
+    this.#text.update(coreTextOptions(state));
+    this.#state = state;
   }
 
-  render(): Promise<ExampleDrawList> {
+  publish(): ExampleDrawList {
     this.#assertLive();
-    if (!this.#dirty) return this.#renderFrame({}, () => {});
-    const state = this.#state;
-    return this.#renderFrame(
-      {
-        ...(!this.#created
-          ? { paragraphMutations: [{ opcode: 'upsert' as const, paragraphId: this.#paragraphId, order: this.#order }] }
-          : {}),
-        textMutations: [
-          {
-            paragraphId: this.#paragraphId,
-            start: 0,
-            deleteCount: this.#publishedText.length,
-            insert: state.text,
-          },
-        ],
-        styleMutations: [
-          {
-            opcode: 'upsert',
-            paragraphId: this.#paragraphId,
-            styleId: this.#styleId,
-            cascadeOrder: 0,
-            start: 0,
-            end: state.text.length,
-            root: true,
-            value: {
-              fontStackHandle: state.fontStack,
-              fontSize: state.fontSize,
-              rasterPixelRatio: state.rasterPixelRatio,
-              foregroundRgba: state.foregroundRgba,
-            },
-          },
-        ],
-        constraints: [this.#constraint()],
-        regions: [this.#region()],
-      },
-      () => {
-        this.#created = true;
-        this.#publishedText = state.text;
-        this.#dirty = false;
-      },
-    );
+    return this.#publish();
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     if (this.#disposed) return;
-    if (this.#created) {
-      await this.#renderFrame({ paragraphMutations: [{ opcode: 'remove', paragraphId: this.#paragraphId }] }, () => {
-        this.#acceptDisposal();
-      });
-      return;
-    }
-    this.#acceptDisposal();
-  }
-
-  #constraint(): TextEngineConstraint {
-    return {
-      paragraphId: this.#paragraphId,
-      flowThreadId: this.#flowThreadId,
-      geometryRevision: this.#geometryRevision,
-      width: this.#state.width,
-      height: this.#state.height,
-      viewportBlockStart: 0,
-      viewportBlockEnd: this.#state.height,
-      resumeBlockOffset: 0,
-      maxLines: EXAMPLE_LIMITS.maxLines,
-      regionStart: 0,
-      resumeCluster: 0,
-      regionCount: 1,
-      resumeRegion: 0,
-      widthMode: 'at-most',
-      heightMode: 'at-most',
-      wrap: 'word',
-      align: 'start',
-      overflow: 'visible',
-      blockAlign: 'start',
-    };
-  }
-
-  #region(): TextEngineRegion {
-    return {
-      id: this.#regionId,
-      geometryRevision: this.#geometryRevision,
-      transformIndex: this.#transformIndex,
-      shape: 'rectangle',
-      exclusionStart: 0,
-      exclusionCount: 0,
-      writingMode: 'horizontal-tb',
-      textOrientation: 'mixed',
-      inlineStart: 0,
-      blockStart: 0,
-      inlineEnd: this.#state.width,
-      blockEnd: this.#state.height,
-      clipInlineStart: 0,
-      clipBlockStart: 0,
-      clipInlineEnd: this.#state.width,
-      clipBlockEnd: this.#state.height,
-    };
+    this.#disposed = true;
+    this.#text.dispose();
   }
 
   #assertLive(): void {
     if (this.#disposed) throw new Error('example text is disposed');
   }
+}
 
-  #acceptDisposal(): void {
+class ExamplePlanTarget implements PlanTarget {
+  readonly delivery = 'borrowed' as const;
+  readonly #device: ExampleRendererDevice | undefined;
+  readonly #payloads = new Map<number, ReturnType<PlanCandidate['acquirePayload']>>();
+  #lastDrawList: ExampleDrawList | undefined;
+  #disposed = false;
+
+  constructor(device: ExampleRendererDevice | undefined) {
+    this.#device = device;
+  }
+
+  get shader(): ExampleRendererDevice['shader'] | undefined {
+    return this.#device?.shader;
+  }
+
+  get lastDrawList(): ExampleDrawList {
+    if (this.#lastDrawList === undefined) throw new Error('example renderer has not accepted a plan');
+    return this.#lastDrawList;
+  }
+
+  accept(candidate: PlanCandidate) {
+    if (this.#disposed) return { accepted: false as const, error: new Error('example plan target is disposed') };
+    const list = readCandidate(candidate);
+    const device = this.#device;
+    if (device === undefined) {
+      this.#lastDrawList = list;
+      return { accepted: true as const };
+    }
+
+    const resources: ExampleRendererResourceInput[] = [];
+    const acquired: Array<ReturnType<PlanCandidate['acquirePayload']>> = [];
+    const retained = new Set<ReturnType<PlanCandidate['acquirePayload']>>();
+    try {
+      for (const record of list.resourceRecords) {
+        if (record.referenceId === 0 || this.#payloads.has(record.referenceId)) continue;
+        const payload = candidate.acquirePayload(record.referenceId as ResourceHandle);
+        if (payload.techniqueId !== device.shader.variant.techniqueId) {
+          payload.dispose();
+          throw new TypeError(`plan payload technique "${payload.techniqueId}" does not match the selected shader`);
+        }
+        acquired.push(payload);
+        resources.push({
+          id: record.referenceId,
+          generation: record.generation,
+          name: payload.resourceName,
+          resource: payload.payload,
+        });
+      }
+      const pendingResources = device.prepareResources(resources);
+      try {
+        pendingResources.commit();
+      } catch (error) {
+        pendingResources.discard();
+        throw error;
+      }
+      for (const [index, payload] of acquired.entries()) {
+        this.#payloads.set(resources[index]!.id, payload);
+        retained.add(payload);
+      }
+
+      const pending = device.prepareSubmission(list);
+      try {
+        if (!pending.commit()) {
+          pending.discard();
+          return { accepted: false as const, error: new Error('example renderer rejected a superseded plan') };
+        }
+      } catch (error) {
+        pending.discard();
+        throw error;
+      }
+      this.#lastDrawList = list;
+      return { accepted: true as const };
+    } catch (error) {
+      for (const payload of acquired) if (!retained.has(payload)) payload.dispose();
+      return { accepted: false as const, error };
+    }
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
     this.#disposed = true;
-    this.#releaseOrdinal();
+    for (const payload of this.#payloads.values()) payload.dispose();
+    this.#payloads.clear();
   }
 }
 
-function normalizeTextOptions(
-  options: ExampleTextOptions,
-): Required<Omit<ExampleTextOptions, 'fontStack'>> & Pick<ExampleTextOptions, 'fontStack'> {
+type NormalizedExampleTextOptions = Required<Omit<ExampleTextOptions, 'font' | 'color' | 'opacity'>> &
+  Pick<ExampleTextOptions, 'font' | 'color' | 'opacity'>;
+
+function normalizeTextOptions(options: ExampleTextOptions): NormalizedExampleTextOptions {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
     throw new TypeError('example text options must be an object');
   }
   if (typeof options.text !== 'string') throw new TypeError('example text content must be a string');
   return {
-    fontStack: options.fontStack,
+    font: options.font,
     text: options.text,
     fontSize: positiveFinite(options.fontSize ?? 48, 'fontSize'),
     width: positiveFinite(options.width ?? 1024, 'width'),
     height: positiveFinite(options.height ?? 256, 'height'),
     rasterPixelRatio: positiveFinite(options.rasterPixelRatio ?? 1, 'rasterPixelRatio'),
-    foregroundRgba: unsignedU32(options.foregroundRgba ?? 0xffff_ffff, 'foregroundRgba'),
+    ...(options.color === undefined ? {} : { color: options.color }),
+    ...(options.opacity === undefined ? {} : { opacity: options.opacity }),
   };
 }
 
-function sameTextState(
-  left: Required<Omit<ExampleTextOptions, 'fontStack'>> & Pick<ExampleTextOptions, 'fontStack'>,
-  right: Required<Omit<ExampleTextOptions, 'fontStack'>> & Pick<ExampleTextOptions, 'fontStack'>,
-): boolean {
-  return (
-    left.fontStack === right.fontStack &&
-    left.text === right.text &&
-    left.fontSize === right.fontSize &&
-    left.width === right.width &&
-    left.height === right.height &&
-    left.rasterPixelRatio === right.rasterPixelRatio &&
-    left.foregroundRgba === right.foregroundRgba
-  );
+function coreTextOptions(state: NormalizedExampleTextOptions) {
+  const paint: GlyphPaintInput | undefined =
+    state.color === undefined && state.opacity === undefined
+      ? undefined
+      : {
+          ...(state.color === undefined ? {} : { color: state.color }),
+          ...(state.opacity === undefined ? {} : { opacity: state.opacity }),
+        };
+  return {
+    font: state.font,
+    text: state.text,
+    style: { fontSize: state.fontSize },
+    ...(paint === undefined ? {} : { paint }),
+    rasterPixelRatio: state.rasterPixelRatio,
+    contentBox: {
+      width: { mode: 'at-most' as const, size: state.width },
+      height: { mode: 'at-most' as const, size: state.height },
+      maxLines: EXAMPLE_LIMITS.maxLines,
+    },
+  };
 }
 
 function positiveFinite(value: number, name: string): number {
   if (!Number.isFinite(value) || value <= 0) throw new RangeError(`example text ${name} must be positive and finite`);
-  return value;
-}
-
-function unsignedU32(value: number, name: string): number {
-  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
-    throw new RangeError(`example text ${name} must be an unsigned 32-bit integer`);
-  }
   return value;
 }

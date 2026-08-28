@@ -241,6 +241,8 @@ class TextRuntimeImpl implements TextRuntime {
   readonly #liveFontRegistrations = new Set<RuntimeFontRegistration>();
   readonly #legacyShaperFonts = new Set<RegisteredFont>();
   #disposed = false;
+  #disposing = false;
+  #borrowedPlanActive = false;
 
   constructor(legacyRegistry: FontRegistry, runtimeRegistry: RuntimeFontRegistry, shaper: RuntimeShaper) {
     this.#legacyRegistry = legacyRegistry;
@@ -261,6 +263,8 @@ class TextRuntimeImpl implements TextRuntime {
       options,
       () => this.#hosts.delete(host),
       (font) => this._acquireFont(font),
+      () => this.#assertHostAvailable(),
+      () => this.#enterBorrowedPlan(),
     );
     this.#hosts.add(host);
     return host;
@@ -336,8 +340,11 @@ class TextRuntimeImpl implements TextRuntime {
    * are frequently already unwinding an earlier error.
    */
   dispose(): void {
-    if (this.#disposed) return;
-    this.#disposed = true;
+    if (this.#disposed || this.#disposing) return;
+    if (this.#borrowedPlanActive) {
+      throw new Error('text runtime cannot be disposed while a borrowed render plan is active');
+    }
+    this.#disposing = true;
     const report = (stage: string, error: unknown): void => {
       if (DEV) console.warn(`text runtime teardown continued after ${stage} failed: ${String(error)}`);
     };
@@ -400,6 +407,9 @@ class TextRuntimeImpl implements TextRuntime {
       this.#shaper.dispose();
     } catch (error) {
       report('disposing the shaper', error);
+    } finally {
+      this.#disposed = true;
+      this.#disposing = false;
     }
   }
 
@@ -688,7 +698,26 @@ class TextRuntimeImpl implements TextRuntime {
   }
 
   #assertActive(): void {
+    if (this.#disposed || this.#disposing) throw new Error('text runtime has been disposed');
+    this.#assertHostAvailable();
+  }
+
+  #assertHostAvailable(): void {
     if (this.#disposed) throw new Error('text runtime has been disposed');
+    if (this.#borrowedPlanActive) {
+      throw new Error('text runtime cannot be reentered while a borrowed render plan is active');
+    }
+  }
+
+  #enterBorrowedPlan(): () => void {
+    this.#assertActive();
+    this.#borrowedPlanActive = true;
+    let active = true;
+    return () => {
+      if (!active) throw new Error('borrowed render-plan gate was released twice');
+      active = false;
+      this.#borrowedPlanActive = false;
+    };
   }
 
   /** @internal */

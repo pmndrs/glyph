@@ -207,11 +207,11 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     if (!pending.replacesRenderState) {
       let active = true;
       return Object.freeze({
-        commit: async () => {
+        commit: () => {
           if (!active) return false;
           active = false;
           this.#assertLive();
-          return pending.publishAsync(async () => {});
+          return pending.publish(() => {});
         },
         discard: () => {
           active = false;
@@ -228,12 +228,12 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     }
     let active = true;
     return Object.freeze({
-      commit: async () => {
+      commit: () => {
         if (!active) return false;
         active = false;
         try {
           this.#assertLive();
-          const accepted = await pending.publishAsync(() => this.#submitValidated(pending.realizedDraws, buffers));
+          const accepted = pending.publish(() => this.#submitValidated(pending.realizedDraws, buffers));
           if (!accepted) {
             destroyInstanceBuffers(buffers);
             return false;
@@ -460,22 +460,13 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     throw new TypeError(`TypeGPU example renderer has no vertex layout for "${name}" f32x${vectorWidth}`);
   }
 
-  async #submitValidated(
+  #submitValidated(
     realizedDraws: readonly ExampleRealizedDraw[],
     buffers: ReadonlyMap<string, ReadonlyMap<Uint8Array, GpuInstanceBuffer>>,
-  ): Promise<void> {
-    this.#device.pushErrorScope('validation');
-    let command: GPUCommandBuffer;
-    try {
-      command = this.#encodeAcceptedState(realizedDraws, buffers);
-      this.#device.queue.submit([command]);
-    } catch (error) {
-      const validationError = await this.#device.popErrorScope();
-      throw validationError === null ? error : gpuOperationError('submit render pass', validationError);
-    }
-    const validationError = await this.#device.popErrorScope();
-    if (validationError !== null) throw gpuOperationError('submit render pass', validationError);
-    // Validation acceptance commits the candidate; queue completion stays pipelined.
+  ): void {
+    const command = this.#encodeAcceptedState(realizedDraws, buffers);
+    this.#device.queue.submit([command]);
+    // CPU submission acceptance commits the candidate; later WebGPU faults enter device-loss recovery.
     this.#assertLive();
     this.#submittedPasses += 1;
   }

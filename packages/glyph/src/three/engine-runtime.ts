@@ -21,7 +21,6 @@ import {
   type PortableGeometryPayload,
   type PortableResource,
   type TextEngineSession,
-  type TextEngineSessionOptions,
   textShaperAbi,
 } from '../core.js';
 import { threeRenderPolicyDescriptor, type ThreeTransformMode } from './render-policy.js';
@@ -39,6 +38,12 @@ const INTERNAL_ORDER_BUFFER_ID: typeof textShaperAbi.engine.internalBufferBindin
   textShaperAbi.engine.internalBufferBindings.order;
 const coordinators = new WeakMap<TextRuntime, ThreeTextEngineCoordinator>();
 const coordinatorDisposeObservers = new WeakMap<ThreeTextEngineCoordinator, () => void>();
+
+interface ThreeRawSessionOptions {
+  readonly requestCapacity: number;
+  readonly resultCapacity: number;
+  readonly textCapacity?: number;
+}
 
 export interface ThreeTextEngineStackLease {
   readonly handle: FontStackHandle;
@@ -234,7 +239,7 @@ export class ThreeTextEngineCoordinator {
     };
   }
 
-  createSession(options: Omit<TextEngineSessionOptions, 'handle'>): TextEngineSession {
+  createSession(options: ThreeRawSessionOptions): TextEngineSession {
     this.#assertActive();
     return this.host.createSession({ ...options, handle: this.#allocateSessionHandle() });
   }

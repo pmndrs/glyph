@@ -5,8 +5,11 @@ import {
   readTextEngineResource,
   readTextEngineRetirement,
   TextEngineRenderPlanView,
+  type AsyncPlanCandidate,
   type OwnedTextEnginePublication,
+  type PlanCandidate,
   type TextEnginePublication,
+  type TextEngineRenderPlanReader,
 } from '@pmndrs/glyph/core';
 
 import { decodeDraw, decodePrimitive, type ExampleDrawList } from './draw-list.js';
@@ -34,6 +37,19 @@ export function readPublication(
   view: TextEngineRenderPlanView = new TextEngineRenderPlanView(),
 ): ExampleDrawList {
   view.bind(publication);
+  return readPlan(view, publication, false);
+}
+
+/** Decode a target candidate and own only the fields the returned list retains. */
+export function readCandidate(candidate: PlanCandidate | AsyncPlanCandidate): ExampleDrawList {
+  return readPlan(candidate.plan, candidate, candidate.plan.delivery === 'borrowed');
+}
+
+function readPlan(
+  view: TextEngineRenderPlanReader,
+  publication: Readonly<{ engineRevision: number; planRevision: number; publicationGeneration: number }>,
+  copyRetainedBytes: boolean,
+): ExampleDrawList {
   const draws = view.table('draws');
   const decoded: ReturnType<typeof decodeDraw>[] = [];
   for (let index = 0; index < draws.count; index += 1) decoded.push(decodeDraw(view, view.record(draws, index)));
@@ -54,7 +70,10 @@ export function readPublication(
   }
   const patches = view.table('patches');
   const patchRecords: ReturnType<typeof readTextEnginePatch>[] = [];
-  for (let index = 0; index < patches.count; index += 1) patchRecords.push(readTextEnginePatch(view, patches, index));
+  for (let index = 0; index < patches.count; index += 1) {
+    const patch = readTextEnginePatch(view, patches, index);
+    patchRecords.push(copyRetainedBytes ? { ...patch, payload: patch.payload?.slice() } : patch);
+  }
   const retirements = view.table('retirements');
   const retirementRecords: ReturnType<typeof readTextEngineRetirement>[] = [];
   for (let index = 0; index < retirements.count; index += 1) {
@@ -70,23 +89,25 @@ export function readPublication(
     primitiveRecords,
     patches: patchRecords,
     retirements: retirementRecords,
-    resources: snapshot(view, 'resources'),
-    buffers: snapshot(view, 'buffers'),
-    primitives: snapshot(view, 'primitives'),
-    diagnostics: snapshot(view, 'diagnostics'),
+    resources: snapshot(view, 'resources', copyRetainedBytes),
+    buffers: snapshot(view, 'buffers', copyRetainedBytes),
+    primitives: snapshot(view, 'primitives', copyRetainedBytes),
+    diagnostics: snapshot(view, 'diagnostics', copyRetainedBytes),
   };
 }
 
-/** A window into the owned bytes — no second copy. */
+/** Own borrowed bytes that escape target acceptance; preserve existing ownership otherwise. */
 function snapshot(
-  view: TextEngineRenderPlanView,
+  view: TextEngineRenderPlanReader,
   name: 'resources' | 'buffers' | 'primitives' | 'diagnostics',
+  copy: boolean,
 ): ExampleTableSnapshot {
   const table = view.table(name);
   const byteLength = table.count * table.stride;
+  const records = byteLength === 0 ? new Uint8Array(0) : view.bytes(table.offset, byteLength);
   return {
     count: table.count,
     stride: table.stride,
-    records: byteLength === 0 ? new Uint8Array(0) : view.bytes(table.offset, byteLength),
+    records: copy ? records.slice() : records,
   };
 }

@@ -75,7 +75,7 @@ export interface ExamplePendingResources {
 /** One fully validated publication whose commit only swaps prepared owned state. */
 export interface ExamplePendingSubmission {
   /** Publish once; false means a newer candidate already won. */
-  commit(): boolean | Promise<boolean>;
+  commit(): boolean;
   /** Release an uncommitted publication. Safe to call more than once. */
   discard(): void;
 }

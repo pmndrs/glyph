@@ -3,9 +3,7 @@ import {
   assertOwnedTextEnginePublication,
   createTextRuntime,
   compileFontBinding,
-  compileTextEngineFrameUpdate,
   createRuntimeShaper,
-  id,
   Paragraph,
   readTextEngineLayouts,
   readTextEngineMeasurements,
@@ -14,13 +12,17 @@ import {
   TextEngineRenderPlanView,
   TextEngineStatusError,
   textRuntimeShaper,
-  textShaperAbi,
   type FontBindingDescriptor,
+  type HostFontStackBinding,
+  type HostMaterialBinding,
+  type HostPolicy,
+  type HostResourceBinding,
+  type HostTransformBinding,
   type OwnedTextEnginePublication,
+  type PlanTarget,
   type RuntimeShaper,
-  type TextEngineFrameUpdate,
   type TextEnginePublication,
-  type TextEngineSession,
+  type SynchronousTextEngineSession,
 } from '@pmndrs/glyph/core';
 
 // The renderer-neutral core: a runtime shaper hosts one engine, sessions publish plans.
@@ -29,46 +31,104 @@ void shaper;
 
 const runtime = await createTextRuntime();
 const host: TextEngineHost = runtime.createTextEngineHost({ integration: 'core-api-test' });
-const policyHandle = id('policy', 'core-api-test/default');
-host.registerPolicy(policyHandle, new Uint8Array(8));
-host.disposePolicy(policyHandle);
-const session: TextEngineSession = host.createSession({
-  handle: host.id('session', 'core-api-test/session'),
+declare const installedPolicy: HostPolicy;
+declare const stackBinding: HostFontStackBinding;
+declare const materialBinding: HostMaterialBinding;
+declare const resourceBinding: HostResourceBinding;
+declare const transformBinding: HostTransformBinding;
+const target: PlanTarget = {
+  delivery: 'borrowed',
+  accept(candidate) {
+    void candidate.plan.table('draws');
+    return { accepted: true };
+  },
+  dispose() {},
+};
+const session: SynchronousTextEngineSession = host.createSession({
+  policy: installedPolicy,
+  target: () => target,
+  limits: {
+    maxParagraphs: 8,
+    maxClusters: 256,
+    maxLines: 64,
+    maxRegions: 8,
+    maxExclusions: 8,
+    maxInlineObjects: 8,
+    maxSlotsPerBand: 8,
+    maxOutputBytes: 128 * 1024,
+  },
   requestCapacity: 4096,
-  resultCapacity: textShaperAbi.layouts.engineResult.size,
+  resultCapacity: 128 * 1024,
+  textCapacity: 1024,
 });
-host.createSession({
-  // @ts-expect-error Host ID domains remain distinct even though every value serializes as a number.
-  handle: host.id('paragraph', 'core-api-test/not-a-session'),
-  requestCapacity: 4096,
-  resultCapacity: textShaperAbi.layouts.engineResult.size,
+const retainedText = session.createText({ font: stackBinding, text: 'hello' });
+retainedText.update({ text: 'world' });
+const retainedMeasurement = retainedText.layout();
+const retainedInspection = retainedText.glyphs();
+void retainedMeasurement;
+void retainedInspection;
+session.createText({ font: stackBinding, text: 'material', material: materialBinding, transform: transformBinding });
+// @ts-expect-error Resource identities cannot be authored where a material identity is required.
+session.createText({ font: stackBinding, text: 'resource-as-material', material: resourceBinding });
+// @ts-expect-error Material identities cannot be authored where a transform identity is required.
+session.createText({ font: stackBinding, text: 'material-as-transform', transform: materialBinding });
+session.createText({
+  font: stackBinding,
+  text: 'inline',
+  inlineObjects: [
+    {
+      textOffset: 0,
+      material: materialBinding,
+      resource: resourceBinding,
+      inlineExtent: 1,
+      blockExtent: 1,
+      baselineOffset: 0,
+      marginInlineStart: 0,
+      marginInlineEnd: 0,
+      marginBlockStart: 0,
+      marginBlockEnd: 0,
+      baselineAlignment: 'alphabetic',
+    },
+  ],
 });
-// @ts-expect-error Raw numbers cannot bypass host-scoped provenance.
-host.createSession({ handle: 1, requestCapacity: 4096, resultCapacity: textShaperAbi.layouts.engineResult.size });
+session.createText({
+  font: stackBinding,
+  text: 'invalid-inline',
+  inlineObjects: [
+    {
+      textOffset: 0,
+      material: materialBinding,
+      // @ts-expect-error Inline resources have a distinct identity domain from materials.
+      resource: materialBinding,
+      inlineExtent: 1,
+      blockExtent: 1,
+      baselineOffset: 0,
+      marginInlineStart: 0,
+      marginInlineEnd: 0,
+      marginBlockStart: 0,
+      marginBlockEnd: 0,
+      baselineAlignment: 'alphabetic',
+    },
+  ],
+});
+const acceptance = session.publish();
+void acceptance;
 
-declare const frame: TextEngineFrameUpdate;
-const request: Uint8Array = compileTextEngineFrameUpdate(frame);
-const publication: TextEnginePublication = session.update(request);
+declare const publication: TextEnginePublication;
 
 // Ownership protocol: borrows expire; owned copies do not.
 declare const expiredError: TextEnginePublicationExpiredError;
 const generations: readonly [number, number] = [expiredError.consumedGeneration, expiredError.latestGeneration];
 void generations;
-const ownedPublication: OwnedTextEnginePublication = session.copyPublication(publication);
+declare const ownedPublication: OwnedTextEnginePublication;
 assertOwnedTextEnginePublication(ownedPublication);
 // @ts-expect-error A borrowed publication does not carry package-private owned provenance.
 const forgedOwnedPublication: OwnedTextEnginePublication = publication;
 void forgedOwnedPublication;
 void ownedPublication;
-const live: boolean = session.isExpired(publication);
-void live;
-// @ts-expect-error Copying is explicit ownership, not retain/release reference counting.
-session.retain(publication);
-// @ts-expect-error Borrow checks are internal to ownership-boundary operations.
-session.assertLive(publication);
-// @ts-expect-error Renderer acceptance is carried by the next frame's revision fields.
-session.acknowledge(publication);
-// @ts-expect-error Copying bytes must not expose an early-advancing acceptance counter.
+// @ts-expect-error Retained sessions expose no raw update protocol.
+session.update(new Uint8Array());
+// @ts-expect-error Retained sessions expose no caller-authored acceptance cursor.
 void session.acknowledgedGeneration;
 
 const plan = new TextEngineRenderPlanView().bind(publication);

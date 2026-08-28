@@ -7,14 +7,7 @@
  */
 export type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
 export { decodeDraw } from './draw-list.js';
-export {
-  ExampleText,
-  ExampleTextEngine,
-  type ExampleFrameInput,
-  type ExampleTextOptions,
-  type ExampleTextUpdate,
-} from './engine.js';
-export type { OwnedTextEnginePublication } from '@pmndrs/glyph/core';
+export { ExampleText, ExampleTextEngine, type ExampleTextOptions, type ExampleTextUpdate } from './engine.js';
 export { readDrawList } from './plan-reader.js';
 export type { ExampleTableSnapshot } from './snapshot.js';
 export {

@@ -56,7 +56,7 @@ export interface RegisteredRaster<Kind extends string = string> {
   readonly version: number;
   /** Validated companion-extension JSON owned semantically by the raster module. */
   readonly extensionData: JsonValue;
-  /** Return a bounds-checked immutable view of an artifact bufferView. */
+  /** Borrow a bounds-checked view of immutable artifact storage. Technique providers must not mutate it. */
   view(bufferView: number): Uint8Array;
   /** Resolve an embedded or authenticated external extension resource. */
   resource(source: RasterResourceSource, signal?: AbortSignal): Promise<Uint8Array>;

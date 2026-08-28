@@ -1,9 +1,6 @@
 /**
- * An owned view of one plan table.
- *
- * `records` is a window into the owned publication's bytes — the single copy
- * `TextEngineSession.copyPublication` made — so holding it is free and always safe. It never
- * aliases engine memory.
+ * Bytes retained from one plan table. Borrowed targets copy this window before acceptance
+ * returns; owned publications keep their existing owned view.
  */
 export interface ExampleTableSnapshot {
   readonly count: number;

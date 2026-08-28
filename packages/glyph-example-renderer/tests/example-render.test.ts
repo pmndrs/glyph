@@ -2,19 +2,19 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { defineRasterTechnique, rasterBake } from '@pmndrs/glyph';
+import { createFontStack, defineRasterTechnique, loadFont, rasterBake } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import {
   createTextRuntime,
   textShaperAbi,
   defineTechniqueSchema,
-  id,
   programId,
   registerRasterPlanProgram,
   techniqueId,
   type TextEngineBufferRecord,
   type TextEnginePatchRecord,
   type TextEngineRetirementRecord,
+  type PlanTarget,
 } from '@pmndrs/glyph/core';
 import { afterEach, expect, test } from 'vitest';
 
@@ -36,15 +36,11 @@ import {
   type ExampleRendererShader,
 } from '../src/index.js';
 import { ExampleTextEngine } from '../src/engine.js';
+import { exampleRenderPolicyDescriptor } from '../src/policy.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const shaperWasm = new URL('../../glyph/dist/text-shaper.wasm', import.meta.url);
 const temporaryDirectories: string[] = [];
-const PARAGRAPH_ID = id('paragraph', 'glyph-example-renderer-test/paragraph');
-const STYLE_ID = id('style', 'glyph-example-renderer-test/style');
-const FLOW_THREAD_ID = id('flow-thread', 'glyph-example-renderer-test/flow-thread');
-const REGION_ID = id('region', 'glyph-example-renderer-test/region');
-const TRANSFORM_INDEX = 1;
 const EXPECTED_RECOVERED_TEXT_GLYPHS = 4;
 
 class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
@@ -142,97 +138,105 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
   const engine = new ExampleTextEngine(runtime, device);
   try {
     const bytes = await readFile(output);
-    const font = await runtime.loadFont({
+    const font = await loadFont({
       input: { baked: `data:model/gltf-binary;base64,${bytes.toString('base64')}` },
       raster: { technique: glyphExample, options: { paletteSeed: 7 } },
     });
     try {
+      const flowHost = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/flow-retention' });
+      const flowPolicy = flowHost.installPolicy(exampleRenderPolicyDescriptor(flowHost.wireIdentities));
+      const flowFont = flowHost.bindFontStack(createFontStack(font));
+      const flowTransform = flowHost.createTransformBinding();
+      let flowTargetAcceptances = 0;
+      const flowTarget: PlanTarget = {
+        delivery: 'borrowed',
+        accept: () => {
+          expect(() => flowHost.dispose()).toThrow('borrowed render plan');
+          flowTargetAcceptances += 1;
+          return { accepted: true };
+        },
+        dispose() {},
+      };
+      const flowSession = flowHost.createSession({
+        policy: flowPolicy,
+        target: () => flowTarget,
+        limits: {
+          maxParagraphs: 2,
+          maxClusters: 64,
+          maxLines: 16,
+          maxRegions: 4,
+          maxExclusions: 4,
+          maxInlineObjects: 1,
+          maxSlotsPerBand: 4,
+          maxOutputBytes: 128 * 1024,
+        },
+        requestCapacity: 4096,
+        resultCapacity: 128 * 1024,
+        textCapacity: 1024,
+      });
+      const mutableWidth = { mode: 'at-most' as const, size: 512 };
+      const mutableRegion = {
+        transform: flowTransform,
+        shape: 'rectangle' as const,
+        writingMode: 'horizontal-tb' as const,
+        textOrientation: 'mixed' as const,
+        inlineStart: 0,
+        blockStart: 0,
+        inlineEnd: 512,
+        blockEnd: 256,
+        clipInlineStart: 0,
+        clipBlockStart: 0,
+        clipInlineEnd: 512,
+        clipBlockEnd: 256,
+      };
+      const flowText = flowSession.createText({
+        font: flowFont,
+        text: 'a',
+        style: { fontSize: 32 },
+        contentBox: { width: mutableWidth },
+        flow: { regions: [{ region: mutableRegion }] },
+      });
+      flowTransform.dispose();
+      mutableWidth.size = Number.NaN;
+      mutableRegion.inlineEnd = Number.NaN;
+      expect(flowText.layout().glyphCount).toBe(1);
+      expect(flowText.glyphs().glyphCount).toBe(1);
+      expect(flowTargetAcceptances).toBe(0);
+      flowText.update({ text: 'abcd' });
+      expect(flowText.layout().glyphCount).toBe(4);
+      expect(flowText.glyphs().glyphCount).toBe(4);
+      expect(flowTargetAcceptances).toBe(0);
+      expect(flowSession.publish()).toEqual({ accepted: true });
+      expect(flowTargetAcceptances).toBe(1);
+      flowText.dispose();
+      expect(() => flowText.layout()).toThrow('disposed');
+      const sessionOwnedText = flowSession.createText({ font: flowFont, text: 'session-owned' });
+      expect(sessionOwnedText.layout().glyphCount).toBeGreaterThan(0);
+      flowSession.dispose();
+      expect(sessionOwnedText.disposed).toBe(true);
+      expect(() => sessionOwnedText.layout()).toThrow('disposed');
+      flowHost.dispose();
+
       const foreignFont = Object.create(font) as typeof font;
       Object.defineProperty(foreignFont, 'technique', {
         value: { ...font.technique, id: 'studio.other-technique' },
       });
-      expect(() => engine.registerFont(foreignFont)).toThrow('cannot render');
+      expect(() => engine.bindFont(foreignFont)).toThrow('cannot render');
       expect(device.resources.size).toBe(0);
 
-      const invalidFont = Object.create(font) as typeof font;
-      Object.defineProperty(invalidFont, 'font', { value: { ...font.font, handle: 0 } });
-      expect(() => engine.registerFont(invalidFont)).toThrow();
-      expect(device.resources.size).toBe(0);
+      const stackBinding = engine.bindFontStack(createFontStack(font));
+      expect(() => engine.createText({ font: stackBinding, text: 'invalid', fontSize: Number.NaN })).toThrow(
+        'fontSize',
+      );
+      const text = engine.createText({ font: stackBinding, text: 'glyph', fontSize: 48, width: 1000, height: 1000 });
 
       device.failNextResourceCommit = true;
-      expect(() => engine.registerFont(font)).toThrow('injected resource commit failure');
+      expect(() => text.publish()).toThrow('injected resource commit failure');
       expect(device.discardedResourceBatches).toBe(1);
       expect(device.resources.size).toBe(0);
 
-      const retryFont = Object.create(font) as typeof font;
-      Object.defineProperties(retryFont, {
-        disposed: { value: false },
-        data: { value: { ...font.data, inset: font.data.inset + 0.01 } },
-      });
-      // Different bytes under the reused handle prove the failed registration left no Wasm binding behind.
-      const binding = engine.registerFont(retryFont);
-      expect(binding).toBe(id('font-binding', 'glyph-example-renderer/1'));
-      const stackHandle = engine.registerFontStack([binding]);
-      engine.openSession();
-      const list = await engine.render({
-        paragraphMutations: [{ opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 0 }],
-        textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: 'glyph' }],
-        styleMutations: [
-          {
-            opcode: 'upsert',
-            paragraphId: PARAGRAPH_ID,
-            styleId: STYLE_ID,
-            cascadeOrder: 0,
-            start: 0,
-            end: 5,
-            root: true,
-            value: { fontStackHandle: stackHandle, fontSize: 48, rasterPixelRatio: 1, foregroundRgba: 0xffff_ffff },
-          },
-        ],
-        constraints: [
-          {
-            paragraphId: PARAGRAPH_ID,
-            flowThreadId: FLOW_THREAD_ID,
-            geometryRevision: 1,
-            width: 1000,
-            height: 1000,
-            viewportBlockStart: 0,
-            viewportBlockEnd: 1000,
-            resumeBlockOffset: 0,
-            maxLines: 32,
-            regionStart: 0,
-            resumeCluster: 0,
-            regionCount: 1,
-            resumeRegion: 0,
-            widthMode: 'at-most',
-            heightMode: 'at-most',
-            wrap: 'word',
-            align: 'start',
-            overflow: 'visible',
-            blockAlign: 'start',
-          },
-        ],
-        regions: [
-          {
-            id: REGION_ID,
-            geometryRevision: 1,
-            transformIndex: TRANSFORM_INDEX,
-            shape: 'rectangle',
-            exclusionStart: 0,
-            exclusionCount: 0,
-            writingMode: 'horizontal-tb',
-            textOrientation: 'mixed',
-            inlineStart: 0,
-            blockStart: 0,
-            inlineEnd: 1000,
-            blockEnd: 1000,
-            clipInlineStart: 0,
-            clipBlockStart: 0,
-            clipInlineEnd: 1000,
-            clipBlockEnd: 1000,
-          },
-        ],
-      });
+      text.update({ text: 'Glyph' });
+      const list = text.publish();
 
       expect(list.draws.length).toBeGreaterThan(0);
       expect(device.resources.size).toBeGreaterThan(0);
@@ -258,65 +262,42 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         expect(realized.resources.get('glyphGeometry')).toBeDefined();
       }
       const acceptedDraws = [...device.realizedDraws];
-      const noOp = await engine.render({});
+      const retainedBufferTable = list.buffers.records.slice();
+      const retainedPatchPayloads = list.patches.map(({ payload }) => payload?.slice());
+      const noOp = engine.publish();
       expect(noOp.draws).toEqual([]);
       expect(device.realizedDraws).toEqual(acceptedDraws);
 
       device.failNextSubmission = true;
-      await expect(
-        engine.render({ textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 1, insert: 'G' }] }),
-      ).rejects.toThrow('injected submission failure');
-      expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2]);
-      const recoveryRequest = engine.frameRequest({});
-      const requestView = new DataView(recoveryRequest.buffer, recoveryRequest.byteOffset, recoveryRequest.byteLength);
-      const requestLayout = textShaperAbi.layouts.engineUpdateRequest;
-      expect(requestView.getUint32(requestLayout.expectedEngineRevision, true)).toBe(3);
-      expect(requestView.getUint32(requestLayout.consumedPlanRevision, true)).toBe(2);
-      expect(requestView.getUint32(requestLayout.acknowledgedPublicationGeneration, true)).toBe(2);
-      const recovered = await engine.render({
-        textMutations: [{ paragraphId: PARAGRAPH_ID, start: 1, deleteCount: 1, insert: 'L' }],
-      });
-      expect(recovered.publicationGeneration).toBe(4);
-      expect(device.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 4]);
-      expect(bufferSnapshot(device.primary.buffers)).toEqual(bufferSnapshot(device.oracle.buffers));
-      expect(device.oracle.submissions.map(({ publicationGeneration }) => publicationGeneration)).toEqual([1, 2, 3, 4]);
-      await engine.render({ paragraphMutations: [{ opcode: 'remove', paragraphId: PARAGRAPH_ID }] });
-
-      expect(() => engine.createText({ fontStack: stackHandle, text: 'invalid', fontSize: Number.NaN })).toThrow(
-        'fontSize',
-      );
-      const text = engine.createText({ fontStack: stackHandle, text: 'retained', fontSize: 42, width: 512 });
-      const initialText = await text.render();
-      expect(initialText.draws.length).toBeGreaterThan(0);
-      const initialTransformIds = initialText.draws.map(({ transformId }) => transformId);
-      device.failNextSubmission = true;
       text.update({ text: 'WXYZ' });
-      await expect(text.render()).rejects.toThrow('injected submission failure');
-      const recoveredText = await text.render();
-      expect(recoveredText.primitiveRecords.reduce((count, primitive) => count + primitive.recordCount, 0)).toBe(
+      expect(() => text.publish()).toThrow('injected submission failure');
+      text.update({ text: 'wxyz' });
+      const recovered = text.publish();
+      expect(recovered.primitiveRecords.reduce((count, primitive) => count + primitive.recordCount, 0)).toBe(
         EXPECTED_RECOVERED_TEXT_GLYPHS,
       );
-      text.update({ text: 'updated', foregroundRgba: 0xff80_40ff });
-      expect((await text.render()).draws.length).toBeGreaterThan(0);
+      expect(list.buffers.records).toEqual(retainedBufferTable);
+      expect(list.patches.map(({ payload }) => payload)).toEqual(retainedPatchPayloads);
+      expect(bufferSnapshot(device.primary.buffers)).toEqual(bufferSnapshot(device.oracle.buffers));
+      text.update({ text: 'updated', color: '#ff8040' });
+      expect(text.publish().draws.length).toBeGreaterThan(0);
       expect(text.text).toBe('updated');
-      const inFlight = engine.render({});
-      expect(() => engine.registerFont(font)).toThrow('while a frame submission is in progress');
-      expect(() => engine.dispose()).toThrow('while a frame submission is in progress');
-      await inFlight;
-      await text.dispose();
-      expect(() => text.render()).toThrow('disposed');
+      text.dispose();
+      expect(() => text.publish()).toThrow('disposed');
+      engine.publish();
       const replacement = engine.createText({
-        fontStack: stackHandle,
+        font: stackBinding,
         text: 'replacement',
         fontSize: 42,
         width: 512,
       });
-      const replacementText = await replacement.render();
-      expect(replacementText.draws.map(({ transformId }) => transformId)).toEqual(initialTransformIds);
-      await replacement.dispose();
+      expect(replacement.publish().draws.length).toBeGreaterThan(0);
+      replacement.dispose();
+      engine.publish();
       engine.dispose();
-      expect(() => engine.registerFont(font)).toThrow('disposed');
+      expect(() => engine.bindFont(font)).toThrow('disposed');
       expect(device.discardedResourceBatches).toBe(1);
+      stackBinding.dispose();
     } finally {
       engine.dispose();
       font.dispose();

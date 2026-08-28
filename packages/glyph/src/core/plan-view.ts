@@ -7,6 +7,15 @@ export interface RenderPlanTable {
   readonly stride: number;
 }
 
+export interface RenderPlanReader {
+  record(table: RenderPlanTable, index: number): number;
+  u8(offset: number): number;
+  u16(offset: number): number;
+  u32(offset: number): number;
+  f32(offset: number): number;
+  bytes(offset: number, byteLength: number): Uint8Array;
+}
+
 type TableName = 'resources' | 'buffers' | 'patches' | 'primitives' | 'draws' | 'retirements' | 'diagnostics';
 
 const resultLayout = textShaperAbi.layouts.engineResult;
@@ -252,7 +261,7 @@ const bufferLayout = textShaperAbi.layouts.engineBuffer;
 const retirementLayout = textShaperAbi.layouts.engineRetirement;
 
 export function readTextEnginePatch(
-  view: TextEngineRenderPlanView,
+  view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
 ): TextEnginePatchRecord {
@@ -276,7 +285,7 @@ export function readTextEnginePatch(
 }
 
 export function readTextEngineResource(
-  view: TextEngineRenderPlanView,
+  view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
 ): TextEngineResourceRecord {
@@ -292,7 +301,7 @@ export function readTextEngineResource(
 }
 
 export function readTextEngineBuffer(
-  view: TextEngineRenderPlanView,
+  view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
 ): TextEngineBufferRecord {
@@ -310,7 +319,7 @@ export function readTextEngineBuffer(
 }
 
 export function readTextEngineRetirement(
-  view: TextEngineRenderPlanView,
+  view: RenderPlanReader,
   table: RenderPlanTable,
   index: number,
 ): TextEngineRetirementRecord {

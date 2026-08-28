@@ -12,6 +12,8 @@ import {
   RenderWireIdentityRegistry,
   textShaperAbi,
   type PolicyBufferId,
+  type PolicyCapabilitySet,
+  type PolicyDescriptor,
   type PolicyHandle,
 } from '@pmndrs/glyph/core';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
@@ -36,8 +38,14 @@ export const EXAMPLE_RENDERER_PROGRAM_NAMESPACE = 'example-renderer';
 export function exampleRenderPolicyBytes(
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
 ): Uint8Array {
-  const capabilitySet = exampleCapabilitySet();
-  return compileRenderPolicy({
+  return compileRenderPolicy(exampleRenderPolicyDescriptor(identities));
+}
+
+export function exampleRenderPolicyDescriptor(
+  identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
+): PolicyDescriptor {
+  const capabilitySet = exampleCapabilitySet;
+  return Object.freeze({
     capabilitySets: [capabilitySet],
     programs: [
       createRasterPolicyProgram(glyphExamplePlanProgram, {
@@ -52,21 +60,19 @@ export function exampleRenderPolicyBytes(
   });
 }
 
-function exampleCapabilitySet() {
-  return {
-    flags:
-      textShaperAbi.policy.capabilityFlags.storageBuffers |
-      textShaperAbi.policy.capabilityFlags.aliasVec2 |
-      textShaperAbi.policy.capabilityFlags.aliasVec4 |
-      textShaperAbi.policy.capabilityFlags.orderedDirect,
-    maxBufferBytes: 16 * 1024 * 1024,
-    updateAlignment: 4,
-    coalesceGapBytes: 128,
-    rangeCallPenaltyBytes: 256,
-    maxBuffersPerDraw: 8,
-    maxResourcesPerDraw: 4,
-    maxIndirectDraws: 0,
-    fragmentationBudget: 8,
-    wholeBufferThresholdBasisPoints: 7_500,
-  };
-}
+export const exampleCapabilitySet: PolicyCapabilitySet = Object.freeze({
+  flags:
+    textShaperAbi.policy.capabilityFlags.storageBuffers |
+    textShaperAbi.policy.capabilityFlags.aliasVec2 |
+    textShaperAbi.policy.capabilityFlags.aliasVec4 |
+    textShaperAbi.policy.capabilityFlags.orderedDirect,
+  maxBufferBytes: 16 * 1024 * 1024,
+  updateAlignment: 4,
+  coalesceGapBytes: 128,
+  rangeCallPenaltyBytes: 256,
+  maxBuffersPerDraw: 8,
+  maxResourcesPerDraw: 4,
+  maxIndirectDraws: 0,
+  fragmentationBudget: 8,
+  wholeBufferThresholdBasisPoints: 7_500,
+});

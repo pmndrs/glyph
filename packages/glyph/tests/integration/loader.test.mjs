@@ -368,7 +368,8 @@ test('registration merges embedded and external delivery without changing raster
   assert.equal(records.byteLength, 2937 * 20);
   const firstByte = records[0];
   records[0] ^= 0xff;
-  assert.equal(raster.view(recordsBufferView)[0], firstByte);
+  assert.equal(raster.view(recordsBufferView)[0], firstByte ^ 0xff);
+  records[0] = firstByte;
   assert.throws(() => raster.view(1_000_000), RangeError);
 });
 

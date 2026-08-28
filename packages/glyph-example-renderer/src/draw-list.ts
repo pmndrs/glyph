@@ -2,7 +2,7 @@ import {
   textShaperAbi,
   type TextEngineBufferRecord,
   type TextEnginePatchRecord,
-  type TextEngineRenderPlanView,
+  type TextEngineRenderPlanReader,
   type TextEngineRetirementRecord,
 } from '@pmndrs/glyph/core';
 
@@ -56,11 +56,8 @@ export interface ExampleDraw {
 }
 
 /**
- * One frame's render plan, safe to hold forever.
- *
- * Ownership comes from `TextEngineSession.copyPublication`, which copies the whole encoded
- * result once and brands it; every field here is either a decode of that copy or a
- * view into it, and nothing aliases the engine's Wasm memory.
+ * One decoded frame, safe to hold after target acceptance. Borrowed byte fields are copied
+ * while the target callback is active; scalar records are decoded directly.
  */
 export interface ExampleDrawList {
   readonly engineRevision: number;
@@ -84,7 +81,7 @@ export interface ExampleDrawList {
 }
 
 /** Decode one row of the `draws` table. */
-export function decodeDraw(view: TextEngineRenderPlanView, offset: number): ExampleDraw {
+export function decodeDraw(view: TextEngineRenderPlanReader, offset: number): ExampleDraw {
   return {
     id: view.u32(offset + drawLayout.id),
     programId: view.u32(offset + drawLayout.programId),
@@ -107,7 +104,7 @@ export function decodeDraw(view: TextEngineRenderPlanView, offset: number): Exam
 }
 
 /** Decode one primitive row without assigning meaning to its wire kind. */
-export function decodePrimitive(view: TextEngineRenderPlanView, offset: number): ExamplePrimitiveRecord {
+export function decodePrimitive(view: TextEngineRenderPlanReader, offset: number): ExamplePrimitiveRecord {
   return {
     id: view.u32(offset + primitiveLayout.id),
     techniqueId: view.u32(offset + primitiveLayout.techniqueId),
