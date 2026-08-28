@@ -94,17 +94,14 @@ async function bundle(
               let transformed = code;
               let changed = false;
               for (const asset of wasmAssets) {
-                for (const relative of ['./', '../']) {
-                  for (const quote of ['"', "'"]) {
-                    const expression = `new URL(${quote}${relative}${asset}${quote}, import.meta.url)`;
-                    if (!transformed.includes(expression)) continue;
-                    transformed = transformed.replaceAll(
-                      expression,
-                      `new URL(${quote}${asset}${quote}, ${quote}https://size.invalid/${quote})`,
-                    );
-                    changed = true;
-                  }
-                }
+                const expression = new RegExp(
+                  `new URL\\((["'])\\.{1,2}\\/(?:\\.{1,2}\\/)*(?:dist\\/)?${asset}\\1,\\s*import\\.meta\\.url\\)`,
+                  'g',
+                );
+                transformed = transformed.replace(expression, (_match, quote: string) => {
+                  changed = true;
+                  return `new URL(${quote}${asset}${quote}, ${quote}https://size.invalid/${quote})`;
+                });
               }
               if (!changed || !id.includes('/packages/glyph/')) return;
               return transformed;
