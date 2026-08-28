@@ -405,6 +405,75 @@ runtime-independent, and neither `TextRuntime` nor a measurement target enters t
 
 ### Integrator surface
 
+#### Approved lifecycle vocabulary migration
+
+The public TypeScript lifecycle uses graphics-programmer ownership names. The Wasm domain is the `TextEngine`; it creates
+and owns integration hosts. A host creates a `RetainedPlan`, which owns mutable retained text and publishes successive
+immutable render plans. It is not a batch: one publication may contain many resource, storage, primitive, and draw
+batches. It is not a run: a typographic run is already a different, smaller text concept.
+
+| Current TypeScript name          | Replacement                  | Contract                                                                       |
+| -------------------------------- | ---------------------------- | ------------------------------------------------------------------------------ |
+| `createTextRuntime`              | `createTextEngine`           | Construct one Wasm shaping/layout engine domain.                               |
+| `TextRuntime`                    | `TextEngine`                 | Own Wasm, runtime-local font registrations, hosts, and the borrowed-plan gate. |
+| `TextRuntimeOptions`             | `TextEngineOptions`          | Configure construction of that engine domain.                                  |
+| `runtime.createTextEngineHost()` | `engine.createHost()`        | Create and permanently attach one renderer integration host.                   |
+| `host.createSession()`           | `host.createRetainedPlan()`  | Create one retained desired-text and publication lifecycle.                    |
+| `SynchronousTextEngineSession`   | `SynchronousRetainedPlan`    | Publish through a synchronous borrowed `PlanTarget`.                           |
+| `AsyncTextEngineSession`         | `AsyncRetainedPlan`          | Publish through an owned-copy `AsyncPlanTarget`.                               |
+| `SessionFor<Target>`             | `RetainedPlanFor<Target>`    | Select the retained-plan surface from target delivery.                         |
+| `TextEngineSessionOptions`       | `RetainedPlanOptions`        | Bind policy, target, limits, and initial capacities once.                      |
+| `TextEnginePublishOptions`       | `RetainedPlanPublishOptions` | Select semantic views and compositing for one publication.                     |
+| `TextEngineSessionDisposedError` | `RetainedPlanDisposedError`  | Report use after the retained-plan owner has disposed.                         |
+| `TextEngineText`                 | `RetainedText`               | One mutable text instance owned by a retained plan.                            |
+| `TextEngineTextOptions`          | `RetainedTextOptions`        | Construct one retained text instance.                                          |
+| `TextEngineTextUpdate`           | `RetainedTextUpdate`         | Replace part of one retained text's desired state.                             |
+
+`TextEngineHost`, `PlanTarget`, `AsyncPlanTarget`, and immutable render-plan names stay unchanged. `RenderPlan` describes
+the accepted publication, while `RetainedPlan` describes the long-lived producer across revisions. Internal TypeScript
+implementation symbols follow the same vocabulary. Rust/Wasm ABI field and export names that encode the existing
+`session` protocol remain unchanged; this migration does not alter persisted bytes or generated ABI symbols.
+
+The migration is one symbol-aware operation over TypeScript and TSX. It uses pinned `ts-morph` rename operations with
+comment renaming enabled and string renaming disabled. The tool must resolve every declaration before it writes. String
+literals are then enumerated from the TypeScript AST and changed only when they are human-facing API prose; protocol
+identities and generated names remain byte-identical. Markdown and HTML are updated only after source symbols are proven
+clean. Generated JavaScript and declarations are rebuilt, never edited.
+
+The implementation also creates a repository-local codemod skill and a dated canary migration archive. Each archived
+codemod is the authoritative migration recipe: it records removed or renamed exports, methods, types, and import paths;
+deterministic ts-morph transforms; before/after call sites; ownership and behavior invariants; ambiguity guidance; and
+verification gates. The agent applies the automatic transforms and uses the same recipe for call sites that require
+judgment. Later canary changes add another ordered codemod instead of rewriting history. Public migration prose is rendered
+from or links to those recipes rather than copying a second rename table that can drift.
+
+#### Queued ID authoring follow-up
+
+After the lifecycle migration, the numeric ID API becomes one callable namespace:
+
+```ts
+const applicationId = id('studio/selection');
+const bufferId = id.buffer('three/stable-glyph');
+const techniqueWireId = id.technique(msdf);
+const programWireId = id.program(msdf, 'three', 'shadow');
+const resourceWireId = id.resource(atlasResource);
+```
+
+`id()` returns a domainless brand. Each method selects a required canonical domain and a distinct numeric brand; there is
+no optional domain argument. Standalone `techniqueId`, `programId`, and `resourceId` exports are removed. Every lowering
+records canonical provenance and rejects collisions in the shared rendering domain used by all hosts that can feed one
+target/device. Hosts do not salt portable IDs: equal semantic identities remain equal across hosts, while different
+identities that collide cannot be installed together. Host-generated policy, binding, stack, retained-plan, material,
+and transform handles remain automatic and absent from ordinary user input.
+
+#### Queued font-request review
+
+Request simplification starts with a read-only inventory, not a speculative rewrite. The audit records every current
+single-raster, multi-raster, `defineFont` token, baked/source/byte, runtime-bake, Three loader, React hook, preload, clear,
+and library-bound form; its cache identity, ownership, cancellation, discovery, and return typing; and every repository
+call pattern. The target request shape is chosen only after that behavior map is reviewed, then all maintained consumers
+migrate atomically.
+
 `TextRuntime` and `TextEngineHost` are both `/core` integrator vocabulary. Applications load and retain `Font` values
 through the root package or an integration's convenience loader; they never need a runtime merely to hold a font:
 
