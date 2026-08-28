@@ -185,7 +185,7 @@ export function renderFlatSlugCpuReference(
 function assertGlyphColumns(glyphs: SlugCpuReferenceGlyphs): number {
   const count = glyphs.page.length;
   for (const column of Object.values(glyphs)) {
-    if (!ArrayBuffer.isView(column) || column.length !== count) {
+    if (!ArrayBuffer.isView(column) || !('length' in column) || column.length !== count) {
       throw new TypeError('Slug CPU reference glyph columns must have equal lengths');
     }
   }
