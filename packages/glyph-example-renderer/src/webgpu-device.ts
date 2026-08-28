@@ -1,3 +1,5 @@
+/// <reference types="@webgpu/types" />
+
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 
