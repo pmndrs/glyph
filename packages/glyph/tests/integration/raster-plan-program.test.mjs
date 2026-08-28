@@ -5,6 +5,7 @@ import { defineRasterResourceId, defineRasterTechnique } from '../../dist/index.
 import {
   compileRasterFont,
   defineTechniqueSchema,
+  readCompiledRasterFont,
   registerRasterPlanProgram,
   resolveRasterPlanProgram,
 } from '../../dist/core.js';
@@ -198,6 +199,40 @@ test('font compilation owns binding metadata and normalizes retained payloads', 
   );
   assert.equal(typeof compiled.resources.set, 'undefined');
   assert.equal(typeof compiled.declaredResources.clear, 'undefined');
+});
+
+test('compiled font views expose named fields and selected portable resources without decoded data', () => {
+  const value = technique('test.plan-read-compiled');
+  const program = registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      compiler.retain('colors', COLORS, { kind: 'buffer', bytes: new Uint8Array([1, 2, 3, 4]), stride: 4 });
+      compiler.retain('mesh', MESH, indexedQuadGeometry());
+      return compiler.compile({
+        strikes: [12, 24],
+        resource: (glyph, strike) => (glyph === 1 && strike === 1 ? undefined : COLORS),
+        f32: { opacity: (row) => row + 0.25 },
+        u32: { page: (row) => row + 10 },
+      });
+    },
+  });
+  const compiled = compileRasterFont(loaded(value, 2), new RenderWireIdentityRegistry());
+  const view = readCompiledRasterFont(compiled, program);
+
+  assert.equal(view.scope, 'glyph');
+  assert.equal(view.glyphCount, 2);
+  assert.deepEqual(view.strikes, [12, 24]);
+  assert.equal(view.f32('opacity', 1), 1.25);
+  assert.equal(view.u32('page', 0), 10);
+  assert.equal(view.resource(0, 1).key, COLORS);
+  assert.equal(view.resource(1, 1), undefined);
+  assert.equal(view.resources.find(({ key }) => key === COLORS).payload.bytes[0], 1);
+  assert.throws(() => view.f32('missing', 0), /no f32 field/);
+  assert.throws(() => view.u32('page', 2), /outside/);
+  assert.throws(() => readCompiledRasterFont({ ...compiled }, program), /not created by this package/);
+  assert.throws(() => readCompiledRasterFont(compiled, null), /registered portable plan program/);
 });
 
 test('resource selection receives explicit glyph and strike coordinates', () => {

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:cbfa1a9579a8d5fa39d6786ab74ef038faf64e399e4410458c794bea33a64028'
+source_digest: 'sha256:197f464ec005b0ed7a9f6c982286df696764f705ba631a9185e259729f8ab604'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -287,6 +287,11 @@ compiler alone lowers them into the strike-major wire table. Three validates dec
 semantics when a variant registers, then validates every retained payload attribute when a font is bound, before device
 realization. Material contexts retain the discriminated `PortableResource` union rather than erasing validated payloads
 to `unknown`.
+
+CPU reference renderers and allocation diagnostics may pair `compileRasterFont()` with `readCompiledRasterFont()`.
+The authenticated read-only view resolves schema field names, strike rows, selected resources, and portable payloads
+directly from the compiled binding. It does not expose technique-private decoded font data, perform another raster
+decode, or copy the binding's scalar value tables; ordinary renderers continue through their session plan target.
 
 Portable resource declarations select `one` or `many` cardinality. Fixed-member groups carry synchronized leaf buffers
 and textures under one retained identity; groups cannot nest, geometry cannot repeat, and every resourceful schema names

@@ -66,9 +66,8 @@ interface CommonBenchmarkFontAsset {
 }
 
 /**
- * One fixture loaded exactly once through the target-v1 `FontLoader`. `loaded` owns the technique, its decoded raster
- * data, the registered font, and the text runtime, so every scene reads its font from `loaded.font` rather than from a
- * separately projected handle.
+ * One fixture loaded once through `FontLoader`. `loaded` is the canonical Font lease; `data` is a CPU-oracle view
+ * reconstructed from the same compiled binding and portable payloads consumed by renderer integrations.
  */
 export type BenchmarkFontAsset =
   | (CommonBenchmarkFontAsset & {

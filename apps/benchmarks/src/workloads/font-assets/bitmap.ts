@@ -19,13 +19,12 @@ import sourceSerifBitmapDensityFontUrl from '../../../fixtures/rendering/source-
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import { preloadFontAssetUrls } from './authenticated-gzip';
 import type { BenchmarkFontAsset, BenchmarkFontAssetRequest, BitmapFixtureDensity } from './contracts';
+import { compiledBitmapData } from './compiled-data';
 import {
   createFontDeliveryMetrics,
-  captureRasterTechniqueData,
   loadBakedFont,
   loadSourceFont,
   measuredRuntimeFontBake,
-  measuredRuntimeRaster,
   sourceUrlForFixture,
 } from './runtime';
 
@@ -79,10 +78,9 @@ export async function loadBitmapFontAsset(
   const metrics = createFontDeliveryMetrics(delivery);
   const strikes = bitmapDensity === 'live' ? liveStrikes : conformanceStrikes;
   if (delivery === 'runtime') {
-    const captured = captureRasterTechniqueData(measuredBitmapTechnique(metrics, onProgress));
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: captured.technique, options: { strikes } },
+      raster: { technique: bitmapTechnique, options: { strikes } },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       library,
       ...(signal === undefined ? {} : { signal }),
@@ -93,7 +91,7 @@ export async function loadBitmapFontAsset(
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
       loaded,
-      data: captured.data(),
+      data: compiledBitmapData(loaded),
       metrics,
     };
   }
@@ -102,10 +100,9 @@ export async function loadBitmapFontAsset(
   if (!response.ok) throw new Error(`Unable to load bitmap font fixture (${response.status})`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   signal?.throwIfAborted();
-  const captured = captureRasterTechniqueData(bitmapTechnique);
   const loaded = await loadBakedFont({
     artifact: bytes,
-    raster: { technique: captured.technique, options: { strikes } },
+    raster: { technique: bitmapTechnique, options: { strikes } },
     library,
     ...(signal === undefined ? {} : { signal }),
   });
@@ -115,19 +112,7 @@ export async function loadBitmapFontAsset(
     atlasGpuBytes: 0,
     compressedBytes: bytes.byteLength,
     loaded,
-    data: captured.data(),
+    data: compiledBitmapData(loaded),
     metrics,
   };
-}
-
-/**
- * Clones the technique with an instrumented runtime baker. The Three adapter resolves a program by technique ID rather
- * than object identity, so the clone still renders while reporting the same raster delivery evidence.
- */
-function measuredBitmapTechnique(
-  metrics: BenchmarkFontAsset['metrics'],
-  onProgress?: Extract<BenchmarkFontAssetRequest, { readonly technique: 'bitmap' }>['onProgress'],
-): typeof bitmapTechnique {
-  const runtimeBaker = measuredRuntimeRaster(bitmapTechnique.runtimeBaker, metrics, onProgress);
-  return { ...bitmapTechnique, ...(runtimeBaker === undefined ? {} : { runtimeBaker }) };
 }

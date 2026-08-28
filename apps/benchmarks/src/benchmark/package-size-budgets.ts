@@ -6,11 +6,11 @@ export const packageSizeBudgets = {
     gzipBytes: 82_400,
     brotliBytes: 63_500,
   },
-  // Runtime-owned hosts, retained target sessions, semantic plan readers, portable resources,
-  // and transactional call-time validation. Includes reviewed cross-host compression margin.
+  // Hosts, retained sessions, semantic plan readers, portable resources, and call-time validation.
+  // Includes the zero-copy compiled-font view used by CPU renderer integrations.
   'core-subpath-js': {
-    rawBytes: 405_000,
-    minifiedBytes: 268_000,
+    rawBytes: 412_000,
+    minifiedBytes: 270_000,
     gzipBytes: 68_000,
     brotliBytes: 57_000,
   },

@@ -240,6 +240,10 @@ export const examplePlan: RasterPlanProgram<typeof exampleTechnique, typeof exam
 bytes plus constrained portable payloads. The runtime deduplicates shaping registration, while each renderer may realize
 the same payload separately for each physical device/context.
 
+For CPU reference renderers and allocation diagnostics, `readCompiledRasterFont()` provides named read-only field access,
+strike selection, and retained portable resources over that same compiled result. It neither publishes internal decoded
+Font data nor performs a second decode; the benchmark uses this path to compare Bitmap, MTSDF, and Slug against hardware.
+
 The plan uses canonical pen origins. Historical ink-box-start placement was implementation cruft, not a second supported
 integration mode; renderer-neutral findings are applied back to Three rather than preserved as opt-in divergence.
 

@@ -231,7 +231,7 @@ interface LoadedTechniqueFont {
   readonly bitmapStrikes: readonly { readonly ppem: number }[];
   readonly font: WorkloadFont;
   readonly fontLoadMs: number;
-  /** The target-v1 handle every workload Text binds to. It carries the technique, its decoded raster, and the runtime. */
+  /** Canonical application Font lease bound by every workload Text. */
   readonly loaded: WorkloadFont;
   readonly metrics: FontDeliveryMetrics;
   readonly mtsdfConfiguration?: MtsdfRasterConfiguration;

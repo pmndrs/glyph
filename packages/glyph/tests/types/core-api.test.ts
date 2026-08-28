@@ -6,11 +6,15 @@ import {
   type ParagraphSpan,
 } from '@pmndrs/glyph';
 import {
+  readCompiledRasterFont,
   createTextRuntime,
   compileFontBinding,
   TextEngineHost,
   TextEngineRenderPlanView,
   TextEngineStatusError,
+  type AnyTechniqueSchema,
+  type CompiledRasterFont,
+  type RasterPlanProgram,
   type FontBindingDescriptor,
   type HostFontStackBinding,
   type HostMaterialBinding,
@@ -25,6 +29,7 @@ import {
   type ResourceHandle,
   type SynchronousTextEngineSession,
 } from '@pmndrs/glyph/core';
+import { bitmapPlanProgram } from '@pmndrs/glyph/raster/bitmap';
 // @ts-expect-error Dynamic engine session IDs are package-managed implementation state.
 import type { TextEngineSessionHandle as PublicTextEngineSessionHandle } from '@pmndrs/glyph/core';
 void (undefined as unknown as PublicTextEngineSessionHandle);
@@ -172,6 +177,24 @@ void rawResourceHandle;
 declare const binding: FontBindingDescriptor;
 const bindingBytes: Uint8Array = compileFontBinding(binding);
 void bindingBytes;
+
+declare const compiledRasterFont: CompiledRasterFont;
+declare const rasterPlanProgram: RasterPlanProgram<AnyRasterTechnique, AnyTechniqueSchema>;
+const compiledRasterView = readCompiledRasterFont(compiledRasterFont, rasterPlanProgram);
+const compiledResource = compiledRasterView.resource(0, 0);
+const compiledF32: number = compiledRasterView.f32('bearingX', 0);
+const compiledU32: number = compiledRasterView.u32('page', 0);
+void compiledResource;
+void compiledF32;
+void compiledU32;
+
+const exactCompiledRasterView = readCompiledRasterFont(compiledRasterFont, bitmapPlanProgram);
+exactCompiledRasterView.f32('bearingX', 0);
+exactCompiledRasterView.u32('page', 0);
+// @ts-expect-error Compiled field names are derived from the exact registered schema.
+exactCompiledRasterView.f32('missing', 0);
+// @ts-expect-error Scalar domains stay distinct even when both fields exist.
+exactCompiledRasterView.u32('bearingX', 0);
 
 declare const status: TextEngineStatusError;
 const code: number = status.status;

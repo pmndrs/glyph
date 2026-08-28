@@ -102,9 +102,12 @@ export {
 export {
   compileRasterFont,
   createRasterPolicyProgram,
+  readCompiledRasterFont,
   registerRasterPlanProgram,
   resolveRasterPlanProgram,
   type CompiledRasterFont,
+  type CompiledRasterFontResource,
+  type CompiledRasterFontView,
   type RasterPlanProgram,
   type RasterPlanProgramFontCompiler,
   type RasterFontBinding,

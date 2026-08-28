@@ -10,11 +10,11 @@
       "label": "Renderer-neutral core JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "92aae23ee8be0b00eb6966eaa92fd7ce044598e1d95c1768be4a227b8c57f072",
-      "rawBytes": 403023,
-      "minifiedBytes": 263920,
-      "gzipBytes": 65495,
-      "brotliBytes": 54833
+      "sha256": "d034bf30219416b51baf013e84c41771bcdd18f9a5aeb89a62f79e121d746862",
+      "rawBytes": 409434,
+      "minifiedBytes": 267990,
+      "gzipBytes": 66483,
+      "brotliBytes": 55698
     },
     {
       "id": "tsl-subpath-js",

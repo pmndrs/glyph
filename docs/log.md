@@ -2,6 +2,13 @@
 
 ## 2026-08-28
 
+- **Kept renderer oracles on the authenticated portable technique path** — Benchmark font assets now compile and read
+  the exact registered Bitmap, MSDF, or Slug technique instead of cloning a same-ID wrapper to capture private decoded
+  data. The validated read-only compiled-font view resolves named fields, strikes, resource selections, and portable
+  payloads directly from existing binding bytes without a second raster decode or field-table copy. External Slug parity
+  now fetches the core, companion, and each page artifact exactly once while feeding both Text and the independent CPU
+  reference; WebGPU and WebGL2 retain equal embedded/external framebuffer hashes.
+
 - **Closed retained renderer lifecycle and scaling gaps** — Async acceptance now validates returned transfer buffers
   against a scalar captured before any sibling Wasm growth can detach the publication view. The example target releases
   payload leases and physical geometry after the final accepted plan reference retires, preserves a checkpoint control,

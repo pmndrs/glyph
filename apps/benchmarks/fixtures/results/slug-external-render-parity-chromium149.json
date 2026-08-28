@@ -1,13 +1,13 @@
 {
   "schemaVersion": 0,
   "kind": "slug-external-render-parity-observation",
-  "capturedAt": "2026-07-29T08:04:57.901Z",
+  "capturedAt": "2026-08-28T10:46:04.858Z",
   "authority": "public-font-loader-and-text-framebuffer",
   "environment": {
     "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
     "hardwareConcurrency": 10,
     "webgpu": true,
-    "crossOriginIsolated": false
+    "crossOriginIsolated": true
   },
   "gpuAdapter": {
     "architecture": "metal-3",
@@ -19,14 +19,14 @@
     {
       "role": "font",
       "file": "inter-external.font.glb",
-      "bytes": 172552,
-      "sha256": "91397ecdf2259a8abb7ac45f8e2206f3c5a95405ce0092f2466ec15b14ce8386"
+      "bytes": 172636,
+      "sha256": "217c1715aedf21097224b45a3e2c6ff77ecfc2cdaead9809ef7775f6889136f3"
     },
     {
       "role": "raster",
       "file": "slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb.glb",
       "bytes": 119280,
-      "sha256": "eb46a30dbf428f011bb0091b3a49bbf81afaf0b8ebf3da8a2005b522c906acde"
+      "sha256": "602a55586c1001819af7ac5d6a4d71fb3260c604d69dcc0334eb2b8c84dceccd"
     },
     {
       "role": "raster-page",
@@ -78,24 +78,24 @@
         },
         {
           "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-curves.ktx2",
-          "count": 2
+          "count": 1
         },
         {
           "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-headers.r32ui.bin",
-          "count": 2
+          "count": 1
         },
         {
           "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-references.r16ui.bin",
-          "count": 2
+          "count": 1
         },
         {
           "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb.glb",
           "count": 1
         }
       ],
-      "fetchContract": "core and companion once; page resources twice for public Text and independent CPU-reference decodes",
-      "embeddedRenderSubmitMs": 18.799999997019768,
-      "externalRenderSubmitMs": 8.100000001490116
+      "fetchContract": "core, companion, and every page resource exactly once; one target-v1 load feeds both Text and the CPU reference",
+      "embeddedRenderSubmitMs": 25.359999999403954,
+      "externalRenderSubmitMs": 12.200000002980232
     },
     {
       "backend": "webgl2",
@@ -127,24 +127,24 @@
         },
         {
           "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-curves.ktx2",
-          "count": 2
+          "count": 1
         },
         {
           "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-headers.r32ui.bin",
-          "count": 2
+          "count": 1
         },
         {
           "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-references.r16ui.bin",
-          "count": 2
+          "count": 1
         },
         {
           "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb.glb",
           "count": 1
         }
       ],
-      "fetchContract": "core and companion once; page resources twice for public Text and independent CPU-reference decodes",
-      "embeddedRenderSubmitMs": 18.700000002980232,
-      "externalRenderSubmitMs": 13.600000001490116
+      "fetchContract": "core, companion, and every page resource exactly once; one target-v1 load feeds both Text and the CPU reference",
+      "embeddedRenderSubmitMs": 36.65999999642372,
+      "externalRenderSubmitMs": 25.780000001192093
     }
   ]
 }

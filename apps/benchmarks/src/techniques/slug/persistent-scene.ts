@@ -410,8 +410,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
           fixture: initialFontFixture,
           asset: { font: loaded.loaded, fontLoadMs, loaded, loadedFont, rasterConfiguration },
         },
-        // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
-        // registered font would strand the raster this technique still holds.
+        // Dispose the application Font lease; live renderer bindings retain their own counted lease.
         { dispose: (asset) => asset.loadedFont.dispose() },
       );
       const textStarted = performance.now();

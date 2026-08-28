@@ -12,13 +12,12 @@ import showcaseManifest from '../../../fixtures/rendering/showcase-mtsdf-fixture
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import { fetchAuthenticatedGzipAsset, preloadFontAssetUrls } from './authenticated-gzip';
 import type { AuthenticatedArtifactSize, BenchmarkFontAsset, BenchmarkFontAssetRequest } from './contracts';
+import { compiledMsdfData } from './compiled-data';
 import {
   createFontDeliveryMetrics,
-  captureRasterTechniqueData,
   loadBakedFont,
   loadSourceFont,
   measuredRuntimeFontBake,
-  measuredRuntimeRaster,
   sourceUrlForFixture,
 } from './runtime';
 
@@ -75,10 +74,9 @@ export async function loadMtsdfFontAsset(
   const manifest = fixtureManifests.get(fixture);
   if (manifest === undefined) throw new RangeError(`Unknown MTSDF font fixture: ${fixture}`);
   if (delivery === 'runtime') {
-    const captured = captureRasterTechniqueData(measuredMtsdfTechnique(metrics, onProgress));
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: captured.technique },
+      raster: { technique: mtsdfTechnique },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
       library,
       ...(signal === undefined ? {} : { signal }),
@@ -89,7 +87,7 @@ export async function loadMtsdfFontAsset(
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
       loaded,
-      data: captured.data(),
+      data: compiledMsdfData(loaded),
       metrics,
     };
   }
@@ -99,10 +97,9 @@ export async function loadMtsdfFontAsset(
     'MTSDF font fixture',
     signal,
   );
-  const captured = captureRasterTechniqueData(mtsdfTechnique);
   const loaded = await loadBakedFont({
     artifact,
-    raster: { technique: captured.technique },
+    raster: { technique: mtsdfTechnique },
     library,
     ...(signal === undefined ? {} : { signal }),
   });
@@ -112,19 +109,7 @@ export async function loadMtsdfFontAsset(
     atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
     compressedBytes: manifest.compressed.bytes,
     loaded,
-    data: captured.data(),
+    data: compiledMsdfData(loaded),
     metrics,
   };
-}
-
-/**
- * Clones the technique with an instrumented runtime baker. The Three adapter resolves a program by technique ID rather
- * than object identity, so the clone still renders while reporting the same raster delivery evidence.
- */
-function measuredMtsdfTechnique(
-  metrics: BenchmarkFontAsset['metrics'],
-  onProgress?: Extract<BenchmarkFontAssetRequest, { readonly technique: 'mtsdf' }>['onProgress'],
-): typeof mtsdfTechnique {
-  const runtimeBaker = measuredRuntimeRaster(mtsdfTechnique.runtimeBaker, metrics, onProgress);
-  return { ...mtsdfTechnique, ...(runtimeBaker === undefined ? {} : { runtimeBaker }) };
 }

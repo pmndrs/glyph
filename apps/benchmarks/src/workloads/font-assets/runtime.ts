@@ -1,18 +1,11 @@
 import {
   type AnyRasterTechnique,
   type BakeProgressListener,
-  defineRasterTechnique,
   type FontLibrary,
   type Font,
   type FontRequest,
-  type JsonValue,
-  type RasterTechnique,
-  type RasterTechniqueId,
-  type RasterOptionsArgument,
-  type RasterBakeArtifact,
   type RuntimeFontBake,
   type RuntimeFontBakeRequest,
-  type RuntimeRasterBakerModule,
 } from '@pmndrs/glyph';
 import { FontLoader } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -153,87 +146,4 @@ function loadingManager(library: FontLibrary | undefined): THREE.LoadingManager 
     isolatedLoadingManagers.set(library, manager);
   }
   return manager;
-}
-
-/** Capture data decoded by a benchmark-owned technique wrapper without exposing it through Font. */
-export function captureRasterTechniqueData<
-  Id extends RasterTechniqueId,
-  Kind extends string,
-  Options,
-  Descriptor extends JsonValue,
-  Data,
->(
-  technique: RasterTechnique<Id, Kind, Options, Descriptor, Data>,
-  beforeDecode?: (
-    font: Parameters<RasterTechnique<Id, Kind, Options, Descriptor, Data>['decode']>[0],
-    raster: Parameters<RasterTechnique<Id, Kind, Options, Descriptor, Data>['decode']>[1],
-  ) => void,
-) {
-  let decoded: Data | undefined;
-  const captured = defineRasterTechnique({
-    id: technique.id,
-    kind: technique.kind,
-    extension: technique.extension,
-    version: technique.version,
-    ...(technique.runtimeBaker === undefined ? {} : { runtimeBaker: technique.runtimeBaker }),
-    descriptor: (options: RasterOptionsArgument<Options>) => technique.descriptor(options),
-    async decode(font, raster, signal) {
-      beforeDecode?.(font, raster);
-      const data = await technique.decode(font, raster, signal);
-      decoded = data;
-      return data;
-    },
-    dispose: (data: Data) => technique.dispose(data),
-  });
-  return Object.freeze({
-    technique: captured,
-    data(): Data {
-      if (decoded === undefined) throw new Error('benchmark raster technique has not decoded a font');
-      return decoded;
-    },
-  });
-}
-
-export function measuredRuntimeRaster<Kind extends string, Options>(
-  load:
-    | (() => Promise<
-        RuntimeRasterBakerModule<Kind, Options> | { readonly default: RuntimeRasterBakerModule<Kind, Options> }
-      >)
-    | undefined,
-  metrics: FontDeliveryMetrics,
-  onProgress?: BakeProgressListener,
-) {
-  if (load === undefined) return undefined;
-  return async (): Promise<RuntimeRasterBakerModule<Kind, Options>> => {
-    const started = performance.now();
-    const imported = await load();
-    const baker = isDefaultRasterBaker<Kind, Options>(imported) ? imported.default : imported;
-    if (!isRuntimeRasterBaker<Kind, Options>(baker)) throw new TypeError('runtime raster baker module is invalid');
-    return {
-      kind: baker.kind,
-      async bake(request) {
-        const artifact = await baker.bake({ ...request, ...(onProgress === undefined ? {} : { onProgress }) });
-        metrics.rasterBakeMs = performance.now() - started;
-        metrics.rasterArtifactBytes = rasterArtifactBytes(artifact);
-        metrics.rasterGpuBytes = artifact.report.gpuBytes;
-        return artifact;
-      },
-    };
-  };
-}
-
-function isDefaultRasterBaker<Kind extends string, Options>(
-  value: unknown,
-): value is { readonly default: RuntimeRasterBakerModule<Kind, Options> } {
-  return typeof value === 'object' && value !== null && 'default' in value;
-}
-
-function isRuntimeRasterBaker<Kind extends string, Options>(
-  value: unknown,
-): value is RuntimeRasterBakerModule<Kind, Options> {
-  return typeof value === 'object' && value !== null && 'kind' in value && 'bake' in value;
-}
-
-function rasterArtifactBytes(artifact: RasterBakeArtifact<string>): number {
-  return artifact.artifacts.reduce((total, entry) => total + entry.bytes.byteLength, 0);
 }

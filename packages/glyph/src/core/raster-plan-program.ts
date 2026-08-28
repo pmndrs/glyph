@@ -1,4 +1,5 @@
 import type { Font } from '../font.js';
+import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { immutableFontResources, immutableFontVariantIdentity } from '../loaded-font.js';
 import { isRasterTechnique, type AnyRasterTechnique, type RasterResourceId } from '../raster-technique.js';
 import { compileFontBinding, emptyFontBindingTable, fontBindingResources, schemaFieldTable } from './font-binding.js';
@@ -54,6 +55,34 @@ export interface CompiledRasterFont {
   readonly resources: ReadonlyMap<RasterResourceId, PortableResource>;
   /** Each logical schema role mapped to the one or more retained keys carrying its payloads. */
   readonly declaredResources: ReadonlyMap<string, readonly RasterResourceId[]>;
+}
+
+/** One resource row exposed by a validated compiled-font binding view. */
+export interface CompiledRasterFontResource {
+  /** Stable technique-authored resource identity. */
+  readonly key: RasterResourceId;
+  /** Immutable portable payload associated with the identity. */
+  readonly payload: PortableResource;
+}
+
+type BindingFieldName<Names> = Names extends readonly string[] ? Names[number] : never;
+
+/** Read-only semantic view over one authenticated compiled-font binding. */
+export interface CompiledRasterFontView<Schema extends AnyTechniqueSchema = AnyTechniqueSchema> {
+  /** Schema scope that determines the row count of named fields. */
+  readonly scope: Schema['scope'];
+  /** Number of glyph rows represented by the binding. */
+  readonly glyphCount: number;
+  /** Authored raster strikes in ascending ppem order. */
+  readonly strikes: readonly number[];
+  /** Resources in the exact order referenced by binding rows. */
+  readonly resources: readonly CompiledRasterFontResource[];
+  /** Resolve the selected resource for one glyph and strike. */
+  resource(glyphIndex: number, strikeIndex: number): CompiledRasterFontResource | undefined;
+  /** Read one schema-declared float field from its scoped row. */
+  f32(name: BindingFieldName<Schema['binding']['f32']>, row: number): number;
+  /** Read one schema-declared unsigned field from its scoped row. */
+  u32(name: BindingFieldName<Schema['binding']['u32']>, row: number): number;
 }
 
 type ResourcePayload<Declaration extends TechniqueResourceDeclaration> = Declaration['kind'] extends 'buffer'
@@ -303,6 +332,169 @@ export function compileRasterFont(
     fontResources.data,
     identities,
   );
+}
+
+/**
+ * Read named binding fields and portable resources without exposing technique-owned decoded data.
+ * The view borrows `compiled`; mutating its public byte or payload arrays invalidates later reads.
+ */
+export function readCompiledRasterFont<Technique extends AnyRasterTechnique, Schema extends AnyTechniqueSchema>(
+  compiled: CompiledRasterFont,
+  program: RasterPlanProgram<Technique, Schema> & { readonly technique: Technique; readonly schema: Schema },
+  identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
+): CompiledRasterFontView<Schema> {
+  if (!compiledRasterFonts.has(compiled)) throw new TypeError('compiled raster font was not created by this package');
+  if (!isRecord(program) || !isRasterTechnique(program.technique)) {
+    throw new TypeError('compiled raster font reader needs the registered portable plan program');
+  }
+  if (programs.get(program.technique.id) !== (program as unknown as ErasedProgram)) {
+    throw new TypeError('compiled raster font reader needs the registered portable plan program');
+  }
+  if (!(identities instanceof RenderWireIdentityRegistry)) {
+    throw new TypeError('compiled raster font reader identities must be a RenderWireIdentityRegistry');
+  }
+  const bytes = compiled.binding;
+  const request = textShaperAbi.layouts.fontBindingRequest;
+  const strikeLayout = textShaperAbi.layouts.fontBindingStrike;
+  const resourceLayout = textShaperAbi.layouts.fontBindingResource;
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength < request.size) {
+    throw new TypeError('compiled raster font binding is truncated');
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(request.abiVersion, true) !== textShaperAbi.version) {
+    throw new TypeError('compiled raster font binding ABI version is unsupported');
+  }
+  if (view.getUint32(request.byteLength, true) !== bytes.byteLength) {
+    throw new TypeError('compiled raster font binding byte length is invalid');
+  }
+  const techniqueId = identities.techniqueId(program.technique);
+  if (view.getUint32(request.techniqueId, true) !== techniqueId) {
+    throw new TypeError('compiled raster font binding technique does not match its program');
+  }
+  if (view.getUint16(request.programVariant, true) !== (program.programVariant ?? 0)) {
+    throw new TypeError('compiled raster font binding variant does not match its program');
+  }
+  const glyphCount = view.getUint32(request.glyphCount, true);
+  const strikeCount = view.getUint32(request.strikeCount, true);
+  const resourceCount = view.getUint32(request.resourceCount, true);
+  const strikesOffset = checkedBindingRange(
+    view.getUint32(request.strikesOffset, true),
+    strikeCount,
+    strikeLayout.size,
+    bytes.byteLength,
+    'strikes',
+  );
+  const resourcesOffset = checkedBindingRange(
+    view.getUint32(request.resourcesOffset, true),
+    resourceCount,
+    resourceLayout.size,
+    bytes.byteLength,
+    'resources',
+  );
+  const strikeRows = checkedProduct(glyphCount, strikeCount, 'compiled raster font strike rows');
+  const resourceIndicesOffset = checkedBindingRange(
+    view.getUint32(request.resourceIndicesOffset, true),
+    strikeRows,
+    4,
+    bytes.byteLength,
+    'resource indices',
+  );
+  const strikes = Object.freeze(
+    Array.from({ length: strikeCount }, (_, index) =>
+      view.getUint32(strikesOffset + index * strikeLayout.size + strikeLayout.ppem, true),
+    ),
+  );
+  const resourcesById = new Map<number, CompiledRasterFontResource>();
+  for (const [key, payload] of compiled.resources) {
+    const id = identities.resourceId(key);
+    if (resourcesById.has(id)) throw new TypeError(`compiled raster font has duplicate resource identity ${id}`);
+    resourcesById.set(id, Object.freeze({ key, payload }));
+  }
+  const resources = Object.freeze(
+    Array.from({ length: resourceCount }, (_, index) => {
+      const offset = resourcesOffset + index * resourceLayout.size;
+      const id = view.getUint32(offset + resourceLayout.id, true);
+      const resource = resourcesById.get(id);
+      if (resource === undefined) throw new TypeError(`compiled raster font binding references unknown resource ${id}`);
+      return resource;
+    }),
+  );
+  if (resources.length !== resourcesById.size) {
+    throw new TypeError('compiled raster font binding does not reference every portable resource');
+  }
+  const scope = program.schema.scope;
+  const rows = scope === 'glyph' ? glyphCount : scope === 'strike' ? strikeRows : resourceCount;
+  const f32 = bindingFieldReader(view, request, bytes.byteLength, scope, 'f32', program.schema.binding.f32 ?? [], rows);
+  const u32 = bindingFieldReader(view, request, bytes.byteLength, scope, 'u32', program.schema.binding.u32 ?? [], rows);
+  return Object.freeze({
+    scope,
+    glyphCount,
+    strikes,
+    resources,
+    resource(glyphIndex: number, strikeIndex: number) {
+      const glyph = checkedBindingIndex(glyphIndex, glyphCount, 'glyph index');
+      const strike = checkedBindingIndex(strikeIndex, strikeCount, 'strike index');
+      const selected = view.getUint32(resourceIndicesOffset + (strike * glyphCount + glyph) * 4, true);
+      if (selected === MISSING_RESOURCE) return undefined;
+      if (selected >= resources.length) throw new RangeError('compiled raster font selected an invalid resource row');
+      return resources[selected];
+    },
+    f32,
+    u32,
+  });
+}
+
+function bindingFieldReader(
+  view: DataView,
+  request: typeof textShaperAbi.layouts.fontBindingRequest,
+  byteLength: number,
+  scope: 'glyph' | 'strike' | 'resource',
+  scalar: 'f32' | 'u32',
+  names: readonly string[],
+  rows: number,
+): (name: string, row: number) => number {
+  const title = `${scope}${scalar === 'f32' ? 'F32' : 'U32'}` as
+    | 'glyphF32'
+    | 'glyphU32'
+    | 'strikeF32'
+    | 'strikeU32'
+    | 'resourceF32'
+    | 'resourceU32';
+  const fieldCount = view.getUint8(request[`${title}FieldCount`]);
+  if (fieldCount !== names.length) {
+    throw new TypeError(`compiled raster font ${title} fields do not match its schema`);
+  }
+  const offset = checkedBindingRange(
+    view.getUint32(request[`${title}Offset`], true),
+    checkedProduct(rows, fieldCount, `compiled raster font ${title} values`),
+    4,
+    byteLength,
+    title,
+  );
+  const fields = new Map(names.map((name, index) => [name, index]));
+  return (name: string, row: number) => {
+    const field = fields.get(name);
+    if (field === undefined) throw new TypeError(`compiled raster font has no ${scalar} field "${name}"`);
+    const selectedRow = checkedBindingIndex(row, rows, `${title} row`);
+    const valueOffset = offset + (field * rows + selectedRow) * 4;
+    return scalar === 'f32' ? view.getFloat32(valueOffset, true) : view.getUint32(valueOffset, true);
+  };
+}
+
+function checkedBindingRange(offset: number, count: number, stride: number, byteLength: number, label: string): number {
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > byteLength) {
+    throw new RangeError(`compiled raster font ${label} offset is invalid`);
+  }
+  const length = checkedProduct(count, stride, `compiled raster font ${label} bytes`);
+  if (offset + length > byteLength) throw new RangeError(`compiled raster font ${label} is truncated`);
+  return offset;
+}
+
+function checkedBindingIndex(value: number, count: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value >= count) {
+    throw new RangeError(`compiled raster font ${label} ${value} is outside 0..${count - 1}`);
+  }
+  return value;
 }
 
 function compileRasterFontSource(

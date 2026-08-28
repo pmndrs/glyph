@@ -450,8 +450,7 @@ async function activateBitmapTextPersistentScene(
         fixture: fontFixture,
         asset: { atlas, font: loadedAsset.loaded, fontLoadMs, loaded: loadedAsset, loadedFont },
       },
-      // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
-      // registered font would strand the raster this technique still holds.
+      // Dispose the application Font lease; live renderer bindings retain their own counted lease.
       { dispose: (asset) => asset.loadedFont.dispose() },
     );
     const activeFontFixture = fontFixtureController;

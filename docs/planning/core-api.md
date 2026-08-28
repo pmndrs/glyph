@@ -127,6 +127,8 @@ Policy authors use semantic capability/scalar names and branded hash helpers. Th
 
 <code>bindFont()</code> and <code>bindFontStack()</code> are host-local, idempotent in underlying registration, and return independent counted leases. Binding requires a compatible policy, deduplicates shaping registration in the runtime, runs the technique's cold <code>compileFont()</code> path, registers binding bytes, and retains constrained immutable payloads. Cross-host, disposed, or incompatible bindings throw at the call boundary.
 
+Integrators that need a CPU oracle or allocation diagnostics may call <code>compileRasterFont()</code> followed by <code>readCompiledRasterFont()</code>. The read-only view resolves schema field names, strikes, selected resources, and portable payloads directly from the authenticated compiled binding. It does not expose the technique's internal decoded <code>Font.data</code>, perform another decode, or copy the binding's scalar value tables.
+
 ## Session and retained text
 
 One session owns one retained batch, target, policy selection, capacity budget, and acceptance frontier:

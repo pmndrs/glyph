@@ -8,7 +8,7 @@ export interface BitmapAtlasPageStats {
   readonly gpuBytes: number;
 }
 
-/** Reads the Bitmap allocation topology captured by the benchmark-owned technique wrapper. */
+/** Reads Bitmap allocation topology reconstructed from its compiled portable font contract. */
 export function bitmapAtlasConfiguration(data: BitmapData): {
   readonly gpuBytes: number;
   readonly pages: readonly BitmapAtlasPageStats[];

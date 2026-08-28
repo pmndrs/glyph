@@ -5,7 +5,7 @@ export interface MtsdfRasterConfiguration {
   readonly pixelRange: number;
 }
 
-/** Reads MTSDF allocation metadata captured by the benchmark-owned technique wrapper. */
+/** Reads MTSDF allocation metadata reconstructed from its compiled portable font contract. */
 export function mtsdfDataConfiguration(data: MsdfData): MtsdfRasterConfiguration {
   return { emSize: data.emSize, pixelRange: data.pixelRange };
 }
