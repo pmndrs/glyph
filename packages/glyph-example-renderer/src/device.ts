@@ -30,6 +30,7 @@ import {
 import type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
 import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE } from './policy.js';
 
+/** One named instance-buffer input required by an example renderer shader. */
 export interface ExampleRendererShaderBuffer {
   readonly id: PolicyBufferId;
   readonly scalar: 'f32' | 'u32';
@@ -53,6 +54,7 @@ export interface ExampleRendererShaderVariant<
   readonly outputs: Readonly<Record<string, string>>;
 }
 
+/** A renderer-selected shader realization for one portable technique variant. */
 export interface ExampleRendererShader<Variant extends ExampleRendererShaderVariant = ExampleRendererShaderVariant> {
   readonly variant: Variant;
   readonly programNamespace: string;
@@ -62,6 +64,7 @@ export interface ExampleRendererShader<Variant extends ExampleRendererShaderVari
   readonly fragmentWgsl: string;
 }
 
+/** One acquired portable resource passed to a renderer device for realization. */
 export interface ExampleRendererResourceInput {
   readonly id: ResourceHandle;
   readonly generation: number;
@@ -114,6 +117,7 @@ export function getExampleRendererShader(): GlyphExampleRendererShader {
   return resolvedExampleRendererShader;
 }
 
+/** Lazily resolved TypeGPU shader metadata used by the concrete example device. */
 export const exampleRendererShader: GlyphExampleRendererShader = Object.freeze({
   variant: glyphExampleTypeGpuVariant,
   programNamespace: EXAMPLE_RENDERER_PROGRAM_NAMESPACE,
@@ -161,6 +165,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   #submissionRevision = 0;
   #asyncPublicationInFlight = false;
 
+  /** Creates a deterministic CPU renderer for the selected shader contract. */
   constructor(shader: ExampleRendererShader = exampleRendererShader) {
     assertExampleRendererShader(shader);
     this.shader = shader;
@@ -172,6 +177,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.#programVariant = unsignedInteger(shader.programVariant, 0xffff, 'shader program variant');
   }
 
+  /** Validates and stages portable resources without mutating accepted state. */
   prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources {
     this.#assertMutable('prepare resources');
     if (!Array.isArray(resources)) throw new TypeError('example renderer resources must be an array');
@@ -200,6 +206,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     });
   }
 
+  /** Validates and stages one draw list without mutating accepted state. */
   prepareSubmission(drawList: ExampleDrawList): RecordingPendingSubmission {
     this.#assertMutable('prepare a submission');
     assertDrawList(drawList);
@@ -326,10 +333,12 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     });
   }
 
+  /** Immediately records one already-validated resource for focused backend tests. */
   createResource(id: ResourceHandle, name: string, resource: unknown, generation = 1): void {
     this.prepareResources([{ id, generation, name, resource }]).commit();
   }
 
+  /** Applies validated buffer records and patches to the recording state. */
   applyBufferPlan(
     buffers: readonly TextEngineBufferRecord[],
     patches: readonly TextEnginePatchRecord[],
@@ -353,10 +362,12 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.#submissionRevision += 1;
   }
 
+  /** Returns retained bytes for an exact buffer generation, when present. */
   bufferBytes(id: RenderPlanBufferId, generation: number): Uint8Array | undefined {
     return this.#retainedBuffers.get(bufferKey(id, generation))?.bytes;
   }
 
+  /** Retires one exact resource generation from the recording state. */
   retireResource(id: ResourceHandle, generation: number): void {
     this.#assertMutable('retire a resource');
     const state = this.#resourceState();
@@ -400,6 +411,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.#resourceRevision += 1;
   }
 
+  /** Validates and commits one draw list synchronously. */
   submit(drawList: ExampleDrawList): void {
     this.#assertMutable('submit a draw list');
     assertDrawList(drawList);
@@ -645,6 +657,7 @@ interface ExampleBufferState {
   readonly activeByName: ReadonlyMap<string, Uint8Array>;
 }
 
+/** Concrete geometry and draw counts resolved from one portable primitive. */
 export interface ExampleGeometry {
   readonly kind: 'synthetic-quad' | 'supplied';
   readonly indexed: boolean;
@@ -661,6 +674,7 @@ export interface ExampleDrawBindings {
   readonly resources: ReadonlyMap<string, unknown>;
 }
 
+/** One validated draw with its concrete geometry and named shader bindings. */
 export interface ExampleRealizedDraw extends ExampleDrawBindings {
   readonly draw: ExampleDraw;
   readonly primitive: ExamplePrimitiveRecord;

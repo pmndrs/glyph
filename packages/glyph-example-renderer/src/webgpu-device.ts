@@ -61,6 +61,7 @@ const fragmentMain = tgpu.fragmentFn({ in: { color: d.vec4f, uv: d.vec2f }, out:
   return glyphExampleFragment(TypeGpuGlyphExampleFragmentInput({ color: input.color, quadUv: input.uv }));
 });
 
+/** Caller-owned WebGPU device and offscreen target dimensions for the example backend. */
 export interface TypeGpuExampleRendererDeviceOptions {
   readonly device: GPUDevice;
   readonly width: number;
@@ -109,6 +110,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   #lost = false;
   #disposed = false;
 
+  /** Creates an offscreen TypeGPU backend around a caller-owned WebGPU device. */
   constructor(options: TypeGpuExampleRendererDeviceOptions) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new TypeError('TypeGPU example renderer options must be an object');
@@ -153,10 +155,12 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     });
   }
 
+  /** Number of render passes submitted by accepted, non-idle publications. */
   get submittedPasses(): number {
     return this.#submittedPasses;
   }
 
+  /** Validates and stages portable geometry without mutating accepted GPU state. */
   prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources {
     this.#assertActive();
     const pending = this.#recording.prepareResources(resources);
@@ -203,6 +207,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     });
   }
 
+  /** Validates and stages one publication before its GPU submission is committed. */
   prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission {
     this.#assertActive();
     const pending = this.#recording.prepareSubmission(drawList);
@@ -273,7 +278,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     }
   }
 
-  /** Copies the most recently submitted offscreen target into tightly packed RGBA bytes. */
+  /** Returns a caller-owned RGBA snapshot after submitted GPU work completes. */
   async readPixels(): Promise<Uint8Array> {
     this.#assertActive();
     const bytesPerRow = this.width * 4;
@@ -318,6 +323,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     }
   }
 
+  /** Releases every GPU resource owned by this backend; the caller still owns the device. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
