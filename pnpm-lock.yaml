@@ -17,6 +17,9 @@ importers:
       oxfmt:
         specifier: 0.35.0
         version: 0.35.0
+      ts-morph:
+        specifier: 26.0.0
+        version: 26.0.0
       typescript:
         specifier: 7.0.2
         version: 7.0.2
