@@ -401,9 +401,12 @@ flowchart TD
 - Synchronous and asynchronous sessions may coexist under one host. The runtime-wide borrow gate prevents a sibling call
   from invalidating an active borrowed publication.
 
-On device loss or a full renderer rebuild, call `control.requestCheckpoint()` for every session attached to that physical
-resource pool. The next publication for each session is complete rather than delta-based. A target must not request a
-checkpoint merely because it rejected malformed data; malformed plans are engine defects.
+On device loss or a full renderer rebuild, discard that device's physical realizations and call
+`control.requestCheckpoint()` for every session attached to the physical resource pool. The next publication for each
+session is complete rather than delta-based, so the target can reacquire portable payloads and rebuild buffers and
+geometry without an authored text mutation. The example integration packages this sequence as
+`engine.replaceDevice(nextDevice)`. A target must not request a checkpoint merely because it rejected malformed data;
+malformed plans are engine defects.
 
 ## 11. Dispose in ownership order
 

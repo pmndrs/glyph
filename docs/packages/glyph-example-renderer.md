@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:7aa3993337fcb896e0329a6809b5baa9fb6f5dc24c231d382e04c8666f7d39f3'
+source_digest: 'sha256:2cdddfda38853084022972c1d023f6057fa01218484b429670b4e4bbb65269f1'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -65,8 +65,9 @@ text when an integration needs current desired metrics or positioned glyphs befo
 The plan target consumes the borrowed A/B publication synchronously. `plan-reader.ts` decodes resources, buffers, patches,
 primitives, draws, and retirements through semantic `/core` readers and copies only borrowed patch/table bytes that its
 accepted draw list retains. Resource records resolve through `candidate.acquirePayload()`, producing counted leases over
-validated portable geometry and companion resources. The target keeps those leases until target disposal and never
-substitutes stale payloads after failure.
+validated portable geometry and companion resources. The target indexes accepted plan-resource generations by branded
+numeric handle, releases a payload lease after its last accepted plan reference retires, and never substitutes stale
+payloads after failure. Target disposal releases any leases that remain live.
 
 `RecordingExampleRendererDevice` is the deterministic CPU oracle. It validates complete candidate state against the
 selected technique, program, variant, named buffers, geometry, resource and storage generations, patch ranges, primitive
@@ -76,7 +77,9 @@ leave accepted state untouched.
 `TypeGpuExampleRendererDevice` is the concrete backend. It realizes GLB-like position, UV, and index accessors; creates
 TypeGPU/WebGPU vertex, index, and instance buffers; builds the selected pipeline; encodes an indexed instanced pass; and
 submits to an offscreen `rgba8unorm` target. Validation acceptance is awaited without stalling every frame on queue
-completion. Empty idle deltas produce no submission, while accepted removal clears the target.
+completion. Empty idle deltas produce no submission, while accepted removal clears the target. Device replacement drops
+physical realizations, asks the retained session for a complete checkpoint, reacquires portable resources, and redraws
+without an authored text mutation.
 
 The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a core runtime, binds the external
 technique, publishes initial and updated retained text, and asserts non-empty draws, required named buffers and geometry,
