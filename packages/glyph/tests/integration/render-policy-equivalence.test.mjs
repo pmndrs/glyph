@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { id } from '../../dist/core/render-policy.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
-import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
+import { threeRenderPolicyBytes, threeRenderPolicyDescriptor } from '../../dist/three/render-policy.js';
 
 const fixtureUrl = new URL('../fixtures/render-policy/hand-numbered-policy-bytes.json', import.meta.url);
 const THREE_PROGRAM_IDS = new Map([
@@ -13,6 +13,10 @@ const THREE_PROGRAM_IDS = new Map([
   [id.technique('pmndrs.slug'), id.program('pmndrs.slug', 'three')],
   [id.technique('pmndrs.decoration'), id.program('pmndrs.decoration', 'three')],
 ]);
+
+test('Three rejects counterfeit render ID factories at policy assembly', () => {
+  assert.throws(() => threeRenderPolicyDescriptor({}), /Three render policy ids must be/);
+});
 
 /**
  * Semantic equivalence against the hand-numbered programs. Register numbers and

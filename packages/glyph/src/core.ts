@@ -116,10 +116,12 @@ export {
   type RasterPolicySystem,
 } from './core/raster-plan-program.js';
 export {
+  assertRenderIdFactory,
   compileRenderPolicy,
   createProgram,
   id,
   programContext,
+  RenderIdScope,
   selectPolicyCapabilitySet,
   stores,
   type Id,

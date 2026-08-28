@@ -151,11 +151,23 @@ export function transform({ project, tsMorph }) {
     const usedFormerHelper = [...DIRECT_HELPERS].some(([name]) => imports.has(name));
     for (const name of DIRECT_HELPERS.keys()) imports.get(name)?.specifier.remove();
     const registryImport = imports.get('RenderWireIdentityRegistry')?.specifier;
-    if (registryImport !== undefined) renameRegistryImport(registryImport, glyphSource, javascript);
+    if (registryImport !== undefined) {
+      if (!glyphSource && !hasRegistryUse(sourceFile, registryLocal, tsMorph)) {
+        removeImportSpecifier(registryImport);
+      } else renameRegistryImport(registryImport, glyphSource, javascript);
+    }
     if (needsIdUtility || usedFormerHelper || (!glyphSource && registryLocal !== undefined)) {
-      ensureIdImport(glyphImports, idLocal);
+      ensureIdImport(glyphImports, idLocal, sourceFile);
     }
   }
+}
+
+function hasRegistryUse(sourceFile, local, tsMorph) {
+  if (local === undefined) return false;
+  return sourceFile.getDescendantsOfKind(tsMorph.SyntaxKind.Identifier).some((identifier) => {
+    if (identifier.getText() !== local) return false;
+    return !identifier.getAncestors().some((ancestor) => tsMorph.Node.isImportSpecifier(ancestor));
+  });
 }
 
 function renamePublicIdParameters(project, tsMorph) {
@@ -345,15 +357,14 @@ function isRegistryReceiver(receiver, bindings) {
   );
 }
 
-function ensureIdImport(declarations, local) {
+function ensureIdImport(declarations, local, sourceFile) {
   const live = declarations.filter((declaration) => !declaration.wasForgotten());
   const core = live
     .filter((declaration) => idModuleRank(declaration) !== undefined)
     .sort((left, right) => idModuleRank(left) - idModuleRank(right));
   let target = core.find((declaration) => !declaration.isTypeOnly());
   if (target === undefined) {
-    const source = live[0].getSourceFile();
-    target = source.addImportDeclaration({
+    target = sourceFile.addImportDeclaration({
       moduleSpecifier: core[0]?.getModuleSpecifierValue() ?? '@pmndrs/glyph/core',
       namedImports: [],
     });
@@ -374,6 +385,18 @@ function ensureIdImport(declarations, local) {
   target.addNamedImport(local === 'id' ? 'id' : { name: 'id', alias: local });
 }
 
+function removeImportSpecifier(specifier) {
+  const declaration = specifier.getImportDeclaration();
+  specifier.remove();
+  if (
+    declaration.getNamedImports().length === 0 &&
+    declaration.getDefaultImport() === undefined &&
+    declaration.getNamespaceImport() === undefined
+  ) {
+    declaration.remove();
+  }
+}
+
 function idModuleRank(declaration) {
   const specifier = declaration.getModuleSpecifierValue();
   if (/(?:^|\/)core\/render-policy\.js$/.test(specifier)) return 0;
@@ -389,15 +412,7 @@ function idModuleRank(declaration) {
 
 function renameRegistryImport(specifier, glyphSource, javascript) {
   if (javascript && !glyphSource) {
-    const declaration = specifier.getImportDeclaration();
-    specifier.remove();
-    if (
-      declaration.getNamedImports().length === 0 &&
-      declaration.getDefaultImport() === undefined &&
-      declaration.getNamespaceImport() === undefined
-    ) {
-      declaration.remove();
-    }
+    removeImportSpecifier(specifier);
     return;
   }
   const replacement = glyphSource ? 'RenderIdScope' : 'RenderIdFactory';

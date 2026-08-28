@@ -2,11 +2,23 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { defineRasterResourceId, defineRasterTechnique } from '../../dist/index.js';
+import {
+  createRasterPolicyProgram,
+  defineTechniqueSchema,
+  id,
+  registerRasterPlanProgram,
+  techniqueProgram,
+} from '../../dist/core.js';
 import { bitmap } from '../../dist/raster/bitmap-technique.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
 import { loadFont } from '../../dist/loader.js';
-import { threeRenderPolicyDescriptor } from '../../dist/three/render-policy.js';
+import {
+  threePolicyCapabilitySet,
+  threeRenderPolicyDescriptor,
+  threeSystemBuffers,
+} from '../../dist/three/render-policy.js';
 import {
   acquireEngineFontBinding,
   createGlyphEngine,
@@ -19,6 +31,51 @@ import {
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const raster = { technique: bitmap, options: { strikes: [16] } };
+const COLLIDING_RESOURCE_A = defineRasterResourceId('pmndrs.msdf/4wzx/16');
+const COLLIDING_RESOURCE_B = defineRasterResourceId('pmndrs.msdf/b6cd/16');
+const COLLISION_ORIGIN_BUFFER_ID = id.buffer('test.backend-font-binding/collision-origin');
+
+function collisionTechnique(name) {
+  return defineRasterTechnique({
+    id: `test.backend-font-binding.${name}`,
+    kind: bitmap.kind,
+    extension: bitmap.extension,
+    version: bitmap.version,
+    descriptor: (options) => bitmap.descriptor(options),
+    decode: (font, artifact, signal) => bitmap.decode(font, artifact, signal),
+    dispose: (data) => bitmap.dispose(data),
+  });
+}
+
+function collisionPlan(technique, resource) {
+  const schema = defineTechniqueSchema({
+    technique: technique.id,
+    scope: 'glyph',
+    binding: {},
+    buffers: { origin: { id: COLLISION_ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
+    resources: { payload: { kind: 'buffer' } },
+    render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
+  });
+  return registerRasterPlanProgram({
+    technique,
+    schema,
+    policyBody(system) {
+      const program = techniqueProgram(schema, { system });
+      return program.compile({
+        origin: [program.semantics.inlineOrigin, program.semantics.blockOrigin],
+      });
+    },
+    compileFont(compiler) {
+      compiler.retain('payload', resource, { kind: 'buffer', bytes: new Uint8Array(4), stride: 4 });
+      return compiler.compile({ strikes: [0], resource: () => resource });
+    },
+  });
+}
+
+const firstCollisionTechnique = collisionTechnique('collision-a');
+const secondCollisionTechnique = collisionTechnique('collision-b');
+const firstCollisionPlan = collisionPlan(firstCollisionTechnique, COLLIDING_RESOURCE_A);
+const secondCollisionPlan = collisionPlan(secondCollisionTechnique, COLLIDING_RESOURCE_B);
 
 async function fixtureFont() {
   return loadFont({ baked: { bytes: await readFile(fontUrl) } }, raster);
@@ -136,6 +193,43 @@ test('a glyph-engine-owned backend installs complete policies and deduplicates o
   policy.dispose();
   backend.dispose();
   glyphEngine.dispose();
+});
+
+test('one backend rejects colliding resource identities when the second font binds', async () => {
+  const bytes = await readFile(fontUrl);
+  const [firstFont, secondFont] = await Promise.all([
+    loadFont({ baked: { bytes } }, { technique: firstCollisionTechnique, options: { strikes: [16] } }),
+    loadFont({ baked: { bytes } }, { technique: secondCollisionTechnique, options: { strikes: [16] } }),
+  ]);
+  const glyphEngine = await fixtureEngine();
+  const shaper = glyphEngineShaperForTests(glyphEngine);
+  const backend = glyphEngine.createBackend({ integration: 'test.backend-font-binding-collision' });
+  const policy = backend.installPolicy((ids) => {
+    const capabilitySet = threePolicyCapabilitySet();
+    const options = {
+      namespace: 'test.backend-font-binding-collision',
+      system: threeSystemBuffers,
+      capabilitySet,
+      transformMode: 'indexed',
+      allocationMode: 'ordered',
+      ids,
+    };
+    return threeRenderPolicyDescriptor(ids, 'indexed', [
+      createRasterPolicyProgram(firstCollisionPlan, options),
+      createRasterPolicyProgram(secondCollisionPlan, options),
+    ]);
+  });
+  const first = backend.bindFont(firstFont);
+
+  assert.throws(() => backend.bindFont(secondFont), /render wire identity collision/);
+  assert.equal(shaper.memoryReport().fontCount, 1, 'a rejected binding must release its engine registration');
+
+  first.dispose();
+  policy.dispose();
+  backend.dispose();
+  glyphEngine.dispose();
+  firstFont.dispose();
+  secondFont.dispose();
 });
 
 test('a glyph-engine-owned backend binds immutable font stacks and retains their fonts', async () => {

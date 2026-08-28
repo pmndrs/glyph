@@ -13,7 +13,10 @@ try {
   await mkdir(path.join(root, 'app'), { recursive: true });
   await writeFile(
     path.join(root, 'tsconfig.json'),
-    JSON.stringify({ compilerOptions: { module: 'nodenext', moduleResolution: 'nodenext' }, include: ['app/**/*.ts'] }),
+    JSON.stringify({
+      compilerOptions: { allowJs: true, checkJs: false, module: 'nodenext', moduleResolution: 'nodenext' },
+      include: ['app/**/*'],
+    }),
   );
   await writeFile(
     path.join(root, 'app/renderer.ts'),
@@ -70,6 +73,24 @@ try {
       '',
     ].join('\n'),
   );
+  await writeFile(
+    path.join(root, 'app/registry-inferred.ts'),
+    [
+      "import { RenderWireIdentityRegistry } from '@pmndrs/glyph/core';",
+      'const ids = new RenderWireIdentityRegistry();',
+      'void ids;',
+      '',
+    ].join('\n'),
+  );
+  await writeFile(
+    path.join(root, 'app/registry-only.mjs'),
+    [
+      "import { RenderWireIdentityRegistry } from '@pmndrs/glyph/core';",
+      'const ids = new RenderWireIdentityRegistry();',
+      'void ids;',
+      '',
+    ].join('\n'),
+  );
   const recipe = path.resolve('.agents/skills/codemod/codemods/2026-08-28-id-factory');
   const result = await runCodemod({
     codemod: recipe,
@@ -77,7 +98,12 @@ try {
     target: root,
     write: true,
   });
-  assert.deepEqual(result.changedFiles, [path.join(root, 'app/renderer.ts'), path.join(root, 'app/type-only.ts')]);
+  assert.deepEqual(result.changedFiles, [
+    path.join(root, 'app/registry-inferred.ts'),
+    path.join(root, 'app/registry-only.mjs'),
+    path.join(root, 'app/renderer.ts'),
+    path.join(root, 'app/type-only.ts'),
+  ]);
   const output = await readFile(path.join(root, 'app/renderer.ts'), 'utf8');
   assert.match(output, /glyphId\.buffer\('vendor\/value'\)/);
   assert.match(output, /glyphId\.retainedPlan\('vendor\/plan'\)/);
@@ -95,6 +121,12 @@ try {
   const typeOnlyOutput = await readFile(path.join(root, 'app/type-only.ts'), 'utf8');
   assert.match(typeOnlyOutput, /import \{[^}]*id[^}]*\} from '@pmndrs\/glyph\/core';/);
   assert.match(typeOnlyOutput, /import type \{ Font \} from '@pmndrs\/glyph';/);
+  for (const name of ['registry-inferred.ts', 'registry-only.mjs']) {
+    const inferred = await readFile(path.join(root, 'app', name), 'utf8');
+    assert.match(inferred, /import \{ id \} from ["']@pmndrs\/glyph\/core["'];/);
+    assert.match(inferred, /const ids = id;/);
+    assert.doesNotMatch(inferred, /RenderIdFactory|RenderWireIdentityRegistry/);
+  }
   await executeFile(path.resolve('node_modules/.bin/tsc'), ['-p', path.join(root, 'tsconfig.json'), '--noEmit']);
   const repeated = await runCodemod({
     codemod: recipe,
