@@ -80,13 +80,10 @@ impl FlowLayoutArena {
     pub(crate) fn reserve(
         &mut self,
         line_capacity: usize,
-        max_slots_per_band: usize,
+        fragment_capacity: usize,
     ) -> Result<(), EngineError> {
         reserve(&mut self.lines, line_capacity)?;
-        reserve(
-            &mut self.fragments,
-            line_capacity.saturating_mul(max_slots_per_band),
-        )?;
+        reserve(&mut self.fragments, fragment_capacity)?;
         reserve(&mut self.ellipsis_threads, line_capacity)
     }
 
@@ -106,7 +103,10 @@ impl FlowLayoutArena {
         if clusters.starts.is_empty() || geometry.constraints.is_empty() {
             return Ok(());
         }
-        self.reserve(max_lines, max_slots_per_band)?;
+        // Limits reject excess work; they are not allocation requests. A line consumes at
+        // least one cluster, and ordinary lines need one fragment. Exceptional flows grow.
+        let likely_lines = clusters.starts.len().min(max_lines);
+        self.reserve(likely_lines, likely_lines)?;
         for constraint in geometry.constraints.iter().copied() {
             let resume = cluster_for_offset(clusters, constraint.resume_cluster)?;
             let mut cursor = LineCursor::at_cluster(resume);
@@ -914,6 +914,41 @@ mod tests {
         assert_eq!(layout.lines.len(), 2);
         assert_eq!(layout.fragments[0].line.cluster_end, 6);
         assert_eq!(layout.fragments[1].line.cluster_end, 10);
+    }
+
+    #[test]
+    fn safety_limits_do_not_preallocate_their_full_bound() {
+        let clusters = uniform_clusters(8, 1.0);
+        let styles = [uniform_style(8)];
+        let geometry = plain_geometry(constraint());
+        let mut layout = FlowLayoutArena::default();
+        layout
+            .build(
+                &geometry,
+                &clusters,
+                &styles,
+                &mut InlineSlotArena::default(),
+                65_536,
+                8,
+                |_| {
+                    Some(FontMetrics {
+                        units_per_em: 1_000,
+                        ascender: 800,
+                        descender: -200,
+                        line_gap: 0,
+                        underline_position: -100,
+                        underline_thickness: 50,
+                        strikeout_position: 300,
+                        strikeout_size: 50,
+                    })
+                },
+                |_| Some(1),
+            )
+            .unwrap();
+
+        assert!(layout.lines.capacity() < 64);
+        assert!(layout.fragments.capacity() < 64);
+        assert!(layout.ellipsis_threads.capacity() < 64);
     }
 
     fn uniform_clusters(count: usize, advance: f64) -> ClusterArena {

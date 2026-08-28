@@ -1768,9 +1768,9 @@ impl EngineSession {
                     spare.reset_for_reuse();
                     spare
                 } else {
-                    let mut state = ParagraphState::default();
-                    state.initialize()?;
-                    state
+                    // Only the reusable spare is prewarmed. New retained paragraphs grow
+                    // each arena from their actual content instead of paying session defaults.
+                    ParagraphState::default()
                 };
                 self.paragraphs.insert(
                     index,
@@ -2220,10 +2220,11 @@ impl ParagraphState {
         }
         {
             let (committed, pending) = self.flow_layout.pair_mut();
-            committed.reserve(capacity, 1)?;
-            pending.reserve(capacity, 1)?;
+            committed.reserve(capacity, capacity)?;
+            pending.reserve(capacity, capacity)?;
         }
-        self.intrinsic_flow_layout_scratch.reserve(capacity, 1)?;
+        self.intrinsic_flow_layout_scratch
+            .reserve(capacity, capacity)?;
         self.boundary_shape.reserve(capacity.min(64))?;
         self.pending_boundary_shape.reserve(capacity.min(64))?;
         self.boundary_shape_scratch.reserve(glyph_capacity)?;
@@ -4612,6 +4613,58 @@ mod tests {
             "the first paragraph's speculative state survives the second query"
         );
         assert!(session.paragraph(2).unwrap().state.text.is_prepared());
+    }
+
+    #[test]
+    fn a_session_prewarms_only_its_reusable_paragraph() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+
+        let lifecycle_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 3, 2),
+        ]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 3;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3)
+                .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let session = engine.sessions.get(&4).unwrap();
+        assert!(
+            session
+                .paragraph(1)
+                .unwrap()
+                .state
+                .style_mutation_scratch
+                .capacity()
+                >= DEFAULT_STYLE_CAPACITY
+        );
+        assert_eq!(
+            session
+                .paragraph(2)
+                .unwrap()
+                .state
+                .style_mutation_scratch
+                .capacity(),
+            0,
+            "cold paragraphs must grow from authored content rather than session defaults"
+        );
+        assert_eq!(
+            session
+                .paragraph(3)
+                .unwrap()
+                .state
+                .style_mutation_scratch
+                .capacity(),
+            0
+        );
     }
 
     #[test]
