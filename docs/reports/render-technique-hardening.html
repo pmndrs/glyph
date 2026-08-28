@@ -711,11 +711,11 @@ const recovered = text.publish();</code></pre>
       </section>
 
       <section id="evidence">
-        <h2>Verification and remaining work</h2>
+        <h2>Verification and deliberate follow-up</h2>
         <p class="status">Current package gate: green.</p>
         <ul>
           <li>
-            915 package tests passed, including cache behavior, branded plan identities, root/Three measurement parity,
+            916 Glyph package tests passed, including cache behavior, branded plan identities, root/Three measurement parity,
             caller-owned glyph columns, first-frame bounds, render-plan ownership, and React lifecycle.
           </li>
           <li>225 shaper tests plus Unicode 17 bidi and line-break conformance passed.</li>
@@ -726,6 +726,10 @@ const recovered = text.publish();</code></pre>
           <li>
             The external example renderer has deterministic recording-device tests and a concrete TypeGPU/WebGPU
             pixel-readback gate.
+          </li>
+          <li>
+            The example packages pass 13 raster and 12 renderer tests. The benchmark app passes 113 unit tests, its full
+            headless browser matrix, production build, formatting, typecheck, and package-size freshness gate.
           </li>
           <li>
             Hardware TypeGPU/WebGPU and Three labs each produced a non-empty draw before and after retained updates;
@@ -751,10 +755,38 @@ const recovered = text.publish();</code></pre>
             they no longer clone a same-ID technique or decode raster payloads twice. External Slug parity fetches all
             five artifacts once and passes on WebGPU and WebGL2 with equal embedded/external framebuffer hashes.
           </li>
+          <li>
+            Slug's public table lanes now name their actual curve, horizontal-header, vertical-header, and reference
+            bases. Lane order and binding bytes are unchanged; typed and uncounted malformed oracle columns have direct
+            negative coverage.
+          </li>
+          <li>
+            The semantic Slug names add 80 raw / 64 minified bytes to each graph that embeds the technique. Three is
+            686,713 raw / 111,433 gzip / 92,326 Brotli bytes; core and shader subpaths are byte-identical, and every
+            reviewed ceiling passes.
+          </li>
         </ul>
         <p>
-          <strong>Final merge evidence still to be recorded here:</strong> workspace-wide checks, external Opus High
-          review, stack CI, and final commit/PR identity. This section is updated only from actual final runs.
+          <strong>Review:</strong> resumable Opus High review closed the malformed Slug oracle, MTSDF configuration,
+          semantic lane-name, and uncounted-view findings. It reported no actionable blocker; the sole optional negative
+          control it named was added at <code>689958d3</code>.
+        </p>
+        <p>
+          <strong>Merge identity:</strong> draft <a href="https://github.com/pmndrs/glyph/pull/120">PR #120</a> on
+          <code>feat/render-technique-portability</code>, based directly on <code>feat/plan-retention</code> / PR #110.
+          The branch is submitted with <code>gh stack</code> and is not merged.
+        </p>
+        <p>
+          <strong>Remote evidence:</strong> GitHub
+          <a href="https://github.com/pmndrs/glyph/actions/runs/33172838781">CI run 33172838781</a> passed Static
+          checks, the complete Check gauntlet, and the package-size comparison against #110 at code head
+          <code>689958d3</code>.
+        </p>
+        <p>
+          <strong>Deliberate Three follow-up:</strong> compatible font-stack runs inside one text and renderer-private
+          GPU realizations across sessions can share more physical storage. Core now supplies counted immutable payload
+          leases and per-device realization identities; implementing that sharing remains Three-owned and must preserve
+          paragraph and visual order. No implicit core batch, scene, canvas, or device abstraction is needed.
         </p>
       </section>
 
