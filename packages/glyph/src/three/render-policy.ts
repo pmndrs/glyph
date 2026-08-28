@@ -4,6 +4,7 @@ import {
   createRasterPolicyProgram,
   definePolicyBuffers,
   defineTechniqueSchema,
+  id,
   schemaPolicyBuffers,
   techniqueProgram,
   type PolicyAllocationMode,
@@ -19,7 +20,6 @@ import {
   type AnyTechniqueSchema,
   type TechniqueSchema,
 } from '../core.js';
-import { assertRenderIdFactory, RenderIdScope, id } from '../core/render-policy.js';
 import { bitmapPlanProgram } from '../raster/bitmap-technique.js';
 import { msdfPlanProgram } from '../raster/msdf.js';
 import { slugPlanProgram } from '../raster/slug-technique.js';
@@ -92,7 +92,7 @@ const THREE_PROGRAM_NAMESPACE = 'three';
 
 /** Compiler-mapped Three policy covering every first-party raster technique in one registration. */
 export function threeRenderPolicyBytes(
-  ids: RenderIdFactory = new RenderIdScope(),
+  ids: RenderIdFactory = id,
   transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
   additionalPrograms: readonly PolicyProgram[] = [],
   allocationMode: ThreeAllocationMode = 'ordered',
@@ -102,12 +102,11 @@ export function threeRenderPolicyBytes(
 
 /** @internal Assemble the descriptor retained by the Three adapter alongside its compiled wire policy. */
 export function threeRenderPolicyDescriptor(
-  ids: RenderIdFactory = new RenderIdScope(),
+  ids: RenderIdFactory = id,
   transformMode: ThreeTransformMode | ThreeTechniqueTransformModes = 'indexed',
   additionalPrograms: readonly PolicyProgram[] = [],
   allocationMode: ThreeAllocationMode = 'ordered',
 ): PolicyDescriptor {
-  assertRenderIdFactory(ids, 'Three render policy ids');
   if (!Array.isArray(additionalPrograms)) throw new TypeError('Three additional policy programs need an array');
   if (allocationMode !== 'ordered' && allocationMode !== 'stable') {
     throw new TypeError('Three allocation mode must be "ordered" or "stable"');
