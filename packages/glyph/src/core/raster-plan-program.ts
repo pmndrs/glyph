@@ -1,5 +1,5 @@
 import type { Font } from '../font.js';
-import { immutableFontResources, type LoadedFont } from '../loaded-font.js';
+import { immutableFontResources, immutableFontVariantIdentity, type LoadedFont } from '../loaded-font.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { isRasterTechnique, type AnyRasterTechnique, type RasterResourceId } from '../raster-technique.js';
 import { compileFontBinding, emptyFontBindingTable, fontBindingResources, schemaFieldTable } from './font-binding.js';
@@ -297,7 +297,13 @@ export function compileRasterFont(
   identities: RenderWireIdentityRegistry,
 ): CompiledRasterFont | undefined {
   const fontResources = immutableFontResources(font);
-  return compileRasterFontSource(font, font.technique, fontResources.font.glyphCount, fontResources.data, identities);
+  return compileRasterFontSource(
+    immutableFontVariantIdentity(font),
+    font.technique,
+    fontResources.font.glyphCount,
+    fontResources.data,
+    identities,
+  );
 }
 
 /** Temporary bridge while first-party integrations migrate from runtime-bound fonts. */

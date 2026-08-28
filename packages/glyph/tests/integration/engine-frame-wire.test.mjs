@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
+import { compileTextEngineFrameUpdate, validateTextEngineFrameRecords } from '../../dist/core/frame-wire.js';
 import { id, selectPolicyCapabilitySet } from '../../dist/core/render-policy.js';
 import { engineFrameUpdateBytes } from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
@@ -11,6 +11,7 @@ const POLICY_ID = id('policy', 'engine-frame-wire/policy');
 const OTHER_POLICY_ID = id('policy', 'engine-frame-wire/other-policy');
 const FONT_STACK_ID = id('font-stack', 'engine-frame-wire/font-stack');
 const PARAGRAPH_ID = id('paragraph', 'engine-frame-wire/paragraph');
+const OTHER_PARAGRAPH_ID = id('paragraph', 'engine-frame-wire/other-paragraph');
 const STYLE_ID = id('style', 'engine-frame-wire/style');
 const FLOW_THREAD_ID = id('flow-thread', 'engine-frame-wire/flow-thread');
 const REGION_ID = id('region', 'engine-frame-wire/region');
@@ -71,6 +72,96 @@ test('frame compiler rejects raw and cross-domain numeric identities before allo
         paragraphMutations: [{ opcode: 'remove', paragraphId: 1 }],
       }),
     /must come from id\('paragraph'/,
+  );
+});
+
+test('record validation rejects malformed runtime values without serializing a frame', () => {
+  const style = {
+    opcode: 'upsert',
+    paragraphId: PARAGRAPH_ID,
+    styleId: STYLE_ID,
+    cascadeOrder: 0,
+    start: 0,
+    end: 1,
+    root: true,
+    value: { fontStackHandle: FONT_STACK_ID, direction: 'sideways' },
+  };
+  assert.throws(() => validateTextEngineFrameRecords({ styleMutations: [style] }), /direction is invalid/);
+  assert.throws(
+    () =>
+      validateTextEngineFrameRecords({
+        paragraphMutations: [
+          { opcode: 'upsert', paragraphId: PARAGRAPH_ID, order: 0 },
+          { opcode: 'upsert', paragraphId: OTHER_PARAGRAPH_ID, order: 0 },
+        ],
+      }),
+    /duplicate paragraph orders/,
+  );
+  assert.throws(
+    () =>
+      compileTextEngineFrameUpdate({
+        sessionId: SESSION_ID,
+        policyHandle: POLICY_ID,
+        expectedEngineRevision: 0,
+        consumedPlanRevision: 0,
+        acknowledgedPublicationGeneration: 0,
+        limits: {
+          maxParagraphs: 1,
+          maxClusters: 1,
+          maxLines: 1,
+          maxRegions: 1,
+          maxExclusions: 1,
+          maxInlineObjects: 1,
+          maxSlotsPerBand: 1,
+          maxOutputBytes: 1024,
+        },
+        styleMutations: [style],
+      }),
+    /direction is invalid/,
+  );
+  assert.throws(
+    () =>
+      compileTextEngineFrameUpdate({
+        sessionId: SESSION_ID,
+        policyHandle: POLICY_ID,
+        expectedEngineRevision: 0,
+        consumedPlanRevision: 0,
+        acknowledgedPublicationGeneration: 0,
+        semanticViewMask: 6,
+        limits: {
+          maxParagraphs: 1,
+          maxClusters: 1,
+          maxLines: 1,
+          maxRegions: 1,
+          maxExclusions: 1,
+          maxInlineObjects: 1,
+          maxSlotsPerBand: 1,
+          maxOutputBytes: 1024,
+        },
+      }),
+    /semanticViewMask is not supported/,
+  );
+  assert.throws(
+    () =>
+      compileTextEngineFrameUpdate({
+        sessionId: SESSION_ID,
+        policyHandle: POLICY_ID,
+        expectedEngineRevision: 0,
+        consumedPlanRevision: 0,
+        acknowledgedPublicationGeneration: 0,
+        limits: {
+          maxParagraphs: 1,
+          maxClusters: 1,
+          maxLines: 1,
+          maxRegions: 1,
+          maxExclusions: 1,
+          maxInlineObjects: 1,
+          maxSlotsPerBand: 1,
+          maxOutputBytes: 1024,
+        },
+        policyParameters: new Uint8Array(),
+      }),
+    /policyParameters are not supported/,
   );
 });
 
@@ -176,7 +267,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
     expectedEngineRevision: 3,
     consumedPlanRevision: 4,
     acknowledgedPublicationGeneration: 5,
-    semanticViewMask: 6,
+    semanticViewMask: abi.engine.semanticViewMasks.all,
     compositingIndependent: true,
     limits: {
       maxParagraphs: 4,
@@ -197,6 +288,7 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
         cascadeOrder: 2,
         start: 1,
         end: 5,
+        root: true,
         value: {
           fontStackHandle: FONT_STACK_ID,
           materialId: MATERIAL_ID,
@@ -222,7 +314,29 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
         },
       },
     ],
-    constraints: [],
+    constraints: [
+      {
+        paragraphId: PARAGRAPH_ID,
+        flowThreadId: FLOW_THREAD_ID,
+        geometryRevision: 1,
+        width: 100,
+        height: 100,
+        viewportBlockStart: 0,
+        viewportBlockEnd: 100,
+        resumeBlockOffset: 0,
+        maxLines: 16,
+        regionStart: 0,
+        resumeCluster: 0,
+        regionCount: 1,
+        resumeRegion: 0,
+        widthMode: 'exact',
+        heightMode: 'exact',
+        wrap: 'word',
+        align: 'start',
+        overflow: 'visible',
+        blockAlign: 'start',
+      },
+    ],
     regions: [
       {
         id: REGION_ID,
@@ -287,7 +401,6 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
         baselineAlignment: 'alphabetic',
       },
     ],
-    policyParameters: Uint8Array.of(7, 8, 9),
   });
   const request = abi.layouts.engineUpdateRequest;
   const header = new DataView(bytes.buffer, bytes.byteOffset, request.size);
@@ -297,8 +410,8 @@ test('production frame compiler carries full style, polygon, exclusion, and inli
   assert.equal(header.getUint32(request.regionCount, true), 1);
   assert.equal(header.getUint32(request.exclusionCount, true), 1);
   assert.equal(header.getUint32(request.inlineObjectCount, true), 1);
-  assert.equal(header.getUint32(request.policyParametersLength, true), 3);
-  assert.deepEqual(bytes.slice(header.getUint32(request.policyParametersOffset, true)), Uint8Array.of(7, 8, 9));
+  assert.equal(header.getUint32(request.policyParametersLength, true), 0);
+  assert.equal(header.getUint32(request.policyParametersOffset, true), 0);
   const styleOffset = header.getUint32(request.styleMutationsOffset, true);
   const style = abi.layouts.engineStyleMutation;
   const styleView = new DataView(bytes.buffer, bytes.byteOffset + styleOffset, style.size);
@@ -433,6 +546,26 @@ test('production frame compiler encodes typography controls and their defaults',
         maxOutputBytes: 65_536,
       },
       constraints: [constraint(typography)],
+      regions: [
+        {
+          id: REGION_ID,
+          geometryRevision: 1,
+          transformIndex: 1,
+          shape: 'rectangle',
+          exclusionStart: 0,
+          exclusionCount: 0,
+          writingMode: 'horizontal-tb',
+          textOrientation: 'mixed',
+          inlineStart: 0,
+          blockStart: 0,
+          inlineEnd: 320,
+          blockEnd: 180,
+          clipInlineStart: 0,
+          clipBlockStart: 0,
+          clipInlineEnd: 320,
+          clipBlockEnd: 180,
+        },
+      ],
     });
 
   const layout = abi.layouts.engineConstraint;

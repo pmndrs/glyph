@@ -2,10 +2,91 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  createExactFrameBufferPool,
   createFrameTransferPool,
   isFrameTransferPublication,
   returnFrameTransfer,
 } from '../../dist/internal/frame-transfer-pool.js';
+
+test('owned plan buffers reuse exact sizes within deterministic count and byte bounds', () => {
+  const pool = createExactFrameBufferPool({
+    maximumBufferBytes: 64,
+    maximumPooledBuffers: 2,
+    maximumPooledBytes: 72,
+  });
+
+  const first24 = pool.acquire(24);
+  assert.equal(pool.release(first24), true);
+  const first40 = pool.acquire(40);
+  assert.equal(pool.release(first40), true);
+  const reused24 = pool.acquire(24);
+  assert.equal(reused24, first24);
+  assert.equal(pool.release(reused24), true);
+  const first48 = pool.acquire(48);
+  assert.equal(pool.release(first48), true);
+
+  assert.deepEqual(pool.stats(), {
+    allocations: 3,
+    poolHits: 1,
+    returns: 4,
+    discardedReturns: 1,
+    pooledBuffers: 2,
+    pooledBytes: 72,
+  });
+
+  const replacement40 = pool.acquire(40);
+  assert.notEqual(replacement40, first40);
+  assert.equal(pool.acquire(24), first24);
+  assert.deepEqual(pool.stats(), {
+    allocations: 4,
+    poolHits: 2,
+    returns: 4,
+    discardedReturns: 1,
+    pooledBuffers: 1,
+    pooledBytes: 48,
+  });
+  pool.clear();
+  assert.equal(pool.stats().pooledBuffers, 0);
+  assert.equal(pool.stats().pooledBytes, 0);
+});
+
+test('owned plan buffer pooling validates ownership and discards unusable returns', () => {
+  assert.throws(() => createExactFrameBufferPool(null), /limits must be an object/);
+  assert.throws(
+    () =>
+      createExactFrameBufferPool({
+        maximumBufferBytes: 0,
+        maximumPooledBuffers: 1,
+        maximumPooledBytes: 1,
+      }),
+    /positive u32/,
+  );
+  const pool = createExactFrameBufferPool({
+    maximumBufferBytes: 16,
+    maximumPooledBuffers: 1,
+    maximumPooledBytes: 16,
+  });
+  assert.throws(() => pool.acquire(0), /positive u32/);
+  assert.throws(() => pool.acquire(17), /maximumBufferBytes/);
+  assert.throws(() => pool.release(new Uint8Array(1)), /attached ArrayBuffer/);
+  const detached = new ArrayBuffer(1);
+  structuredClone(detached, { transfer: [detached] });
+  assert.throws(() => pool.release(detached), /attached ArrayBuffer/);
+  assert.throws(() => pool.release(new ArrayBuffer(17)), /invalid byte length/);
+  const returned = new ArrayBuffer(8);
+  assert.equal(pool.release(returned), true);
+  assert.throws(() => pool.release(returned), /returned twice/);
+
+  const discardPool = createExactFrameBufferPool({
+    maximumBufferBytes: 16,
+    maximumPooledBuffers: 0,
+    maximumPooledBytes: 0,
+  });
+  const discarded = new ArrayBuffer(8);
+  assert.equal(discardPool.release(discarded), false);
+  assert.throws(() => discardPool.release(discarded), /returned twice/);
+  assert.equal(discardPool.stats().discardedReturns, 1);
+});
 
 const limits = {
   maximumBufferBytes: 1_024,

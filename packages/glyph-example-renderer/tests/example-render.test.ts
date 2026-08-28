@@ -11,10 +11,13 @@ import {
   programId,
   registerRasterPlanProgram,
   techniqueId,
+  TextEngineTransportError,
+  type AsyncPlanTarget,
   type TextEngineBufferRecord,
   type TextEnginePatchRecord,
   type TextEngineRetirementRecord,
   type PlanTarget,
+  type PlanTargetControl,
 } from '@pmndrs/glyph/core';
 import { afterEach, expect, test } from 'vitest';
 
@@ -144,32 +147,59 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
     });
     try {
       const flowHost = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/flow-retention' });
+      type InstrumentedRawSession = { measureParagraph: (...arguments_: unknown[]) => unknown };
+      const instrumentedHost = flowHost as unknown as {
+        _createRawSession: (options: unknown) => InstrumentedRawSession;
+      };
+      const createRawSession = instrumentedHost._createRawSession.bind(instrumentedHost);
+      let paragraphQueries = 0;
+      instrumentedHost._createRawSession = (options) => {
+        const session = createRawSession(options);
+        const measureParagraph = session.measureParagraph.bind(session);
+        session.measureParagraph = (...arguments_) => {
+          paragraphQueries += 1;
+          return measureParagraph(...arguments_);
+        };
+        return session;
+      };
       const flowPolicy = flowHost.installPolicy(exampleRenderPolicyDescriptor(flowHost.wireIdentities));
       const flowFont = flowHost.bindFontStack(createFontStack(font));
       const flowTransform = flowHost.createTransformBinding();
+      const flowLimits = {
+        maxParagraphs: 2,
+        maxClusters: 64,
+        maxLines: 16,
+        maxRegions: 4,
+        maxExclusions: 4,
+        maxInlineObjects: 1,
+        maxSlotsPerBand: 4,
+        maxOutputBytes: 128 * 1024,
+      } as const;
       let flowTargetAcceptances = 0;
+      let flowControl: PlanTargetControl | undefined;
+      let requestCheckpointDuringAcceptance = false;
+      const flowPublicationFlags: number[] = [];
       const flowTarget: PlanTarget = {
         delivery: 'borrowed',
-        accept: () => {
+        accept: (candidate) => {
           expect(() => flowHost.dispose()).toThrow('borrowed render plan');
           flowTargetAcceptances += 1;
+          flowPublicationFlags.push(candidate.plan.u32(textShaperAbi.layouts.engineResult.flags));
+          if (requestCheckpointDuringAcceptance) {
+            requestCheckpointDuringAcceptance = false;
+            flowControl!.requestCheckpoint();
+          }
           return { accepted: true };
         },
         dispose() {},
       };
       const flowSession = flowHost.createSession({
         policy: flowPolicy,
-        target: () => flowTarget,
-        limits: {
-          maxParagraphs: 2,
-          maxClusters: 64,
-          maxLines: 16,
-          maxRegions: 4,
-          maxExclusions: 4,
-          maxInlineObjects: 1,
-          maxSlotsPerBand: 4,
-          maxOutputBytes: 128 * 1024,
+        target: (control) => {
+          flowControl = control;
+          return flowTarget;
         },
+        limits: flowLimits,
         requestCapacity: 4096,
         resultCapacity: 128 * 1024,
         textCapacity: 1024,
@@ -196,6 +226,17 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         contentBox: { width: mutableWidth },
         flow: { regions: [{ region: mutableRegion }] },
       });
+      expect(() => flowSession.createText({ font: flowFont, text: 'duplicate', order: 0 })).toThrow(
+        /order 0 is already in use/,
+      );
+      expect(() => flowSession.createText({ font: flowFont, text: 'invalid', style: { fontSize: 0 } })).toThrow(
+        /font size must be positive/,
+      );
+      expect(() =>
+        flowText.update({
+          contentBox: { width: { mode: 'at-most', size: 512 }, firstLineIndent: -1 },
+        }),
+      ).toThrow(/indent and spacing must be nonnegative/);
       flowTransform.dispose();
       mutableWidth.size = Number.NaN;
       mutableRegion.inlineEnd = Number.NaN;
@@ -208,13 +249,83 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(flowTargetAcceptances).toBe(0);
       expect(flowSession.publish()).toEqual({ accepted: true });
       expect(flowTargetAcceptances).toBe(1);
+      const publishUnchecked = flowSession.publish.bind(flowSession) as (options: unknown) => unknown;
+      expect(() => publishUnchecked({ policyParameters: new Uint8Array() })).toThrow(/not supported/);
+      expect(flowTargetAcceptances).toBe(1);
+      flowText.update({ text: 'abcde' });
+      expect(flowSession.publish({ semanticViews: 'measurement' })).toEqual({ accepted: true });
+      const queriesAfterMeasuredPublish = paragraphQueries;
+      expect(flowText.layout().glyphCount).toBe(5);
+      expect(paragraphQueries).toBe(queriesAfterMeasuredPublish);
+      expect(flowText.glyphs().glyphCount).toBe(5);
+      expect(paragraphQueries).toBe(queriesAfterMeasuredPublish + 1);
+      flowText.update({ text: 'abcdef' });
+      expect(flowSession.publish({ semanticViews: 'layout-inspection' })).toEqual({ accepted: true });
+      const queriesAfterInspectedPublish = paragraphQueries;
+      expect(flowText.layout().glyphCount).toBe(6);
+      expect(flowText.glyphs().glyphCount).toBe(6);
+      expect(paragraphQueries).toBe(queriesAfterInspectedPublish);
+      expect(flowTargetAcceptances).toBe(3);
+      flowControl!.requestCheckpoint();
+      expect(flowSession.publish()).toEqual({ accepted: true });
+      expect(flowPublicationFlags.at(-1)! & textShaperAbi.engine.resultFlags.checkpoint).not.toBe(0);
+      requestCheckpointDuringAcceptance = true;
+      flowText.update({ text: 'abcdefg' });
+      expect(flowSession.publish()).toEqual({ accepted: true });
+      expect(flowSession.publish()).toEqual({ accepted: true });
+      expect(flowPublicationFlags.at(-1)! & textShaperAbi.engine.resultFlags.checkpoint).not.toBe(0);
       flowText.dispose();
       expect(() => flowText.layout()).toThrow('disposed');
       const sessionOwnedText = flowSession.createText({ font: flowFont, text: 'session-owned' });
       expect(sessionOwnedText.layout().glyphCount).toBeGreaterThan(0);
+      expect(() => flowSession.createText({ font: flowFont, text: 'too-many-pending' })).toThrow(
+        /pending paragraph mutations exceed limits.maxParagraphs/,
+      );
       flowSession.dispose();
       expect(sessionOwnedText.disposed).toBe(true);
       expect(() => sessionOwnedText.layout()).toThrow('disposed');
+
+      let returnedBuffer: ArrayBuffer | undefined;
+      let reusedBuffers = 0;
+      let corruptReturn = false;
+      const asyncTarget: AsyncPlanTarget = {
+        delivery: 'owned',
+        maximumPlanBytes: flowLimits.maxOutputBytes,
+        async accept(candidate) {
+          if (candidate.bytes.buffer === returnedBuffer) reusedBuffers += 1;
+          const workerBytes = structuredClone(candidate.bytes, { transfer: [candidate.bytes.buffer] });
+          if (corruptReturn) {
+            const layout = textShaperAbi.layouts.engineResult;
+            new DataView(workerBytes.buffer).setUint32(layout.planRevision, candidate.planRevision + 1, true);
+          }
+          const returnedBytes = structuredClone(workerBytes, { transfer: [workerBytes.buffer] });
+          returnedBuffer = returnedBytes.buffer;
+          return { accepted: true, returnedBytes };
+        },
+        dispose() {},
+      };
+      const asyncSession = flowHost.createSession({
+        policy: flowPolicy,
+        target: () => asyncTarget,
+        limits: flowLimits,
+        requestCapacity: 4096,
+        resultCapacity: flowLimits.maxOutputBytes,
+        textCapacity: 1024,
+      });
+      const asyncText = asyncSession.createText({
+        font: flowFont,
+        text: { text: 'abc', spans: [{ start: 1, end: 1, style: { fontSize: 12 } }] },
+      });
+      expect(await asyncSession.publish()).toEqual({ accepted: true });
+      asyncText.update({ text: 'def' });
+      expect(await asyncSession.publish()).toEqual({ accepted: true });
+      asyncText.update({ text: 'ghi' });
+      expect(await asyncSession.publish()).toEqual({ accepted: true });
+      expect(reusedBuffers).toBe(1);
+      corruptReturn = true;
+      asyncText.update({ text: 'jkl' });
+      await expect(asyncSession.publish()).rejects.toBeInstanceOf(TextEngineTransportError);
+      asyncSession.dispose();
       flowHost.dispose();
 
       const foreignFont = Object.create(font) as typeof font;

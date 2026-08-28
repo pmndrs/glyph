@@ -113,6 +113,8 @@ session.createText({
 });
 const acceptance = session.publish();
 void acceptance;
+// @ts-expect-error Policy parameters have no registered schema and are not an accepted publish input.
+session.publish({ policyParameters: new Uint8Array() });
 
 declare const publication: TextEnginePublication;
 

@@ -65,6 +65,28 @@ export interface FrameTransferPool {
   stats(): FrameTransferPoolStats;
 }
 
+export interface ExactFrameBufferPoolLimits {
+  readonly maximumBufferBytes: number;
+  readonly maximumPooledBuffers: number;
+  readonly maximumPooledBytes: number;
+}
+
+export interface ExactFrameBufferPoolStats {
+  readonly allocations: number;
+  readonly poolHits: number;
+  readonly returns: number;
+  readonly discardedReturns: number;
+  readonly pooledBuffers: number;
+  readonly pooledBytes: number;
+}
+
+export interface ExactFrameBufferPool {
+  acquire(byteLength: number): ArrayBuffer;
+  release(buffer: ArrayBuffer): boolean;
+  clear(): void;
+  stats(): ExactFrameBufferPoolStats;
+}
+
 interface MutableStats {
   allocations: number;
   poolHits: number;
@@ -196,6 +218,78 @@ export function createFrameTransferPool(limits: FrameTransferPoolLimits): FrameT
         ...stats,
         outstandingTransfers: outstanding.size,
         outstandingBytes,
+        pooledBuffers: pooled.length,
+        pooledBytes,
+      };
+    },
+  };
+}
+
+/** Bounded exact-size allocation reuse shared by owned plan delivery. */
+export function createExactFrameBufferPool(limits: ExactFrameBufferPoolLimits): ExactFrameBufferPool {
+  if (!isNonArrayObject(limits)) throw new TypeError('exact frame buffer pool limits must be an object');
+  assertPositiveU32('maximumBufferBytes', limits.maximumBufferBytes);
+  assertU32('maximumPooledBuffers', limits.maximumPooledBuffers);
+  assertU32('maximumPooledBytes', limits.maximumPooledBytes);
+  const maximumBufferBytes = limits.maximumBufferBytes;
+  const maximumPooledBuffers = limits.maximumPooledBuffers;
+  const maximumPooledBytes = limits.maximumPooledBytes;
+  const pooled: ArrayBuffer[] = [];
+  const returned = new WeakSet<ArrayBuffer>();
+  let pooledBytes = 0;
+  let allocations = 0;
+  let poolHits = 0;
+  let returns = 0;
+  let discardedReturns = 0;
+
+  return {
+    acquire(byteLength) {
+      assertPositiveU32('exact frame buffer byteLength', byteLength);
+      if (byteLength > maximumBufferBytes) throw new RangeError('exact frame buffer exceeds maximumBufferBytes');
+      const index = exactLengthIndex(pooled, byteLength);
+      if (index < 0) {
+        allocations += 1;
+        return new ArrayBuffer(byteLength);
+      }
+      const buffer = pooled.splice(index, 1)[0]!;
+      returned.delete(buffer);
+      pooledBytes -= buffer.byteLength;
+      poolHits += 1;
+      return buffer;
+    },
+
+    release(buffer) {
+      if (!(buffer instanceof ArrayBuffer) || buffer.detached) {
+        throw new TypeError('returned exact frame buffer must be an attached ArrayBuffer');
+      }
+      if (buffer.byteLength === 0 || buffer.byteLength > maximumBufferBytes) {
+        throw new RangeError('returned exact frame buffer has an invalid byte length');
+      }
+      if (returned.has(buffer)) throw new TypeError('exact frame buffer was returned twice');
+      returned.add(buffer);
+      returns += 1;
+      pooled.push(buffer);
+      pooledBytes += buffer.byteLength;
+      while (pooled.length > maximumPooledBuffers || pooledBytes > maximumPooledBytes) {
+        const discarded = pooled.shift();
+        if (discarded === undefined) throw new TypeError('exact frame buffer pool accounting is inconsistent');
+        pooledBytes -= discarded.byteLength;
+        discardedReturns += 1;
+      }
+      return pooled.includes(buffer);
+    },
+
+    clear() {
+      pooled.length = 0;
+      pooledBytes = 0;
+    },
+
+    stats() {
+      return {
+        allocations,
+        poolHits,
+        returns,
+        discardedReturns,
         pooledBuffers: pooled.length,
         pooledBytes,
       };

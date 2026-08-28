@@ -5,7 +5,7 @@ import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, type CompiledRasterFont } from './raster-plan-program.js';
-import type { PortableResource } from './portable-resources.js';
+import { portableResourceIdentity, type PortableResource } from './portable-resources.js';
 import {
   createRetainedTextEngineSession,
   type SessionFor,
@@ -374,7 +374,12 @@ export class TextEngineHost {
         if (resourceName === undefined) throw new Error(`compiled font retained an unnamed resource "${key}"`);
         payloads.set(
           this.wireIdentities.resourceId(key),
-          Object.freeze({ identity: Object.freeze({}), techniqueId: font.technique.id, resourceName, payload }),
+          Object.freeze({
+            identity: portableResourceIdentity(payload),
+            techniqueId: font.technique.id,
+            resourceName,
+            payload,
+          }),
         );
       }
       this.registerFontBinding(handle, runtime.handle, compiled.binding);

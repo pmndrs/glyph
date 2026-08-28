@@ -75,6 +75,8 @@ const rawSampleRows = [];
 const cases = [
   'cold',
   'no-op',
+  'publish-measurement',
+  'publish-inspection',
   'font-size',
   'column-resize',
   'measure-query',
@@ -150,7 +152,16 @@ function measureWarm(name) {
       acknowledgedPublicationGeneration: state.publicationGeneration,
     };
     let bytes;
-    if (name === 'font-size') {
+    if (name === 'publish-measurement' || name === 'publish-inspection') {
+      bytes = updateBytes({ ...common, geometry: baseGeometry });
+      new DataView(bytes.buffer).setUint32(
+        abi.layouts.engineUpdateRequest.semanticViewMask,
+        name === 'publish-measurement'
+          ? abi.engine.semanticViewMasks.measurement
+          : abi.engine.semanticViewMasks.layoutInspection,
+        true,
+      );
+    } else if (name === 'font-size') {
       bytes = updateBytes({
         ...common,
         style: { ...baseStyle, fontSize: 12 + index * 0.5 },
@@ -383,16 +394,19 @@ function printReport(caseReports) {
     `\ncomplete Rust text_update + ${options.technique} render plan · ${caseReports[0]?.glyphs ?? 0} renderable instances (${options.glyphs} fixture target) · ${options.warmup} warmup · ${options.repetitions} measured`,
   );
   console.log(
-    `${'case'.padEnd(16)}${'instances'.padStart(9)}${'median'.padStart(11)}${'p95'.padStart(11)}${'min'.padStart(11)}${'rsd'.padStart(9)}${'patches'.padStart(9)}${'writes'.padStart(11)}`,
+    `${'case'.padEnd(22)}${'instances'.padStart(9)}${'median'.padStart(11)}${'p95'.padStart(11)}${'min'.padStart(11)}${'rsd'.padStart(9)}${'patches'.padStart(9)}${'writes'.padStart(11)}`,
   );
   for (const report of caseReports) {
     console.log(
-      `${report.name.padEnd(16)}${String(report.glyphs).padStart(9)}${`${report.medianMs.toFixed(3)}ms`.padStart(11)}${`${report.p95Ms.toFixed(3)}ms`.padStart(11)}${`${report.minMs.toFixed(3)}ms`.padStart(11)}${`${report.rsdPercent.toFixed(1)}%`.padStart(9)}${String(report.patchCount).padStart(9)}${formatBytes(report.writeBytes).padStart(11)}`,
+      `${report.name.padEnd(22)}${String(report.glyphs).padStart(9)}${`${report.medianMs.toFixed(3)}ms`.padStart(11)}${`${report.p95Ms.toFixed(3)}ms`.padStart(11)}${`${report.minMs.toFixed(3)}ms`.padStart(11)}${`${report.rsdPercent.toFixed(1)}%`.padStart(9)}${String(report.patchCount).padStart(9)}${formatBytes(report.writeBytes).padStart(11)}`,
     );
   }
   console.log('column-resize is the existing layout-width case: one fully active column is reflowed end to end.');
   console.log(
     'measure-query answers the same alternating widths through the paragraph-scoped synchronous measure: no gather, plan, or publication.',
+  );
+  console.log(
+    'publish-measurement and publish-inspection isolate semantic-sidecar overhead against the otherwise identical no-op publication.',
   );
   console.log(
     'suffix-edit matches the TypeScript text benchmark; localized-edit replaces one code unit; localized-splice alternates one middle insertion/deletion.',
@@ -443,6 +457,8 @@ function parseArguments(arguments_) {
       ![
         'cold',
         'no-op',
+        'publish-measurement',
+        'publish-inspection',
         'font-size',
         'column-resize',
         'measure-query',

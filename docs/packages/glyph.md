@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:0280400bcd070e4cc707cc6c0dd89cf0befe2787a4ac8cb31c36d9329c49c793'
+source_digest: 'sha256:2820658e2b9019c8df43939d8f7ee855105d6c7e41109d23b57592ea417d50ee'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -337,13 +337,18 @@ selected font binding—not a `Text` technique selector—carries the renderer p
 
 ## Semantic queries
 
-Ordinary rendering requests no layout readback. For an attached `Text`, `layout()` explicitly measures aggregate values
-and counts for current desired state; `Text.glyphs()` separately copies committed line and glyph arrays. `layout()` routes
-every semantic change through the core host's non-publishing `session.measureParagraph`, without matrix traversal,
-renderer realization, publication flips, or revision burns. The request carries the complete desired paragraph lifecycle
-while applying text, style, and geometry mutations only for the queried paragraph, so sequential first-frame queries
-extend one speculative batch candidate. The next ordinary traversal adopts matching prepared work and publishes the batch
-once. Unchanged measurements are cached; committed glyph inspection remains a distinct full-session query.
+Publication emits no semantic readback by default. A renderer that needs current local bounds requests the measurement
+sidecar on the same update; core copies it into the retained text cache before target acceptance, so plan publication and
+bounds cost one Wasm hop. Every semantic mutation invalidates that cache immediately. `Text.layout()` then answers from
+the cache or explicitly measures current desired state, while `Text.glyphs()` similarly requests the positioned
+inspection lane. Neither query traverses matrices, realizes renderer resources, flips publication slots, or burns a
+revision.
+
+An explicit query before first render carries the desired paragraph lifecycle and applies text, style, and geometry
+mutations only for the queried paragraph. Sequential queries extend one speculative batch candidate. The next ordinary
+publication adopts matching prepared work and publishes the batch once instead of shaping twice; a geometry-only mismatch
+reuses the semantic prefix and recomputes only flow and positioning. Unchanged measurements and inspections remain cached
+until the next semantic mutation.
 
 The engine additionally exports `pmndrs_glyph_engine_measure_paragraph`, a paragraph-scoped synchronous query beside
 `pmndrs_glyph_engine_update`. It reuses the update request layout with the queried paragraph as an ABI argument, runs

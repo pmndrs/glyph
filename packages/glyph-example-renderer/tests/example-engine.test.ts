@@ -131,4 +131,35 @@ describe('a retained engine driven through the published core surface', () => {
     expect(disposals).toBe(1);
     runtime.dispose();
   });
+
+  test('rejects impossible output limits before constructing a target', async () => {
+    const runtime = await createTextRuntime({ wasm: await wasmBytes() });
+    const host = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/limits' });
+    const policy = host.installPolicy(exampleRenderPolicyDescriptor(host.wireIdentities));
+    let targetConstructions = 0;
+    const target: PlanTarget = {
+      delivery: 'borrowed',
+      accept: () => ({ accepted: true }),
+      dispose() {},
+    };
+    const create = (maxOutputBytes: number) =>
+      host.createSession({
+        policy,
+        target: () => {
+          targetConstructions += 1;
+          return target;
+        },
+        limits: { ...LIMITS, maxOutputBytes },
+        ...CAPACITIES,
+      });
+
+    try {
+      expect(() => create(1)).toThrow(/result header/);
+      expect(() => create(64 * 1024 * 1024 + 1)).toThrow(/engine limit/);
+      expect(targetConstructions).toBe(0);
+    } finally {
+      host.dispose();
+      runtime.dispose();
+    }
+  });
 });

@@ -666,7 +666,6 @@ interface TextEngineText {
 interface TextEnginePublishOptions {
   readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
   readonly compositing?: 'ordered' | 'independent';
-  readonly policyParameters?: Uint8Array;
 }
 
 interface SynchronousTextEngineSession {
@@ -753,6 +752,24 @@ policy.dispose();
 host.dispose();
 runtime.dispose();
 ```
+
+`createText()` and `text.update()` snapshot bindings and reject malformed authored values at those calls, but do not
+shape, measure, or serialize a trial frame. `layout()` and `glyphs()` are explicit synchronous queries: asking before a
+publish pays for the paragraph-scoped Wasm query once and caches its copied result until the next semantic mutation.
+`publish()` remains the ordinary coalescing boundary and performs one frame encode for every dirty text together.
+`PolicyDescriptor` is complete at installation; publish accepts no untyped policy-parameter bytes because the current
+policy ABI defines no parameter schema that could validate or consume them.
+
+Publishing with `semanticViews: 'measurement'` or `'layout-inspection'` asks the same frame transaction to emit copied
+semantic sidecars and fills those same caches before target acceptance. This keeps a renderer's ordinary path to a
+current local bounding box at one Wasm hop: Three may install the returned bounds for culling before GPU submission.
+Mutation invalidates the box immediately, and an explicit pre-render bounding-box request measures lazily rather than
+returning stale data. Two Wasm hops are required only when the caller demands metrics before publish or feeds those
+metrics back into constraints or positioning that must alter the pending plan. The early query leaves Rust's existing
+speculative transaction available: a matching publish adopts its prepared paragraph instead of shaping twice, and a
+geometry-only mismatch reuses the matching semantic prefix before recomputing flow and positioning. The default remains
+`semanticViews: 'none'`; sidecar overhead is measured separately from both no-op publication and paragraph-scoped early
+measurement.
 
 In this example, `renderer` already owns its surface and physical device/context. Neither enters `createSession()` or any
 other core signature.
@@ -863,6 +880,11 @@ Acceptance advances only after the renderer transaction commits. Rejection leave
 acceptance cursor unchanged. Recoverable renderer transitions such as device replacement use each attached target's
 `PlanTargetControl.requestCheckpoint()` after rebuilding the device pool. Invalid plan bytes are never a recoverable target
 result; they throw as an implementation defect at the decoding call.
+
+Checkpoint requests advance a private target-control generation rather than marking authored text dirty. The next
+publication presents a zero consumed-plan cursor, causing Rust to publish its complete retained plan without manufacturing
+paragraph/style mutations or exceeding authoring limits. Acceptance satisfies only the generation captured before target
+delivery, so a device-loss request raised during `accept()` survives for the following publication.
 
 An `AsyncPlanTarget` that crosses a worker remains one target with two renderer-owned endpoints. Its source endpoint
 resolves every resource referenced by the candidate and transfers an envelope containing the package-created plan buffer,
@@ -1204,8 +1226,8 @@ Each step is one coherent commit and remains green before the next.
   accept IDs/revisions/indices or raw material/resource numbers;
 - renderer-owned region transforms use an opaque HostTransformBinding that targets can resolve; a raw transform-table
   index is not accepted or lost;
-- publish options accept named semantic/compositing choices and policy bytes, never a numeric mask or ownerless capability
-  selection, and can request measurement plus layout inspection together through `semanticViews: 'all'`;
+- publish options accept only named semantic/compositing choices, never policy bytes, a numeric mask, or ownerless
+  capability selection, and can request measurement plus layout inspection together through `semanticViews: 'all'`;
 - convenience APIs never accept raw numeric registration IDs;
 - renderer-specific Canvas, Three.js, TypeGPU, WebGPU, material, and device types do not enter root or portable policy
   declarations.

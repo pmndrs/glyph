@@ -6,15 +6,18 @@ import {
   type ParagraphLayoutSummary,
 } from '../layout.js';
 import type { ParagraphContentBox, ParagraphStyle } from '../text-properties.js';
+import { createExactFrameBufferPool, type ExactFrameBufferPool } from '../internal/frame-transfer-pool.js';
 import { compileEngineGeometry, engineStyleId, engineStyleValue } from '../engine-encoding.js';
 import {
-  compileTextEngineFrameUpdate,
+  compileValidatedTextEngineFrameUpdate,
+  MAX_TEXT_ENGINE_OUTPUT_BYTES,
   type TextEngineConstraint,
   type TextEngineExclusion,
   type TextEngineFrameLimits,
   type TextEngineInlineObject,
   type TextEngineRegion,
   type TextEngineStyleMutation,
+  validateTextEngineFrameRecords,
 } from './frame-wire.js';
 import type {
   HostFontStackBinding,
@@ -221,7 +224,6 @@ export interface TextEngineText {
 export interface TextEnginePublishOptions {
   readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
   readonly compositing?: 'ordered' | 'independent';
-  readonly policyParameters?: Uint8Array;
 }
 
 interface RetainedSessionBase {
@@ -299,6 +301,11 @@ interface RetainedTextState {
   inspection: ParagraphLayoutInspection | undefined;
 }
 
+interface PendingPublication {
+  readonly publication: TextEnginePublication;
+  readonly checkpointGeneration: number;
+}
+
 const textStates = new WeakMap<object, Readonly<{ session: RetainedTextEngineSession; state: RetainedTextState }>>();
 
 /** @internal Constructed only by TextEngineHost after it has validated host ownership. */
@@ -321,12 +328,13 @@ class RetainedTextEngineSession {
   readonly #limits: TextEngineLimits;
   readonly #texts = new Set<RetainedTextState>();
   readonly #removed = new Set<RetainedTextState>();
-  readonly #returnedBuffers = new Map<number, ArrayBuffer[]>();
+  readonly #returnedBuffers: ExactFrameBufferPool | undefined;
   #nextTextOrdinal = 1;
   #engineRevision = 0;
   #planRevision = 0;
   #acknowledgedGeneration = 0;
-  #checkpointRequested = false;
+  #checkpointGeneration = 0;
+  #acceptedCheckpointGeneration = 0;
   #pending = false;
   #disposed = false;
 
@@ -339,7 +347,7 @@ class RetainedTextEngineSession {
     let claimed = false;
     const control = new TargetControlState(() => {
       this.#assertActive();
-      this.#checkpointRequested = true;
+      this.#checkpointGeneration = checkedNextCheckpointGeneration(this.#checkpointGeneration);
     });
     try {
       const capabilitySet =
@@ -362,6 +370,14 @@ class RetainedTextEngineSession {
       this.#control = control;
       this.#policy = policy;
       this.#capabilitySet = capabilitySet;
+      this.#returnedBuffers =
+        target.delivery === 'owned'
+          ? createExactFrameBufferPool({
+              maximumBufferBytes: target.maximumPlanBytes,
+              maximumPooledBuffers: 2,
+              maximumPooledBytes: target.maximumPlanBytes,
+            })
+          : undefined;
     } catch (error) {
       control.dispose();
       policy.dispose();
@@ -425,7 +441,7 @@ class RetainedTextEngineSession {
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
     const source = Object.freeze({ ...state.desired.source, ...update }) as TextEngineTextOptions;
     const desired = resolveTextOptions(this.#host, source, state.ordinal);
-    const candidate = { ...state, desired };
+    const candidate = { ...state, desired, dirty: true };
     try {
       this.#validateState(candidate);
     } catch (error) {
@@ -493,13 +509,14 @@ class RetainedTextEngineSession {
     this.#texts.clear();
     this.#removed.clear();
     attempt(() => this.#policy.dispose());
-    this.#returnedBuffers.clear();
+    this.#returnedBuffers?.clear();
     this.#host._detachRetainedSession(this);
     if (failure !== undefined) throw failure;
   }
 
   #publishBorrowed(options: NormalizedPublishOptions): PlanAcceptance {
-    const publication = this.#publishEngine(options);
+    const pending = this.#publishEngine(options);
+    const { publication } = pending;
     const lease = new BorrowedPlanLease(publication, this.#raw);
     const candidate = this.#candidate(lease);
     const leaveBorrow = this.#host._enterBorrowedPlan();
@@ -512,12 +529,13 @@ class RetainedTextEngineSession {
       lease.expire();
       leaveBorrow();
     }
-    if (result.accepted) this.#accept(publication);
+    if (result.accepted) this.#accept(pending);
     return result;
   }
 
   async #publishOwned(options: NormalizedPublishOptions): Promise<PlanAcceptance> {
-    const publication = this.#publishEngine(options);
+    const pending = this.#publishEngine(options);
+    const { publication } = pending;
     const bytes = this.#copyPlan(publication.bytes);
     const plan = new TextEngineRenderPlanView().bindBytes(bytes);
     const payloadLeases = this.#resolvePlanPayloads(plan);
@@ -545,9 +563,9 @@ class RetainedTextEngineSession {
         (this.#target as AsyncPlanTarget).accept(candidate, this.#targetController.signal),
         this.#targetController.signal,
       );
-      const accepted = assertAsyncAcceptance(result, bytes.byteLength);
+      const accepted = assertAsyncAcceptance(result, publication);
       if (accepted.returnedBytes !== undefined) this.#returnPlanBuffer(accepted.returnedBytes);
-      if (accepted.accepted) this.#accept(publication);
+      if (accepted.accepted) this.#accept(pending);
       return accepted.accepted ? { accepted: true } : { accepted: false, error: accepted.error };
     } finally {
       this.#pending = false;
@@ -555,12 +573,34 @@ class RetainedTextEngineSession {
     }
   }
 
-  #publishEngine(options: NormalizedPublishOptions): TextEnginePublication {
-    const frame = this.#compileFrame(options);
+  #publishEngine(options: NormalizedPublishOptions): PendingPublication {
+    const checkpointGeneration = this.#checkpointGeneration;
+    const frame = this.#compileFrame(options, checkpointGeneration);
     const publication = this.#raw.update(frame);
     this.#engineRevision = publication.engineRevision;
+    this.#cacheSemanticViews(publication, options.semanticViewMask);
     this.#commitDesiredState();
-    return publication;
+    return { publication, checkpointGeneration };
+  }
+
+  #cacheSemanticViews(publication: TextEnginePublication, semanticViewMask: number): void {
+    const masks = textShaperAbi.engine.semanticViewMasks;
+    if ((semanticViewMask & masks.layoutInspection) !== 0) {
+      const layouts = readTextEngineLayouts(publication);
+      for (const state of this.#texts) {
+        const layout = layouts.get(state.paragraphId);
+        if (layout === undefined) continue;
+        state.measurement = layout;
+        state.inspection = layout;
+      }
+      return;
+    }
+    if ((semanticViewMask & masks.measurement) === 0) return;
+    const measurements = readTextEngineMeasurements(publication);
+    for (const state of this.#texts) {
+      const measurement = measurements.get(state.paragraphId);
+      if (measurement !== undefined) state.measurement = measurement;
+    }
   }
 
   #queryText(state: RetainedTextState, inspection: false): ParagraphLayoutSummary;
@@ -578,7 +618,7 @@ class RetainedTextEngineSession {
     }
     const geometry = compileGeometry(this.#host, state, 0, 0);
     const textChanged = !state.published || state.publishedText !== state.desired.text;
-    const request = compileTextEngineFrameUpdate({
+    const request = compileValidatedTextEngineFrameUpdate({
       sessionId: this.#raw.handle,
       policyHandle: this.#policy.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
@@ -626,11 +666,11 @@ class RetainedTextEngineSession {
     return measurement;
   }
 
-  #compileFrame(options: NormalizedPublishOptions): Uint8Array {
+  #compileFrame(options: NormalizedPublishOptions, checkpointGeneration: number): Uint8Array {
     const paragraphMutations = [
       ...[...this.#removed].map((state) => ({ opcode: 'remove' as const, paragraphId: state.paragraphId })),
       ...[...this.#texts]
-        .filter((state) => !state.removed && (state.dirty || this.#checkpointRequested))
+        .filter((state) => !state.removed && state.dirty)
         .map((state) => ({
           opcode: 'upsert' as const,
           paragraphId: state.paragraphId,
@@ -638,7 +678,7 @@ class RetainedTextEngineSession {
         })),
     ];
     const textMutations = [...this.#texts]
-      .filter((state) => !state.removed && (state.dirty || this.#checkpointRequested))
+      .filter((state) => !state.removed && state.dirty)
       .map((state) => ({
         paragraphId: state.paragraphId,
         start: 0,
@@ -651,7 +691,7 @@ class RetainedTextEngineSession {
     const exclusions: TextEngineExclusion[] = [];
     const inlineObjects: TextEngineInlineObject[] = [];
     for (const state of this.#texts) {
-      if (state.removed || (!state.dirty && !this.#checkpointRequested)) continue;
+      if (state.removed || !state.dirty) continue;
       const styles = compileStyles(this.#host, state);
       styleMutations.push(...styles);
       for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
@@ -667,12 +707,12 @@ class RetainedTextEngineSession {
       exclusions.push(...geometry.exclusions);
       inlineObjects.push(...compileInlineObjects(this.#host, state));
     }
-    return compileTextEngineFrameUpdate({
+    return compileValidatedTextEngineFrameUpdate({
       sessionId: this.#raw.handle,
       policyHandle: this.#policy.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
-      consumedPlanRevision: this.#planRevision,
+      consumedPlanRevision: checkpointGeneration === this.#acceptedCheckpointGeneration ? this.#planRevision : 0,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
       semanticViewMask: options.semanticViewMask,
       compositingIndependent: options.compositingIndependent,
@@ -684,7 +724,6 @@ class RetainedTextEngineSession {
       regions,
       exclusions,
       inlineObjects,
-      ...(options.policyParameters === undefined ? {} : { policyParameters: options.policyParameters }),
     });
   }
 
@@ -692,24 +731,77 @@ class RetainedTextEngineSession {
     const styles = compileStyles(this.#host, state);
     const geometry = compileGeometry(this.#host, state, 0, 0);
     const inlineObjects = compileInlineObjects(this.#host, state);
-    compileTextEngineFrameUpdate({
-      sessionId: this.#raw.handle,
-      policyHandle: this.#policy.handle,
-      ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
-      expectedEngineRevision: this.#engineRevision,
-      consumedPlanRevision: this.#planRevision,
-      acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
-      limits: this.#limits,
-      paragraphMutations: [
-        { opcode: 'upsert', paragraphId: state.paragraphId, order: state.desired.source.order ?? 0 },
-      ],
-      textMutations: [{ paragraphId: state.paragraphId, start: 0, deleteCount: 0, insert: state.desired.text }],
-      styleMutations: styles,
-      constraints: [geometry.constraint],
-      regions: geometry.regions,
-      exclusions: geometry.exclusions,
-      inlineObjects,
-    });
+    validateTextEngineFrameRecords(
+      {
+        paragraphMutations: [
+          {
+            opcode: 'upsert',
+            paragraphId: state.paragraphId,
+            order: state.desired.source.order ?? state.ordinal - 1,
+          },
+        ],
+        textMutations: [{ paragraphId: state.paragraphId, start: 0, deleteCount: 0, insert: state.desired.text }],
+        styleMutations: styles,
+        constraints: [geometry.constraint],
+        regions: geometry.regions,
+        exclusions: geometry.exclusions,
+        inlineObjects,
+      },
+      this.#limits,
+    );
+    this.#validateAggregateLimits(state);
+  }
+
+  #validateAggregateLimits(candidate: RetainedTextState): void {
+    const states = [
+      ...[...this.#texts].filter((state) => !state.removed && state.paragraphId !== candidate.paragraphId),
+      candidate,
+    ];
+    const orders = new Set<number>();
+    let liveStyleCount = 0;
+    let regionCount = 0;
+    let exclusionCount = 0;
+    let inlineObjectCount = 0;
+    for (const state of states) {
+      const order = state.desired.source.order ?? state.ordinal - 1;
+      if (orders.has(order)) throw new RangeError(`retained text order ${order} is already in use`);
+      orders.add(order);
+      liveStyleCount += compiledStyleCount(state);
+      const flow = state.desired.source.flow;
+      regionCount += flow?.regions.length ?? state.desired.source.contentBox?.columns?.count ?? 1;
+      exclusionCount += flow?.regions.reduce((sum, region) => sum + (region.exclusions?.length ?? 0), 0) ?? 0;
+      inlineObjectCount += state.desired.source.inlineObjects?.length ?? 0;
+    }
+    if (states.length > this.#limits.maxParagraphs) {
+      throw new RangeError('retained texts exceed limits.maxParagraphs');
+    }
+    if (liveStyleCount > this.#limits.maxClusters) {
+      throw new RangeError('retained text styles exceed limits.maxClusters');
+    }
+    if (states.length > this.#limits.maxRegions || regionCount > this.#limits.maxRegions) {
+      throw new RangeError('retained text regions exceed limits.maxRegions');
+    }
+    if (exclusionCount > this.#limits.maxExclusions) {
+      throw new RangeError('retained text exclusions exceed limits.maxExclusions');
+    }
+    if (inlineObjectCount > this.#limits.maxInlineObjects) {
+      throw new RangeError('retained inline objects exceed limits.maxInlineObjects');
+    }
+    const pending = states.filter((state) => state.dirty);
+    if (this.#removed.size + pending.length > this.#limits.maxParagraphs) {
+      throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
+    }
+    if (pending.length > this.#limits.maxClusters) {
+      throw new RangeError('pending text mutations exceed limits.maxClusters');
+    }
+    let pendingStyleCount = 0;
+    for (const state of pending) {
+      const nextStyleCount = compiledStyleCount(state);
+      pendingStyleCount += nextStyleCount + Math.max(0, state.publishedStyleCount - nextStyleCount);
+    }
+    if (pendingStyleCount > this.#limits.maxClusters) {
+      throw new RangeError('pending style mutations exceed limits.maxClusters');
+    }
   }
 
   #commitDesiredState(): void {
@@ -719,10 +811,10 @@ class RetainedTextEngineSession {
     }
     this.#removed.clear();
     for (const state of this.#texts) {
-      if (!state.dirty && !this.#checkpointRequested) continue;
+      if (!state.dirty) continue;
       state.published = true;
       state.publishedText = state.desired.text;
-      state.publishedStyleCount = 1 + state.desired.spans.length;
+      state.publishedStyleCount = compiledStyleCount(state);
       state.geometryRevision += 1;
       state.dirty = false;
     }
@@ -809,8 +901,7 @@ class RetainedTextEngineSession {
     if (source.byteLength > (this.#target as AsyncPlanTarget).maximumPlanBytes) {
       throw new TextEngineTransportCapacityError('render plan exceeds the target transfer limit');
     }
-    const bucket = this.#returnedBuffers.get(source.byteLength);
-    const buffer = bucket?.pop() ?? new ArrayBuffer(source.byteLength);
+    const buffer = this.#returnedBuffers!.acquire(source.byteLength);
     const bytes = new Uint8Array(buffer);
     bytes.set(source);
     return bytes;
@@ -820,18 +911,13 @@ class RetainedTextEngineSession {
     if (!(bytes instanceof Uint8Array) || bytes.byteOffset !== 0 || bytes.byteLength !== bytes.buffer.byteLength) {
       throw new TextEngineTransportError('async target returned a non-full-span plan buffer');
     }
-    let bucket = this.#returnedBuffers.get(bytes.byteLength);
-    if (bucket === undefined) {
-      bucket = [];
-      this.#returnedBuffers.set(bytes.byteLength, bucket);
-    }
-    if (bucket.length === 0) bucket.push(bytes.buffer);
+    this.#returnedBuffers!.release(bytes.buffer);
   }
 
-  #accept(publication: TextEnginePublication): void {
+  #accept({ publication, checkpointGeneration }: PendingPublication): void {
     this.#planRevision = publication.planRevision;
     this.#acknowledgedGeneration = publication.publicationGeneration;
-    this.#checkpointRequested = false;
+    this.#acceptedCheckpointGeneration = checkpointGeneration;
   }
 
   #assertMutable(): void {
@@ -976,11 +1062,13 @@ class OwnedPlanReader implements OwnedTextEngineRenderPlan {
 interface NormalizedPublishOptions {
   readonly semanticViewMask: number;
   readonly compositingIndependent: boolean;
-  readonly policyParameters: Uint8Array | undefined;
 }
 
 function normalizePublishOptions(value: TextEnginePublishOptions | undefined): NormalizedPublishOptions {
   if (value !== undefined && !isNonArrayObject(value)) throw new TypeError('publish options must be an object');
+  if (value !== undefined && Object.hasOwn(value, 'policyParameters')) {
+    throw new TypeError('publish policyParameters are not supported');
+  }
   const semanticViews = value?.semanticViews ?? 'none';
   const masks = textShaperAbi.engine.semanticViewMasks;
   const semanticViewMask =
@@ -998,13 +1086,9 @@ function normalizePublishOptions(value: TextEnginePublishOptions | undefined): N
   if (compositing !== 'ordered' && compositing !== 'independent') {
     throw new TypeError('compositing must be "ordered" or "independent"');
   }
-  if (value?.policyParameters !== undefined && !(value.policyParameters instanceof Uint8Array)) {
-    throw new TypeError('policyParameters must be a Uint8Array');
-  }
   return {
     semanticViewMask,
     compositingIndependent: compositing === 'independent',
-    policyParameters: value?.policyParameters,
   };
 }
 
@@ -1265,6 +1349,12 @@ function compileStyles(host: TextEngineHost, state: RetainedTextState): readonly
   ];
 }
 
+function compiledStyleCount(state: RetainedTextState): number {
+  let count = 1;
+  for (const span of state.desired.spans) count += Number(span.start !== span.end);
+  return count;
+}
+
 function compileGeometry(
   host: TextEngineHost,
   state: RetainedTextState,
@@ -1375,6 +1465,12 @@ function snapshotLimits(value: unknown): TextEngineLimits {
     maxOutputBytes: value.maxOutputBytes,
   }) as TextEngineLimits;
   for (const [name, limit] of Object.entries(snapshot)) positiveU32(limit, name);
+  if (snapshot.maxOutputBytes < textShaperAbi.layouts.engineResult.size) {
+    throw new RangeError('maxOutputBytes cannot hold a text engine result header');
+  }
+  if (snapshot.maxOutputBytes > MAX_TEXT_ENGINE_OUTPUT_BYTES) {
+    throw new RangeError('maxOutputBytes exceeds the text engine limit');
+  }
   return snapshot;
 }
 
@@ -1422,7 +1518,7 @@ function assertAcceptance(value: unknown): PlanAcceptance {
 
 function assertAsyncAcceptance(
   value: unknown,
-  byteLength: number,
+  publication: TextEnginePublication,
 ): Readonly<{ accepted: boolean; error?: unknown; returnedBytes?: Uint8Array<ArrayBuffer> }> {
   const accepted = assertAcceptance(value);
   const returnedBytes = isNonArrayObject(value) ? value.returnedBytes : undefined;
@@ -1430,10 +1526,24 @@ function assertAsyncAcceptance(
     if (
       !(returnedBytes instanceof Uint8Array) ||
       returnedBytes.byteOffset !== 0 ||
-      returnedBytes.byteLength !== byteLength ||
-      returnedBytes.buffer.byteLength !== byteLength
+      returnedBytes.byteLength !== publication.bytes.byteLength ||
+      returnedBytes.buffer.byteLength !== publication.bytes.byteLength
     ) {
       throw new TextEngineTransportError('async target returned the wrong plan buffer');
+    }
+    let returnedPlan: TextEngineRenderPlanView;
+    try {
+      returnedPlan = new TextEngineRenderPlanView().bindBytes(returnedBytes);
+    } catch (cause) {
+      throw new TextEngineTransportError('async target returned malformed plan bytes', { cause });
+    }
+    const layout = textShaperAbi.layouts.engineResult;
+    if (
+      returnedPlan.u32(layout.engineRevision) !== publication.engineRevision ||
+      returnedPlan.u32(layout.planRevision) !== publication.planRevision ||
+      returnedPlan.u32(layout.publicationGeneration) !== publication.publicationGeneration
+    ) {
+      throw new TextEngineTransportError('async target returned bytes for a different publication');
     }
   }
   if (accepted.accepted && returnedBytes === undefined) {
@@ -1463,6 +1573,11 @@ async function abortableTargetAcceptance(
 
 function checkedNextOrdinal(value: number): number {
   if (value >= MAX_U32) throw new RangeError('text handles are exhausted');
+  return value + 1;
+}
+
+function checkedNextCheckpointGeneration(value: number): number {
+  if (value >= MAX_U32) throw new RangeError('plan target checkpoint generation is exhausted');
   return value + 1;
 }
 

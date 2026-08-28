@@ -10,6 +10,7 @@ import {
   textShaperAbi,
 } from '../../dist/core.js';
 import { RenderWireIdentityRegistry } from '../../dist/core/render-policy.js';
+import { createImmutableFontLease, immutableFontVariantIdentity } from '../../dist/loaded-font.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';
 import { immutableTestFont } from '../support/immutable-font.mjs';
 
@@ -281,6 +282,29 @@ test('one loaded font reuses its immutable compilation across engine identity re
 
   assert.equal(first, second);
   assert.equal(calls, 1);
+});
+
+test('independent Font leases over one immutable variant share compilation', () => {
+  const value = technique('test.plan-compile-shared-variant');
+  let calls = 0;
+  registerRasterPlanProgram({
+    technique: value,
+    schema: schemaFor(value),
+    policyBody: body,
+    compileFont(compiler) {
+      calls += 1;
+      return validCompile(compiler);
+    },
+  });
+  const firstFont = loaded(value);
+  const secondFont = createImmutableFontLease(immutableFontVariantIdentity(firstFont));
+  const first = compileRasterFont(firstFont, new RenderWireIdentityRegistry());
+  const second = compileRasterFont(secondFont, new RenderWireIdentityRegistry());
+
+  assert.equal(first, second);
+  assert.equal(calls, 1);
+  firstFont.dispose();
+  secondFont.dispose();
 });
 
 test('retention rejects undeclared, duplicate, missing, and wrong-kind resources', () => {

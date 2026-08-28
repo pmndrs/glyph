@@ -53,6 +53,18 @@ const textureBytesPerTexel: Readonly<Record<PortableTextureFormat, number>> = Ob
   r32uint: 4,
 });
 
+const portableResourceIdentities = new WeakMap<object, object>();
+
+/** @internal Stable package identity for one normalized immutable payload. */
+export function portableResourceIdentity(resource: PortableResource): object {
+  let identity = portableResourceIdentities.get(resource);
+  if (identity === undefined) {
+    identity = Object.freeze({});
+    portableResourceIdentities.set(resource, identity);
+  }
+  return identity;
+}
+
 /** One contiguous slice of a geometry payload's immutable bytes. */
 export interface PortableBufferView {
   readonly offset: number;
