@@ -12,6 +12,7 @@ import {
 const SUBMISSION_WARMUP = 20;
 const SUBMISSION_SAMPLES = 101;
 
+/** Hardware-backed draw, recovery, and submission evidence from the TypeGPU lab. */
 export interface RenderTechniqueTypeGpuLabReport {
   readonly initialDraws: number;
   readonly updatedDraws: number;
@@ -30,9 +31,7 @@ export interface RenderTechniqueTypeGpuLabReport {
 /** Runs the external-renderer contract through a real WebGPU device and reads its RGBA target back. */
 export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTypeGpuLabReport> {
   if (navigator.gpu === undefined) throw new Error('the TypeGPU renderer lab requires WebGPU');
-  const adapter = await navigator.gpu.requestAdapter();
-  if (adapter === null) throw new Error('the TypeGPU renderer lab could not acquire a WebGPU adapter');
-  let gpuDevice = await adapter.requestDevice();
+  let gpuDevice = await requestGpuDevice();
   const runtime = await createTextRuntime();
   let renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
   const devices = [gpuDevice];
@@ -65,7 +64,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       const updated = text.publish();
       const updatedPixels = await renderer.readPixels();
       gpuDevice.destroy();
-      gpuDevice = await adapter.requestDevice();
+      gpuDevice = await requestGpuDevice();
       devices.push(gpuDevice);
       renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
       renderers.push(renderer);
@@ -139,6 +138,12 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
     runtime.dispose();
     for (const ownedDevice of devices.reverse()) ownedDevice.destroy();
   }
+}
+
+async function requestGpuDevice(): Promise<GPUDevice> {
+  const adapter = await navigator.gpu.requestAdapter();
+  if (adapter === null) throw new Error('the TypeGPU renderer lab could not acquire a WebGPU adapter');
+  return adapter.requestDevice();
 }
 
 function percentile(sorted: readonly number[], quantile: number): number {
