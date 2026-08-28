@@ -7,7 +7,7 @@ const bitmapRuntimeBaker: RuntimeRasterBakerModule<typeof BITMAP_KIND, BitmapBak
   {
     kind: BITMAP_KIND,
     name: 'pmndrs-glyph-bitmap-baker',
-    workerUrl: new URL('./bitmap-worker.js', import.meta.url),
+    workerUrl: new URL('../../dist/runtime-bakers/bitmap-worker.js', import.meta.url),
   },
 );
 

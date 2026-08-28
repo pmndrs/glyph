@@ -6,24 +6,42 @@
   "author": "Justin Walsh (https://github.com/thejustinwalsh)",
   "type": "module",
   "sideEffects": [
+    "./src/index.ts",
+    "./src/register.ts",
     "./dist/index.js",
     "./dist/register.js"
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": {
+        "source": "./src/index.ts",
+        "default": "./dist/index.d.ts"
+      },
+      "source": "./src/index.ts",
       "import": "./dist/index.js"
     },
     "./baker": {
-      "types": "./dist/baker.d.ts",
+      "types": {
+        "source": "./src/baker.ts",
+        "default": "./dist/baker.d.ts"
+      },
+      "source": "./src/baker.ts",
       "import": "./dist/baker.js"
     },
     "./typegpu": {
-      "types": "./dist/typegpu.d.ts",
+      "types": {
+        "source": "./src/typegpu.ts",
+        "default": "./dist/typegpu.d.ts"
+      },
+      "source": "./src/typegpu.ts",
       "import": "./dist/typegpu.js"
     },
     "./tsl": {
-      "types": "./dist/tsl.d.ts",
+      "types": {
+        "source": "./src/tsl.ts",
+        "default": "./dist/tsl.d.ts"
+      },
+      "source": "./src/tsl.ts",
       "import": "./dist/tsl.js"
     },
     "./package.json": "./package.json"

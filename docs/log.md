@@ -2,6 +2,10 @@
 
 ## 2026-08-28
 
+- **Enabled workspace source-condition development** — Every TypeScript package subpath now exposes a custom `source`
+  condition, and both Vite applications opt into it for build, typecheck, and hot reload. Default consumers still resolve
+  built ESM and declarations; Wasm remains a distribution artifact.
+
 - **Aligned React font loading with R3F's cache and nested Text API** — Generic `useFont` now accepts a technique directly,
   while `useBitmapFont`, `useMSDF`, and `useSlug` are typed wrappers with matching preload and clear methods. R3F remains
   the sole promise/result cache; Glyph owns only abort and font-lease disposal. Nested `Text` authors inline runs, and its

@@ -213,7 +213,7 @@ class RuntimeShaperImpl implements RuntimeShaper {
 }
 
 async function fetchDefaultWasm(): Promise<ArrayBuffer> {
-  const url = new URL('./text-shaper.wasm', import.meta.url);
+  const url = new URL('../dist/text-shaper.wasm', import.meta.url);
   if (url.protocol === 'file:' && typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
     const fileSystem = process.getBuiltinModule('node:fs') as typeof import('node:fs');
     const bytes = fileSystem.readFileSync(url);

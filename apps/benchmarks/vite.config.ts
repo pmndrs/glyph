@@ -2,7 +2,7 @@ import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defaultClientConditions, defineConfig } from 'vite';
 
 import { fontNotices } from './scripts/font-notices.mts';
 
@@ -14,7 +14,10 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
 } as const;
 
 export default defineConfig({
-  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    conditions: ['source', ...defaultClientConditions],
+  },
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] }),

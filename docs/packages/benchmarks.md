@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:24b106038215d7a094b2358598e320a020a928023031b8316489b1fad91abc9f'
+source_digest: 'sha256:ccd5f4ab0578fb75dc0708115429dc813e7d5313b5bc084c057a81625847f9b4'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -209,6 +209,10 @@ generated:
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
+
+The Vite and TypeScript configurations opt into the workspace packages' custom `source` export condition. Development,
+build, and typecheck therefore consume current TypeScript sources without requiring a package rebuild; release-oriented
+Node workflows continue to exercise built package exports.
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 

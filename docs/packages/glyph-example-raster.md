@@ -5,7 +5,7 @@ description: Proves the portable raster boundary and ships matching TypeGPU and 
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:db34060b055e35c3c0a89c1365e4bf6a8379aba1bd443e4d9772ef520c44fd55'
+source_digest: 'sha256:78ce75d684803ab5d7c3cdaf6aef3a72908be3fdae1e606c2db0b5c2f66c187c'
 tags: [package, raster, extension-proof, typegpu, tsl]
 sources:
   - id: manifest
@@ -82,6 +82,8 @@ inputs, buffers, scalar operations, and storage/draw keys. A cold compiler lower
 into one font binding and retains the supplied indexed quad under that stable resource identity; the selected host binds
 the resulting origin, size, and color buffers plus geometry to its shader. The package no longer owns a
 `ParagraphBatchTarget`, target revision, slack planner, dirty-range upload loop, or mesh transaction.
+Its package subpaths publish a custom `source` condition so opted-in workspace Vite consumers resolve these TypeScript
+modules directly; default package resolution continues to use built ESM and declarations.
 Focused tests cover deterministic bytes, public Node bake, standalone companion validation, external resource
 resolution, abort-before-decode, plus a compiled-Wasm public `Text` lifecycle that verifies Rust-packed sizes and colors
 and observes retained draw/geometry identity. No test reconstructs the removed TypeScript selector, storage, or writer.

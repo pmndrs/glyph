@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:f25b6e23fd46ecda0511a7941a3e350b163e8445e271978f629650ab752b4450'
+source_digest: 'sha256:de128fa1fdeb44c03640adc538870a0cfc02764f13b459233d1e91d9a96148a0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -129,6 +129,9 @@ that turns those payloads into textures, buffers, and geometry and leases them a
 
 The three renderer-neutral raster leaves and their `three/*` compatibility barrels retain registration side effects under
 tree shaking. Shader implementations remain explicit `/tsl` or `/typegpu` imports and are not pulled in by registration.
+Every TypeScript subpath also publishes a custom `source` condition. Workspace Vite applications opt into that condition
+for direct TS/TSX hot reload, while ordinary Node and package consumers continue to resolve built declarations and ESM.
+Wasm and `package.json` exports remain distribution artifacts because they have no TypeScript source equivalent.
 
 The font-baker Rust source, direct-memory wrapper, schemas, tests, build pipeline, optimized Wasm, and generated ABI are
 owned by this package. There is no separately published font-baker package. The root entry has no static edge to the

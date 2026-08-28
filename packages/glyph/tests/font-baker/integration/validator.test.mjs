@@ -124,7 +124,11 @@ test('keeps the packaged extension schema byte-identical to the canonical schema
 
   const manifest = JSON.parse(manifestSource);
   assert.deepEqual(manifest.exports['./bake'], {
-    types: './dist/node/bake.d.ts',
+    types: {
+      source: './src/node/bake.ts',
+      default: './dist/node/bake.d.ts',
+    },
+    source: './src/node/bake.ts',
     import: './dist/node/bake.js',
   });
   assert.equal(FONT_BAKER_VERSION, manifest.version);

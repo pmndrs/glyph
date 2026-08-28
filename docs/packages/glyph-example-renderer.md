@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:560a42beefa10acc09790263025d446c6e87194fde56e50375aef75b39b0afff'
+source_digest: 'sha256:f1295715f5ad0007c68fc8625ff0fb9b176a2930e1ca410d2cba41954d4cea31'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -55,6 +55,8 @@ The package is a standing consumer proof. Source imports only published root ass
 public main and `/typegpu` subpaths—never `internal/`, `generated/`, `/three`, or Three itself. Its policy supplies its own
 system lane, semantic capability set, allocation mode, transform mode, and program namespace while reusing the technique's
 portable policy body. Capability wire IDs are automatic; stable author-owned identities are branded numeric hashes.
+The package root exposes a custom `source` condition for opted-in workspace tools; default consumers still resolve its
+built ESM and declarations.
 
 `ExampleTextEngine` receives a `TextRuntime`, creates its host through `runtime.createTextEngineHost()`, installs its policy,
 binds immutable fonts/stacks, opens one retained synchronous session, and exposes `createText()`, `update()`, `publish()`,

@@ -1,7 +1,7 @@
 import babel from '@rolldown/plugin-babel';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { readFile } from 'node:fs/promises';
-import { defineConfig } from 'vite';
+import { defaultClientConditions, defineConfig } from 'vite';
 
 const CROSS_ORIGIN_ISOLATION_HEADERS = {
   'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -19,6 +19,7 @@ const FONT_LICENSES = [
 ] as const;
 
 export default defineConfig({
+  resolve: { conditions: ['source', ...defaultClientConditions] },
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] }),

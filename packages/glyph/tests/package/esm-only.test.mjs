@@ -24,6 +24,12 @@ test('the published contract is ESM-only', async () => {
   });
   assert.deepEqual(manifest.bin, { glyph: './bin/glyph.js' });
   assert.deepEqual(manifest.sideEffects, [
+    './src/raster/bitmap-technique.ts',
+    './src/raster/msdf.ts',
+    './src/raster/slug-technique.ts',
+    './src/three/bitmap.ts',
+    './src/three/msdf.ts',
+    './src/three/slug.ts',
     './dist/raster/bitmap-technique.js',
     './dist/raster/msdf.js',
     './dist/raster/slug-technique.js',
@@ -83,9 +89,10 @@ test('the published contract is ESM-only', async () => {
       continue;
     }
 
-    assert.deepEqual(Object.keys(target).sort(), ['import', 'types']);
+    assert.deepEqual(Object.keys(target).sort(), ['import', 'source', 'types']);
+    assert.match(target.source, /^\.\/src\/.*\.ts$/);
+    assert.deepEqual(target.types, { source: target.source, default: target.import.replace(/\.js$/, '.d.ts') });
     assert.match(target.import, /^\.\/dist\/.*\.js$/);
-    assert.match(target.types, /^\.\/dist\/.*\.d\.ts$/);
     assert.equal('require' in target, false);
   }
 });
@@ -108,7 +115,7 @@ test('the public loader graph exposes immutable loading without mutable registra
   assert.doesNotMatch(initialGraph, /(?:\.\/node\/|\.\/bakers\/)/);
   assert.doesNotMatch(initialGraph, /(?:PMNDRS_font_slug|\.\/raster\/slug|slug-shaders)/);
   assert.doesNotMatch(entry, /(?:three\/|three["'])/, 'core entry must not import Three');
-  assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\/runtime-bake-worker\.js["']/);
+  assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\.\/dist\/runtime-bake-worker\.js["']/);
   assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
   assert.match(serialWorkerHost, /type:\s*["']module["']/);
   assert.match(runtimeWorker, /from ["']\.\/font-baker\/wasm-url\.js["']/);
