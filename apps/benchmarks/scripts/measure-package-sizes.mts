@@ -367,6 +367,7 @@ const coreJavaScript = await measureJavaScript(
       '/packages/glyph/dist/font-baker/index.js',
       '/packages/glyph/dist/font-baker/validator.js',
       '/packages/glyph/dist/font-baker/wasm-url.js',
+      '/packages/glyph/dist/internal/unicode.js',
     ],
   },
 );
