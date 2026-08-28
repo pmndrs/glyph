@@ -133,6 +133,7 @@ export {
   type PolicyDescriptor,
   type PolicyInput,
   type PolicyInputScope,
+  type MaterialHandle,
   type PolicyOperation,
   type PolicyProgram,
   type PolicyScalarType,
@@ -141,6 +142,7 @@ export {
   type RenderProgramId,
   type RenderResourceId,
   type RenderTechniqueId,
+  type ResourceHandle,
 } from './core/render-policy.js';
 export {
   definePolicyBuffers,

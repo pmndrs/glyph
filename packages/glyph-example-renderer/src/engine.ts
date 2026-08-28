@@ -5,6 +5,9 @@ import {
   type HostPolicy,
   type PlanCandidate,
   type PlanTarget,
+  type PlanTargetControl,
+  type RenderPlanResourceId,
+  type ResourceHandle,
   type SynchronousTextEngineSession,
   type TextEngineText,
   type TextRuntime,
@@ -59,6 +62,7 @@ export class ExampleTextEngine {
   #disposed = false;
 
   constructor(runtime: TextRuntime, device?: ExampleRendererDevice) {
+    if (device !== undefined) assertExampleRendererDevice(device);
     this.#host = runtime.createTextEngineHost({ integration: '@pmndrs/glyph-example-renderer' });
     this.#target = new ExamplePlanTarget(device);
     try {
@@ -106,7 +110,10 @@ export class ExampleTextEngine {
     this.#session = this.#host.createSession({
       policy: this.#policy,
       capabilitySet: exampleCapabilitySet,
-      target: () => this.#target,
+      target: (control) => {
+        this.#target.attachControl(control);
+        return this.#target;
+      },
       limits: EXAMPLE_LIMITS,
       requestCapacity: 64 * 1024,
       resultCapacity: 256 * 1024,
@@ -126,6 +133,13 @@ export class ExampleTextEngine {
     const result = this.#requireSession().publish();
     if (!result.accepted) throw result.error;
     return this.#target.lastDrawList;
+  }
+
+  /** Installs a caller-owned rebuilt device; the next publication is a complete checkpoint. */
+  replaceDevice(device: ExampleRendererDevice): void {
+    this.#assertActive();
+    assertExampleRendererDevice(device);
+    this.#target.replaceDevice(device);
   }
 
   /** Disposes the host, session, target, and retained payload leases. */
@@ -195,8 +209,13 @@ export class ExampleText {
 
 class ExamplePlanTarget implements PlanTarget {
   readonly delivery = 'borrowed' as const;
-  readonly #device: ExampleRendererDevice | undefined;
-  readonly #payloads = new Map<number, ReturnType<PlanCandidate['acquirePayload']>>();
+  #device: ExampleRendererDevice | undefined;
+  #control: PlanTargetControl | undefined;
+  readonly #payloads = new Map<ResourceHandle, ReturnType<PlanCandidate['acquirePayload']>>();
+  readonly #resourcePayloads = new Map<
+    RenderPlanResourceId,
+    Readonly<{ generation: number; referenceId: ResourceHandle }>
+  >();
   #lastDrawList: ExampleDrawList | undefined;
   #disposed = false;
 
@@ -213,6 +232,26 @@ class ExamplePlanTarget implements PlanTarget {
     return this.#lastDrawList;
   }
 
+  attachControl(control: PlanTargetControl): void {
+    if (this.#control !== undefined) throw new Error('example plan target already has a session control');
+    this.#control = control;
+  }
+
+  replaceDevice(device: ExampleRendererDevice): void {
+    if (this.#disposed) throw new Error('example plan target is disposed');
+    const current = this.#device;
+    if (current === device) return;
+    if (current !== undefined && !sameShaderSelection(current.shader, device.shader)) {
+      throw new TypeError('replacement device must select the same renderer shader');
+    }
+    for (const payload of this.#payloads.values()) payload.dispose();
+    this.#payloads.clear();
+    this.#resourcePayloads.clear();
+    this.#lastDrawList = undefined;
+    this.#device = device;
+    this.#control?.requestCheckpoint();
+  }
+
   accept(candidate: PlanCandidate) {
     if (this.#disposed) return { accepted: false as const, error: new Error('example plan target is disposed') };
     const list = readCandidate(candidate);
@@ -223,11 +262,14 @@ class ExamplePlanTarget implements PlanTarget {
     }
 
     const resources: ExampleRendererResourceInput[] = [];
+    const nextResourcePayloads = new Map(this.#resourcePayloads);
     const acquired: Array<ReturnType<PlanCandidate['acquirePayload']>> = [];
     const retained = new Set<ReturnType<PlanCandidate['acquirePayload']>>();
     try {
       for (const record of list.resourceRecords) {
-        if (record.referenceId === 0 || this.#payloads.has(record.referenceId)) continue;
+        if (record.referenceId === 0) continue;
+        nextResourcePayloads.set(record.id, { generation: record.generation, referenceId: record.referenceId });
+        if (this.#payloads.has(record.referenceId)) continue;
         const payload = candidate.acquirePayload(record.referenceId);
         if (payload.techniqueId !== device.shader.variant.techniqueId) {
           payload.dispose();
@@ -240,6 +282,12 @@ class ExamplePlanTarget implements PlanTarget {
           name: payload.resourceName,
           resource: payload.payload,
         });
+      }
+      for (const retirement of list.retirements) {
+        if (retirement.kind !== 'resource') continue;
+        const resourceId = retirement.id as RenderPlanResourceId;
+        const current = nextResourcePayloads.get(resourceId);
+        if (current?.generation === retirement.generation) nextResourcePayloads.delete(resourceId);
       }
       const pendingResources = device.prepareResources(resources);
       try {
@@ -264,6 +312,17 @@ class ExamplePlanTarget implements PlanTarget {
         throw error;
       }
       this.#lastDrawList = list;
+      this.#resourcePayloads.clear();
+      for (const [id, payload] of nextResourcePayloads) this.#resourcePayloads.set(id, payload);
+      const activeReferences = new Set([...nextResourcePayloads.values()].map(({ referenceId }) => referenceId));
+      const retiredReferences: ResourceHandle[] = [];
+      for (const [referenceId, payload] of this.#payloads) {
+        if (activeReferences.has(referenceId)) continue;
+        this.#payloads.delete(referenceId);
+        retiredReferences.push(referenceId);
+        payload.dispose();
+      }
+      device.releaseResources(retiredReferences);
       return { accepted: true as const };
     } catch (error) {
       for (const payload of acquired) if (!retained.has(payload)) payload.dispose();
@@ -276,6 +335,43 @@ class ExamplePlanTarget implements PlanTarget {
     this.#disposed = true;
     for (const payload of this.#payloads.values()) payload.dispose();
     this.#payloads.clear();
+    this.#resourcePayloads.clear();
+    this.#control = undefined;
+  }
+}
+
+function sameShaderSelection(left: ExampleRendererDevice['shader'], right: ExampleRendererDevice['shader']): boolean {
+  return (
+    left.variant.techniqueId === right.variant.techniqueId &&
+    left.variant.language === right.variant.language &&
+    left.programNamespace === right.programNamespace &&
+    left.programName === right.programName &&
+    left.programVariant === right.programVariant
+  );
+}
+
+function assertExampleRendererDevice(value: unknown): asserts value is ExampleRendererDevice {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError('example renderer device must be an object');
+  }
+  const device = value as Partial<ExampleRendererDevice>;
+  const shader = device.shader;
+  if (
+    typeof shader !== 'object' ||
+    shader === null ||
+    typeof shader.variant !== 'object' ||
+    shader.variant === null ||
+    typeof shader.variant.techniqueId !== 'string' ||
+    typeof shader.variant.language !== 'string'
+  ) {
+    throw new TypeError('example renderer device must select a shader');
+  }
+  if (
+    typeof device.prepareResources !== 'function' ||
+    typeof device.prepareSubmission !== 'function' ||
+    typeof device.releaseResources !== 'function'
+  ) {
+    throw new TypeError('example renderer device must implement resource and submission methods');
   }
 }
 

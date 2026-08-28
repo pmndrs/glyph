@@ -6,7 +6,10 @@ import {
   resolveRasterPlanProgram,
   type PortableGeometryPayload,
   type PolicyBufferId,
+  type RenderPlanBufferId,
+  type RenderPlanResourceId,
   type RenderProgramId,
+  type ResourceHandle,
   type RenderTechniqueId,
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
@@ -60,7 +63,7 @@ export interface ExampleRendererShader<Variant extends ExampleRendererShaderVari
 }
 
 export interface ExampleRendererResourceInput {
-  readonly id: number;
+  readonly id: ResourceHandle;
   readonly generation: number;
   readonly name: string;
   readonly resource: unknown;
@@ -130,23 +133,25 @@ export interface ExampleRendererDevice {
   prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources;
   /** Validate and realize a whole publication without touching accepted device state. */
   prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission;
+  /** Release portable resources after their last accepted plan reference retires. */
+  releaseResources(referenceIds: readonly ResourceHandle[]): void;
 }
 
 /** Deterministic CPU oracle for plan validation and backend tests. */
 export class RecordingExampleRendererDevice implements ExampleRendererDevice {
   readonly shader: ExampleRendererShader;
-  readonly resources: Map<number, unknown> = new Map();
+  readonly resources: Map<ResourceHandle, unknown> = new Map();
   readonly resourcesByName: Map<string, unknown> = new Map();
   readonly geometriesByName: Map<string, ExampleGeometry> = new Map();
-  readonly buffers: Map<number, Uint8Array> = new Map();
+  readonly buffers: Map<RenderPlanBufferId, Uint8Array> = new Map();
   readonly buffersByName: Map<string, Uint8Array> = new Map();
   readonly retirements: number[] = [];
   readonly submissions: ExampleDrawList[] = [];
   readonly realizedDraws: ExampleRealizedDraw[] = [];
-  readonly #resourceNames = new Map<number, string>();
-  readonly #resourceGenerations = new Map<number, number>();
-  readonly #resourceIds = new Map<string, Set<number>>();
-  readonly #planResources = new Map<number, RetainedExamplePlanResource>();
+  readonly #resourceNames = new Map<ResourceHandle, string>();
+  readonly #resourceGenerations = new Map<ResourceHandle, number>();
+  readonly #resourceIds = new Map<string, Set<ResourceHandle>>();
+  readonly #planResources = new Map<RenderPlanResourceId, RetainedExamplePlanResource>();
   readonly #retainedBuffers = new Map<string, RetainedExampleBuffer>();
   readonly #techniqueWireId: RenderTechniqueId;
   readonly #programWireId: RenderProgramId;
@@ -321,7 +326,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     });
   }
 
-  createResource(id: number, name: string, resource: unknown, generation = 1): void {
+  createResource(id: ResourceHandle, name: string, resource: unknown, generation = 1): void {
     this.prepareResources([{ id, generation, name, resource }]).commit();
   }
 
@@ -348,11 +353,11 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.#submissionRevision += 1;
   }
 
-  bufferBytes(id: number, generation: number): Uint8Array | undefined {
+  bufferBytes(id: RenderPlanBufferId, generation: number): Uint8Array | undefined {
     return this.#retainedBuffers.get(bufferKey(id, generation))?.bytes;
   }
 
-  retireResource(id: number, generation: number): void {
+  retireResource(id: ResourceHandle, generation: number): void {
     this.#assertMutable('retire a resource');
     const state = this.#resourceState();
     const retired = retireResourceState(state, {
@@ -366,6 +371,32 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     if (!retired) return;
     this.#replaceResourceState(state);
     this.retirements.push(id);
+    this.#resourceRevision += 1;
+  }
+
+  /** Releases retained CPU resources after their last accepted plan reference retires. */
+  releaseResources(referenceIds: readonly ResourceHandle[]): void {
+    this.#assertMutable('release resources');
+    if (!Array.isArray(referenceIds)) throw new TypeError('released resource references must be an array');
+    const state = this.#resourceState();
+    let changed = false;
+    for (const id of referenceIds) {
+      const referenceId = positiveInteger(id, 'released resource reference') as ResourceHandle;
+      const generation = state.resourceGenerations.get(referenceId);
+      if (generation === undefined) continue;
+      changed =
+        retireResourceState(state, {
+          kind: 'resource',
+          id: referenceId,
+          generation,
+          afterPublicationGeneration: 0,
+          byteOffset: 0,
+          byteLength: 0,
+        }) || changed;
+    }
+    if (!changed) return;
+    this.#replaceResourceState(state);
+    this.retirements.push(...referenceIds);
     this.#resourceRevision += 1;
   }
 
@@ -439,10 +470,10 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     records: readonly ExampleResourceRecord[],
     primitive: ExamplePrimitiveRecord,
     state: ExampleResourceState,
-    planResources: ReadonlyMap<number, RetainedExamplePlanResource>,
+    planResources: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
   ): ReadonlyMap<string, unknown> {
     const selected = new Set<string>();
-    const selectedByName = new Map<string, { readonly referenceId: number; readonly resource: unknown }>();
+    const selectedByName = new Map<string, { readonly referenceId: ResourceHandle; readonly resource: unknown }>();
     for (const record of records) {
       const retained = currentPlanResource(planResources, record);
       const { id, generation, referenceId } = retained;
@@ -463,7 +494,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
       if (selectedByName.has(name)) throw new Error(`example renderer draw repeats resource "${name}"`);
       selectedByName.set(name, { referenceId, resource });
     }
-    const primaryId = positiveInteger(primitive.resourceId, 'primitive resource id');
+    const primaryId = positiveInteger(primitive.resourceId, 'primitive resource id') as RenderPlanResourceId;
     const primaryGeneration = positiveInteger(primitive.resourceGeneration, 'primitive resource generation');
     if (!selected.has(resourceKey(primaryId, primaryGeneration))) {
       throw new Error('example renderer primitive resource is not included in its draw resource span');
@@ -492,7 +523,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     drawList: ExampleDrawList,
     bufferState: ExampleBufferState,
     resourceState: ExampleResourceState,
-    planResources: ReadonlyMap<number, RetainedExamplePlanResource>,
+    planResources: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
   ): ExampleRealizedDraw {
     assertObject(draw, 'draw');
     positiveInteger(draw.id, 'draw id');
@@ -568,16 +599,16 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
 }
 
 interface ExampleResourceState {
-  readonly resources: Map<number, unknown>;
+  readonly resources: Map<ResourceHandle, unknown>;
   readonly resourcesByName: Map<string, unknown>;
   readonly geometriesByName: Map<string, ExampleGeometry>;
-  readonly resourceNames: Map<number, string>;
-  readonly resourceGenerations: Map<number, number>;
-  readonly resourceIds: Map<string, Set<number>>;
+  readonly resourceNames: Map<ResourceHandle, string>;
+  readonly resourceGenerations: Map<ResourceHandle, number>;
+  readonly resourceIds: Map<string, Set<ResourceHandle>>;
 }
 
 interface ExampleResourceEntry {
-  readonly id: number;
+  readonly id: ResourceHandle;
   readonly generation: number;
   readonly name: string;
   readonly resource: unknown;
@@ -585,20 +616,20 @@ interface ExampleResourceEntry {
 }
 
 interface RetainedExamplePlanResource {
-  readonly id: number;
+  readonly id: RenderPlanResourceId;
   readonly generation: number;
   readonly techniqueId: number;
   readonly resourceKind: number;
-  readonly referenceId: number;
+  readonly referenceId: ResourceHandle;
 }
 
 interface ExamplePlanResourceState {
-  readonly retained: ReadonlyMap<number, RetainedExamplePlanResource>;
-  readonly retiredIds: readonly number[];
+  readonly retained: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>;
+  readonly retiredIds: readonly RenderPlanResourceId[];
 }
 
 interface RetainedExampleBuffer {
-  readonly id: number;
+  readonly id: RenderPlanBufferId;
   readonly generation: number;
   readonly programId: number;
   readonly binding: TextEngineBufferBinding;
@@ -610,7 +641,7 @@ interface RetainedExampleBuffer {
 
 interface ExampleBufferState {
   readonly retained: ReadonlyMap<string, RetainedExampleBuffer>;
-  readonly activeById: ReadonlyMap<number, Uint8Array>;
+  readonly activeById: ReadonlyMap<RenderPlanBufferId, Uint8Array>;
   readonly activeByName: ReadonlyMap<string, Uint8Array>;
 }
 
@@ -644,7 +675,7 @@ function validateResourceEntry(
   input: ExampleRendererResourceInput,
 ): ExampleResourceEntry {
   assertObject(input, 'resource entry');
-  const id = positiveInteger(input.id, 'resource id');
+  const id = positiveInteger(input.id, 'resource id') as ResourceHandle;
   const generation = positiveInteger(input.generation, 'resource generation');
   if (typeof input.name !== 'string' || input.name.length === 0) {
     throw new TypeError('example renderer resource names are required');
@@ -711,7 +742,7 @@ function absorbResourceEntry(state: ExampleResourceState, entry: ExampleResource
   state.resourcesByName.set(entry.name, entry.resource);
   state.resourceNames.set(entry.id, entry.name);
   state.resourceGenerations.set(entry.id, entry.generation);
-  const ids = state.resourceIds.get(entry.name) ?? new Set<number>();
+  const ids = state.resourceIds.get(entry.name) ?? new Set<ResourceHandle>();
   ids.add(entry.id);
   state.resourceIds.set(entry.name, ids);
   if (entry.geometry !== undefined) state.geometriesByName.set(entry.name, entry.geometry);
@@ -720,7 +751,7 @@ function absorbResourceEntry(state: ExampleResourceState, entry: ExampleResource
 function retireResourceState(state: ExampleResourceState, retirement: TextEngineRetirementRecord): boolean {
   assertObject(retirement, 'resource retirement');
   if (retirement.kind !== 'resource') return false;
-  const id = positiveInteger(retirement.id, 'retired resource id');
+  const id = positiveInteger(retirement.id, 'retired resource id') as ResourceHandle;
   const generation = positiveInteger(retirement.generation, 'retired resource generation');
   if (state.resourceGenerations.get(id) !== generation) return false;
   const name = state.resourceNames.get(id);
@@ -735,7 +766,7 @@ function retireResourceState(state: ExampleResourceState, retirement: TextEngine
       state.resourcesByName.delete(name);
       state.geometriesByName.delete(name);
     } else if (ids !== undefined) {
-      const replacement = ids.values().next().value as number | undefined;
+      const replacement = ids.values().next().value;
       if (replacement !== undefined) state.resourcesByName.set(name, state.resources.get(replacement));
     }
   }
@@ -745,17 +776,17 @@ function retireResourceState(state: ExampleResourceState, retirement: TextEngine
 function preparePlanResourceState(
   techniqueWireId: RenderTechniqueId,
   resources: ExampleResourceState,
-  source: ReadonlyMap<number, RetainedExamplePlanResource>,
+  source: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
   records: readonly ExampleResourceRecord[],
   retirements: readonly TextEngineRetirementRecord[],
 ): ExamplePlanResourceState {
   const retained = new Map(source);
-  const seen = new Set<number>();
+  const seen = new Set<RenderPlanResourceId>();
   for (const record of records) {
     assertObject(record, 'resource record');
-    const id = positiveInteger(record.id, 'resource record id');
+    const id = positiveInteger(record.id, 'resource record id') as RenderPlanResourceId;
     const generation = positiveInteger(record.generation, 'resource record generation');
-    const referenceId = positiveInteger(record.referenceId, 'resource record reference id');
+    const referenceId = positiveInteger(record.referenceId, 'resource record reference id') as ResourceHandle;
     const resourceKind = unsignedInteger(record.resourceKind, 32, 'resource record kind');
     if (resourceKind === 0) throw new RangeError('example renderer resource record kind must be positive');
     if (record.techniqueId !== techniqueWireId) {
@@ -784,23 +815,24 @@ function preparePlanResourceState(
     }
     retained.set(id, { id, generation, techniqueId: techniqueWireId, resourceKind, referenceId });
   }
-  const retiredIds: number[] = [];
+  const retiredIds: RenderPlanResourceId[] = [];
   for (const retirement of retirements) {
     if (retirement.kind !== 'resource') continue;
-    const current = retained.get(retirement.id);
+    const resourceId = retirement.id as RenderPlanResourceId;
+    const current = retained.get(resourceId);
     if (current?.generation !== retirement.generation) continue;
-    retained.delete(retirement.id);
-    retiredIds.push(retirement.id);
+    retained.delete(resourceId);
+    retiredIds.push(resourceId);
   }
   return { retained, retiredIds };
 }
 
 function currentPlanResource(
-  retained: ReadonlyMap<number, RetainedExamplePlanResource>,
+  retained: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
   record: ExampleResourceRecord,
 ): RetainedExamplePlanResource {
   assertObject(record, 'draw resource record');
-  const id = positiveInteger(record.id, 'draw resource id');
+  const id = positiveInteger(record.id, 'draw resource id') as RenderPlanResourceId;
   const generation = positiveInteger(record.generation, 'draw resource generation');
   const current = retained.get(id);
   if (
@@ -820,7 +852,7 @@ function validatePrimitiveRecord(
   techniqueWireId: RenderTechniqueId,
   programWireId: RenderProgramId,
   programVariant: number,
-  resources: ReadonlyMap<number, RetainedExamplePlanResource>,
+  resources: ReadonlyMap<RenderPlanResourceId, RetainedExamplePlanResource>,
 ): void {
   assertObject(primitive, 'primitive');
   positiveInteger(primitive.id, 'primitive id');
@@ -836,7 +868,7 @@ function validatePrimitiveRecord(
   const count = positiveInteger(primitive.recordCount, 'primitive record count');
   if (count > 0xffff) throw new RangeError('example renderer primitive record count exceeds u16');
   nonnegativeInteger(primitive.recordIndex, 'primitive record index');
-  const resourceId = positiveInteger(primitive.resourceId, 'primitive resource id');
+  const resourceId = positiveInteger(primitive.resourceId, 'primitive resource id') as RenderPlanResourceId;
   const resourceGeneration = positiveInteger(primitive.resourceGeneration, 'primitive resource generation');
   if (resources.get(resourceId)?.generation !== resourceGeneration) {
     throw new Error(
@@ -857,12 +889,12 @@ function prepareBufferState(
     throw new TypeError('example renderer buffer plans require arrays');
   }
   const retained = cloneRetainedBuffers(source);
-  const active = new Map<number, string>();
+  const active = new Map<RenderPlanBufferId, string>();
   for (const record of buffers) retainBufferRecord(retained, active, record, programWireId);
   for (const patch of patches) applyBufferPatch(retained, active, patch);
   for (const retirement of retirements) validateRetirement(retirement);
   for (const retirement of retirements) retireBuffer(retained, active, retirement);
-  const activeById = new Map<number, Uint8Array>();
+  const activeById = new Map<RenderPlanBufferId, Uint8Array>();
   const activeByName = new Map<string, Uint8Array>();
   for (const [id, key] of active) {
     const buffer = retained.get(key);
@@ -876,7 +908,7 @@ function prepareBufferState(
 
 function currentBuffer(state: ExampleBufferState, record: TextEngineBufferRecord): RetainedExampleBuffer {
   assertObject(record, 'draw buffer record');
-  const id = positiveInteger(record.id, 'draw buffer id');
+  const id = positiveInteger(record.id, 'draw buffer id') as RenderPlanBufferId;
   const generation = positiveInteger(record.generation, 'draw buffer generation');
   const retained = state.retained.get(bufferKey(id, generation));
   if (retained === undefined || state.activeById.get(id) !== retained.bytes) {
@@ -901,12 +933,12 @@ function cloneRetainedBuffers(source: ReadonlyMap<string, RetainedExampleBuffer>
 
 function retainBufferRecord(
   retained: Map<string, RetainedExampleBuffer>,
-  active: Map<number, string>,
+  active: Map<RenderPlanBufferId, string>,
   record: TextEngineBufferRecord,
   programWireId: RenderProgramId,
 ): void {
   assertObject(record, 'buffer record');
-  const id = positiveInteger(record.id, 'buffer id');
+  const id = positiveInteger(record.id, 'buffer id') as RenderPlanBufferId;
   const generation = positiveInteger(record.generation, 'buffer generation');
   const retainedProgramId = positiveInteger(record.programId, 'buffer program id');
   if (retainedProgramId !== programWireId) {
@@ -957,11 +989,11 @@ function retainBufferRecord(
 
 function applyBufferPatch(
   retained: Map<string, RetainedExampleBuffer>,
-  active: ReadonlyMap<number, string>,
+  active: ReadonlyMap<RenderPlanBufferId, string>,
   patch: TextEnginePatchRecord,
 ): void {
   assertObject(patch, 'buffer patch');
-  const id = positiveInteger(patch.bufferId, 'patch buffer id');
+  const id = positiveInteger(patch.bufferId, 'patch buffer id') as RenderPlanBufferId;
   const generation = positiveInteger(patch.bufferGeneration, 'patch buffer generation');
   const destinationOffset = nonnegativeInteger(patch.destinationOffset, 'patch destination offset');
   const byteLength = nonnegativeInteger(patch.byteLength, 'patch byte length');
@@ -1001,7 +1033,7 @@ function applyBufferPatch(
     return;
   }
   if (patch.kind === 'copy') {
-    const sourceId = positiveInteger(patch.sourceBufferId, 'copy source buffer id');
+    const sourceId = positiveInteger(patch.sourceBufferId, 'copy source buffer id') as RenderPlanBufferId;
     const sourceKey = active.get(sourceId);
     const source = sourceKey === undefined ? undefined : retained.get(sourceKey);
     if (source === undefined) throw new Error(`copy patch references inactive source buffer ${sourceId}`);
@@ -1020,12 +1052,12 @@ function applyBufferPatch(
 
 function retireBuffer(
   retained: Map<string, RetainedExampleBuffer>,
-  active: Map<number, string>,
+  active: Map<RenderPlanBufferId, string>,
   retirement: TextEngineRetirementRecord,
 ): void {
   assertObject(retirement, 'retirement');
   if (retirement.kind !== 'buffer') return;
-  const id = positiveInteger(retirement.id, 'retired buffer id');
+  const id = positiveInteger(retirement.id, 'retired buffer id') as RenderPlanBufferId;
   const generation = positiveInteger(retirement.generation, 'retired buffer generation');
   const key = bufferKey(id, generation);
   retained.delete(key);

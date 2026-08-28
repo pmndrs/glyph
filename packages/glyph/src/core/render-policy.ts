@@ -65,6 +65,7 @@ export type PolicyHandle = GlyphId<'policy'>;
 export type FontBindingHandle = GlyphId<'font-binding'>;
 export type FontStackHandle = GlyphId<'font-stack'>;
 export type TextEngineSessionHandle = GlyphId<'session'>;
+/** Host-local material identity carried by a render plan. */
 export type MaterialHandle = GlyphId<'material'>;
 export type ParagraphId = GlyphId<'paragraph'>;
 export type StyleId = GlyphId<'style'>;
@@ -72,6 +73,7 @@ export type FlowThreadId = GlyphId<'flow-thread'>;
 export type RegionId = GlyphId<'region'>;
 export type ExclusionId = GlyphId<'exclusion'>;
 export type InlineObjectId = GlyphId<'inline-object'>;
+/** Host-local resource identity carried by inline objects and renderer callbacks. */
 export type ResourceHandle = GlyphId<'resource'>;
 export type GlyphIdFactory = <const Kind extends GlyphIdKind>(kind: Kind, name: string) => GlyphId<Kind>;
 

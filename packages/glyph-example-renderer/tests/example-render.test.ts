@@ -16,6 +16,7 @@ import {
   type RenderPlanDrawId,
   type RenderPlanPrimitiveId,
   type RenderPlanResourceId,
+  type ResourceHandle,
   type TextEngineBufferRecord,
   type TextEnginePatchRecord,
   type TextEngineRetirementKind,
@@ -58,6 +59,7 @@ const planDrawId = (value: number) => value as RenderPlanDrawId;
 const planPrimitiveId = (value: number) => value as RenderPlanPrimitiveId;
 const planResourceId = (value: number) => value as RenderPlanResourceId;
 const policyBufferId = (value: number) => value as PolicyBufferId;
+const portableResourceId = (value: number) => value as ResourceHandle;
 
 class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
   readonly primary = new RecordingExampleRendererDevice();
@@ -126,6 +128,11 @@ class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
         primary.discard();
       },
     });
+  }
+
+  releaseResources(referenceIds: readonly ResourceHandle[]): void {
+    this.primary.releaseResources(referenceIds);
+    this.oracle.releaseResources(referenceIds);
   }
 }
 
@@ -262,6 +269,10 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(flowTargetAcceptances).toBe(0);
       expect(flowSession.publish()).toEqual({ accepted: true });
       expect(flowTargetAcceptances).toBe(1);
+      const orderedText = flowSession.createText({ font: flowFont, text: 'ordered', order: 1 });
+      expect(() => orderedText.update({ order: 0 })).toThrow(/order 0 is already in use/);
+      orderedText.update({ text: 'still-valid' });
+      orderedText.dispose();
       const publishUnchecked = flowSession.publish.bind(flowSession) as (options: unknown) => unknown;
       expect(() => publishUnchecked({ policyParameters: new Uint8Array() })).toThrow(/not supported/);
       expect(flowTargetAcceptances).toBe(1);
@@ -405,6 +416,8 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       text.dispose();
       expect(() => text.publish()).toThrow('disposed');
       engine.publish();
+      expect(device.resources.size).toBe(0);
+      expect(device.resourcesByName.has('glyphGeometry')).toBe(false);
       const replacement = engine.createText({
         font: stackBinding,
         text: 'replacement',
@@ -412,8 +425,14 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         width: 512,
       });
       expect(replacement.publish().draws.length).toBeGreaterThan(0);
+      const rebuiltDevice = new RecordingExampleRendererDevice();
+      engine.replaceDevice(rebuiltDevice);
+      const rebuilt = engine.publish();
+      expect(rebuilt.draws.length).toBeGreaterThan(0);
+      expect(rebuiltDevice.resourcesByName.has('glyphGeometry')).toBe(true);
       replacement.dispose();
       engine.publish();
+      expect(rebuiltDevice.resources.size).toBe(0);
       engine.dispose();
       expect(() => engine.bindFont(font)).toThrow('disposed');
       expect(device.discardedResourceBatches).toBe(1);
@@ -488,8 +507,12 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
     programVariant: suppliedPlan.programVariant ?? 0,
   };
   const device = new RecordingExampleRendererDevice(shader);
-  device.createResource(41, 'glyphColors', { kind: 'buffer', bytes: new Uint8Array(16), stride: 4 });
-  device.createResource(42, 'glyphGeometry', glyphExampleIndexedQuadGeometry);
+  device.createResource(portableResourceId(41), 'glyphColors', {
+    kind: 'buffer',
+    bytes: new Uint8Array(16),
+    stride: 4,
+  });
+  device.createResource(portableResourceId(42), 'glyphGeometry', glyphExampleIndexedQuadGeometry);
   const bufferRecords = bindShaderContract(device);
   const techniqueWireId = techniqueId(shader.variant.techniqueId);
   const programWireId = programId(shader.variant.techniqueId, shader.programNamespace, shader.programName);
@@ -618,8 +641,8 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
   expect(retirementOnly.replacesRenderState).toBe(true);
   retirementOnly.commit();
   expect(device.realizedDraws).toEqual([]);
-  expect(device.resources.has(41)).toBe(true);
-  expect(device.resources.has(42)).toBe(true);
+  expect(device.resources.has(portableResourceId(41))).toBe(true);
+  expect(device.resources.has(portableResourceId(42))).toBe(true);
   stale.commit();
   expect(device.realizedDraws).toEqual([]);
 
@@ -646,14 +669,14 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
 
 test('does not retire a newer resource generation through a stale retirement', () => {
   const device = new RecordingExampleRendererDevice();
-  device.createResource(42, 'glyphGeometry', portableGeometry(4), 3);
+  device.createResource(portableResourceId(42), 'glyphGeometry', portableGeometry(4), 3);
 
-  device.retireResource(42, 2);
-  expect(device.resources.has(42)).toBe(true);
+  device.retireResource(portableResourceId(42), 2);
+  expect(device.resources.has(portableResourceId(42))).toBe(true);
   expect(device.retirements).toEqual([]);
 
-  device.retireResource(42, 3);
-  expect(device.resources.has(42)).toBe(false);
+  device.retireResource(portableResourceId(42), 3);
+  expect(device.resources.has(portableResourceId(42))).toBe(false);
   expect(device.retirements).toEqual([42]);
 });
 
@@ -670,7 +693,7 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
   expect(() => device.applyBufferPlan([{ ...first, capacityRecords: 3 }], [], [])).toThrow(
     'requires tightly packed physical buffers',
   );
-  expect(device.bufferBytes(1, 1)).toBeUndefined();
+  expect(device.bufferBytes(planBufferId(1), 1)).toBeUndefined();
   device.applyBufferPlan(
     [first, second],
     [
@@ -683,14 +706,16 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
     [],
   );
 
-  expect(device.bufferBytes(1, 1)).toEqual(new Uint8Array([0, 0, 0, 0, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0]));
-  expect(device.bufferBytes(2, 1)?.subarray(0, 8)).toEqual(new Uint8Array([5, 6, 7, 8, 9, 10, 11, 12]));
+  expect(device.bufferBytes(planBufferId(1), 1)).toEqual(
+    new Uint8Array([0, 0, 0, 0, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0]),
+  );
+  expect(device.bufferBytes(planBufferId(2), 1)?.subarray(0, 8)).toEqual(new Uint8Array([5, 6, 7, 8, 9, 10, 11, 12]));
 
-  const before = device.bufferBytes(1, 1)?.slice();
+  const before = device.bufferBytes(planBufferId(1), 1)?.slice();
   expect(() =>
     device.applyBufferPlan([first, second], [patch('write', 1, 1, 15, 2, { payload: new Uint8Array([1, 2]) })], []),
   ).toThrow('buffer patch exceeds its buffer');
-  expect(device.bufferBytes(1, 1)).toEqual(before);
+  expect(device.bufferBytes(planBufferId(1), 1)).toEqual(before);
 
   const replacement = bufferRecord(1, 2, 8, 1);
   device.applyBufferPlan(
@@ -701,37 +726,41 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
     ],
     [retirement('buffer', 1, 1)],
   );
-  expect(device.bufferBytes(1, 1)).toBeUndefined();
-  expect(device.bufferBytes(1, 2)).toEqual(new Uint8Array([13, 14, 15, 16, 0, 0, 0, 0]));
-  expect(device.bufferBytes(2, 1)?.subarray(0, 8)).toEqual(new Uint8Array([5, 6, 7, 8, 9, 10, 11, 12]));
+  expect(device.bufferBytes(planBufferId(1), 1)).toBeUndefined();
+  expect(device.bufferBytes(planBufferId(1), 2)).toEqual(new Uint8Array([13, 14, 15, 16, 0, 0, 0, 0]));
+  expect(device.bufferBytes(planBufferId(2), 1)?.subarray(0, 8)).toEqual(new Uint8Array([5, 6, 7, 8, 9, 10, 11, 12]));
 });
 
 test('prepares resources without restoring stale device state', () => {
   const device = new RecordingExampleRendererDevice();
   const first = portableGeometry(4);
-  device.createResource(42, 'glyphGeometry', first, 1);
-  expect(device.resources.get(42)).toBe(first);
+  device.createResource(portableResourceId(42), 'glyphGeometry', first, 1);
+  expect(device.resources.get(portableResourceId(42))).toBe(first);
 
   const second = portableGeometry(8);
-  const pending = device.prepareResources([{ id: 42, generation: 2, name: 'glyphGeometry', resource: second }]);
-  expect(device.resources.get(42)).toBe(first);
+  const pending = device.prepareResources([
+    { id: portableResourceId(42), generation: 2, name: 'glyphGeometry', resource: second },
+  ]);
+  expect(device.resources.get(portableResourceId(42))).toBe(first);
   pending.commit();
-  expect(device.resources.get(42)).toBe(second);
+  expect(device.resources.get(portableResourceId(42))).toBe(second);
 
   expect(() =>
     device.prepareResources([
-      { id: 42, generation: 3, name: 'glyphGeometry', resource: portableGeometry(12) },
-      { id: 42, generation: 3, name: 'glyphGeometry', resource: portableGeometry(16) },
+      { id: portableResourceId(42), generation: 3, name: 'glyphGeometry', resource: portableGeometry(12) },
+      { id: portableResourceId(42), generation: 3, name: 'glyphGeometry', resource: portableGeometry(16) },
     ]),
   ).toThrow('changed content without changing generation');
-  expect(device.resources.get(42)).toBe(second);
+  expect(device.resources.get(portableResourceId(42))).toBe(second);
 
   const staleResource = portableGeometry(12);
-  const stale = device.prepareResources([{ id: 42, generation: 3, name: 'glyphGeometry', resource: staleResource }]);
+  const stale = device.prepareResources([
+    { id: portableResourceId(42), generation: 3, name: 'glyphGeometry', resource: staleResource },
+  ]);
   const newer = portableGeometry(16);
-  device.createResource(42, 'glyphGeometry', newer, 4);
+  device.createResource(portableResourceId(42), 'glyphGeometry', newer, 4);
   stale.commit();
-  expect(device.resources.get(42)).toBe(newer);
+  expect(device.resources.get(portableResourceId(42))).toBe(newer);
 });
 
 function portableGeometry(marker: number) {

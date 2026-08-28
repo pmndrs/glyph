@@ -18,6 +18,8 @@ export interface RenderTechniqueTypeGpuLabReport {
   readonly initialVisiblePixels: number;
   readonly updatedVisiblePixels: number;
   readonly changedPixels: number;
+  readonly recoveredDraws: number;
+  readonly recoveredVisiblePixels: number;
   readonly idleGpuSubmissions: number;
   readonly clearGpuSubmissions: number;
   readonly clearedVisiblePixels: number;
@@ -30,9 +32,11 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
   if (navigator.gpu === undefined) throw new Error('the TypeGPU renderer lab requires WebGPU');
   const adapter = await navigator.gpu.requestAdapter();
   if (adapter === null) throw new Error('the TypeGPU renderer lab could not acquire a WebGPU adapter');
-  const gpuDevice = await adapter.requestDevice();
+  let gpuDevice = await adapter.requestDevice();
   const runtime = await createTextRuntime();
-  const renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
+  let renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
+  const devices = [gpuDevice];
+  const renderers = [renderer];
   const engine = new ExampleTextEngine(runtime, renderer);
   let font;
   try {
@@ -60,6 +64,14 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       text.update({ text: 'Updated WebGPU', color: '#ff40a0' });
       const updated = text.publish();
       const updatedPixels = await renderer.readPixels();
+      gpuDevice.destroy();
+      gpuDevice = await adapter.requestDevice();
+      devices.push(gpuDevice);
+      renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
+      renderers.push(renderer);
+      engine.replaceDevice(renderer);
+      const recovered = text.publish();
+      const recoveredPixels = await renderer.readPixels();
       const submissionSamples: number[] = [];
       for (let index = 0; index < SUBMISSION_WARMUP + SUBMISSION_SAMPLES; index += 1) {
         text.update({ text: index % 2 === 0 ? 'Pipeline WebGPU' : 'Updated WebGPU' });
@@ -71,7 +83,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       }
       submissionSamples.sort((left, right) => left - right);
       const submissionsBeforeIdle = renderer.submittedPasses;
-      if (submissionsBeforeIdle !== 2 + SUBMISSION_WARMUP + SUBMISSION_SAMPLES) {
+      if (submissionsBeforeIdle !== 1 + SUBMISSION_WARMUP + SUBMISSION_SAMPLES) {
         throw new Error('the TypeGPU renderer lab did not submit every measured frame');
       }
       text.publish();
@@ -87,6 +99,8 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         initialVisiblePixels: visiblePixelCount(initialPixels),
         updatedVisiblePixels: visiblePixelCount(updatedPixels),
         changedPixels: changedPixelCount(initialPixels, updatedPixels),
+        recoveredDraws: recovered.draws.length,
+        recoveredVisiblePixels: visiblePixelCount(recoveredPixels),
         idleGpuSubmissions,
         clearGpuSubmissions: renderer.submittedPasses - submissionsBeforeDispose,
         clearedVisiblePixels: visiblePixelCount(clearedPixels),
@@ -100,6 +114,8 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
         report.initialVisiblePixels === 0 ||
         report.updatedVisiblePixels === 0 ||
         report.changedPixels === 0 ||
+        report.recoveredDraws === 0 ||
+        report.recoveredVisiblePixels === 0 ||
         report.idleGpuSubmissions !== 0 ||
         report.clearGpuSubmissions !== 1 ||
         report.clearedVisiblePixels !== 0 ||
@@ -119,9 +135,9 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
   } finally {
     engine.dispose();
     font?.dispose();
-    renderer.dispose();
+    for (const ownedRenderer of renderers.reverse()) ownedRenderer.dispose();
     runtime.dispose();
-    gpuDevice.destroy();
+    for (const ownedDevice of devices.reverse()) ownedDevice.destroy();
   }
 }
 

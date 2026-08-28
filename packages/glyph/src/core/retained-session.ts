@@ -364,6 +364,7 @@ interface RetainedTextState {
   readonly paragraphId: ParagraphId;
   readonly ordinal: number;
   desired: ResolvedTextOptions;
+  metrics: RetainedTextMetrics;
   publishedText: string;
   publishedStyleCount: number;
   geometryRevision: number;
@@ -375,6 +376,14 @@ interface RetainedTextState {
   committed: ResolvedTextOptions | undefined;
   measurement: ParagraphLayoutSummary | undefined;
   inspection: ParagraphLayoutInspection | undefined;
+}
+
+interface RetainedTextMetrics {
+  readonly order: number;
+  readonly styleCount: number;
+  readonly regionCount: number;
+  readonly exclusionCount: number;
+  readonly inlineObjectCount: number;
 }
 
 interface PendingPublication {
@@ -414,6 +423,14 @@ class RetainedTextEngineSession {
   readonly #removed = new Set<RetainedTextState>();
   readonly #measured = new Map<RetainedTextState, ResolvedTextOptions>();
   readonly #returnedBuffers: ExactFrameBufferPool | undefined;
+  readonly #textsByOrder = new Map<number, RetainedTextState>();
+  #liveTextCount = 0;
+  #liveStyleCount = 0;
+  #liveRegionCount = 0;
+  #liveExclusionCount = 0;
+  #liveInlineObjectCount = 0;
+  #dirtyTextCount = 0;
+  #pendingStyleCount = 0;
   #nextTextOrdinal = 1;
   #engineRevision = 0;
   #planRevision = 0;
@@ -520,6 +537,7 @@ class RetainedTextEngineSession {
       paragraphId: this.#host.id('paragraph', `${this.#host.integration}/text/${ordinal}`),
       ordinal,
       desired,
+      metrics: retainedTextMetrics(desired, ordinal),
       publishedText: '',
       publishedStyleCount: 0,
       geometryRevision: 0,
@@ -540,6 +558,7 @@ class RetainedTextEngineSession {
     }
     const text = new TextEngineTextImpl(this, state);
     textStates.set(text, { session: this, state });
+    this.#addLiveState(state);
     this.#texts.add(state);
     this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     this.#nextTextOrdinal = nextOrdinal;
@@ -560,17 +579,19 @@ class RetainedTextEngineSession {
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
     const source = Object.freeze({ ...state.desired.source, ...update }) as TextEngineTextOptions;
     const desired = resolveTextOptions(this.#host, source, state.ordinal);
-    const candidate = { ...state, desired, dirty: true };
+    const candidate = { ...state, desired, metrics: retainedTextMetrics(desired, state.ordinal), dirty: true };
     try {
-      this.#validateState(candidate);
+      this.#validateState(candidate, state);
     } catch (error) {
       releaseResolvedText(desired);
       throw error;
     }
-    const previousOrder = state.desired.source.order ?? state.ordinal - 1;
-    const nextOrder = desired.source.order ?? state.ordinal - 1;
+    const previousOrder = state.metrics.order;
+    const nextOrder = candidate.metrics.order;
+    this.#replaceLiveState(state, candidate.metrics);
     releaseResolvedText(state.desired);
     state.desired = desired;
+    state.metrics = candidate.metrics;
     state.dirty = true;
     state.measurement = undefined;
     state.inspection = undefined;
@@ -600,6 +621,7 @@ class RetainedTextEngineSession {
     if (state.disposed) return;
     this.#assertMutable();
     state.disposed = true;
+    this.#removeLiveState(state);
     releaseResolvedText(state.desired);
     state.desiredReleased = true;
     this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
@@ -638,6 +660,14 @@ class RetainedTextEngineSession {
     }
     this.#texts.clear();
     this.#removed.clear();
+    this.#textsByOrder.clear();
+    this.#liveTextCount = 0;
+    this.#liveStyleCount = 0;
+    this.#liveRegionCount = 0;
+    this.#liveExclusionCount = 0;
+    this.#liveInlineObjectCount = 0;
+    this.#dirtyTextCount = 0;
+    this.#pendingStyleCount = 0;
     attempt(() => this.#policy.dispose());
     this.#returnedBuffers?.clear();
     this.#host._detachRetainedSession(this);
@@ -666,6 +696,7 @@ class RetainedTextEngineSession {
   async #publishOwned(options: NormalizedPublishOptions): Promise<PlanAcceptance> {
     const pending = this.#publishEngine(options);
     const { publication } = pending;
+    const publicationByteLength = publication.bytes.byteLength;
     const bytes = this.#copyPlan(publication.bytes);
     const plan = new TextEngineRenderPlanView().bindBytes(bytes);
     const payloadLeases = this.#resolvePlanPayloads(plan);
@@ -703,7 +734,7 @@ class RetainedTextEngineSession {
         (this.#target as AsyncPlanTarget).accept(candidate, this.#targetController.signal),
         this.#targetController.signal,
       );
-      const accepted = assertAsyncAcceptance(result, publication);
+      const accepted = assertAsyncAcceptance(result, publication, publicationByteLength);
       if (accepted.returnedBytes !== undefined) {
         if (bytes.buffer.byteLength !== 0 && accepted.returnedBytes.buffer !== bytes.buffer) {
           throw new TextEngineTransportError('async target copied the plan instead of transferring it');
@@ -891,7 +922,7 @@ class RetainedTextEngineSession {
     });
   }
 
-  #validateState(state: RetainedTextState): void {
+  #validateState(state: RetainedTextState, replacing?: RetainedTextState): void {
     const styles = compileStyles(this.#host, state);
     const geometry = compileGeometry(this.#host, state, 0, 0);
     const inlineObjects = compileInlineObjects(this.#host, state);
@@ -913,36 +944,34 @@ class RetainedTextEngineSession {
       },
       this.#limits,
     );
-    this.#validateAggregateLimits(state);
+    this.#validateAggregateLimits(state, replacing);
   }
 
-  #validateAggregateLimits(candidate: RetainedTextState): void {
-    const states = [
-      ...[...this.#texts].filter((state) => !state.removed && state.paragraphId !== candidate.paragraphId),
-      candidate,
-    ];
-    const orders = new Set<number>();
-    let liveStyleCount = 0;
-    let regionCount = 0;
-    let exclusionCount = 0;
-    let inlineObjectCount = 0;
-    for (const state of states) {
-      const order = state.desired.source.order ?? state.ordinal - 1;
-      if (orders.has(order)) throw new RangeError(`retained text order ${order} is already in use`);
-      orders.add(order);
-      liveStyleCount += compiledStyleCount(state);
-      const flow = state.desired.source.flow;
-      regionCount += flow?.regions.length ?? state.desired.source.contentBox?.columns?.count ?? 1;
-      exclusionCount += flow?.regions.reduce((sum, region) => sum + (region.exclusions?.length ?? 0), 0) ?? 0;
-      inlineObjectCount += state.desired.source.inlineObjects?.length ?? 0;
+  #validateAggregateLimits(candidate: RetainedTextState, replacing?: RetainedTextState): void {
+    const owner = this.#textsByOrder.get(candidate.metrics.order);
+    if (owner !== undefined && owner !== replacing) {
+      throw new RangeError(`retained text order ${candidate.metrics.order} is already in use`);
     }
-    if (states.length > this.#limits.maxParagraphs) {
+    const previous = replacing?.metrics;
+    const liveTextCount = this.#liveTextCount + (replacing === undefined ? 1 : 0);
+    const liveStyleCount = this.#liveStyleCount - (previous?.styleCount ?? 0) + candidate.metrics.styleCount;
+    const regionCount = this.#liveRegionCount - (previous?.regionCount ?? 0) + candidate.metrics.regionCount;
+    const exclusionCount =
+      this.#liveExclusionCount - (previous?.exclusionCount ?? 0) + candidate.metrics.exclusionCount;
+    const inlineObjectCount =
+      this.#liveInlineObjectCount - (previous?.inlineObjectCount ?? 0) + candidate.metrics.inlineObjectCount;
+    const dirtyTextCount = this.#dirtyTextCount - Number(replacing?.dirty ?? false) + 1;
+    const pendingStyleCount =
+      this.#pendingStyleCount -
+      (replacing?.dirty ? pendingStyleMutationCount(replacing) : 0) +
+      pendingStyleMutationCount(candidate);
+    if (liveTextCount > this.#limits.maxParagraphs) {
       throw new RangeError('retained texts exceed limits.maxParagraphs');
     }
     if (liveStyleCount > this.#limits.maxClusters) {
       throw new RangeError('retained text styles exceed limits.maxClusters');
     }
-    if (states.length > this.#limits.maxRegions || regionCount > this.#limits.maxRegions) {
+    if (liveTextCount > this.#limits.maxRegions || regionCount > this.#limits.maxRegions) {
       throw new RangeError('retained text regions exceed limits.maxRegions');
     }
     if (exclusionCount > this.#limits.maxExclusions) {
@@ -951,21 +980,52 @@ class RetainedTextEngineSession {
     if (inlineObjectCount > this.#limits.maxInlineObjects) {
       throw new RangeError('retained inline objects exceed limits.maxInlineObjects');
     }
-    const pending = states.filter((state) => state.dirty);
-    if (this.#removed.size + pending.length > this.#limits.maxParagraphs) {
+    if (this.#removed.size + dirtyTextCount > this.#limits.maxParagraphs) {
       throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
     }
-    if (pending.length > this.#limits.maxClusters) {
+    if (dirtyTextCount > this.#limits.maxClusters) {
       throw new RangeError('pending text mutations exceed limits.maxClusters');
-    }
-    let pendingStyleCount = 0;
-    for (const state of pending) {
-      const nextStyleCount = compiledStyleCount(state);
-      pendingStyleCount += nextStyleCount + Math.max(0, state.publishedStyleCount - nextStyleCount);
     }
     if (pendingStyleCount > this.#limits.maxClusters) {
       throw new RangeError('pending style mutations exceed limits.maxClusters');
     }
+  }
+
+  #addLiveState(state: RetainedTextState): void {
+    this.#textsByOrder.set(state.metrics.order, state);
+    this.#liveTextCount += 1;
+    this.#liveStyleCount += state.metrics.styleCount;
+    this.#liveRegionCount += state.metrics.regionCount;
+    this.#liveExclusionCount += state.metrics.exclusionCount;
+    this.#liveInlineObjectCount += state.metrics.inlineObjectCount;
+    this.#dirtyTextCount += Number(state.dirty);
+    if (state.dirty) this.#pendingStyleCount += pendingStyleMutationCount(state);
+  }
+
+  #replaceLiveState(state: RetainedTextState, metrics: RetainedTextMetrics): void {
+    if (state.metrics.order !== metrics.order) {
+      this.#textsByOrder.delete(state.metrics.order);
+      this.#textsByOrder.set(metrics.order, state);
+    }
+    this.#liveStyleCount += metrics.styleCount - state.metrics.styleCount;
+    this.#liveRegionCount += metrics.regionCount - state.metrics.regionCount;
+    this.#liveExclusionCount += metrics.exclusionCount - state.metrics.exclusionCount;
+    this.#liveInlineObjectCount += metrics.inlineObjectCount - state.metrics.inlineObjectCount;
+    if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
+    const candidate = { ...state, metrics, dirty: true };
+    this.#dirtyTextCount += Number(!state.dirty);
+    this.#pendingStyleCount += pendingStyleMutationCount(candidate);
+  }
+
+  #removeLiveState(state: RetainedTextState): void {
+    this.#textsByOrder.delete(state.metrics.order);
+    this.#liveTextCount -= 1;
+    this.#liveStyleCount -= state.metrics.styleCount;
+    this.#liveRegionCount -= state.metrics.regionCount;
+    this.#liveExclusionCount -= state.metrics.exclusionCount;
+    this.#liveInlineObjectCount -= state.metrics.inlineObjectCount;
+    this.#dirtyTextCount -= Number(state.dirty);
+    if (state.dirty) this.#pendingStyleCount -= pendingStyleMutationCount(state);
   }
 
   #commitDesiredState(): void {
@@ -989,6 +1049,8 @@ class RetainedTextEngineSession {
       state.publishedText = state.desired.text;
       state.publishedStyleCount = compiledStyleCount(state);
       state.geometryRevision += 1;
+      this.#dirtyTextCount -= 1;
+      this.#pendingStyleCount -= pendingStyleMutationCount(state);
       state.dirty = false;
     }
   }
@@ -1597,9 +1659,24 @@ function compileStyles(host: TextEngineHost, state: RetainedTextState): readonly
 }
 
 function compiledStyleCount(state: RetainedTextState): number {
-  let count = 1;
-  for (const span of state.desired.spans) count += Number(span.start !== span.end);
-  return count;
+  return state.metrics.styleCount;
+}
+
+function retainedTextMetrics(desired: ResolvedTextOptions, ordinal: number): RetainedTextMetrics {
+  let styleCount = 1;
+  for (const span of desired.spans) styleCount += Number(span.start !== span.end);
+  const flow = desired.source.flow;
+  return {
+    order: desired.source.order ?? ordinal - 1,
+    styleCount,
+    regionCount: flow?.regions.length ?? desired.source.contentBox?.columns?.count ?? 1,
+    exclusionCount: flow?.regions.reduce((sum, region) => sum + (region.exclusions?.length ?? 0), 0) ?? 0,
+    inlineObjectCount: desired.source.inlineObjects?.length ?? 0,
+  };
+}
+
+function pendingStyleMutationCount(state: RetainedTextState): number {
+  return state.metrics.styleCount + Math.max(0, state.publishedStyleCount - state.metrics.styleCount);
 }
 
 function compileGeometry(
@@ -1798,6 +1875,7 @@ function assertAcceptance(value: unknown): PlanAcceptance {
 function assertAsyncAcceptance(
   value: unknown,
   publication: TextEnginePublication,
+  publicationByteLength: number,
 ): Readonly<{ accepted: boolean; error?: unknown; returnedBytes?: Uint8Array<ArrayBuffer> }> {
   const accepted = assertAcceptance(value);
   const returnedBytes = isNonArrayObject(value) ? value.returnedBytes : undefined;
@@ -1806,8 +1884,8 @@ function assertAsyncAcceptance(
       !(returnedBytes instanceof Uint8Array) ||
       !(returnedBytes.buffer instanceof ArrayBuffer) ||
       returnedBytes.byteOffset !== 0 ||
-      returnedBytes.byteLength !== publication.bytes.byteLength ||
-      returnedBytes.buffer.byteLength !== publication.bytes.byteLength
+      returnedBytes.byteLength !== publicationByteLength ||
+      returnedBytes.buffer.byteLength !== publicationByteLength
     ) {
       throw new TextEngineTransportError('async target returned the wrong plan buffer');
     }

@@ -367,6 +367,11 @@ export class TextEngineHost {
   readonly #liveRetainedFontStacks = new Set<RetainedHostFontStackBinding>();
   readonly #portablePayloads = new Map<number, RetainedHostPortablePayload>();
   readonly #opaqueBindings = new Set<RetainedHostOpaqueBinding>();
+  readonly #opaqueBindingsByKind = {
+    material: new Map<number, RetainedHostOpaqueBinding>(),
+    resource: new Map<number, RetainedHostOpaqueBinding>(),
+    transform: new Map<number, RetainedHostOpaqueBinding>(),
+  };
   readonly #onDispose: (() => void) | undefined;
   readonly #bindRuntimeFont: HostRuntimeFontBinder | undefined;
   readonly #assertRuntimeAvailable: (() => void) | undefined;
@@ -680,10 +685,8 @@ export class TextEngineHost {
     handle: number,
   ): HostMaterialBinding | HostResourceBinding | HostTransformBinding {
     if (this.#disposed) throw new Error('text engine host is disposed');
-    for (const state of this.#opaqueBindings) {
-      if (state.kind !== kind || state.handle !== handle || state.disposed) continue;
-      return state.binding;
-    }
+    const state = this.#opaqueBindingsByKind[kind].get(handle);
+    if (state !== undefined && !state.disposed) return state.binding;
     throw new Error(`text render plan references unknown ${kind} binding ${handle}`);
   }
 
@@ -1102,6 +1105,7 @@ export class TextEngineHost {
     const binding = new HostOpaqueBindingImpl(this, state);
     state.binding = binding;
     this.#opaqueBindings.add(state);
+    this.#opaqueBindingsByKind[kind].set(handle, state);
     hostOpaqueBindings.set(binding, { host: this, state });
     if (kind === 'material') this.#nextMaterialOrdinal = next!;
     else if (kind === 'resource') this.#nextResourceOrdinal = next!;
@@ -1116,6 +1120,7 @@ export class TextEngineHost {
     if (state.leases !== 0) return;
     state.disposed = true;
     this.#opaqueBindings.delete(state);
+    this.#opaqueBindingsByKind[state.kind].delete(state.handle);
     if (state.kind === 'transform') this.#freeTransformOrdinals.push(state.handle);
   }
 
@@ -1124,6 +1129,7 @@ export class TextEngineHost {
     state.leases = 0;
     state.disposed = true;
     this.#opaqueBindings.delete(state);
+    this.#opaqueBindingsByKind[state.kind].delete(state.handle);
   }
 
   /** @internal */

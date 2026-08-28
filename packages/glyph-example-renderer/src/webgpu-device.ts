@@ -1,7 +1,7 @@
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 
-import type { PortableGeometryPayload } from '@pmndrs/glyph/core';
+import type { PortableGeometryPayload, ResourceHandle } from '@pmndrs/glyph/core';
 import {
   TypeGpuGlyphExampleFragmentInput,
   TypeGpuGlyphExampleVertexInput,
@@ -85,7 +85,7 @@ type GpuInstanceBuffers = Map<string, Map<Uint8Array, GpuInstanceBuffer>>;
 interface PreparedGeometry {
   readonly resource: unknown;
   readonly geometry: GpuGeometry;
-  readonly resourceIds: number[];
+  readonly resourceIds: ResourceHandle[];
 }
 
 /** A concrete offscreen TypeGPU renderer whose accepted submissions produce RGBA pixels. */
@@ -103,6 +103,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   readonly #pipeline;
   // Font bindings are host-lifetime; their geometry is released with the device.
   readonly #geometries = new Map<unknown, GpuGeometry>();
+  readonly #geometryResources = new Map<ResourceHandle, unknown>();
   readonly #instanceBuffers: GpuInstanceBuffers = new Map();
   #submittedPasses = 0;
   #lost = false;
@@ -190,6 +191,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
           const previous = this.#geometries.get(entry.resource);
           this.#geometries.set(entry.resource, entry.geometry);
           if (previous !== undefined) destroyGeometry(previous);
+          for (const id of entry.resourceIds) this.#geometryResources.set(id, entry.resource);
         }
       },
       discard: () => {
@@ -256,6 +258,21 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     });
   }
 
+  /** Destroys geometry after its last accepted portable reference retires. */
+  releaseResources(referenceIds: readonly ResourceHandle[]): void {
+    this.#assertActive();
+    this.#recording.releaseResources(referenceIds);
+    for (const id of referenceIds) {
+      const resource = this.#geometryResources.get(id);
+      if (resource === undefined || this.#recording.resources.has(id)) continue;
+      this.#geometryResources.delete(id);
+      if ([...this.#geometryResources.values()].includes(resource)) continue;
+      const geometry = this.#geometries.get(resource);
+      if (geometry !== undefined) destroyGeometry(geometry);
+      this.#geometries.delete(resource);
+    }
+  }
+
   /** Copies the most recently submitted offscreen target into tightly packed RGBA bytes. */
   async readPixels(): Promise<Uint8Array> {
     this.#assertActive();
@@ -305,6 +322,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     if (this.#disposed) return;
     this.#disposed = true;
     for (const geometry of this.#geometries.values()) destroyGeometry(geometry);
+    this.#geometryResources.clear();
     destroyInstanceBuffers(this.#instanceBuffers);
     this.#target.destroy();
     this.#viewport.buffer.destroy();

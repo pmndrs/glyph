@@ -17,10 +17,12 @@ import {
   type HostPolicy,
   type HostResourceBinding,
   type HostTransformBinding,
+  type MaterialHandle,
   type PlanTarget,
   type RenderPlanClipId,
   type RenderPlanSemanticId,
   type RenderPlanTransformId,
+  type ResourceHandle,
   type SynchronousTextEngineSession,
 } from '@pmndrs/glyph/core';
 // @ts-expect-error Dynamic engine session IDs are package-managed implementation state.
@@ -43,10 +45,15 @@ declare const stackBinding: HostFontStackBinding;
 declare const materialBinding: HostMaterialBinding;
 declare const resourceBinding: HostResourceBinding;
 declare const transformBinding: HostTransformBinding;
+declare const materialHandle: MaterialHandle;
+declare const resourceHandle: ResourceHandle;
 const target: PlanTarget = {
   delivery: 'borrowed',
   accept(candidate) {
     void candidate.plan.table('draws');
+    candidate.resolveMaterial(materialHandle);
+    candidate.resolveResource(resourceHandle);
+    candidate.acquirePayload(resourceHandle).dispose();
     return { accepted: true };
   },
   dispose() {},
@@ -151,6 +158,16 @@ const rawTransformId: RenderPlanTransformId = 1;
 void rawClipId;
 void rawSemanticId;
 void rawTransformId;
+const numericMaterialHandle: number = materialHandle;
+const numericResourceHandle: number = resourceHandle;
+void numericMaterialHandle;
+void numericResourceHandle;
+// @ts-expect-error Material identities are host-owned, not caller-authored numbers.
+const rawMaterialHandle: MaterialHandle = 1;
+// @ts-expect-error Resource identities are host-owned, not caller-authored numbers.
+const rawResourceHandle: ResourceHandle = 1;
+void rawMaterialHandle;
+void rawResourceHandle;
 
 declare const binding: FontBindingDescriptor;
 const bindingBytes: Uint8Array = compileFontBinding(binding);

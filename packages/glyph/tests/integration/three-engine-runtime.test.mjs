@@ -255,6 +255,7 @@ test('an async target must return the same unmodified transferred publication', 
   const coordinator = new ThreeTextEngineCoordinator(runtime);
   let corruptReturn = false;
   let holdReturn = false;
+  let growRuntimeDuringAcceptance = false;
   let releaseReturn;
   const target = {
     delivery: 'owned',
@@ -264,6 +265,23 @@ test('an async target must return the same unmodified transferred publication', 
       assert.equal(candidate.bytes.byteLength, candidate.bytes.buffer.byteLength);
       assert.equal(candidate.plan.bytes(0, candidate.bytes.byteLength).buffer, candidate.bytes.buffer);
       const workerBytes = structuredClone(candidate.bytes, { transfer: [candidate.bytes.buffer] });
+      if (growRuntimeDuringAcceptance) {
+        growRuntimeDuringAcceptance = false;
+        const sibling = coordinator.host.createSession({
+          policy: coordinator.policy,
+          capabilitySet: coordinator.capabilitySet,
+          target: () => ({
+            delivery: 'borrowed',
+            accept: () => ({ accepted: true }),
+            dispose() {},
+          }),
+          limits,
+          requestCapacity: 64 * 1024,
+          resultCapacity: 64 * 1024 * 1024,
+          textCapacity: 64,
+        });
+        sibling.dispose();
+      }
       if (corruptReturn) {
         new DataView(workerBytes.buffer).setUint32(
           textShaperAbi.layouts.engineResult.planRevision,
@@ -291,6 +309,9 @@ test('an async target must return the same unmodified transferred publication', 
   const binding = coordinator.bindFontStack(font);
   const text = session.createText({ font: binding, text: 'abc', style: { fontSize: 16 } });
   try {
+    assert.deepEqual(await session.publish(), { accepted: true });
+    growRuntimeDuringAcceptance = true;
+    text.update({ text: 'abcz' });
     assert.deepEqual(await session.publish(), { accepted: true });
     holdReturn = true;
     text.update({ text: 'abcd' });
