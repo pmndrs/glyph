@@ -9,7 +9,7 @@ import {
   type PolicyDescriptor,
 } from '../../src/core/render-policy.js';
 import { compileTextEngineFrameUpdate, type TextEngineFrameUpdate } from '../../src/core/frame-wire.js';
-import type { ParagraphId, TextEngineSessionHandle } from '../../src/core/render-policy.js';
+import type { ParagraphId, RetainedPlanHandle } from '../../src/core/render-policy.js';
 import { textShaperAbi } from '../../src/generated/text-shaper-abi.js';
 import { defineRasterResourceId } from '../../src/raster-technique.js';
 
@@ -54,16 +54,16 @@ createProgram(1, program, body, buffers, 'direct', 'ordered');
 createProgram(program, technique, body, buffers, 'direct', 'ordered');
 // @ts-expect-error Resource identities cannot stand in for technique identities.
 createProgram(resource, program, body, buffers, 'direct', 'ordered');
-// @ts-expect-error Policy buffer IDs cannot stand in for session handles.
-const session: TextEngineSessionHandle = buffer;
-void session;
+// @ts-expect-error Policy buffer IDs cannot stand in for retained-plan handles.
+const retainedPlan: RetainedPlanHandle = buffer;
+void retainedPlan;
 
 const paragraph = id('paragraph', 'vendor.example/body');
 const style = id('style', 'vendor.example/body/root');
 const flowThread = id('flow-thread', 'vendor.example/article');
 const region = id('region', 'vendor.example/page/1');
 const frame: TextEngineFrameUpdate = {
-  sessionId: id('session', 'vendor.example/scene'),
+  retainedPlanId: id('retained-plan', 'vendor.example/scene'),
   policyHandle: id('policy', 'vendor.example/render'),
   expectedEngineRevision: 0,
   consumedPlanRevision: 0,
@@ -150,8 +150,8 @@ void rawParagraph;
 // @ts-expect-error Identity domains cannot be interchanged.
 const wrongParagraph: ParagraphId = style;
 void wrongParagraph;
-// @ts-expect-error Frame session IDs require the session brand.
-compileTextEngineFrameUpdate({ ...frame, sessionId: 1 });
+// @ts-expect-error Frame retained-plan IDs require the retained-plan brand.
+compileTextEngineFrameUpdate({ ...frame, retainedPlanId: 1 });
 // @ts-expect-error Frame paragraph IDs require the paragraph brand.
 compileTextEngineFrameUpdate({ ...frame, paragraphMutations: [{ opcode: 'remove', paragraphId: 1 }] });
 // @ts-expect-error Capability profiles are selected from their descriptor, never by authored ordinal.

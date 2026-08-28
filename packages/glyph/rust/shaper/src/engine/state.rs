@@ -13,7 +13,7 @@ use super::{
     font_binding::FontRenderBinding,
     frame::{
         CommittedUpdate, MeasuredParagraph, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-        PreparedUpdate, SessionRevision, UpdateRequest,
+        PreparedUpdate, RetainedPlanRevision, UpdateRequest,
     },
     identity_index::IdentityIndex,
     policy::{ALLOCATION_ORDERED_DIRECT, CapabilitySetId, ValidatedPolicy},
@@ -61,8 +61,8 @@ pub enum EngineError {
     HandleConflict,
     PolicyMissing,
     FontStackMissing,
-    SessionConflict,
-    SessionMissing,
+    RetainedPlanConflict,
+    RetainedPlanMissing,
     RevisionConflict,
     RevisionExhausted,
     /// The request was rejected for a cause the engine does not classify further: a malformed
@@ -70,7 +70,7 @@ pub enum EngineError {
     /// Every cause a caller can act on has its own variant below; this one never names one.
     InvalidRequest,
     ResultTooLarge,
-    /// A host tried to dispose a policy or font stack still named by committed session state.
+    /// A backend tried to dispose a policy or font stack still named by committed retained-plan state.
     RegistrationInUse,
     /// A style's `[start, end)` is inverted, reaches past the end of the paragraph's text, or lands
     /// inside a UTF-16 surrogate pair.
@@ -134,7 +134,7 @@ pub struct TextEngine {
     policies: BTreeMap<u32, ValidatedPolicy>,
     font_bindings: Vec<RegisteredFontBinding>,
     font_stacks: Vec<RegisteredFontStack>,
-    sessions: BTreeMap<u32, EngineSession>,
+    retained_plans: BTreeMap<u32, RetainedPlanState>,
     gather: PolicyGatherWorkspace,
     gather_cache: Option<GatherCacheKey>,
     prepared_gather_cache: Option<GatherCacheKey>,
@@ -193,7 +193,7 @@ struct BoundaryCandidate {
 /// it leave-committed before preparing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SpeculativeTransaction {
-    revision: SessionRevision,
+    revision: RetainedPlanRevision,
     /// Increments whenever a queried paragraph's semantic prefix (text/style) or the
     /// lifecycle input rebuilds cold; geometry-only extension keeps the generation.
     generation: u32,
@@ -203,8 +203,8 @@ struct SpeculativeTransaction {
 }
 
 #[derive(Default)]
-struct EngineSession {
-    revision: SessionRevision,
+struct RetainedPlanState {
+    revision: RetainedPlanRevision,
     acknowledged_publication_generation: u32,
     policy_binding: Option<PolicyBinding>,
     speculative: Option<SpeculativeTransaction>,
@@ -296,8 +296,8 @@ struct PolicyBinding {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct GatherCacheKey {
-    session_id: u32,
-    revision: SessionRevision,
+    retained_plan_id: u32,
+    revision: RetainedPlanRevision,
     policy_handle: u32,
     policy_fingerprint: u64,
     capability_set: u32,
@@ -439,9 +439,9 @@ impl TextEngine {
             .binary_search_by_key(&handle, |stack| stack.handle)
             .map_err(|_| EngineError::FontStackMissing)?;
         if self
-            .sessions
+            .retained_plans
             .values()
-            .any(|session| session.references_font_stack(handle))
+            .any(|retained_plan| retained_plan.references_font_stack(handle))
         {
             return Err(EngineError::RegistrationInUse);
         }
@@ -500,8 +500,8 @@ impl TextEngine {
     }
 
     pub fn dispose_policy(&mut self, handle: u32) -> Result<(), EngineError> {
-        if self.sessions.values().any(|session| {
-            session
+        if self.retained_plans.values().any(|retained_plan| {
+            retained_plan
                 .policy_binding
                 .is_some_and(|binding| binding.handle == handle)
         }) {
@@ -522,94 +522,107 @@ impl TextEngine {
         self.policies.len().try_into().unwrap_or(u32::MAX)
     }
 
-    pub fn create_session(&mut self, handle: u32) -> Result<(), EngineError> {
+    pub fn create_retained_plan(&mut self, handle: u32) -> Result<(), EngineError> {
         if handle == 0 {
             return Err(EngineError::InvalidHandle);
         }
-        if self.sessions.contains_key(&handle) {
-            return Err(EngineError::SessionConflict);
+        if self.retained_plans.contains_key(&handle) {
+            return Err(EngineError::RetainedPlanConflict);
         }
-        let mut session = EngineSession::default();
+        let mut retained_plan = RetainedPlanState::default();
         let mut spare = ParagraphState::default();
         spare.initialize()?;
-        session.spare_paragraph = Some(spare);
-        self.sessions.insert(handle, session);
+        retained_plan.spare_paragraph = Some(spare);
+        self.retained_plans.insert(handle, retained_plan);
         Ok(())
     }
 
-    pub fn dispose_session(&mut self, handle: u32) -> Result<(), EngineError> {
-        self.sessions
+    pub fn dispose_retained_plan(&mut self, handle: u32) -> Result<(), EngineError> {
+        self.retained_plans
             .remove(&handle)
-            .ok_or(EngineError::SessionMissing)?;
+            .ok_or(EngineError::RetainedPlanMissing)?;
         if self
             .gather_cache
-            .is_some_and(|cache| cache.session_id == handle)
+            .is_some_and(|cache| cache.retained_plan_id == handle)
             || self
                 .prepared_gather_cache
-                .is_some_and(|cache| cache.session_id == handle)
+                .is_some_and(|cache| cache.retained_plan_id == handle)
         {
             self.invalidate_gather_cache();
         }
         Ok(())
     }
 
-    pub fn reserve_session_text(&mut self, handle: u32, capacity: u32) -> Result<(), EngineError> {
+    pub fn reserve_retained_plan_text(
+        &mut self,
+        handle: u32,
+        capacity: u32,
+    ) -> Result<(), EngineError> {
         let capacity = usize::try_from(capacity).map_err(|_| EngineError::ResultTooLarge)?;
-        let session = self
-            .sessions
+        let retained_plan = self
+            .retained_plans
             .get_mut(&handle)
-            .ok_or(EngineError::SessionMissing)?;
-        if let Some(paragraph) = session.spare_paragraph.as_mut() {
+            .ok_or(EngineError::RetainedPlanMissing)?;
+        if let Some(paragraph) = retained_plan.spare_paragraph.as_mut() {
             paragraph.reserve_text(capacity)?;
         }
         Ok(())
     }
 
-    pub(crate) fn session_revision(&self, handle: u32) -> Result<SessionRevision, EngineError> {
-        self.sessions
+    pub(crate) fn retained_plan_revision(
+        &self,
+        handle: u32,
+    ) -> Result<RetainedPlanRevision, EngineError> {
+        self.retained_plans
             .get(&handle)
-            .map(|session| session.revision)
-            .ok_or(EngineError::SessionMissing)
+            .map(|retained_plan| retained_plan.revision)
+            .ok_or(EngineError::RetainedPlanMissing)
     }
 
     #[cfg(test)]
-    pub(crate) fn session_text(&self, handle: u32) -> Result<&[u16], EngineError> {
-        self.sessions
+    pub(crate) fn retained_plan_text(&self, handle: u32) -> Result<&[u16], EngineError> {
+        self.retained_plans
             .get(&handle)
-            .and_then(EngineSession::first_paragraph_state)
+            .and_then(RetainedPlanState::first_paragraph_state)
             .map(|paragraph| paragraph.text.committed().units.as_slice())
-            .ok_or(EngineError::SessionMissing)
+            .ok_or(EngineError::RetainedPlanMissing)
     }
 
     #[cfg(test)]
-    pub(crate) fn session_style_count(&self, handle: u32) -> Result<usize, EngineError> {
-        self.sessions
+    pub(crate) fn retained_plan_style_count(&self, handle: u32) -> Result<usize, EngineError> {
+        self.retained_plans
             .get(&handle)
-            .and_then(EngineSession::first_paragraph_state)
+            .and_then(RetainedPlanState::first_paragraph_state)
             .map(|paragraph| paragraph.styles.committed().arena.len())
-            .ok_or(EngineError::SessionMissing)
+            .ok_or(EngineError::RetainedPlanMissing)
     }
 
     #[cfg(test)]
-    pub(crate) fn session_style_segment_count(&self, handle: u32) -> Result<usize, EngineError> {
-        self.sessions
+    pub(crate) fn retained_plan_style_segment_count(
+        &self,
+        handle: u32,
+    ) -> Result<usize, EngineError> {
+        self.retained_plans
             .get(&handle)
-            .and_then(EngineSession::first_paragraph_state)
+            .and_then(RetainedPlanState::first_paragraph_state)
             .map(|paragraph| paragraph.styles.committed().resolved.segments().len())
-            .ok_or(EngineError::SessionMissing)
+            .ok_or(EngineError::RetainedPlanMissing)
     }
 
     #[cfg(test)]
-    pub(crate) fn session_shaping_run_count(&self, handle: u32) -> Result<usize, EngineError> {
-        self.sessions
+    pub(crate) fn retained_plan_shaping_run_count(
+        &self,
+        handle: u32,
+    ) -> Result<usize, EngineError> {
+        self.retained_plans
             .get(&handle)
-            .and_then(EngineSession::first_paragraph_state)
+            .and_then(RetainedPlanState::first_paragraph_state)
             .map(|paragraph| paragraph.shaping_runs.committed().runs().len())
-            .ok_or(EngineError::SessionMissing)
+            .ok_or(EngineError::RetainedPlanMissing)
     }
 
-    pub fn session_count(&self) -> u32 {
-        self.sessions.len().try_into().unwrap_or(u32::MAX)
+    pub fn retained_plan_count(&self) -> u32 {
+        self.retained_plans.len().try_into().unwrap_or(u32::MAX)
     }
 
     #[cfg(test)]
@@ -676,21 +689,21 @@ impl TextEngine {
         let policy_fingerprint = policy.fingerprint();
         let font_bindings = &self.font_bindings;
         let font_stacks = &self.font_stacks;
-        let session = self
-            .sessions
-            .get_mut(&request.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        if session.policy_binding.is_some_and(|binding| {
+        let retained_plan = self
+            .retained_plans
+            .get_mut(&request.retained_plan_id)
+            .ok_or(EngineError::RetainedPlanMissing)?;
+        if retained_plan.policy_binding.is_some_and(|binding| {
             binding.handle != request.policy_handle || binding.fingerprint != policy_fingerprint
         }) {
             return Err(EngineError::InvalidRequest);
         }
-        if request.expected_engine_revision != session.revision.engine
-            || request.consumed_plan_revision > session.revision.plan
+        if request.expected_engine_revision != retained_plan.revision.engine
+            || request.consumed_plan_revision > retained_plan.revision.plan
         {
             return Err(EngineError::RevisionConflict);
         }
-        // The lifecycle describes the desired session so creations and replacements can share one
+        // The lifecycle describes the desired retained plan so creations and replacements can share one
         // candidate, while semantic mutations still belong only to the queried paragraph.
         let mut queried_paragraph_present = request.paragraph_mutations.len() == 0;
         for index in 0..request.paragraph_mutations.len() {
@@ -709,22 +722,22 @@ impl TextEngine {
         if !queried_paragraph_present {
             return Err(EngineError::InvalidRequest);
         }
-        let lifecycle_fingerprint = speculative_lifecycle_fingerprint(session, request)?;
-        let prior_generation = session
+        let lifecycle_fingerprint = speculative_lifecycle_fingerprint(retained_plan, request)?;
+        let prior_generation = retained_plan
             .speculative
             .map_or(0, |transaction| transaction.generation);
-        let transaction = session.speculative.filter(|transaction| {
-            transaction.revision == session.revision
+        let transaction = retained_plan.speculative.filter(|transaction| {
+            transaction.revision == retained_plan.revision
                 && transaction.lifecycle_fingerprint == lifecycle_fingerprint
         });
-        if session.speculative.is_some() && transaction.is_none() {
-            session.abort_pending();
+        if retained_plan.speculative.is_some() && transaction.is_none() {
+            retained_plan.abort_pending();
         }
         let (mut next_glyph_id, mut next_content_revision) = match transaction {
             Some(transaction) => (transaction.next_glyph_id, transaction.next_content_revision),
             None => (
-                session.next_glyph_id.max(1),
-                session.next_content_revision.max(1),
+                retained_plan.next_glyph_id.max(1),
+                retained_plan.next_content_revision.max(1),
             ),
         };
         let mut generation = match transaction {
@@ -732,15 +745,15 @@ impl TextEngine {
             None => prior_generation.wrapping_add(1),
         };
         let implicit_paragraph =
-            if request.paragraph_mutations.len() == 0 && session.paragraphs.is_empty() {
+            if request.paragraph_mutations.len() == 0 && retained_plan.paragraphs.is_empty() {
                 request_semantic_paragraph_id(request)?
             } else {
                 None
             };
         let preparation = (|| {
-            session.semantic_records.clear();
+            retained_plan.semantic_records.clear();
             if transaction.is_none() {
-                session.prepare_lifecycle(
+                retained_plan.prepare_lifecycle(
                     request.paragraph_mutations,
                     implicit_paragraph,
                     request.limits.max_paragraphs,
@@ -771,7 +784,7 @@ impl TextEngine {
             {
                 return Err(EngineError::InvalidRequest);
             }
-            let paragraph = session
+            let paragraph = retained_plan
                 .paragraph_mut(paragraph_id)
                 .ok_or(EngineError::InvalidRequest)?;
             let (prefix_retained, geometry_retained) = if transaction.is_some() {
@@ -831,10 +844,10 @@ impl TextEngine {
             {
                 let include_layout_inspection =
                     request.semantic_view_mask & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION != 0;
-                let mut records = core::mem::take(&mut session.semantic_records);
+                let mut records = core::mem::take(&mut retained_plan.semantic_records);
                 let query = append_paragraph_measurement(
                     &mut records,
-                    &mut session
+                    &mut retained_plan
                         .paragraph_mut(paragraph_id)
                         .ok_or(EngineError::InvalidRequest)?
                         .state,
@@ -845,25 +858,25 @@ impl TextEngine {
                     request.limits,
                     include_layout_inspection,
                 );
-                session.semantic_records = records;
+                retained_plan.semantic_records = records;
                 query?;
             }
             Ok(())
         })();
         if let Err(error) = preparation {
-            session.abort_pending();
+            retained_plan.abort_pending();
             return Err(error.in_paragraph(paragraph_id));
         }
-        session.speculative = Some(SpeculativeTransaction {
-            revision: session.revision,
+        retained_plan.speculative = Some(SpeculativeTransaction {
+            revision: retained_plan.revision,
             generation,
             lifecycle_fingerprint,
             next_glyph_id,
             next_content_revision,
         });
         Ok(MeasuredParagraph {
-            session_id: request.session_id,
-            revision: session.revision,
+            retained_plan_id: request.retained_plan_id,
+            revision: retained_plan.revision,
         })
     }
 
@@ -893,20 +906,20 @@ impl TextEngine {
         let gather = &mut self.gather;
         let gather_cache = &mut self.gather_cache;
         let prepared_gather_cache = &mut self.prepared_gather_cache;
-        let session = self
-            .sessions
-            .get_mut(&request.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        if session.policy_binding.is_some_and(|binding| {
+        let retained_plan = self
+            .retained_plans
+            .get_mut(&request.retained_plan_id)
+            .ok_or(EngineError::RetainedPlanMissing)?;
+        if retained_plan.policy_binding.is_some_and(|binding| {
             binding.handle != request.policy_handle || binding.fingerprint != policy_fingerprint
         }) {
             return Err(EngineError::InvalidRequest);
         }
-        if request.expected_engine_revision != session.revision.engine
-            || request.consumed_plan_revision > session.revision.plan
+        if request.expected_engine_revision != retained_plan.revision.engine
+            || request.consumed_plan_revision > retained_plan.revision.plan
             || publication_generation == 0
             || request.acknowledged_publication_generation
-                < session.acknowledged_publication_generation
+                < retained_plan.acknowledged_publication_generation
             || request.acknowledged_publication_generation >= publication_generation
         {
             return Err(EngineError::RevisionConflict);
@@ -916,36 +929,36 @@ impl TextEngine {
         // reserved identities to the commit; per-paragraph adoption is
         // fingerprint-gated inside the preparation loop. Any other transaction drops
         // leave-committed, so the frame proceeds exactly from committed state.
-        let adopted = match session.speculative {
+        let adopted = match retained_plan.speculative {
             Some(transaction)
-                if transaction.revision == session.revision
+                if transaction.revision == retained_plan.revision
                     && transaction.lifecycle_fingerprint
-                        == speculative_lifecycle_fingerprint(session, request)? =>
+                        == speculative_lifecycle_fingerprint(retained_plan, request)? =>
             {
                 Some(transaction)
             }
             Some(_) => {
-                session.abort_pending();
+                retained_plan.abort_pending();
                 None
             }
             None => None,
         };
-        session.speculative = None;
-        let next = SessionRevision {
-            engine: session
+        retained_plan.speculative = None;
+        let next = RetainedPlanRevision {
+            engine: retained_plan
                 .revision
                 .engine
                 .checked_add(1)
                 .ok_or(EngineError::RevisionExhausted)?,
-            plan: session
+            plan: retained_plan
                 .revision
                 .plan
                 .checked_add(1)
                 .ok_or(EngineError::RevisionExhausted)?,
         };
         let current_gather_key = GatherCacheKey {
-            session_id: request.session_id,
-            revision: session.revision,
+            retained_plan_id: request.retained_plan_id,
+            revision: retained_plan.revision,
             policy_handle: request.policy_handle,
             policy_fingerprint,
             capability_set: request.capability_set,
@@ -954,32 +967,33 @@ impl TextEngine {
             revision: next,
             ..current_gather_key
         };
-        let checkpoint =
-            session.revision.plan == 0 || request.consumed_plan_revision != session.revision.plan;
+        let checkpoint = retained_plan.revision.plan == 0
+            || request.consumed_plan_revision != retained_plan.revision.plan;
         // A completed renderer fence is external monotonic state. It remains accepted even if
         // plan preparation or publication later aborts.
-        session.acknowledged_publication_generation = request.acknowledged_publication_generation;
+        retained_plan.acknowledged_publication_generation =
+            request.acknowledged_publication_generation;
         let (mut next_glyph_id, mut next_content_revision) = match adopted {
             Some(transaction) => (
                 transaction.next_glyph_id.max(1),
                 transaction.next_content_revision.max(1),
             ),
             None => (
-                session.next_glyph_id.max(1),
-                session.next_content_revision.max(1),
+                retained_plan.next_glyph_id.max(1),
+                retained_plan.next_content_revision.max(1),
             ),
         };
         let implicit_paragraph =
-            if request.paragraph_mutations.len() == 0 && session.paragraphs.is_empty() {
+            if request.paragraph_mutations.len() == 0 && retained_plan.paragraphs.is_empty() {
                 request_semantic_paragraph_id(request)?
             } else {
                 None
             };
         let mut gather_output_matches_next = false;
         let preparation = (|| {
-            session.semantic_records.clear();
+            retained_plan.semantic_records.clear();
             if adopted.is_none() {
-                session.prepare_lifecycle(
+                retained_plan.prepare_lifecycle(
                     request.paragraph_mutations,
                     implicit_paragraph,
                     request.limits.max_paragraphs,
@@ -987,8 +1001,8 @@ impl TextEngine {
             }
             let (mut text_cursor, mut style_cursor) = (0, 0);
             let (mut constraint_cursor, mut inline_object_cursor) = (0, 0);
-            for order_index in 0..session.active_order().len() {
-                let paragraph_id = session.active_order()[order_index].id;
+            for order_index in 0..retained_plan.active_order().len() {
+                let paragraph_id = retained_plan.active_order()[order_index].id;
                 let text = request
                     .text_mutations
                     .take_paragraph(paragraph_id, &mut text_cursor)
@@ -1005,7 +1019,7 @@ impl TextEngine {
                         &mut inline_object_cursor,
                     )
                     .map_err(|_| EngineError::InvalidRequest)?;
-                let paragraph = session
+                let paragraph = retained_plan
                     .paragraph_mut(paragraph_id)
                     .ok_or(EngineError::InvalidRequest)?;
                 let (prefix_adopted, geometry_adopted) = if adopted.is_some() {
@@ -1066,28 +1080,28 @@ impl TextEngine {
             {
                 return Err(EngineError::InvalidRequest);
             }
-            let positioned_changed = session.lifecycle_changed
-                || session
+            let positioned_changed = retained_plan.lifecycle_changed
+                || retained_plan
                     .paragraphs
                     .iter()
                     .any(|paragraph| paragraph.positioned_changed);
             let reuse_ordered_plan = !checkpoint
                 && !positioned_changed
-                && request.compositing_independent == session.compositing_independent
+                && request.compositing_independent == retained_plan.compositing_independent
                 && policy
                     .programs()
                     .iter()
                     .all(|program| program.allocation_strategy == ALLOCATION_ORDERED_DIRECT);
             if reuse_ordered_plan {
-                session.plan.prepare_reuse().map_err(plan_error)?;
+                retained_plan.plan.prepare_reuse().map_err(plan_error)?;
                 gather_output_matches_next = cached_gather == Some(current_gather_key);
             } else {
                 let record_count =
-                    session
+                    retained_plan
                         .active_order()
                         .iter()
                         .try_fold(0usize, |total, ordered| {
-                            let paragraph = session
+                            let paragraph = retained_plan
                                 .paragraph(ordered.id)
                                 .ok_or(EngineError::InvalidRequest)?;
                             let positioned = paragraph.state.positioned.active();
@@ -1098,20 +1112,20 @@ impl TextEngine {
                 *gather_cache = None;
                 *prepared_gather_cache = None;
                 let capability_set = CapabilitySetId(request.capability_set);
-                // Decoration rows bypass the retained gather cursor arithmetic, so a session with
+                // Decoration rows bypass the retained gather cursor arithmetic, so a retained plan with
                 // any decorated paragraph must rebuild from a reset workspace; entering the
                 // retained path and falling back mid-append would stack fresh rows onto the
                 // previous update's buffers.
-                let attempted_retained =
-                    cached_gather == Some(current_gather_key) && !session_has_decorations(session);
+                let attempted_retained = cached_gather == Some(current_gather_key)
+                    && !retained_plan_has_decorations(retained_plan);
                 let retained = attempted_retained
                     && gather
                         .begin_retained(policy, record_count)
                         .map_err(gather_error)?;
                 if retained {
-                    append_session_gather(
+                    append_retained_plan_gather(
                         gather,
-                        session,
+                        retained_plan,
                         policy,
                         capability_set,
                         font_bindings,
@@ -1120,9 +1134,9 @@ impl TextEngine {
                 }
                 if !retained {
                     gather.begin(policy, record_count).map_err(gather_error)?;
-                    append_session_gather(
+                    append_retained_plan_gather(
                         gather,
-                        session,
+                        retained_plan,
                         policy,
                         capability_set,
                         font_bindings,
@@ -1132,7 +1146,7 @@ impl TextEngine {
                 let gathered = gather.view();
                 let mut plan_input = gathered.plan_input();
                 plan_input.order_independent = request.compositing_independent;
-                session
+                retained_plan
                     .plan
                     .prepare(
                         policy,
@@ -1152,11 +1166,11 @@ impl TextEngine {
                     | super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION)
                 != 0
             {
-                let mut records = core::mem::take(&mut session.semantic_records);
+                let mut records = core::mem::take(&mut retained_plan.semantic_records);
                 let query = (|| {
-                    for order_index in 0..session.active_order().len() {
-                        let paragraph_id = session.active_order()[order_index].id;
-                        let paragraph = session
+                    for order_index in 0..retained_plan.active_order().len() {
+                        let paragraph_id = retained_plan.active_order()[order_index].id;
+                        let paragraph = retained_plan
                             .paragraph_mut(paragraph_id)
                             .ok_or(EngineError::InvalidRequest)?;
                         append_paragraph_measurement(
@@ -1173,26 +1187,30 @@ impl TextEngine {
                     }
                     Ok(())
                 })();
-                session.semantic_records = records;
+                retained_plan.semantic_records = records;
                 query?;
             }
-            session.pending_next_glyph_id = next_glyph_id;
-            session.pending_next_content_revision = next_content_revision;
-            session.pending_compositing_independent = request.compositing_independent;
+            retained_plan.pending_next_glyph_id = next_glyph_id;
+            retained_plan.pending_next_content_revision = next_content_revision;
+            retained_plan.pending_compositing_independent = request.compositing_independent;
             Ok(())
         })();
         if let Err(error) = preparation {
-            session.abort_pending();
+            retained_plan.abort_pending();
             return Err(error);
         }
         if gather_output_matches_next {
             *prepared_gather_cache = Some(next_gather_key);
         }
         Ok(PreparedUpdate {
-            session_id: request.session_id,
-            previous: session.revision,
+            retained_plan_id: request.retained_plan_id,
+            previous: retained_plan.revision,
             next,
-            required_base_revision: if checkpoint { 0 } else { session.revision.plan },
+            required_base_revision: if checkpoint {
+                0
+            } else {
+                retained_plan.revision.plan
+            },
             checkpoint,
             policy_handle: request.policy_handle,
             capability_set: request.capability_set,
@@ -1204,14 +1222,14 @@ impl TextEngine {
         &self,
         prepared: PreparedUpdate,
     ) -> Result<RenderPlanView<'_>, EngineError> {
-        let session = self
-            .sessions
-            .get(&prepared.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        if session.revision != prepared.previous {
+        let retained_plan = self
+            .retained_plans
+            .get(&prepared.retained_plan_id)
+            .ok_or(EngineError::RetainedPlanMissing)?;
+        if retained_plan.revision != prepared.previous {
             return Err(EngineError::RevisionConflict);
         }
-        session
+        retained_plan
             .plan
             .plan_view(
                 prepared.policy_handle,
@@ -1225,28 +1243,28 @@ impl TextEngine {
         &self,
         prepared: PreparedUpdate,
     ) -> Result<&[super::semantic_view::SemanticRecord], EngineError> {
-        let session = self
-            .sessions
-            .get(&prepared.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        if session.revision != prepared.previous {
+        let retained_plan = self
+            .retained_plans
+            .get(&prepared.retained_plan_id)
+            .ok_or(EngineError::RetainedPlanMissing)?;
+        if retained_plan.revision != prepared.previous {
             return Err(EngineError::RevisionConflict);
         }
-        Ok(&session.semantic_records)
+        Ok(&retained_plan.semantic_records)
     }
 
     /// Drops a measure query's speculative transaction leave-committed. Used when
     /// staging the query result fails terminally: a query the caller only observed
     /// as failed must not leave an adoptable transaction behind.
     pub(crate) fn abort_measure(&mut self, measured: MeasuredParagraph) -> Result<(), EngineError> {
-        let session = self
-            .sessions
-            .get_mut(&measured.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        if session.revision != measured.revision {
+        let retained_plan = self
+            .retained_plans
+            .get_mut(&measured.retained_plan_id)
+            .ok_or(EngineError::RetainedPlanMissing)?;
+        if retained_plan.revision != measured.revision {
             return Err(EngineError::RevisionConflict);
         }
-        session.abort_pending();
+        retained_plan.abort_pending();
         Ok(())
     }
 
@@ -1254,26 +1272,26 @@ impl TextEngine {
         &self,
         measured: MeasuredParagraph,
     ) -> Result<&[super::semantic_view::SemanticRecord], EngineError> {
-        let session = self
-            .sessions
-            .get(&measured.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        if session.revision != measured.revision {
+        let retained_plan = self
+            .retained_plans
+            .get(&measured.retained_plan_id)
+            .ok_or(EngineError::RetainedPlanMissing)?;
+        if retained_plan.revision != measured.revision {
             return Err(EngineError::RevisionConflict);
         }
-        Ok(&session.semantic_records)
+        Ok(&retained_plan.semantic_records)
     }
 
     pub(crate) fn abort_update(&mut self, prepared: PreparedUpdate) -> Result<(), EngineError> {
         let next_gather_key = prepared_gather_key(prepared, prepared.next);
-        let session = self
-            .sessions
-            .get_mut(&prepared.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        if session.revision != prepared.previous {
+        let retained_plan = self
+            .retained_plans
+            .get_mut(&prepared.retained_plan_id)
+            .ok_or(EngineError::RetainedPlanMissing)?;
+        if retained_plan.revision != prepared.previous {
             return Err(EngineError::RevisionConflict);
         }
-        session.abort_pending();
+        retained_plan.abort_pending();
         if self.prepared_gather_cache == Some(next_gather_key) {
             self.prepared_gather_cache = None;
         }
@@ -1286,25 +1304,25 @@ impl TextEngine {
     ) -> Result<CommittedUpdate, EngineError> {
         let previous_gather_key = prepared_gather_key(prepared, prepared.previous);
         let next_gather_key = prepared_gather_key(prepared, prepared.next);
-        let session = self
-            .sessions
-            .get_mut(&prepared.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        if session.revision != prepared.previous {
+        let retained_plan = self
+            .retained_plans
+            .get_mut(&prepared.retained_plan_id)
+            .ok_or(EngineError::RetainedPlanMissing)?;
+        if retained_plan.revision != prepared.previous {
             return Err(EngineError::RevisionConflict);
         }
-        session.plan.commit().map_err(plan_error)?;
-        session.commit_paragraphs();
-        session.next_glyph_id = session.pending_next_glyph_id;
-        session.next_content_revision = session.pending_next_content_revision;
-        session.pending_next_glyph_id = 0;
-        session.pending_next_content_revision = 0;
-        session.compositing_independent = session.pending_compositing_independent;
-        session.policy_binding = Some(PolicyBinding {
+        retained_plan.plan.commit().map_err(plan_error)?;
+        retained_plan.commit_paragraphs();
+        retained_plan.next_glyph_id = retained_plan.pending_next_glyph_id;
+        retained_plan.next_content_revision = retained_plan.pending_next_content_revision;
+        retained_plan.pending_next_glyph_id = 0;
+        retained_plan.pending_next_content_revision = 0;
+        retained_plan.compositing_independent = retained_plan.pending_compositing_independent;
+        retained_plan.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
             fingerprint: prepared.policy_fingerprint,
         });
-        session.revision = prepared.next;
+        retained_plan.revision = prepared.next;
         if self.prepared_gather_cache == Some(next_gather_key) {
             self.gather_cache = Some(next_gather_key);
             self.prepared_gather_cache = None;
@@ -1312,7 +1330,7 @@ impl TextEngine {
             self.gather_cache = Some(next_gather_key);
         }
         Ok(CommittedUpdate {
-            session_id: prepared.session_id,
+            retained_plan_id: prepared.retained_plan_id,
             revision: prepared.next,
             required_base_revision: prepared.required_base_revision,
             checkpoint: prepared.checkpoint,
@@ -1320,9 +1338,9 @@ impl TextEngine {
     }
 }
 
-fn prepared_gather_key(prepared: PreparedUpdate, revision: SessionRevision) -> GatherCacheKey {
+fn prepared_gather_key(prepared: PreparedUpdate, revision: RetainedPlanRevision) -> GatherCacheKey {
     GatherCacheKey {
-        session_id: prepared.session_id,
+        retained_plan_id: prepared.retained_plan_id,
         revision,
         policy_handle: prepared.policy_handle,
         policy_fingerprint: prepared.policy_fingerprint,
@@ -1331,13 +1349,15 @@ fn prepared_gather_key(prepared: PreparedUpdate, revision: SessionRevision) -> G
 }
 
 /// Whether any live paragraph carries decoration records, using pending state when prepared —
-/// the same view `append_session_gather` reads.
-fn session_has_decorations(session: &EngineSession) -> bool {
-    session.active_order().iter().any(|ordered| {
-        session.paragraph(ordered.id).is_some_and(|paragraph| {
-            let positioned = paragraph.state.positioned.active();
-            !positioned.decorations().is_empty()
-        })
+/// the same view `append_retained_plan_gather` reads.
+fn retained_plan_has_decorations(retained_plan: &RetainedPlanState) -> bool {
+    retained_plan.active_order().iter().any(|ordered| {
+        retained_plan
+            .paragraph(ordered.id)
+            .is_some_and(|paragraph| {
+                let positioned = paragraph.state.positioned.active();
+                !positioned.decorations().is_empty()
+            })
     })
 }
 
@@ -1518,17 +1538,17 @@ fn append_paragraph_measurement(
     )
 }
 
-fn append_session_gather(
+fn append_retained_plan_gather(
     gather: &mut PolicyGatherWorkspace,
-    session: &EngineSession,
+    retained_plan: &RetainedPlanState,
     policy: &ValidatedPolicy,
     capability_set: CapabilitySetId,
     font_bindings: &[RegisteredFontBinding],
     retained: bool,
 ) -> Result<(), EngineError> {
     let mut retaining = retained;
-    for ordered in session.active_order() {
-        let paragraph = session
+    for ordered in retained_plan.active_order() {
+        let paragraph = retained_plan
             .paragraph(ordered.id)
             .ok_or(EngineError::InvalidRequest)?;
         let positioned = paragraph.state.positioned.active();
@@ -1559,7 +1579,7 @@ fn append_session_gather(
                 capability_set,
                 positioned.decorations(),
                 ordered.id,
-                session.revision.engine.max(1),
+                retained_plan.revision.engine.max(1),
                 super::policy_gather::DecorationPass::Under,
             )
             .map_err(gather_error)?;
@@ -1594,7 +1614,7 @@ fn append_session_gather(
                 capability_set,
                 positioned.decorations(),
                 ordered.id,
-                session.revision.engine.max(1),
+                retained_plan.revision.engine.max(1),
                 super::policy_gather::DecorationPass::Over,
             )
             .map_err(gather_error)?;
@@ -1605,7 +1625,7 @@ fn append_session_gather(
     Ok(())
 }
 
-impl EngineSession {
+impl RetainedPlanState {
     fn references_font_stack(&self, handle: u32) -> bool {
         self.paragraphs.iter().any(|paragraph| {
             paragraph
@@ -1769,7 +1789,7 @@ impl EngineSession {
                     spare
                 } else {
                     // Only the reusable spare is prewarmed. New retained paragraphs grow
-                    // each arena from their actual content instead of paying session defaults.
+                    // each arena from their actual content instead of paying retained-plan defaults.
                     ParagraphState::default()
                 };
                 self.paragraphs.insert(
@@ -2100,7 +2120,7 @@ impl ParagraphState {
                 // positioning, gather, diff, and publication tail for those
                 // frames entirely (the resize analogue of the D-253 measure
                 // adoption). The pending geometry still commits: it is real
-                // session state, and the equivalence proof is exactly the
+                // retained-plan state, and the equivalence proof is exactly the
                 // statement that the retained flow and positioning answer it.
                 if !self.clusters.is_prepared()
                     && !self.text.is_prepared()
@@ -3959,7 +3979,7 @@ fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineErro
 }
 
 /// Identity of a request's structure-changing lifecycle input relative to committed
-/// session state. Upserts that restate an existing paragraph at its committed order
+/// retained-plan state. Upserts that restate an existing paragraph at its committed order
 /// are lifecycle-neutral and do not participate — queries routed at different
 /// existing paragraphs therefore share one transaction, which is what makes the
 /// multi-paragraph retained story reachable. Creations, removals, reorders, and the
@@ -3968,7 +3988,7 @@ fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineErro
 /// structure cannot change without a revision advance, and the transaction already
 /// requires revision equality, so neutrality is stable for the transaction's life.
 fn speculative_lifecycle_fingerprint(
-    session: &EngineSession,
+    retained_plan: &RetainedPlanState,
     request: UpdateRequest<'_>,
 ) -> Result<u64, EngineError> {
     let mut hash = 0_u64;
@@ -3983,7 +4003,7 @@ fn speculative_lifecycle_fingerprint(
                 paragraph_id,
                 order,
             } => {
-                if session
+                if retained_plan
                     .paragraph(paragraph_id)
                     .is_some_and(|paragraph| !paragraph.created && paragraph.order == order)
                 {
@@ -4008,7 +4028,7 @@ fn speculative_lifecycle_fingerprint(
     }
     if request.paragraph_mutations.len() == 0
         && let Some(paragraph_id) = request_semantic_paragraph_id(request)?
-        && !session
+        && !retained_plan
             .paragraph(paragraph_id)
             .is_some_and(|paragraph| !paragraph.created)
     {
@@ -4329,20 +4349,20 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
 
         let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         let first_plan = engine.prepared_plan(first).unwrap();
         assert_eq!(first_plan.policy_handle, 9);
         assert_eq!(first_plan.capability_set, 1);
         assert_eq!(
-            engine.session_revision(4).unwrap(),
-            SessionRevision::default()
+            engine.retained_plan_revision(4).unwrap(),
+            RetainedPlanRevision::default()
         );
         let first = engine.commit_update(first).unwrap();
         assert!(first.checkpoint);
         assert_eq!(first.required_base_revision, 0);
-        assert_eq!(first.revision, SessionRevision { engine: 1, plan: 1 });
+        assert_eq!(first.revision, RetainedPlanRevision { engine: 1, plan: 1 });
         assert_eq!(
             engine.gather_cache.map(|cache| cache.revision),
             Some(first.revision)
@@ -4355,7 +4375,7 @@ mod tests {
         );
         assert_eq!(
             engine.prepared_gather_cache.map(|cache| cache.revision),
-            Some(SessionRevision { engine: 2, plan: 2 })
+            Some(RetainedPlanRevision { engine: 2, plan: 2 })
         );
         let second = engine.commit_update(second).unwrap();
         assert!(!second.checkpoint);
@@ -4369,9 +4389,12 @@ mod tests {
             engine.prepare_update(update(1, 2, 1), 3),
             Err(EngineError::RevisionConflict)
         );
-        assert_eq!(engine.session_count(), 1);
-        assert_eq!(engine.dispose_session(4), Ok(()));
-        assert_eq!(engine.dispose_session(4), Err(EngineError::SessionMissing));
+        assert_eq!(engine.retained_plan_count(), 1);
+        assert_eq!(engine.dispose_retained_plan(4), Ok(()));
+        assert_eq!(
+            engine.dispose_retained_plan(4),
+            Err(EngineError::RetainedPlanMissing)
+        );
     }
 
     #[test]
@@ -4380,7 +4403,7 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
         let mut request = update(0, 0, 0);
         request.capability_set = 3;
         assert_eq!(
@@ -4388,18 +4411,18 @@ mod tests {
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
-            engine.session_revision(4).unwrap(),
-            SessionRevision::default()
+            engine.retained_plan_revision(4).unwrap(),
+            RetainedPlanRevision::default()
         );
     }
 
     #[test]
-    fn a_committed_session_accepts_another_capability_set_from_the_same_policy() {
+    fn a_committed_retained_plan_accepts_another_capability_set_from_the_same_policy() {
         let mut engine = TextEngine::default();
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
         let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         engine.commit_update(first).unwrap();
 
@@ -4416,7 +4439,7 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
         let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         engine.commit_update(first).unwrap();
         let second = engine.prepare_update(update(1, 1, 1), 2).unwrap();
@@ -4438,15 +4461,15 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
         let prepared = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         assert!(engine.prepared_gather_cache.is_some());
         engine.abort_update(prepared).unwrap();
         assert!(engine.gather_cache.is_none());
         assert!(engine.prepared_gather_cache.is_none());
         assert_eq!(
-            engine.session_revision(4).unwrap(),
-            SessionRevision::default()
+            engine.retained_plan_revision(4).unwrap(),
+            RetainedPlanRevision::default()
         );
         let retry = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         engine.commit_update(retry).unwrap();
@@ -4458,8 +4481,8 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
-        engine.reserve_session_text(4, 8).unwrap();
+        engine.create_retained_plan(4).unwrap();
+        engine.reserve_retained_plan_text(4, 8).unwrap();
 
         let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63, 0x64])]);
         let mut initial = update(0, 0, 0);
@@ -4475,25 +4498,28 @@ mod tests {
         query.text_mutations =
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         engine.measure_paragraph(query, 1).unwrap();
-        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
-        let session = engine.sessions.get(&4).unwrap();
-        let state = session.first_paragraph_state().unwrap();
+        assert_eq!(
+            engine.retained_plan_text(4).unwrap(),
+            &[0x61, 0x62, 0x63, 0x64]
+        );
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        let state = retained_plan.first_paragraph_state().unwrap();
         assert!(state.text.is_prepared());
         assert_eq!(
             state.text.pending().units,
             [0x61, 0x62, 0x63, 0x64, 0x58, 0x59]
         );
-        let transaction = session.speculative.unwrap();
-        assert_eq!(transaction.revision, session.revision);
+        let transaction = retained_plan.speculative.unwrap();
+        assert_eq!(transaction.revision, retained_plan.revision);
 
         // The same speculative input extends the transaction instead of rebuilding it.
         let mut repeat = update(1, 1, 1);
         repeat.text_mutations =
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         engine.measure_paragraph(repeat, 1).unwrap();
-        let session = engine.sessions.get(&4).unwrap();
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
         assert_eq!(
-            session.speculative.unwrap().generation,
+            retained_plan.speculative.unwrap().generation,
             transaction.generation
         );
 
@@ -4504,10 +4530,10 @@ mod tests {
         changed.text_mutations =
             parse_text_mutations(&changed_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         engine.measure_paragraph(changed, 1).unwrap();
-        let session = engine.sessions.get(&4).unwrap();
-        assert!(session.speculative.unwrap().generation > transaction.generation);
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        assert!(retained_plan.speculative.unwrap().generation > transaction.generation);
         assert_eq!(
-            session
+            retained_plan
                 .first_paragraph_state()
                 .unwrap()
                 .text
@@ -4515,15 +4541,24 @@ mod tests {
                 .units,
             [0x61, 0x62, 0x63, 0x64, 0x5a]
         );
-        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        assert_eq!(
+            engine.retained_plan_text(4).unwrap(),
+            &[0x61, 0x62, 0x63, 0x64]
+        );
 
         // An ordinary frame drops the transaction leave-committed at entry and
         // proceeds exactly as if no query had happened.
         let follow = engine.prepare_update(update(1, 1, 1), 2).unwrap();
-        assert!(engine.sessions.get(&4).unwrap().speculative.is_none());
+        assert!(engine.retained_plans.get(&4).unwrap().speculative.is_none());
         let committed = engine.commit_update(follow).unwrap();
-        assert_eq!(committed.revision, SessionRevision { engine: 2, plan: 2 });
-        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        assert_eq!(
+            committed.revision,
+            RetainedPlanRevision { engine: 2, plan: 2 }
+        );
+        assert_eq!(
+            engine.retained_plan_text(4).unwrap(),
+            &[0x61, 0x62, 0x63, 0x64]
+        );
     }
 
     #[test]
@@ -4550,8 +4585,8 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
-        engine.reserve_session_text(4, 8).unwrap();
+        engine.create_retained_plan(4).unwrap();
+        engine.reserve_retained_plan_text(4, 8).unwrap();
 
         // Commit two paragraphs.
         let lifecycle_bytes = paragraph_mutation_bytes(&[
@@ -4578,9 +4613,9 @@ mod tests {
         first.text_mutations =
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         engine.measure_paragraph(first, 1).unwrap();
-        let session = engine.sessions.get(&4).unwrap();
-        assert!(session.paragraph(1).unwrap().state.text.is_prepared());
-        let generation = session.speculative.unwrap().generation;
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        assert!(retained_plan.paragraph(1).unwrap().state.text.is_prepared());
+        let generation = retained_plan.speculative.unwrap().generation;
 
         // Measuring paragraph 2 extends the SAME transaction: a lifecycle-neutral
         // upsert of a different existing paragraph must not abort paragraph 1's
@@ -4602,26 +4637,26 @@ mod tests {
         second.text_mutations =
             parse_text_mutations(&second_edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         engine.measure_paragraph(second, 2).unwrap();
-        let session = engine.sessions.get(&4).unwrap();
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
         let _ = generation;
         assert!(
-            session.speculative.is_some(),
+            retained_plan.speculative.is_some(),
             "a query for a second existing paragraph extends the transaction"
         );
         assert!(
-            session.paragraph(1).unwrap().state.text.is_prepared(),
+            retained_plan.paragraph(1).unwrap().state.text.is_prepared(),
             "the first paragraph's speculative state survives the second query"
         );
-        assert!(session.paragraph(2).unwrap().state.text.is_prepared());
+        assert!(retained_plan.paragraph(2).unwrap().state.text.is_prepared());
     }
 
     #[test]
-    fn a_session_prewarms_only_its_reusable_paragraph() {
+    fn a_retained_plan_prewarms_only_its_reusable_paragraph() {
         let mut engine = TextEngine::default();
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
 
         let lifecycle_bytes = paragraph_mutation_bytes(&[
             (PARAGRAPH_MUTATION_UPSERT, 1, 0),
@@ -4636,9 +4671,9 @@ mod tests {
         let prepared = engine.prepare_update(initial, 1).unwrap();
         engine.commit_update(prepared).unwrap();
 
-        let session = engine.sessions.get(&4).unwrap();
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
         assert!(
-            session
+            retained_plan
                 .paragraph(1)
                 .unwrap()
                 .state
@@ -4647,17 +4682,17 @@ mod tests {
                 >= DEFAULT_STYLE_CAPACITY
         );
         assert_eq!(
-            session
+            retained_plan
                 .paragraph(2)
                 .unwrap()
                 .state
                 .style_mutation_scratch
                 .capacity(),
             0,
-            "cold paragraphs must grow from authored content rather than session defaults"
+            "cold paragraphs must grow from authored content rather than retained-plan defaults"
         );
         assert_eq!(
-            session
+            retained_plan
                 .paragraph(3)
                 .unwrap()
                 .state
@@ -4673,8 +4708,8 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
-        engine.reserve_session_text(4, 8).unwrap();
+        engine.create_retained_plan(4).unwrap();
+        engine.reserve_retained_plan_text(4, 8).unwrap();
 
         let lifecycle_bytes = paragraph_mutation_bytes(&[
             (PARAGRAPH_MUTATION_UPSERT, 1, 1),
@@ -4705,10 +4740,10 @@ mod tests {
             parse_text_mutations(&second_edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         engine.measure_paragraph(second, 2).unwrap();
 
-        let session = engine.sessions.get(&4).unwrap();
-        assert!(session.speculative.is_some());
-        assert!(session.paragraph(1).unwrap().state.text.is_prepared());
-        assert!(session.paragraph(2).unwrap().state.text.is_prepared());
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        assert!(retained_plan.speculative.is_some());
+        assert!(retained_plan.paragraph(1).unwrap().state.text.is_prepared());
+        assert!(retained_plan.paragraph(2).unwrap().state.text.is_prepared());
     }
 
     #[test]
@@ -4717,8 +4752,8 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
-        engine.reserve_session_text(4, 8).unwrap();
+        engine.create_retained_plan(4).unwrap();
+        engine.reserve_retained_plan_text(4, 8).unwrap();
 
         let initial_bytes = paragraph_mutation_bytes(&[
             (PARAGRAPH_MUTATION_UPSERT, 1, 0),
@@ -4753,10 +4788,10 @@ mod tests {
                 .unwrap();
         engine.measure_paragraph(second, 3).unwrap();
 
-        let session = engine.sessions.get(&4).unwrap();
-        assert!(session.speculative.is_some());
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        assert!(retained_plan.speculative.is_some());
         assert_eq!(
-            session
+            retained_plan
                 .active_order()
                 .iter()
                 .map(|paragraph| paragraph.id)
@@ -4771,12 +4806,12 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
-        engine.reserve_session_text(4, 8).unwrap();
+        engine.create_retained_plan(4).unwrap();
+        engine.reserve_retained_plan_text(4, 8).unwrap();
         let prepared = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         engine.commit_update(prepared).unwrap();
 
-        // Measure a paragraph the session has never committed: the query owns the
+        // Measure a paragraph the retained plan has never committed: the query owns the
         // candidate speculatively.
         let lifecycle_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 7, 1)]);
         let mut query = update(1, 1, 1);
@@ -4785,9 +4820,9 @@ mod tests {
             parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
                 .unwrap();
         engine.measure_paragraph(query, 7).unwrap();
-        let session = engine.sessions.get(&4).unwrap();
-        assert!(session.paragraph(7).is_some());
-        assert!(session.speculative.is_some());
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        assert!(retained_plan.paragraph(7).is_some());
+        assert!(retained_plan.speculative.is_some());
 
         // A repeated identical lifecycle extends the transaction without recreating
         // the candidate.
@@ -4798,7 +4833,7 @@ mod tests {
                 .unwrap();
         engine.measure_paragraph(repeat, 7).unwrap();
         let generation = engine
-            .sessions
+            .retained_plans
             .get(&4)
             .unwrap()
             .speculative
@@ -4808,21 +4843,28 @@ mod tests {
 
         // An ordinary frame reclaims the candidate: committed state never saw it.
         let follow = engine.prepare_update(update(1, 1, 1), 2).unwrap();
-        let session = engine.sessions.get(&4).unwrap();
-        assert!(session.speculative.is_none());
-        assert!(session.paragraph(7).is_none());
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        assert!(retained_plan.speculative.is_none());
+        assert!(retained_plan.paragraph(7).is_none());
         engine.commit_update(follow).unwrap();
-        assert!(engine.sessions.get(&4).unwrap().paragraph(7).is_none());
+        assert!(
+            engine
+                .retained_plans
+                .get(&4)
+                .unwrap()
+                .paragraph(7)
+                .is_none()
+        );
     }
 
     #[test]
-    fn ordered_utf16_replacements_commit_and_abort_with_the_session_transaction() {
+    fn ordered_utf16_replacements_commit_and_abort_with_the_retained_plan_transaction() {
         let mut engine = TextEngine::default();
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
-        engine.reserve_session_text(4, 8).unwrap();
+        engine.create_retained_plan(4).unwrap();
+        engine.reserve_retained_plan_text(4, 8).unwrap();
 
         let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63, 0x64])]);
         let initial_batch =
@@ -4830,12 +4872,15 @@ mod tests {
         let mut initial = update(0, 0, 0);
         initial.text_mutations = initial_batch;
         let prepared = engine.prepare_update(initial, 1).unwrap();
-        assert!(engine.session_text(4).unwrap().is_empty());
+        assert!(engine.retained_plan_text(4).unwrap().is_empty());
         engine.commit_update(prepared).unwrap();
-        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        assert_eq!(
+            engine.retained_plan_text(4).unwrap(),
+            &[0x61, 0x62, 0x63, 0x64]
+        );
         assert_eq!(
             engine
-                .sessions
+                .retained_plans
                 .get(&4)
                 .unwrap()
                 .first_paragraph_state()
@@ -4847,7 +4892,7 @@ mod tests {
         );
         assert_eq!(
             engine
-                .sessions
+                .retained_plans
                 .get(&4)
                 .unwrap()
                 .first_paragraph_state()
@@ -4865,21 +4910,24 @@ mod tests {
         edit.text_mutations = edit_batch;
         let prepared = engine.prepare_update(edit, 2).unwrap();
         engine.abort_update(prepared).unwrap();
-        assert_eq!(engine.session_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
-        let session = engine.sessions.get(&4).unwrap();
-        let paragraph = session.first_paragraph_state().unwrap();
+        assert_eq!(
+            engine.retained_plan_text(4).unwrap(),
+            &[0x61, 0x62, 0x63, 0x64]
+        );
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        let paragraph = retained_plan.first_paragraph_state().unwrap();
         assert_eq!(paragraph.text.committed().unit_ids, [1, 2, 3, 4]);
         assert_eq!(paragraph.text.committed().next_unit_id, 5);
 
         let retry = engine.prepare_update(edit, 2).unwrap();
         engine.commit_update(retry).unwrap();
         assert_eq!(
-            engine.session_text(4).unwrap(),
+            engine.retained_plan_text(4).unwrap(),
             &[0x61, 0x58, 0x59, 0x63, 0x64, 0x21]
         );
         assert_eq!(
             engine
-                .sessions
+                .retained_plans
                 .get(&4)
                 .unwrap()
                 .first_paragraph_state()
@@ -4891,8 +4939,8 @@ mod tests {
         );
 
         let settled_capacities = {
-            let session = engine.sessions.get(&4).unwrap();
-            let paragraph = session.first_paragraph_state().unwrap();
+            let retained_plan = engine.retained_plans.get(&4).unwrap();
+            let paragraph = retained_plan.first_paragraph_state().unwrap();
             [
                 paragraph.text.committed().units.capacity(),
                 paragraph.text.pending().units.capacity(),
@@ -4905,8 +4953,8 @@ mod tests {
         warm.text_mutations = warm_batch;
         let prepared = engine.prepare_update(warm, 3).unwrap();
         engine.commit_update(prepared).unwrap();
-        let session = engine.sessions.get(&4).unwrap();
-        let paragraph = session.first_paragraph_state().unwrap();
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        let paragraph = retained_plan.first_paragraph_state().unwrap();
         assert_eq!(paragraph.text.committed().unit_ids, [8, 5, 6, 3, 4, 7]);
         assert!(paragraph.pending_text_mirrors_committed);
         assert_eq!(
@@ -4932,7 +4980,7 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
 
         let invalid_bytes = text_mutation_bytes(&[(0, 0, &[0xd800])]);
         let mut invalid = update(0, 0, 0);
@@ -4942,8 +4990,8 @@ mod tests {
             engine.prepare_update(invalid, 1),
             Err(EngineError::InvalidRequest)
         );
-        let session = engine.sessions.get(&4).unwrap();
-        let paragraph = session.first_paragraph_state().unwrap();
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
+        let paragraph = retained_plan.first_paragraph_state().unwrap();
         assert!(paragraph.text.committed().units.is_empty());
         assert!(paragraph.unicode.active().grapheme_boundaries().is_empty());
         assert!(paragraph.bidi.active().levels.is_empty());
@@ -4984,7 +5032,7 @@ mod tests {
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
         engine.register_font_stack(7, &[42]).unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
 
         let text_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63, 0x64])]);
         let mut text = update(0, 0, 0);
@@ -4994,7 +5042,7 @@ mod tests {
         engine.commit_update(prepared).unwrap();
         assert_eq!(
             engine
-                .sessions
+                .retained_plans
                 .get(&4)
                 .unwrap()
                 .first_paragraph_state()
@@ -5012,7 +5060,7 @@ mod tests {
         let prepared = engine.prepare_update(root, 2).unwrap();
         assert_eq!(
             engine
-                .sessions
+                .retained_plans
                 .get(&4)
                 .unwrap()
                 .first_paragraph_state()
@@ -5025,7 +5073,7 @@ mod tests {
         engine.commit_update(prepared).unwrap();
         assert_eq!(
             engine
-                .sessions
+                .retained_plans
                 .get(&4)
                 .unwrap()
                 .first_paragraph_state()
@@ -5039,7 +5087,7 @@ mod tests {
             engine.dispose_font_stack(7),
             Err(EngineError::RegistrationInUse)
         );
-        engine.dispose_session(4).unwrap();
+        engine.dispose_retained_plan(4).unwrap();
         assert_eq!(engine.dispose_font_stack(7), Ok(()));
     }
 
@@ -5050,7 +5098,7 @@ mod tests {
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
         engine.register_font_stack(7, &[42]).unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
 
         let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63, 0x64])]);
         let mut initial = update(0, 0, 0);
@@ -5064,12 +5112,12 @@ mod tests {
         root.style_mutations =
             parse_style_mutations(&root_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         let prepared = engine.prepare_update(root, 2).unwrap();
-        assert_eq!(engine.session_style_count(4), Ok(0));
-        assert_eq!(engine.session_style_segment_count(4), Ok(0));
+        assert_eq!(engine.retained_plan_style_count(4), Ok(0));
+        assert_eq!(engine.retained_plan_style_segment_count(4), Ok(0));
         engine.commit_update(prepared).unwrap();
-        assert_eq!(engine.session_style_count(4), Ok(1));
-        assert_eq!(engine.session_style_segment_count(4), Ok(1));
-        assert_eq!(engine.session_shaping_run_count(4), Ok(1));
+        assert_eq!(engine.retained_plan_style_count(4), Ok(1));
+        assert_eq!(engine.retained_plan_style_segment_count(4), Ok(1));
+        assert_eq!(engine.retained_plan_shaping_run_count(4), Ok(1));
 
         let remove_bytes = remove_style_bytes(1);
         let mut remove = update(2, 2, 2);
@@ -5079,7 +5127,7 @@ mod tests {
             engine.prepare_update(remove, 3),
             Err(EngineError::InvalidRequest)
         );
-        assert_eq!(engine.session_style_count(4), Ok(1));
+        assert_eq!(engine.retained_plan_style_count(4), Ok(1));
 
         let missing_stack_bytes = root_style_bytes(99);
         let mut missing_stack = update(2, 2, 2);
@@ -5095,7 +5143,7 @@ mod tests {
                 style_id: 1,
             }))
         );
-        assert_eq!(engine.session_style_count(4), Ok(1));
+        assert_eq!(engine.retained_plan_style_count(4), Ok(1));
     }
 
     #[test]
@@ -5104,7 +5152,7 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
         let bytes = text_mutation_bytes(&[(0, 0, &[0x61]), (9, 0, &[0x62])]);
         let batch = parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
         let mut request = update(0, 0, 0);
@@ -5113,17 +5161,17 @@ mod tests {
             engine.prepare_update(request, 1),
             Err(EngineError::InvalidRequest)
         );
-        assert!(engine.session_text(4).unwrap().is_empty());
+        assert!(engine.retained_plan_text(4).unwrap().is_empty());
     }
 
     #[test]
-    fn ordered_paragraphs_commit_reorder_and_remove_as_one_session() {
+    fn ordered_paragraphs_commit_reorder_and_remove_as_one_retained_plan() {
         let mut engine = TextEngine::default();
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
-        engine.reserve_session_text(4, 8).unwrap();
+        engine.create_retained_plan(4).unwrap();
+        engine.reserve_retained_plan_text(4, 8).unwrap();
 
         let lifecycle_bytes = paragraph_mutation_bytes(&[
             (PARAGRAPH_MUTATION_UPSERT, 2, 1),
@@ -5141,9 +5189,9 @@ mod tests {
         let prepared = engine.prepare_update(initial, 1).unwrap();
         engine.commit_update(prepared).unwrap();
 
-        let session = engine.sessions.get(&4).unwrap();
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
         assert_eq!(
-            session
+            retained_plan
                 .ordered_paragraphs
                 .iter()
                 .map(|entry| entry.id)
@@ -5151,11 +5199,23 @@ mod tests {
             [1, 2]
         );
         assert_eq!(
-            session.paragraph(1).unwrap().state.text.committed().units,
+            retained_plan
+                .paragraph(1)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
             [0x61, 0x62]
         );
         assert_eq!(
-            session.paragraph(2).unwrap().state.text.committed().units,
+            retained_plan
+                .paragraph(2)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
             [0x63, 0x64]
         );
 
@@ -5170,9 +5230,9 @@ mod tests {
                 .unwrap();
         let prepared = engine.prepare_update(reorder, 2).unwrap();
         engine.commit_update(prepared).unwrap();
-        let session = engine.sessions.get(&4).unwrap();
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
         assert_eq!(
-            session
+            retained_plan
                 .ordered_paragraphs
                 .iter()
                 .map(|entry| entry.id)
@@ -5180,11 +5240,23 @@ mod tests {
             [2, 1]
         );
         assert_eq!(
-            session.paragraph(1).unwrap().state.text.committed().units,
+            retained_plan
+                .paragraph(1)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
             [0x61, 0x62]
         );
         assert_eq!(
-            session.paragraph(2).unwrap().state.text.committed().units,
+            retained_plan
+                .paragraph(2)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
             [0x63, 0x64]
         );
 
@@ -5195,19 +5267,25 @@ mod tests {
             parse_paragraph_mutations(&remove_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         let prepared = engine.prepare_update(remove, 3).unwrap();
         engine.commit_update(prepared).unwrap();
-        let session = engine.sessions.get(&4).unwrap();
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
         assert_eq!(
-            session.ordered_paragraphs,
+            retained_plan.ordered_paragraphs,
             [ParagraphOrder { order: 0, id: 2 }]
         );
-        assert!(session.paragraph(1).is_none());
+        assert!(retained_plan.paragraph(1).is_none());
         assert_eq!(
-            session.paragraph(2).unwrap().state.text.committed().units,
+            retained_plan
+                .paragraph(2)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
             [0x63, 0x64]
         );
-        assert!(session.spare_paragraph.is_some());
+        assert!(retained_plan.spare_paragraph.is_some());
 
-        let spare_text_capacity = session
+        let spare_text_capacity = retained_plan
             .spare_paragraph
             .as_ref()
             .unwrap()
@@ -5226,7 +5304,13 @@ mod tests {
             parse_text_mutations(&replacement_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         let prepared = engine.prepare_update(replacement, 4).unwrap();
         engine.commit_update(prepared).unwrap();
-        let recycled = &engine.sessions.get(&4).unwrap().paragraph(3).unwrap().state;
+        let recycled = &engine
+            .retained_plans
+            .get(&4)
+            .unwrap()
+            .paragraph(3)
+            .unwrap()
+            .state;
         assert_eq!(
             recycled.text.committed().units,
             [0x7a],
@@ -5245,7 +5329,7 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
         let lifecycle_bytes = paragraph_mutation_bytes(&[
             (PARAGRAPH_MUTATION_UPSERT, 1, 0),
             (PARAGRAPH_MUTATION_UPSERT, 2, 1),
@@ -5278,10 +5362,13 @@ mod tests {
             Err(EngineError::InvalidRequest)
         );
 
-        let session = engine.sessions.get(&4).unwrap();
-        assert_eq!(session.revision, SessionRevision { engine: 1, plan: 1 });
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
         assert_eq!(
-            session
+            retained_plan.revision,
+            RetainedPlanRevision { engine: 1, plan: 1 }
+        );
+        assert_eq!(
+            retained_plan
                 .ordered_paragraphs
                 .iter()
                 .map(|entry| entry.id)
@@ -5289,14 +5376,26 @@ mod tests {
             [1, 2]
         );
         assert_eq!(
-            session.paragraph(1).unwrap().state.text.committed().units,
+            retained_plan
+                .paragraph(1)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
             [0x61]
         );
         assert_eq!(
-            session.paragraph(2).unwrap().state.text.committed().units,
+            retained_plan
+                .paragraph(2)
+                .unwrap()
+                .state
+                .text
+                .committed()
+                .units,
             [0x62]
         );
-        assert!(!session.lifecycle_prepared);
+        assert!(!retained_plan.lifecycle_prepared);
     }
 
     #[test]
@@ -5305,7 +5404,7 @@ mod tests {
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
         let lifecycle_bytes = paragraph_mutation_bytes(&[
             (PARAGRAPH_MUTATION_UPSERT, 1, 0),
             (PARAGRAPH_MUTATION_UPSERT, 2, 1),
@@ -5318,7 +5417,7 @@ mod tests {
             engine.prepare_update(too_many, 1),
             Err(EngineError::InvalidRequest)
         );
-        assert!(engine.sessions.get(&4).unwrap().paragraphs.is_empty());
+        assert!(engine.retained_plans.get(&4).unwrap().paragraphs.is_empty());
 
         let mut initial = update(0, 0, 0);
         initial.limits.max_paragraphs = 2;
@@ -5348,9 +5447,9 @@ mod tests {
             engine.prepare_update(unknown, 2),
             Err(EngineError::InvalidRequest)
         );
-        let session = engine.sessions.get(&4).unwrap();
+        let retained_plan = engine.retained_plans.get(&4).unwrap();
         assert_eq!(
-            session
+            retained_plan
                 .ordered_paragraphs
                 .iter()
                 .map(|entry| entry.id)
@@ -5360,12 +5459,12 @@ mod tests {
     }
 
     #[test]
-    fn single_paragraph_session_rejects_mixed_and_rebound_paragraph_ids() {
+    fn single_paragraph_retained_plan_rejects_mixed_and_rebound_paragraph_ids() {
         let mut engine = TextEngine::default();
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
 
         let mut mixed_bytes = text_mutation_bytes(&[(0, 0, &[0x61]), (1, 0, &[0x62])]);
         let second =
@@ -5404,16 +5503,16 @@ mod tests {
             engine.prepare_update(rebound, 2),
             Err(EngineError::InvalidRequest)
         );
-        assert_eq!(engine.session_text(4).unwrap(), &[0x61]);
+        assert_eq!(engine.retained_plan_text(4).unwrap(), &[0x61]);
     }
 
     #[test]
-    fn a_committed_session_retains_its_policy_registration() {
+    fn a_committed_retained_plan_retains_its_policy_registration() {
         let mut engine = TextEngine::default();
         engine
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
-        engine.create_session(4).unwrap();
+        engine.create_retained_plan(4).unwrap();
         let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         engine.commit_update(first).unwrap();
 
@@ -5421,7 +5520,7 @@ mod tests {
             engine.dispose_policy(9),
             Err(EngineError::RegistrationInUse)
         );
-        engine.dispose_session(4).unwrap();
+        engine.dispose_retained_plan(4).unwrap();
         engine.dispose_policy(9).unwrap();
         engine
             .register_policy(9, validated_policy(TechniqueId(2)))
@@ -5537,7 +5636,7 @@ mod tests {
         acknowledged_publication_generation: u32,
     ) -> UpdateRequest<'static> {
         UpdateRequest {
-            session_id: 4,
+            retained_plan_id: 4,
             expected_engine_revision,
             consumed_plan_revision,
             acknowledged_publication_generation,

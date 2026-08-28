@@ -8,23 +8,24 @@ use crate::engine::frame::{
     BASELINE_TEXT_TOP, BLOCK_ALIGN_CENTER, BLOCK_ALIGN_END, BLOCK_ALIGN_START, DECORATION_DASHED,
     DECORATION_DOTTED, DECORATION_DOUBLE, DECORATION_FLAGS_MASK, DECORATION_LINE_THROUGH,
     DECORATION_NONE, DECORATION_OVERLINE, DECORATION_SKIP_INK, DECORATION_SOLID,
-    DECORATION_UNDERLINE, DECORATION_WAVY, DEFAULT_SESSION_TEXT_CAPACITY, EXCLUSION_WRAP_BOTH,
-    EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START, EXCLUSION_WRAP_LARGEST, LAST_LINE_AUTO,
-    LAST_LINE_JUSTIFY, ORIENTATION_MIXED, ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP,
-    OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT,
-    RESULT_FLAG_CHECKPOINT, SEMANTIC_F32_BLOCK_EXTENT, SEMANTIC_F32_BLOCK_ORIGIN,
-    SEMANTIC_F32_BLOCK_START, SEMANTIC_F32_FONT_SIZE, SEMANTIC_F32_FOREGROUND_ALPHA,
-    SEMANTIC_F32_FOREGROUND_BLUE, SEMANTIC_F32_FOREGROUND_GREEN, SEMANTIC_F32_FOREGROUND_RED,
-    SEMANTIC_F32_INLINE_EXTENT, SEMANTIC_F32_INLINE_ORIGIN, SEMANTIC_F32_INLINE_START,
-    SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_RASTER_PIXEL_RATIO, SEMANTIC_U32_CLUSTER_ID,
-    SEMANTIC_U32_FLOW_THREAD_ID, SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_REGION_ID,
-    SEMANTIC_U32_STABLE_GLYPH_ID, SEMANTIC_U32_TRANSFORM_INDEX, SEMANTIC_VIEW_LAYOUT_INSPECTION,
-    SEMANTIC_VIEW_MASK, SEMANTIC_VIEW_MEASUREMENT, SHAPE_POLYGON, SHAPE_RECTANGLE,
-    STYLE_FIELD_BASELINE_SHIFT, STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION,
-    STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE, STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND,
-    STYLE_FIELD_LANGUAGE, STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK,
-    STYLE_FIELD_MATERIAL, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING,
-    STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
+    DECORATION_UNDERLINE, DECORATION_WAVY, DEFAULT_RETAINED_PLAN_TEXT_CAPACITY,
+    EXCLUSION_WRAP_BOTH, EXCLUSION_WRAP_INLINE_END, EXCLUSION_WRAP_INLINE_START,
+    EXCLUSION_WRAP_LARGEST, LAST_LINE_AUTO, LAST_LINE_JUSTIFY, ORIENTATION_MIXED,
+    ORIENTATION_SIDEWAYS, ORIENTATION_UPRIGHT, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
+    PARAGRAPH_MUTATION_REMOVE, PARAGRAPH_MUTATION_UPSERT, RESULT_FLAG_CHECKPOINT,
+    SEMANTIC_F32_BLOCK_EXTENT, SEMANTIC_F32_BLOCK_ORIGIN, SEMANTIC_F32_BLOCK_START,
+    SEMANTIC_F32_FONT_SIZE, SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE,
+    SEMANTIC_F32_FOREGROUND_GREEN, SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INLINE_EXTENT,
+    SEMANTIC_F32_INLINE_ORIGIN, SEMANTIC_F32_INLINE_START, SEMANTIC_F32_INVERSE_FONT_SIZE,
+    SEMANTIC_F32_RASTER_PIXEL_RATIO, SEMANTIC_U32_CLUSTER_ID, SEMANTIC_U32_FLOW_THREAD_ID,
+    SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_REGION_ID, SEMANTIC_U32_STABLE_GLYPH_ID,
+    SEMANTIC_U32_TRANSFORM_INDEX, SEMANTIC_VIEW_LAYOUT_INSPECTION, SEMANTIC_VIEW_MASK,
+    SEMANTIC_VIEW_MEASUREMENT, SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_FIELD_BASELINE_SHIFT,
+    STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION, STYLE_FIELD_FEATURES, STYLE_FIELD_FONT_SIZE,
+    STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE,
+    STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MASK, STYLE_FIELD_MATERIAL,
+    STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING, STYLE_FLAG_ROOT,
+    STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
     TEXT_MUTATION_REPLACE_UTF16, WRAP_CHARACTER, WRAP_NONE, WRAP_WORD, WRITING_HORIZONTAL_TB,
     WRITING_VERTICAL_LR, WRITING_VERTICAL_RL,
 };
@@ -192,7 +193,7 @@ struct PolicyOperationRecord {
 struct EngineUpdateRequestHeader {
     abi_version: u32,
     byte_length: u32,
-    session_id: u32,
+    retained_plan_id: u32,
     expected_engine_revision: u32,
     consumed_plan_revision: u32,
     acknowledged_publication_generation: u32,
@@ -387,7 +388,7 @@ struct EngineResultHeader {
     byte_length: u32,
     status: u32,
     flags: u32,
-    session_id: u32,
+    retained_plan_id: u32,
     engine_revision: u32,
     plan_revision: u32,
     required_base_revision: u32,
@@ -915,9 +916,9 @@ field_offset!(
     byte_length
 );
 field_offset!(
-    ENGINE_UPDATE_SESSION_ID,
+    ENGINE_UPDATE_RETAINED_PLAN_ID,
     EngineUpdateRequestHeader,
-    session_id
+    retained_plan_id
 );
 field_offset!(
     ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
@@ -1571,7 +1572,11 @@ field_offset!(ENGINE_RESULT_ABI_VERSION, EngineResultHeader, abi_version);
 field_offset!(ENGINE_RESULT_BYTE_LENGTH, EngineResultHeader, byte_length);
 field_offset!(ENGINE_RESULT_STATUS, EngineResultHeader, status);
 field_offset!(ENGINE_RESULT_FLAGS, EngineResultHeader, flags);
-field_offset!(ENGINE_RESULT_SESSION_ID, EngineResultHeader, session_id);
+field_offset!(
+    ENGINE_RESULT_RETAINED_PLAN_ID,
+    EngineResultHeader,
+    retained_plan_id
+);
 field_offset!(
     ENGINE_RESULT_ENGINE_REVISION,
     EngineResultHeader,
@@ -1875,10 +1880,10 @@ pub fn json() -> String {
             "registerPolicy": "pmndrs_glyph_engine_register_policy",
             "disposePolicy": "pmndrs_glyph_engine_dispose_policy",
             "policyCount": "pmndrs_glyph_engine_policy_count",
-            "createSession": "pmndrs_glyph_engine_create_session",
-            "reserveSession": "pmndrs_glyph_engine_reserve_session",
-            "disposeSession": "pmndrs_glyph_engine_dispose_session",
-            "sessionCount": "pmndrs_glyph_engine_session_count",
+            "createRetainedPlan": "pmndrs_glyph_engine_create_retained_plan",
+            "reserveRetainedPlan": "pmndrs_glyph_engine_reserve_retained_plan",
+            "disposeRetainedPlan": "pmndrs_glyph_engine_dispose_retained_plan",
+            "retainedPlanCount": "pmndrs_glyph_engine_retained_plan_count",
             "requestPointer": "pmndrs_glyph_engine_request_ptr",
             "requestCapacity": "pmndrs_glyph_engine_request_capacity",
             "textUpdate": "pmndrs_glyph_engine_update",
@@ -2020,7 +2025,7 @@ pub fn json() -> String {
                 "alignment": ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
                 "abiVersion": ENGINE_UPDATE_ABI_VERSION,
                 "byteLength": ENGINE_UPDATE_BYTE_LENGTH,
-                "sessionId": ENGINE_UPDATE_SESSION_ID,
+                "retainedPlanId": ENGINE_UPDATE_RETAINED_PLAN_ID,
                 "expectedEngineRevision": ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
                 "consumedPlanRevision": ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
                 "acknowledgedPublicationGeneration": ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION,
@@ -2213,7 +2218,7 @@ pub fn json() -> String {
                 "byteLength": ENGINE_RESULT_BYTE_LENGTH,
                 "status": ENGINE_RESULT_STATUS,
                 "flags": ENGINE_RESULT_FLAGS,
-                "sessionId": ENGINE_RESULT_SESSION_ID,
+                "retainedPlanId": ENGINE_RESULT_RETAINED_PLAN_ID,
                 "engineRevision": ENGINE_RESULT_ENGINE_REVISION,
                 "planRevision": ENGINE_RESULT_PLAN_REVISION,
                 "requiredBaseRevision": ENGINE_RESULT_REQUIRED_BASE_REVISION,
@@ -2446,7 +2451,7 @@ pub fn json() -> String {
             }
         },
         "engine": {
-            "defaultSessionTextCapacity": DEFAULT_SESSION_TEXT_CAPACITY,
+            "defaultRetainedPlanTextCapacity": DEFAULT_RETAINED_PLAN_TEXT_CAPACITY,
             "frameFlags": {
                 "compositingIndependent": crate::engine::frame::FRAME_FLAG_COMPOSITING_INDEPENDENT
             },
@@ -2649,8 +2654,8 @@ pub fn json() -> String {
             "resultTooLarge": 7,
             "policyConflict": 8,
             "policyMissing": 9,
-            "sessionConflict": 10,
-            "sessionMissing": 11,
+            "retainedPlanConflict": 10,
+            "retainedPlanMissing": 11,
             "revisionConflict": 12,
             "fontStackMissing": 13,
             "fontInUse": 14,

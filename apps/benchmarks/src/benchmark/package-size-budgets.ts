@@ -77,7 +77,7 @@ export const packageSizeBudgets = {
     gzipBytes: 454_500,
     brotliBytes: 361_500,
   },
-  // Three realization, runtime-owned host/session mapping, first-frame measurement and bounds,
+  // Three realization, engine-owned backend/plan mapping, first-frame measurement and bounds,
   // exact-generation resource transactions, and bounded candidate leases.
   'three-runtime-js': {
     rawBytes: 690_000,

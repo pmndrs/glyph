@@ -53,7 +53,7 @@ export function kernelPolicyBytes(abi) {
 export function engineUpdateBytes(
   abi,
   {
-    sessionId,
+    retainedPlanId,
     policyHandle,
     expectedEngineRevision,
     consumedPlanRevision,
@@ -72,7 +72,7 @@ export function engineUpdateBytes(
   const view = new DataView(bytes.buffer);
   view.setUint32(layout.abiVersion, abi.version, true);
   view.setUint32(layout.byteLength, bytes.byteLength, true);
-  view.setUint32(layout.sessionId, sessionId, true);
+  view.setUint32(layout.retainedPlanId, retainedPlanId, true);
   view.setUint32(layout.expectedEngineRevision, expectedEngineRevision, true);
   view.setUint32(layout.consumedPlanRevision, consumedPlanRevision, true);
   view.setUint32(layout.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
@@ -115,7 +115,7 @@ export function engineUpdateBytes(
 export function engineFrameUpdateBytes(
   abi,
   {
-    sessionId,
+    retainedPlanId,
     policyHandle,
     fontStackHandle,
     paragraphId = 1,
@@ -156,7 +156,7 @@ export function engineFrameUpdateBytes(
   const view = new DataView(bytes.buffer);
   view.setUint32(request.abiVersion, abi.version, true);
   view.setUint32(request.byteLength, bytes.byteLength, true);
-  view.setUint32(request.sessionId, sessionId, true);
+  view.setUint32(request.retainedPlanId, retainedPlanId, true);
   view.setUint32(request.expectedEngineRevision, expectedEngineRevision, true);
   view.setUint32(request.consumedPlanRevision, consumedPlanRevision, true);
   view.setUint32(request.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);

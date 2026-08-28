@@ -4,8 +4,8 @@ import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
 import { createFontLibrary, createFontStack, loadFont } from '@pmndrs/glyph';
-import { TextEngineHost } from '@pmndrs/glyph/core';
-import { TextEngineSession } from '../../dist/core/host.js';
+import { GlyphBackend } from '@pmndrs/glyph/core';
+import { PlanTransport } from '../../dist/core/backend.js';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -13,7 +13,7 @@ import { defineTextMaterial, FontLoader, Text, TextGroup } from '@pmndrs/glyph/t
 import * as THREE from 'three/webgpu';
 import { bitmapSchema } from '../../dist/raster/bitmap-technique.js';
 import { slugSchema } from '../../dist/raster/slug-technique.js';
-import { threeRuntimeDomainReport } from '../../dist/three/runtime-domain.js';
+import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
 import { threeSystemBuffers } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
@@ -58,7 +58,7 @@ test('Three domain ownership follows immutable variants across loaders and user-
   };
   const [first, second] = await Promise.all([firstLoader.loadAsync(request), secondLoader.loadAsync(request)]);
   assert.notEqual(first, second, 'each caller owns an independent Font lease');
-  assert.deepEqual(threeRuntimeDomainReport(), { active: true, loaders: 2, fonts: 1, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: true, loaders: 2, fonts: 1, leases: 0 });
 
   const label = new Text({ font: second, text: 'retained' });
   first.dispose();
@@ -66,11 +66,11 @@ test('Three domain ownership follows immutable variants across loaders and user-
   secondLoader.dispose();
   second.dispose();
   assert.ok(label.layout().glyphCount > 0, 'a live Text retains everything needed after loader and Font disposal');
-  assert.deepEqual(threeRuntimeDomainReport(), { active: true, loaders: 0, fonts: 1, leases: 2 });
+  assert.deepEqual(threeEngineDomainReport(), { active: true, loaders: 0, fonts: 1, leases: 2 });
 
   label.dispose();
   library.dispose();
-  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async () => {
@@ -380,16 +380,16 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
 });
 
 test('renderer rejection waits for explicit invalidation and then checkpoints without copied bytes', async (t) => {
-  const copyPublication = TextEngineSession.prototype.copyPublication;
+  const copyPublication = PlanTransport.prototype.copyPublication;
   let publicationCopies = 0;
-  TextEngineSession.prototype.copyPublication = function (publication) {
+  PlanTransport.prototype.copyPublication = function (publication) {
     publicationCopies += 1;
     return copyPublication.call(this, publication);
   };
   t.after(() => {
-    TextEngineSession.prototype.copyPublication = copyPublication;
+    PlanTransport.prototype.copyPublication = copyPublication;
   });
-  const instrumented = await createInstrumentedRuntime();
+  const instrumented = await createInstrumentedEngine();
   const fontDomain = instrumented.fontDomain;
   const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -464,21 +464,21 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
 });
 
 test('a rejected fixed-capacity candidate releases its provisional font-stack lease', async (t) => {
-  const registerFontStack = TextEngineHost.prototype.registerFontStack;
-  const disposeFontStack = TextEngineHost.prototype.disposeFontStack;
+  const registerFontStack = GlyphBackend.prototype.registerFontStack;
+  const disposeFontStack = GlyphBackend.prototype.disposeFontStack;
   let registrations = 0;
   let disposals = 0;
-  TextEngineHost.prototype.registerFontStack = function (...args) {
+  GlyphBackend.prototype.registerFontStack = function (...args) {
     registrations += 1;
     return registerFontStack.apply(this, args);
   };
-  TextEngineHost.prototype.disposeFontStack = function (...args) {
+  GlyphBackend.prototype.disposeFontStack = function (...args) {
     disposals += 1;
     return disposeFontStack.apply(this, args);
   };
   t.after(() => {
-    TextEngineHost.prototype.registerFontStack = registerFontStack;
-    TextEngineHost.prototype.disposeFontStack = disposeFontStack;
+    GlyphBackend.prototype.registerFontStack = registerFontStack;
+    GlyphBackend.prototype.disposeFontStack = disposeFontStack;
   });
 
   const fontDomain = createThreeFontDomain();
@@ -631,7 +631,7 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () 
 });
 
 test('TextGroup realizes two public Text objects as one indexed Rust draw', async () => {
-  const instrumented = await createInstrumentedRuntime();
+  const instrumented = await createInstrumentedEngine();
   const fontDomain = instrumented.fontDomain;
   const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
@@ -837,7 +837,7 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   fontDomain.dispose();
 });
 
-async function createInstrumentedRuntime() {
+async function createInstrumentedEngine() {
   const abi = textShaperAbi;
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
@@ -935,7 +935,7 @@ async function createInstrumentedRuntime() {
 }
 
 test('Text.layout measures attached first-frame state without traversing matrices or realizing draws', async () => {
-  const instrumented = await createInstrumentedRuntime();
+  const instrumented = await createInstrumentedEngine();
   const font = await instrumented.fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
@@ -979,7 +979,7 @@ test('Text.layout measures attached first-frame state without traversing matrice
   assert.equal(
     instrumented.latestUpdateFlags & textShaperAbi.engine.resultFlags.checkpoint,
     textShaperAbi.engine.resultFlags.checkpoint,
-    "the session's first render plan is necessarily its initial checkpoint",
+    "the retainedPlan's first render plan is necessarily its initial checkpoint",
   );
   assert.equal(instrumented.measureCrossings, 2, 'publication must not repeat the host measurement query');
   assert.equal(first.commitState().status, 'committed');
@@ -1001,7 +1001,7 @@ test('Text.layout measures attached first-frame state without traversing matrice
 });
 
 test('standalone Text.layout creates only its implicit measurement batch before traversal', async () => {
-  const instrumented = await createInstrumentedRuntime();
+  const instrumented = await createInstrumentedEngine();
   const font = await instrumented.fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
@@ -1230,13 +1230,13 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
 
 /**
  * Roadmap 11.17 layer 4: layout under a geometry-only change routes to the
- * paragraph-scoped synchronous engine query — no full session updates, no
+ * paragraph-scoped synchronous engine query — no full retainedPlan updates, no
  * publication flips, no revision burn — and the following ordinary frame adopts the
  * speculative work without a checkpoint rebuild.
  */
 test('repeated layout under changing constraints stays on the paragraph query path', async () => {
   const abi = textShaperAbi;
-  const instrumented = await createInstrumentedRuntime();
+  const instrumented = await createInstrumentedEngine();
   const font = await instrumented.fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },

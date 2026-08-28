@@ -11,14 +11,14 @@ okf_version: '0.2'
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
 - [Merged v0 runtime and bake API](planning/api-shapes.md) — superseded migration fixture; it describes the merged v0 surface that the Rust render-plan cutover deleted.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
-- [Core text API](planning/core-api.md) — authoritative API for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, fixed-capacity failure, synchronized updates, and renderer-ready glyph batches.
-- [Font/runtime ownership plan](planning/font-runtime-ownership.md) — accepted migration that separates immutable font assets from runtime registration and binds hosts, sessions, targets, leases, and renderer acceptance to explicit lifetimes.
+- [Core text API](planning/core-api.md) — authoritative application and integration API for fonts, measurement, engines, backends, retained plans, and renderer targets.
+- [Font and engine ownership plan](planning/font-runtime-ownership.md) — accepted migration that separates immutable font assets from engine registration and binds backends, retained plans, targets, leases, and renderer acceptance to explicit lifetimes.
 - [Rust layout engine contract](planning/rust-layout-engine.md) — authoritative engine ABI, render-plan policy, and publication boundary for custom renderers.
 - [Engine integration contract](planning/engine-integration-contract.md) — superseded historical record; the Rust command buffer replaced this storage and batching contract.
 - [Raster technique and engine resource API](planning/raster-technique-api.md) — superseded historical record; the Rust render-plan cutover replaced these TypeScript binding and packing interfaces.
 - [TypeGPU-first shader authority](planning/typegpu-first-shader-authority.md) — exploratory TypeGPU-first shader/program architecture, Three and gpucat bridge limits, fallback authority models, and proof gates.
 - [Renderer integration guide](guides/renderer-integration.md) — the working path for a custom engine: declare a
-  technique schema, author and register a render policy, drive a session, consume all seven plan tables, and
+  technique schema, author and register a render policy, drive a retained plan, consume all seven plan tables, and
   implement the retention and patch protocols.
 - [Technique implementation report](guides/technique-implementation-report.md) — worked portable plan, policy, raster,
   and baker examples with ownership maps and the end-to-end draw flow.

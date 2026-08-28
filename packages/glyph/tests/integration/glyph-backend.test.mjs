@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { FontRegistry } from '../../dist/loader.js';
-import { createTextRuntime } from '@pmndrs/glyph/core';
+import { createGlyphEngine } from '@pmndrs/glyph/core';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
-import { TextEngineHost } from '../../dist/core/host.js';
+import { GlyphBackend } from '../../dist/core/backend.js';
 import { assertGlyphId, id, programId, techniqueId } from '../../dist/core/render-policy.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
@@ -18,56 +18,56 @@ import {
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const TEST_POLICY_HANDLE = id('policy', 'test.text-engine-host/default');
-const TEST_SESSION_HANDLE = id('session', 'test.text-engine-host/default');
-const THREE_POLICY_HANDLE = id('policy', 'test.text-engine-host/three');
+const TEST_POLICY_HANDLE = id('policy', 'test.text-engine-backend/default');
+const TEST_RETAINED_PLAN_HANDLE = id('retained-plan', 'test.text-engine-backend/default');
+const THREE_POLICY_HANDLE = id('policy', 'test.text-engine-backend/three');
 
-test('a text runtime owns every host it creates', async () => {
-  const runtime = await createTextRuntime({ wasm: await readFile(wasmUrl) });
-  assert.throws(() => runtime.createTextEngineHost({ integration: '' }), /nonempty string/u);
-  const host = runtime.createTextEngineHost({ integration: 'test.runtime-owner' });
-  const sessionHandle = host.id('session', 'test.runtime-owner/session');
-  const policyHandle = host.id('policy', 'test.runtime-owner/policy');
-  host.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
+test('a glyph engine owns every backend it creates', async () => {
+  const glyphEngine = await createGlyphEngine({ wasm: await readFile(wasmUrl) });
+  assert.throws(() => glyphEngine.createBackend({ integration: '' }), /nonempty string/u);
+  const backend = glyphEngine.createBackend({ integration: 'test.glyphEngine-owner' });
+  const retainedPlanHandle = backend.id('retained-plan', 'test.glyphEngine-owner/transport');
+  const policyHandle = backend.id('policy', 'test.glyphEngine-owner/policy');
+  backend.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
   const request = engineUpdateBytes(textShaperAbi, {
-    sessionId: sessionHandle,
+    retainedPlanId: retainedPlanHandle,
     policyHandle,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
   });
-  const session = host.createSession({
-    handle: sessionHandle,
+  const transport = backend._createPlanTransport({
+    handle: retainedPlanHandle,
     requestCapacity: request.byteLength,
     resultCapacity: textShaperAbi.layouts.engineResult.size,
   });
 
-  assert.equal(host.integration, 'test.runtime-owner');
-  runtime.dispose();
-  assert.throws(() => host.id('session', 'test.runtime-owner/stale'), /disposed/u);
-  assert.throws(() => session.update(request), /disposed/u);
+  assert.equal(backend.integration, 'test.glyphEngine-owner');
+  glyphEngine.dispose();
+  assert.throws(() => backend.id('retained-plan', 'test.glyphEngine-owner/stale'), /disposed/u);
+  assert.throws(() => transport.update(request), /disposed/u);
 });
 
-test('production text-engine host publishes borrowed A/B plans through the runtime shaper instance', async () => {
+test('a glyph backend publishes borrowed A/B plans through the engine shaper', async () => {
   const wasm = await readFile(wasmUrl);
   const abi = textShaperAbi;
   const shaper = await createRuntimeShaper({ wasm });
-  const host = new TextEngineHost(shaper);
+  const backend = new GlyphBackend(shaper);
   const policyHandle = TEST_POLICY_HANDLE;
-  const sessionId = TEST_SESSION_HANDLE;
-  host.registerPolicy(policyHandle, renderPolicyBytes(abi));
+  const retainedPlanId = TEST_RETAINED_PLAN_HANDLE;
+  backend.registerPolicy(policyHandle, renderPolicyBytes(abi));
   const firstRequest = engineUpdateBytes(abi, {
-    sessionId,
+    retainedPlanId,
     policyHandle,
     expectedEngineRevision: 0,
     consumedPlanRevision: 0,
   });
-  const session = host.createSession({
-    handle: sessionId,
+  const transport = backend._createPlanTransport({
+    handle: retainedPlanId,
     requestCapacity: firstRequest.byteLength,
     resultCapacity: abi.layouts.engineResult.size,
   });
 
-  const first = session.update(firstRequest);
+  const first = transport.update(firstRequest);
   assert.equal(first.engineRevision, 1);
   assert.equal(first.planRevision, 1);
   assert.equal(first.requiredBaseRevision, 0);
@@ -77,9 +77,9 @@ test('production text-engine host publishes borrowed A/B plans through the runti
   assert.equal(first.bytes.byteLength, abi.layouts.engineResult.size);
   const retainedFirst = first.bytes.slice();
 
-  const second = session.update(
+  const second = transport.update(
     engineUpdateBytes(abi, {
-      sessionId,
+      retainedPlanId,
       policyHandle,
       expectedEngineRevision: first.engineRevision,
       consumedPlanRevision: first.planRevision,
@@ -93,19 +93,19 @@ test('production text-engine host publishes borrowed A/B plans through the runti
   assert.equal(second.outputSlot, 1);
   assert.deepEqual(first.bytes, retainedFirst, 'publishing slot B must not mutate borrowed slot A');
 
-  host.dispose();
-  assert.throws(() => session.update(firstRequest), /disposed/);
+  backend.dispose();
+  assert.throws(() => transport.update(firstRequest), /disposed/);
   shaper.dispose();
 });
 
-test('host-scoped ID provenance expires with its owning host', async () => {
+test('backend-scoped ID provenance expires with its owning backend', async () => {
   const shaper = await createRuntimeShaper({ wasm: await readFile(wasmUrl) });
-  const host = new TextEngineHost(shaper);
-  const handle = host.id('session', 'test.text-engine-host/scoped-session');
-  assert.equal(assertGlyphId(handle, 'session', 'session handle'), handle);
-  host.dispose();
-  assert.throws(() => assertGlyphId(handle, 'session', 'session handle'), /must come from id/);
-  assert.throws(() => host.id('session', 'test.text-engine-host/after-dispose'), /disposed/);
+  const backend = new GlyphBackend(shaper);
+  const handle = backend.id('retained-plan', 'test.text-engine-backend/scoped-transport');
+  assert.equal(assertGlyphId(handle, 'retained-plan', 'transport handle'), handle);
+  backend.dispose();
+  assert.throws(() => assertGlyphId(handle, 'retained-plan', 'transport handle'), /must come from id/);
+  assert.throws(() => backend.id('retained-plan', 'test.text-engine-backend/after-dispose'), /disposed/);
   shaper.dispose();
 });
 
@@ -119,11 +119,11 @@ test('font bindings cannot be disposed while an owned stack still references the
   const font = await registry.registerAsset(artifact);
   const shaper = await createRuntimeShaper({ registry, wasm });
   shaper.registerFont(font);
-  const host = new TextEngineHost(shaper);
-  const foreignHost = new TextEngineHost(shaper);
-  const bindingHandle = host.id('font-binding', 'test.text-engine-host/lifecycle-binding');
-  const stackHandle = host.id('font-stack', 'test.text-engine-host/lifecycle-stack');
-  const foreignStackHandle = foreignHost.id('font-stack', 'test.text-engine-host/foreign-lifecycle-stack');
+  const backend = new GlyphBackend(shaper);
+  const foreignBackend = new GlyphBackend(shaper);
+  const bindingHandle = backend.id('font-binding', 'test.text-engine-backend/lifecycle-binding');
+  const stackHandle = backend.id('font-stack', 'test.text-engine-backend/lifecycle-stack');
+  const foreignStackHandle = foreignBackend.id('font-stack', 'test.text-engine-backend/foreign-lifecycle-stack');
   const glyphCount = validated.glyphExtents.byteLength / 8;
   const binding = fontBindingBytes(textShaperAbi, {
     techniqueId: 1,
@@ -134,20 +134,20 @@ test('font bindings cannot be disposed while an owned stack still references the
     glyphF32: [new Array(glyphCount).fill(1)],
   });
   try {
-    host.registerFontBinding(bindingHandle, font.handle, binding);
+    backend.registerFontBinding(bindingHandle, font.handle, binding);
     assert.throws(
-      () => foreignHost.registerFontStack(foreignStackHandle, [bindingHandle]),
-      /not owned by this text engine host/u,
+      () => foreignBackend.registerFontStack(foreignStackHandle, [bindingHandle]),
+      /not owned by this glyph backend/u,
     );
-    host.registerFontStack(stackHandle, [bindingHandle]);
-    assert.throws(() => host.disposeFontBinding(bindingHandle), /still used by font stack/u);
+    backend.registerFontStack(stackHandle, [bindingHandle]);
+    assert.throws(() => backend.disposeFontBinding(bindingHandle), /still used by font stack/u);
     assert.throws(() => shaper.disposeFont(font), /retained by a registered font stack/u);
     assert.equal(shaper.memoryReport().fontCount, 1, 'a refused disposal must keep the shaper registration owned');
-    const policyHandle = host.id('policy', 'test.text-engine-host/lifecycle-policy');
-    const sessionHandle = host.id('session', 'test.text-engine-host/lifecycle-session');
-    host.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
+    const policyHandle = backend.id('policy', 'test.text-engine-backend/lifecycle-policy');
+    const retainedPlanHandle = backend.id('retained-plan', 'test.text-engine-backend/lifecycle-transport');
+    backend.registerPolicy(policyHandle, renderPolicyBytes(textShaperAbi));
     const request = engineFrameUpdateBytes(textShaperAbi, {
-      sessionId: sessionHandle,
+      retainedPlanId: retainedPlanHandle,
       policyHandle,
       fontStackHandle: stackHandle,
       textMutation: { start: 0, deleteCount: 0, insert: [0x41] },
@@ -155,32 +155,32 @@ test('font bindings cannot be disposed while an owned stack still references the
       geometry: { width: 100, height: 100, maxLines: 4, revision: 1 },
       limits: { maxClusters: 16, maxLines: 4, maxOutputBytes: 128 * 1024 },
     });
-    const session = host.createSession({
-      handle: sessionHandle,
+    const transport = backend._createPlanTransport({
+      handle: retainedPlanHandle,
       requestCapacity: request.byteLength,
       resultCapacity: 128 * 1024,
     });
-    session.update(request);
+    transport.update(request);
     assert.throws(
-      () => host.disposeFontStack(stackHandle),
+      () => backend.disposeFontStack(stackHandle),
       (error) => error.code === 'registration-in-use',
-      'a committed session must retain the stack named by its styles',
+      'a committed transport must retain the stack named by its styles',
     );
     assert.throws(
-      () => host.disposePolicy(policyHandle),
+      () => backend.disposePolicy(policyHandle),
       (error) => error.code === 'registration-in-use',
-      'a committed session must retain its policy',
+      'a committed transport must retain its policy',
     );
-    session.dispose();
-    host.disposeFontStack(stackHandle);
-    host.disposeFontBinding(bindingHandle);
-    host.disposePolicy(policyHandle);
-    assert.throws(() => host.disposeFontBinding(bindingHandle), /must come from id/u);
+    transport.dispose();
+    backend.disposeFontStack(stackHandle);
+    backend.disposeFontBinding(bindingHandle);
+    backend.disposePolicy(policyHandle);
+    assert.throws(() => backend.disposeFontBinding(bindingHandle), /must come from id/u);
     shaper.disposeFont(font);
     assert.equal(shaper.memoryReport().fontCount, 0);
   } finally {
-    foreignHost.dispose();
-    host.dispose();
+    foreignBackend.dispose();
+    backend.dispose();
     font.dispose();
     shaper.dispose();
   }
@@ -226,8 +226,8 @@ test('one deterministic Three policy registers Bitmap, MSDF, and Slug with mater
   }
 
   const shaper = await createRuntimeShaper({ wasm });
-  const host = new TextEngineHost(shaper);
-  host.registerPolicy(THREE_POLICY_HANDLE, bytes);
-  host.dispose();
+  const backend = new GlyphBackend(shaper);
+  backend.registerPolicy(THREE_POLICY_HANDLE, bytes);
+  backend.dispose();
   shaper.dispose();
 });

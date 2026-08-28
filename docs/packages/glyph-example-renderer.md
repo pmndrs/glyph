@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: '@pmndrs/glyph-example-renderer'
-description: Proves the published core engine surface through a real TypeGPU/WebGPU host without Three.js.
+description: Proves the published core engine surface through a real TypeGPU/WebGPU backend without Three.js.
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:f1295715f5ad0007c68fc8625ff0fb9b176a2930e1ca410d2cba41954d4cea31'
+source_digest: 'sha256:50b7a6cb74937dc4b8de8240ee5643fea49754cf8d5d77730aaefe391568cc3a'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -16,13 +16,13 @@ sources:
     title: Retention-protocol frame driver
   - id: policy
     resource: ../../packages/glyph-example-renderer/src/policy.ts
-    title: Host-authored system lanes and render policy
+    title: Backend-authored system lanes and render policy
   - id: plan-reader
     resource: ../../packages/glyph-example-renderer/src/plan-reader.ts
     title: Retained-publication reader and draw decoder
   - id: draw-list
     resource: ../../packages/glyph-example-renderer/src/draw-list.ts
-    title: Device-neutral draw list owned by the host
+    title: Device-neutral draw list owned by the backend
   - id: device
     resource: ../../packages/glyph-example-renderer/src/device.ts
     title: Deterministic renderer validation oracle
@@ -42,8 +42,8 @@ sources:
     resource: ../../packages/glyph-example-renderer/tests/example-render.test.ts
     title: Real font, resource, geometry, and non-empty draw acceptance
 generated:
-  by: anthropic/claude-opus-5
-  at: '2026-08-23T09:15:00Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-28T20:20:47Z'
 ---
 
 # Package reference: `@pmndrs/glyph-example-renderer`
@@ -58,9 +58,9 @@ portable policy body. Capability wire IDs are automatic; stable author-owned ide
 The package root exposes a custom `source` condition for opted-in workspace tools; default consumers still resolve its
 built ESM and declarations.
 
-`ExampleTextEngine` receives a `TextRuntime`, creates its host through `runtime.createTextEngineHost()`, installs its policy,
-binds immutable fonts/stacks, opens one retained synchronous session, and exposes `createText()`, `update()`, `publish()`,
-and disposal. The session owns every paragraph/style/flow identity and one `PlanTarget`; callers do not author raw IDs,
+`ExampleTextEngine` receives a `GlyphEngine`, creates its backend through `glyphEngine.createBackend()`, installs its policy,
+binds immutable fonts/stacks, opens one synchronous `RetainedPlan`, and exposes `createText()`, `update()`, `publish()`,
+and disposal. The retained plan owns every paragraph/style/flow identity and one `PlanTarget`; callers do not author raw IDs,
 revisions, acknowledgments, request bytes, or ABI numbers. `layout()` and `glyphs()` remain available on the retained core
 text when an integration needs current desired metrics or positioned glyphs before publication.
 
@@ -81,10 +81,10 @@ leave accepted state untouched.
 TypeGPU/WebGPU vertex, index, and instance buffers; builds the selected pipeline; encodes an indexed instanced pass; and
 submits to an offscreen `rgba8unorm` target. Validation acceptance is awaited without stalling every frame on queue
 completion. Empty idle deltas produce no submission, while accepted removal clears the target. Device replacement drops
-physical realizations, asks the retained session for a complete checkpoint, reacquires portable resources, and redraws
+physical realizations, asks the retained plan for a complete checkpoint, reacquires portable resources, and redraws
 without an authored text mutation.
 
-The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a core runtime, binds the external
+The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a core `GlyphEngine`, binds the external
 technique, publishes initial and updated retained text, and asserts non-empty draws, required named buffers and geometry,
 changed visible pixels, idle submission suppression, failure atomicity, checkpoint behavior, exact retirement, and
 disposal. A separate async-target fixture transfers and returns the same one-copy plan buffer under backpressure.

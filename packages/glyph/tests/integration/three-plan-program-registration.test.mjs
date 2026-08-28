@@ -1,16 +1,16 @@
 /**
  * When a Three raster plan program may still be registered.
  *
- * The registry is module-global, and a `TextRuntime`'s Three coordinator reads it exactly
+ * The registry is module-global, and a `GlyphEngine`'s Three coordinator reads it exactly
  * once, at construction. Nothing re-reads it. A registration after that point was a perfectly legal
- * call that applied to nothing: the technique was in the map, invisible to every runtime already
+ * call that applied to nothing: the technique was in the map, invisible to every engine already
  * built, and the loss surfaced far away and much later as a missing technique when a font using it
  * was bound. A doc comment saying "register early" is not enforcement.
  *
- * The rule this pins: a technique no live runtime could ever see is refused AT the registration,
- * naming itself, and becomes registrable again once no runtime holds a snapshot.
+ * The rule this pins: a technique no live engine could ever see is refused at registration,
+ * naming itself, and becomes registrable again once no engine holds a snapshot.
  *
- * This file owns its own runtime and coordinator because the assertions are about the module-global
+ * This file owns its own engine and coordinator because the assertions are about the module-global
  * registry's lifecycle, and it leaves a program in that registry -- which is safe only because the
  * test runner gives each file its own process.
  */
@@ -23,7 +23,7 @@ import { defineRasterTechnique } from '@pmndrs/glyph';
 import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
 import {
   defineTechniqueGeometryKind,
-  createTextRuntime,
+  createGlyphEngine,
   defineTechniqueSchema,
   f32,
   id,
@@ -45,7 +45,7 @@ const STABLE_GLYPH_BUFFER_ID = id('buffer', 'test.three-plan-program/system/stab
 const TRANSFORM_BUFFER_ID = id('buffer', 'test.three-plan-program/system/transform-index');
 // The coordinator is what takes the snapshot, so the lifecycle is asserted against it directly
 // rather than through a mounted scene that would only reach it incidentally.
-import { ThreeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
+import { ThreeTextEngineCoordinator } from '../../dist/three/engine-coordinator.js';
 
 const portablePrograms = new Map();
 const planProgram = (techniqueIdentity, declaration = {}) => {
@@ -129,7 +129,7 @@ const planProgram = (techniqueIdentity, declaration = {}) => {
   };
 };
 
-test('variant registration rejects incompatible capabilities before a runtime exists', () => {
+test('variant registration rejects incompatible capabilities before an engine exists', () => {
   const missingOutputs = planProgram('test-missing-outputs');
   delete missingOutputs.variant.outputs;
   assert.throws(() => registerThreeRasterPlanProgram(missingOutputs), /needs named shader outputs/);
@@ -236,7 +236,7 @@ test('variant registration rejects incompatible capabilities before a runtime ex
   );
 });
 
-test('registration selects one renderer variant per technique before runtime construction', async () => {
+test('registration selects one renderer variant per technique before engine construction', async () => {
   const primary = planProgram('test-variant-selection');
   const unsupported = planProgram('test-portable-without-three').technique;
   const secondary = {
@@ -249,8 +249,8 @@ test('registration selects one renderer variant per technique before runtime con
     () => registerThreeRasterPlanProgram(secondary),
     /already selected raster variant "test" for technique "test-variant-selection"/,
   );
-  const runtime = await createTextRuntime({ wasm: await readFile(shaperWasmUrl) });
-  const coordinator = new ThreeTextEngineCoordinator(runtime);
+  const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasmUrl) });
+  const coordinator = new ThreeTextEngineCoordinator(glyphEngine);
   const font = await fontForTechnique(unsupported);
   assert.throws(
     () => coordinator.bindFontStack(font),
@@ -258,12 +258,12 @@ test('registration selects one renderer variant per technique before runtime con
   );
   font.dispose();
   coordinator.dispose();
-  runtime.dispose();
+  glyphEngine.dispose();
 });
 
-test('a technique registered after a runtime exists is refused, not silently dropped', async () => {
-  const runtime = await createTextRuntime({ wasm: await readFile(shaperWasmUrl) });
-  const coordinator = new ThreeTextEngineCoordinator(runtime);
+test('a technique registered after an engine exists is refused, not silently dropped', async () => {
+  const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasmUrl) });
+  const coordinator = new ThreeTextEngineCoordinator(glyphEngine);
 
   const late = planProgram('test-late-technique');
   assert.throws(
@@ -271,14 +271,14 @@ test('a technique registered after a runtime exists is refused, not silently dro
     (error) =>
       error instanceof Error &&
       error.message.includes('test-late-technique') &&
-      /registered after 1 text runtime\(s\)/.test(error.message),
-    'a technique no live runtime can see must name itself at the registration',
+      /registered after 1 glyph engine\(s\)/.test(error.message),
+    'a technique no live engine can see must name itself at the registration',
   );
 
   // Once nothing holds a snapshot there is nothing a registration could miss, so it is legal again.
-  // Without this, one disposed runtime would poison the module-global registry for the process.
+  // Without this, one disposed engine would poison the module-global registry for the process.
   coordinator.dispose();
-  runtime.dispose();
+  glyphEngine.dispose();
   assert.doesNotThrow(() => registerThreeRasterPlanProgram(late));
   // Re-registering the IDENTICAL program stays a no-op, so a module evaluated twice is not an error.
   assert.doesNotThrow(() => registerThreeRasterPlanProgram(late));
@@ -290,7 +290,7 @@ test('a technique registered after a runtime exists is refused, not silently dro
   );
 });
 
-test('runtime construction rejects a portable body compiled for different system lanes', async () => {
+test('engine construction rejects a portable body compiled for different system lanes', async () => {
   const technique = defineRasterTechnique({
     id: 'test-wrong-system-lanes',
     kind: 'test',
@@ -340,9 +340,12 @@ test('runtime construction rejects a portable body compiled for different system
     },
   });
 
-  const runtime = await createTextRuntime({ wasm: await readFile(shaperWasmUrl) });
-  assert.throws(() => new ThreeTextEngineCoordinator(runtime), /policy body does not use the requested system buffers/);
-  runtime.dispose();
+  const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasmUrl) });
+  assert.throws(
+    () => new ThreeTextEngineCoordinator(glyphEngine),
+    /policy body does not use the requested system buffers/,
+  );
+  glyphEngine.dispose();
 });
 
 async function fontForTechnique(technique) {

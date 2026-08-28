@@ -2,9 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 
 import {
-  createTextRuntime,
+  createGlyphEngine,
   type PlanTarget,
-  type SynchronousTextEngineSession,
+  type SynchronousRetainedPlan,
   type TextEngineRenderPlanReader,
 } from '@pmndrs/glyph/core';
 import { describe, expect, test } from 'vitest';
@@ -37,8 +37,8 @@ const CAPACITIES = Object.freeze({
 
 describe('a retained engine driven through the published core surface', () => {
   test('publishes synchronously without exposing raw revisions or frame bytes', async () => {
-    const runtime = await createTextRuntime({ wasm: await wasmBytes() });
-    const engine = new ExampleTextEngine(runtime);
+    const glyphEngine = await createGlyphEngine({ wasm: await wasmBytes() });
+    const engine = new ExampleTextEngine(glyphEngine);
     try {
       const first = engine.publish();
       const second = engine.publish();
@@ -49,22 +49,22 @@ describe('a retained engine driven through the published core surface', () => {
       expect(second.engineRevision).toBe(2);
     } finally {
       engine.dispose();
-      runtime.dispose();
+      glyphEngine.dispose();
     }
   });
 
   test('expires borrowed plans and prevents sibling Wasm re-entry', async () => {
-    const runtime = await createTextRuntime({ wasm: await wasmBytes() });
-    const host = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/borrow' });
-    const policy = host.installPolicy(exampleRenderPolicyDescriptor);
+    const glyphEngine = await createGlyphEngine({ wasm: await wasmBytes() });
+    const backend = glyphEngine.createBackend({ integration: 'glyph-example-renderer-test/borrow' });
+    const policy = backend.installPolicy(exampleRenderPolicyDescriptor);
     let retainedReader: TextEngineRenderPlanReader | undefined;
-    let sibling: SynchronousTextEngineSession;
+    let sibling: SynchronousRetainedPlan;
     const siblingTarget: PlanTarget = {
       delivery: 'borrowed',
       accept: () => ({ accepted: true }),
       dispose() {},
     };
-    sibling = host.createSession({
+    sibling = backend.createRetainedPlan({
       policy,
       target: () => siblingTarget,
       limits: LIMITS,
@@ -79,27 +79,27 @@ describe('a retained engine driven through the published core surface', () => {
       },
       dispose() {},
     };
-    const session = host.createSession({
+    const retainedPlan = backend.createRetainedPlan({
       policy,
       target: () => target,
       limits: LIMITS,
       ...CAPACITIES,
     });
     try {
-      expect(session.publish()).toEqual({ accepted: true });
+      expect(retainedPlan.publish()).toEqual({ accepted: true });
       expect(() => retainedReader!.table('draws')).toThrow(/expired/);
     } finally {
-      host.dispose();
-      runtime.dispose();
+      backend.dispose();
+      glyphEngine.dispose();
     }
-    expect(session.disposed).toBe(true);
+    expect(retainedPlan.disposed).toBe(true);
     expect(sibling.disposed).toBe(true);
   });
 
-  test('claims one target for exactly one session and cascades disposal', async () => {
-    const runtime = await createTextRuntime({ wasm: await wasmBytes() });
-    const host = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/ownership' });
-    const policy = host.installPolicy(exampleRenderPolicyDescriptor);
+  test('claims one target for exactly one retained plan and cascades disposal', async () => {
+    const glyphEngine = await createGlyphEngine({ wasm: await wasmBytes() });
+    const backend = glyphEngine.createBackend({ integration: 'glyph-example-renderer-test/ownership' });
+    const policy = backend.installPolicy(exampleRenderPolicyDescriptor);
     let disposals = 0;
     const target: PlanTarget = {
       delivery: 'borrowed',
@@ -108,14 +108,14 @@ describe('a retained engine driven through the published core surface', () => {
         disposals += 1;
       },
     };
-    const session = host.createSession({
+    const retainedPlan = backend.createRetainedPlan({
       policy,
       target: () => target,
       limits: LIMITS,
       ...CAPACITIES,
     });
     expect(() =>
-      host.createSession({
+      backend.createRetainedPlan({
         policy,
         target: () => target,
         limits: LIMITS,
@@ -123,16 +123,16 @@ describe('a retained engine driven through the published core surface', () => {
       }),
     ).toThrow(/already attached/);
     expect(disposals).toBe(0);
-    host.dispose();
-    expect(session.disposed).toBe(true);
+    backend.dispose();
+    expect(retainedPlan.disposed).toBe(true);
     expect(disposals).toBe(1);
-    runtime.dispose();
+    glyphEngine.dispose();
   });
 
   test('rejects impossible output limits before constructing a target', async () => {
-    const runtime = await createTextRuntime({ wasm: await wasmBytes() });
-    const host = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/limits' });
-    const policy = host.installPolicy(exampleRenderPolicyDescriptor);
+    const glyphEngine = await createGlyphEngine({ wasm: await wasmBytes() });
+    const backend = glyphEngine.createBackend({ integration: 'glyph-example-renderer-test/limits' });
+    const policy = backend.installPolicy(exampleRenderPolicyDescriptor);
     let targetConstructions = 0;
     const target: PlanTarget = {
       delivery: 'borrowed',
@@ -140,7 +140,7 @@ describe('a retained engine driven through the published core surface', () => {
       dispose() {},
     };
     const create = (maxOutputBytes: number) =>
-      host.createSession({
+      backend.createRetainedPlan({
         policy,
         target: () => {
           targetConstructions += 1;
@@ -155,8 +155,8 @@ describe('a retained engine driven through the published core surface', () => {
       expect(() => create(64 * 1024 * 1024 + 1)).toThrow(/engine limit/);
       expect(targetConstructions).toBe(0);
     } finally {
-      host.dispose();
-      runtime.dispose();
+      backend.dispose();
+      glyphEngine.dispose();
     }
   });
 });

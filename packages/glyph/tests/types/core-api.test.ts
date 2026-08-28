@@ -7,49 +7,49 @@ import {
 } from '@pmndrs/glyph';
 import {
   readCompiledRasterFont,
-  createTextRuntime,
+  createGlyphEngine,
   compileFontBinding,
-  TextEngineHost,
+  GlyphBackend,
   TextEngineRenderPlanView,
   TextEngineStatusError,
   type AnyTechniqueSchema,
   type CompiledRasterFont,
   type RasterPlanProgram,
   type FontBindingDescriptor,
-  type HostFontStackBinding,
-  type HostMaterialBinding,
-  type HostPolicy,
-  type HostResourceBinding,
-  type HostTransformBinding,
+  type BackendFontStackBinding,
+  type BackendMaterialBinding,
+  type BackendPolicy,
+  type BackendResourceBinding,
+  type BackendTransformBinding,
   type MaterialHandle,
   type PlanTarget,
   type RenderPlanClipId,
   type RenderPlanSemanticId,
   type RenderPlanTransformId,
   type ResourceHandle,
-  type SynchronousTextEngineSession,
+  type SynchronousRetainedPlan,
 } from '@pmndrs/glyph/core';
 import { bitmapPlanProgram } from '@pmndrs/glyph/raster/bitmap';
-// @ts-expect-error Dynamic engine session IDs are package-managed implementation state.
-import type { TextEngineSessionHandle as PublicTextEngineSessionHandle } from '@pmndrs/glyph/core';
-void (undefined as unknown as PublicTextEngineSessionHandle);
+// @ts-expect-error Dynamic engine plan IDs are package-managed implementation state.
+import type { RetainedPlanHandle as PublicRetainedPlanHandle } from '@pmndrs/glyph/core';
+void (undefined as unknown as PublicRetainedPlanHandle);
 // @ts-expect-error Raw frame compilation is package-managed implementation state.
 import { compileTextEngineFrameUpdate as publicCompileTextEngineFrameUpdate } from '@pmndrs/glyph/core';
 void publicCompileTextEngineFrameUpdate;
 // @ts-expect-error Raw Wasm publications are package-managed implementation state.
-import type { TextEnginePublication as PublicTextEnginePublication } from '@pmndrs/glyph/core';
+import type { PlanPublication as PublicTextEnginePublication } from '@pmndrs/glyph/core';
 void (undefined as unknown as PublicTextEnginePublication);
 // @ts-expect-error Owned-publication branding was replaced by target-bound delivery.
-import type { OwnedTextEnginePublication as PublicOwnedTextEnginePublication } from '@pmndrs/glyph/core';
+import type { OwnedPlanPublication as PublicOwnedTextEnginePublication } from '@pmndrs/glyph/core';
 void (undefined as unknown as PublicOwnedTextEnginePublication);
 
-const runtime = await createTextRuntime();
-const host: TextEngineHost = runtime.createTextEngineHost({ integration: 'core-api-test' });
-declare const installedPolicy: HostPolicy;
-declare const stackBinding: HostFontStackBinding;
-declare const materialBinding: HostMaterialBinding;
-declare const resourceBinding: HostResourceBinding;
-declare const transformBinding: HostTransformBinding;
+const glyphEngine = await createGlyphEngine();
+const backend: GlyphBackend = glyphEngine.createBackend({ integration: 'core-api-test' });
+declare const installedPolicy: BackendPolicy;
+declare const stackBinding: BackendFontStackBinding;
+declare const materialBinding: BackendMaterialBinding;
+declare const resourceBinding: BackendResourceBinding;
+declare const transformBinding: BackendTransformBinding;
 declare const materialHandle: MaterialHandle;
 declare const resourceHandle: ResourceHandle;
 const target: PlanTarget = {
@@ -63,7 +63,7 @@ const target: PlanTarget = {
   },
   dispose() {},
 };
-const session: SynchronousTextEngineSession = host.createSession({
+const retainedPlan: SynchronousRetainedPlan = backend.createRetainedPlan({
   policy: installedPolicy,
   target: () => target,
   limits: {
@@ -80,18 +80,23 @@ const session: SynchronousTextEngineSession = host.createSession({
   resultCapacity: 128 * 1024,
   textCapacity: 1024,
 });
-const retainedText = session.createText({ font: stackBinding, text: 'hello' });
+const retainedText = retainedPlan.createText({ font: stackBinding, text: 'hello' });
 retainedText.update({ text: 'world' });
 const retainedMeasurement = retainedText.layout();
 const retainedInspection = retainedText.glyphs();
 void retainedMeasurement;
 void retainedInspection;
-session.createText({ font: stackBinding, text: 'material', material: materialBinding, transform: transformBinding });
+retainedPlan.createText({
+  font: stackBinding,
+  text: 'material',
+  material: materialBinding,
+  transform: transformBinding,
+});
 // @ts-expect-error Resource identities cannot be authored where a material identity is required.
-session.createText({ font: stackBinding, text: 'resource-as-material', material: resourceBinding });
+retainedPlan.createText({ font: stackBinding, text: 'resource-as-material', material: resourceBinding });
 // @ts-expect-error Material identities cannot be authored where a transform identity is required.
-session.createText({ font: stackBinding, text: 'material-as-transform', transform: materialBinding });
-session.createText({
+retainedPlan.createText({ font: stackBinding, text: 'material-as-transform', transform: materialBinding });
+retainedPlan.createText({
   font: stackBinding,
   text: 'inline',
   inlineObjects: [
@@ -110,7 +115,7 @@ session.createText({
     },
   ],
 });
-session.createText({
+retainedPlan.createText({
   font: stackBinding,
   text: 'invalid-inline',
   inlineObjects: [
@@ -130,15 +135,15 @@ session.createText({
     },
   ],
 });
-const acceptance = session.publish();
+const acceptance = retainedPlan.publish();
 void acceptance;
 // @ts-expect-error Policy parameters have no registered schema and are not an accepted publish input.
-session.publish({ policyParameters: new Uint8Array() });
+retainedPlan.publish({ policyParameters: new Uint8Array() });
 
-// @ts-expect-error Retained sessions expose no raw update protocol.
-session.update(new Uint8Array());
-// @ts-expect-error Retained sessions expose no caller-authored acceptance cursor.
-void session.acknowledgedGeneration;
+// @ts-expect-error Retained plans expose no raw update protocol.
+retainedPlan.update(new Uint8Array());
+// @ts-expect-error Retained plans expose no caller-authored acceptance cursor.
+void retainedPlan.acknowledgedGeneration;
 
 declare const transferredBytes: Uint8Array<ArrayBuffer>;
 const plan = new TextEngineRenderPlanView().bindBytes(transferredBytes);
@@ -222,15 +227,15 @@ declare const capability: PolicyCapabilitySet;
 declare const program: PolicyProgram;
 const descriptor: PolicyDescriptor = { capabilitySets: [capability], programs: [program] };
 const policyBytes: Uint8Array = compileRenderPolicy(descriptor);
-host.installPolicy(() => descriptor);
+backend.installPolicy(() => descriptor);
 // @ts-expect-error A policy value has no host identity context; install through a factory.
-host.installPolicy(descriptor);
+backend.installPolicy(descriptor);
 // @ts-expect-error Dynamic ID allocation is package-managed implementation state.
-host.id('policy', 'consumer-authored');
+backend.id('policy', 'consumer-authored');
 // @ts-expect-error Raw policy registration is package-managed implementation state.
-host.registerPolicy(1, policyBytes);
+backend.registerPolicy(1, policyBytes);
 // @ts-expect-error The host's collision registry is supplied only to its policy factory.
-void host.wireIdentities;
+void backend.wireIdentities;
 void policyBytes;
 void techniqueId;
 void brandedTechniqueId;

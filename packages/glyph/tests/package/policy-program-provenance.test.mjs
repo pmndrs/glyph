@@ -9,25 +9,25 @@ const BUFFER = { id: id('buffer', 'test.policy-provenance/position'), scalar: 'f
 /**
  * A value loaded from one program's input table means nothing inside another
  * program: the input index it carries would silently read a different field.
- * Only session-free constants may cross builders.
+ * Only scope-free constants may cross builders.
  */
-test('storing another session’s value throws instead of misreading inputs', () => {
+test('storing another scope’s value throws instead of misreading inputs', () => {
   const first = policyProgram(OPTIONS);
   const second = policyProgram(OPTIONS);
-  assert.throws(() => second.store(BUFFER, [first.semantics.inlineOrigin, second.semantics.blockOrigin]), /session/);
+  assert.throws(() => second.store(BUFFER, [first.semantics.inlineOrigin, second.semantics.blockOrigin]), /scope/);
 });
 
-test('derived values carry their session across combinators', () => {
+test('derived values carry their scope across combinators', () => {
   const first = policyProgram(OPTIONS);
   const second = policyProgram(OPTIONS);
   const derived = f32.mul(first.binding.bearingX, f32.const(2));
-  assert.throws(() => second.store(BUFFER, [derived, second.semantics.blockOrigin]), /session/);
+  assert.throws(() => second.store(BUFFER, [derived, second.semantics.blockOrigin]), /scope/);
 });
 
-test('combinators reject cross-session operands at construction', () => {
+test('combinators reject cross-scope operands at construction', () => {
   const first = policyProgram(OPTIONS);
   const second = policyProgram(OPTIONS);
-  assert.throws(() => f32.mul(first.semantics.fontSize, second.semantics.fontSize), /session/);
+  assert.throws(() => f32.mul(first.semantics.fontSize, second.semantics.fontSize), /scope/);
 });
 
 test('deep shared expression DAGs stay cheap to store', () => {
@@ -40,7 +40,7 @@ test('deep shared expression DAGs stay cheap to store', () => {
   assert.ok(elapsed < 50, `store took ${elapsed}ms over a shared DAG`);
 });
 
-test('constants are session-free and same-session programs still compile', () => {
+test('constants are scope-free and same-scope programs still compile', () => {
   const program = policyProgram(OPTIONS);
   const scale = f32.const(0.5);
   program.store(BUFFER, [

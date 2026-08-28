@@ -235,8 +235,8 @@
       <div class="eyebrow">pmndrs/glyph · durable implementation report</div>
       <h1>From immutable font to accepted GPU draw</h1>
       <p class="lede">
-        This is the current renderer-neutral contract. A runtime owns shaping memory, a host owns one renderer
-        integration, a session owns one retained batch and acceptance frontier, and a plan target joins that core
+        This is the current renderer-neutral contract. A Glyph engine owns shaping memory, a backend owns one renderer
+        integration, a retained plan owns desired text and one acceptance frontier, and a plan target joins that core
         hierarchy to a renderer device or context.
       </p>
 
@@ -270,14 +270,14 @@
 
             <text x="25" y="166" class="title">CORE OWNERSHIP</text>
             <rect x="25" y="182" width="190" height="72" class="box core" />
-            <text x="42" y="210" class="title">TextRuntime</text>
-            <text x="42" y="231" class="minor">Wasm + font registry + hosts</text>
+            <text x="42" y="210" class="title">GlyphEngine</text>
+            <text x="42" y="231" class="minor">Wasm + font registry + backends</text>
             <rect x="245" y="182" width="190" height="72" class="box core" />
-            <text x="262" y="210" class="title">TextEngineHost</text>
-            <text x="262" y="231" class="minor">policy + bindings + sessions</text>
+            <text x="262" y="210" class="title">GlyphBackend</text>
+            <text x="262" y="231" class="minor">policy + bindings + retained plans</text>
             <rect x="465" y="182" width="190" height="72" class="box core" />
-            <text x="482" y="210" class="title">Session</text>
-            <text x="482" y="231" class="minor">batch + target + revisions</text>
+            <text x="482" y="210" class="title">RetainedPlan</text>
+            <text x="482" y="231" class="minor">text + target + revisions</text>
             <rect x="685" y="182" width="170" height="72" class="box core" />
             <text x="702" y="210" class="title">Text instances</text>
             <text x="702" y="231" class="minor">desired retained state</text>
@@ -344,36 +344,36 @@
                 <td>Source, face, subset, or raster variant differs</td>
               </tr>
               <tr>
-                <td><code>TextRuntime</code></td>
-                <td><code>createTextRuntime()</code></td>
-                <td>One Wasm domain, runtime-local shaping registrations, all child hosts</td>
+                <td><code>GlyphEngine</code></td>
+                <td><code>createGlyphEngine()</code></td>
+                <td>One Wasm domain, engine-local shaping registrations, all child backends</td>
                 <td>Worker/memory/teardown isolation is required</td>
               </tr>
               <tr>
-                <td><code>TextEngineHost</code></td>
-                <td><code>runtime.createTextEngineHost()</code></td>
-                <td>One integration’s policy, bindings, identities, and sessions</td>
+                <td><code>GlyphBackend</code></td>
+                <td><code>glyphEngine.createBackend()</code></td>
+                <td>One integration’s policy, bindings, identities, and retained plans</td>
                 <td>Renderer policy, physical device domain, or integration lifetime differs</td>
               </tr>
               <tr>
-                <td><code>Session</code></td>
-                <td><code>host.createSession()</code></td>
-                <td>One retained batch, target, capacity budget, and acceptance frontier</td>
+                <td><code>RetainedPlan</code></td>
+                <td><code>backend.createRetainedPlan()</code></td>
+                <td>Desired text, target, capacity budget, and one acceptance frontier</td>
                 <td>Scene, viewport, target, worker, or independent commit boundary differs</td>
               </tr>
               <tr>
-                <td><code>TextEngineText</code></td>
-                <td><code>session.createText()</code></td>
-                <td>One desired text state inside the session batch</td>
+                <td><code>RetainedText</code></td>
+                <td><code>retainedPlan.createText()</code></td>
+                <td>One desired text state inside the retained plan</td>
                 <td>Application text instances differ</td>
               </tr>
             </tbody>
           </table>
         </div>
         <p>
-          A runtime permanently owns its hosts; a disposed runtime disposes them first. A host cannot rebind. Fonts are
-          different: they are immutable application assets and may bind into several hosts or runtimes. Bindings are
-          host-local, counted leases.
+          A Glyph engine permanently owns its backends; a disposed engine disposes them first. A backend cannot rebind.
+          Fonts are different: they are immutable application assets and may bind into several engines or backends.
+          Bindings are backend-local, counted leases.
         </p>
       </section>
 
@@ -392,21 +392,21 @@ const font = await loadFont({
   raster: { technique: glyphExample, options: { paletteSeed: 7 } },
 });
 const fontStack = createFontStack(font);</code></pre>
-            <p>Loading validates immutable CPU data. It does not create a runtime or GPU object.</p>
+            <p>Loading validates immutable CPU data. It does not create a Glyph engine or GPU object.</p>
           </div>
         </div>
 
         <div class="step">
           <b>2</b>
           <div>
-            <h3>Create a runtime, host, and policy</h3>
-            <pre><code>import { createTextRuntime } from '@pmndrs/glyph/core';
+            <h3>Create a Glyph engine, backend, and policy</h3>
+            <pre><code>import { createGlyphEngine } from '@pmndrs/glyph/core';
 
-const runtime = await createTextRuntime();
-const host = runtime.createTextEngineHost({
+const glyphEngine = await createGlyphEngine();
+const backend = glyphEngine.createBackend({
   integration: 'studio.webgpu-text',
 });
-const policy = host.installPolicy(rendererPolicy);</code></pre>
+const policy = backend.installPolicy(rendererPolicy);</code></pre>
             <p>
               The renderer builds <code>rendererPolicy</code> from its capabilities and system lanes plus each
               technique’s portable policy program. Capability ordinals are automatic; stable protocol IDs are branded
@@ -419,7 +419,7 @@ const policy = host.installPolicy(rendererPolicy);</code></pre>
           <b>3</b>
           <div>
             <h3>Bind the stack and create one plan target</h3>
-            <pre><code>const stack = host.bindFontStack(fontStack);
+            <pre><code>const stack = backend.bindFontStack(fontStack);
 
 const target = {
   delivery: 'borrowed',
@@ -450,8 +450,8 @@ const target = {
         <div class="step">
           <b>4</b>
           <div>
-            <h3>Create a retained session and text</h3>
-            <pre><code>const session = host.createSession({
+            <h3>Create a retained plan and text</h3>
+            <pre><code>const retainedPlan = backend.createRetainedPlan({
   policy,
   capabilitySet,
   target: () =&gt; target,
@@ -461,7 +461,7 @@ const target = {
   textCapacity: 16 * 1024,
 });
 
-const title = session.createText({
+const title = retainedPlan.createText({
   font: stack,
   text: 'Hello',
   style: { fontSize: 48 },
@@ -479,7 +479,7 @@ const title = session.createText({
 const metrics = title.layout();
 const positioned = title.glyphs();
 
-const result = session.publish({ semanticViews: 'measurement' });
+const result = retainedPlan.publish({ semanticViews: 'measurement' });
 if (!result.accepted) reportRendererError(result.error);</code></pre>
             <p>
               <code>layout()</code> returns aggregate metrics. <code>glyphs()</code> returns caller-owned positioned
@@ -495,11 +495,11 @@ if (!result.accepted) reportRendererError(result.error);</code></pre>
           <div>
             <h3>Dispose from leaf to root</h3>
             <pre><code>title.dispose();
-session.dispose();
+retainedPlan.dispose();
 stack.dispose();
 policy.dispose();
-host.dispose();
-runtime.dispose();
+backend.dispose();
+glyphEngine.dispose();
 font.dispose();</code></pre>
             <p>
               Parent disposal is a safety net and cascades through children. Explicit leaf disposal makes resource
@@ -574,7 +574,7 @@ for (let i = 0; i &lt; resources.count; i += 1) {
           Worker. It receives one owned transferable copy and must return the same buffer identity when done. The normal
           same-thread GPU path uses <code>PlanTarget</code> and makes no extra plan copy.
         </p>
-        <pre><code>// The target captured PlanTargetControl when the session was created.
+        <pre><code>// The target captured PlanTargetControl when the retained plan was created.
 oldDevice.dispose();
 const nextDevice = new TypeGpuExampleRendererDevice({ device: nextGpuDevice, width, height });
 engine.replaceDevice(nextDevice);
@@ -608,7 +608,7 @@ const recovered = text.publish();</code></pre>
           <div class="card">
             <h3>Font compiler</h3>
             <p>
-              Runs on first host binding, producing binding bytes and constrained portable payloads—not per frame or
+              Runs on first backend binding, producing binding bytes and constrained portable payloads—not per frame or
               glyph.
             </p>
           </div>
@@ -668,21 +668,21 @@ const recovered = text.publish();</code></pre>
           <div class="card">
             <h3>One WebGL canvas</h3>
             <p>
-              Usually one runtime → one host → one or more sessions → one WebGL context. A second canvas means another
-              non-sharing WebGL context and normally another host/device cache.
+              Usually one Glyph engine → one backend → one or more retained plans → one WebGL context. A second canvas
+              means another non-sharing WebGL context and normally another backend/device cache.
             </p>
           </div>
           <div class="card">
             <h3>Two WebGPU canvases</h3>
             <p>
-              One <code>GPUDevice</code> may configure both canvas contexts. One host may serve sessions for both when
-              policy and device cache domain are shared; each session keeps its own target and acceptance frontier.
+              One <code>GPUDevice</code> may configure both canvas contexts. One backend may serve retained plans for both
+              when policy and device cache domain are shared; each plan keeps its own target and acceptance frontier.
             </p>
           </div>
           <div class="card">
             <h3>Onscreen + Offscreen WebGPU</h3>
             <p>
-              A shared device can serve both contexts. Use separate sessions; use an async target only where plan
+              A shared device can serve both contexts. Use separate retained plans; use an async target only where plan
               consumption crosses the Worker boundary.
             </p>
           </div>
@@ -690,21 +690,21 @@ const recovered = text.publish();</code></pre>
             <h3>Onscreen + Offscreen WebGL</h3>
             <p>
               The contexts do not share GPU objects. Treat them as separate device/cache domains, generally separate
-              hosts, and optionally separate runtimes if worker isolation is desired.
+              backends, and optionally separate Glyph engines if worker isolation is desired.
             </p>
           </div>
           <div class="card">
             <h3>Sync and async together</h3>
             <p>
-              Yes. Separate sessions under one host may use borrowed synchronous and owned asynchronous targets. The
-              runtime-wide borrow gate prevents reentry while a synchronous candidate is active.
+              Yes. Separate retained plans under one backend may use borrowed synchronous and owned asynchronous targets.
+              The engine-wide borrow gate prevents reentry while a synchronous candidate is active.
             </p>
           </div>
           <div class="card">
-            <h3>Several runtimes</h3>
+            <h3>Several Glyph engines</h3>
             <p>
               Valid for independent workers or teardown domains. Immutable fonts may bind into each; shaping
-              registrations and Wasm memory are intentionally not shared across runtimes.
+              registrations and Wasm memory are intentionally not shared across engines.
             </p>
           </div>
         </div>
@@ -748,7 +748,7 @@ const recovered = text.publish();</code></pre>
           </li>
           <li>
             A shrinking-style regression now proves incremental mutation counters retire their old published delta;
-            repeated four-style-to-one-style commits no longer consume the session's future style budget.
+            repeated four-style-to-one-style commits no longer consume the retained plan's future style budget.
           </li>
           <li>
             Benchmark CPU oracles now consume the exact registered technique through a validated compiled-font view;
@@ -784,7 +784,7 @@ const recovered = text.publish();</code></pre>
         </p>
         <p>
           <strong>Deliberate Three follow-up:</strong> compatible font-stack runs inside one text and renderer-private
-          GPU realizations across sessions can share more physical storage. Core now supplies counted immutable payload
+          GPU realizations across retained plans can share more physical storage. Core now supplies counted immutable payload
           leases and per-device realization identities; implementing that sharing remains Three-owned and must preserve
           paragraph and visual order. No implicit core batch, scene, canvas, or device abstraction is needed.
         </p>

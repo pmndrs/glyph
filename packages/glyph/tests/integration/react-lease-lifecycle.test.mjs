@@ -26,7 +26,7 @@ import '../support/browser-globals.mjs';
 
 import { Text, useFont } from '@pmndrs/glyph/react';
 import { useBitmapFont } from '@pmndrs/glyph/react/bitmap';
-import { threeRuntimeDomainReport } from '../../dist/three/runtime-domain.js';
+import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 
@@ -73,7 +73,7 @@ test('mounting and unmounting a React Text returns every paragraph lease', async
     await renderer.unmount();
 
     fixture.dispose();
-    assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+    assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
   } finally {
     fixture.dispose();
   }
@@ -108,7 +108,7 @@ test('StrictMode remount cycles balance their paragraph leases', async () => {
     }
 
     fixture.dispose();
-    assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+    assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
   } finally {
     fixture.dispose();
   }
@@ -132,10 +132,10 @@ test('user font and loader handles may dispose before React releases its Text le
 
   fixture.dispose();
   assert.equal(font.disposed, true);
-  assert.equal(threeRuntimeDomainReport().active, true, 'the mounted Text keeps its renderer domain alive');
+  assert.equal(threeEngineDomainReport().active, true, 'the mounted Text keeps its renderer domain alive');
   await renderer.unmount();
   fixture.dispose();
-  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 test('R3F-cached React consumers receive independent Font leases under StrictMode', async () => {
@@ -162,7 +162,7 @@ test('R3F-cached React consumers receive independent Font leases under StrictMod
     await renderer.unmount();
     clearRequest(request);
   }
-  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 test('clearing a React font resource leaves its mounted consumer lease live', async () => {
@@ -184,7 +184,7 @@ test('clearing a React font resource leaves its mounted consumer lease live', as
   } finally {
     await renderer.unmount();
   }
-  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 test('the generic useFont cache survives StrictMode replay and releases its runtime domain', async () => {
@@ -206,7 +206,7 @@ test('the generic useFont cache survives StrictMode replay and releases its runt
   assert.equal(observed.get('generic')?.disposed, false);
   await renderer.unmount();
   clearRequest(request);
-  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 test('technique convenience preload and hook share the R3F resource', async () => {
@@ -232,7 +232,7 @@ test('technique convenience preload and hook share the R3F resource', async () =
   } finally {
     await renderer.unmount();
   }
-  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 test('clearing a pending R3F font load cannot resurrect its cache lease', async () => {
@@ -243,7 +243,7 @@ test('clearing a pending R3F font load cannot resurrect its cache lease', async 
     useFont.clear(input, bitmap, options);
   });
   assert.equal(errors.length, 1);
-  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 function hookFontTree(request, observed, names) {

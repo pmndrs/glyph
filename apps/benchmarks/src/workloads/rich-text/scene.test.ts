@@ -15,7 +15,7 @@ import {
 
 /**
  * `span()` distinguishes a font selection from a style by structure alone, and composing a literal never touches a
- * font's raster data. Stubs therefore exercise the real composition path without a runtime, a shaper, or a fixture
+ * font's raster data. Stubs therefore exercise the real composition path without a text engine, a shaper, or a fixture
  * load — which is what keeps this guard on the authored ranges cheap enough to run beside the rest of the unit suite.
  */
 const companionFonts = {

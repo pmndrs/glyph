@@ -11,7 +11,7 @@ every consumer speaks it. `@pmndrs/glyph/three` and `@pmndrs/glyph/react` are in
 their own surface. `@pmndrs/glyph/core` is for implementing an integration: the render policy, the render plan, the
 frame wire and its handoff. It is additive to the root rather than parallel to it, so a custom renderer imports both.
 The [renderer integration guide](docs/guides/renderer-integration.md) walks that path end to end: declaring a
-technique schema, authoring and registering a policy, driving a session, reading all seven plan tables, and
+technique schema, authoring and registering a policy, driving a retained plan, reading all seven plan tables, and
 implementing the retention and patch protocols.
 
 The repository's `glyph-example-raster` and `glyph-example-renderer` packages are the external-consumer proof of that
@@ -25,7 +25,7 @@ variant it supports.
 
 The rule, if you are deciding where something belongs: **a type an application can encounter lives at the root; a
 thing only an integrator constructs lives in `/core`.** That is why `Paragraph`, `Font`, and their measurement types
-are at the root, while runtime, host, session, policy, and plan-target construction stays in `/core`.
+are at the root, while engine, backend, retained-plan, policy, and plan-target construction stays in `/core`.
 
 ## Render text with React Three Fiber
 
@@ -224,7 +224,7 @@ const material = defineTextMaterial((context) => {
 const custom = new Text({ font: inter, text: 'Custom material', material });
 ```
 
-Call `dispose()` when a `Text`, `TextGroup`, loaded font, or loader will not be reused. Disposing a group releases its session and renderer resources but does not dispose descendant `Text` objects, which may move to another live group.
+Call `dispose()` when a `Text`, `TextGroup`, loaded font, or loader will not be reused. Disposing a group releases its retained plan and renderer resources but does not dispose descendant `Text` objects, which may move to another live group.
 
 ## Bake fonts
 
@@ -256,9 +256,9 @@ Fonts without authored glyph names still report exact glyph IDs.
 ## Core API
 
 Every Three primitive above uses the same renderer-neutral lifecycle. The application loads immutable fonts from the root
-package. An integration creates one Wasm runtime, creates its host through that runtime, installs its renderer policy,
-binds fonts, and creates a retained session with a plan target. Neither runtime, host, nor session is a canvas or GPU
-device; the target connects one session's publications to renderer-owned resources and submission.
+package. An integration creates one Glyph engine, creates a backend through that engine, installs its renderer policy,
+binds fonts, and creates a retained plan with a target. None is a canvas or GPU device; the target connects one retained
+plan's publications to renderer-owned resources and submission.
 
 The complete public sequence is:
 
@@ -266,24 +266,24 @@ The complete public sequence is:
 import { createFontStack, loadFont } from '@pmndrs/glyph';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import {
-  createTextRuntime,
+  createGlyphEngine,
   readTextEngineDraw,
   readTextEnginePatch,
   type PlanCandidate,
   type PlanTarget,
 } from '@pmndrs/glyph/core';
 
-// Integration lifetime: one Wasm shaping domain, then one renderer-owned host.
-const runtime = await createTextRuntime();
-const host = runtime.createTextEngineHost({ integration: 'my-renderer' });
-const policy = host.installPolicy(myRendererPolicy);
+// Integration lifetime: one Wasm shaping domain, then one renderer backend.
+const glyphEngine = await createGlyphEngine();
+const backend = glyphEngine.createBackend({ integration: 'my-renderer' });
+const policy = backend.installPolicy(myRendererPolicy);
 
-// Application assets are renderer-neutral and may outlive this runtime.
+// Application assets are renderer-neutral and may outlive this engine.
 const inter = await loadFont({
   input: { baked: '/fonts/Inter.font.glb' },
   raster: { technique: msdf },
 });
-const font = host.bindFontStack(createFontStack(inter));
+const font = backend.bindFontStack(createFontStack(inter));
 
 const target: PlanTarget = {
   delivery: 'borrowed',
@@ -304,8 +304,8 @@ const target: PlanTarget = {
   },
 };
 
-// Session lifetime: one independently revisioned retained batch and one target.
-const session = host.createSession({
+// Retained-plan lifetime: desired text, one revision stream, and one target.
+const retainedPlan = backend.createRetainedPlan({
   policy,
   target: () => target,
   limits,
@@ -313,7 +313,7 @@ const session = host.createSession({
   resultCapacity: 256 * 1024,
   textCapacity: 16 * 1024,
 });
-const title = session.createText({
+const title = retainedPlan.createText({
   font,
   text: 'Hello',
   style: { fontSize: 48 },
@@ -326,14 +326,14 @@ const positionedGlyphs = title.glyphs();
 
 // Mutations stay cheap until a query or publication needs current shaped state.
 title.update({ text: 'Hello, Glyph' });
-const acceptance = session.publish();
+const acceptance = retainedPlan.publish();
 if (!acceptance.accepted) throw acceptance.error;
 ```
 
 The semantic record readers are the public decoding surface; raw ABI offsets are package-private. `PlanTarget` is the
 normal zero-copy path because CPU-side GPU encoding is synchronous. Use `AsyncPlanTarget` only when the candidate crosses
 an asynchronous boundary such as a Worker; it receives one self-owned copy and must return that same transfer buffer.
-`host.dispose()` closes its sessions and bindings, while `runtime.dispose()` first closes every host and then releases
+`backend.dispose()` closes its retained plans and bindings, while `glyphEngine.dispose()` first closes every backend and then releases
 Wasm. See the [renderer integration guide](docs/guides/renderer-integration.md) for resource realization, checkpoints,
 retirements, async transfer, and complete topology diagrams.
 

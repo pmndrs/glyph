@@ -1,6 +1,6 @@
 //! One pipeline stage's committed value beside its optional pending replacement.
 //!
-//! A retained paragraph carries every stage twice: what the session has committed, and
+//! A retained paragraph carries every stage twice: what the retained plan has committed, and
 //! what an in-flight update has prepared. Holding those as three independent fields —
 //! `value`, `pending_value`, and a `value_prepared` flag — spreads one indivisible fact
 //! across three places and leaves the selection to be written out by hand at every read
@@ -40,7 +40,7 @@ impl<T> Staged<T> {
     }
 
     /// The last committed value, ignoring anything in flight. Used where a stage must
-    /// compare against what the session already published — the equivalence proofs — and
+    /// compare against what the retained plan already published — the equivalence proofs — and
     /// nowhere else.
     pub(crate) fn committed(&self) -> &T {
         &self.committed
@@ -100,7 +100,7 @@ impl<T> Staged<T> {
         self.prepared = false;
     }
 
-    /// Seeds the committed value for a test. Session reuse goes through the owning
+    /// Seeds the committed value for a test. Retained-plan reuse goes through the owning
     /// arena's `reset_for_reuse`, not through this.
     #[cfg(test)]
     pub(crate) fn reset(&mut self, value: T) {

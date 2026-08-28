@@ -1,6 +1,6 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { LayoutBox, ParagraphLayoutInspection, ParagraphLayoutSummary, ParagraphLineMetrics } from '../layout.js';
-import type { TextEnginePublication } from './host.js';
+import type { PlanPublication } from './backend.js';
 
 /**
  * Reads the ink box off one semantic record, or reports its absence.
@@ -20,9 +20,7 @@ function inkBoundsOf(view: SemanticViewReader, record: number, measured: boolean
 }
 
 /** Reads an explicitly requested semantic sidecar. Rendering never calls this reader. */
-export function readTextEngineMeasurements(
-  publication: TextEnginePublication,
-): ReadonlyMap<number, ParagraphLayoutSummary> {
+export function readTextEngineMeasurements(publication: PlanPublication): ReadonlyMap<number, ParagraphLayoutSummary> {
   const view = new SemanticViewReader(publication);
   const table = view.table();
   const recordLayout = textShaperAbi.layouts.engineSemanticView;
@@ -104,9 +102,7 @@ export function readTextEngineMeasurements(
 }
 
 /** Copies one explicitly requested retained layout out of borrowed Wasm publication memory. */
-export function readTextEngineLayouts(
-  publication: TextEnginePublication,
-): ReadonlyMap<number, ParagraphLayoutInspection> {
+export function readTextEngineLayouts(publication: PlanPublication): ReadonlyMap<number, ParagraphLayoutInspection> {
   const view = new SemanticViewReader(publication);
   const table = view.table();
   const recordLayout = textShaperAbi.layouts.engineSemanticView;
@@ -285,10 +281,10 @@ interface SemanticViewTable {
 }
 
 class SemanticViewReader {
-  readonly #publication: TextEnginePublication;
+  readonly #publication: PlanPublication;
   readonly #view: DataView;
 
-  constructor(publication: TextEnginePublication) {
+  constructor(publication: PlanPublication) {
     if (publication.bytes.buffer !== publication.memoryBuffer) {
       throw new TypeError('text-engine query bytes do not belong to the reported Wasm memory');
     }

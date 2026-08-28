@@ -1,5 +1,5 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import type { TextEnginePublication } from './host.js';
+import type { PlanPublication } from './backend.js';
 import type {
   MaterialHandle,
   PolicyBufferId,
@@ -69,8 +69,8 @@ export class TextEngineRenderPlanView {
   #baseOffset = 0;
   #byteLength = 0;
 
-  /** @internal Raw Wasm publications are consumed only by the retained session. */
-  bind(publication: TextEnginePublication): this {
+  /** @internal Raw Wasm publications are consumed only by the retained plan. */
+  bind(publication: PlanPublication): this {
     const bytes = publication.bytes;
     if (bytes.buffer !== publication.memoryBuffer) {
       throw new TypeError('text-engine publication bytes do not belong to the reported Wasm memory');

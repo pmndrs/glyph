@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { createFontStack, defineRasterTechnique, loadFont, rasterBake } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import {
-  createTextRuntime,
+  createGlyphEngine,
   defineTechniqueSchema,
   programId,
   registerRasterPlanProgram,
@@ -156,9 +156,9 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
     ],
   });
 
-  const runtime = await createTextRuntime({ wasm: await readFile(shaperWasm) });
+  const glyphEngine = await createGlyphEngine({ wasm: await readFile(shaperWasm) });
   const device = new ThrowOnceExampleRendererDevice();
-  const engine = new ExampleTextEngine(runtime, device);
+  const engine = new ExampleTextEngine(glyphEngine, device);
   try {
     const bytes = await readFile(output);
     const font = await loadFont({
@@ -166,25 +166,25 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       raster: { technique: glyphExample, options: { paletteSeed: 7 } },
     });
     try {
-      const flowHost = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/flow-retention' });
-      type InstrumentedRawSession = { measureParagraph: (...arguments_: unknown[]) => unknown };
-      const instrumentedHost = flowHost as unknown as {
-        _createRawSession: (options: unknown) => InstrumentedRawSession;
+      const flowBackend = glyphEngine.createBackend({ integration: 'glyph-example-renderer-test/flow-retention' });
+      type InstrumentedPlanTransport = { measureParagraph: (...arguments_: unknown[]) => unknown };
+      const instrumentedBackend = flowBackend as unknown as {
+        _createPlanTransport: (options: unknown) => InstrumentedPlanTransport;
       };
-      const createRawSession = instrumentedHost._createRawSession.bind(instrumentedHost);
+      const createPlanTransport = instrumentedBackend._createPlanTransport.bind(instrumentedBackend);
       let paragraphQueries = 0;
-      instrumentedHost._createRawSession = (options) => {
-        const session = createRawSession(options);
-        const measureParagraph = session.measureParagraph.bind(session);
-        session.measureParagraph = (...arguments_) => {
+      instrumentedBackend._createPlanTransport = (options) => {
+        const transport = createPlanTransport(options);
+        const measureParagraph = transport.measureParagraph.bind(transport);
+        transport.measureParagraph = (...arguments_) => {
           paragraphQueries += 1;
           return measureParagraph(...arguments_);
         };
-        return session;
+        return transport;
       };
-      const flowPolicy = flowHost.installPolicy(exampleRenderPolicyDescriptor);
-      const flowFont = flowHost.bindFontStack(createFontStack(font));
-      const flowTransform = flowHost.createTransformBinding();
+      const flowPolicy = flowBackend.installPolicy(exampleRenderPolicyDescriptor);
+      const flowFont = flowBackend.bindFontStack(createFontStack(font));
+      const flowTransform = flowBackend.createTransformBinding();
       const flowLimits = {
         maxParagraphs: 2,
         maxClusters: 64,
@@ -202,7 +202,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       const flowTarget: PlanTarget = {
         delivery: 'borrowed',
         accept: (candidate) => {
-          expect(() => flowHost.dispose()).toThrow('borrowed render plan');
+          expect(() => flowBackend.dispose()).toThrow('borrowed render plan');
           flowTargetAcceptances += 1;
           flowCheckpoints.push(candidate.checkpoint);
           if (requestCheckpointDuringAcceptance) {
@@ -213,7 +213,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         },
         dispose() {},
       };
-      const flowSession = flowHost.createSession({
+      const flowRetainedPlan = flowBackend.createRetainedPlan({
         policy: flowPolicy,
         target: (control) => {
           flowControl = control;
@@ -239,17 +239,17 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         clipInlineEnd: 512,
         clipBlockEnd: 256,
       };
-      const flowText = flowSession.createText({
+      const flowText = flowRetainedPlan.createText({
         font: flowFont,
         text: 'a',
         style: { fontSize: 32 },
         contentBox: { width: mutableWidth },
         flow: { regions: [{ region: mutableRegion }] },
       });
-      expect(() => flowSession.createText({ font: flowFont, text: 'duplicate', order: 0 })).toThrow(
+      expect(() => flowRetainedPlan.createText({ font: flowFont, text: 'duplicate', order: 0 })).toThrow(
         /order 0 is already in use/,
       );
-      expect(() => flowSession.createText({ font: flowFont, text: 'invalid', style: { fontSize: 0 } })).toThrow(
+      expect(() => flowRetainedPlan.createText({ font: flowFont, text: 'invalid', style: { fontSize: 0 } })).toThrow(
         /font size must be positive/,
       );
       expect(() =>
@@ -267,36 +267,36 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(flowText.layout().glyphCount).toBe(4);
       expect(flowText.glyphs().glyphCount).toBe(4);
       expect(flowTargetAcceptances).toBe(0);
-      expect(flowSession.publish()).toEqual({ accepted: true });
+      expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
       expect(flowTargetAcceptances).toBe(1);
-      const orderedText = flowSession.createText({ font: flowFont, text: 'ordered', order: 1 });
+      const orderedText = flowRetainedPlan.createText({ font: flowFont, text: 'ordered', order: 1 });
       expect(() => orderedText.update({ order: 0 })).toThrow(/order 0 is already in use/);
       orderedText.update({ text: 'still-valid' });
       orderedText.dispose();
-      const publishUnchecked = flowSession.publish.bind(flowSession) as (options: unknown) => unknown;
+      const publishUnchecked = flowRetainedPlan.publish.bind(flowRetainedPlan) as (options: unknown) => unknown;
       expect(() => publishUnchecked({ policyParameters: new Uint8Array() })).toThrow(/not supported/);
       expect(flowTargetAcceptances).toBe(1);
       flowText.update({ text: 'abcde' });
-      expect(flowSession.publish({ semanticViews: 'measurement' })).toEqual({ accepted: true });
+      expect(flowRetainedPlan.publish({ semanticViews: 'measurement' })).toEqual({ accepted: true });
       const queriesAfterMeasuredPublish = paragraphQueries;
       expect(flowText.layout().glyphCount).toBe(5);
       expect(paragraphQueries).toBe(queriesAfterMeasuredPublish);
       expect(flowText.glyphs().glyphCount).toBe(5);
       expect(paragraphQueries).toBe(queriesAfterMeasuredPublish + 1);
       flowText.update({ text: 'abcdef' });
-      expect(flowSession.publish({ semanticViews: 'layout-inspection' })).toEqual({ accepted: true });
+      expect(flowRetainedPlan.publish({ semanticViews: 'layout-inspection' })).toEqual({ accepted: true });
       const queriesAfterInspectedPublish = paragraphQueries;
       expect(flowText.layout().glyphCount).toBe(6);
       expect(flowText.glyphs().glyphCount).toBe(6);
       expect(paragraphQueries).toBe(queriesAfterInspectedPublish);
       expect(flowTargetAcceptances).toBe(3);
       flowControl!.requestCheckpoint();
-      expect(flowSession.publish()).toEqual({ accepted: true });
+      expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
       expect(flowCheckpoints.at(-1)).toBe(true);
       requestCheckpointDuringAcceptance = true;
       flowText.update({ text: 'abcdefg' });
-      expect(flowSession.publish()).toEqual({ accepted: true });
-      expect(flowSession.publish()).toEqual({ accepted: true });
+      expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
+      expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
       expect(flowCheckpoints.at(-1)).toBe(true);
       const expandedStyles = {
         text: 'abc',
@@ -309,11 +309,11 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       // A stale-ledger regression leaked three styles per cycle and exhausted the 64-entry budget here.
       for (let index = 0; index < 21; index += 1) {
         flowText.update({ text: expandedStyles });
-        expect(flowSession.publish()).toEqual({ accepted: true });
+        expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
         flowText.update({ text: 'abc' });
-        expect(flowSession.publish()).toEqual({ accepted: true });
+        expect(flowRetainedPlan.publish()).toEqual({ accepted: true });
       }
-      const styleBudgetProbe = flowSession.createText({
+      const styleBudgetProbe = flowRetainedPlan.createText({
         font: flowFont,
         text: { text: 'x', spans: [{ start: 0, end: 1, style: { fontSize: 24 } }] },
         order: 1,
@@ -321,14 +321,14 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       styleBudgetProbe.dispose();
       flowText.dispose();
       expect(() => flowText.layout()).toThrow('disposed');
-      const sessionOwnedText = flowSession.createText({ font: flowFont, text: 'session-owned' });
-      expect(sessionOwnedText.layout().glyphCount).toBeGreaterThan(0);
-      expect(() => flowSession.createText({ font: flowFont, text: 'too-many-pending' })).toThrow(
+      const retainedPlanOwnedText = flowRetainedPlan.createText({ font: flowFont, text: 'plan-owned' });
+      expect(retainedPlanOwnedText.layout().glyphCount).toBeGreaterThan(0);
+      expect(() => flowRetainedPlan.createText({ font: flowFont, text: 'too-many-pending' })).toThrow(
         /pending paragraph mutations exceed limits.maxParagraphs/,
       );
-      flowSession.dispose();
-      expect(sessionOwnedText.disposed).toBe(true);
-      expect(() => sessionOwnedText.layout()).toThrow('disposed');
+      flowRetainedPlan.dispose();
+      expect(retainedPlanOwnedText.disposed).toBe(true);
+      expect(() => retainedPlanOwnedText.layout()).toThrow('disposed');
 
       let returnedBuffer: ArrayBuffer | undefined;
       let reusedBuffers = 0;
@@ -344,7 +344,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         },
         dispose() {},
       };
-      const asyncSession = flowHost.createSession({
+      const asyncRetainedPlan = flowBackend.createRetainedPlan({
         policy: flowPolicy,
         target: () => asyncTarget,
         limits: flowLimits,
@@ -352,18 +352,18 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         resultCapacity: flowLimits.maxOutputBytes,
         textCapacity: 1024,
       });
-      const asyncText = asyncSession.createText({
+      const asyncText = asyncRetainedPlan.createText({
         font: flowFont,
         text: { text: 'abc', spans: [{ start: 1, end: 1, style: { fontSize: 12 } }] },
       });
-      expect(await asyncSession.publish()).toEqual({ accepted: true });
+      expect(await asyncRetainedPlan.publish()).toEqual({ accepted: true });
       asyncText.update({ text: 'def' });
-      expect(await asyncSession.publish()).toEqual({ accepted: true });
+      expect(await asyncRetainedPlan.publish()).toEqual({ accepted: true });
       asyncText.update({ text: 'ghi' });
-      expect(await asyncSession.publish()).toEqual({ accepted: true });
+      expect(await asyncRetainedPlan.publish()).toEqual({ accepted: true });
       expect(reusedBuffers).toBe(1);
-      asyncSession.dispose();
-      flowHost.dispose();
+      asyncRetainedPlan.dispose();
+      flowBackend.dispose();
 
       const foreignFont = Object.create(font) as typeof font;
       Object.defineProperty(foreignFont, 'technique', {
@@ -468,7 +468,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       font.dispose();
     }
   } finally {
-    runtime.dispose();
+    glyphEngine.dispose();
   }
 });
 

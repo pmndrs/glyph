@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 
 import test from 'node:test';
 
-import { id, TextEngineHost, TextEngineRenderPlanView } from '../../dist/core.js';
-import { assertOwnedTextEnginePublication, TextEnginePublicationExpiredError } from '../../dist/core/retention.js';
+import { id, GlyphBackend, TextEngineRenderPlanView } from '../../dist/core.js';
+import { assertOwnedPlanPublication, PlanPublicationExpiredError } from '../../dist/core/retention.js';
 import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
@@ -25,9 +25,9 @@ const LIMITS = {
 };
 
 /** One real engine frame with renderer acceptance carried explicitly on the wire. */
-function frameRequest(session, latest, accepted) {
+function frameRequest(transport, latest, accepted) {
   return compileTextEngineFrameUpdate({
-    sessionId: session.handle,
+    retainedPlanId: transport.handle,
     policyHandle: POLICY_HANDLE,
     expectedEngineRevision: latest.engineRevision,
     consumedPlanRevision: accepted.planRevision,
@@ -36,23 +36,23 @@ function frameRequest(session, latest, accepted) {
   });
 }
 
-async function drivenSession() {
+async function drivenTransport() {
   const wasm = await readFile(wasmUrl);
   const shaper = await createRuntimeShaper({ wasm });
-  const host = new TextEngineHost(shaper);
-  host.registerPolicy(POLICY_HANDLE, threeRenderPolicyBytes());
-  const session = host.createSession({
-    handle: id('session', 'publication-retention/session'),
+  const backend = new GlyphBackend(shaper);
+  backend.registerPolicy(POLICY_HANDLE, threeRenderPolicyBytes());
+  const transport = backend._createPlanTransport({
+    handle: id('retained-plan', 'publication-retention/transport'),
     requestCapacity: 4096,
     resultCapacity: 128 * 1024,
   });
   let latest = { engineRevision: 0, planRevision: 0 };
   let accepted = { planRevision: 0, publicationGeneration: 0 };
   return {
-    host,
-    session,
+    backend,
+    transport,
     publish() {
-      latest = session.update(frameRequest(session, latest, accepted));
+      latest = transport.update(frameRequest(transport, latest, accepted));
       return latest;
     },
     accept(publication) {
@@ -65,21 +65,21 @@ async function drivenSession() {
 }
 
 test('a borrowed publication expires at the next call, and an owned copy survives everything', async () => {
-  const { session, publish, accept } = await drivenSession();
+  const { transport, publish, accept } = await drivenTransport();
 
   const first = publish();
   assert.equal(first.publicationGeneration, 1);
-  assert.equal(session.isExpired(first), false, 'a fresh borrow is live');
+  assert.equal(transport.isExpired(first), false, 'a fresh borrow is live');
 
   // Copying establishes JavaScript ownership but does not claim renderer acceptance.
-  const owned = session.copyPublication(first);
-  assert.doesNotThrow(() => assertOwnedTextEnginePublication(owned));
-  assert.equal(session.isExpired(owned), false, 'a session-owned copy never expires');
+  const owned = transport.copyPublication(first);
+  assert.doesNotThrow(() => assertOwnedPlanPublication(owned));
+  assert.equal(transport.isExpired(owned), false, 'a transport-owned copy never expires');
   assert.equal(owned.bytes.byteLength, first.bytes.byteLength);
   assert.notEqual(owned.bytes.buffer, first.memoryBuffer, 'the copy never aliases Wasm memory');
   const transferred = structuredClone(owned);
   assert.throws(
-    () => assertOwnedTextEnginePublication(transferred),
+    () => assertOwnedPlanPublication(transferred),
     /was not copied/u,
     'structured cloning cannot transfer same-realm runtime provenance',
   );
@@ -127,7 +127,7 @@ test('a borrowed publication expires at the next call, and an owned copy survive
   }
   const forged = Object.freeze({ ...owned, bytes: first.bytes, memoryBuffer: first.memoryBuffer });
   assert.throws(
-    () => assertOwnedTextEnginePublication(forged),
+    () => assertOwnedPlanPublication(forged),
     /was not copied/u,
     'copying the visible fields cannot forge owned provenance',
   );
@@ -137,44 +137,46 @@ test('a borrowed publication expires at the next call, and an owned copy survive
   const second = publish();
   assert.equal(second.publicationGeneration, 2);
   assert.notEqual(second.outputSlot, first.outputSlot, 'publications alternate slots');
-  assert.equal(session.isExpired(first), true);
+  assert.equal(transport.isExpired(first), true);
 
   accept(second);
   publish();
   assert.throws(
-    () => session.copyPublication(first),
+    () => transport.copyPublication(first),
     (error) =>
-      error instanceof TextEnginePublicationExpiredError &&
-      error.consumedGeneration === 1 &&
-      error.latestGeneration === 3,
+      error instanceof PlanPublicationExpiredError && error.consumedGeneration === 1 && error.latestGeneration === 3,
     'a stale borrow must be loud, not silently re-read',
   );
   assert.equal(owned.bytes.byteLength > 0 && owned.bytes[0] !== undefined, true, 'the owned copy outlives every slot');
 
-  session.dispose();
-  assert.equal(session.isExpired(owned), false, 'session disposal does not expire owned bytes');
+  transport.dispose();
+  assert.equal(transport.isExpired(owned), false, 'transport disposal does not expire owned bytes');
 });
 
 test('expiry covers capacity growth and disposal, and foreign publications are rejected', async () => {
-  const { host, session, publish } = await drivenSession();
+  const { backend, transport, publish } = await drivenTransport();
   const published = publish();
-  session.reserve(4096, 8 * 1024 * 1024);
-  assert.equal(session.isExpired(published), true, 'reserving moves the arenas the borrow points into');
-  host.dispose();
+  transport.reserve(4096, 8 * 1024 * 1024);
+  assert.equal(transport.isExpired(published), true, 'reserving moves the arenas the borrow points into');
+  backend.dispose();
 
-  // A publication this session never issued cannot be reasoned about, so even a
+  // A publication this transport never issued cannot be reasoned about, so even a
   // live-looking one is rejected instead of silently accepted.
-  const other = await drivenSession();
-  assert.throws(() => other.session.isExpired(published), TypeError);
-  const owned = other.session.copyPublication(other.publish());
-  const foreign = await drivenSession();
-  assert.throws(() => foreign.session.isExpired(owned), TypeError, 'owned copies remain associated with their session');
-  foreign.session.dispose();
-  other.session.dispose();
+  const other = await drivenTransport();
+  assert.throws(() => other.transport.isExpired(published), TypeError);
+  const owned = other.transport.copyPublication(other.publish());
+  const foreign = await drivenTransport();
+  assert.throws(
+    () => foreign.transport.isExpired(owned),
+    TypeError,
+    'owned copies remain associated with their transport',
+  );
+  foreign.transport.dispose();
+  other.transport.dispose();
 });
 
 test('the engine verifies acceptance: a generation that goes backwards is a conflict', async () => {
-  const { session, publish, accept } = await drivenSession();
+  const { transport, publish, accept } = await drivenTransport();
   const first = publish();
   accept(first);
 
@@ -183,7 +185,7 @@ test('the engine verifies acceptance: a generation that goes backwards is a conf
   assert.equal(second.publicationGeneration, 2);
   // ...so replaying an older one is a revision conflict, proving the wire field is load-bearing.
   const replayed = compileTextEngineFrameUpdate({
-    sessionId: session.handle,
+    retainedPlanId: transport.handle,
     policyHandle: POLICY_HANDLE,
     expectedEngineRevision: second.engineRevision,
     consumedPlanRevision: second.planRevision,
@@ -191,8 +193,8 @@ test('the engine verifies acceptance: a generation that goes backwards is a conf
     limits: LIMITS,
   });
   assert.throws(
-    () => session.update(replayed),
+    () => transport.update(replayed),
     (error) => error.code === 'revision-conflict',
   );
-  session.dispose();
+  transport.dispose();
 });

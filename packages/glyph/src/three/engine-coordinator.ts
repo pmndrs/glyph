@@ -4,18 +4,18 @@ import type { AnyRasterTechnique } from '../raster-technique.js';
 import { bitmap } from '../raster/bitmap-technique.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug-technique.js';
-import type { TextRuntime } from '../text-runtime.js';
+import type { GlyphEngine } from '../glyph-engine.js';
 import {
-  type HostFontStackBinding,
-  type HostMaterialBinding,
-  type HostPolicy,
-  type HostTransformBinding,
+  type BackendFontStackBinding,
+  type BackendMaterialBinding,
+  type BackendPolicy,
+  type BackendTransformBinding,
   type PolicyBufferId,
   type PolicyCapabilitySet,
   type PortableResource,
   type RenderWireIdentityRegistry,
   type TextEngineBufferBinding,
-  type TextEngineHost,
+  type GlyphBackend,
 } from '../core.js';
 import { threeRenderPolicyDescriptor, type ThreeTransformMode } from './render-policy.js';
 import type { ThreeTextMaterial } from './material.js';
@@ -43,20 +43,20 @@ export interface ThreeTextEngineCoordinatorOptions {
 
 /** Counted Three material binding; dispose releases this lease without disposing the material. */
 export interface ThreeMaterialBindingLease {
-  readonly binding: HostMaterialBinding;
+  readonly binding: BackendMaterialBinding;
   dispose(): void;
 }
 
 interface RetainedThreeMaterialBinding {
-  readonly binding: HostMaterialBinding;
+  readonly binding: BackendMaterialBinding;
   readonly material: ThreeTextMaterial;
   references: number;
 }
 
-/** Three-owned host, policy, and opaque renderer-binding domain over one text runtime. */
+/** Three-owned backend, policy, and opaque renderer-binding domain over one glyph engine. */
 export class ThreeTextEngineCoordinator {
-  readonly host: TextEngineHost;
-  readonly policy: HostPolicy;
+  readonly backend: GlyphBackend;
+  readonly policy: BackendPolicy;
   readonly capabilitySet: PolicyCapabilitySet;
   /** @internal Collision-checked static identities captured while installing this renderer policy. */
   readonly identities: RenderWireIdentityRegistry;
@@ -67,12 +67,12 @@ export class ThreeTextEngineCoordinator {
     FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>
   >();
   readonly #materialBindings = new WeakMap<ThreeTextMaterial, RetainedThreeMaterialBinding>();
-  readonly #materials = new WeakMap<HostMaterialBinding, ThreeTextMaterial>();
-  readonly #transforms = new WeakMap<HostTransformBinding, THREE.Object3D>();
+  readonly #materials = new WeakMap<BackendMaterialBinding, ThreeTextMaterial>();
+  readonly #transforms = new WeakMap<BackendTransformBinding, THREE.Object3D>();
   #applyingPlan = false;
   #disposed = false;
 
-  constructor(runtime: TextRuntime, options: ThreeTextEngineCoordinatorOptions = {}) {
+  constructor(glyphEngine: GlyphEngine, options: ThreeTextEngineCoordinatorOptions = {}) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new TypeError('Three text engine coordinator options need an object');
     }
@@ -80,19 +80,19 @@ export class ThreeTextEngineCoordinator {
     if (transformMode !== 'indexed' && transformMode !== 'direct') {
       throw new TypeError('Three text engine transform mode must be "indexed" or "direct"');
     }
-    const host = runtime.createTextEngineHost({ integration: '@pmndrs/glyph/three' });
+    const backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph/three' });
     let snapshot = false;
-    let policy: HostPolicy | undefined;
+    let policy: BackendPolicy | undefined;
     let identities: RenderWireIdentityRegistry | undefined;
     let planPrograms: readonly CompiledThreeRasterPlanProgram[] | undefined;
     let descriptor: ReturnType<typeof threeRenderPolicyDescriptor> | undefined;
     try {
-      policy = host.installPolicy((hostIdentities) => {
-        identities = hostIdentities;
-        planPrograms = compiledThreeRasterPlanPrograms(hostIdentities, transformMode);
+      policy = backend.installPolicy((backendIdentities) => {
+        identities = backendIdentities;
+        planPrograms = compiledThreeRasterPlanPrograms(backendIdentities, transformMode);
         snapshot = true;
         descriptor = threeRenderPolicyDescriptor(
-          hostIdentities,
+          backendIdentities,
           transformMode,
           planPrograms.map((program) => program.policy),
         );
@@ -100,23 +100,23 @@ export class ThreeTextEngineCoordinator {
       });
     } catch (error) {
       if (snapshot && identities !== undefined) releaseThreeRasterPlanProgramSnapshot(identities);
-      host.dispose();
+      backend.dispose();
       throw error;
     }
     if (identities === undefined || planPrograms === undefined || descriptor === undefined) {
       policy.dispose();
-      host.dispose();
+      backend.dispose();
       throw new Error('Three policy factory did not produce its retained policy state');
     }
     this.identities = identities;
     this.#planPrograms = new Map(planPrograms.map((program) => [program.technique.id, program]));
     this.#policyBufferIds = policyBufferIds(descriptor.programs);
     this.capabilitySet = descriptor.capabilitySets[0]!;
-    this.host = host;
+    this.backend = backend;
     this.policy = policy;
   }
 
-  bindFontStack(selection: FontSelection<AnyRasterTechnique>): HostFontStackBinding {
+  bindFontStack(selection: FontSelection<AnyRasterTechnique>): BackendFontStackBinding {
     this.#assertActive();
     const fonts = immutableFontSelectionFonts(selection);
     for (const font of fonts) {
@@ -132,14 +132,14 @@ export class ThreeTextEngineCoordinator {
       stack = this.#singleFontStacks.get(font) ?? createFontStack(font);
       this.#singleFontStacks.set(font, stack);
     }
-    return this.host.bindFontStack(stack);
+    return this.backend.bindFontStack(stack);
   }
 
   acquireMaterial(material: ThreeTextMaterial): ThreeMaterialBindingLease {
     this.#assertActive();
     let retained = this.#materialBindings.get(material);
     if (retained === undefined) {
-      const binding = this.host.createMaterialBinding();
+      const binding = this.backend.createMaterialBinding();
       retained = { binding, material, references: 0 };
       this.#materialBindings.set(material, retained);
       this.#materials.set(binding, material);
@@ -160,20 +160,20 @@ export class ThreeTextEngineCoordinator {
     });
   }
 
-  resolveMaterial(binding: HostMaterialBinding): ThreeTextMaterial {
+  resolveMaterial(binding: BackendMaterialBinding): ThreeTextMaterial {
     const material = this.#materials.get(binding);
     if (material === undefined) throw new TypeError('render plan resolved an unknown Three material binding');
     return material;
   }
 
-  bindTransform(object: THREE.Object3D): HostTransformBinding {
+  bindTransform(object: THREE.Object3D): BackendTransformBinding {
     this.#assertActive();
-    const binding = this.host.createTransformBinding();
+    const binding = this.backend.createTransformBinding();
     this.#transforms.set(binding, object);
     return binding;
   }
 
-  resolveTransform(binding: HostTransformBinding): THREE.Object3D {
+  resolveTransform(binding: BackendTransformBinding): THREE.Object3D {
     const object = this.#transforms.get(binding);
     if (object === undefined) throw new TypeError('render plan resolved an unknown Three transform binding');
     return object;
@@ -219,7 +219,7 @@ export class ThreeTextEngineCoordinator {
       failure = error;
     }
     try {
-      this.host.dispose();
+      this.backend.dispose();
     } catch (error) {
       failure ??= error;
     }

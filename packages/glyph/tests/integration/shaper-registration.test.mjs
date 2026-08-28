@@ -152,10 +152,10 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   const policy = copyToWasm(memory, fn.allocate, policyBytes);
   assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
   fn.deallocate(policy.pointer, policy.length);
-  assert.equal(fn.createSession(29, 2048, 64 * 1024, 4), abi.status.ok);
+  assert.equal(fn.createRetainedPlan(29, 2048, 64 * 1024, 4), abi.status.ok);
   const styleWarmBuffer = memory.buffer;
   const initialUpdate = engineStyleUpdateBytes(abi, {
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     text: [0x61, 0x62, 0x63, 0x64],
@@ -175,7 +175,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.equal(fn.planCount(), 1, 'text_update must shape retained runs through HarfRust');
 
   const warmUpdate = engineStyleUpdateBytes(abi, {
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: 1,
@@ -194,7 +194,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.equal(result.getUint32(abi.layouts.engineResult.patchCount, true), 0);
 
   const removeRoot = engineStyleUpdateBytes(abi, {
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: 2,
@@ -210,7 +210,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.invalidRequest);
   assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 2);
   assert.equal(fn.planCount(), 1, 'an aborted update must not perform another shape');
-  assert.equal(fn.disposeSession(29), abi.status.ok);
+  assert.equal(fn.disposeRetainedPlan(29), abi.status.ok);
   assert.equal(fn.disposePolicy(23), abi.status.ok);
 
   assert.equal(fn.disposeFont(101), abi.status.fontInUse);
@@ -254,10 +254,10 @@ test('text_update advances missing clusters through an ordered font stack', asyn
   const policy = copyToWasm(memory, fn.allocate, policyBytes);
   assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
   fn.deallocate(policy.pointer, policy.length);
-  assert.equal(fn.createSession(29, 2048, 64 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRetainedPlan(29, 2048, 64 * 1024, 0), abi.status.ok);
 
   const update = engineStyleUpdateBytes(abi, {
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     text: [0x0915],
@@ -312,14 +312,14 @@ test('text_update appends a reordered Devanagari grapheme after a conjunct', asy
   const policy = copyToWasm(memory, fn.allocate, policyBytes);
   assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
   fn.deallocate(policy.pointer, policy.length);
-  assert.equal(fn.createSession(29, 16 * 1024, 256 * 1024, 64), abi.status.ok);
+  assert.equal(fn.createRetainedPlan(29, 16 * 1024, 256 * 1024, 64), abi.status.ok);
 
   const prefix = 'कर्म क्षेत्र में प्रगति निरंतर चलती है। प्र';
   const appended = 'त्ये';
   assert.equal(prefix.length, 43);
   assert.equal(appended.length, 4);
   const initial = engineStyleUpdateBytes(abi, {
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     text: utf16Units(prefix),
@@ -334,7 +334,7 @@ test('text_update appends a reordered Devanagari grapheme after a conjunct', asy
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
 
   const update = engineStyleUpdateBytes(abi, {
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: 1,
@@ -429,7 +429,7 @@ function twoTechniquePolicyBytes(abi) {
 function engineStyleUpdateBytes(
   abi,
   {
-    sessionId,
+    retainedPlanId,
     policyHandle,
     fontStackHandle,
     expectedEngineRevision = 0,
@@ -466,7 +466,7 @@ function engineStyleUpdateBytes(
   const view = new DataView(bytes.buffer);
   view.setUint32(request.abiVersion, abi.version, true);
   view.setUint32(request.byteLength, bytes.byteLength, true);
-  view.setUint32(request.sessionId, sessionId, true);
+  view.setUint32(request.retainedPlanId, retainedPlanId, true);
   view.setUint32(request.expectedEngineRevision, expectedEngineRevision, true);
   view.setUint32(request.consumedPlanRevision, consumedPlanRevision, true);
   view.setUint32(request.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
@@ -610,7 +610,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   const policy = copyToWasm(memory, fn.allocate, policyBytes);
   assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
   fn.deallocate(policy.pointer, policy.length);
-  assert.equal(fn.createSession(29, 4096, 128 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRetainedPlan(29, 4096, 128 * 1024, 0), abi.status.ok);
 
   const resultLayout = abi.layouts.engineResult;
   const record = abi.layouts.engineSemanticView;
@@ -651,7 +651,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
   const seeded = run(
     engineStyleUpdateBytes(abi, {
-      sessionId: 29,
+      retainedPlanId: 29,
       policyHandle: 23,
       fontStackHandle: 17,
       text,
@@ -664,7 +664,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
 
   // The narrow measure reflects the queried constraint, not the committed one.
   const measureRequest = engineStyleUpdateBytes(abi, {
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: seeded.engineRevision,
@@ -695,7 +695,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   assert.equal(repeated.status, abi.status.ok);
   assert.deepEqual(measurementFor(repeated, 1), narrow, 'a repeated query answers identically');
   const widerRequest = engineStyleUpdateBytes(abi, {
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: seeded.engineRevision,
@@ -723,7 +723,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   // Reverting to the committed constraint must revert the speculative layout
   // tail: the answer comes from committed flow, not the narrow query's leftovers.
   const committedWidthRequest = engineStyleUpdateBytes(abi, {
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: seeded.engineRevision,
@@ -752,7 +752,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   // pre-measure revisions.
   const followUp = run(
     engineStyleUpdateBytes(abi, {
-      sessionId: 29,
+      retainedPlanId: 29,
       policyHandle: 23,
       fontStackHandle: 17,
       expectedEngineRevision: seeded.engineRevision,
@@ -766,7 +766,7 @@ test('measure_paragraph answers synchronously without publishing or burning revi
   );
   assert.equal(followUp.status, abi.status.ok);
   assert.equal(followUp.engineRevision, seeded.engineRevision + 1);
-  assert.equal(fn.disposeSession(29), abi.status.ok);
+  assert.equal(fn.disposeRetainedPlan(29), abi.status.ok);
 });
 
 /**
@@ -798,7 +798,7 @@ test('the committing frame adopts the speculative transaction and its reserved g
   const policy = copyToWasm(memory, fn.allocate, policyBytes);
   assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
   fn.deallocate(policy.pointer, policy.length);
-  assert.equal(fn.createSession(29, 4096, 256 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRetainedPlan(29, 4096, 256 * 1024, 0), abi.status.ok);
 
   const resultLayout = abi.layouts.engineResult;
   const record = abi.layouts.engineSemanticView;
@@ -841,7 +841,7 @@ test('the committing frame adopts the speculative transaction and its reserved g
   const geometry = { width: 300, height: 200, maxLines: 16 };
   const seeded = run(
     engineStyleUpdateBytes(abi, {
-      sessionId: 29,
+      retainedPlanId: 29,
       policyHandle: 23,
       fontStackHandle: 17,
       text: base,
@@ -854,7 +854,7 @@ test('the committing frame adopts the speculative transaction and its reserved g
   assert.ok(seeded.glyphIds.length > 0, 'the seeded frame reports committed glyphs');
 
   const appended = (suffix) => ({
-    sessionId: 29,
+    retainedPlanId: 29,
     policyHandle: 23,
     fontStackHandle: 17,
     expectedEngineRevision: seeded.engineRevision,
@@ -890,16 +890,16 @@ test('the committing frame adopts the speculative transaction and its reserved g
     secondNew,
     'the committing frame adopts the exact glyph identities the query reported',
   );
-  assert.equal(fn.disposeSession(29), abi.status.ok);
+  assert.equal(fn.disposeRetainedPlan(29), abi.status.ok);
 });
 
 /**
  * Measurement-only queries skip the per-glyph positioning tail (the
  * measurement derives at line level from flow and clusters), and the
  * committing frame runs exactly the missing tail when it adopts such a
- * transaction. The proof is end-state equality: a session that measured
+ * transaction. The proof is end-state equality: a retainedPlan that measured
  * several widths before committing must publish a semantic table
- * byte-identical to a control session that committed the same frame
+ * byte-identical to a control retainedPlan that committed the same frame
  * without ever measuring.
  */
 test('measurement-only queries leave the committing frame byte-identical to a never-measured control', async () => {
@@ -925,7 +925,7 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
     const policy = copyToWasm(memory, fn.allocate, policyBytes);
     assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
     fn.deallocate(policy.pointer, policy.length);
-    assert.equal(fn.createSession(37, 4096, 256 * 1024, 0), abi.status.ok);
+    assert.equal(fn.createRetainedPlan(37, 4096, 256 * 1024, 0), abi.status.ok);
     const resultLayout = abi.layouts.engineResult;
     const run = (bytes, entry, mask, paragraphId) => {
       new DataView(bytes.buffer).setUint32(abi.layouts.engineUpdateRequest.semanticViewMask, mask, true);
@@ -955,7 +955,7 @@ test('measurement-only queries leave the committing frame byte-identical to a ne
   const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
   const request = (geometryWidth, seeded, withText) =>
     engineStyleUpdateBytes(abi, {
-      sessionId: 37,
+      retainedPlanId: 37,
       policyHandle: 23,
       fontStackHandle: 17,
       ...(seeded === undefined
@@ -1051,7 +1051,7 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   const policy = copyToWasm(memory, fn.allocate, policyBytes);
   assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
   fn.deallocate(policy.pointer, policy.length);
-  assert.equal(fn.createSession(41, 4096, 128 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRetainedPlan(41, 4096, 128 * 1024, 0), abi.status.ok);
 
   const resultLayout = abi.layouts.engineResult;
   const record = abi.layouts.engineSemanticView;
@@ -1096,7 +1096,7 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   const update = (width, seeded, withText) =>
     run(
       engineStyleUpdateBytes(abi, {
-        sessionId: 41,
+        retainedPlanId: 41,
         policyHandle: 23,
         fontStackHandle: 17,
         ...(seeded === undefined
@@ -1137,7 +1137,7 @@ test('resize equivalence adopts committed positioning and still relayouts on bre
   assert.equal(restored.status, abi.status.ok);
   assert.equal(restored.measurement?.lineCount, 1);
   assert.equal(restored.measurement?.inlineExtent, 181.375);
-  assert.equal(fn.disposeSession(41), abi.status.ok);
+  assert.equal(fn.disposeRetainedPlan(41), abi.status.ok);
 });
 
 /**
@@ -1173,7 +1173,7 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
   const policy = copyToWasm(memory, fn.allocate, policyBytes);
   assert.equal(fn.registerPolicy(23, policy.pointer, policy.length), abi.status.ok);
   fn.deallocate(policy.pointer, policy.length);
-  assert.equal(fn.createSession(31, 4096, 128 * 1024, 0), abi.status.ok);
+  assert.equal(fn.createRetainedPlan(31, 4096, 128 * 1024, 0), abi.status.ok);
 
   const resultLayout = abi.layouts.engineResult;
   const record = abi.layouts.engineSemanticView;
@@ -1214,7 +1214,7 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
   const text = Array.from('alpha beta gamma delta', (character) => character.charCodeAt(0));
   const seeded = run(
     engineStyleUpdateBytes(abi, {
-      sessionId: 31,
+      retainedPlanId: 31,
       policyHandle: 23,
       fontStackHandle: 17,
       text,
@@ -1244,7 +1244,7 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
   ];
   for (const [width, lineCount, inlineExtent] of pinned) {
     const measureRequest = engineStyleUpdateBytes(abi, {
-      sessionId: 31,
+      retainedPlanId: 31,
       policyHandle: 23,
       fontStackHandle: 17,
       expectedEngineRevision: seeded.engineRevision,
@@ -1266,5 +1266,5 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
     assert.equal(measurement.lineCount, lineCount, `line count at width ${width}`);
     assert.equal(measurement.inlineExtent, inlineExtent, `exact f32 extent at width ${width}`);
   }
-  assert.equal(fn.disposeSession(31), abi.status.ok);
+  assert.equal(fn.disposeRetainedPlan(31), abi.status.ok);
 });

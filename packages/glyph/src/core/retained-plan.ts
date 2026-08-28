@@ -21,16 +21,16 @@ import {
   validateTextEngineFrameRecords,
 } from './frame-wire.js';
 import type {
-  HostFontStackBinding,
-  HostMaterialBinding,
-  HostOpaqueBindingLease,
-  HostPolicy,
-  HostResourceBinding,
-  HostTransformBinding,
-  TextEngineHost,
-  TextEnginePublication,
-  TextEngineSession,
-} from './host.js';
+  BackendFontStackBinding,
+  BackendMaterialBinding,
+  BackendOpaqueBindingLease,
+  BackendPolicy,
+  BackendResourceBinding,
+  BackendTransformBinding,
+  GlyphBackend,
+  PlanPublication,
+  PlanTransport,
+} from './backend.js';
 import {
   TextEngineRenderPlanView,
   readTextEngineResource,
@@ -51,7 +51,7 @@ const MAX_U32 = 0xffff_ffff;
 const claimedTargets = new WeakSet<object>();
 
 declare const planOriginBrand: unique symbol;
-/** Unforgeable identity of the session that produced a plan candidate. */
+/** Unforgeable identity of the plan that produced a plan candidate. */
 export interface PlanOrigin {
   readonly [planOriginBrand]: true;
 }
@@ -83,7 +83,7 @@ export interface TextEngineRenderPlanReader {
   bytes(offset: number, byteLength: number): Uint8Array;
 }
 
-/** A synchronous view into runtime-owned A/B memory. */
+/** A synchronous view into engine-owned A/B memory. */
 export interface BorrowedTextEngineRenderPlan extends TextEngineRenderPlanReader {
   readonly delivery: 'borrowed';
 }
@@ -116,10 +116,10 @@ export interface ResolvedPlanPayload extends ResolvedPortablePayload {
   readonly resources: readonly ResolvedPortablePayload[];
 }
 
-/** A plan transform resolved to its host-owned binding. */
+/** A plan transform resolved to its backend-owned binding. */
 export interface ResolvedPlanTransform {
   readonly transformIndex: RenderPlanTransformId;
-  readonly binding: HostTransformBinding;
+  readonly binding: BackendTransformBinding;
 }
 
 /** A synchronous candidate whose borrowed plan must be consumed during `accept`. */
@@ -133,8 +133,8 @@ export interface PlanCandidate {
   readonly checkpoint: boolean;
   readonly transforms: readonly ResolvedPlanTransform[];
   acquirePayload(referenceId: ResourceHandle): PortablePayloadLease;
-  resolveMaterial(materialId: MaterialHandle): HostMaterialBinding;
-  resolveResource(resourceId: ResourceHandle): HostResourceBinding;
+  resolveMaterial(materialId: MaterialHandle): BackendMaterialBinding;
+  resolveResource(resourceId: ResourceHandle): BackendResourceBinding;
 }
 
 /** A self-owned candidate suitable for a worker or deferred renderer. */
@@ -159,7 +159,7 @@ export type AsyncPlanTargetResult =
   | Readonly<{ accepted: true; returnedBytes: Uint8Array<ArrayBuffer> }>
   | Readonly<{ accepted: false; error: unknown; returnedBytes?: Uint8Array<ArrayBuffer> }>;
 
-/** Renderer-to-session control channel for requesting a complete checkpoint. */
+/** Renderer-to-plan control channel for requesting a complete checkpoint. */
 export interface PlanTargetControl {
   requestCheckpoint(): void;
 }
@@ -182,12 +182,12 @@ export interface AsyncPlanTarget {
 /** Either supported plan-delivery contract. */
 export type TextPlanTarget = PlanTarget | AsyncPlanTarget;
 
-/** One formatted-text span using host-bound renderer and font values. */
+/** One formatted-text span using backend-bound renderer and font values. */
 export interface TextEngineSpan {
   readonly start: number;
   readonly end: number;
-  readonly font?: HostFontStackBinding;
-  readonly material?: HostMaterialBinding;
+  readonly font?: BackendFontStackBinding;
+  readonly material?: BackendMaterialBinding;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
 }
@@ -201,12 +201,12 @@ export interface TextEngineFormattedText {
 /** Plain or formatted input accepted by a retained text instance. */
 export type TextEngineTextInput = string | TextEngineFormattedText;
 
-/** A flow region whose transform is already bound to the host. */
+/** A flow region whose transform is already bound to the backend. */
 export type TextEngineRegionInput = Omit<
   TextEngineRegion,
   'id' | 'geometryRevision' | 'transformIndex' | 'exclusionStart' | 'exclusionCount'
 > & {
-  readonly transform: HostTransformBinding;
+  readonly transform: BackendTransformBinding;
 };
 
 /** An exclusion authored relative to its containing flow region. */
@@ -223,24 +223,24 @@ export interface TextEngineFlowInput {
   readonly regions: readonly TextEngineFlowRegionInput[];
 }
 
-/** Inline-object input using host-bound material and resource values. */
+/** Inline-object input using backend-bound material and resource values. */
 export type TextEngineInlineObjectInput = Omit<
   TextEngineInlineObject,
   'paragraphId' | 'id' | 'contentRevision' | 'materialId' | 'resourceId' | 'resourceGeneration'
 > & {
-  readonly material: HostMaterialBinding;
-  readonly resource: HostResourceBinding;
+  readonly material: BackendMaterialBinding;
+  readonly resource: BackendResourceBinding;
 };
 
-/** Fixed safety and capacity limits for one retained session. */
+/** Fixed safety and capacity limits for one retained plan. */
 export interface TextEngineLimits extends TextEngineFrameLimits {}
 
 /** Initial desired state for one retained text instance. */
-export interface TextEngineTextOptions {
-  readonly font: HostFontStackBinding;
+export interface RetainedTextOptions {
+  readonly font: BackendFontStackBinding;
   readonly text: TextEngineTextInput;
-  readonly material?: HostMaterialBinding;
-  readonly transform?: HostTransformBinding;
+  readonly material?: BackendMaterialBinding;
+  readonly transform?: BackendTransformBinding;
   readonly order?: number;
   readonly rasterPixelRatio?: number;
   readonly contentBox?: ParagraphContentBox;
@@ -251,14 +251,14 @@ export interface TextEngineTextOptions {
 }
 
 /** Partial desired-state replacement for one retained text instance. */
-export type TextEngineTextUpdate = Partial<Omit<TextEngineTextOptions, 'font'>> & {
-  readonly font?: HostFontStackBinding;
+export type RetainedTextUpdate = Partial<Omit<RetainedTextOptions, 'font'>> & {
+  readonly font?: BackendFontStackBinding;
 };
 
-/** One session-owned retained text instance. */
-export interface TextEngineText {
+/** One plan-owned retained text instance. */
+export interface RetainedText {
   readonly disposed: boolean;
-  update(update: TextEngineTextUpdate): void;
+  update(update: RetainedTextUpdate): void;
   /** Returns aggregate metrics; a cache miss may synchronously incur font and layout lookup work. */
   layout(): ParagraphLayoutSummary;
   /** Returns caller-owned columns; a cache miss may synchronously incur glyph lookup and positioning work. */
@@ -267,39 +267,39 @@ export interface TextEngineText {
 }
 
 /** Optional semantic views to cache while compiling the next publication. */
-export interface TextEnginePublishOptions {
+export interface RetainedPlanPublishOptions {
   readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
   readonly compositing?: 'ordered' | 'independent';
 }
 
-interface RetainedSessionBase {
+interface RetainedPlanBase {
   readonly disposed: boolean;
-  /** Creates one retained text instance in this session. */
-  createText(options: TextEngineTextOptions): TextEngineText;
-  /** Disposes every retained text instance and releases this session. */
+  /** Creates one retained text instance in this plan. */
+  createText(options: RetainedTextOptions): RetainedText;
+  /** Disposes every retained text instance and releases this plan. */
   dispose(): void;
 }
 
-/** A synchronous retained session selected from a synchronous target. */
-export interface SynchronousTextEngineSession extends RetainedSessionBase {
+/** A synchronous retained plan selected from a synchronous target. */
+export interface SynchronousRetainedPlan extends RetainedPlanBase {
   /** Compiles and synchronously offers current desired state to the plan target. */
-  publish(options?: TextEnginePublishOptions): PlanAcceptance;
+  publish(options?: RetainedPlanPublishOptions): PlanAcceptance;
 }
 
-/** An asynchronous retained session selected from an asynchronous target. */
-export interface AsyncTextEngineSession extends RetainedSessionBase {
+/** An asynchronous retained plan selected from an asynchronous target. */
+export interface AsyncRetainedPlan extends RetainedPlanBase {
   /** Copies, transfers, and asynchronously offers current desired state to the plan target. */
-  publish(options?: TextEnginePublishOptions): Promise<PlanAcceptance>;
+  publish(options?: RetainedPlanPublishOptions): Promise<PlanAcceptance>;
 }
 
-/** Resolves the session surface from its target's delivery contract. */
-export type SessionFor<Target extends TextPlanTarget> = Target extends AsyncPlanTarget
-  ? AsyncTextEngineSession
-  : SynchronousTextEngineSession;
+/** Resolves the plan surface from its target's delivery contract. */
+export type RetainedPlanFor<Target extends TextPlanTarget> = Target extends AsyncPlanTarget
+  ? AsyncRetainedPlan
+  : SynchronousRetainedPlan;
 
 /** Construction options for one retained text batch and render target. */
-export interface TextEngineSessionOptions<Target extends TextPlanTarget> {
-  readonly policy: HostPolicy;
+export interface RetainedPlanOptions<Target extends TextPlanTarget> {
+  readonly policy: BackendPolicy;
   readonly capabilitySet?: PolicyCapabilitySet;
   readonly target: (control: PlanTargetControl) => Target;
   readonly limits: TextEngineLimits;
@@ -308,31 +308,31 @@ export interface TextEngineSessionOptions<Target extends TextPlanTarget> {
   readonly textCapacity: number;
 }
 
-/** @internal A retained session that can query authored text but cannot publish a render plan. */
-export interface MeasurementTextEngineSession {
+/** @internal A retained plan that can query authored text but cannot publish a render plan. */
+export interface MeasurementPlan {
   readonly disposed: boolean;
-  createText(options: TextEngineTextOptions): TextEngineText;
+  createText(options: RetainedTextOptions): RetainedText;
   dispose(): void;
 }
 
-/** @internal Renderer-free session construction used by the root Paragraph service. */
-export interface MeasurementTextEngineSessionOptions {
-  readonly policy: HostPolicy;
+/** @internal Renderer-free plan construction used by the root Paragraph service. */
+export interface MeasurementPlanOptions {
+  readonly policy: BackendPolicy;
   readonly limits: TextEngineLimits;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
   readonly textCapacity: number;
 }
 
-/** Thrown when a retained session is used after disposal. */
-export class TextEngineSessionDisposedError extends Error {
+/** Thrown when a retained plan is used after disposal. */
+export class RetainedPlanDisposedError extends Error {
   constructor() {
-    super('text engine session has been disposed');
-    this.name = 'TextEngineSessionDisposedError';
+    super('retained plan has been disposed');
+    this.name = 'RetainedPlanDisposedError';
   }
 }
 
-/** Thrown when a pending asynchronous acceptance prevents another session call. */
+/** Thrown when a pending asynchronous acceptance prevents another plan call. */
 export class TextEngineBackpressureError extends Error {}
 /** Thrown when fixed transport capacity cannot encode the requested work. */
 export class TextEngineTransportCapacityError extends Error {}
@@ -342,22 +342,22 @@ export class TextEngineTransportError extends Error {}
 interface ResolvedSpan {
   readonly start: number;
   readonly end: number;
-  readonly font: ReturnType<TextEngineHost['_retainFontStackBinding']> | undefined;
-  readonly material: HostOpaqueBindingLease | undefined;
+  readonly font: ReturnType<GlyphBackend['_retainFontStackBinding']> | undefined;
+  readonly material: BackendOpaqueBindingLease | undefined;
   readonly style: ParagraphStyle | undefined;
   readonly paint: GlyphPaintInput | undefined;
 }
 
 interface ResolvedTextOptions {
-  readonly source: TextEngineTextOptions;
+  readonly source: RetainedTextOptions;
   readonly text: string;
   readonly spans: readonly ResolvedSpan[];
-  readonly font: ReturnType<TextEngineHost['_retainFontStackBinding']>;
-  readonly material: HostOpaqueBindingLease | undefined;
-  readonly transform: HostOpaqueBindingLease;
-  readonly flowTransforms: readonly HostOpaqueBindingLease[];
-  readonly inlineMaterials: readonly HostOpaqueBindingLease[];
-  readonly inlineResources: readonly HostOpaqueBindingLease[];
+  readonly font: ReturnType<GlyphBackend['_retainFontStackBinding']>;
+  readonly material: BackendOpaqueBindingLease | undefined;
+  readonly transform: BackendOpaqueBindingLease;
+  readonly flowTransforms: readonly BackendOpaqueBindingLease[];
+  readonly inlineMaterials: readonly BackendOpaqueBindingLease[];
+  readonly inlineResources: readonly BackendOpaqueBindingLease[];
 }
 
 interface RetainedTextState {
@@ -387,32 +387,29 @@ interface RetainedTextMetrics {
 }
 
 interface PendingPublication {
-  readonly publication: TextEnginePublication;
+  readonly publication: PlanPublication;
   readonly checkpointGeneration: number;
 }
 
-const textStates = new WeakMap<object, Readonly<{ session: RetainedTextEngineSession; state: RetainedTextState }>>();
+const textStates = new WeakMap<object, Readonly<{ retainedPlan: RetainedPlanImpl; state: RetainedTextState }>>();
 
-/** @internal Constructed only by TextEngineHost after it has validated host ownership. */
-export function createRetainedTextEngineSession<Target extends TextPlanTarget>(
-  host: TextEngineHost,
-  options: TextEngineSessionOptions<Target>,
-): SessionFor<Target> {
-  return new RetainedTextEngineSession(host, options) as SessionFor<Target>;
+/** @internal Constructed only after GlyphBackend validates backend ownership. */
+export function createRetainedPlanImpl<Target extends TextPlanTarget>(
+  backend: GlyphBackend,
+  options: RetainedPlanOptions<Target>,
+): RetainedPlanFor<Target> {
+  return new RetainedPlanImpl(backend, options) as RetainedPlanFor<Target>;
 }
 
-/** @internal Construct a retained query session without a renderer acceptance target. */
-export function createMeasurementTextEngineSession(
-  host: TextEngineHost,
-  options: MeasurementTextEngineSessionOptions,
-): MeasurementTextEngineSession {
-  return new RetainedTextEngineSession(host, options, true);
+/** @internal Construct a retained query plan without a renderer acceptance target. */
+export function createMeasurementPlan(backend: GlyphBackend, options: MeasurementPlanOptions): MeasurementPlan {
+  return new RetainedPlanImpl(backend, options, true);
 }
 
-class RetainedTextEngineSession {
-  readonly #host: TextEngineHost;
-  readonly #raw: TextEngineSession;
-  readonly #policy: ReturnType<TextEngineHost['_retainInstalledPolicy']>;
+class RetainedPlanImpl {
+  readonly #backend: GlyphBackend;
+  readonly #transport: PlanTransport;
+  readonly #policy: ReturnType<GlyphBackend['_retainInstalledPolicy']>;
   readonly #capabilitySet: ReturnType<typeof selectPolicyCapabilitySet> | undefined;
   readonly #target: TextPlanTarget | undefined;
   readonly #control: TargetControlState | undefined;
@@ -444,20 +441,20 @@ class RetainedTextEngineSession {
   #disposed = false;
 
   constructor(
-    host: TextEngineHost,
-    options: TextEngineSessionOptions<TextPlanTarget> | MeasurementTextEngineSessionOptions,
+    backend: GlyphBackend,
+    options: RetainedPlanOptions<TextPlanTarget> | MeasurementPlanOptions,
     measurementOnly = false,
   ) {
-    this.#host = host;
-    if (measurementOnly) assertMeasurementSessionOptions(options);
-    else assertSessionOptions(options);
+    this.#backend = backend;
+    if (measurementOnly) assertMeasurementPlanOptions(options);
+    else assertRetainedPlanOptions(options);
     this.#limits = snapshotLimits(options.limits);
     this.#textCapacity = options.textCapacity;
-    const policy = host._retainInstalledPolicy(options.policy);
+    const policy = backend._retainInstalledPolicy(options.policy);
     if (measurementOnly) {
       try {
-        const handle = host._allocateRetainedSessionHandle();
-        this.#raw = host._createRawSession({
+        const handle = backend._allocateRetainedPlanHandle();
+        this.#transport = backend._createPlanTransport({
           handle,
           requestCapacity: options.requestCapacity,
           resultCapacity: options.resultCapacity,
@@ -474,7 +471,7 @@ class RetainedTextEngineSession {
         throw error;
       }
     }
-    const renderOptions = options as TextEngineSessionOptions<TextPlanTarget>;
+    const renderOptions = options as RetainedPlanOptions<TextPlanTarget>;
     let target: TextPlanTarget | undefined;
     let claimed = false;
     const control = new TargetControlState(() => {
@@ -488,11 +485,11 @@ class RetainedTextEngineSession {
           : selectPolicyCapabilitySet(policy.handle, policy.descriptor, renderOptions.capabilitySet);
       target = renderOptions.target(control);
       assertTarget(target, this.#limits.maxOutputBytes);
-      if (claimedTargets.has(target)) throw new TypeError('plan target is already attached to another session');
+      if (claimedTargets.has(target)) throw new TypeError('plan target is already attached to another retained plan');
       claimedTargets.add(target);
       claimed = true;
-      const handle = host._allocateRetainedSessionHandle();
-      this.#raw = host._createRawSession({
+      const handle = backend._allocateRetainedPlanHandle();
+      this.#transport = backend._createPlanTransport({
         handle,
         requestCapacity: options.requestCapacity,
         resultCapacity: options.resultCapacity,
@@ -517,7 +514,7 @@ class RetainedTextEngineSession {
         try {
           target!.dispose();
         } catch (disposeError) {
-          throw combinedFailure(error, disposeError, 'session construction and target disposal both failed');
+          throw combinedFailure(error, disposeError, 'retained-plan construction and target disposal both failed');
         }
       }
       throw error;
@@ -528,13 +525,13 @@ class RetainedTextEngineSession {
     return this.#disposed;
   }
 
-  createText(options: TextEngineTextOptions): TextEngineText {
+  createText(options: RetainedTextOptions): RetainedText {
     this.#assertMutable();
     const ordinal = this.#nextTextOrdinal;
     const nextOrdinal = checkedNextOrdinal(ordinal);
-    const desired = resolveTextOptions(this.#host, options, ordinal);
+    const desired = resolveTextOptions(this.#backend, options, ordinal);
     const state: RetainedTextState = {
-      paragraphId: this.#host.id('paragraph', `${this.#host.integration}/text/${ordinal}`),
+      paragraphId: this.#backend.id('paragraph', `${this.#backend.integration}/text/${ordinal}`),
       ordinal,
       desired,
       metrics: retainedTextMetrics(desired, ordinal),
@@ -556,8 +553,8 @@ class RetainedTextEngineSession {
       releaseResolvedText(desired);
       throw error;
     }
-    const text = new TextEngineTextImpl(this, state);
-    textStates.set(text, { session: this, state });
+    const text = new RetainedTextImpl(this, state);
+    textStates.set(text, { retainedPlan: this, state });
     this.#addLiveState(state);
     this.#texts.add(state);
     this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
@@ -565,20 +562,20 @@ class RetainedTextEngineSession {
     return text;
   }
 
-  publish(options?: TextEnginePublishOptions): PlanAcceptance | Promise<PlanAcceptance> {
+  publish(options?: RetainedPlanPublishOptions): PlanAcceptance | Promise<PlanAcceptance> {
     this.#assertMutable();
-    if (this.#target === undefined) throw new Error('measurement-only text sessions cannot publish render plans');
+    if (this.#target === undefined) throw new Error('measurement-only retained plans cannot publish render plans');
     const normalized = normalizePublishOptions(options);
     return this.#target.delivery === 'borrowed' ? this.#publishBorrowed(normalized) : this.#publishOwned(normalized);
   }
 
   /** @internal */
-  _updateText(state: RetainedTextState, update: TextEngineTextUpdate): void {
+  _updateText(state: RetainedTextState, update: RetainedTextUpdate): void {
     this.#assertMutable();
     if (state.disposed) throw new Error('text engine text has been disposed');
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
-    const source = Object.freeze({ ...state.desired.source, ...update }) as TextEngineTextOptions;
-    const desired = resolveTextOptions(this.#host, source, state.ordinal);
+    const source = Object.freeze({ ...state.desired.source, ...update }) as RetainedTextOptions;
+    const desired = resolveTextOptions(this.#backend, source, state.ordinal);
     const candidate = { ...state, desired, metrics: retainedTextMetrics(desired, state.ordinal), dirty: true };
     try {
       this.#validateState(candidate, state);
@@ -636,9 +633,9 @@ class RetainedTextEngineSession {
 
   dispose(): void {
     if (this.#disposed) return;
-    this.#host._assertRuntimeMutationAllowed();
+    this.#backend._assertEngineMutationAllowed();
     this.#disposed = true;
-    this.#targetController.abort(new TextEngineSessionDisposedError());
+    this.#targetController.abort(new RetainedPlanDisposedError());
     this.#control?.dispose();
     let failure: unknown;
     const attempt = (dispose: () => void): void => {
@@ -649,7 +646,7 @@ class RetainedTextEngineSession {
       }
     };
     if (this.#target !== undefined) attempt(() => this.#target!.dispose());
-    attempt(() => this.#raw.dispose());
+    attempt(() => this.#transport.dispose());
     attempt(() => this.#clearMeasuredBindings());
     for (const state of this.#texts) {
       state.disposed = true;
@@ -670,16 +667,16 @@ class RetainedTextEngineSession {
     this.#pendingStyleCount = 0;
     attempt(() => this.#policy.dispose());
     this.#returnedBuffers?.clear();
-    this.#host._detachRetainedSession(this);
+    this.#backend._detachRetainedPlan(this);
     if (failure !== undefined) throw failure;
   }
 
   #publishBorrowed(options: NormalizedPublishOptions): PlanAcceptance {
     const pending = this.#publishEngine(options);
     const { publication } = pending;
-    const lease = new BorrowedPlanLease(publication, this.#raw);
+    const lease = new BorrowedPlanLease(publication, this.#transport);
     const candidate = this.#candidate(lease);
-    const leaveBorrow = this.#host._enterBorrowedPlan();
+    const leaveBorrow = this.#backend._enterBorrowedPlan();
     let result: PlanAcceptance;
     try {
       const answer = (this.#target as PlanTarget).accept(candidate, this.#targetController.signal);
@@ -777,14 +774,14 @@ class RetainedTextEngineSession {
     this.#ensureTextCapacity();
     const checkpointGeneration = this.#checkpointGeneration;
     const frame = this.#compileFrame(options, checkpointGeneration);
-    const publication = this.#raw.update(frame);
+    const publication = this.#transport.update(frame);
     this.#engineRevision = publication.engineRevision;
     this.#cacheSemanticViews(publication, options.semanticViewMask);
     this.#commitDesiredState();
     return { publication, checkpointGeneration };
   }
 
-  #cacheSemanticViews(publication: TextEnginePublication, semanticViewMask: number): void {
+  #cacheSemanticViews(publication: PlanPublication, semanticViewMask: number): void {
     const masks = textShaperAbi.engine.semanticViewMasks;
     if ((semanticViewMask & masks.layoutInspection) !== 0) {
       const layouts = readTextEngineLayouts(publication);
@@ -809,19 +806,19 @@ class RetainedTextEngineSession {
   #queryText(state: RetainedTextState, inspection: boolean): ParagraphLayoutSummary | ParagraphLayoutInspection {
     this.#assertTextQueryable(state);
     this.#ensureTextCapacity();
-    const styles = compileStyles(this.#host, state);
+    const styles = compileStyles(this.#backend, state);
     const styleMutations: TextEngineStyleMutation[] = [...styles];
     for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
       styleMutations.push({
         opcode: 'remove',
         paragraphId: state.paragraphId,
-        styleId: engineStyleId(this.#host.id, state.paragraphId, index),
+        styleId: engineStyleId(this.#backend.id, state.paragraphId, index),
       });
     }
-    const geometry = compileGeometry(this.#host, state, 0, 0);
+    const geometry = compileGeometry(this.#backend, state, 0, 0);
     const textChanged = !state.published || state.publishedText !== state.desired.text;
     const request = compileValidatedTextEngineFrameUpdate({
-      sessionId: this.#raw.handle,
+      retainedPlanId: this.#transport.handle,
       policyHandle: this.#policy.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
@@ -846,9 +843,9 @@ class RetainedTextEngineSession {
       constraints: [geometry.constraint],
       regions: geometry.regions,
       exclusions: geometry.exclusions,
-      inlineObjects: compileInlineObjects(this.#host, state),
+      inlineObjects: compileInlineObjects(this.#backend, state),
     });
-    const publication = this.#raw.measureParagraph(request, state.paragraphId);
+    const publication = this.#transport.measureParagraph(request, state.paragraphId);
     if (inspection) {
       const layout = readTextEngineLayouts(publication).get(state.paragraphId);
       if (layout === undefined) throw new Error('text engine returned no layout inspection for retained text');
@@ -887,23 +884,23 @@ class RetainedTextEngineSession {
     const inlineObjects: TextEngineInlineObject[] = [];
     for (const state of this.#texts) {
       if (state.removed || !state.dirty) continue;
-      const styles = compileStyles(this.#host, state);
+      const styles = compileStyles(this.#backend, state);
       styleMutations.push(...styles);
       for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
         styleMutations.push({
           opcode: 'remove',
           paragraphId: state.paragraphId,
-          styleId: engineStyleId(this.#host.id, state.paragraphId, index),
+          styleId: engineStyleId(this.#backend.id, state.paragraphId, index),
         });
       }
-      const geometry = compileGeometry(this.#host, state, regions.length, exclusions.length);
+      const geometry = compileGeometry(this.#backend, state, regions.length, exclusions.length);
       constraints.push(geometry.constraint);
       regions.push(...geometry.regions);
       exclusions.push(...geometry.exclusions);
-      inlineObjects.push(...compileInlineObjects(this.#host, state));
+      inlineObjects.push(...compileInlineObjects(this.#backend, state));
     }
     return compileValidatedTextEngineFrameUpdate({
-      sessionId: this.#raw.handle,
+      retainedPlanId: this.#transport.handle,
       policyHandle: this.#policy.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
       expectedEngineRevision: this.#engineRevision,
@@ -923,9 +920,9 @@ class RetainedTextEngineSession {
   }
 
   #validateState(state: RetainedTextState, replacing?: RetainedTextState): void {
-    const styles = compileStyles(this.#host, state);
-    const geometry = compileGeometry(this.#host, state, 0, 0);
-    const inlineObjects = compileInlineObjects(this.#host, state);
+    const styles = compileStyles(this.#backend, state);
+    const geometry = compileGeometry(this.#backend, state, 0, 0);
+    const inlineObjects = compileInlineObjects(this.#backend, state);
     validateTextEngineFrameRecords(
       {
         paragraphMutations: [
@@ -1070,17 +1067,17 @@ class RetainedTextEngineSession {
       },
       resolveMaterial: (materialId: MaterialHandle) => {
         lease.assertActive();
-        return this.#host._resolveOpaqueBinding('material', materialId) as HostMaterialBinding;
+        return this.#backend._resolveOpaqueBinding('material', materialId) as BackendMaterialBinding;
       },
       resolveResource: (resourceId: ResourceHandle) => {
         lease.assertActive();
-        return this.#host._resolveOpaqueBinding('resource', resourceId) as HostResourceBinding;
+        return this.#backend._resolveOpaqueBinding('resource', resourceId) as BackendResourceBinding;
       },
     });
   }
 
   #portablePayload(referenceId: ResourceHandle): PortablePayloadLease {
-    const lease = this.#host._acquirePortablePayload(referenceId);
+    const lease = this.#backend._acquirePortablePayload(referenceId);
     let disposed = false;
     return Object.freeze({
       referenceId,
@@ -1131,17 +1128,17 @@ class RetainedTextEngineSession {
   }
 
   #resolvedTransforms(): readonly ResolvedPlanTransform[] {
-    const transforms = new Map<number, HostTransformBinding>();
+    const transforms = new Map<number, BackendTransformBinding>();
     for (const state of this.#texts) {
       if (state.removed) continue;
       transforms.set(
         state.desired.transform.handle,
-        this.#host._resolveOpaqueBinding('transform', state.desired.transform.handle) as HostTransformBinding,
+        this.#backend._resolveOpaqueBinding('transform', state.desired.transform.handle) as BackendTransformBinding,
       );
       for (const transform of state.desired.flowTransforms) {
         transforms.set(
           transform.handle,
-          this.#host._resolveOpaqueBinding('transform', transform.handle) as HostTransformBinding,
+          this.#backend._resolveOpaqueBinding('transform', transform.handle) as BackendTransformBinding,
         );
       }
     }
@@ -1235,21 +1232,21 @@ class RetainedTextEngineSession {
       if (!state.removed) required = Math.max(required, state.desired.text.length);
     }
     if (required <= this.#textCapacity) return;
-    this.#raw._reserveText(required);
+    this.#transport._reserveText(required);
     this.#textCapacity = required;
   }
 
   #assertActive(): void {
-    if (this.#disposed) throw new TextEngineSessionDisposedError();
+    if (this.#disposed) throw new RetainedPlanDisposedError();
   }
 }
 
-class TextEngineTextImpl implements TextEngineText {
-  readonly #session: RetainedTextEngineSession;
+class RetainedTextImpl implements RetainedText {
+  readonly #retainedPlan: RetainedPlanImpl;
   readonly #state: RetainedTextState;
 
-  constructor(session: RetainedTextEngineSession, state: RetainedTextState) {
-    this.#session = session;
+  constructor(retainedPlan: RetainedPlanImpl, state: RetainedTextState) {
+    this.#retainedPlan = retainedPlan;
     this.#state = state;
   }
 
@@ -1257,39 +1254,39 @@ class TextEngineTextImpl implements TextEngineText {
     return this.#state.disposed;
   }
 
-  update(update: TextEngineTextUpdate): void {
-    this.#session._updateText(this.#state, update);
+  update(update: RetainedTextUpdate): void {
+    this.#retainedPlan._updateText(this.#state, update);
   }
 
   layout(): ParagraphLayoutSummary {
-    return this.#session._layoutText(this.#state);
+    return this.#retainedPlan._layoutText(this.#state);
   }
 
   glyphs(): ParagraphLayoutInspection {
-    return this.#session._inspectText(this.#state);
+    return this.#retainedPlan._inspectText(this.#state);
   }
 
   dispose(): void {
-    this.#session._disposeText(this.#state);
+    this.#retainedPlan._disposeText(this.#state);
   }
 }
 
 class BorrowedPlanLease {
-  readonly publication: TextEnginePublication;
+  readonly publication: PlanPublication;
   readonly reader: BorrowedTextEngineRenderPlan;
   #active = true;
 
-  constructor(publication: TextEnginePublication, session: TextEngineSession) {
+  constructor(publication: PlanPublication, transport: PlanTransport) {
     this.publication = publication;
     const view = new TextEngineRenderPlanView().bind(publication);
     this.reader = new GuardedPlanReader('borrowed', view, () => this.assertActive());
-    this.#session = session;
+    this.#transport = transport;
   }
 
-  readonly #session: TextEngineSession;
+  readonly #transport: PlanTransport;
 
   assertActive(): void {
-    if (!this.#active || this.#session.isExpired(this.publication)) {
+    if (!this.#active || this.#transport.isExpired(this.publication)) {
       throw new Error('borrowed text render plan has expired');
     }
   }
@@ -1373,7 +1370,7 @@ interface NormalizedPublishOptions {
   readonly compositingIndependent: boolean;
 }
 
-function normalizePublishOptions(value: TextEnginePublishOptions | undefined): NormalizedPublishOptions {
+function normalizePublishOptions(value: RetainedPlanPublishOptions | undefined): NormalizedPublishOptions {
   if (value !== undefined && !isNonArrayObject(value)) throw new TypeError('publish options must be an object');
   if (value !== undefined && Object.hasOwn(value, 'policyParameters')) {
     throw new TypeError('publish policyParameters are not supported');
@@ -1401,25 +1398,26 @@ function normalizePublishOptions(value: TextEnginePublishOptions | undefined): N
   };
 }
 
-function resolveTextOptions(host: TextEngineHost, value: TextEngineTextOptions, ordinal: number): ResolvedTextOptions {
+function resolveTextOptions(backend: GlyphBackend, value: RetainedTextOptions, ordinal: number): ResolvedTextOptions {
   if (!isNonArrayObject(value)) throw new TypeError('text engine text options must be an object');
   validateTextScalarOptions(value, ordinal);
   const formattedText = normalizeTextInput(value.text);
-  const font = host._retainFontStackBinding(value.font);
+  const font = backend._retainFontStackBinding(value.font);
   const leases: Array<{ dispose(): void }> = [font];
   try {
-    const material = value.material === undefined ? undefined : host._retainOpaqueBinding(value.material, 'material');
+    const material =
+      value.material === undefined ? undefined : backend._retainOpaqueBinding(value.material, 'material');
     if (material !== undefined) leases.push(material);
     const createdTransform = value.transform === undefined;
-    const transformBinding = value.transform ?? host.createTransformBinding();
-    const transform = host._retainOpaqueBinding(transformBinding, 'transform');
+    const transformBinding = value.transform ?? backend.createTransformBinding();
+    const transform = backend._retainOpaqueBinding(transformBinding, 'transform');
     leases.push(transform);
     if (createdTransform) transformBinding.dispose();
     const spans = formattedText.spans.map((span) => {
-      const spanFont = span.font === undefined ? undefined : host._retainFontStackBinding(span.font);
+      const spanFont = span.font === undefined ? undefined : backend._retainFontStackBinding(span.font);
       if (spanFont !== undefined) leases.push(spanFont);
       const spanMaterial =
-        span.material === undefined ? undefined : host._retainOpaqueBinding(span.material, 'material');
+        span.material === undefined ? undefined : backend._retainOpaqueBinding(span.material, 'material');
       if (spanMaterial !== undefined) leases.push(spanMaterial);
       return Object.freeze({
         start: span.start,
@@ -1430,19 +1428,19 @@ function resolveTextOptions(host: TextEngineHost, value: TextEngineTextOptions, 
         paint: span.paint,
       });
     });
-    const flowTransforms: HostOpaqueBindingLease[] = [];
+    const flowTransforms: BackendOpaqueBindingLease[] = [];
     for (const flowRegion of value.flow?.regions ?? []) {
-      const retained = host._retainOpaqueBinding(flowRegion.region.transform, 'transform');
+      const retained = backend._retainOpaqueBinding(flowRegion.region.transform, 'transform');
       leases.push(retained);
       flowTransforms.push(retained);
     }
-    const inlineMaterials: HostOpaqueBindingLease[] = [];
-    const inlineResources: HostOpaqueBindingLease[] = [];
+    const inlineMaterials: BackendOpaqueBindingLease[] = [];
+    const inlineResources: BackendOpaqueBindingLease[] = [];
     for (const object of value.inlineObjects ?? []) {
-      const retainedMaterial = host._retainOpaqueBinding(object.material, 'material');
+      const retainedMaterial = backend._retainOpaqueBinding(object.material, 'material');
       leases.push(retainedMaterial);
       inlineMaterials.push(retainedMaterial);
-      const retainedResource = host._retainOpaqueBinding(object.resource, 'resource');
+      const retainedResource = backend._retainOpaqueBinding(object.resource, 'resource');
       leases.push(retainedResource);
       inlineResources.push(retainedResource);
     }
@@ -1494,8 +1492,8 @@ function normalizeTextInput(value: unknown): TextEngineFormattedText {
     return Object.freeze({
       start: span.start as number,
       end: span.end as number,
-      ...(span.font === undefined ? {} : { font: span.font as HostFontStackBinding }),
-      ...(span.material === undefined ? {} : { material: span.material as HostMaterialBinding }),
+      ...(span.font === undefined ? {} : { font: span.font as BackendFontStackBinding }),
+      ...(span.material === undefined ? {} : { material: span.material as BackendMaterialBinding }),
       ...(span.style === undefined
         ? {}
         : { style: cloneAuthoredData(span.style as ParagraphStyle, `text span ${index} style`) }),
@@ -1508,16 +1506,16 @@ function normalizeTextInput(value: unknown): TextEngineFormattedText {
 }
 
 function snapshotTextOptions(
-  value: TextEngineTextOptions,
+  value: RetainedTextOptions,
   input: TextEngineFormattedText,
-  font: ReturnType<TextEngineHost['_retainFontStackBinding']>,
-  material: HostOpaqueBindingLease | undefined,
-  transform: HostOpaqueBindingLease,
+  font: ReturnType<GlyphBackend['_retainFontStackBinding']>,
+  material: BackendOpaqueBindingLease | undefined,
+  transform: BackendOpaqueBindingLease,
   spans: readonly ResolvedSpan[],
-  flowTransforms: readonly HostOpaqueBindingLease[],
-  inlineMaterials: readonly HostOpaqueBindingLease[],
-  inlineResources: readonly HostOpaqueBindingLease[],
-): TextEngineTextOptions {
+  flowTransforms: readonly BackendOpaqueBindingLease[],
+  inlineMaterials: readonly BackendOpaqueBindingLease[],
+  inlineResources: readonly BackendOpaqueBindingLease[],
+): RetainedTextOptions {
   const {
     font: _font,
     text: _text,
@@ -1536,7 +1534,7 @@ function snapshotTextOptions(
           start: span.start,
           end: span.end,
           ...(span.font === undefined ? {} : { font: span.font.binding }),
-          ...(span.material === undefined ? {} : { material: span.material.binding as HostMaterialBinding }),
+          ...(span.material === undefined ? {} : { material: span.material.binding as BackendMaterialBinding }),
           ...(span.style === undefined ? {} : { style: span.style }),
           ...(span.paint === undefined ? {} : { paint: span.paint }),
         }),
@@ -1547,8 +1545,8 @@ function snapshotTextOptions(
     ...snapshot,
     font: font.binding,
     text,
-    ...(material === undefined ? {} : { material: material.binding as HostMaterialBinding }),
-    transform: transform.binding as HostTransformBinding,
+    ...(material === undefined ? {} : { material: material.binding as BackendMaterialBinding }),
+    transform: transform.binding as BackendTransformBinding,
     ...(value.flow === undefined
       ? {}
       : {
@@ -1559,7 +1557,7 @@ function snapshotTextOptions(
                 return Object.freeze({
                   region: Object.freeze({
                     ...cloneAuthoredData(region, `text flow region ${index}`),
-                    transform: flowTransforms[index]!.binding as HostTransformBinding,
+                    transform: flowTransforms[index]!.binding as BackendTransformBinding,
                   }),
                   ...(flowRegion.exclusions === undefined
                     ? {}
@@ -1581,8 +1579,8 @@ function snapshotTextOptions(
               const { material: _inlineMaterial, resource: _inlineResource, ...data } = object;
               return Object.freeze({
                 ...cloneAuthoredData(data, `text inline object ${index}`),
-                material: inlineMaterials[index]!.binding as HostMaterialBinding,
-                resource: inlineResources[index]!.binding as HostResourceBinding,
+                material: inlineMaterials[index]!.binding as BackendMaterialBinding,
+                resource: inlineResources[index]!.binding as BackendResourceBinding,
               });
             }),
           ),
@@ -1590,7 +1588,7 @@ function snapshotTextOptions(
   });
 }
 
-function validateTextScalarOptions(value: TextEngineTextOptions, ordinal: number): void {
+function validateTextScalarOptions(value: RetainedTextOptions, ordinal: number): void {
   if (value.order !== undefined) uint32(value.order, 'text order');
   if (
     value.rasterPixelRatio !== undefined &&
@@ -1621,13 +1619,13 @@ function validateTextScalarOptions(value: TextEngineTextOptions, ordinal: number
   uint32(ordinal, 'text ordinal');
 }
 
-function compileStyles(host: TextEngineHost, state: RetainedTextState): readonly TextEngineStyleMutation[] {
+function compileStyles(backend: GlyphBackend, state: RetainedTextState): readonly TextEngineStyleMutation[] {
   const desired = state.desired;
   const source = desired.source;
   const root: TextEngineStyleMutation = {
     opcode: 'upsert',
     paragraphId: state.paragraphId,
-    styleId: engineStyleId(host.id, state.paragraphId, 1),
+    styleId: engineStyleId(backend.id, state.paragraphId, 1),
     cascadeOrder: 0,
     start: 0,
     end: desired.text.length,
@@ -1646,7 +1644,7 @@ function compileStyles(host: TextEngineHost, state: RetainedTextState): readonly
       .map((span, index) => ({
         opcode: 'upsert' as const,
         paragraphId: state.paragraphId,
-        styleId: engineStyleId(host.id, state.paragraphId, index + 2),
+        styleId: engineStyleId(backend.id, state.paragraphId, index + 2),
         cascadeOrder: index + 1,
         start: span.start,
         end: span.end,
@@ -1680,7 +1678,7 @@ function pendingStyleMutationCount(state: RetainedTextState): number {
 }
 
 function compileGeometry(
-  host: TextEngineHost,
+  backend: GlyphBackend,
   state: RetainedTextState,
   regionStart: number,
   exclusionStart: number,
@@ -1691,7 +1689,7 @@ function compileGeometry(
 }> {
   const revision = state.geometryRevision + 1;
   const ordinary = compileEngineGeometry(
-    host.id,
+    backend.id,
     state.paragraphId,
     state.desired.transform.handle,
     revision,
@@ -1706,7 +1704,7 @@ function compileGeometry(
   for (const [regionIndex, input] of flow.regions.entries()) {
     const transform = state.desired.flowTransforms[regionIndex]!;
     const firstExclusion = exclusionStart + exclusions.length;
-    const regionId = host.id('region', `paragraph/${state.paragraphId}/flow/${regionIndex}`);
+    const regionId = backend.id('region', `paragraph/${state.paragraphId}/flow/${regionIndex}`);
     regions.push({
       ...input.region,
       id: regionId,
@@ -1718,7 +1716,7 @@ function compileGeometry(
     for (const [index, exclusion] of (input.exclusions ?? []).entries()) {
       exclusions.push({
         ...exclusion,
-        id: host.id('exclusion', `paragraph/${state.paragraphId}/flow/${regionIndex}/exclusion/${index}`),
+        id: backend.id('exclusion', `paragraph/${state.paragraphId}/flow/${regionIndex}/exclusion/${index}`),
         regionId,
         geometryRevision: revision,
       });
@@ -1731,11 +1729,11 @@ function compileGeometry(
   };
 }
 
-function compileInlineObjects(host: TextEngineHost, state: RetainedTextState): readonly TextEngineInlineObject[] {
+function compileInlineObjects(backend: GlyphBackend, state: RetainedTextState): readonly TextEngineInlineObject[] {
   return (state.desired.source.inlineObjects ?? []).map((object, index) => ({
     ...object,
     paragraphId: state.paragraphId,
-    id: host.id('inline-object', `paragraph/${state.paragraphId}/inline/${index}`),
+    id: backend.id('inline-object', `paragraph/${state.paragraphId}/inline/${index}`),
     contentRevision: state.geometryRevision + 1,
     materialId: state.desired.inlineMaterials[index]!.handle as MaterialHandle,
     resourceId: state.desired.inlineResources[index]!.handle as ResourceHandle,
@@ -1790,18 +1788,18 @@ function releaseResolvedText(value: ResolvedTextOptions): void {
   if (failure !== undefined) throw failure;
 }
 
-function assertSessionOptions(value: unknown): asserts value is TextEngineSessionOptions<TextPlanTarget> {
-  if (!isNonArrayObject(value)) throw new TypeError('text engine session options must be an object');
-  if (typeof value.target !== 'function') throw new TypeError('text engine session target must be a factory');
-  assertSessionCapacities(value);
+function assertRetainedPlanOptions(value: unknown): asserts value is RetainedPlanOptions<TextPlanTarget> {
+  if (!isNonArrayObject(value)) throw new TypeError('retained plan options must be an object');
+  if (typeof value.target !== 'function') throw new TypeError('retained plan target must be a factory');
+  assertRetainedPlanCapacities(value);
 }
 
-function assertMeasurementSessionOptions(value: unknown): asserts value is MeasurementTextEngineSessionOptions {
-  if (!isNonArrayObject(value)) throw new TypeError('measurement text engine session options must be an object');
-  assertSessionCapacities(value);
+function assertMeasurementPlanOptions(value: unknown): asserts value is MeasurementPlanOptions {
+  if (!isNonArrayObject(value)) throw new TypeError('measurement plan options must be an object');
+  assertRetainedPlanCapacities(value);
 }
 
-function assertSessionCapacities(value: Record<PropertyKey, unknown>): void {
+function assertRetainedPlanCapacities(value: Record<PropertyKey, unknown>): void {
   positiveU32(value.requestCapacity, 'requestCapacity');
   positiveU32(value.resultCapacity, 'resultCapacity');
   positiveU32(value.textCapacity, 'textCapacity');
@@ -1854,7 +1852,7 @@ class TargetControlState implements PlanTargetControl {
   }
 
   requestCheckpoint(): void {
-    if (!this.#active) throw new TextEngineSessionDisposedError();
+    if (!this.#active) throw new RetainedPlanDisposedError();
     this.#request();
   }
 
@@ -1874,7 +1872,7 @@ function assertAcceptance(value: unknown): PlanAcceptance {
 
 function assertAsyncAcceptance(
   value: unknown,
-  publication: TextEnginePublication,
+  publication: PlanPublication,
   publicationByteLength: number,
 ): Readonly<{ accepted: boolean; error?: unknown; returnedBytes?: Uint8Array<ArrayBuffer> }> {
   const accepted = assertAcceptance(value);
@@ -1922,7 +1920,7 @@ async function abortableTargetAcceptance(
 ): Promise<AsyncPlanTargetResult> {
   if (!(promise instanceof Promise)) throw new TypeError('owned plan target accept() must return a Promise');
   return new Promise((resolve, reject) => {
-    const abort = (): void => reject(signal.reason ?? new TextEngineSessionDisposedError());
+    const abort = (): void => reject(signal.reason ?? new RetainedPlanDisposedError());
     if (signal.aborted) return abort();
     signal.addEventListener('abort', abort, { once: true });
     promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
@@ -1939,7 +1937,7 @@ function checkedNextCheckpointGeneration(value: number): number {
   return value + 1;
 }
 
-function publicationIsCheckpoint(publication: TextEnginePublication): boolean {
+function publicationIsCheckpoint(publication: PlanPublication): boolean {
   return (publication.flags & textShaperAbi.engine.resultFlags.checkpoint) !== 0;
 }
 

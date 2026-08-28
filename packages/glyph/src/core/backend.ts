@@ -7,16 +7,12 @@ import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from './raster-plan-program.js';
 import { portableResourceIdentity, type PortableResource } from './portable-resources.js';
 import {
-  createRetainedTextEngineSession,
-  type SessionFor,
-  type TextEngineSessionOptions as RetainedTextEngineSessionOptions,
+  createRetainedPlanImpl,
+  type RetainedPlanFor,
+  type RetainedPlanOptions,
   type TextPlanTarget,
-} from './retained-session.js';
-import {
-  markOwnedTextEnginePublication,
-  TextEnginePublicationExpiredError,
-  type OwnedTextEnginePublication,
-} from './retention.js';
+} from './retained-plan.js';
+import { markOwnedPlanPublication, PlanPublicationExpiredError, type OwnedPlanPublication } from './retention.js';
 import {
   assertGlyphId,
   compileRenderPolicy,
@@ -30,83 +26,80 @@ import {
   type PolicyDescriptor,
   type PolicyHandle,
   type StyleId,
-  type TextEngineSessionHandle,
+  type RetainedPlanHandle,
 } from './render-policy.js';
 
 const MAX_U32 = 0xffff_ffff;
 
-/** @internal Raw wire-session construction retained only while first-party integrations migrate. */
-export interface RawTextEngineSessionOptions {
-  readonly handle: TextEngineSessionHandle;
+/** @internal Raw wire transport construction used only by the retained-plan implementation. */
+interface PlanTransportOptions {
+  readonly handle: RetainedPlanHandle;
   readonly requestCapacity: number;
   readonly resultCapacity: number;
   readonly textCapacity?: number;
 }
 
-/** @internal Compatibility name removed with the raw JavaScript session. */
-export type TextEngineSessionOptions = RawTextEngineSessionOptions;
-
-/** Names the renderer integration that owns a host. */
-export interface TextEngineHostOptions {
+/** Names one renderer integration backend. */
+export interface GlyphBackendOptions {
   /** Stable diagnostic namespace; never a wire ID or lookup key. */
   readonly integration: string;
 }
 
-/** A counted host-local render-policy installation. */
-export interface HostPolicy {
-  readonly [hostPolicyBrand]: true;
+/** A counted backend-local render-policy installation. */
+export interface BackendPolicy {
+  readonly [backendPolicyBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** Builds one policy descriptor using the host's collision-checked wire identities. */
-export type HostPolicyFactory = (identities: RenderWireIdentityRegistry) => PolicyDescriptor;
+/** Builds one policy descriptor using the backend's collision-checked wire identities. */
+export type BackendPolicyFactory = (identities: RenderWireIdentityRegistry) => PolicyDescriptor;
 
-/** A counted host-local binding of one immutable font. */
-export interface HostFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
-  readonly [hostFontBindingBrand]: true;
+/** A counted backend-local binding of one immutable font. */
+export interface BackendFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+  readonly [backendFontBindingBrand]: true;
   readonly technique: Technique;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** A counted host-local ordered font-stack binding. */
-export interface HostFontStackBinding {
-  readonly [hostFontStackBindingBrand]: true;
+/** A counted backend-local ordered font-stack binding. */
+export interface BackendFontStackBinding {
+  readonly [backendFontStackBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** A host-local renderer material identity. */
-export interface HostMaterialBinding {
-  readonly [hostMaterialBindingBrand]: true;
+/** A backend-local renderer material identity. */
+export interface BackendMaterialBinding {
+  readonly [backendMaterialBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** A host-local renderer resource identity. */
-export interface HostResourceBinding {
-  readonly [hostResourceBindingBrand]: true;
+/** A backend-local renderer resource identity. */
+export interface BackendResourceBinding {
+  readonly [backendResourceBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-/** A host-local renderer transform identity. */
-export interface HostTransformBinding {
-  readonly [hostTransformBindingBrand]: true;
+/** A backend-local renderer transform identity. */
+export interface BackendTransformBinding {
+  readonly [backendTransformBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
-declare const hostPolicyBrand: unique symbol;
-declare const hostFontBindingBrand: unique symbol;
-declare const hostFontStackBindingBrand: unique symbol;
-declare const hostMaterialBindingBrand: unique symbol;
-declare const hostResourceBindingBrand: unique symbol;
-declare const hostTransformBindingBrand: unique symbol;
+declare const backendPolicyBrand: unique symbol;
+declare const backendFontBindingBrand: unique symbol;
+declare const backendFontStackBindingBrand: unique symbol;
+declare const backendMaterialBindingBrand: unique symbol;
+declare const backendResourceBindingBrand: unique symbol;
+declare const backendTransformBindingBrand: unique symbol;
 
-/** @internal Runtime-owned shaping registration supplied only by TextRuntime. */
-export interface HostRuntimeFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
+/** @internal Runtime-owned shaping registration supplied only by GlyphEngine. */
+export interface BackendEngineFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
   readonly technique: Technique;
   readonly handle: FontHandle;
   readonly identity: object;
@@ -114,17 +107,17 @@ export interface HostRuntimeFontBinding<Technique extends AnyRasterTechnique = A
   dispose(): void;
 }
 
-/** @internal Runtime callback installed by TextRuntime when it constructs a host. */
-export type HostRuntimeFontBinder = <Technique extends AnyRasterTechnique>(
+/** @internal Engine callback installed when it constructs a backend. */
+export type BackendEngineFontBinder = <Technique extends AnyRasterTechnique>(
   font: Font<Technique>,
-) => HostRuntimeFontBinding<Technique>;
+) => BackendEngineFontBinding<Technique>;
 
 /**
  * One borrowed A/B render-plan publication. Its bytes point into Wasm memory and expire when
- * this session answers any later call; see `core/retention.ts` for the protocol.
+ * this transport answers any later call; see `core/retention.ts` for the protocol.
  * `copyPublication` validates and owns bytes that must survive the borrow.
  */
-export interface TextEnginePublication {
+export interface PlanPublication {
   readonly bytes: Uint8Array;
   readonly memoryBuffer: ArrayBuffer;
   readonly memoryGrew: boolean;
@@ -145,9 +138,9 @@ export interface TextEnginePublication {
 /**
  * The paragraph and style a rejected frame names, read out of the result header.
  *
- * Both are the identifiers the REQUEST used, so a host maps them straight back to what it authored.
+ * Both are the identifiers the request used, so a backend maps them to what it authored.
  * Zero means the status names none: an engine-internal invariant, a capacity watermark, or a
- * session-level conflict attributes nothing.
+ * retained-plan-level conflict attributes nothing.
  */
 /** Request identities used by an integration to map a rejected frame back to authored state. */
 export interface TextEngineFault {
@@ -158,10 +151,10 @@ export interface TextEngineFault {
 const NO_FAULT: TextEngineFault = Object.freeze({ paragraphId: 0, styleId: 0 });
 
 interface EngineRegistrationOwners {
-  readonly policies: Map<number, TextEngineHost>;
-  readonly fontBindings: Map<number, TextEngineHost>;
-  readonly fontStacks: Map<number, TextEngineHost>;
-  readonly sessions: Map<number, TextEngineHost>;
+  readonly policies: Map<number, GlyphBackend>;
+  readonly fontBindings: Map<number, GlyphBackend>;
+  readonly fontStacks: Map<number, GlyphBackend>;
+  readonly retainedPlans: Map<number, GlyphBackend>;
 }
 
 const registrationOwners = new WeakMap<object, EngineRegistrationOwners>();
@@ -173,7 +166,7 @@ function ownersFor(exports: object): EngineRegistrationOwners {
       policies: new Map(),
       fontBindings: new Map(),
       fontStacks: new Map(),
-      sessions: new Map(),
+      retainedPlans: new Map(),
     };
     registrationOwners.set(exports, owners);
   }
@@ -191,8 +184,8 @@ export type TextEngineStatusCode =
   | 'result-too-large'
   | 'policy-conflict'
   | 'policy-missing'
-  | 'session-conflict'
-  | 'session-missing'
+  | 'retained-plan-conflict'
+  | 'retained-plan-missing'
   | 'revision-conflict'
   | 'font-stack-missing'
   | 'font-in-use'
@@ -214,8 +207,8 @@ const TEXT_ENGINE_STATUS_CODES: ReadonlyMap<number, TextEngineStatusCode> = new 
   [textShaperAbi.status.resultTooLarge, 'result-too-large'],
   [textShaperAbi.status.policyConflict, 'policy-conflict'],
   [textShaperAbi.status.policyMissing, 'policy-missing'],
-  [textShaperAbi.status.sessionConflict, 'session-conflict'],
-  [textShaperAbi.status.sessionMissing, 'session-missing'],
+  [textShaperAbi.status.retainedPlanConflict, 'retained-plan-conflict'],
+  [textShaperAbi.status.retainedPlanMissing, 'retained-plan-missing'],
   [textShaperAbi.status.revisionConflict, 'revision-conflict'],
   [textShaperAbi.status.fontStackMissing, 'font-stack-missing'],
   [textShaperAbi.status.fontInUse, 'font-in-use'],
@@ -291,7 +284,7 @@ function headerFault(header: DataView): TextEngineFault {
     : Object.freeze({ paragraphId: paragraphId as ParagraphId | 0, styleId: styleId as StyleId | 0 });
 }
 
-interface InstalledHostPolicy {
+interface InstalledBackendPolicy {
   readonly handle: PolicyHandle;
   readonly descriptor: PolicyDescriptor;
   readonly techniqueIds: ReadonlySet<number>;
@@ -299,83 +292,89 @@ interface InstalledHostPolicy {
   disposed: boolean;
 }
 
-interface RetainedHostFontBinding {
+interface RetainedBackendFontBinding {
   readonly identity: object;
   readonly technique: AnyRasterTechnique;
   readonly handle: FontBindingHandle;
-  readonly runtime: HostRuntimeFontBinding;
-  readonly payloads: ReadonlyMap<number, RetainedHostPortablePayload>;
+  readonly engineBinding: BackendEngineFontBinding;
+  readonly payloads: ReadonlyMap<number, RetainedBackendPortablePayload>;
   leases: number;
   disposed: boolean;
 }
 
-interface RetainedHostPortablePayload {
+interface RetainedBackendPortablePayload {
   readonly referenceId: number;
   readonly identity: object;
   readonly techniqueId: string;
   readonly resourceName: string;
   readonly payload: PortableResource;
-  group: readonly RetainedHostPortablePayload[] | undefined;
+  group: readonly RetainedBackendPortablePayload[] | undefined;
   owners: number;
   leases: number;
 }
 
-interface RetainedHostFontStackBinding {
+interface RetainedBackendFontStackBinding {
   readonly identity: object;
   readonly handle: FontStackHandle;
-  readonly bindings: readonly HostFontBindingImpl[];
+  readonly bindings: readonly BackendFontBindingImpl[];
   leases: number;
   disposed: boolean;
 }
 
-interface RetainedHostOpaqueBinding {
+interface RetainedBackendOpaqueBinding {
   readonly kind: 'material' | 'resource' | 'transform';
   readonly handle: number;
-  binding: HostMaterialBinding | HostResourceBinding | HostTransformBinding;
+  binding: BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding;
   leases: number;
   disposed: boolean;
 }
 
-/** Counted lease over one host-local renderer binding. */
-export interface HostOpaqueBindingLease {
+/** Counted lease over one backend-local renderer binding. */
+export interface BackendOpaqueBindingLease {
   readonly handle: number;
-  readonly binding: HostMaterialBinding | HostResourceBinding | HostTransformBinding;
+  readonly binding: BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding;
   dispose(): void;
 }
 
-const hostPolicies = new WeakMap<object, Readonly<{ host: TextEngineHost; state: InstalledHostPolicy }>>();
-const hostFontStacks = new WeakMap<object, Readonly<{ host: TextEngineHost; state: RetainedHostFontStackBinding }>>();
-const hostOpaqueBindings = new WeakMap<object, Readonly<{ host: TextEngineHost; state: RetainedHostOpaqueBinding }>>();
+const backendPolicies = new WeakMap<object, Readonly<{ backend: GlyphBackend; state: InstalledBackendPolicy }>>();
+const backendFontStacks = new WeakMap<
+  object,
+  Readonly<{ backend: GlyphBackend; state: RetainedBackendFontStackBinding }>
+>();
+const backendOpaqueBindings = new WeakMap<
+  object,
+  Readonly<{ backend: GlyphBackend; state: RetainedBackendOpaqueBinding }>
+>();
 
-/** Lifecycle owner for retained policies, font bindings, font stacks, and sessions in one RuntimeShaper. */
-export class TextEngineHost {
+/** Owns one renderer integration's policies, bindings, retained plans, and transport. */
+export class GlyphBackend {
   readonly integration: string;
   readonly #identityNamespace: string;
   readonly #wireIdentities = new RenderWireIdentityRegistry();
   readonly #ids = new GlyphIdScope();
   readonly #exports;
   readonly #owners: EngineRegistrationOwners;
-  readonly #retainedSessions = new Set<{ dispose(): void }>();
-  readonly #sessions = new Set<TextEngineSession>();
+  readonly #retainedPlans = new Set<{ dispose(): void }>();
+  readonly #transports = new Set<PlanTransport>();
   readonly #policies = new Set<PolicyHandle>();
   readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
   readonly #fontBindings = new Set<FontBindingHandle>();
-  readonly #installedPolicies = new Set<InstalledHostPolicy>();
-  readonly #retainedFontBindings = new WeakMap<object, RetainedHostFontBinding>();
-  readonly #liveRetainedFontBindings = new Set<RetainedHostFontBinding>();
-  readonly #retainedFontStacks = new WeakMap<object, RetainedHostFontStackBinding>();
-  readonly #liveRetainedFontStacks = new Set<RetainedHostFontStackBinding>();
-  readonly #portablePayloads = new Map<number, RetainedHostPortablePayload>();
-  readonly #opaqueBindings = new Set<RetainedHostOpaqueBinding>();
+  readonly #installedPolicies = new Set<InstalledBackendPolicy>();
+  readonly #retainedFontBindings = new WeakMap<object, RetainedBackendFontBinding>();
+  readonly #liveRetainedFontBindings = new Set<RetainedBackendFontBinding>();
+  readonly #retainedFontStacks = new WeakMap<object, RetainedBackendFontStackBinding>();
+  readonly #liveRetainedFontStacks = new Set<RetainedBackendFontStackBinding>();
+  readonly #portablePayloads = new Map<number, RetainedBackendPortablePayload>();
+  readonly #opaqueBindings = new Set<RetainedBackendOpaqueBinding>();
   readonly #opaqueBindingsByKind = {
-    material: new Map<number, RetainedHostOpaqueBinding>(),
-    resource: new Map<number, RetainedHostOpaqueBinding>(),
-    transform: new Map<number, RetainedHostOpaqueBinding>(),
+    material: new Map<number, RetainedBackendOpaqueBinding>(),
+    resource: new Map<number, RetainedBackendOpaqueBinding>(),
+    transform: new Map<number, RetainedBackendOpaqueBinding>(),
   };
   readonly #onDispose: (() => void) | undefined;
-  readonly #bindRuntimeFont: HostRuntimeFontBinder | undefined;
-  readonly #assertRuntimeAvailable: (() => void) | undefined;
-  readonly #enterRuntimeBorrow: (() => () => void) | undefined;
+  readonly #bindEngineFont: BackendEngineFontBinder | undefined;
+  readonly #assertEngineAvailable: (() => void) | undefined;
+  readonly #enterEngineBorrow: (() => () => void) | undefined;
   #nextPolicyOrdinal = 1;
   #nextFontBindingOrdinal = 1;
   #nextFontStackOrdinal = 1;
@@ -383,43 +382,43 @@ export class TextEngineHost {
   #nextResourceOrdinal = 1;
   #nextTransformOrdinal = 1;
   readonly #freeTransformOrdinals: number[] = [];
-  #nextRetainedSessionOrdinal = 1;
+  #nextRetainedPlanOrdinal = 1;
   #disposed = false;
 
-  /** @internal Hosts are owned and normally created by TextRuntime. */
+  /** @internal Backends are owned and normally created by GlyphEngine. */
   constructor(
     shaper: RuntimeShaper,
-    options: TextEngineHostOptions = { integration: 'internal' },
+    options: GlyphBackendOptions = { integration: 'internal' },
     onDispose?: () => void,
-    bindRuntimeFont?: HostRuntimeFontBinder,
-    assertRuntimeAvailable?: () => void,
-    enterRuntimeBorrow?: () => () => void,
+    bindEngineFont?: BackendEngineFontBinder,
+    assertEngineAvailable?: () => void,
+    enterEngineBorrow?: () => () => void,
     identityNamespace?: string,
   ) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-      throw new TypeError('text engine host options need an object');
+      throw new TypeError('glyph backend options must be an object');
     }
     if (typeof options.integration !== 'string' || options.integration.length === 0) {
-      throw new TypeError('text engine host integration must be a nonempty string');
+      throw new TypeError('glyph backend integration must be a nonempty string');
     }
     this.integration = options.integration;
     this.#identityNamespace = identityNamespace ?? options.integration;
     this.#exports = runtimeShaperEngineExports(shaper);
     this.#owners = ownersFor(this.#exports);
     this.#onDispose = onDispose;
-    this.#bindRuntimeFont = bindRuntimeFont;
-    this.#assertRuntimeAvailable = assertRuntimeAvailable;
-    this.#enterRuntimeBorrow = enterRuntimeBorrow;
+    this.#bindEngineFont = bindEngineFont;
+    this.#assertEngineAvailable = assertEngineAvailable;
+    this.#enterEngineBorrow = enterEngineBorrow;
   }
 
-  /** @internal Derive one branded ID retained until its registration or this host is disposed. */
+  /** @internal Derive one branded ID retained until its registration or this backend is disposed. */
   readonly id = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
     this.#assertActive();
     return this.#ids.id(kind, name);
   };
 
-  /** Installs one renderer policy for this host and returns its counted lease. */
-  installPolicy(factory: HostPolicyFactory): HostPolicy {
+  /** Installs one renderer policy for this backend and returns its counted lease. */
+  installPolicy(factory: BackendPolicyFactory): BackendPolicy {
     this.#assertActive();
     if (typeof factory !== 'function') throw new TypeError('text engine policy must be a factory');
     const snapshot = snapshotPolicyDescriptor(factory(this.#wireIdentities));
@@ -428,7 +427,7 @@ export class TextEngineHost {
     const handle = this.id('policy', `${this.#identityNamespace}/policy/${ordinal}`);
     this.registerPolicy(handle, bytes);
     this.#nextPolicyOrdinal = ordinal + 1;
-    const state: InstalledHostPolicy = {
+    const state: InstalledBackendPolicy = {
       handle,
       descriptor: snapshot,
       techniqueIds: new Set(snapshot.programs.map((program) => program.techniqueId)),
@@ -436,29 +435,29 @@ export class TextEngineHost {
       disposed: false,
     };
     this.#installedPolicies.add(state);
-    const policy = new HostPolicyImpl(this, state) as HostPolicy;
-    hostPolicies.set(policy, { host: this, state });
+    const policy = new BackendPolicyImpl(this, state) as BackendPolicy;
+    backendPolicies.set(policy, { backend: this, state });
     return policy;
   }
 
-  /** Binds one immutable font's shaping and portable raster resources to this host. */
-  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): HostFontBinding<Technique> {
+  /** Binds one immutable font's shaping and portable raster resources to this backend. */
+  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): BackendFontBinding<Technique> {
     this.#assertActive();
-    if (this.#bindRuntimeFont === undefined) {
-      throw new Error('text engine host was not created by a text runtime');
+    if (this.#bindEngineFont === undefined) {
+      throw new Error('glyph backend was not created by a glyph engine');
     }
-    const runtime = this.#bindRuntimeFont(font);
+    const engineBinding = this.#bindEngineFont(font);
     try {
       const techniqueId = this.#wireIdentities.techniqueId(font.technique);
       if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
-        throw new TypeError(`text engine host has no installed policy for "${font.technique.id}"`);
+        throw new TypeError(`glyph backend has no installed policy for "${font.technique.id}"`);
       }
-      const existing = this.#retainedFontBindings.get(runtime.identity);
+      const existing = this.#retainedFontBindings.get(engineBinding.identity);
       if (existing !== undefined && !existing.disposed) {
-        if (existing.technique !== font.technique) throw new Error('runtime font identity changed raster technique');
-        runtime.dispose();
+        if (existing.technique !== font.technique) throw new Error('engine font identity changed raster technique');
+        engineBinding.dispose();
         existing.leases += 1;
-        return new HostFontBindingImpl(this, existing) as unknown as HostFontBinding<Technique>;
+        return new BackendFontBindingImpl(this, existing) as unknown as BackendFontBinding<Technique>;
       }
       const compiled = compileRasterFont(font, this.#wireIdentities);
       if (compiled === undefined) {
@@ -468,53 +467,53 @@ export class TextEngineHost {
       const handle = this.id('font-binding', `${this.#identityNamespace}/font/${ordinal}`);
       const payloads = this.#retainPortablePayloads(font.technique, compiled);
       try {
-        this.registerFontBinding(handle, runtime.handle, compiled.binding);
+        this.registerFontBinding(handle, engineBinding.handle, compiled.binding);
       } catch (error) {
         this.#releasePortablePayloadOwners(payloads);
         throw error;
       }
       this.#nextFontBindingOrdinal = ordinal + 1;
-      const state: RetainedHostFontBinding = {
-        identity: runtime.identity,
+      const state: RetainedBackendFontBinding = {
+        identity: engineBinding.identity,
         technique: font.technique,
         handle,
-        runtime,
+        engineBinding,
         payloads,
         leases: 1,
         disposed: false,
       };
-      this.#retainedFontBindings.set(runtime.identity, state);
+      this.#retainedFontBindings.set(engineBinding.identity, state);
       this.#liveRetainedFontBindings.add(state);
-      return new HostFontBindingImpl(this, state) as unknown as HostFontBinding<Technique>;
+      return new BackendFontBindingImpl(this, state) as unknown as BackendFontBinding<Technique>;
     } catch (error) {
-      runtime.dispose();
+      engineBinding.dispose();
       throw error;
     }
   }
 
-  /** Binds an ordered immutable font stack to this host. */
+  /** Binds an ordered immutable font stack to this backend. */
   bindFontStack<Technique extends AnyRasterTechnique>(
     stack: FontStack<Technique, Font<Technique>>,
-  ): HostFontStackBinding {
+  ): BackendFontStackBinding {
     this.#assertActive();
     const fonts = immutableFontStackFonts(stack as FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>);
     for (const font of fonts) {
       const techniqueId = this.#wireIdentities.techniqueId(font.technique);
       if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
-        throw new TypeError(`text engine host has no installed policy for "${font.technique.id}"`);
+        throw new TypeError(`glyph backend has no installed policy for "${font.technique.id}"`);
       }
     }
     const existing = this.#retainedFontStacks.get(stack);
     if (existing !== undefined && !existing.disposed) {
       existing.leases += 1;
-      const binding = new HostFontStackBindingImpl(this, existing) as HostFontStackBinding;
-      hostFontStacks.set(binding, { host: this, state: existing });
+      const binding = new BackendFontStackBindingImpl(this, existing) as BackendFontStackBinding;
+      backendFontStacks.set(binding, { backend: this, state: existing });
       return binding;
     }
-    const bindings: HostFontBindingImpl[] = [];
+    const bindings: BackendFontBindingImpl[] = [];
     try {
       for (const font of fonts) {
-        bindings.push(this.bindFont(font) as unknown as HostFontBindingImpl);
+        bindings.push(this.bindFont(font) as unknown as BackendFontBindingImpl);
       }
       const ordinal = this.#nextFontStackOrdinal;
       const handle = this.id('font-stack', `${this.#identityNamespace}/font-stack/${ordinal}`);
@@ -523,7 +522,7 @@ export class TextEngineHost {
         bindings.map((binding) => binding._state().handle),
       );
       this.#nextFontStackOrdinal = ordinal + 1;
-      const state: RetainedHostFontStackBinding = {
+      const state: RetainedBackendFontStackBinding = {
         identity: stack,
         handle,
         bindings: Object.freeze(bindings),
@@ -532,8 +531,8 @@ export class TextEngineHost {
       };
       this.#retainedFontStacks.set(stack, state);
       this.#liveRetainedFontStacks.add(state);
-      const binding = new HostFontStackBindingImpl(this, state) as HostFontStackBinding;
-      hostFontStacks.set(binding, { host: this, state });
+      const binding = new BackendFontStackBindingImpl(this, state) as BackendFontStackBinding;
+      backendFontStacks.set(binding, { backend: this, state });
       return binding;
     } catch (error) {
       for (const binding of bindings.reverse()) binding.dispose();
@@ -542,21 +541,21 @@ export class TextEngineHost {
   }
 
   /** @internal */
-  _disposeInstalledPolicy(state: InstalledHostPolicy): void {
+  _disposeInstalledPolicy(state: InstalledBackendPolicy): void {
     if (state.disposed) return;
-    if (state.leases <= 0) throw new Error('host policy lease underflow');
+    if (state.leases <= 0) throw new Error('backend policy lease underflow');
     state.leases -= 1;
     if (state.leases === 0) this.#disposeInstalledPolicy(state);
   }
 
   /** @internal */
   _retainInstalledPolicy(
-    policy: HostPolicy,
+    policy: BackendPolicy,
   ): Readonly<{ handle: PolicyHandle; descriptor: PolicyDescriptor; dispose(): void }> {
     this.#assertActive();
-    const entry = hostPolicies.get(policy as object);
-    if (entry === undefined || entry.host !== this || entry.state.disposed || policy.disposed) {
-      throw new TypeError('host policy must be a live policy installed by this text engine host');
+    const entry = backendPolicies.get(policy as object);
+    if (entry === undefined || entry.backend !== this || entry.state.disposed || policy.disposed) {
+      throw new TypeError('backend policy must be a live policy installed by this glyph backend');
     }
     entry.state.leases += 1;
     let disposed = false;
@@ -573,16 +572,16 @@ export class TextEngineHost {
 
   /** @internal */
   _retainFontStackBinding(
-    binding: HostFontStackBinding,
-  ): Readonly<{ handle: FontStackHandle; binding: HostFontStackBinding; dispose(): void }> {
+    binding: BackendFontStackBinding,
+  ): Readonly<{ handle: FontStackHandle; binding: BackendFontStackBinding; dispose(): void }> {
     this.#assertActive();
-    const entry = hostFontStacks.get(binding as object);
-    if (entry === undefined || entry.host !== this || entry.state.disposed || binding.disposed) {
-      throw new TypeError('font stack binding must be a live binding from this text engine host');
+    const entry = backendFontStacks.get(binding as object);
+    if (entry === undefined || entry.backend !== this || entry.state.disposed || binding.disposed) {
+      throw new TypeError('font stack binding must be live and owned by this glyph backend');
     }
     entry.state.leases += 1;
-    const retained = new HostFontStackBindingImpl(this, entry.state) as HostFontStackBinding;
-    hostFontStacks.set(retained, { host: this, state: entry.state });
+    const retained = new BackendFontStackBindingImpl(this, entry.state) as BackendFontStackBinding;
+    backendFontStacks.set(retained, { backend: this, state: entry.state });
     return Object.freeze({
       handle: entry.state.handle,
       binding: retained,
@@ -590,42 +589,42 @@ export class TextEngineHost {
     });
   }
 
-  /** Allocates a host-local identity for renderer-owned material state. */
-  createMaterialBinding(): HostMaterialBinding {
-    return this.#createOpaqueBinding('material') as HostMaterialBinding;
+  /** Allocates a backend-local identity for renderer-owned material state. */
+  createMaterialBinding(): BackendMaterialBinding {
+    return this.#createOpaqueBinding('material') as BackendMaterialBinding;
   }
 
-  /** Allocates a host-local identity for renderer-owned resource state. */
-  createResourceBinding(): HostResourceBinding {
-    return this.#createOpaqueBinding('resource') as HostResourceBinding;
+  /** Allocates a backend-local identity for renderer-owned resource state. */
+  createResourceBinding(): BackendResourceBinding {
+    return this.#createOpaqueBinding('resource') as BackendResourceBinding;
   }
 
-  /** Allocates a host-local identity for renderer-owned transform state. */
-  createTransformBinding(): HostTransformBinding {
-    return this.#createOpaqueBinding('transform') as HostTransformBinding;
+  /** Allocates a backend-local identity for renderer-owned transform state. */
+  createTransformBinding(): BackendTransformBinding {
+    return this.#createOpaqueBinding('transform') as BackendTransformBinding;
   }
 
   /** @internal */
   _retainOpaqueBinding(
-    binding: HostMaterialBinding | HostResourceBinding | HostTransformBinding,
-    kind: RetainedHostOpaqueBinding['kind'],
-  ): HostOpaqueBindingLease {
+    binding: BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding,
+    kind: RetainedBackendOpaqueBinding['kind'],
+  ): BackendOpaqueBindingLease {
     this.#assertActive();
-    const entry = hostOpaqueBindings.get(binding as object);
+    const entry = backendOpaqueBindings.get(binding as object);
     if (
       entry === undefined ||
-      entry.host !== this ||
+      entry.backend !== this ||
       entry.state.kind !== kind ||
       entry.state.disposed ||
       binding.disposed
     ) {
-      throw new TypeError(`${kind} binding must be a live binding from this text engine host`);
+      throw new TypeError(`${kind} binding must be live and owned by this glyph backend`);
     }
     entry.state.leases += 1;
-    const retained = new HostOpaqueBindingImpl(this, entry.state) as HostMaterialBinding &
-      HostResourceBinding &
-      HostTransformBinding;
-    hostOpaqueBindings.set(retained, { host: this, state: entry.state });
+    const retained = new BackendOpaqueBindingImpl(this, entry.state) as BackendMaterialBinding &
+      BackendResourceBinding &
+      BackendTransformBinding;
+    backendOpaqueBindings.set(retained, { backend: this, state: entry.state });
     return Object.freeze({
       handle: entry.state.handle,
       binding: retained,
@@ -647,7 +646,7 @@ export class TextEngineHost {
     }>[];
     dispose(): void;
   }> {
-    if (this.#disposed) throw new Error('text engine host is disposed');
+    if (this.#disposed) throw new Error('glyph backend is disposed');
     uint32Handle(referenceId, 'portable payload reference');
     const resolved = this.#portablePayloads.get(referenceId);
     if (resolved === undefined || resolved.owners === 0 || resolved.group === undefined) {
@@ -681,19 +680,19 @@ export class TextEngineHost {
 
   /** @internal */
   _resolveOpaqueBinding(
-    kind: RetainedHostOpaqueBinding['kind'],
+    kind: RetainedBackendOpaqueBinding['kind'],
     handle: number,
-  ): HostMaterialBinding | HostResourceBinding | HostTransformBinding {
-    if (this.#disposed) throw new Error('text engine host is disposed');
+  ): BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding {
+    if (this.#disposed) throw new Error('glyph backend is disposed');
     const state = this.#opaqueBindingsByKind[kind].get(handle);
     if (state !== undefined && !state.disposed) return state.binding;
     throw new Error(`text render plan references unknown ${kind} binding ${handle}`);
   }
 
   /** @internal */
-  _disposeRetainedFontBinding(state: RetainedHostFontBinding): void {
+  _disposeRetainedFontBinding(state: RetainedBackendFontBinding): void {
     if (state.disposed) return;
-    if (state.leases <= 0) throw new Error('host font binding lease underflow');
+    if (state.leases <= 0) throw new Error('backend font binding lease underflow');
     if (state.leases > 1) {
       state.leases -= 1;
       return;
@@ -702,9 +701,9 @@ export class TextEngineHost {
   }
 
   /** @internal */
-  _disposeRetainedFontStack(state: RetainedHostFontStackBinding): void {
+  _disposeRetainedFontStack(state: RetainedBackendFontStackBinding): void {
     if (state.disposed) return;
-    if (state.leases <= 0) throw new Error('host font stack lease underflow');
+    if (state.leases <= 0) throw new Error('backend font stack lease underflow');
     if (state.leases > 1) {
       state.leases -= 1;
       return;
@@ -740,7 +739,7 @@ export class TextEngineHost {
     this.#assertActive();
     assertGlyphId(bindingHandle, 'font-binding', 'font binding handle');
     if (!this.#fontBindings.has(bindingHandle)) {
-      throw new Error(`font binding ${bindingHandle} is not owned by this text engine host`);
+      throw new Error(`font binding ${bindingHandle} is not owned by this glyph backend`);
     }
     for (const [stackHandle, fontHandles] of this.#fontStacks) {
       if (fontHandles.includes(bindingHandle)) {
@@ -763,7 +762,7 @@ export class TextEngineHost {
     for (const [index, fontHandle] of fontHandles.entries()) {
       const checkedHandle = assertGlyphId(fontHandle, 'font-binding', 'font binding handle');
       if (!this.#fontBindings.has(checkedHandle)) {
-        throw new Error(`font binding ${checkedHandle} is not owned by this text engine host`);
+        throw new Error(`font binding ${checkedHandle} is not owned by this glyph backend`);
       }
       view.setUint32(index * 4, checkedHandle, true);
     }
@@ -786,7 +785,7 @@ export class TextEngineHost {
   disposeFontStack(handle: FontStackHandle): void {
     this.#assertActive();
     assertGlyphId(handle, 'font-stack', 'font stack handle');
-    if (!this.#fontStacks.has(handle)) throw new Error(`font stack ${handle} is not owned by this text engine host`);
+    if (!this.#fontStacks.has(handle)) throw new Error(`font stack ${handle} is not owned by this glyph backend`);
     requireStatus(this.#exports.disposeFontStack(handle), 'dispose font stack');
     this.#fontStacks.delete(handle);
     this.#releaseClaim(this.#owners.fontStacks, handle);
@@ -816,97 +815,89 @@ export class TextEngineHost {
   disposePolicy(handle: PolicyHandle): void {
     this.#assertActive();
     handle = assertGlyphId(handle, 'policy', 'policy handle');
-    if (!this.#policies.has(handle)) throw new Error(`render policy ${handle} is not owned by this text engine host`);
+    if (!this.#policies.has(handle)) throw new Error(`render policy ${handle} is not owned by this glyph backend`);
     requireStatus(this.#exports.disposePolicy(handle), 'dispose render policy');
     this.#policies.delete(handle);
     this.#releaseClaim(this.#owners.policies, handle);
     this.#ids.release(handle, 'policy');
   }
 
-  /** Creates a retained text session whose delivery mode is selected by its plan target. */
-  createSession<Target extends TextPlanTarget>(options: RetainedTextEngineSessionOptions<Target>): SessionFor<Target>;
-  /** @internal Raw compatibility overload removed with caller-authored wire updates. */
-  createSession(options: RawTextEngineSessionOptions): TextEngineSession;
-  createSession(
-    options: RetainedTextEngineSessionOptions<TextPlanTarget> | RawTextEngineSessionOptions,
-  ): SessionFor<TextPlanTarget> | TextEngineSession {
-    if (typeof options === 'object' && options !== null && 'target' in options) {
-      const session = createRetainedTextEngineSession(this, options);
-      this.#retainedSessions.add(session);
-      return session;
-    }
-    return this._createRawSession(options);
+  /** Creates a retained plan whose delivery mode is selected by its target. */
+  createRetainedPlan<Target extends TextPlanTarget>(options: RetainedPlanOptions<Target>): RetainedPlanFor<Target> {
+    const retainedPlan = createRetainedPlanImpl(this, options);
+    this.#retainedPlans.add(retainedPlan);
+    return retainedPlan;
   }
 
   /** @internal */
-  _detachRetainedSession(session: { dispose(): void }): void {
-    this.#retainedSessions.delete(session);
+  _detachRetainedPlan(retainedPlan: { dispose(): void }): void {
+    this.#retainedPlans.delete(retainedPlan);
   }
 
   /** @internal */
-  _createRawSession(options: RawTextEngineSessionOptions): TextEngineSession {
+  _createPlanTransport(options: PlanTransportOptions): PlanTransport {
     this.#assertActive();
-    const handle = assertGlyphId(options.handle, 'session', 'session handle');
+    const handle = assertGlyphId(options.handle, 'retained-plan', 'retained-plan handle');
     const requestCapacity = uint32(options.requestCapacity, 'request capacity');
     const resultCapacity = uint32(options.resultCapacity, 'result capacity');
     const textCapacity = uint32(options.textCapacity ?? 0, 'text capacity');
-    const adopted = this.#ids.retain(handle, 'session', 'session handle');
+    const adopted = this.#ids.retain(handle, 'retained-plan', 'retained-plan handle');
     let claimed = false;
     try {
-      claimed = this.#claim(this.#owners.sessions, handle, 'text session');
+      claimed = this.#claim(this.#owners.retainedPlans, handle, 'retained plan');
       requireStatus(
-        this.#exports.createSession(handle, requestCapacity, resultCapacity, textCapacity),
-        'create text session',
+        this.#exports.createRetainedPlan(handle, requestCapacity, resultCapacity, textCapacity),
+        'create retained plan',
       );
-      const session = new TextEngineSession(
+      const transport = new PlanTransport(
         this.#exports,
         handle,
         requestCapacity,
         resultCapacity,
         textCapacity,
         (request) => this.#assertFrameOwnership(handle, request),
-        () => this.#assertRuntimeAvailable?.(),
+        () => this.#assertEngineAvailable?.(),
         () => {
-          this.#sessions.delete(session);
-          this.#releaseClaim(this.#owners.sessions, handle);
-          this.#ids.release(handle, 'session');
+          this.#transports.delete(transport);
+          this.#releaseClaim(this.#owners.retainedPlans, handle);
+          this.#ids.release(handle, 'retained-plan');
         },
       );
-      this.#sessions.add(session);
-      return session;
+      this.#transports.add(transport);
+      return transport;
     } catch (error) {
-      this.#rollbackClaim(this.#owners.sessions, handle, claimed);
-      if (adopted) this.#ids.release(handle, 'session');
+      this.#rollbackClaim(this.#owners.retainedPlans, handle, claimed);
+      if (adopted) this.#ids.release(handle, 'retained-plan');
       throw error;
     }
   }
 
   /** @internal */
-  _allocateRetainedSessionHandle(): TextEngineSessionHandle {
+  _allocateRetainedPlanHandle(): RetainedPlanHandle {
     this.#assertActive();
-    const ordinal = this.#nextRetainedSessionOrdinal;
+    const ordinal = this.#nextRetainedPlanOrdinal;
     if (!Number.isSafeInteger(ordinal) || ordinal <= 0 || ordinal > MAX_U32) {
-      throw new RangeError('retained text session handles are exhausted');
+      throw new RangeError('retained-plan handles are exhausted');
     }
-    this.#nextRetainedSessionOrdinal = ordinal + 1;
-    return this.id('session', `${this.#identityNamespace}/retained-session/${ordinal}`);
+    this.#nextRetainedPlanOrdinal = ordinal + 1;
+    return this.id('retained-plan', `${this.#identityNamespace}/retained-plan/${ordinal}`);
   }
 
   /** @internal */
   _enterBorrowedPlan(): () => void {
     this.#assertActive();
-    return this.#enterRuntimeBorrow?.() ?? (() => {});
+    return this.#enterEngineBorrow?.() ?? (() => {});
   }
 
   /** @internal */
-  _assertRuntimeMutationAllowed(): void {
+  _assertEngineMutationAllowed(): void {
     this.#assertActive();
   }
 
-  /** Disposes this host and every policy, binding, and session it still owns. */
+  /** Disposes this backend and every policy, binding, retained plan, and transport it owns. */
   dispose(): void {
     if (this.#disposed) return;
-    this.#assertRuntimeAvailable?.();
+    this.#assertEngineAvailable?.();
     let failure: unknown;
     const attempt = (dispose: () => void): void => {
       try {
@@ -915,8 +906,8 @@ export class TextEngineHost {
         failure ??= error;
       }
     };
-    for (const session of [...this.#retainedSessions]) attempt(() => session.dispose());
-    for (const session of [...this.#sessions]) attempt(() => session.dispose());
+    for (const retainedPlan of [...this.#retainedPlans]) attempt(() => retainedPlan.dispose());
+    for (const transport of [...this.#transports]) attempt(() => transport.dispose());
     for (const binding of [...this.#opaqueBindings]) attempt(() => this.#forceDisposeOpaqueBinding(binding));
     const retainedStackHandles = new Set([...this.#liveRetainedFontStacks].map((stack) => stack.handle));
     for (const stack of [...this.#liveRetainedFontStacks]) attempt(() => this.#disposeRetainedFontStack(stack));
@@ -934,13 +925,13 @@ export class TextEngineHost {
       if (!installedPolicyHandles.has(handle)) attempt(() => this.disposePolicy(handle));
     }
     if (
-      this.#sessions.size !== 0 ||
+      this.#transports.size !== 0 ||
       this.#fontStacks.size !== 0 ||
       this.#fontBindings.size !== 0 ||
       this.#policies.size !== 0 ||
       this.#portablePayloads.size !== 0
     ) {
-      failure ??= new Error('text engine host disposal left live registrations or payload leases');
+      failure ??= new Error('glyph backend disposal left live registrations or payload leases');
     } else {
       try {
         this.#ids.dispose();
@@ -954,22 +945,24 @@ export class TextEngineHost {
     if (failure !== undefined) throw failure;
   }
 
-  #assertFrameOwnership(sessionHandle: TextEngineSessionHandle, request: Uint8Array): void {
+  #assertFrameOwnership(retainedPlanHandle: RetainedPlanHandle, request: Uint8Array): void {
     const references = frameRegistrationReferences(request);
-    if (references.sessionHandle !== sessionHandle) {
-      throw new TypeError(`text update belongs to session ${references.sessionHandle}, not ${sessionHandle}`);
+    if (references.retainedPlanHandle !== retainedPlanHandle) {
+      throw new TypeError(
+        `text update belongs to retained plan ${references.retainedPlanHandle}, not ${retainedPlanHandle}`,
+      );
     }
     if (this.#owners.policies.get(references.policyHandle) !== this) {
-      throw new TypeError(`render policy ${references.policyHandle} is not owned by this text engine host`);
+      throw new TypeError(`render policy ${references.policyHandle} is not owned by this glyph backend`);
     }
     for (const handle of references.fontStackHandles) {
       if (this.#owners.fontStacks.get(handle) !== this) {
-        throw new TypeError(`font stack ${handle} is not owned by this text engine host`);
+        throw new TypeError(`font stack ${handle} is not owned by this glyph backend`);
       }
     }
   }
 
-  #disposeRetainedFontBinding(state: RetainedHostFontBinding): void {
+  #disposeRetainedFontBinding(state: RetainedBackendFontBinding): void {
     if (state.disposed) return;
     this.disposeFontBinding(state.handle);
     state.leases = 0;
@@ -977,18 +970,18 @@ export class TextEngineHost {
     this.#retainedFontBindings.delete(state.identity);
     this.#liveRetainedFontBindings.delete(state);
     this.#releasePortablePayloadOwners(state.payloads);
-    state.runtime.dispose();
+    state.engineBinding.dispose();
   }
 
   #retainPortablePayloads(
     technique: AnyRasterTechnique,
     compiled: CompiledRasterFont,
-  ): ReadonlyMap<number, RetainedHostPortablePayload> {
+  ): ReadonlyMap<number, RetainedBackendPortablePayload> {
     const resourceNames = new Map<string, string>();
     for (const [name, keys] of compiled.declaredResources) {
       for (const key of keys) resourceNames.set(key, name);
     }
-    const payloads = new Map<number, RetainedHostPortablePayload>();
+    const payloads = new Map<number, RetainedBackendPortablePayload>();
     try {
       for (const [key, payload] of compiled.resources) {
         const resourceName = resourceNames.get(key);
@@ -1028,13 +1021,13 @@ export class TextEngineHost {
   #bindPortablePayloadGroups(
     technique: AnyRasterTechnique,
     compiled: CompiledRasterFont,
-    payloads: ReadonlyMap<number, RetainedHostPortablePayload>,
+    payloads: ReadonlyMap<number, RetainedBackendPortablePayload>,
   ): void {
     const program = resolveRasterPlanProgram(technique.id);
     if (program === undefined) throw new Error(`portable plan program "${technique.id}" is no longer registered`);
     const selectedName = program.schema.render.resource;
     if (selectedName === undefined) throw new Error(`portable plan program "${technique.id}" has no render resource`);
-    const companions: RetainedHostPortablePayload[] = [];
+    const companions: RetainedBackendPortablePayload[] = [];
     for (const [name, keys] of compiled.declaredResources) {
       if (name === selectedName || program.schema.resources[name]?.cardinality === 'many') continue;
       if (keys.length !== 1) throw new Error(`singleton resource "${name}" does not have exactly one payload`);
@@ -1055,7 +1048,7 @@ export class TextEngineHost {
     }
   }
 
-  #releasePortablePayloadOwners(payloads: ReadonlyMap<number, RetainedHostPortablePayload>): void {
+  #releasePortablePayloadOwners(payloads: ReadonlyMap<number, RetainedBackendPortablePayload>): void {
     for (const payload of payloads.values()) {
       if (payload.owners <= 0) throw new Error('portable payload owner underflow');
       payload.owners -= 1;
@@ -1063,19 +1056,19 @@ export class TextEngineHost {
     }
   }
 
-  #releasePortablePayloadLease(payload: RetainedHostPortablePayload): void {
+  #releasePortablePayloadLease(payload: RetainedBackendPortablePayload): void {
     if (payload.leases <= 0) throw new Error('portable payload lease underflow');
     payload.leases -= 1;
     this.#deletePortablePayloadIfUnused(payload);
   }
 
-  #deletePortablePayloadIfUnused(payload: RetainedHostPortablePayload): void {
+  #deletePortablePayloadIfUnused(payload: RetainedBackendPortablePayload): void {
     if (payload.owners === 0 && payload.leases === 0 && this.#portablePayloads.get(payload.referenceId) === payload) {
       this.#portablePayloads.delete(payload.referenceId);
     }
   }
 
-  #disposeInstalledPolicy(state: InstalledHostPolicy): void {
+  #disposeInstalledPolicy(state: InstalledBackendPolicy): void {
     if (state.disposed) return;
     this.disposePolicy(state.handle);
     state.leases = 0;
@@ -1083,7 +1076,7 @@ export class TextEngineHost {
     this.#installedPolicies.delete(state);
   }
 
-  #createOpaqueBinding(kind: RetainedHostOpaqueBinding['kind']): HostOpaqueBindingImpl {
+  #createOpaqueBinding(kind: RetainedBackendOpaqueBinding['kind']): BackendOpaqueBindingImpl {
     this.#assertActive();
     const recycledTransformOrdinal = kind === 'transform' ? this.#freeTransformOrdinals.pop() : undefined;
     const ordinal =
@@ -1093,29 +1086,29 @@ export class TextEngineHost {
         : kind === 'resource'
           ? this.#nextResourceOrdinal
           : this.#nextTransformOrdinal);
-    const next = recycledTransformOrdinal === undefined ? nextHostOrdinal(ordinal, `${kind} binding`) : undefined;
+    const next = recycledTransformOrdinal === undefined ? nextBackendOrdinal(ordinal, `${kind} binding`) : undefined;
     const handle = kind === 'transform' ? ordinal : this.id(kind, `${this.#identityNamespace}/${kind}/${ordinal}`);
-    const state: RetainedHostOpaqueBinding = {
+    const state: RetainedBackendOpaqueBinding = {
       kind,
       handle,
-      binding: undefined as unknown as HostOpaqueBindingImpl,
+      binding: undefined as unknown as BackendOpaqueBindingImpl,
       leases: 1,
       disposed: false,
     };
-    const binding = new HostOpaqueBindingImpl(this, state);
+    const binding = new BackendOpaqueBindingImpl(this, state);
     state.binding = binding;
     this.#opaqueBindings.add(state);
     this.#opaqueBindingsByKind[kind].set(handle, state);
-    hostOpaqueBindings.set(binding, { host: this, state });
+    backendOpaqueBindings.set(binding, { backend: this, state });
     if (kind === 'material') this.#nextMaterialOrdinal = next!;
     else if (kind === 'resource') this.#nextResourceOrdinal = next!;
     else if (next !== undefined) this.#nextTransformOrdinal = next;
     return binding;
   }
 
-  #releaseOpaqueBinding(state: RetainedHostOpaqueBinding): void {
+  #releaseOpaqueBinding(state: RetainedBackendOpaqueBinding): void {
     if (state.disposed) return;
-    if (state.leases <= 0) throw new Error(`host ${state.kind} binding lease underflow`);
+    if (state.leases <= 0) throw new Error(`backend ${state.kind} binding lease underflow`);
     state.leases -= 1;
     if (state.leases !== 0) return;
     state.disposed = true;
@@ -1124,7 +1117,7 @@ export class TextEngineHost {
     if (state.kind === 'transform') this.#freeTransformOrdinals.push(state.handle);
   }
 
-  #forceDisposeOpaqueBinding(state: RetainedHostOpaqueBinding): void {
+  #forceDisposeOpaqueBinding(state: RetainedBackendOpaqueBinding): void {
     if (state.disposed) return;
     state.leases = 0;
     state.disposed = true;
@@ -1133,13 +1126,13 @@ export class TextEngineHost {
   }
 
   /** @internal */
-  _disposeOpaqueBinding(binding: HostMaterialBinding | HostResourceBinding | HostTransformBinding): void {
-    const entry = hostOpaqueBindings.get(binding as object);
-    if (entry === undefined || entry.host !== this) throw new TypeError('opaque binding belongs to another host');
+  _disposeOpaqueBinding(binding: BackendMaterialBinding | BackendResourceBinding | BackendTransformBinding): void {
+    const entry = backendOpaqueBindings.get(binding as object);
+    if (entry === undefined || entry.backend !== this) throw new TypeError('opaque binding belongs to another backend');
     this.#releaseOpaqueBinding(entry.state);
   }
 
-  #disposeRetainedFontStack(state: RetainedHostFontStackBinding): void {
+  #disposeRetainedFontStack(state: RetainedBackendFontStackBinding): void {
     if (state.disposed) return;
     this.disposeFontStack(state.handle);
     state.leases = 0;
@@ -1157,20 +1150,20 @@ export class TextEngineHost {
     if (failure !== undefined) throw failure;
   }
 
-  #claim(owners: Map<number, TextEngineHost>, handle: number, label: string): boolean {
+  #claim(owners: Map<number, GlyphBackend>, handle: number, label: string): boolean {
     const owner = owners.get(handle);
     if (owner === this) return false;
-    if (owner !== undefined) throw new Error(`${label} ${handle} is already owned by another text engine host`);
+    if (owner !== undefined) throw new Error(`${label} ${handle} is already owned by another glyph backend`);
     owners.set(handle, this);
     return true;
   }
 
-  #rollbackClaim(owners: Map<number, TextEngineHost>, handle: number, claimed: boolean): void {
+  #rollbackClaim(owners: Map<number, GlyphBackend>, handle: number, claimed: boolean): void {
     if (claimed && owners.get(handle) === this) owners.delete(handle);
   }
 
-  #releaseClaim(owners: Map<number, TextEngineHost>, handle: number): void {
-    if (owners.get(handle) !== this) throw new Error(`text engine host lost registration ${handle}`);
+  #releaseClaim(owners: Map<number, GlyphBackend>, handle: number): void {
+    if (owners.get(handle) !== this) throw new Error(`glyph backend lost registration ${handle}`);
     owners.delete(handle);
   }
 
@@ -1190,14 +1183,14 @@ export class TextEngineHost {
   }
 
   #assertActive(): void {
-    if (this.#disposed) throw new Error('text engine host is disposed');
-    this.#assertRuntimeAvailable?.();
+    if (this.#disposed) throw new Error('glyph backend is disposed');
+    this.#assertEngineAvailable?.();
   }
 }
 
 function samePortablePayloadGroup(
-  left: readonly RetainedHostPortablePayload[],
-  right: readonly RetainedHostPortablePayload[],
+  left: readonly RetainedBackendPortablePayload[],
+  right: readonly RetainedBackendPortablePayload[],
 ): boolean {
   if (left.length !== right.length) return false;
   return left.every((resource, index) => right[index] === resource);
@@ -1256,14 +1249,14 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
   return true;
 }
 
-class HostPolicyImpl implements HostPolicy {
-  declare readonly [hostPolicyBrand]: true;
-  readonly #host: TextEngineHost;
-  readonly #state: InstalledHostPolicy;
+class BackendPolicyImpl implements BackendPolicy {
+  declare readonly [backendPolicyBrand]: true;
+  readonly #backend: GlyphBackend;
+  readonly #state: InstalledBackendPolicy;
   #disposed = false;
 
-  constructor(host: TextEngineHost, state: InstalledHostPolicy) {
-    this.#host = host;
+  constructor(backend: GlyphBackend, state: InstalledBackendPolicy) {
+    this.#backend = backend;
     this.#state = state;
   }
 
@@ -1273,18 +1266,18 @@ class HostPolicyImpl implements HostPolicy {
 
   dispose(): void {
     if (this.disposed) return;
-    this.#host._disposeInstalledPolicy(this.#state);
+    this.#backend._disposeInstalledPolicy(this.#state);
     this.#disposed = true;
   }
 }
 
-class HostFontBindingImpl {
-  readonly #host: TextEngineHost;
-  readonly #state: RetainedHostFontBinding;
+class BackendFontBindingImpl {
+  readonly #backend: GlyphBackend;
+  readonly #state: RetainedBackendFontBinding;
   #disposed = false;
 
-  constructor(host: TextEngineHost, state: RetainedHostFontBinding) {
-    this.#host = host;
+  constructor(backend: GlyphBackend, state: RetainedBackendFontBinding) {
+    this.#backend = backend;
     this.#state = state;
   }
 
@@ -1298,25 +1291,25 @@ class HostFontBindingImpl {
 
   dispose(): void {
     if (this.disposed) return;
-    this.#host._disposeRetainedFontBinding(this.#state);
+    this.#backend._disposeRetainedFontBinding(this.#state);
     this.#disposed = true;
   }
 
   /** @internal */
-  _state(): RetainedHostFontBinding {
-    if (this.disposed) throw new Error('host font binding has been disposed');
+  _state(): RetainedBackendFontBinding {
+    if (this.disposed) throw new Error('backend font binding has been disposed');
     return this.#state;
   }
 }
 
-class HostFontStackBindingImpl implements HostFontStackBinding {
-  declare readonly [hostFontStackBindingBrand]: true;
-  readonly #host: TextEngineHost;
-  readonly #state: RetainedHostFontStackBinding;
+class BackendFontStackBindingImpl implements BackendFontStackBinding {
+  declare readonly [backendFontStackBindingBrand]: true;
+  readonly #backend: GlyphBackend;
+  readonly #state: RetainedBackendFontStackBinding;
   #disposed = false;
 
-  constructor(host: TextEngineHost, state: RetainedHostFontStackBinding) {
-    this.#host = host;
+  constructor(backend: GlyphBackend, state: RetainedBackendFontStackBinding) {
+    this.#backend = backend;
     this.#state = state;
   }
 
@@ -1326,21 +1319,21 @@ class HostFontStackBindingImpl implements HostFontStackBinding {
 
   dispose(): void {
     if (this.disposed) return;
-    this.#host._disposeRetainedFontStack(this.#state);
+    this.#backend._disposeRetainedFontStack(this.#state);
     this.#disposed = true;
   }
 }
 
-class HostOpaqueBindingImpl implements HostMaterialBinding, HostResourceBinding, HostTransformBinding {
-  declare readonly [hostMaterialBindingBrand]: true;
-  declare readonly [hostResourceBindingBrand]: true;
-  declare readonly [hostTransformBindingBrand]: true;
-  readonly #host: TextEngineHost;
-  readonly #state: RetainedHostOpaqueBinding;
+class BackendOpaqueBindingImpl implements BackendMaterialBinding, BackendResourceBinding, BackendTransformBinding {
+  declare readonly [backendMaterialBindingBrand]: true;
+  declare readonly [backendResourceBindingBrand]: true;
+  declare readonly [backendTransformBindingBrand]: true;
+  readonly #backend: GlyphBackend;
+  readonly #state: RetainedBackendOpaqueBinding;
   #disposed = false;
 
-  constructor(host: TextEngineHost, state: RetainedHostOpaqueBinding) {
-    this.#host = host;
+  constructor(backend: GlyphBackend, state: RetainedBackendOpaqueBinding) {
+    this.#backend = backend;
     this.#state = state;
   }
 
@@ -1350,7 +1343,7 @@ class HostOpaqueBindingImpl implements HostMaterialBinding, HostResourceBinding,
 
   dispose(): void {
     if (this.disposed) return;
-    this.#host._disposeOpaqueBinding(this);
+    this.#backend._disposeOpaqueBinding(this);
     this.#disposed = true;
   }
 }
@@ -1363,12 +1356,13 @@ function snapshotPolicyDescriptor(descriptor: PolicyDescriptor): PolicyDescripto
   }
 }
 
-export class TextEngineSession {
+/** @internal Owns one retained plan's direct Wasm request/result exchange. */
+export class PlanTransport {
   readonly #exports;
-  readonly #handle: TextEngineSessionHandle;
+  readonly #handle: RetainedPlanHandle;
   readonly #onDispose: () => void;
   readonly #assertRequestOwnership: (request: Uint8Array) => void;
-  readonly #assertRuntimeAvailable: () => void;
+  readonly #assertEngineAvailable: () => void;
   #requestCapacity: number;
   #resultCapacity: number;
   #textCapacity: number;
@@ -1376,20 +1370,20 @@ export class TextEngineSession {
   /** Bumped before every call that can answer with new bytes; borrows from older epochs are dead. */
   #epoch = 0;
   /** The epoch each issued borrow was published under, keyed by publication identity. */
-  readonly #issued = new WeakMap<TextEnginePublication, number>();
-  /** Owned copies made by this session; unlike borrows, they never expire. */
-  readonly #owned = new WeakSet<TextEnginePublication>();
+  readonly #issued = new WeakMap<PlanPublication, number>();
+  /** Owned copies made by this transport; unlike borrows, they never expire. */
+  readonly #owned = new WeakSet<PlanPublication>();
   #latestGeneration = 0;
 
-  /** @internal Sessions are created through {@link TextEngineHost.createSession}. */
+  /** @internal Plan transports are created by the retained-plan implementation. */
   constructor(
     exports: ReturnType<typeof runtimeShaperEngineExports>,
-    handle: TextEngineSessionHandle,
+    handle: RetainedPlanHandle,
     requestCapacity: number,
     resultCapacity: number,
     textCapacity: number,
     assertRequestOwnership: (request: Uint8Array) => void,
-    assertRuntimeAvailable: () => void,
+    assertEngineAvailable: () => void,
     onDispose: () => void,
   ) {
     this.#exports = exports;
@@ -1398,23 +1392,22 @@ export class TextEngineSession {
     this.#resultCapacity = resultCapacity;
     this.#textCapacity = textCapacity;
     this.#assertRequestOwnership = assertRequestOwnership;
-    this.#assertRuntimeAvailable = assertRuntimeAvailable;
+    this.#assertEngineAvailable = assertEngineAvailable;
     this.#onDispose = onDispose;
   }
 
-  get handle(): TextEngineSessionHandle {
+  get handle(): RetainedPlanHandle {
     return this.#handle;
   }
 
   /**
-   * Whether this session's publication has expired. An owned copy always answers false.
-   * A borrow expires when the session answers another call, Wasm memory grows, or the
-   * session is disposed.
+   * Whether this transport's publication has expired. An owned copy always answers false.
+   * A borrow expires after another answer, Wasm memory growth, or transport disposal.
    */
-  isExpired(publication: TextEnginePublication): boolean {
+  isExpired(publication: PlanPublication): boolean {
     if (this.#owned.has(publication)) return false;
     if (this.#issued.get(publication) === undefined) {
-      throw new TypeError('publication was not issued by this text engine session');
+      throw new TypeError('publication was not issued by this plan transport');
     }
     return (
       this.#disposed ||
@@ -1429,10 +1422,10 @@ export class TextEngineSession {
    * asynchronous work and later engine calls in this JavaScript realm. Transfer its
    * self-owned bytes to a worker as untrusted boundary data; runtime provenance is realm-local.
    */
-  copyPublication(publication: TextEnginePublication): OwnedTextEnginePublication {
+  copyPublication(publication: PlanPublication): OwnedPlanPublication {
     this.#assertPublicationCurrent(publication);
     const bytes = publication.bytes.slice();
-    const owned = markOwnedTextEnginePublication(
+    const owned = markOwnedPlanPublication(
       Object.freeze({
         ...publication,
         bytes,
@@ -1444,9 +1437,9 @@ export class TextEngineSession {
     return owned;
   }
 
-  #assertPublicationCurrent(publication: TextEnginePublication): void {
+  #assertPublicationCurrent(publication: PlanPublication): void {
     if (this.isExpired(publication)) {
-      throw new TextEnginePublicationExpiredError(publication.publicationGeneration, this.#latestGeneration);
+      throw new PlanPublicationExpiredError(publication.publicationGeneration, this.#latestGeneration);
     }
   }
 
@@ -1461,8 +1454,8 @@ export class TextEngineSession {
     textCapacity = uint32(textCapacity, 'text capacity');
     this.#invalidate();
     requireStatus(
-      this.#exports.reserveSession(this.#handle, requestCapacity, resultCapacity, textCapacity),
-      'reserve text session',
+      this.#exports.reserveRetainedPlan(this.#handle, requestCapacity, resultCapacity, textCapacity),
+      'reserve retained plan',
     );
     this.#requestCapacity = Math.max(this.#requestCapacity, requestCapacity);
     this.#resultCapacity = Math.max(this.#resultCapacity, resultCapacity);
@@ -1474,7 +1467,7 @@ export class TextEngineSession {
     this.reserve(this.#requestCapacity, this.#resultCapacity, textCapacity);
   }
 
-  update(request: Uint8Array): TextEnginePublication {
+  update(request: Uint8Array): PlanPublication {
     this.#assertActive();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
       throw new TypeError('text update request must be a nonempty Uint8Array');
@@ -1490,7 +1483,7 @@ export class TextEngineSession {
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0)
-        throw engineStatusError('resolve text request arena', textShaperAbi.status.sessionMissing);
+        throw engineStatusError('resolve text request arena', textShaperAbi.status.retainedPlanMissing);
       const pinnedMemoryBuffer = this.#exports.memory.buffer;
       new Uint8Array(pinnedMemoryBuffer, requestPointer, requestLength).set(request);
       const resultPointer = this.#exports.textUpdate(this.#handle, requestPointer, requestLength);
@@ -1528,12 +1521,12 @@ export class TextEngineSession {
 
   /**
    * Answers one paragraph-scoped synchronous measurement without publishing. The
-   * result rides the inactive output slot under a host lease: its bytes stay readable
+   * result rides the inactive output slot under a backend lease: its bytes stay readable
    * only until the next call into the same Wasm module. Engine revisions, the
    * publication generation, and the renderer fence are untouched, so the following
    * ordinary frame proceeds from pre-measure state.
    */
-  measureParagraph(request: Uint8Array, paragraphId: ParagraphId): TextEnginePublication {
+  measureParagraph(request: Uint8Array, paragraphId: ParagraphId): PlanPublication {
     this.#assertActive();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
       throw new TypeError('paragraph measure request must be a nonempty Uint8Array');
@@ -1550,7 +1543,7 @@ export class TextEngineSession {
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0)
-        throw engineStatusError('resolve text request arena', textShaperAbi.status.sessionMissing);
+        throw engineStatusError('resolve text request arena', textShaperAbi.status.retainedPlanMissing);
       new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
       const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
       const memoryBuffer = this.#exports.memory.buffer;
@@ -1589,7 +1582,7 @@ export class TextEngineSession {
     resultPointer: number,
     memoryBuffer: ArrayBuffer,
     initialMemoryBuffer: ArrayBuffer,
-  ): TextEnginePublication {
+  ): PlanPublication {
     const layout = textShaperAbi.layouts.engineResult;
     const byteLength = header.getUint32(layout.byteLength, true);
     if (byteLength < layout.size || resultPointer + byteLength > memoryBuffer.byteLength) {
@@ -1597,7 +1590,7 @@ export class TextEngineSession {
     }
     this.#requestCapacity = header.getUint32(layout.requestCapacity, true);
     this.#resultCapacity = header.getUint32(layout.resultCapacity, true);
-    const publication: TextEnginePublication = {
+    const publication: PlanPublication = {
       bytes: new Uint8Array(memoryBuffer, resultPointer, byteLength),
       memoryBuffer,
       memoryGrew: memoryBuffer !== initialMemoryBuffer,
@@ -1621,21 +1614,21 @@ export class TextEngineSession {
 
   dispose(): void {
     if (this.#disposed) return;
-    this.#assertRuntimeAvailable();
-    requireStatus(this.#exports.disposeSession(this.#handle), 'dispose text session');
+    this.#assertEngineAvailable();
+    requireStatus(this.#exports.disposeRetainedPlan(this.#handle), 'dispose retained plan');
     this.#invalidate();
     this.#disposed = true;
     this.#onDispose();
   }
 
   #assertActive(): void {
-    if (this.#disposed) throw new Error('text engine session is disposed');
-    this.#assertRuntimeAvailable();
+    if (this.#disposed) throw new Error('plan transport is disposed');
+    this.#assertEngineAvailable();
   }
 }
 
 interface FrameRegistrationReferences {
-  readonly sessionHandle: number;
+  readonly retainedPlanHandle: number;
   readonly policyHandle: number;
   readonly fontStackHandles: ReadonlySet<number>;
 }
@@ -1667,7 +1660,7 @@ function frameRegistrationReferences(bytes: Uint8Array): FrameRegistrationRefere
     }
   }
   return {
-    sessionHandle: uint32Handle(view.getUint32(request.sessionId, true), 'frame session handle'),
+    retainedPlanHandle: uint32Handle(view.getUint32(request.retainedPlanId, true), 'frame retained-plan handle'),
     policyHandle: uint32Handle(view.getUint32(request.policyHandle, true), 'frame policy handle'),
     fontStackHandles,
   };
@@ -1705,7 +1698,7 @@ function checkedProduct(left: number, right: number, label: string): number {
   return value;
 }
 
-function nextHostOrdinal(current: number, label: string): number {
+function nextBackendOrdinal(current: number, label: string): number {
   if (!Number.isSafeInteger(current) || current <= 0 || current > MAX_U32) {
     throw new RangeError(`${label} identities are exhausted`);
   }

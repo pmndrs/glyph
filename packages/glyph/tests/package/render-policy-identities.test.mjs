@@ -59,7 +59,7 @@ test('semantic ID helpers are stable and namespace program variants', () => {
 
 test('host ID helpers are stable, nonzero, domain-separated, and collision-checked', () => {
   assert.equal(id('policy', 'example/default'), id('policy', 'example/default'));
-  assert.notEqual(id('policy', 'example/default'), id('session', 'example/default'));
+  assert.notEqual(id('policy', 'example/default'), id('retained-plan', 'example/default'));
   assert.ok(id('buffer', 'example/origin') > 0 && id('buffer', 'example/origin') <= 0xffff);
   assert.throws(() => id('policy', ''), /nonempty string/);
   assert.throws(() => id('unknown', 'example'), /kind is not supported/);

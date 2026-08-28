@@ -18,8 +18,8 @@
  * Three policy with `threeRenderPolicyBytes`'s default `'ordered'` allocation mode and
  * `ThreeTextEngineCoordinatorOptions` exposes only `transformMode`, so no first-party path
  * reachable from `Text`/`TextGroup` selects `'stable'`. Covering it needs either a coordinator
- * option or a host-level test that drives `TextEngineHost` directly, as
- * `three-engine-runtime.test.mjs` does.
+ * option or a host-level test that drives `GlyphBackend` directly, as
+ * `three-engine-coordinator.test.mjs` does.
  */
 import test, { after } from 'node:test';
 

@@ -105,7 +105,7 @@ pub enum RetainedGather {
     RebuildFrom(usize),
 }
 
-/// Decoration rows use the top identity bit; session glyph identities stay below it.
+/// Decoration rows use the top identity bit; retained-plan glyph identities stay below it.
 pub const DECORATION_STABLE_ID_BASE: u32 = 0x8000_0000;
 
 /// CSS paint order for decoration appends: underline and overline draw under the text,
@@ -1722,7 +1722,7 @@ mod tests {
 
     /// A glyph whose binding selects no raster -- a space -- commits an identity and occupies no
     /// record, so it advances source space without advancing record space. The retained walk pairs
-    /// the two by position across the whole session, which is why deleting one is the edit that
+    /// the two by position across the whole retained plan, which is why deleting one is the edit that
     /// unpicks the pairing: every glyph after it reads a neighbour's source row, and an unchanged
     /// glyph reading a recordless row is skipped, retiring a record nobody edited. `RECORDLESS`
     /// below is the id of a glyph the fixture binding cannot select; a fresh gather of the same
@@ -1735,7 +1735,7 @@ mod tests {
 
         // Inside one paragraph: the surviving glyph reports nothing changed, so the walk reads the
         // deleted space's source row as its own and skips the record it owns.
-        retained_session_matches_fresh(
+        retained_plan_matches_fresh(
             "recordless glyph deleted inside a paragraph",
             &[(1, &[layout_glyph(1, 0), space(2), layout_glyph(3, 1)], &[])],
             &[(1, &[layout_glyph(1, 0), layout_glyph(3, 1)], &[0, 0])],
@@ -1746,7 +1746,7 @@ mod tests {
         // surviving glyph reports a change -- and still leaves the running cursors short of where
         // its rows ended, so the untouched paragraph below it resumes inside its predecessor's
         // rows. This is `text-mutation-known-defects.test.mjs` case 1 in miniature.
-        retained_session_matches_fresh(
+        retained_plan_matches_fresh(
             "leading run and its space deleted above an untouched paragraph",
             &[
                 (
@@ -1770,7 +1770,7 @@ mod tests {
 
         // The mirror image: the paragraph that shed the glyph is last, so nothing follows it to
         // detect the short walk and `finish_retained` is what must catch it.
-        retained_session_matches_fresh(
+        retained_plan_matches_fresh(
             "recordless glyph deleted in the last paragraph",
             &[
                 (1, &[layout_glyph(1, 0), layout_glyph(2, 1)], &[]),
@@ -1783,7 +1783,7 @@ mod tests {
             false,
         );
 
-        // A recordless glyph that stays put must not cost the retained path anything: a session
+        // A recordless glyph that stays put must not cost the retained path anything: a retained plan
         // holding a space and changing nothing is retained end to end, so the checks above buy
         // their correctness without a rebuild.
         let mut workspace = PolicyGatherWorkspace::default();
@@ -1794,9 +1794,9 @@ mod tests {
             (2, &[layout_glyph(4, 1)], &[]),
         ];
         workspace.reserve_policy(&policy, 16).unwrap();
-        gather_session(&policy, &binding, &mut workspace, paragraphs, false);
+        gather_retained_plan(&policy, &binding, &mut workspace, paragraphs, false);
         assert!(workspace.begin_retained(&policy, 16).unwrap());
-        assert!(gather_session(
+        assert!(gather_retained_plan(
             &policy,
             &binding,
             &mut workspace,
@@ -1805,13 +1805,13 @@ mod tests {
         ));
     }
 
-    /// One paragraph as `append_session_gather` sees it: its transform, its glyphs, and the
+    /// One paragraph as `append_retained_plan_gather` sees it: its transform, its glyphs, and the
     /// semantic deltas positioning reports. An empty delta slice is an untouched paragraph.
     type Paragraph<'a> = (u32, &'a [LayoutGlyph], &'a [u16]);
 
-    /// Gathers a whole session the way `state::append_session_gather` does, and reports whether
+    /// Gathers a whole retained plan the way `state::append_retained_plan_gather` does, and reports whether
     /// the retained path survived to the end.
-    fn gather_session(
+    fn gather_retained_plan(
         policy: &ValidatedPolicy,
         binding: &FontRenderBinding,
         workspace: &mut PolicyGatherWorkspace,
@@ -1859,13 +1859,13 @@ mod tests {
         retaining
     }
 
-    /// A session edited into some content must gather exactly what a session built with that
+    /// A retained plan edited into some content must gather exactly what a retained plan built with that
     /// content gathers -- every record, every register, in order.
     /// `expect_retained` names whether the edit is supposed to stay on the incremental path.
     /// Without it an implementation that abandoned retention entirely and rebuilt every frame
     /// would satisfy every comparison below, so the differential would prove correctness while
     /// silently losing the fast path it exists to protect.
-    fn retained_session_matches_fresh(
+    fn retained_plan_matches_fresh(
         label: &str,
         before: &[Paragraph<'_>],
         after: &[Paragraph<'_>],
@@ -1876,14 +1876,14 @@ mod tests {
 
         let mut incremental = PolicyGatherWorkspace::default();
         incremental.reserve_policy(&policy, 16).unwrap();
-        gather_session(&policy, &binding, &mut incremental, before, false);
+        gather_retained_plan(&policy, &binding, &mut incremental, before, false);
         assert!(incremental.begin_retained(&policy, 16).unwrap(), "{label}");
-        let retained = gather_session(&policy, &binding, &mut incremental, after, true);
+        let retained = gather_retained_plan(&policy, &binding, &mut incremental, after, true);
         assert_eq!(retained, expect_retained, "{label}: retention");
 
         let mut fresh = PolicyGatherWorkspace::default();
         fresh.reserve_policy(&policy, 16).unwrap();
-        gather_session(&policy, &binding, &mut fresh, after, false);
+        gather_retained_plan(&policy, &binding, &mut fresh, after, false);
 
         let incremental_view = incremental.view();
         let fresh_view = fresh.view();

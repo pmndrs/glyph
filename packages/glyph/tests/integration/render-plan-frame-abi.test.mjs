@@ -6,7 +6,7 @@ import { copyIntoAllocation, engineUpdateBytes, renderPolicyBytes } from '../sup
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const sessionId = 5;
+const retainedPlanId = 5;
 const policyHandle = 11;
 
 test('publishes retained frame transactions through aligned A/B Wasm arenas', async () => {
@@ -18,7 +18,24 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
   );
   assert.ok(memory instanceof WebAssembly.Memory);
+  for (const [name, exported] of Object.entries(abi.functions)) {
+    assert.equal(
+      typeof instance.exports[exported],
+      'function',
+      `${name} must resolve to the Rust Wasm export ${exported}`,
+    );
+  }
   assert.equal(fn.initialize(), abi.status.ok);
+  assert.equal('createSession' in abi.functions, false);
+  assert.equal('reserveSession' in abi.functions, false);
+  assert.equal('disposeSession' in abi.functions, false);
+  assert.equal('sessionCount' in abi.functions, false);
+  assert.equal('sessionConflict' in abi.status, false);
+  assert.equal('sessionMissing' in abi.status, false);
+  assert.equal(instance.exports.pmndrs_glyph_engine_create_session, undefined);
+  assert.equal(instance.exports.pmndrs_glyph_engine_reserve_session, undefined);
+  assert.equal(instance.exports.pmndrs_glyph_engine_dispose_session, undefined);
+  assert.equal(instance.exports.pmndrs_glyph_engine_session_count, undefined);
 
   const policy = renderPolicyBytes(abi);
   const policyPointer = copyIntoAllocation(memory, fn.allocate, policy);
@@ -84,7 +101,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.deepEqual(abi.engine.blockAlignments, { center: 2, end: 3, start: 1 });
   assert.deepEqual(abi.engine.exclusionWrapSides, { both: 1, inlineEnd: 3, inlineStart: 2, largest: 4 });
   assert.deepEqual(abi.engine.inlineObjectBaselines, { alphabetic: 1, middle: 3, textBottom: 4, textTop: 2 });
-  assert.equal(abi.engine.defaultSessionTextCapacity, 1024);
+  assert.equal(abi.engine.defaultRetainedPlanTextCapacity, 1024);
   assert.deepEqual(abi.engine.semanticF32Fields, {
     blockExtent: 3,
     blockOrigin: 7,
@@ -108,15 +125,15 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
     stableGlyphId: 5,
     transformIndex: 4,
   });
-  assert.equal(fn.createSession(sessionId, requestLayout.size, resultLayout.size, 0), abi.status.ok);
-  assert.equal(fn.sessionCount(), 1);
-  let requestPointer = fn.requestPointer(sessionId);
+  assert.equal(fn.createRetainedPlan(retainedPlanId, requestLayout.size, resultLayout.size, 0), abi.status.ok);
+  assert.equal(fn.retainedPlanCount(), 1);
+  let requestPointer = fn.requestPointer(retainedPlanId);
   assert.notEqual(requestPointer, 0);
   assert.equal(requestPointer % 16, 0);
-  assert.ok(fn.requestCapacity(sessionId) >= requestLayout.size);
+  assert.ok(fn.requestCapacity(retainedPlanId) >= requestLayout.size);
 
   writeRequest(memory, requestPointer, abi, 0, 0);
-  const firstPointer = fn.textUpdate(sessionId, requestPointer, requestLayout.size);
+  const firstPointer = fn.textUpdate(retainedPlanId, requestPointer, requestLayout.size);
   assert.notEqual(firstPointer, 0);
   assert.equal(firstPointer % resultLayout.alignment, 0);
   assertResult(memory, firstPointer, abi, {
@@ -132,7 +149,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
 
   const warmBuffer = memory.buffer;
   writeRequest(memory, requestPointer, abi, 1, 1, 1);
-  const secondPointer = fn.textUpdate(sessionId, requestPointer, requestLayout.size);
+  const secondPointer = fn.textUpdate(retainedPlanId, requestPointer, requestLayout.size);
   assert.strictEqual(memory.buffer, warmBuffer, 'a warm empty transaction must not grow Wasm memory');
   assert.notEqual(secondPointer, firstPointer);
   assertResult(memory, secondPointer, abi, {
@@ -148,7 +165,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   const secondHeader = resultBytes(memory, secondPointer, resultLayout).slice();
 
   writeRequest(memory, requestPointer, abi, 2, 2, 3);
-  const futureFencePointer = fn.textUpdate(sessionId, requestPointer, requestLayout.size);
+  const futureFencePointer = fn.textUpdate(retainedPlanId, requestPointer, requestLayout.size);
   assertResult(memory, futureFencePointer, abi, {
     status: abi.status.revisionConflict,
     engineRevision: 2,
@@ -161,7 +178,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.deepEqual(resultBytes(memory, secondPointer, resultLayout), secondHeader);
 
   writeRequest(memory, requestPointer, abi, 1, 2, 1);
-  const failedPointer = fn.textUpdate(sessionId, requestPointer, requestLayout.size);
+  const failedPointer = fn.textUpdate(retainedPlanId, requestPointer, requestLayout.size);
   assert.notEqual(failedPointer, secondPointer);
   assertResult(memory, failedPointer, abi, {
     status: abi.status.revisionConflict,
@@ -175,7 +192,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   assert.deepEqual(resultBytes(memory, secondPointer, resultLayout), secondHeader);
 
   writeRequest(memory, requestPointer, abi, 2, 0, 2);
-  const checkpointPointer = fn.textUpdate(sessionId, requestPointer, requestLayout.size);
+  const checkpointPointer = fn.textUpdate(retainedPlanId, requestPointer, requestLayout.size);
   assertResult(memory, checkpointPointer, abi, {
     status: abi.status.ok,
     engineRevision: 3,
@@ -187,14 +204,14 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   });
   const checkpointHeader = resultBytes(memory, checkpointPointer, resultLayout).slice();
 
-  assert.equal(fn.reserveSession(sessionId, 512, resultLayout.size, 8), abi.status.ok);
-  requestPointer = fn.requestPointer(sessionId);
-  assert.ok(fn.requestCapacity(sessionId) >= 512);
+  assert.equal(fn.reserveRetainedPlan(retainedPlanId, 512, resultLayout.size, 8), abi.status.ok);
+  requestPointer = fn.requestPointer(retainedPlanId);
+  assert.ok(fn.requestCapacity(retainedPlanId) >= 512);
   const textWarmBuffer = memory.buffer;
   const insertLength = writeRequest(memory, requestPointer, abi, 3, 3, 3, [
     { start: 0, deleteCount: 0, insert: [0x61, 0x62, 0x63] },
   ]);
-  const insertedPointer = fn.textUpdate(sessionId, requestPointer, insertLength);
+  const insertedPointer = fn.textUpdate(retainedPlanId, requestPointer, insertLength);
   assert.strictEqual(memory.buffer, textWarmBuffer);
   assertResult(memory, insertedPointer, abi, {
     status: abi.status.ok,
@@ -210,7 +227,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   const retainedEditLength = writeRequest(memory, requestPointer, abi, 4, 4, 4, [
     { start: 1, deleteCount: 1, insert: [0x58] },
   ]);
-  const retainedEditPointer = fn.textUpdate(sessionId, requestPointer, retainedEditLength);
+  const retainedEditPointer = fn.textUpdate(retainedPlanId, requestPointer, retainedEditLength);
   assert.strictEqual(memory.buffer, textWarmBuffer);
   assertResult(memory, retainedEditPointer, abi, {
     status: abi.status.ok,
@@ -226,7 +243,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   const invalidEditLength = writeRequest(memory, requestPointer, abi, 5, 5, 5, [
     { start: 9, deleteCount: 0, insert: [0x21] },
   ]);
-  const invalidEditPointer = fn.textUpdate(sessionId, requestPointer, invalidEditLength);
+  const invalidEditPointer = fn.textUpdate(retainedPlanId, requestPointer, invalidEditLength);
   assertResult(memory, invalidEditPointer, abi, {
     status: abi.status.invalidRequest,
     engineRevision: 5,
@@ -240,7 +257,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
 
   const geometry = geometryRequestBytes(abi, 5, 5, 5);
   new Uint8Array(memory.buffer, requestPointer, geometry.byteLength).set(geometry);
-  const geometryPointer = fn.textUpdate(sessionId, requestPointer, geometry.byteLength);
+  const geometryPointer = fn.textUpdate(retainedPlanId, requestPointer, geometry.byteLength);
   assertResult(memory, geometryPointer, abi, {
     status: abi.status.ok,
     engineRevision: 6,
@@ -256,7 +273,7 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
   const exclusionOffset = new DataView(invalidGeometry.buffer).getUint32(requestLayout.exclusionsOffset, true);
   new DataView(invalidGeometry.buffer).setUint32(exclusionOffset + abi.layouts.engineExclusion.regionId, 9, true);
   new Uint8Array(memory.buffer, requestPointer, invalidGeometry.byteLength).set(invalidGeometry);
-  const invalidGeometryPointer = fn.textUpdate(sessionId, requestPointer, invalidGeometry.byteLength);
+  const invalidGeometryPointer = fn.textUpdate(retainedPlanId, requestPointer, invalidGeometry.byteLength);
   assertResult(memory, invalidGeometryPointer, abi, {
     status: abi.status.invalidRequest,
     engineRevision: 6,
@@ -270,17 +287,17 @@ test('publishes retained frame transactions through aligned A/B Wasm arenas', as
 
   const oldBuffer = memory.buffer;
   const grownCapacity = 8 * 1024 * 1024;
-  assert.equal(fn.reserveSession(sessionId, grownCapacity, grownCapacity, 0), abi.status.ok);
+  assert.equal(fn.reserveRetainedPlan(retainedPlanId, grownCapacity, grownCapacity, 0), abi.status.ok);
   assert.notStrictEqual(memory.buffer, oldBuffer);
   assert.equal(oldBuffer.byteLength, 0, 'memory.grow must detach fixed-length views in the pinned runtime');
-  requestPointer = fn.requestPointer(sessionId);
+  requestPointer = fn.requestPointer(retainedPlanId);
   assert.equal(requestPointer % 16, 0);
-  assert.ok(fn.requestCapacity(sessionId) >= grownCapacity);
+  assert.ok(fn.requestCapacity(retainedPlanId) >= grownCapacity);
 
-  assert.equal(fn.disposeSession(sessionId), abi.status.ok);
-  assert.equal(fn.sessionCount(), 0);
-  assert.equal(fn.disposeSession(sessionId), abi.status.sessionMissing);
-  assert.equal(fn.textUpdate(sessionId, requestPointer, requestLayout.size), 0);
+  assert.equal(fn.disposeRetainedPlan(retainedPlanId), abi.status.ok);
+  assert.equal(fn.retainedPlanCount(), 0);
+  assert.equal(fn.disposeRetainedPlan(retainedPlanId), abi.status.retainedPlanMissing);
+  assert.equal(fn.textUpdate(retainedPlanId, requestPointer, requestLayout.size), 0);
   assert.equal(fn.disposePolicy(policyHandle), abi.status.ok);
 });
 
@@ -294,7 +311,7 @@ function writeRequest(
   textMutations = [],
 ) {
   const bytes = engineUpdateBytes(abi, {
-    sessionId,
+    retainedPlanId,
     policyHandle,
     expectedEngineRevision,
     consumedPlanRevision,
@@ -318,7 +335,7 @@ function geometryRequestBytes(abi, expectedEngineRevision, consumedPlanRevision,
   const bytes = new Uint8Array(inlineObjectOffset + inlineObject.size);
   bytes.set(
     engineUpdateBytes(abi, {
-      sessionId,
+      retainedPlanId,
       policyHandle,
       expectedEngineRevision,
       consumedPlanRevision,
@@ -391,7 +408,7 @@ function assertResult(memory, pointer, abi, expected) {
   const view = new DataView(memory.buffer, pointer, layout.size);
   assert.equal(view.getUint32(layout.abiVersion, true), abi.version);
   assert.equal(view.getUint32(layout.byteLength, true), layout.size);
-  assert.equal(view.getUint32(layout.sessionId, true), sessionId);
+  assert.equal(view.getUint32(layout.retainedPlanId, true), retainedPlanId);
   for (const [field, value] of Object.entries(expected)) {
     assert.equal(view.getUint32(layout[field], true), value, field);
   }

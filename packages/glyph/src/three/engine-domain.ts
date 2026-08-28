@@ -8,34 +8,34 @@ import {
   type FontSelection,
 } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import { createTextRuntime, type TextRuntime } from '../text-runtime.js';
-import { ThreeTextEngineCoordinator } from './engine-runtime.js';
+import { createGlyphEngine, type GlyphEngine } from '../glyph-engine.js';
+import { ThreeTextEngineCoordinator } from './engine-coordinator.js';
 
-interface ReadyThreeRuntimeDomain {
-  readonly runtime: TextRuntime;
+interface ReadyThreeEngineDomain {
+  readonly glyphEngine: GlyphEngine;
   readonly coordinator: ThreeTextEngineCoordinator;
 }
 
-interface ThreeRuntimeDomain {
-  ready: Promise<ReadyThreeRuntimeDomain>;
-  value: ReadyThreeRuntimeDomain | undefined;
+interface ThreeEngineDomain {
+  ready: Promise<ReadyThreeEngineDomain>;
+  value: ReadyThreeEngineDomain | undefined;
   loaderCount: number;
   fontCount: number;
   leaseCount: number;
   disposed: boolean;
 }
 
-export interface ThreeRuntimeDomainLease {
+export interface ThreeEngineDomainLease {
   readonly coordinator: ThreeTextEngineCoordinator;
-  retain(): ThreeRuntimeDomainLease;
+  retain(): ThreeEngineDomainLease;
   dispose(): void;
 }
 
-let sharedDomain: WeakRef<ThreeRuntimeDomain> | undefined;
-const fontDomains = new WeakMap<object, ThreeRuntimeDomain>();
+let sharedDomain: WeakRef<ThreeEngineDomain> | undefined;
+const fontDomains = new WeakMap<object, ThreeEngineDomain>();
 
 /** @internal Deterministic lifecycle evidence for package tests. */
-export function threeRuntimeDomainReport(): Readonly<{
+export function threeEngineDomainReport(): Readonly<{
   active: boolean;
   loaders: number;
   fonts: number;
@@ -78,32 +78,32 @@ export function acquireThreeLoaderDomain(manager: THREE.LoadingManager): Readonl
 
 export function acquireThreeTextDomain(
   selection: FontSelection<AnyRasterTechnique> | readonly FontSelection<AnyRasterTechnique>[],
-): ThreeRuntimeDomainLease {
+): ThreeEngineDomainLease {
   const selections = Array.isArray(selection) ? selection : [selection];
   const fonts = selections.flatMap((entry) => immutableFontSelectionFonts(entry));
-  let domain: ThreeRuntimeDomain | undefined;
+  let domain: ThreeEngineDomain | undefined;
   for (const font of fonts) {
     const candidate = fontDomains.get(immutableFontVariantIdentity(font));
     if (candidate === undefined || candidate.disposed || candidate.value === undefined) {
       throw new TypeError('Three fonts must be initialized by FontLoader before constructing Text');
     }
     if (domain !== undefined && candidate !== domain) {
-      throw new TypeError('one Three text selection cannot span different renderer runtime domains');
+      throw new TypeError('one Three text selection cannot span different Three engine domains');
     }
     domain = candidate;
   }
-  if (domain === undefined || domain.value === undefined) throw new Error('Three text selection has no runtime domain');
+  if (domain === undefined || domain.value === undefined) throw new Error('Three text selection has no engine domain');
   return retainDomain(domain);
 }
 
-function retainDomain(domain: ThreeRuntimeDomain): ThreeRuntimeDomainLease {
-  if (domain.disposed || domain.value === undefined) throw new Error('Three runtime domain is not ready');
+function retainDomain(domain: ThreeEngineDomain): ThreeEngineDomainLease {
+  if (domain.disposed || domain.value === undefined) throw new Error('Three engine domain is not ready');
   domain.leaseCount += 1;
   let disposed = false;
   return Object.freeze({
     coordinator: domain.value.coordinator,
     retain() {
-      if (disposed) throw new Error('Three runtime domain lease has been disposed');
+      if (disposed) throw new Error('Three engine domain lease has been disposed');
       return retainDomain(domain);
     },
     dispose() {
@@ -115,8 +115,8 @@ function retainDomain(domain: ThreeRuntimeDomain): ThreeRuntimeDomainLease {
   });
 }
 
-function createDomain(): ThreeRuntimeDomain {
-  const domain: ThreeRuntimeDomain = {
+function createDomain(): ThreeEngineDomain {
+  const domain: ThreeEngineDomain = {
     ready: undefined as never,
     value: undefined,
     loaderCount: 0,
@@ -124,19 +124,19 @@ function createDomain(): ThreeRuntimeDomain {
     leaseCount: 0,
     disposed: false,
   };
-  domain.ready = createTextRuntime().then((runtime) => {
+  domain.ready = createGlyphEngine().then((glyphEngine) => {
     if (domain.disposed) {
-      runtime.dispose();
-      throw new Error('Three runtime domain was disposed during initialization');
+      glyphEngine.dispose();
+      throw new Error('Three engine domain was disposed during initialization');
     }
     let coordinator: ThreeTextEngineCoordinator;
     try {
-      coordinator = new ThreeTextEngineCoordinator(runtime);
+      coordinator = new ThreeTextEngineCoordinator(glyphEngine);
     } catch (error) {
-      runtime.dispose();
+      glyphEngine.dispose();
       throw error;
     }
-    const value = Object.freeze({ runtime, coordinator });
+    const value = Object.freeze({ glyphEngine, coordinator });
     domain.value = value;
     return value;
   });
@@ -146,13 +146,12 @@ function createDomain(): ThreeRuntimeDomain {
   return domain;
 }
 
-function associateFont(domain: ThreeRuntimeDomain, font: Font<AnyRasterTechnique>): void {
-  if (domain.disposed || domain.value === undefined) throw new Error('Three runtime domain is not ready');
+function associateFont(domain: ThreeEngineDomain, font: Font<AnyRasterTechnique>): void {
+  if (domain.disposed || domain.value === undefined) throw new Error('Three engine domain is not ready');
   const identity = immutableFontVariantIdentity(font);
   const existing = fontDomains.get(identity);
   if (existing !== undefined) {
-    if (existing !== domain)
-      throw new TypeError('font variant is already initialized for another Three runtime domain');
+    if (existing !== domain) throw new TypeError('font variant is already initialized for another Three engine domain');
     return;
   }
   fontDomains.set(identity, domain);
@@ -165,7 +164,7 @@ function associateFont(domain: ThreeRuntimeDomain, font: Font<AnyRasterTechnique
   });
 }
 
-function maybeDisposeDomain(domain: ThreeRuntimeDomain): void {
+function maybeDisposeDomain(domain: ThreeEngineDomain): void {
   if (domain.disposed || domain.loaderCount !== 0 || domain.fontCount !== 0 || domain.leaseCount !== 0) return;
   domain.disposed = true;
   if (sharedDomain?.deref() === domain) sharedDomain = undefined;
@@ -173,6 +172,6 @@ function maybeDisposeDomain(domain: ThreeRuntimeDomain): void {
   domain.value = undefined;
   if (value !== undefined) {
     value.coordinator.dispose();
-    value.runtime.dispose();
+    value.glyphEngine.dispose();
   }
 }

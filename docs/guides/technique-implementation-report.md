@@ -9,7 +9,7 @@ sources:
     title: Technique implementability plan
   - id: ownership-plan
     resource: ../planning/font-runtime-ownership.md
-    title: Font/runtime ownership plan
+    title: Font and GlyphEngine ownership plan
   - id: portable-plan
     resource: ../../packages/glyph-example-raster/src/portable.ts
     title: External portable technique plan
@@ -30,7 +30,7 @@ sources:
     title: End-to-end renderer acceptance
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-28T00:00:00Z'
+  at: '2026-08-28T20:10:29Z'
 ---
 
 # Portable raster-technique implementation report
@@ -53,7 +53,7 @@ flowchart LR
   Artifact --> Load[loadFont]
   Load --> Raster[RasterTechnique.decode]
   Raster --> Font[Immutable Font + typed raster data]
-  Font --> Bind[host.bindFont / bindFontStack]
+  Font --> Bind[backend.bindFont / bindFontStack]
   Plan[Registered RasterPlanProgram] --> Bind
   Bind --> Wasm[Shaping + layout + policy execution]
   Policy[Renderer-owned PolicyDescriptor] --> Wasm
@@ -236,8 +236,8 @@ export const examplePlan: RasterPlanProgram<typeof exampleTechnique, typeof exam
 };
 ```
 
-`compileFont()` runs when a font is first bound for a runtime/host path, not once per frame or glyph. Its result is binding
-bytes plus constrained portable payloads. The runtime deduplicates shaping registration, while each renderer may realize
+`compileFont()` runs when a font is first bound for an engine/backend path, not once per frame or glyph. Its result is binding
+bytes plus constrained portable payloads. The Glyph engine deduplicates shaping registration, while each renderer may realize
 the same payload separately for each physical device/context.
 
 For CPU reference renderers and allocation diagnostics, `readCompiledRasterFont()` provides named read-only field access,
@@ -263,7 +263,7 @@ plan. TypeGPU and TSL shader code remains behind explicit subpaths and is not pu
 
 ## 5. Publish shader variants
 
-A shader variant restates the same named schema contract in one language. It does not assemble the host policy.
+A shader variant restates the same named schema contract in one language. It does not assemble the backend policy.
 
 ```ts
 export const exampleTypeGpuVariant = Object.freeze({
@@ -325,12 +325,12 @@ const policyFactory = (identities: RenderWireIdentityRegistry) => ({
   ],
 });
 
-const policy = host.installPolicy(policyFactory);
+const policy = backend.installPolicy(policyFactory);
 ```
 
 Three performs the same assembly in `/three`. It may expose a `createMaterial(context)` helper because material creation
 is a legitimate renderer responsibility. What it must not duplicate is portable schema, font compilation, policy body,
-or resource meaning. Three-specific system lanes remain described by `threePolicyAbi`; those host-owned values are not a
+or resource meaning. Three-specific system lanes remain described by `threePolicyAbi`; those backend-owned values are not a
 portable core ABI.
 
 ## 7. Implement the baker
@@ -368,22 +368,22 @@ await bakeFont({
 
 ## 8. Integrate and render
 
-The full callable runtime/host/session/target sequence is in
+The full callable engine/backend/retained-plan/target sequence is in
 [Integrate a renderer with Glyph](renderer-integration.md). In abbreviated form:
 
 ```ts
 const font = await loadFont({ input: { baked: bakedUrl }, raster: { technique: exampleTechnique } });
-const runtime = await createTextRuntime();
-const host = runtime.createTextEngineHost({ integration: 'studio.renderer' });
-const policy = host.installPolicy(policyFactory);
-const stack = host.bindFontStack(createFontStack(font));
-const session = host.createSession({ policy, target: () => planTarget, capabilitySet, limits, ...capacities });
-const text = session.createText({ font: stack, text: 'Portable', style: { fontSize: 64 } });
+const glyphEngine = await createGlyphEngine();
+const backend = glyphEngine.createBackend({ integration: 'studio.renderer' });
+const policy = backend.installPolicy(policyFactory);
+const stack = backend.bindFontStack(createFontStack(font));
+const retainedPlan = backend.createRetainedPlan({ policy, target: () => planTarget, capabilitySet, limits, ...capacities });
+const text = retainedPlan.createText({ font: stack, text: 'Portable', style: { fontSize: 64 } });
 
 text.update({ text: 'Portable renderer' });
 const metrics = text.layout();
 const glyphs = text.glyphs();
-const acceptance = session.publish();
+const acceptance = retainedPlan.publish();
 ```
 
 `layout()` may incur font/layout lookup on a cache miss. `glyphs()` may incur glyph lookup/positioning on a cache miss and
@@ -395,22 +395,22 @@ realizes primitives, submits draws, and reports one atomic acceptance.
 
 ```mermaid
 sequenceDiagram
-  participant Session
+  participant RetainedPlan
   participant Target
   participant Plan
-  participant Host
+  participant Backend
   participant Device
 
-  Session->>Target: accept(candidate)
+  RetainedPlan->>Target: accept(candidate)
   Target->>Plan: read resources/buffers/patches/primitives/draws
-  Target->>Host: candidate.acquirePayload(referenceId)
-  Host-->>Target: counted portable payload lease
+  Target->>Backend: candidate.acquirePayload(referenceId)
+  Backend-->>Target: counted portable payload lease
   Target->>Device: validate and stage physical resources
   Target->>Device: encode patches and draws
   Target->>Device: commit candidate
   Device-->>Target: committed
-  Target-->>Session: accepted: true
-  Session->>Session: advance plan and publication fences
+  Target-->>RetainedPlan: accepted: true
+  RetainedPlan->>RetainedPlan: advance plan and publication fences
 ```
 
 Resources are not “just put in a map.” The map is a renderer-owned cache keyed by the plan's numeric `(id, generation)`.

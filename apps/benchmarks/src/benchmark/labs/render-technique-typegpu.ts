@@ -1,5 +1,5 @@
 import { createFontStack, loadFont } from '@pmndrs/glyph';
-import { createTextRuntime } from '@pmndrs/glyph/core';
+import { createGlyphEngine } from '@pmndrs/glyph/core';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { ExampleTextEngine, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
 
@@ -32,11 +32,11 @@ export interface RenderTechniqueTypeGpuLabReport {
 export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTypeGpuLabReport> {
   if (navigator.gpu === undefined) throw new Error('the TypeGPU renderer lab requires WebGPU');
   let gpuDevice = await requestGpuDevice();
-  const runtime = await createTextRuntime();
+  const glyphEngine = await createGlyphEngine();
   let renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
   const devices = [gpuDevice];
   const renderers = [renderer];
-  const engine = new ExampleTextEngine(runtime, renderer);
+  const engine = new ExampleTextEngine(glyphEngine, renderer);
   let font;
   try {
     font = await loadFont({
@@ -48,7 +48,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
     });
     const binding = engine.bindFont(font);
     const stack = engine.bindFontStack(createFontStack(font));
-    engine.openSession();
+    engine.openRetainedPlan();
     const text = engine.createText({
       font: stack,
       text: 'Portable TypeGPU',
@@ -135,7 +135,7 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
     engine.dispose();
     font?.dispose();
     for (const ownedRenderer of renderers.reverse()) ownedRenderer.dispose();
-    runtime.dispose();
+    glyphEngine.dispose();
     for (const ownedDevice of devices.reverse()) ownedDevice.destroy();
   }
 }

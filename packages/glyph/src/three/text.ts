@@ -30,25 +30,25 @@ import type {
 } from '../text-properties.js';
 import { normalizedColumns, replacedContent } from '../engine-encoding.js';
 import type {
-  HostFontStackBinding,
-  HostTransformBinding,
-  SynchronousTextEngineSession,
+  BackendFontStackBinding,
+  BackendTransformBinding,
+  SynchronousRetainedPlan,
   TextEngineFormattedText,
-  TextEngineText,
-  TextEngineTextOptions,
+  RetainedText,
+  RetainedTextOptions,
 } from '../core.js';
 import { ThreeTextRenderPlanExecutor } from './engine-plan-target.js';
-import { type ThreeMaterialBindingLease, type ThreeTextEngineCoordinator } from './engine-runtime.js';
+import { type ThreeMaterialBindingLease, type ThreeTextEngineCoordinator } from './engine-coordinator.js';
 import type { ThreeTextMaterial } from './material.js';
-import { acquireThreeTextDomain, type ThreeRuntimeDomainLease } from './runtime-domain.js';
+import { acquireThreeTextDomain, type ThreeEngineDomainLease } from './engine-domain.js';
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const MAX_TEXT_UNITS = 65_536;
 const MAX_PARAGRAPHS = 4_096;
 const MAX_REGIONS = MAX_PARAGRAPHS * 16;
-const SESSION_REQUEST_BYTES = 64 * 1024;
-const SESSION_RESULT_BYTES = 256 * 1024;
-const MIN_SESSION_TEXT_UNITS = 256;
+const PLAN_REQUEST_BYTES = 64 * 1024;
+const PLAN_RESULT_BYTES = 256 * 1024;
+const MIN_PLAN_TEXT_UNITS = 256;
 
 const THREE_TEXT_LIMITS = Object.freeze({
   maxParagraphs: MAX_PARAGRAPHS,
@@ -118,14 +118,14 @@ interface DesiredTextState<Technique extends AnyRasterTechnique> {
 }
 
 interface TextFontBindings {
-  readonly root: HostFontStackBinding;
-  readonly spans: ReadonlyMap<number, HostFontStackBinding>;
+  readonly root: BackendFontStackBinding;
+  readonly spans: ReadonlyMap<number, BackendFontStackBinding>;
 }
 
 interface TextReconciler {
   coordinator(text: Text<AnyRasterTechnique>): ThreeTextEngineCoordinator;
-  acquireDomain(text: Text<AnyRasterTechnique>): ThreeRuntimeDomainLease;
-  transform(text: Text<AnyRasterTechnique>): HostTransformBinding;
+  acquireDomain(text: Text<AnyRasterTechnique>): ThreeEngineDomainLease;
+  transform(text: Text<AnyRasterTechnique>): BackendTransformBinding;
   desired<Technique extends AnyRasterTechnique>(text: Text<Technique>): DesiredTextState<Technique>;
   fontBindings(text: Text<AnyRasterTechnique>): TextFontBindings;
   desiredRevision(text: Text<AnyRasterTechnique>): number;
@@ -160,8 +160,8 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     };
   }
 
-  readonly #domain: ThreeRuntimeDomainLease;
-  readonly #transform: HostTransformBinding;
+  readonly #domain: ThreeEngineDomainLease;
+  readonly #transform: BackendTransformBinding;
   readonly #boundingBox = new THREE.Box3();
   #desired: DesiredTextState<Technique>;
   #fontBindings: TextFontBindings;
@@ -180,7 +180,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     super();
     const desired = normalizeDesired(properties);
     const domain = acquireThreeTextDomain(fontSelections(desired));
-    let transform: HostTransformBinding | undefined;
+    let transform: BackendTransformBinding | undefined;
     let fontBindings: TextFontBindings | undefined;
     try {
       transform = domain.coordinator.bindTransform(this);
@@ -419,7 +419,7 @@ export class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     return this.#binding;
   }
 
-  #acquireDomain(): ThreeRuntimeDomainLease {
+  #acquireDomain(): ThreeEngineDomainLease {
     return this.#domain.retain();
   }
 
@@ -611,8 +611,8 @@ export class TextGroup extends THREE.Object3D {
 }
 
 interface BoundTextEntry {
-  readonly handle: TextEngineText;
-  readonly transform: HostTransformBinding;
+  readonly handle: RetainedText;
+  readonly transform: BackendTransformBinding;
   materialLeases: readonly ThreeMaterialBindingLease[];
   stagedRevision: number;
   stagedOrder: number;
@@ -626,9 +626,9 @@ interface CanonicalInspection {
 
 class ThreeTextBatchBinding {
   readonly #coordinator: ThreeTextEngineCoordinator;
-  readonly #domain: ThreeRuntimeDomainLease;
+  readonly #domain: ThreeEngineDomainLease;
   readonly #group: TextGroup | undefined;
-  readonly #session: SynchronousTextEngineSession;
+  readonly #retainedPlan: SynchronousRetainedPlan;
   readonly #target: ThreeTextRenderPlanExecutor;
   readonly #entries = new Map<Text<AnyRasterTechnique>, BoundTextEntry>();
   readonly #placementLayouts = new WeakMap<GlyphPlacements, ParagraphLayoutInspection>();
@@ -655,7 +655,7 @@ class ThreeTextBatchBinding {
     };
     let target: ThreeTextRenderPlanExecutor | undefined;
     try {
-      this.#session = this.#coordinator.host.createSession({
+      this.#retainedPlan = this.#coordinator.backend.createRetainedPlan({
         policy: this.#coordinator.policy,
         capabilitySet: this.#coordinator.capabilitySet,
         target: () => {
@@ -663,11 +663,11 @@ class ThreeTextBatchBinding {
           return target;
         },
         limits: THREE_TEXT_LIMITS,
-        requestCapacity: SESSION_REQUEST_BYTES,
-        resultCapacity: SESSION_RESULT_BYTES,
-        textCapacity: MIN_SESSION_TEXT_UNITS,
+        requestCapacity: PLAN_REQUEST_BYTES,
+        resultCapacity: PLAN_RESULT_BYTES,
+        textCapacity: MIN_PLAN_TEXT_UNITS,
       });
-      if (target === undefined) throw new Error('Three text session did not construct its plan target');
+      if (target === undefined) throw new Error('Three retained plan did not construct its plan target');
       this.#target = target;
     } catch (error) {
       this.#domain.dispose();
@@ -826,7 +826,7 @@ class ThreeTextBatchBinding {
       this.#target.syncTransforms(undefined, worldMatricesCurrent);
       return;
     }
-    const result = this.#session.publish({
+    const result = this.#retainedPlan.publish({
       semanticViews: 'measurement',
       compositing: this.#group?.compositing ?? 'ordered',
     });
@@ -866,7 +866,7 @@ class ThreeTextBatchBinding {
     }
     this.#entries.clear();
     try {
-      this.#session.dispose();
+      this.#retainedPlan.dispose();
     } catch (error) {
       failure ??= error;
     }
@@ -899,7 +899,7 @@ class ThreeTextBatchBinding {
       );
       if (previous === undefined) {
         const transform = options.transform!;
-        const handle = this.#session.createText(options);
+        const handle = this.#retainedPlan.createText(options);
         this.#entries.set(text, {
           handle,
           transform,
@@ -948,12 +948,12 @@ class ThreeTextBatchBinding {
 function coreTextOptions(
   desired: DesiredTextState<AnyRasterTechnique>,
   bindings: TextFontBindings,
-  transform: HostTransformBinding,
+  transform: BackendTransformBinding,
   groupMaterial: ThreeTextMaterial | undefined,
   order: number,
   coordinator: ThreeTextEngineCoordinator,
   leases: ThreeMaterialBindingLease[],
-): TextEngineTextOptions {
+): RetainedTextOptions {
   const rootMaterial = bindMaterial(coordinator, desired.material ?? groupMaterial, leases);
   const spans = desired.spans.map((span, index) => {
     const font = bindings.spans.get(index);
@@ -997,7 +997,7 @@ function bindFonts(
   desired: DesiredTextState<AnyRasterTechnique>,
 ): TextFontBindings {
   const root = coordinator.bindFontStack(desired.font);
-  const spans = new Map<number, HostFontStackBinding>();
+  const spans = new Map<number, BackendFontStackBinding>();
   try {
     for (const [index, span] of desired.spans.entries()) {
       if (span.font !== undefined) spans.set(index, coordinator.bindFontStack(span.font));

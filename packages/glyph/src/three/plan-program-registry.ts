@@ -199,10 +199,10 @@ export function registerThreeRasterPlanProgram<
       `Three already selected raster variant "${existing.variant.id}" for technique "${techniqueId}"`,
     );
   }
-  const runtimeCount = liveSnapshotCount();
-  if (runtimeCount !== 0) {
+  const engineCount = liveSnapshotCount();
+  if (engineCount !== 0) {
     throw new Error(
-      `Three raster variant "${techniqueId}/${variantId}" was registered after ${runtimeCount} text runtime(s) ` +
+      `Three raster variant "${techniqueId}/${variantId}" was registered after ${engineCount} glyph engine(s) ` +
         'already read the registry; register every technique before its first Text or TextGroup realization',
     );
   }
@@ -254,7 +254,7 @@ export function assertThreeGeometryPayload(
   }
 }
 
-/** @internal Forget a disposed runtime's renderer snapshot. */
+/** @internal Forget a disposed Three coordinator's renderer snapshot. */
 export function releaseThreeRasterPlanProgramSnapshot(identities: RenderWireIdentityRegistry): void {
   const references = snapshotsByRegistry.get(identities);
   if (references === undefined) return;

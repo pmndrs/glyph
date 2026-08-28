@@ -70,7 +70,7 @@ pub(crate) const BASELINE_ALPHABETIC: u8 = 1;
 pub(crate) const BASELINE_TEXT_TOP: u8 = 2;
 pub(crate) const BASELINE_MIDDLE: u8 = 3;
 pub(crate) const BASELINE_TEXT_BOTTOM: u8 = 4;
-pub(crate) const DEFAULT_SESSION_TEXT_CAPACITY: u32 = 1024;
+pub(crate) const DEFAULT_RETAINED_PLAN_TEXT_CAPACITY: u32 = 1024;
 pub(crate) const SEMANTIC_F32_INLINE_START: u8 = 0;
 pub(crate) const SEMANTIC_F32_BLOCK_START: u8 = 1;
 pub(crate) const SEMANTIC_F32_INLINE_EXTENT: u8 = 2;
@@ -95,7 +95,7 @@ pub(crate) const PARAGRAPH_MUTATION_REMOVE: u8 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct UpdateRequest<'a> {
-    pub session_id: u32,
+    pub retained_plan_id: u32,
     pub expected_engine_revision: u32,
     pub consumed_plan_revision: u32,
     pub acknowledged_publication_generation: u32,
@@ -136,16 +136,16 @@ impl UpdateLimits {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct SessionRevision {
+pub(crate) struct RetainedPlanRevision {
     pub engine: u32,
     pub plan: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct PreparedUpdate {
-    pub(super) session_id: u32,
-    pub(super) previous: SessionRevision,
-    pub(super) next: SessionRevision,
+    pub(super) retained_plan_id: u32,
+    pub(super) previous: RetainedPlanRevision,
+    pub(super) next: RetainedPlanRevision,
     pub(super) required_base_revision: u32,
     pub(super) checkpoint: bool,
     pub(super) policy_handle: u32,
@@ -154,25 +154,25 @@ pub(crate) struct PreparedUpdate {
 }
 
 impl PreparedUpdate {
-    pub(crate) fn session_id(self) -> u32 {
-        self.session_id
+    pub(crate) fn retained_plan_id(self) -> u32 {
+        self.retained_plan_id
     }
 }
 
 /// Witness of a paragraph-scoped speculative measurement: semantic records for the
-/// queried paragraph are ready to stage while committed session state, revisions, and
+/// queried paragraph are ready to stage while committed retained-plan state, revisions, and
 /// identity counters remain untouched. The prepared pending state stays retained as
-/// the session's speculative transaction; it cannot be committed through this witness.
+/// the retained plan's speculative transaction; it cannot be committed through this witness.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MeasuredParagraph {
-    pub(super) session_id: u32,
-    pub(super) revision: SessionRevision,
+    pub(super) retained_plan_id: u32,
+    pub(super) revision: RetainedPlanRevision,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct CommittedUpdate {
-    pub session_id: u32,
-    pub revision: SessionRevision,
+    pub retained_plan_id: u32,
+    pub revision: RetainedPlanRevision,
     pub required_base_revision: u32,
     pub checkpoint: bool,
 }

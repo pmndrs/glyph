@@ -50,7 +50,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
     status: () => 'ready',
     load: async (_controls, context) => {
       if (state.kind === 'ready') return;
-      // A loading manager this target owns keeps its text runtime, and the fonts registered in it, isolated from the
+      // A loading manager this target owns keeps its text engine, and the fonts registered in it, isolated from the
       // shared manager every other benchmark surface loads through.
       const loader = new FontLoader(new THREE.LoadingManager());
       const fonts = new Map<AdvancedShapingFontFixture, Font<BitmapTechnique>>();

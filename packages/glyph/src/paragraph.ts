@@ -16,19 +16,19 @@ import type {
   ParagraphStyle,
 } from './text-properties.js';
 import { normalizedColumns, replacedContent } from './engine-encoding.js';
-import { createTextRuntime, type TextRuntime } from './text-runtime.js';
-import type { HostFontStackBinding, HostPolicy, TextEngineHost } from './core/host.js';
+import { createGlyphEngine, type GlyphEngine } from './glyph-engine.js';
+import type { BackendFontStackBinding, BackendPolicy, GlyphBackend } from './core/backend.js';
 import {
   createRasterPolicyProgram,
   resolveRasterPlanProgram,
   type RasterPlanProgram,
 } from './core/raster-plan-program.js';
 import {
-  createMeasurementTextEngineSession,
-  type MeasurementTextEngineSession,
-  type TextEngineText,
-  type TextEngineTextOptions,
-} from './core/retained-session.js';
+  createMeasurementPlan,
+  type MeasurementPlan,
+  type RetainedText,
+  type RetainedTextOptions,
+} from './core/retained-plan.js';
 import {
   id,
   type PolicyCapabilitySet,
@@ -39,9 +39,9 @@ import { definePolicyBuffers, type AnyTechniqueSchema } from './core/technique-s
 
 const MAX_TEXT_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const MAX_PARAGRAPH_TEXT_UNITS = 0x00ff_ffff;
-const SESSION_REQUEST_BYTES = 64 * 1024;
-const SESSION_RESULT_BYTES = 256 * 1024;
-const SESSION_TEXT_UNITS = 256;
+const PLAN_REQUEST_BYTES = 64 * 1024;
+const PLAN_RESULT_BYTES = 256 * 1024;
+const PLAN_TEXT_UNITS = 256;
 const MEASUREMENT_PROGRAM_NAMESPACE = 'paragraph-measurement';
 /** Unconstrained, at-most, and exact probes cover the normal layout negotiation cycle. */
 const MAX_CACHED_PARAGRAPH_CONSTRAINTS = 3;
@@ -104,14 +104,14 @@ interface ResolvedParagraphState<Technique extends AnyRasterTechnique> {
 }
 
 interface MeasurementServiceLease {
-  readonly runtime: TextRuntime;
-  readonly host: TextEngineHost;
+  readonly glyphEngine: GlyphEngine;
+  readonly backend: GlyphBackend;
   release(): void;
 }
 
 interface MeasurementService {
-  readonly runtime: TextRuntime;
-  readonly host: TextEngineHost;
+  readonly glyphEngine: GlyphEngine;
+  readonly backend: GlyphBackend;
 }
 
 /** A renderer-free retained paragraph whose queries are synchronous after async construction. */
@@ -138,7 +138,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
     this.#engineBox = flowBox(desired.policy, undefined, undefined);
   }
 
-  /** @internal The root factory owns asynchronous runtime acquisition. */
+  /** @internal The root factory owns asynchronous engine acquisition. */
   static _create<Technique extends AnyRasterTechnique>(
     desired: ResolvedParagraphState<Technique>,
     serviceLease: MeasurementServiceLease,
@@ -223,7 +223,7 @@ export class Paragraph<Technique extends AnyRasterTechnique = AnyRasterTechnique
     if (sameTechniqueSet(this.#desired, next)) {
       this.#engine.update(next, nextBox);
     } else {
-      const replacement = new ParagraphEngine(this.#serviceLease.host, next, nextBox);
+      const replacement = new ParagraphEngine(this.#serviceLease.backend, next, nextBox);
       const previous = this.#engine;
       this.#engine = replacement;
       previous.dispose();
@@ -297,7 +297,7 @@ export async function createParagraph<Technique extends AnyRasterTechnique>(
   normalizedColumns(box);
   const serviceLease = await acquireMeasurementService();
   try {
-    const engine = new ParagraphEngine(serviceLease.host, desired, box);
+    const engine = new ParagraphEngine(serviceLease.backend, desired, box);
     return Paragraph._create(desired, serviceLease, engine);
   } catch (error) {
     serviceLease.release();
@@ -306,35 +306,35 @@ export async function createParagraph<Technique extends AnyRasterTechnique>(
 }
 
 class ParagraphEngine {
-  readonly host: TextEngineHost;
-  readonly policy: HostPolicy;
-  readonly session: MeasurementTextEngineSession;
-  readonly text: TextEngineText;
+  readonly backend: GlyphBackend;
+  readonly policy: BackendPolicy;
+  readonly retainedPlan: MeasurementPlan;
+  readonly text: RetainedText;
   readonly #singleFontStacks = new WeakMap<
     Font<AnyRasterTechnique>,
     FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>
   >();
   #disposed = false;
 
-  constructor(host: TextEngineHost, desired: ResolvedParagraphState<AnyRasterTechnique>, box: ParagraphContentBox) {
-    let policy: HostPolicy | undefined;
-    let session: MeasurementTextEngineSession | undefined;
-    let text: TextEngineText | undefined;
+  constructor(backend: GlyphBackend, desired: ResolvedParagraphState<AnyRasterTechnique>, box: ParagraphContentBox) {
+    let policy: BackendPolicy | undefined;
+    let retainedPlan: MeasurementPlan | undefined;
+    let text: RetainedText | undefined;
     try {
-      policy = host.installPolicy((identities) => measurementPolicyDescriptor(identities, desired));
-      session = createMeasurementTextEngineSession(host, {
+      policy = backend.installPolicy((identities) => measurementPolicyDescriptor(identities, desired));
+      retainedPlan = createMeasurementPlan(backend, {
         policy,
         limits: measurementLimits(),
-        requestCapacity: SESSION_REQUEST_BYTES,
-        resultCapacity: SESSION_RESULT_BYTES,
-        textCapacity: Math.max(SESSION_TEXT_UNITS, desired.text.length + 1),
+        requestCapacity: PLAN_REQUEST_BYTES,
+        resultCapacity: PLAN_RESULT_BYTES,
+        textCapacity: Math.max(PLAN_TEXT_UNITS, desired.text.length + 1),
       });
-      text = createEngineText(host, session, desired, box, this.#singleFontStacks);
+      text = createEngineText(backend, retainedPlan, desired, box, this.#singleFontStacks);
     } catch (error) {
       let teardownFailure: Readonly<{ error: unknown }> | undefined;
       try {
         text?.dispose();
-        session?.dispose();
+        retainedPlan?.dispose();
         policy?.dispose();
       } catch (disposeError) {
         teardownFailure = { error: disposeError };
@@ -347,17 +347,17 @@ class ParagraphEngine {
       }
       throw error;
     }
-    this.host = host;
+    this.backend = backend;
     this.policy = policy;
-    this.session = session;
+    this.retainedPlan = retainedPlan;
     this.text = text;
   }
 
   update(desired: ResolvedParagraphState<AnyRasterTechnique>, box: ParagraphContentBox): void {
     this.#assertActive();
-    const bindings: HostFontStackBinding[] = [];
+    const bindings: BackendFontStackBinding[] = [];
     try {
-      this.text.update(engineTextOptions(this.host, desired, box, bindings, this.#singleFontStacks));
+      this.text.update(engineTextOptions(this.backend, desired, box, bindings, this.#singleFontStacks));
     } finally {
       disposeBindings(bindings);
     }
@@ -367,7 +367,7 @@ class ParagraphEngine {
     if (this.#disposed) return;
     this.#disposed = true;
     let failure: unknown;
-    for (const dispose of [() => this.text.dispose(), () => this.session.dispose(), () => this.policy.dispose()]) {
+    for (const dispose of [() => this.text.dispose(), () => this.retainedPlan.dispose(), () => this.policy.dispose()]) {
       try {
         dispose();
       } catch (error) {
@@ -383,32 +383,32 @@ class ParagraphEngine {
 }
 
 function createEngineText(
-  host: TextEngineHost,
-  session: MeasurementTextEngineSession,
+  backend: GlyphBackend,
+  retainedPlan: MeasurementPlan,
   desired: ResolvedParagraphState<AnyRasterTechnique>,
   box: ParagraphContentBox,
   singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
-): TextEngineText {
-  const bindings: HostFontStackBinding[] = [];
+): RetainedText {
+  const bindings: BackendFontStackBinding[] = [];
   try {
-    return session.createText(engineTextOptions(host, desired, box, bindings, singleFontStacks));
+    return retainedPlan.createText(engineTextOptions(backend, desired, box, bindings, singleFontStacks));
   } finally {
     disposeBindings(bindings);
   }
 }
 
 function engineTextOptions(
-  host: TextEngineHost,
+  backend: GlyphBackend,
   desired: ResolvedParagraphState<AnyRasterTechnique>,
   box: ParagraphContentBox,
-  bindings: HostFontStackBinding[],
+  bindings: BackendFontStackBinding[],
   singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
-): TextEngineTextOptions {
-  const font = bindSelection(host, desired.font, bindings, singleFontStacks);
+): RetainedTextOptions {
+  const font = bindSelection(backend, desired.font, bindings, singleFontStacks);
   const spans = desired.spans.map((span) => ({
     start: span.start,
     end: span.end,
-    ...(span.font === undefined ? {} : { font: bindSelection(host, span.font, bindings, singleFontStacks) }),
+    ...(span.font === undefined ? {} : { font: bindSelection(backend, span.font, bindings, singleFontStacks) }),
     ...(span.style === undefined ? {} : { style: span.style }),
     ...(span.paint === undefined ? {} : { paint: span.paint }),
   }));
@@ -423,11 +423,11 @@ function engineTextOptions(
 }
 
 function bindSelection(
-  host: TextEngineHost,
+  backend: GlyphBackend,
   selection: FontSelection<AnyRasterTechnique>,
-  bindings: HostFontStackBinding[],
+  bindings: BackendFontStackBinding[],
   singleFontStacks: WeakMap<Font<AnyRasterTechnique>, FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>>,
-): HostFontStackBinding {
+): BackendFontStackBinding {
   const fonts = immutableFontSelectionFonts(selection);
   let stack: FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>;
   if ('fonts' in selection) {
@@ -437,12 +437,12 @@ function bindSelection(
     stack = singleFontStacks.get(font) ?? createFontStack(font);
     singleFontStacks.set(font, stack);
   }
-  const binding = host.bindFontStack(stack);
+  const binding = backend.bindFontStack(stack);
   bindings.push(binding);
   return binding;
 }
 
-function disposeBindings(bindings: readonly HostFontStackBinding[]): void {
+function disposeBindings(bindings: readonly BackendFontStackBinding[]): void {
   let failure: unknown;
   for (const binding of [...bindings].reverse()) {
     try {
@@ -638,11 +638,11 @@ function acquireMeasurementService(): Promise<MeasurementServiceLease> {
 }
 
 async function createMeasurementService(): Promise<MeasurementService> {
-  const runtime = await createTextRuntime();
+  const glyphEngine = await createGlyphEngine();
   try {
-    return { runtime, host: runtime.createTextEngineHost({ integration: '@pmndrs/glyph/paragraph' }) };
+    return { glyphEngine, backend: glyphEngine.createBackend({ integration: '@pmndrs/glyph/paragraph' }) };
   } catch (error) {
-    runtime.dispose();
+    glyphEngine.dispose();
     throw error;
   }
 }
@@ -652,7 +652,7 @@ function releaseMeasurementService(service: MeasurementService, promise: Promise
   measurementServiceReferences -= 1;
   if (measurementServiceReferences !== 0) return;
   if (measurementServicePromise === promise) measurementServicePromise = undefined;
-  service.runtime.dispose();
+  service.glyphEngine.dispose();
 }
 
 function layoutDigest(layout: ParagraphLayoutInspection): string {

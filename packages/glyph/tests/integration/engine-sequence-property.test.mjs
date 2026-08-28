@@ -20,7 +20,7 @@ import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
-import { threeRuntimeDomainReport } from '../../dist/three/runtime-domain.js';
+import { threeEngineDomainReport } from '../../dist/three/engine-domain.js';
 
 const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
 
@@ -468,7 +468,7 @@ test('font and loader teardown is total while Text retains the renderer domain',
     loaded.dispose();
     loaded.dispose();
     assert.ok(Object.values(fonts).every((font) => font.disposed));
-    assert.equal(threeRuntimeDomainReport().active, true, 'live Text leases keep the renderer domain valid');
+    assert.equal(threeEngineDomainReport().active, true, 'live Text leases keep the renderer domain valid');
     for (const text of texts) assert.ok(text.layout().glyphCount > 0);
     group.dispose();
     group.dispose();
@@ -477,7 +477,7 @@ test('font and loader teardown is total while Text retains the renderer domain',
     group.dispose();
     loaded.dispose();
   }
-  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 test('renderer leases may dispose before their user font and loader handles', async () => {
@@ -510,5 +510,5 @@ test('renderer leases may dispose before their user font and loader handles', as
     loaded.dispose();
   }
   assert.ok(Object.values(fonts).every((font) => font.disposed));
-  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+  assert.deepEqual(threeEngineDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });

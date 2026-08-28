@@ -12,7 +12,7 @@ import {
   type RuntimeFontBake,
 } from '../loader.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import { acquireThreeLoaderDomain } from './runtime-domain.js';
+import { acquireThreeLoaderDomain } from './engine-domain.js';
 
 export interface ThreeFontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;

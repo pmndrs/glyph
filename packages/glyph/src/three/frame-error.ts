@@ -38,7 +38,7 @@ export type TextFrameRejection<Technique extends AnyRasterTechnique = AnyRasterT
   | Readonly<{ cause: 'font-stack-missing'; subject: TextFrameSubject<Technique> }>
   /** A font in the laid-out text has no registered metrics. */
   | Readonly<{ cause: 'font-metrics-missing'; subject: TextFrameSubject<Technique> }>
-  /** The frame did not fit the session arenas even after the host grew them. */
+  /** The frame did not fit the retained-plan arenas even after the backend grew them. */
   | Readonly<{ cause: 'capacity'; requiredRequestBytes: number; requiredResultBytes: number }>
   /** Any status the engine does not classify as caller-actionable. */
   | Readonly<{ cause: 'engine' }>;
@@ -100,7 +100,7 @@ export function textFrameError(error: unknown, resolve: TextFrameSubjectResolver
 function rejectionMessage(rejection: TextFrameRejection, error: TextEngineStatusError): string {
   if (rejection.cause === 'capacity') {
     return (
-      `text frame exceeded the session arenas (required request=${rejection.requiredRequestBytes},` +
+      `text frame exceeded the retained-plan arenas (required request=${rejection.requiredRequestBytes},` +
       ` result=${rejection.requiredResultBytes}): ${error.message}`
     );
   }

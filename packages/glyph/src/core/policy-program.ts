@@ -14,18 +14,18 @@ import { isTechniqueSchema } from './technique-schema.js';
 const MAX_REGISTERS = 32;
 
 type Node =
-  | { readonly kind: 'loadF32'; readonly input: number; readonly label: string; readonly session: object }
-  | { readonly kind: 'loadU32'; readonly input: number; readonly label: string; readonly session: object }
+  | { readonly kind: 'loadF32'; readonly input: number; readonly label: string; readonly authoringScope: object }
+  | { readonly kind: 'loadU32'; readonly input: number; readonly label: string; readonly authoringScope: object }
   | {
       readonly kind: 'binary';
       readonly op: 'addF32' | 'subtractF32' | 'multiplyF32';
       readonly left: Node;
       readonly right: Node;
-      readonly session: object | undefined;
+      readonly authoringScope: object | undefined;
     }
-  | { readonly kind: 'constantF32'; readonly value: number; readonly session: undefined }
-  | { readonly kind: 'constantU32'; readonly value: number; readonly session: undefined }
-  | { readonly kind: 'convertU32ToF32'; readonly source: Node; readonly session: object | undefined };
+  | { readonly kind: 'constantF32'; readonly value: number; readonly authoringScope: undefined }
+  | { readonly kind: 'constantU32'; readonly value: number; readonly authoringScope: undefined }
+  | { readonly kind: 'convertU32ToF32'; readonly source: Node; readonly authoringScope: object | undefined };
 
 declare const f32Brand: unique symbol;
 declare const u32Brand: unique symbol;
@@ -56,7 +56,7 @@ function u32Value(node: Node): PolicyU32Value {
 
 function nodeOf(value: PolicyF32Value | PolicyU32Value): Node {
   const node = nodes.get(value);
-  if (node === undefined) throw new TypeError('policy value does not belong to this authoring session');
+  if (node === undefined) throw new TypeError('policy value does not belong to this authoring scope');
   return node;
 }
 
@@ -65,18 +65,22 @@ function nodeOf(value: PolicyF32Value | PolicyU32Value): Node {
  * created it; storing it elsewhere would silently read a different field.
  * Provenance is stamped at construction and combined in O(1) per node, so
  * shared expression DAGs never require a graph walk: constants stay
- * session-free, and mixing two sessions fails at the combinator itself.
+ * scope-free, and mixing two authoring scopes fails at the combinator itself.
  */
-function combinedSession(left: Node, right: Node): object | undefined {
-  if (left.session !== undefined && right.session !== undefined && left.session !== right.session) {
-    throw new TypeError('policy values from different authoring sessions cannot combine');
+function combinedAuthoringScope(left: Node, right: Node): object | undefined {
+  if (
+    left.authoringScope !== undefined &&
+    right.authoringScope !== undefined &&
+    left.authoringScope !== right.authoringScope
+  ) {
+    throw new TypeError('policy values from different authoring scopes cannot combine');
   }
-  return left.session ?? right.session;
+  return left.authoringScope ?? right.authoringScope;
 }
 
-function assertSession(node: Node, session: object): void {
-  if (node.session !== undefined && node.session !== session) {
-    throw new TypeError('policy value belongs to a different authoring session');
+function assertAuthoringScope(node: Node, authoringScope: object): void {
+  if (node.authoringScope !== undefined && node.authoringScope !== authoringScope) {
+    throw new TypeError('policy value belongs to a different authoring scope');
   }
 }
 
@@ -93,7 +97,7 @@ function addF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Value {
     op: 'addF32',
     left: leftNode,
     right: rightNode,
-    session: combinedSession(leftNode, rightNode),
+    authoringScope: combinedAuthoringScope(leftNode, rightNode),
   });
 }
 
@@ -105,7 +109,7 @@ function subtractF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Valu
     op: 'subtractF32',
     left: leftNode,
     right: rightNode,
-    session: combinedSession(leftNode, rightNode),
+    authoringScope: combinedAuthoringScope(leftNode, rightNode),
   });
 }
 
@@ -117,25 +121,25 @@ function multiplyF32(left: PolicyF32Value, right: PolicyF32Value): PolicyF32Valu
     op: 'multiplyF32',
     left: leftNode,
     right: rightNode,
-    session: combinedSession(leftNode, rightNode),
+    authoringScope: combinedAuthoringScope(leftNode, rightNode),
   });
 }
 
 function u32ToF32(source: PolicyU32Value): PolicyF32Value {
   const sourceNode = nodeOf(source);
-  return f32Value({ kind: 'convertU32ToF32', source: sourceNode, session: sourceNode.session });
+  return f32Value({ kind: 'convertU32ToF32', source: sourceNode, authoringScope: sourceNode.authoringScope });
 }
 
 function constantF32(value: number): PolicyF32Value {
   if (!Number.isFinite(value)) throw new RangeError('policy f32 constants must be finite');
-  return f32Value({ kind: 'constantF32', value, session: undefined });
+  return f32Value({ kind: 'constantF32', value, authoringScope: undefined });
 }
 
 function constantU32(value: number): PolicyU32Value {
   if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
     throw new RangeError('policy u32 constants must be u32');
   }
-  return u32Value({ kind: 'constantU32', value, session: undefined });
+  return u32Value({ kind: 'constantU32', value, authoringScope: undefined });
 }
 
 /** Typed f32 expression constructors for portable policy programs. */
@@ -430,9 +434,10 @@ export function policyProgram<
     { scope: 'semantic', field: semanticU32.stableGlyphId },
     ...bindingU32Names.map((_, field) => ({ scope: options.scope, field })),
   ];
-  const session = {};
+  const authoringScope = {};
   let nextF32 = 0;
-  const loadF32 = (label: string): PolicyF32Value => f32Value({ kind: 'loadF32', input: nextF32++, label, session });
+  const loadF32 = (label: string): PolicyF32Value =>
+    f32Value({ kind: 'loadF32', input: nextF32++, label, authoringScope });
   const semantics: PolicyProgramSemantics = {
     inlineOrigin: loadF32('inlineOrigin'),
     blockOrigin: loadF32('blockOrigin'),
@@ -444,13 +449,13 @@ export function policyProgram<
       alpha: loadF32('color.alpha'),
     },
     inverseFontSize: options.inverseFontSize === true ? loadF32('inverseFontSize') : undefined,
-    transformIndex: u32Value({ kind: 'loadU32', input: 0, label: 'transformIndex', session }),
-    stableGlyphId: u32Value({ kind: 'loadU32', input: 1, label: 'stableGlyphId', session }),
+    transformIndex: u32Value({ kind: 'loadU32', input: 0, label: 'transformIndex', authoringScope }),
+    stableGlyphId: u32Value({ kind: 'loadU32', input: 1, label: 'stableGlyphId', authoringScope }),
   };
   const binding: Record<string, PolicyF32Value | PolicyU32Value> = {};
   for (const name of bindingF32Names) binding[name] = loadF32(name);
   for (const [index, name] of bindingU32Names.entries()) {
-    binding[name] = u32Value({ kind: 'loadU32', input: 2 + index, label: name, session });
+    binding[name] = u32Value({ kind: 'loadU32', input: 2 + index, label: name, authoringScope });
   }
 
   const stores: StoreRecord[] = [];
@@ -468,7 +473,7 @@ export function policyProgram<
       const opcode = buffer.scalar === 'f32' ? opcodes.storeF32 : opcodes.storeU32;
       for (const [lane, value] of lanes.entries()) {
         const node = nodeOf(value);
-        assertSession(node, session);
+        assertAuthoringScope(node, authoringScope);
         assertNodeScalar(node, buffer.scalar, buffer.id, lane);
         stores.push({ opcode, buffer: buffer.id, lane, node });
       }
@@ -476,7 +481,7 @@ export function policyProgram<
     storeF32(buffer, lanes) {
       for (const [lane, value] of lanes.entries()) {
         const node = nodeOf(value);
-        assertSession(node, session);
+        assertAuthoringScope(node, authoringScope);
         assertNodeScalar(node, 'f32', buffer, lane);
         stores.push({ opcode: opcodes.storeF32, buffer, lane, node });
       }
@@ -484,7 +489,7 @@ export function policyProgram<
     storeU32(buffer, lanes) {
       for (const [lane, value] of lanes.entries()) {
         const node = nodeOf(value);
-        assertSession(node, session);
+        assertAuthoringScope(node, authoringScope);
         assertNodeScalar(node, 'u32', buffer, lane);
         stores.push({ opcode: opcodes.storeU32, buffer, lane, node });
       }

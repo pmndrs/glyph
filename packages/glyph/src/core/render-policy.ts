@@ -31,7 +31,7 @@ const glyphIdKinds = new Set([
   'policy',
   'font-binding',
   'font-stack',
-  'session',
+  'retained-plan',
   'material',
   'paragraph',
   'style',
@@ -47,7 +47,7 @@ export type GlyphIdKind =
   | 'policy'
   | 'font-binding'
   | 'font-stack'
-  | 'session'
+  | 'retained-plan'
   | 'material'
   | 'paragraph'
   | 'style'
@@ -64,7 +64,7 @@ export type PolicyBufferId = GlyphId<'buffer'>;
 export type PolicyHandle = GlyphId<'policy'>;
 export type FontBindingHandle = GlyphId<'font-binding'>;
 export type FontStackHandle = GlyphId<'font-stack'>;
-export type TextEngineSessionHandle = GlyphId<'session'>;
+export type RetainedPlanHandle = GlyphId<'retained-plan'>;
 /** Host-local material identity carried by a render plan. */
 export type MaterialHandle = GlyphId<'material'>;
 export type ParagraphId = GlyphId<'paragraph'>;

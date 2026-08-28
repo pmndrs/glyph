@@ -32,7 +32,7 @@ import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug-technique.js';
 
 import { bitmapShader, decorationShader, msdfShader, slugShader, type TslSlugPageResources } from '../tsl.js';
-import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-runtime.js';
+import type { ThreeTextEngineCoordinator, ThreeTextEngineResource } from './engine-coordinator.js';
 import type { ThreeTextMaterial, ThreeTextMaterialContext } from './material.js';
 import { assertThreeGeometryPayload, type ThreePlanProgramBuffer } from './plan-program-registry.js';
 

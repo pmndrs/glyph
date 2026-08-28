@@ -7,7 +7,7 @@ tags: [planning, public-api, techniques, bakers, extensibility]
 status: stable
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-26T18:18:53Z'
+  at: '2026-08-28T20:20:47Z'
 ---
 
 # Making a technique reusable across engines
@@ -26,7 +26,7 @@ Three may expose a renderer-local `createMaterial(context)` helper. That helper 
 
 ## What is already fixed
 
-`TextEngineHost` accepts arbitrary binding and policy bytes (`packages/glyph/src/core/host.ts`), and core resolves every
+`GlyphBackend` accepts arbitrary binding and policy bytes (`packages/glyph/src/core/backend.ts`), and core resolves every
 registered portable technique program through one binding compiler (`packages/glyph/src/core/font-binding.ts`). This
 fixes the old asymmetry where Paragraph called `loadedFontBindingBytes` without the lookup that Three performed and
 removes the duplicate first-party binding compilers.
@@ -128,8 +128,8 @@ renderer package
 
 The compiled font owns immutable portable payloads; it does not own their GPU lifetime. A renderer realizes those
 payloads in a device-scoped pool keyed by the plan's stable resource identity and leases the same texture, buffer, or
-geometry to compatible sessions. `TextEngineHost` owns Wasm registrations and `TextEngineSession` owns one revisioned
-plan lifetime; neither is a scene, device, pass, or implicit global batch. This lets a TypeGPU, TSL, WGSL, or GLSL host
+geometry to compatible retained plans. `GlyphBackend` owns Wasm registrations and `RetainedPlan` owns one revisioned
+plan lifetime; neither is a scene, device, pass, or implicit global batch. This lets a TypeGPU, TSL, WGSL, or GLSL backend
 reuse the same portable plan without moving renderer concepts into `/core`.
 
 The portable plan does not carry shader source. The technique package publishes shader realizations as optional subpath modules; each realization consumes the same logical contract regardless of whether it was authored in TypeGPU, TSL, WGSL, or GLSL.
@@ -187,7 +187,7 @@ Make the Three material context technique-neutral. The current `ThreeTextMateria
 
 ### 3. Replace the Three program escape hatch with a generic variant path
 
-Refactor `packages/glyph/src/three/plan-program-registry.ts`, `engine-runtime.ts`, and `engine-plan-target.ts` so the renderer:
+Refactor `packages/glyph/src/three/plan-program-registry.ts`, `engine-coordinator.ts`, and `engine-plan-target.ts` so the renderer:
 
 - resolves a portable plan;
 - selects a compatible shader implementation;

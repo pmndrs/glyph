@@ -35,7 +35,7 @@ p.storeU32(id('buffer', 'type-test/wrong-scalar'), [left]);
 // @ts-expect-error Buffer stores reject arbitrary numeric IDs at typecheck.
 p.storeF32(1, [left]);
 // @ts-expect-error ID domains cannot be interchanged.
-p.storeF32(id('session', 'type-test/session'), [left]);
+p.storeF32(id('retained-plan', 'type-test/retained-plan'), [left]);
 // @ts-expect-error Binding names are declared, not invented at use sites.
 void p.binding.kerning;
 void u32.const;

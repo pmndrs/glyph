@@ -11,7 +11,7 @@ import type {
   RegionId,
   ResourceHandle,
   StyleId,
-  TextEngineSessionHandle,
+  RetainedPlanHandle,
 } from './render-policy.js';
 import { assertGlyphId, policyCapabilitySetSelectionId } from './render-policy.js';
 
@@ -189,7 +189,7 @@ export interface TextEngineInlineObject {
 }
 
 export interface TextEngineFrameUpdate {
-  readonly sessionId: TextEngineSessionHandle;
+  readonly retainedPlanId: RetainedPlanHandle;
   readonly policyHandle: PolicyHandle;
   /** Opaque multi-profile selection; omit it to use the policy's first profile. */
   readonly capabilitySet?: PolicyCapabilitySetSelection;
@@ -277,7 +277,7 @@ export function compileValidatedTextEngineFrameUpdate(frame: TextEngineFrameUpda
   const regions = frame.regions ?? [];
   const exclusions = frame.exclusions ?? [];
   const inlineObjects = frame.inlineObjects ?? [];
-  assertGlyphId(frame.sessionId, 'session', 'frame sessionId');
+  assertGlyphId(frame.retainedPlanId, 'retained-plan', 'frame retainedPlanId');
   assertGlyphId(frame.policyHandle, 'policy', 'frame policyHandle');
   if (frame.capabilitySet !== undefined) {
     policyCapabilitySetSelectionId(frame.capabilitySet, frame.policyHandle);
@@ -365,7 +365,7 @@ export function compileValidatedTextEngineFrameUpdate(frame: TextEngineFrameUpda
 function validateTextEngineFrameUpdate(frame: TextEngineFrameUpdate): void {
   if (!isNonArrayObject(frame)) throw new TypeError('text engine frame must be an object');
   if (Object.hasOwn(frame, 'policyParameters')) throw new TypeError('frame policyParameters are not supported');
-  assertGlyphId(frame.sessionId, 'session', 'frame sessionId');
+  assertGlyphId(frame.retainedPlanId, 'retained-plan', 'frame retainedPlanId');
   assertGlyphId(frame.policyHandle, 'policy', 'frame policyHandle');
   if (frame.capabilitySet !== undefined) policyCapabilitySetSelectionId(frame.capabilitySet, frame.policyHandle);
   for (const [label, value] of [
@@ -576,7 +576,7 @@ function validateConstraint(value: TextEngineConstraint, limits: TextEngineFrame
     throw new RangeError('constraint viewport start must not exceed its end');
   }
   if (limits !== undefined && value.maxLines > limits.maxLines) {
-    throw new RangeError('constraint maxLines exceeds the session limit');
+    throw new RangeError('constraint maxLines exceeds the retained-plan limit');
   }
   if (value.resumeRegion > value.regionCount) {
     throw new RangeError('constraint resumeRegion exceeds its selected regions');
@@ -726,17 +726,18 @@ function validateRecordRelationships(
 ): void {
   if (limits !== undefined) {
     if (paragraphMutations.length > limits.maxParagraphs) {
-      throw new RangeError('frame paragraph mutations exceed the session limit');
+      throw new RangeError('frame paragraph mutations exceed the retained-plan limit');
     }
     if (textMutations.length > limits.maxClusters || styleMutations.length > limits.maxClusters) {
-      throw new RangeError('frame semantic mutations exceed the session limit');
+      throw new RangeError('frame semantic mutations exceed the retained-plan limit');
     }
     if (constraints.length > limits.maxRegions || regions.length > limits.maxRegions) {
-      throw new RangeError('frame regions exceed the session limit');
+      throw new RangeError('frame regions exceed the retained-plan limit');
     }
-    if (exclusions.length > limits.maxExclusions) throw new RangeError('frame exclusions exceed the session limit');
+    if (exclusions.length > limits.maxExclusions)
+      throw new RangeError('frame exclusions exceed the retained-plan limit');
     if (inlineObjects.length > limits.maxInlineObjects) {
-      throw new RangeError('frame inline objects exceed the session limit');
+      throw new RangeError('frame inline objects exceed the retained-plan limit');
     }
   }
   if (
@@ -809,7 +810,7 @@ function writeHeader(view: DataView, frame: TextEngineFrameUpdate, byteLength: n
   for (const [field, value] of [
     ['abiVersion', textShaperAbi.version],
     ['byteLength', byteLength],
-    ['sessionId', frame.sessionId],
+    ['retainedPlanId', frame.retainedPlanId],
     ['expectedEngineRevision', frame.expectedEngineRevision],
     ['consumedPlanRevision', frame.consumedPlanRevision],
     ['acknowledgedPublicationGeneration', frame.acknowledgedPublicationGeneration],

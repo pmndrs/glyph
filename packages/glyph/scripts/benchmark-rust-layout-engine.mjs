@@ -22,7 +22,7 @@ import { copyIntoAllocation, engineFrameUpdateBytes } from '../tests/support/eng
 import { techniqueProof } from './support/render-technique-proof.mjs';
 
 const options = parseArguments(process.argv.slice(2));
-const sessionId = 1;
+const retainedPlanId = 1;
 const policyHandle = 1;
 const fontHandle = 1;
 const fontStackHandle = 1;
@@ -122,20 +122,20 @@ function measureCold() {
   const plans = [];
   let glyphs = 0;
   for (let index = 0; index < options.warmup + options.repetitions; index += 1) {
-    createSession(initial.byteLength);
+    createRetainedPlan(initial.byteLength);
     const result = execute(initial, true);
     glyphs = result.glyphCount;
     if (index >= options.warmup) {
       samples.push(result.durationMs);
       plans.push(result);
     }
-    requireStatus(fn.disposeSession(sessionId), 'dispose cold session');
+    requireStatus(fn.disposeRetainedPlan(retainedPlanId), 'dispose cold retainedPlan');
   }
   return summarize('cold', glyphs, samples, plans);
 }
 
 function measureWarm(name) {
-  createSession(initial.byteLength);
+  createRetainedPlan(initial.byteLength);
   let state = execute(initial, true);
   const liveGlyphCount = state.glyphCount;
   const localizedText = [...utf16];
@@ -224,15 +224,15 @@ function measureWarm(name) {
       plans.push(state);
     }
   }
-  requireStatus(fn.disposeSession(sessionId), `dispose ${name} session`);
+  requireStatus(fn.disposeRetainedPlan(retainedPlanId), `dispose ${name} retainedPlan`);
   return summarize(name, liveGlyphCount, samples, plans);
 }
 
-function createSession(requestCapacity) {
+function createRetainedPlan(requestCapacity) {
   const beforeBytes = memory.buffer.byteLength;
   requireStatus(
-    fn.createSession(sessionId, requestCapacity, outputCapacity, utf16.length + 1),
-    'create benchmark session',
+    fn.createRetainedPlan(retainedPlanId, requestCapacity, outputCapacity, utf16.length + 1),
+    'create benchmark retainedPlan',
   );
   if (sessionMemory === undefined) {
     sessionMemory = { beforeBytes, afterBytes: memory.buffer.byteLength };
@@ -240,8 +240,8 @@ function createSession(requestCapacity) {
 }
 
 function execute(bytes, allowGrowth = false, operation = 'text_update', measureParagraphId) {
-  const requestPointer = fn.requestPointer(sessionId);
-  if (requestPointer === 0 || fn.requestCapacity(sessionId) < bytes.byteLength) {
+  const requestPointer = fn.requestPointer(retainedPlanId);
+  if (requestPointer === 0 || fn.requestCapacity(retainedPlanId) < bytes.byteLength) {
     throw new Error('benchmark request exceeds its pre-reserved arena');
   }
   const buffer = memory.buffer;
@@ -250,8 +250,8 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
   new Uint8Array(buffer, requestPointer, bytes.byteLength).set(bytes);
   const resultPointer =
     measureParagraphId === undefined
-      ? fn.textUpdate(sessionId, requestPointer, bytes.byteLength)
-      : fn.measureParagraph(sessionId, requestPointer, bytes.byteLength, measureParagraphId);
+      ? fn.textUpdate(retainedPlanId, requestPointer, bytes.byteLength)
+      : fn.measureParagraph(retainedPlanId, requestPointer, bytes.byteLength, measureParagraphId);
   const durationMs = performance.now() - started;
   if (memory.buffer !== buffer && !allowGrowth) {
     throw new Error(`measured text_update grew Wasm memory from ${bufferBytes} to ${memory.buffer.byteLength} bytes`);
@@ -303,7 +303,7 @@ function execute(bytes, allowGrowth = false, operation = 'text_update', measureP
 
 function updateBytes(fields) {
   return engineFrameUpdateBytes(abi, {
-    sessionId,
+    retainedPlanId,
     policyHandle,
     fontStackHandle,
     limits,

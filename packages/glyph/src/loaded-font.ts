@@ -167,13 +167,13 @@ export function cloneImmutableFont<Technique extends AnyRasterTechnique>(font: F
   return createImmutableFontLease(immutableStateOf(font).variant as ImmutableFontVariant<Technique>);
 }
 
-/** @internal Retain a library, pending-load, runtime, or renderer lease. */
+/** @internal Retain a library, pending-load, engine, or renderer lease. */
 export function retainImmutableFontVariant(variant: ImmutableFontVariant<AnyRasterTechnique>): void {
   if (variant.released) throw new TypeError('font variant has been released');
   variant.leases += 1;
 }
 
-/** @internal Release a library, pending-load, runtime, or renderer lease. */
+/** @internal Release a library, pending-load, engine, or renderer lease. */
 export function releaseImmutableFontVariant(variant: ImmutableFontVariant<AnyRasterTechnique>): void {
   if (variant.leases <= 0) throw new Error('immutable font lease underflow');
   variant.leases -= 1;

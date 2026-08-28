@@ -1,7 +1,7 @@
 ---
 type: How-to guide
 title: Integrate a renderer with Glyph
-description: Builds a renderer integration from immutable fonts through runtime, host, session, resource realization, plan acceptance, and disposal.
+description: Builds a renderer integration from immutable fonts through a Glyph engine, backend, retained plan, resource realization, plan acceptance, and disposal.
 tags: [renderer, core, policy, render-plan, retention, wasm]
 sources:
   - id: engine-call-contract
@@ -19,24 +19,24 @@ sources:
   - id: core-entry
     resource: ../../packages/glyph/src/core.ts
     title: Renderer-neutral core entry point
-  - id: retained-session
-    resource: ../../packages/glyph/src/core/retained-session.ts
-    title: Retained session and target contracts
+  - id: retained-plan
+    resource: ../../packages/glyph/src/core/retained-plan.ts
+    title: Retained-plan and target contracts
   - id: plan-view
     resource: ../../packages/glyph/src/core/plan-view.ts
     title: Semantic render-plan readers
   - id: ownership-plan
     resource: ../planning/font-runtime-ownership.md
-    title: Font, runtime, host, session, and target ownership
+    title: Font, engine, backend, retained-plan, and target ownership
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-28T00:00:00Z'
+  at: '2026-08-28T20:10:29Z'
 ---
 
 # Integrate a renderer with Glyph
 
 This guide is for an engine implementor. It uses application assets from `@pmndrs/glyph` and integration machinery from
-`@pmndrs/glyph/core`. The result owns a Wasm shaping runtime, installs a renderer policy, binds immutable fonts, retains
+`@pmndrs/glyph/core`. The result owns a Glyph engine, installs a renderer policy, binds immutable fonts, retains
 text, realizes renderer resources, and accepts revisioned draw plans.
 
 The executable reference is [`glyph-example-renderer`](../../packages/glyph-example-renderer/src/engine.ts). It uses a
@@ -48,28 +48,28 @@ indexed geometry, TypeGPU-generated WGSL, a concrete WebGPU device, and non-empt
 ```mermaid
 flowchart LR
   App[Application] -->|loadFont| Font[Immutable Font]
-  Integrator[Renderer integration] -->|createTextRuntime| Runtime[TextRuntime]
-  Runtime -->|createTextEngineHost| Host[TextEngineHost]
-  Host -->|installPolicy| Policy[HostPolicy]
-  Font -->|bindFontStack| Host
-  Host -->|createSession| Session[TextEngineSession]
-  Session -->|createText / update| Text[TextEngineText]
+  Integrator[Renderer integration] -->|createGlyphEngine| Engine[GlyphEngine]
+  Engine -->|createBackend| Backend[GlyphBackend]
+  Backend -->|installPolicy| Policy[BackendPolicy]
+  Font -->|bindFontStack| Backend
+  Backend -->|createRetainedPlan| RetainedPlan[RetainedPlan]
+  RetainedPlan -->|createText / update| Text[RetainedText]
   Text -->|layout / glyphs| Query[Current desired layout]
-  Session -->|publish| Candidate[Plan candidate]
+  RetainedPlan -->|publish| Candidate[Plan candidate]
   Candidate -->|acquirePayload| Portable[Portable resources]
   Candidate -->|semantic readers| Records[Buffers / patches / primitives / draws]
   Portable --> Device[Renderer device or context]
   Records --> Device
   Device -->|transactional commit| Surface[Canvas / texture / pass]
-  Surface -->|accepted| Session
+  Surface -->|accepted| RetainedPlan
 ```
 
-The ownership hierarchy is `TextRuntime → TextEngineHost → TextEngineSession → TextEngineText`. The renderer hierarchy
-is separate: device/context → target → resources/pipelines/submissions. A target joins those hierarchies for one session.
+The ownership hierarchy is `GlyphEngine → GlyphBackend → RetainedPlan → RetainedText`. The renderer hierarchy
+is separate: device/context → target → resources/pipelines/submissions. A target joins those hierarchies for one retained plan.
 
 ## 1. Load immutable application assets
 
-Font loading does not require a runtime or renderer. A `Font` may bind to multiple runtimes and outlive any one of them.
+Font loading does not require a Glyph engine or renderer. A `Font` may bind to multiple engines and outlive any one of them.
 
 ```ts
 import { createFontStack, loadFont } from '@pmndrs/glyph';
@@ -85,24 +85,24 @@ const fontStack = createFontStack(font);
 `loadFont()` validates the artifact and decodes renderer-neutral raster data. It does not allocate GPU objects or copy
 shaping data into Wasm. `font.dispose()` rejects future bindings and releases backing data after existing bindings end.
 
-## 2. Create the runtime and host
+## 2. Create the engine and backend
 
-Create a runtime for each independent Wasm ownership domain. Create a host through that runtime so disposal and borrow
+Create an engine for each independent Wasm ownership domain. Create a backend through that engine so disposal and borrow
 ordering are unrepresentable as detached relationships.
 
 ```ts
-import { createTextRuntime } from '@pmndrs/glyph/core';
+import { createGlyphEngine } from '@pmndrs/glyph/core';
 
-const runtime = await createTextRuntime();
-const host = runtime.createTextEngineHost({ integration: 'studio.webgpu-text' });
+const glyphEngine = await createGlyphEngine();
+const backend = glyphEngine.createBackend({ integration: 'studio.webgpu-text' });
 ```
 
-The runtime owns its Wasm shaper, deduplicated runtime-local font registrations, all child hosts, and the runtime-wide
-borrow gate. The host owns one integration's policy installations, font and stack bindings, renderer bindings, sessions,
-and collision-checked wire identities. A host cannot rebind to another runtime.
+The engine owns its Wasm shaper, deduplicated engine-local font registrations, all child backends, and the engine-wide
+borrow gate. The backend owns one integration's policy installations, font and stack bindings, renderer bindings,
+retained plans, and collision-checked wire identities. A backend cannot rebind to another engine.
 
-Use another runtime when work needs independent Wasm memory, worker isolation, or independent teardown. Multiple hosts in
-one runtime are valid when separate integrations share shaping registrations but need separate policies and lifetimes.
+Use another engine when work needs independent Wasm memory, worker isolation, or independent teardown. Multiple backends
+in one engine are valid when separate integrations share shaping registrations but need separate policies and lifetimes.
 
 ## 3. Author and install the renderer policy
 
@@ -157,27 +157,27 @@ function rendererPolicy(identities: RenderWireIdentityRegistry): PolicyDescripto
   };
 }
 
-const policy = host.installPolicy(rendererPolicy);
+const policy = backend.installPolicy(rendererPolicy);
 ```
 
 Authors use semantic names and branded hash helpers. They do not type raw wire numbers. Capability-set IDs are assigned
 by policy compilation; technique, program, resource, and policy-buffer IDs are hashed and collision-checked. Raw shaper
 ABI layouts are package-private.
 
-## 4. Bind fonts and stacks to the host
+## 4. Bind fonts and stacks to the backend
 
-Binding is the cold bridge from an immutable font to this runtime and policy. It is idempotent and lease-counted.
+Binding is the cold bridge from an immutable font to this engine and policy. It is idempotent and lease-counted.
 
 ```ts
-const stack = host.bindFontStack(fontStack);
+const stack = backend.bindFontStack(fontStack);
 ```
 
-`bindFont()` ensures the host has a compatible installed policy, registers shaping bytes once per runtime, compiles the
+`bindFont()` ensures the backend has a compatible installed policy, registers shaping bytes once per engine, compiles the
 technique's binding table, and retains its portable payloads. `bindFontStack()` does that work for each stack member,
 preserves application fallback order, and retains the resulting bindings. Most integrations expose only the stack binding
 to their text constructor.
 
-The returned objects are opaque host-local tokens. Passing a binding from another host, a disposed binding, or a font
+The returned objects are opaque backend-local tokens. Passing a binding from another backend, a disposed binding, or a font
 whose technique has no policy throws at that call boundary.
 
 ## 5. Implement a synchronous plan target
@@ -265,9 +265,9 @@ They demonstrate the required invariant: validation may allocate candidate state
 successful commit. A failed candidate is reported; the renderer never substitutes stale resources or retries an invalid
 plan.
 
-## 6. Create a session and retained text
+## 6. Create a retained plan and text
 
-One session owns one retained batch, one policy selection, one plan target, and one acceptance frontier.
+One retained plan owns desired text, one policy selection, one plan target, and one acceptance frontier.
 
 ```ts
 const limits = {
@@ -281,11 +281,11 @@ const limits = {
   maxOutputBytes: 16 * 1024 * 1024,
 } as const;
 
-const session = host.createSession({
+const retainedPlan = backend.createRetainedPlan({
   policy,
   capabilitySet,
-  target: (sessionControl) => {
-    control = sessionControl;
+  target: (planControl) => {
+    control = planControl;
     return target;
   },
   limits,
@@ -294,7 +294,7 @@ const session = host.createSession({
   textCapacity: 16 * 1024,
 });
 
-const title = session.createText({
+const title = retainedPlan.createText({
   font: stack,
   text: 'Hello',
   style: { fontSize: 48 },
@@ -302,8 +302,8 @@ const title = session.createText({
 });
 ```
 
-Use separate sessions for independently accepted scenes, viewports, render targets, or workers. Multiple sessions may
-share one host and font bindings. They do not share revision cursors or accepted plan state.
+Use separate retained plans for independently accepted scenes, viewports, render targets, or workers. Multiple retained
+plans may share one backend and font bindings. They do not share revision cursors or accepted plan state.
 
 ## 7. Query, mutate, and publish
 
@@ -315,7 +315,7 @@ title.update({ text: 'Hello, Glyph' });
 const metrics = title.layout();
 const positioned = title.glyphs();
 
-const result = session.publish({ semanticViews: 'measurement' });
+const result = retainedPlan.publish({ semanticViews: 'measurement' });
 if (!result.accepted) reportRendererError(result.error);
 ```
 
@@ -350,7 +350,7 @@ unions and branded numeric identities. Integrations do not read generated offset
 ## 9. Cross an asynchronous boundary
 
 Use `AsyncPlanTarget` only when the renderer cannot finish CPU consumption in the synchronous callback, most commonly a
-Worker. The session makes exactly one standalone copy and transfers ownership through the candidate.
+Worker. The retained plan makes exactly one standalone copy and transfers ownership through the candidate.
 
 ```ts
 import type { AsyncPlanTarget } from '@pmndrs/glyph/core';
@@ -372,38 +372,38 @@ const workerTarget: AsyncPlanTarget = {
 
 The worker treats bytes as untrusted and calls `new TextEngineRenderPlanView().bindBytes(bytes)`. It must return the same
 full-span `ArrayBuffer`, unmodified, so the bounded exact-size pool can reuse it. While acceptance is pending, another
-session call throws `TextEngineBackpressureError`. This is one copy for ownership, not a second compatibility path.
+retained-plan call throws `TextEngineBackpressureError`. This is one copy for ownership, not a second compatibility path.
 
-## 10. Connect hosts and sessions to canvases
+## 10. Connect backends and retained plans to canvases
 
 Core deliberately does not own `GPUDevice`, WebGL context, canvas, render pass, or texture. Map topology according to the
 renderer:
 
 ```mermaid
 flowchart TD
-  Runtime[TextRuntime] --> Host[TextEngineHost]
-  Host --> SessionA[Session A]
-  Host --> SessionB[Session B]
-  SessionA --> TargetA[Plan target A]
-  SessionB --> TargetB[Plan target B]
+  Engine[GlyphEngine] --> Backend[GlyphBackend]
+  Backend --> PlanA[Retained plan A]
+  Backend --> PlanB[Retained plan B]
+  PlanA --> TargetA[Plan target A]
+  PlanB --> TargetB[Plan target B]
   TargetA --> Device[Renderer-owned device/context]
   TargetB --> Device
   Device --> CanvasA[Canvas / texture A]
   Device --> CanvasB[Canvas / texture B]
 ```
 
-- WebGPU may use one `GPUDevice` for several canvas contexts or offscreen textures. Sessions can share a renderer-owned
+- WebGPU may use one `GPUDevice` for several canvas contexts or offscreen textures. Retained plans can share a renderer-owned
   device pool while keeping independent targets and acceptance frontiers.
 - WebGL resources belong to one context. Use one renderer resource pool per context; separate canvases normally mean
-  separate contexts and targets even when sessions share one host.
-- Onscreen and OffscreenCanvas in separate threads need separate runtime/host/session domains unless all engine calls stay
+  separate contexts and targets even when retained plans share one backend.
+- Onscreen and OffscreenCanvas in separate threads need separate engine/backend/retained-plan domains unless all engine calls stay
   on one side and plans use the asynchronous transfer contract.
-- Synchronous and asynchronous sessions may coexist under one host. The runtime-wide borrow gate prevents a sibling call
+- Synchronous and asynchronous retained plans may coexist under one backend. The engine-wide borrow gate prevents a sibling call
   from invalidating an active borrowed publication.
 
 On device loss or a full renderer rebuild, discard that device's physical realizations and call
-`control.requestCheckpoint()` for every session attached to the physical resource pool. The next publication for each
-session is complete rather than delta-based, so the target can reacquire portable payloads and rebuild buffers and
+`control.requestCheckpoint()` for every retained plan attached to the physical resource pool. The next publication for each
+retained plan is complete rather than delta-based, so the target can reacquire portable payloads and rebuild buffers and
 geometry without an authored text mutation. The example integration packages this sequence as
 `engine.replaceDevice(nextDevice)`. A target must not request a checkpoint merely because it rejected malformed data;
 malformed plans are engine defects.
@@ -414,17 +414,17 @@ Explicit disposal is deterministic and idempotent:
 
 ```ts
 title.dispose();
-session.dispose();
+retainedPlan.dispose();
 stack.dispose();
 policy.dispose();
-host.dispose();
-runtime.dispose();
+backend.dispose();
+glyphEngine.dispose();
 font.dispose();
 ```
 
-You may rely on owner cascade instead: session disposal closes its text and target; host disposal closes sessions and
-host bindings; runtime disposal closes hosts before Wasm. The immutable root font is intentionally separate and may be
-disposed after every runtime binding ends. Renderer GPU objects remain the target/device's responsibility.
+You may rely on owner cascade instead: retained-plan disposal closes its text and target; backend disposal closes retained
+plans and backend bindings; engine disposal closes backends before Wasm. The immutable root font is intentionally separate
+and may be disposed after every engine binding ends. Renderer GPU objects remain the target/device's responsibility.
 
 ## Verify the integration
 

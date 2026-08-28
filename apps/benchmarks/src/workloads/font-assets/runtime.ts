@@ -73,8 +73,8 @@ export function measuredRuntimeFontBake(
 }
 
 /**
- * The Three font loader keys one text runtime per loading manager, and every `Text` in a paragraph batch must share a
- * runtime. A caller-supplied immutable library gives an isolated benchmark surface one manager and loader domain.
+ * The Three font loader keys one text engine per loading manager, and every `Text` in a paragraph batch must share one
+ * engine. A caller-supplied immutable library gives an isolated benchmark surface one manager and loader domain.
  */
 const sharedLoadingManager = new THREE.LoadingManager();
 const isolatedLoadingManagers = new WeakMap<FontLibrary, THREE.LoadingManager>();

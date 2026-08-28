@@ -1,7 +1,7 @@
 ---
 type: API Specification
 title: Core text API
-description: Current root application vocabulary and renderer-neutral runtime, host, session, policy, plan-target, and semantic record contracts.
+description: Current root application vocabulary and renderer-neutral engine, backend, retained plan, policy, plan-target, and semantic record contracts.
 documentation_type: reference
 tags: [api, fonts, shaping, paragraphs, layout, rendering, ownership]
 status: stable
@@ -11,28 +11,28 @@ sources:
     title: Accepted architectural decisions
   - id: ownership
     resource: font-runtime-ownership.md
-    title: Font, runtime, host, session, and target ownership
+    title: Font, engine, backend, retained plan, and target ownership
   - id: root-entry
     resource: ../../packages/glyph/src/index.ts
     title: Root application entry point
   - id: core-entry
     resource: ../../packages/glyph/src/core.ts
     title: Renderer-neutral integration entry point
-  - id: runtime
-    resource: ../../packages/glyph/src/text-runtime.ts
-    title: Current text runtime
-  - id: host
-    resource: ../../packages/glyph/src/core/host.ts
-    title: Current host lifecycle
-  - id: retained-session
-    resource: ../../packages/glyph/src/core/retained-session.ts
-    title: Current session and target lifecycle
+  - id: engine
+    resource: ../../packages/glyph/src/glyph-engine.ts
+    title: Current Glyph engine
+  - id: backend
+    resource: ../../packages/glyph/src/core/backend.ts
+    title: Current backend lifecycle
+  - id: retained-plan
+    resource: ../../packages/glyph/src/core/retained-plan.ts
+    title: Current retained plan and target lifecycle
   - id: guide
     resource: ../guides/renderer-integration.md
     title: Renderer integration guide
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-28T00:00:00Z'
+  at: '2026-08-28T20:20:47Z'
 ---
 
 # Core text API
@@ -40,13 +40,13 @@ generated:
 Glyph has two additive public surfaces:
 
 - <code>@pmndrs/glyph</code> is application vocabulary: immutable fonts, font stacks, formatted text, Paragraph, layout values, technique definition, loading, and baking;
-- <code>@pmndrs/glyph/core</code> is integration machinery: runtime, host, policy, bindings, sessions, plan targets, portable resource contracts, and semantic plan readers.
+- <code>@pmndrs/glyph/core</code> is integration machinery: engine, backend, policy, bindings, retained plans, plan targets, portable resource contracts, and semantic plan readers.
 
 Three and React are integrations over those surfaces. Canvas, scene, GPU device, material, pipeline, and render pass remain renderer-owned.
 
 ## Application-owned fonts
 
-Font loading is independent from a shaping runtime or renderer:
+Font loading is independent from a shaping engine or renderer:
 
 <pre><code>import { createFontStack, loadFont } from '@pmndrs/glyph';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
@@ -57,7 +57,7 @@ const inter = await loadFont({
 });
 const body = createFontStack(inter);</code></pre>
 
-<code>Font&lt;Technique&gt;</code> owns immutable artifact backing and decoded portable raster data. It may bind into several runtimes or hosts and may outlive any one of them. <code>font.dispose()</code> prevents new bindings; existing counted bindings keep the backing alive until their own disposal.
+<code>Font&lt;Technique&gt;</code> owns immutable artifact backing and decoded portable raster data. It may bind into several engines or backends and may outlive any one of them. <code>font.dispose()</code> prevents new bindings; existing counted bindings keep the backing alive until their own disposal.
 
 <code>FontLibrary</code> is an optional application cache with explicit leases. Top-level <code>loadFont()</code> coalesces only in-flight work and does not make an unbounded global cache.
 
@@ -81,33 +81,33 @@ const positioned = paragraph.glyphs({
   width: { mode: 'exactly', size: metrics.contentWidth },
 });</code></pre>
 
-<code>createParagraph()</code> asynchronously acquires a private per-realm measurement runtime. Once returned, <code>layout()</code>, <code>glyphs()</code>, and <code>update()</code> are synchronous.
+<code>createParagraph()</code> asynchronously acquires a private per-realm measurement engine. Once returned, <code>layout()</code>, <code>glyphs()</code>, and <code>update()</code> are synchronous.
 
 - <code>layout()</code> returns aggregate dimensions, intrinsic widths, line metrics, baselines, and glyph count. A cache miss may synchronously incur font and layout lookup work.
 - <code>glyphs()</code> returns caller-owned positioned glyph and line columns plus ink boxes. A cache miss may synchronously incur glyph lookup and positioning; every call copies the returned columns.
 - neither query publishes a renderer plan, creates GPU resources, needs a scene matrix, or changes renderer acceptance;
 - invalid constraints throw at the call that supplied them.
 
-## Runtime and host
+## Engine and backend
 
-<pre><code>import { createTextRuntime } from '@pmndrs/glyph/core';
+<pre><code>import { createGlyphEngine } from '@pmndrs/glyph/core';
 
-const runtime = await createTextRuntime();
-const host = runtime.createTextEngineHost({
+const engine = await createGlyphEngine();
+const backend = engine.createBackend({
   integration: 'studio.webgpu-text',
 });</code></pre>
 
-<code>TextRuntime</code> owns one Wasm shaping domain, its runtime-local font registrations, a runtime-wide borrowed-plan gate, and every host it creates. <code>runtime.dispose()</code> disposes child hosts before releasing Wasm. A host cannot detach or rebind.
+<code>GlyphEngine</code> owns one Wasm shaping domain, its engine-local font registrations, an engine-wide borrowed-plan gate, and every backend it creates. <code>engine.dispose()</code> disposes child backends before releasing Wasm. A backend cannot detach or rebind.
 
-<code>TextEngineHost</code> owns one integration's installed policies, font and stack bindings, renderer-owned material/resource/transform identities, sessions, and collision-checked wire identities.
+<code>GlyphBackend</code> owns one integration's installed policies, font and stack bindings, renderer-owned material/resource/transform identities, retained plans, and collision-checked wire identities.
 
-Several hosts may share one runtime when their policy or device lifetimes differ but shared Wasm registration is useful. Use separate runtimes for worker, memory, or teardown isolation.
+Several backends may share one engine when their policy or device lifetimes differ but shared Wasm registration is useful. Use separate engines for worker, memory, or teardown isolation.
 
 ## Policy installation and font binding
 
 A renderer combines technique-owned portable policy bodies with renderer-owned system lanes and capabilities:
 
-<pre><code>const policy = host.installPolicy((identities) =&gt; ({
+<pre><code>const policy = backend.installPolicy((identities) =&gt; ({
   capabilitySets: [capabilitySet],
   programs: [
     createRasterPolicyProgram(examplePlan, {
@@ -121,19 +121,19 @@ A renderer combines technique-owned portable policy bodies with renderer-owned s
   ],
 }));
 
-const stack = host.bindFontStack(body);</code></pre>
+const stack = backend.bindFontStack(body);</code></pre>
 
 Policy authors use semantic capability/scalar names and branded hash helpers. They never type raw ABI ordinals or caller-chosen numeric IDs. Compilation assigns capability-set ordinals and rejects collisions or malformed descriptors before registration.
 
-<code>bindFont()</code> and <code>bindFontStack()</code> are host-local, idempotent in underlying registration, and return independent counted leases. Binding requires a compatible policy, deduplicates shaping registration in the runtime, runs the technique's cold <code>compileFont()</code> path, registers binding bytes, and retains constrained immutable payloads. Cross-host, disposed, or incompatible bindings throw at the call boundary.
+<code>bindFont()</code> and <code>bindFontStack()</code> are backend-local, idempotent in underlying registration, and return independent counted leases. Binding requires a compatible policy, deduplicates shaping registration in the engine, runs the technique's cold <code>compileFont()</code> path, registers binding bytes, and retains constrained immutable payloads. Cross-backend, disposed, or incompatible bindings throw at the call boundary.
 
 Integrators that need a CPU oracle or allocation diagnostics may call <code>compileRasterFont()</code> followed by <code>readCompiledRasterFont()</code>. The read-only view resolves schema field names, strikes, selected resources, and portable payloads directly from the authenticated compiled binding. It does not expose the technique's internal decoded <code>Font.data</code>, perform another decode, or copy the binding's scalar value tables.
 
-## Session and retained text
+## Retained plan and retained text
 
-One session owns one retained batch, target, policy selection, capacity budget, and acceptance frontier:
+One retained plan owns one retained batch, target, policy selection, capacity budget, and acceptance frontier:
 
-<pre><code>const session = host.createSession({
+<pre><code>const retainedPlan = backend.createRetainedPlan({
   policy,
   capabilitySet,
   target: () =&gt; target,
@@ -143,7 +143,7 @@ One session owns one retained batch, target, policy selection, capacity budget, 
   textCapacity: 16 * 1024,
 });
 
-const title = session.createText({
+const title = retainedPlan.createText({
   font: stack,
   text: 'Hello',
   style: { fontSize: 48 },
@@ -153,14 +153,14 @@ const title = session.createText({
 title.update({ text: 'Hello, Glyph' });
 const metrics = title.layout();
 const positioned = title.glyphs();
-const acceptance = session.publish();
+const acceptance = retainedPlan.publish();
 if (!acceptance.accepted) reportRendererError(acceptance.error);</code></pre>
 
 <code>update()</code> validates and records desired state. Shaping is deferred until <code>layout()</code>, <code>glyphs()</code>, or <code>publish()</code> needs a current answer. <code>publish()</code> compiles a candidate, calls the target, and advances the accepted revision and retirement fence only after target commit.
 
 <code>layout()</code> and <code>glyphs()</code> are synchronous, on-demand queries over current desired state. A cache miss may incur font/layout or glyph-positioning lookup work; <code>glyphs()</code> returns copied caller-owned columns. Neither query publishes a renderer plan.
 
-Use another session for an independently accepted scene, viewport, render target, or worker. Sessions may share their host's policies and font bindings but never share revision cursors.
+Use another retained plan for an independently accepted scene, viewport, render target, or worker. Retained plans may share their backend's policies and font bindings but never share revision cursors.
 
 ## PlanTarget: normal borrowed delivery
 
@@ -191,11 +191,11 @@ Acceptance is transactional. A rejected candidate releases provisional objects, 
 
 ## AsyncPlanTarget: actual asynchronous boundaries
 
-Use <code>AsyncPlanTarget</code> only when CPU consumption crosses an asynchronous boundary, usually a Worker. The session makes exactly one full-span standalone copy after checking the target's declared maximum. The sender transfers that allocation without another clone; the result returns the same buffer identity for bounded pool reuse.
+Use <code>AsyncPlanTarget</code> only when CPU consumption crosses an asynchronous boundary, usually a Worker. The retained plan makes exactly one full-span standalone copy after checking the target's declared maximum. The sender transfers that allocation without another clone; the result returns the same buffer identity for bounded pool reuse.
 
 Referenced payloads and transforms cross with validated manifests. Canonical font backing is never detached. The receiver treats transferred plan bytes as untrusted and binds them through <code>TextEngineRenderPlanView.bindBytes()</code>.
 
-Synchronous and asynchronous sessions may coexist under one host. The runtime-wide borrow gate prevents any host from re-entering shared Wasm while a synchronous candidate is active.
+Synchronous and asynchronous retained plans may coexist under one backend. The engine-wide borrow gate prevents any backend from re-entering shared Wasm while a synchronous candidate is active.
 
 ## Semantic render-plan surface
 
@@ -224,18 +224,18 @@ A valid emitted plan that contradicts its own metadata is an engine defect, not 
 Dispose leaf objects when their lifetime ends:
 
 <pre><code>title.dispose();
-session.dispose();
+retainedPlan.dispose();
 stack.dispose();
 policy.dispose();
-host.dispose();
-runtime.dispose();
+backend.dispose();
+engine.dispose();
 inter.dispose();</code></pre>
 
-Parent disposal cascades as a safety net. Explicit disposal remains the correctness mechanism; finalization is not used to guess ordering among runtime, host, device, session, and resource lifetimes.
+Parent disposal cascades as a safety net. Explicit disposal remains the correctness mechanism; finalization is not used to guess ordering among engine, backend, device, retained plan, and resource lifetimes.
 
 ## Related current documentation
 
 - [Integrate a renderer with Glyph](../guides/renderer-integration.md)
 - [Portable raster-technique implementation report](../guides/technique-implementation-report.md)
-- [Font, runtime, host, session, and render-target ownership](font-runtime-ownership.md)
+- [Font, engine, backend, retained plan, and render-target ownership](font-runtime-ownership.md)
 - [Current Glyph package reference](../packages/glyph.md)

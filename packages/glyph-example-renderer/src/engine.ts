@@ -1,16 +1,16 @@
 import type { AnyRasterTechnique, ColorInput, Font, FontStack, GlyphPaintInput } from '@pmndrs/glyph';
 import {
-  type HostFontBinding,
-  type HostFontStackBinding,
-  type HostPolicy,
+  type BackendFontBinding,
+  type BackendFontStackBinding,
+  type BackendPolicy,
   type PlanCandidate,
   type PlanTarget,
   type PlanTargetControl,
   type RenderPlanResourceId,
   type ResourceHandle,
-  type SynchronousTextEngineSession,
-  type TextEngineText,
-  type TextRuntime,
+  type SynchronousRetainedPlan,
+  type RetainedText,
+  type GlyphEngine,
 } from '@pmndrs/glyph/core';
 
 import type { ExampleDrawList } from './draw-list.js';
@@ -31,7 +31,7 @@ const EXAMPLE_LIMITS = Object.freeze({
 
 /** Initial state for one retained example-renderer text instance. */
 export interface ExampleTextOptions {
-  readonly font: HostFontStackBinding;
+  readonly font: BackendFontStackBinding;
   readonly text: string;
   readonly fontSize?: number;
   readonly width?: number;
@@ -43,7 +43,7 @@ export interface ExampleTextOptions {
 
 /** Desired-state changes accepted by an example-renderer text instance. */
 export interface ExampleTextUpdate {
-  readonly font?: HostFontStackBinding;
+  readonly font?: BackendFontStackBinding;
   readonly text?: string;
   readonly fontSize?: number;
   readonly width?: number;
@@ -53,28 +53,28 @@ export interface ExampleTextUpdate {
   readonly opacity?: number;
 }
 
-/** A complete third-party integration using only root assets and the public `/core` host contract. */
+/** A complete third-party integration using root assets and the public `/core` backend contract. */
 export class ExampleTextEngine {
-  readonly #host;
-  readonly #policy: HostPolicy;
+  readonly #backend;
+  readonly #policy: BackendPolicy;
   readonly #target: ExamplePlanTarget;
-  #session: SynchronousTextEngineSession | undefined;
+  #retainedPlan: SynchronousRetainedPlan | undefined;
   #disposed = false;
 
-  constructor(runtime: TextRuntime, device?: ExampleRendererDevice) {
+  constructor(glyphEngine: GlyphEngine, device?: ExampleRendererDevice) {
     if (device !== undefined) assertExampleRendererDevice(device);
-    this.#host = runtime.createTextEngineHost({ integration: '@pmndrs/glyph-example-renderer' });
+    this.#backend = glyphEngine.createBackend({ integration: '@pmndrs/glyph-example-renderer' });
     this.#target = new ExamplePlanTarget(device);
     try {
-      this.#policy = this.#host.installPolicy(exampleRenderPolicyDescriptor);
+      this.#policy = this.#backend.installPolicy(exampleRenderPolicyDescriptor);
     } catch (error) {
-      this.#host.dispose();
+      this.#backend.dispose();
       throw error;
     }
   }
 
-  /** Binds one immutable font to this renderer host. */
-  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): HostFontBinding<Technique> {
+  /** Binds one immutable font to this renderer backend. */
+  bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): BackendFontBinding<Technique> {
     this.#assertActive();
     const shader = this.#target.shader;
     if (shader !== undefined && shader.variant.techniqueId !== font.technique.id) {
@@ -82,13 +82,13 @@ export class ExampleTextEngine {
         `example renderer shader "${shader.variant.techniqueId}" cannot render "${font.technique.id}"`,
       );
     }
-    return this.#host.bindFont(font);
+    return this.#backend.bindFont(font);
   }
 
-  /** Binds an ordered immutable font stack to this renderer host. */
+  /** Binds an ordered immutable font stack to this renderer backend. */
   bindFontStack<Technique extends AnyRasterTechnique>(
     stack: FontStack<Technique, Font<Technique>>,
-  ): HostFontStackBinding {
+  ): BackendFontStackBinding {
     this.#assertActive();
     const shader = this.#target.shader;
     if (shader !== undefined) {
@@ -100,14 +100,14 @@ export class ExampleTextEngine {
         }
       }
     }
-    return this.#host.bindFontStack(stack);
+    return this.#backend.bindFontStack(stack);
   }
 
-  /** Opens the engine's single retained example session. */
-  openSession(): SynchronousTextEngineSession {
+  /** Opens the engine's single retained example plan. */
+  openRetainedPlan(): SynchronousRetainedPlan {
     this.#assertActive();
-    if (this.#session !== undefined) throw new Error('example engine already has an open text session');
-    this.#session = this.#host.createSession({
+    if (this.#retainedPlan !== undefined) throw new Error('example engine already has an open retained plan');
+    this.#retainedPlan = this.#backend.createRetainedPlan({
       policy: this.#policy,
       capabilitySet: exampleCapabilitySet,
       target: (control) => {
@@ -119,18 +119,18 @@ export class ExampleTextEngine {
       resultCapacity: 256 * 1024,
       textCapacity: 16 * 1024,
     });
-    return this.#session;
+    return this.#retainedPlan;
   }
 
-  /** Creates one retained text instance in the open session. */
+  /** Creates one retained text instance in the open plan. */
   createText(options: ExampleTextOptions): ExampleText {
-    const session = this.#requireSession();
-    return new ExampleText(session, () => this.publish(), options);
+    const retainedPlan = this.#requireRetainedPlan();
+    return new ExampleText(retainedPlan, () => this.publish(), options);
   }
 
   /** Publishes current desired state and returns the accepted decoded draw list. */
   publish(): ExampleDrawList {
-    const result = this.#requireSession().publish();
+    const result = this.#requireRetainedPlan().publish();
     if (!result.accepted) throw result.error;
     return this.#target.lastDrawList;
   }
@@ -142,17 +142,17 @@ export class ExampleTextEngine {
     this.#target.replaceDevice(device);
   }
 
-  /** Disposes the host, session, target, and retained payload leases. */
+  /** Disposes the backend, plan, target, and retained payload leases. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#host.dispose();
-    this.#session = undefined;
+    this.#backend.dispose();
+    this.#retainedPlan = undefined;
   }
 
-  #requireSession(): SynchronousTextEngineSession {
+  #requireRetainedPlan(): SynchronousRetainedPlan {
     this.#assertActive();
-    return this.#session ?? this.openSession();
+    return this.#retainedPlan ?? this.openRetainedPlan();
   }
 
   #assertActive(): void {
@@ -160,17 +160,17 @@ export class ExampleTextEngine {
   }
 }
 
-/** One retained text instance owned by an {@link ExampleTextEngine} session. */
+/** One retained text instance owned by an {@link ExampleTextEngine} plan. */
 export class ExampleText {
-  readonly #text: TextEngineText;
+  readonly #text: RetainedText;
   readonly #publish: () => ExampleDrawList;
   #state: NormalizedExampleTextOptions;
   #disposed = false;
 
-  constructor(session: SynchronousTextEngineSession, publish: () => ExampleDrawList, options: ExampleTextOptions) {
+  constructor(retainedPlan: SynchronousRetainedPlan, publish: () => ExampleDrawList, options: ExampleTextOptions) {
     this.#publish = publish;
     this.#state = normalizeTextOptions(options);
-    this.#text = session.createText(coreTextOptions(this.#state));
+    this.#text = retainedPlan.createText(coreTextOptions(this.#state));
   }
 
   /** Current desired text content. */
@@ -189,13 +189,13 @@ export class ExampleText {
     this.#state = state;
   }
 
-  /** Publishes the owning session and returns its accepted draw list. */
+  /** Publishes the owning plan and returns its accepted draw list. */
   publish(): ExampleDrawList {
     this.#assertActive();
     return this.#publish();
   }
 
-  /** Removes this retained text instance from its session. */
+  /** Removes this retained text instance from its plan. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -233,7 +233,7 @@ class ExamplePlanTarget implements PlanTarget {
   }
 
   attachControl(control: PlanTargetControl): void {
-    if (this.#control !== undefined) throw new Error('example plan target already has a session control');
+    if (this.#control !== undefined) throw new Error('example plan target already has retained-plan control');
     this.#control = control;
   }
 
