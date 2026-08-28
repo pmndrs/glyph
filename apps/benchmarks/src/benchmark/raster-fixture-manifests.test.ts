@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createGunzip } from 'node:zlib';
 
 import { describe, expect, it } from 'vitest';
+import { MSDF_EM_SIZE, MSDF_PIXEL_RANGE } from '@pmndrs/glyph/raster/msdf';
 
 import bitmapManifest from '../../fixtures/rendering/showcase-raster-fixtures-v0.json' with { type: 'json' };
 import bitmapDensityManifest from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json' with { type: 'json' };
@@ -113,6 +114,10 @@ describe('checked raster fixture manifests', () => {
       'PMNDRS_font_distance_field',
       artifact.file,
     );
+    expect(artifact.configuration).toEqual({ emSize: MSDF_EM_SIZE, pixelRange: MSDF_PIXEL_RANGE });
+    expect(integerProperty(raster, 'emSize', artifact.file)).toBe(artifact.configuration.emSize);
+    expect(integerProperty(raster, 'planeUnitsPerEm', artifact.file)).toBe(artifact.configuration.emSize);
+    expect(integerProperty(raster, 'pixelRange', artifact.file)).toBe(artifact.configuration.pixelRange);
     expect(integerProperty(raster, 'glyphCount', artifact.file)).toBe(identity.glyphCount);
     expect(arrayProperty(raster, 'pages', artifact.file)).toHaveLength(artifact.raster.pages.length);
     expect(sum(artifact.raster.pages.map(({ decodedGpuBytes }) => decodedGpuBytes))).toBe(

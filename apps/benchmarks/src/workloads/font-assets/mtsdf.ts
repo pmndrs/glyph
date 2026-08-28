@@ -1,4 +1,5 @@
 import { msdf as mtsdfTechnique } from '@pmndrs/glyph/three/msdf';
+import { MSDF_EM_SIZE, MSDF_PIXEL_RANGE } from '@pmndrs/glyph/raster/msdf';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url';
 import dancingScriptCompressedFontUrl from '../../../fixtures/rendering/dancing-script-mtsdf.font.glb.gz?url';
@@ -27,6 +28,7 @@ export type MtsdfFontAsset = Extract<BenchmarkFontAsset, { readonly technique: '
 
 interface MtsdfFixtureManifest {
   readonly fontFixture: BenchmarkFontFixture;
+  readonly configuration: { readonly emSize: number; readonly pixelRange: number };
   readonly compressed: AuthenticatedArtifactSize;
   readonly uncompressed: AuthenticatedArtifactSize;
   readonly raster: { readonly runtimeTextureArray: { readonly basePaddedGpuBytes: number } };
@@ -73,7 +75,11 @@ export async function loadMtsdfFontAsset(
   const metrics = createFontDeliveryMetrics(delivery);
   const manifest = fixtureManifests.get(fixture);
   if (manifest === undefined) throw new RangeError(`Unknown MTSDF font fixture: ${fixture}`);
+  const configuration = { ...manifest.configuration, planeUnitsPerEm: manifest.configuration.emSize };
   if (delivery === 'runtime') {
+    if (configuration.emSize !== MSDF_EM_SIZE || configuration.pixelRange !== MSDF_PIXEL_RANGE) {
+      throw new TypeError('runtime MTSDF fixture configuration must match the default bake request');
+    }
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
       raster: { technique: mtsdfTechnique },
@@ -87,7 +93,7 @@ export async function loadMtsdfFontAsset(
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
       loaded,
-      data: compiledMsdfData(loaded),
+      data: compiledMsdfData(loaded, configuration),
       metrics,
     };
   }
@@ -109,7 +115,7 @@ export async function loadMtsdfFontAsset(
     atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
     compressedBytes: manifest.compressed.bytes,
     loaded,
-    data: compiledMsdfData(loaded),
+    data: compiledMsdfData(loaded, configuration),
     metrics,
   };
 }

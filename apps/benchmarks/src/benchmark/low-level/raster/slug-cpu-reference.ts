@@ -1,5 +1,5 @@
 import type { ParagraphLayout } from '@pmndrs/glyph';
-import { SLUG_GLYPH_RECORD_STRIDE, type SlugData, type SlugPageData } from '@pmndrs/glyph/raster/slug';
+import type { SlugPageData } from '@pmndrs/glyph/raster/slug';
 
 const ABSENT_PAGE = 0xffff;
 const MAX_SAFE_BAND_CURVES = 512;
@@ -23,6 +23,42 @@ export interface SlugCpuReference {
   readonly evaluatedCurves: number;
 }
 
+/** Portable Slug columns consumed by the independent benchmark oracle. */
+export interface SlugCpuReferenceData {
+  /** Integer scale for glyph plane bounds. */
+  readonly planeUnitsPerEm: number;
+  /** Retained portable Slug page payloads. */
+  readonly pages: readonly SlugPageData[];
+  /** Per-glyph columns reconstructed from the compiled portable binding. */
+  readonly glyphs: SlugCpuReferenceGlyphs;
+}
+
+/** Parallel per-glyph Slug columns needed by the scalar reference renderer. */
+export interface SlugCpuReferenceGlyphs {
+  /** Left glyph bound in plane units. */
+  readonly planeLeft: Int16Array;
+  /** Bottom glyph bound in plane units. */
+  readonly planeBottom: Int16Array;
+  /** Right glyph bound in plane units. */
+  readonly planeRight: Int16Array;
+  /** Top glyph bound in plane units. */
+  readonly planeTop: Int16Array;
+  /** Selected portable page index or the absent sentinel. */
+  readonly page: Uint16Array;
+  /** Horizontal band count. */
+  readonly horizontalBands: Uint16Array;
+  /** Vertical band count. */
+  readonly verticalBands: Uint16Array;
+  /** Page-local curve-table base. */
+  readonly curveBase: Uint32Array;
+  /** Page-local horizontal-header base. */
+  readonly horizontalHeaderBase: Uint32Array;
+  /** Page-local vertical-header base. */
+  readonly verticalHeaderBase: Uint32Array;
+  /** Page-local reference-table base. */
+  readonly referenceBase: Uint32Array;
+}
+
 export interface FlatSlugCpuReferenceOptions {
   readonly width: number;
   readonly height: number;
@@ -38,7 +74,7 @@ export interface FlatSlugCpuReferenceOptions {
  * and reference resources without invoking Three.js, TSL, or browser fonts.
  */
 export function renderFlatSlugCpuReference(
-  data: SlugData,
+  data: SlugCpuReferenceData,
   layout: ParagraphLayout,
   options: FlatSlugCpuReferenceOptions,
 ): SlugCpuReference {
@@ -50,11 +86,8 @@ export function renderFlatSlugCpuReference(
   const fontSlot = nonnegativeInteger(options.fontSlot ?? 0, 'Slug CPU reference font slot');
   const fill = linearColor(options.fill ?? [1, 1, 1, 1]);
   assertLayoutArrays(layout);
-  if (data.records.byteLength % SLUG_GLYPH_RECORD_STRIDE !== 0) {
-    throw new TypeError('Slug CPU reference record table is not densely packed');
-  }
+  const availableGlyphs = assertGlyphColumns(data.glyphs);
 
-  const records = new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
   // The decoded pages carry bytes rather than texel views, so bind each page once instead of per evaluated band.
   const pageTexels = data.pages.map(bindPageTexels);
   const pixels = opaqueBlack(width, height);
@@ -66,26 +99,25 @@ export function renderFlatSlugCpuReference(
   for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
     if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
     const glyphId = layout.glyphIds[glyphIndex]!;
-    if (glyphId >= data.records.byteLength / SLUG_GLYPH_RECORD_STRIDE) {
+    if (glyphId >= availableGlyphs) {
       throw new TypeError('paragraph layout references a Slug glyph outside the resource');
     }
-    const record = glyphId * SLUG_GLYPH_RECORD_STRIDE;
-    const pageIndex = records.getUint16(record + 8, true);
+    const pageIndex = data.glyphs.page[glyphId]!;
     if (pageIndex === ABSENT_PAGE) continue;
     const page = data.pages[pageIndex];
     const texels = pageTexels[pageIndex];
     if (page === undefined || texels === undefined) throw new TypeError('Slug record references a missing page');
 
-    const planeLeft = records.getInt16(record, true);
-    const planeBottom = records.getInt16(record + 2, true);
-    const planeRight = records.getInt16(record + 4, true);
-    const planeTop = records.getInt16(record + 6, true);
-    const horizontalBandCount = records.getUint16(record + 10, true);
-    const verticalBandCount = records.getUint16(record + 12, true);
-    const curveBase = records.getUint32(record + 16, true);
-    const horizontalHeaderBase = records.getUint32(record + 24, true);
-    const verticalHeaderBase = records.getUint32(record + 28, true);
-    const referenceBase = records.getUint32(record + 32, true);
+    const planeLeft = data.glyphs.planeLeft[glyphId]!;
+    const planeBottom = data.glyphs.planeBottom[glyphId]!;
+    const planeRight = data.glyphs.planeRight[glyphId]!;
+    const planeTop = data.glyphs.planeTop[glyphId]!;
+    const horizontalBandCount = data.glyphs.horizontalBands[glyphId]!;
+    const verticalBandCount = data.glyphs.verticalBands[glyphId]!;
+    const curveBase = data.glyphs.curveBase[glyphId]!;
+    const horizontalHeaderBase = data.glyphs.horizontalHeaderBase[glyphId]!;
+    const verticalHeaderBase = data.glyphs.verticalHeaderBase[glyphId]!;
+    const referenceBase = data.glyphs.referenceBase[glyphId]!;
     const fontSize = positiveFinite(layout.glyphFontSizes[glyphIndex]!, 'Slug CPU reference glyph font size');
     const scale = fontSize / positiveFinite(data.planeUnitsPerEm, 'Slug plane units per em');
     const logicalLeft = originX + layout.x[glyphIndex]! + planeLeft * scale;
@@ -148,6 +180,16 @@ export function renderFlatSlugCpuReference(
   }
 
   return { width, height, pixels, bounds, unclippedBounds, glyphCount, evaluatedCurves };
+}
+
+function assertGlyphColumns(glyphs: SlugCpuReferenceGlyphs): number {
+  const count = glyphs.page.length;
+  for (const column of Object.values(glyphs)) {
+    if (!ArrayBuffer.isView(column) || column.length !== count) {
+      throw new TypeError('Slug CPU reference glyph columns must have equal lengths');
+    }
+  }
+  return count;
 }
 
 /** Typed views over one decoded page, bound once so band evaluation stays a pure indexed read. */

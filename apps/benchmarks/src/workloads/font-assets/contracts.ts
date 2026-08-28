@@ -1,9 +1,10 @@
 import type { BakeProgressListener, FontLibrary, Font } from '@pmndrs/glyph';
 import type { bitmap as bitmapTechnique, BitmapData } from '@pmndrs/glyph/raster/bitmap';
 import type { msdf as mtsdfTechnique, MsdfData } from '@pmndrs/glyph/raster/msdf';
-import type { slug as slugTechnique, SlugData } from '@pmndrs/glyph/raster/slug';
+import type { slug as slugTechnique } from '@pmndrs/glyph/raster/slug';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
 import type { FontDelivery, RasterTechnique } from '../../benchmark/url-state';
 
 export type BitmapFixtureDensity = 'conformance' | 'live';
@@ -83,7 +84,7 @@ export type BenchmarkFontAsset =
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'slug';
       readonly loaded: Font<typeof slugTechnique>;
-      readonly data: SlugData;
+      readonly data: SlugCpuReferenceData;
     });
 
 export interface BenchmarkFontAssetPreloadRequest {

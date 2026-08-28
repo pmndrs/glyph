@@ -1,5 +1,5 @@
 import type { Font, ParagraphLayout } from '@pmndrs/glyph';
-import { slug, type SlugData } from '@pmndrs/glyph/three/slug';
+import { slug } from '@pmndrs/glyph/three/slug';
 import { FontLoader, Text, type TextSpan } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -7,7 +7,7 @@ import type { TargetRunOutput } from '../../../contracts';
 import { rasterConformanceSpecimen, type BenchmarkFontFixture } from '../../../font-fixtures';
 import { compareRgba8Coverage } from '../../../low-level/raster/mtsdf-cpu-reference';
 import { compactRgba8Readback } from '../../../low-level/raster/rgba-readback';
-import { renderFlatSlugCpuReference } from '../../../low-level/raster/slug-cpu-reference';
+import { renderFlatSlugCpuReference, type SlugCpuReferenceData } from '../../../low-level/raster/slug-cpu-reference';
 import { sha256 } from '../../shared';
 import type { FontDelivery } from '../../../url-state';
 import type { BakedSlugArtifactSource as SlugBakedArtifactSource } from '../../../../workloads/font-assets';
@@ -145,7 +145,7 @@ interface FlatSlugConformanceResources {
   readonly camera: THREE.OrthographicCamera;
   /** Owns the decoded Slug data the CPU reference reads, so no scene decodes the raster a second time. */
   readonly font: Font<typeof slug>;
-  readonly data: SlugData;
+  readonly data: SlugCpuReferenceData;
   readonly line: Text<typeof slug>;
   readonly sourceTypes?: SlugRasterSourceTypes;
 }
@@ -570,7 +570,7 @@ interface CreateFlatSlugConformanceResourcesOptions {
 
 interface LoadedSlugConformanceFont {
   readonly font: Font<typeof slug>;
-  readonly data: SlugData;
+  readonly data: SlugCpuReferenceData;
   readonly sourceTypes?: SlugRasterSourceTypes;
 }
 

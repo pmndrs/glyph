@@ -1,18 +1,13 @@
 import type { Font } from '@pmndrs/glyph';
 import type { bitmap, BitmapData, BitmapStrikeData } from '@pmndrs/glyph/raster/bitmap';
-import { MSDF_EM_SIZE, type msdf, type MsdfData } from '@pmndrs/glyph/raster/msdf';
-import {
-  SLUG_GLYPH_RECORD_STRIDE,
-  SLUG_PLANE_UNITS_PER_EM,
-  type slug,
-  type SlugData,
-  type SlugPageData,
-} from '@pmndrs/glyph/raster/slug';
+import type { msdf, MsdfConfiguration, MsdfData } from '@pmndrs/glyph/raster/msdf';
+import { SLUG_PLANE_UNITS_PER_EM, type slug, type SlugPageData } from '@pmndrs/glyph/raster/slug';
 import {
   compileRasterFont,
   readCompiledRasterFont,
   RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
+  type CompiledRasterFont,
   type CompiledRasterFontResource,
   type CompiledRasterFontView,
   type PortableResourceGroupPayload,
@@ -20,18 +15,18 @@ import {
   type PortableTexturePayload,
 } from '@pmndrs/glyph/core';
 
+import type { SlugCpuReferenceData } from '../../benchmark/low-level/raster/slug-cpu-reference';
+
 const DENSE_GLYPH_RECORD_STRIDE = 20;
-const RECONSTRUCTED_PLANE_UNITS_PER_EM = 2_048;
 const ABSENT_PAGE = 0xffff;
 
 /** Reconstruct the benchmark Bitmap oracle from the exact portable program consumed by renderers. */
 export function compiledBitmapData(font: Font<typeof bitmap>): BitmapData {
-  const view = compiledView(font);
+  const { compiled, view } = compiledView(font);
   if (view.scope !== 'strike') throw new TypeError('Bitmap compiled binding must use strike scope');
   const resourceIndex = new Map(view.resources.map((resource, index) => [resource.key, index]));
   const strikes: BitmapStrikeData[] = view.strikes.map((ppem, strikeIndex) => {
-    const resource = view.resource(0, strikeIndex);
-    if (resource === undefined) throw new TypeError(`Bitmap strike ${strikeIndex} has no atlas resource`);
+    const resource = declaredResource(compiled, view, 'atlas', strikeIndex, `Bitmap strike ${strikeIndex}`);
     const atlas = textureArray(resource, 'Bitmap atlas');
     assertTextureArrayFormat(atlas, 'r8unorm', 'Bitmap atlas');
     const records = new Uint8Array(view.glyphCount * DENSE_GLYPH_RECORD_STRIDE);
@@ -60,8 +55,8 @@ export function compiledBitmapData(font: Font<typeof bitmap>): BitmapData {
 }
 
 /** Reconstruct the benchmark MTSDF oracle from the exact portable program consumed by renderers. */
-export function compiledMsdfData(font: Font<typeof msdf>): MsdfData {
-  const view = compiledView(font);
+export function compiledMsdfData(font: Font<typeof msdf>, configuration: MsdfConfiguration): MsdfData {
+  const { view } = compiledView(font);
   if (view.scope !== 'glyph' || view.strikes.length !== 1) {
     throw new TypeError('MTSDF compiled binding must use one glyph-scoped strike');
   }
@@ -79,6 +74,13 @@ export function compiledMsdfData(font: Font<typeof msdf>): MsdfData {
     pixelRangeBuffer.bytes.byteOffset,
     pixelRangeBuffer.bytes.byteLength,
   ).getFloat32(0, true);
+  if (pixelRange !== configuration.pixelRange) {
+    throw new TypeError('MTSDF compiled binding pixelRange does not match its authenticated configuration');
+  }
+  const planeUnitsPerEm = positivePlaneUnits(configuration.emSize, 'MTSDF emSize');
+  if (configuration.planeUnitsPerEm !== planeUnitsPerEm) {
+    throw new TypeError('MTSDF planeUnitsPerEm must equal its authenticated emSize');
+  }
   const records = new Uint8Array(view.glyphCount * DENSE_GLYPH_RECORD_STRIDE);
   const output = new DataView(records.buffer);
   for (let glyph = 0; glyph < view.glyphCount; glyph += 1) {
@@ -87,34 +89,44 @@ export function compiledMsdfData(font: Font<typeof msdf>): MsdfData {
       output.setUint16(record + 16, ABSENT_PAGE, true);
       continue;
     }
-    writeDenseRecord(output, record, view, glyph, atlas.width, atlas.height, RECONSTRUCTED_PLANE_UNITS_PER_EM);
+    writeDenseRecord(output, record, view, glyph, atlas.width, atlas.height, planeUnitsPerEm);
   }
   return {
     resource: resource.key,
     binding: { width: atlas.width, height: atlas.height, layers: atlas.layers },
-    emSize: MSDF_EM_SIZE,
+    emSize: planeUnitsPerEm,
     pixelRange,
-    planeUnitsPerEm: RECONSTRUCTED_PLANE_UNITS_PER_EM,
+    planeUnitsPerEm,
     records,
     pages: textureArrayPages(resource, atlas),
   };
 }
 
 /** Reconstruct the benchmark Slug oracle from the exact portable program consumed by renderers. */
-export function compiledSlugData(font: Font<typeof slug>): SlugData {
-  const view = compiledView(font);
+export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData {
+  const { view } = compiledView(font);
   if (view.scope !== 'glyph' || view.strikes.length !== 1) {
     throw new TypeError('Slug compiled binding must use one glyph-scoped strike');
   }
   const pages = view.resources.map((resource) => slugPage(resource));
   const pageIndex = new Map(view.resources.map((resource, index) => [resource.key, index]));
-  const records = new Uint8Array(view.glyphCount * SLUG_GLYPH_RECORD_STRIDE);
-  const output = new DataView(records.buffer);
+  const glyphs = {
+    planeLeft: new Int16Array(view.glyphCount),
+    planeBottom: new Int16Array(view.glyphCount),
+    planeRight: new Int16Array(view.glyphCount),
+    planeTop: new Int16Array(view.glyphCount),
+    page: new Uint16Array(view.glyphCount),
+    horizontalBands: new Uint16Array(view.glyphCount),
+    verticalBands: new Uint16Array(view.glyphCount),
+    curveBase: new Uint32Array(view.glyphCount),
+    horizontalHeaderBase: new Uint32Array(view.glyphCount),
+    verticalHeaderBase: new Uint32Array(view.glyphCount),
+    referenceBase: new Uint32Array(view.glyphCount),
+  };
   for (let glyph = 0; glyph < view.glyphCount; glyph += 1) {
-    const record = glyph * SLUG_GLYPH_RECORD_STRIDE;
     const resource = view.resource(glyph, 0);
     if (resource === undefined) {
-      output.setUint16(record + 8, ABSENT_PAGE, true);
+      glyphs.page[glyph] = ABSENT_PAGE;
       continue;
     }
     const selectedPage = pageIndex.get(resource.key);
@@ -123,28 +135,44 @@ export function compiledSlugData(font: Font<typeof slug>): SlugData {
     const top = view.f32('bearingY', glyph);
     const right = left + view.f32('width', glyph);
     const bottom = top - view.f32('height', glyph);
-    output.setInt16(record, planeValue(left, SLUG_PLANE_UNITS_PER_EM, 'Slug left'), true);
-    output.setInt16(record + 2, planeValue(bottom, SLUG_PLANE_UNITS_PER_EM, 'Slug bottom'), true);
-    output.setInt16(record + 4, planeValue(right, SLUG_PLANE_UNITS_PER_EM, 'Slug right'), true);
-    output.setInt16(record + 6, planeValue(top, SLUG_PLANE_UNITS_PER_EM, 'Slug top'), true);
-    output.setUint16(record + 8, selectedPage, true);
-    output.setUint16(record + 10, u16(view.u32('horizontalBands', glyph), 'Slug horizontal bands'), true);
-    output.setUint16(record + 12, u16(view.u32('verticalBands', glyph), 'Slug vertical bands'), true);
-    output.setUint32(record + 16, view.u32('curveStart', glyph), true);
-    output.setUint32(record + 24, view.u32('headerStart', glyph), true);
-    output.setUint32(record + 28, view.u32('referenceStart', glyph), true);
-    output.setUint32(record + 32, view.u32('bandStart', glyph), true);
+    glyphs.planeLeft[glyph] = planeValue(left, SLUG_PLANE_UNITS_PER_EM, 'Slug left');
+    glyphs.planeBottom[glyph] = planeValue(bottom, SLUG_PLANE_UNITS_PER_EM, 'Slug bottom');
+    glyphs.planeRight[glyph] = planeValue(right, SLUG_PLANE_UNITS_PER_EM, 'Slug right');
+    glyphs.planeTop[glyph] = planeValue(top, SLUG_PLANE_UNITS_PER_EM, 'Slug top');
+    glyphs.page[glyph] = u16(selectedPage, 'Slug page index');
+    glyphs.horizontalBands[glyph] = u16(view.u32('horizontalBands', glyph), 'Slug horizontal bands');
+    glyphs.verticalBands[glyph] = u16(view.u32('verticalBands', glyph), 'Slug vertical bands');
+    glyphs.curveBase[glyph] = view.u32('curveStart', glyph);
+    glyphs.horizontalHeaderBase[glyph] = view.u32('headerStart', glyph);
+    glyphs.verticalHeaderBase[glyph] = view.u32('referenceStart', glyph);
+    glyphs.referenceBase[glyph] = view.u32('bandStart', glyph);
   }
-  return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, records, pages };
+  return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }
 
-function compiledView(font: Font<typeof bitmap | typeof msdf | typeof slug>): CompiledRasterFontView {
+function compiledView(font: Font<typeof bitmap | typeof msdf | typeof slug>): {
+  readonly compiled: CompiledRasterFont;
+  readonly view: CompiledRasterFontView;
+} {
   const identities = new RenderWireIdentityRegistry();
   const compiled = compileRasterFont(font, identities);
   if (compiled === undefined) throw new TypeError(`no portable program is registered for "${font.technique.id}"`);
   const program = resolveRasterPlanProgram(font.technique.id);
   if (program === undefined) throw new TypeError(`no portable program is registered for "${font.technique.id}"`);
-  return readCompiledRasterFont(compiled, program, identities);
+  return { compiled, view: readCompiledRasterFont(compiled, program, identities) };
+}
+
+function declaredResource(
+  compiled: CompiledRasterFont,
+  view: CompiledRasterFontView,
+  role: string,
+  index: number,
+  label: string,
+): CompiledRasterFontResource {
+  const key = compiled.declaredResources.get(role)?.[index];
+  const resource = key === undefined ? undefined : view.resources.find((candidate) => candidate.key === key);
+  if (resource === undefined) throw new TypeError(`${label} has no declared ${role} resource`);
+  return resource;
 }
 
 function writeDenseRecord(
@@ -256,6 +284,13 @@ function planeValue(value: number, planeUnitsPerEm: number, label: string): numb
   const scaled = Math.round(value * planeUnitsPerEm);
   if (scaled < -0x8000 || scaled > 0x7fff) throw new RangeError(`${label} exceeds reconstructed i16 plane bounds`);
   return scaled;
+}
+
+function positivePlaneUnits(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0 || value > 0x7fff) {
+    throw new RangeError(`${label} must be a positive i16-compatible integer`);
+  }
+  return value;
 }
 
 function texelValue(value: number, dimension: number, label: string): number {
