@@ -244,12 +244,12 @@ class ExamplePlanTarget implements PlanTarget {
     if (current !== undefined && !sameShaderSelection(current.shader, device.shader)) {
       throw new TypeError('replacement device must select the same renderer shader');
     }
+    this.#control?.requestCheckpoint();
     for (const payload of this.#payloads.values()) payload.dispose();
     this.#payloads.clear();
     this.#resourcePayloads.clear();
     this.#lastDrawList = undefined;
     this.#device = device;
-    this.#control?.requestCheckpoint();
   }
 
   accept(candidate: PlanCandidate) {
@@ -315,14 +315,16 @@ class ExamplePlanTarget implements PlanTarget {
       this.#resourcePayloads.clear();
       for (const [id, payload] of nextResourcePayloads) this.#resourcePayloads.set(id, payload);
       const activeReferences = new Set([...nextResourcePayloads.values()].map(({ referenceId }) => referenceId));
-      const retiredReferences: ResourceHandle[] = [];
+      const retiredPayloads: Array<[ResourceHandle, ReturnType<PlanCandidate['acquirePayload']>]> = [];
       for (const [referenceId, payload] of this.#payloads) {
         if (activeReferences.has(referenceId)) continue;
-        this.#payloads.delete(referenceId);
-        retiredReferences.push(referenceId);
-        payload.dispose();
+        retiredPayloads.push([referenceId, payload]);
       }
-      device.releaseResources(retiredReferences);
+      device.releaseResources(retiredPayloads.map(([referenceId]) => referenceId));
+      for (const [referenceId, payload] of retiredPayloads) {
+        payload.dispose();
+        this.#payloads.delete(referenceId);
+      }
       return { accepted: true as const };
     } catch (error) {
       for (const payload of acquired) if (!retained.has(payload)) payload.dispose();
@@ -333,10 +335,21 @@ class ExamplePlanTarget implements PlanTarget {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    for (const payload of this.#payloads.values()) payload.dispose();
+    let failure: unknown;
+    const attempt = (release: () => void): void => {
+      try {
+        release();
+      } catch (error) {
+        failure ??= error;
+      }
+    };
+    const referenceIds = [...this.#payloads.keys()];
+    if (referenceIds.length !== 0) attempt(() => this.#device?.releaseResources(referenceIds));
+    for (const payload of this.#payloads.values()) attempt(() => payload.dispose());
     this.#payloads.clear();
     this.#resourcePayloads.clear();
     this.#control = undefined;
+    if (failure !== undefined) throw failure;
   }
 }
 

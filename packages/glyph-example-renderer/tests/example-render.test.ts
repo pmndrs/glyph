@@ -433,7 +433,12 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       replacement.dispose();
       engine.publish();
       expect(rebuiltDevice.resources.size).toBe(0);
+      const liveAtDispose = engine.createText({ font: stackBinding, text: 'dispose-live', fontSize: 32, width: 512 });
+      expect(liveAtDispose.publish().draws.length).toBeGreaterThan(0);
+      expect(rebuiltDevice.resources.size).toBeGreaterThan(0);
       engine.dispose();
+      expect(rebuiltDevice.resources.size).toBe(0);
+      liveAtDispose.dispose();
       expect(() => engine.bindFont(font)).toThrow('disposed');
       expect(device.discardedResourceBatches).toBe(1);
       stackBinding.dispose();

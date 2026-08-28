@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:2cdddfda38853084022972c1d023f6057fa01218484b429670b4e4bbb65269f1'
+source_digest: 'sha256:5076a511018a36899553d7853d73c4e8196b31b198b984f67a070c7b866688fc'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -67,7 +67,8 @@ primitives, draws, and retirements through semantic `/core` readers and copies o
 accepted draw list retains. Resource records resolve through `candidate.acquirePayload()`, producing counted leases over
 validated portable geometry and companion resources. The target indexes accepted plan-resource generations by branded
 numeric handle, releases a payload lease after its last accepted plan reference retires, and never substitutes stale
-payloads after failure. Target disposal releases any leases that remain live.
+payloads after failure. Target disposal releases any leases and device-cache realizations that remain live without
+claiming ownership of the caller's device.
 
 `RecordingExampleRendererDevice` is the deterministic CPU oracle. It validates complete candidate state against the
 selected technique, program, variant, named buffers, geometry, resource and storage generations, patch ranges, primitive
