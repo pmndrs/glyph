@@ -13,25 +13,22 @@ void glyphEngine.loadFont;
 
 async function loadPortableFonts(): Promise<void> {
   const created = await createGlyphEngine();
-  const bitmapFont: Font<typeof bitmap> = await loadFont({
-    input: { baked: '/fonts/Inter.font.glb' },
-    raster: { technique: bitmap, options: { strikes: [16, 32] } },
-  });
-  const msdfFont: Font<typeof msdf> = await loadFont({
-    input: { baked: '/fonts/Inter.font.glb' },
-    raster: { technique: msdf },
-  });
-  const slugFont: Font<typeof slug> = await loadFont({
-    input: { baked: '/fonts/Inter.font.glb' },
-    raster: { technique: slug },
-  });
-  void [created, bitmapFont, msdfFont, slugFont];
+  const bitmapFont: Font<typeof bitmap> = await loadFont(
+    { baked: '/fonts/Inter.font.glb' },
+    { technique: bitmap, options: { strikes: [16, 32] } },
+  );
+  const msdfFont: Font<typeof msdf> = await loadFont({ baked: '/fonts/Inter.font.glb' }, msdf);
+  const slugFont: Font<typeof slug> = await loadFont({ baked: '/fonts/Inter.font.glb' }, slug);
+  const tuple: Promise<readonly [Font<typeof bitmap>, Font<typeof msdf>, Font<typeof slug>]> = loadFont(
+    { baked: '/fonts/Inter.font.glb' },
+    [{ technique: bitmap, options: { strikes: [16] } }, msdf, slug],
+  );
+  void [created, bitmapFont, msdfFont, slugFont, tuple];
 
-  loadFont({
-    input: { baked: '/fonts/Inter.font.glb' },
-    // @ts-expect-error Bitmap technique options are required.
-    raster: { technique: bitmap },
-  });
+  // @ts-expect-error Bitmap technique options are required.
+  loadFont({ baked: '/fonts/Inter.font.glb' }, { technique: bitmap });
+  // @ts-expect-error Multi-raster loading requires a nonempty tuple.
+  loadFont({ baked: '/fonts/Inter.font.glb' }, []);
 }
 
 void loadPortableFonts;

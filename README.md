@@ -279,10 +279,7 @@ const backend = glyphEngine.createBackend({ integration: 'my-renderer' });
 const policy = backend.installPolicy(myRendererPolicy);
 
 // Application assets are renderer-neutral and may outlive this engine.
-const inter = await loadFont({
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: msdf },
-});
+const inter = await loadFont({ baked: '/fonts/Inter.font.glb' }, msdf);
 const font = backend.bindFontStack(createFontStack(inter));
 
 const target: PlanTarget = {

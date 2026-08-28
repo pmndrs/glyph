@@ -34,10 +34,11 @@ const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/i
 const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
 
 test('one portable request returns typed resources for every declared technique', async () => {
-  const [bitmapFont, msdfFont, slugFont] = await loadFont({
-    input: { baked: { bytes: await readFile(multiTechniqueFontUrl) } },
-    rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
-  });
+  const [bitmapFont, msdfFont, slugFont] = await loadFont({ baked: { bytes: await readFile(multiTechniqueFontUrl) } }, [
+    { technique: bitmap, options: { strikes: [32] } },
+    { technique: msdf },
+    { technique: slug },
+  ]);
   assert.equal(bitmapFont.font, msdfFont.font);
   assert.equal(msdfFont.font, slugFont.font);
   assert.equal(bitmapFont.technique, bitmap);
@@ -46,6 +47,26 @@ test('one portable request returns typed resources for every declared technique'
   bitmapFont.dispose();
   msdfFont.dispose();
   slugFont.dispose();
+});
+
+test('Three font loading rejects malformed arguments before starting LoadingManager work', async () => {
+  const manager = new THREE.LoadingManager();
+  let starts = 0;
+  manager.onStart = () => {
+    starts += 1;
+  };
+  const loader = new FontLoader(manager);
+  const input = { baked: 'data:model/gltf-binary;base64,' };
+
+  assert.throws(
+    () => loader.load({ input, raster: { technique: msdf }, retry: true }, () => {}),
+    /only accepts input, raster, and signal/,
+  );
+  await assert.rejects(loader.loadAsync({ input, raster: { technique: bitmap } }), /options/);
+  await assert.rejects(loader.loadFontsAsync(input, []), /at least one raster technique/);
+  await assert.rejects(loader.loadFontsAsync(input, [{ technique: msdf }], { retry: true }), /only accept signal/);
+  assert.equal(starts, 0);
+  loader.dispose();
 });
 
 test('Three domain ownership follows immutable variants across loaders and user-font disposal', async () => {
@@ -391,10 +412,10 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   });
   const instrumented = await createInstrumentedEngine();
   const fontDomain = instrumented.fontDomain;
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   let failMaterial = true;
   let label;
   const material = defineTextMaterial((context) => {
@@ -482,10 +503,10 @@ test('a rejected fixed-capacity candidate releases its provisional font-stack le
   });
 
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const label = new Text({ font, text: 'over budget', capacity: { size: 1, policy: 'fixed' } });
   try {
@@ -503,10 +524,10 @@ test('a rejected fixed-capacity candidate releases its provisional font-stack le
 
 test('TextGroup drops disposed descendants and reuses their committed transform identities', async () => {
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const group = new TextGroup();
   const survivor = new Text({ font, text: 'A' });
@@ -545,10 +566,10 @@ test('TextGroup drops disposed descendants and reuses their committed transform 
 
 test('Three retires materials bound to a replaced buffer generation', async () => {
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const materials = [];
   const disposed = new Set();
   const material = defineTextMaterial((context) => {
@@ -580,14 +601,11 @@ test('Three retires materials bound to a replaced buffer generation', async () =
 test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () => {
   const fontDomain = createThreeFontDomain();
   const [latin, icon] = await Promise.all([
-    fontDomain.loadFont({
-      input: { baked: dataUrl(await readFile(fontUrl)) },
-      raster: { technique: bitmap, options: { strikes: [16] } },
-    }),
-    fontDomain.loadFont({
-      input: { baked: dataUrl(gunzipSync(await readFile(iconSlugFontUrl))) },
-      raster: { technique: slug, options: {} },
-    }),
+    fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, { technique: bitmap, options: { strikes: [16] } }),
+    fontDomain.loadFont(
+      { baked: dataUrl(gunzipSync(await readFile(iconSlugFontUrl))) },
+      { technique: slug, options: {} },
+    ),
   ]);
   const realizedTechniques = [];
   const material = defineTextMaterial((context) => {
@@ -633,10 +651,10 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () 
 test('TextGroup realizes two public Text objects as one indexed Rust draw', async () => {
   const instrumented = await createInstrumentedEngine();
   const fontDomain = instrumented.fontDomain;
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const group = new TextGroup({ renderOrder: 3 });
   const left = new Text({ font, text: 'AB' });
@@ -936,10 +954,10 @@ async function createInstrumentedEngine() {
 
 test('Text.layout measures attached first-frame state without traversing matrices or realizing draws', async () => {
   const instrumented = await createInstrumentedEngine();
-  const font = await instrumented.fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await instrumented.fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const group = new TextGroup();
   const first = new Text({
@@ -1002,10 +1020,10 @@ test('Text.layout measures attached first-frame state without traversing matrice
 
 test('standalone Text.layout creates only its implicit measurement batch before traversal', async () => {
   const instrumented = await createInstrumentedEngine();
-  const font = await instrumented.fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await instrumented.fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const label = new Text({ font, text: 'standalone first-frame measurement' });
   label.position.set(19, 23, 0);
@@ -1040,10 +1058,10 @@ test('standalone Text.layout creates only its implicit measurement batch before 
 
 test('Bitmap strike changes fully initialize a replacement indexed batch', async () => {
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(densityFontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16, 32] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(densityFontUrl)) },
+    { technique: bitmap, options: { strikes: [16, 32] } },
+  );
   const scene = new THREE.Scene();
   const group = new TextGroup();
   const label = new Text({
@@ -1090,10 +1108,10 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
 
 test('multi-page Bitmap strikes remain one ordered texture-array draw', async () => {
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(densityFontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16, 32] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(densityFontUrl)) },
+    { technique: bitmap, options: { strikes: [16, 32] } },
+  );
   const scene = new THREE.Scene();
   const group = new TextGroup();
   const label = new Text({
@@ -1122,10 +1140,10 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async ()
 
 test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () => {
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(amiriFontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(amiriFontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const text = 'مرحبا بالعالم';
 
   const scene = new THREE.Scene();
@@ -1163,10 +1181,10 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
 
 test('TextGroup atomically replaces child paragraphs without multiplying retained text capacity', async () => {
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const group = new TextGroup({ capacity: { size: 4_096, policy: 'grow' } });
   const first = [new Text({ font, text: 'A' }), new Text({ font, text: 'B' })];
@@ -1198,10 +1216,10 @@ test('TextGroup atomically replaces child paragraphs without multiplying retaine
 
 test('TextGroup grows aggregate glyph storage without reserving one aggregate-sized paragraph', async () => {
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const group = new TextGroup({ capacity: { size: 4_096, policy: 'chunk' } });
   const labels = Array.from({ length: 684 }, (_, index) => new Text({ font, text: `icon-${String(index)}` }));
@@ -1237,10 +1255,10 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
 test('repeated layout under changing constraints stays on the paragraph query path', async () => {
   const abi = textShaperAbi;
   const instrumented = await createInstrumentedEngine();
-  const font = await instrumented.fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await instrumented.fontDomain.loadFont(
+    { baked: dataUrl(await readFile(fontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const label = new Text({
     font,
@@ -1293,10 +1311,10 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
   // units-per-em for it as well. Amiri applies `liga` to Latin f-pairs; Inter as baked
   // does not, which is why every existing Latin fixture missed this.
   const fontDomain = createThreeFontDomain();
-  const font = await fontDomain.loadFont({
-    input: { baked: dataUrl(await readFile(amiriFontUrl)) },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await fontDomain.loadFont(
+    { baked: dataUrl(await readFile(amiriFontUrl)) },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const scene = new THREE.Scene();
   const group = new TextGroup({ batching: 'group' });
   scene.add(group);
@@ -1338,8 +1356,9 @@ function createThreeFontDomain(firstLoad, onDispose = () => {}) {
   const loader = new FontLoader();
   let initial = true;
   return {
-    loadFont(request) {
-      const load = () => ('rasters' in request ? loader.loadFontsAsync(request) : loader.loadAsync(request));
+    loadFont(input, raster) {
+      const load = () =>
+        Array.isArray(raster) ? loader.loadFontsAsync(input, raster) : loader.loadAsync({ input, raster });
       if (!initial || firstLoad === undefined) return load();
       initial = false;
       return firstLoad(load);

@@ -3,9 +3,9 @@ import {
   type BakeProgressListener,
   type FontLibrary,
   type Font,
-  type FontRequest,
   type RuntimeFontBake,
   type RuntimeFontBakeRequest,
+  type RasterTechniqueInput,
 } from '@pmndrs/glyph';
 import { FontLoader } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -91,7 +91,7 @@ export async function loadBakedFont<Technique extends AnyRasterTechnique>({
   signal,
 }: {
   readonly artifact: Uint8Array<ArrayBuffer>;
-  readonly raster: FontRequest<Technique>['raster'];
+  readonly raster: RasterTechniqueInput<Technique>;
   readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
 }): Promise<Font<Technique>> {
@@ -116,7 +116,7 @@ export function loadSourceFont<Technique extends AnyRasterTechnique>({
   signal,
 }: {
   readonly source: string;
-  readonly raster: FontRequest<Technique>['raster'];
+  readonly raster: RasterTechniqueInput<Technique>;
   readonly runtimeBake: RuntimeFontBake;
   readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;

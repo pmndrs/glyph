@@ -14,10 +14,10 @@ import { bitmap } from '../../dist/raster/bitmap-technique.js';
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 
 test('immutable-font disposal remains total when one observer fails', async () => {
-  const font = await loadFont({
-    input: { baked: { bytes: await readFile(fontUrl) } },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const font = await loadFont(
+    { baked: { bytes: await readFile(fontUrl) } },
+    { technique: bitmap, options: { strikes: [16] } },
+  );
   const registered = immutableFontResources(font).font;
   let failingObserverCalls = 0;
   let successfulObserverCalls = 0;

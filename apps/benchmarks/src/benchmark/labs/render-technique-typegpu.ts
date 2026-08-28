@@ -39,13 +39,13 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
   const engine = new ExampleTextEngine(glyphEngine, renderer);
   let font;
   try {
-    font = await loadFont({
-      input: {
+    font = await loadFont(
+      {
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
-      raster: { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
-    });
+      { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
+    );
     const binding = engine.bindFont(font);
     const stack = engine.bindFontStack(createFontStack(font));
     engine.openRetainedPlan();

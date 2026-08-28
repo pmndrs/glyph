@@ -7,6 +7,7 @@ import {
   BITMAP_KIND,
   bitmapDescriptorRasterKey,
   canonicalizeBitmapDescriptor,
+  normalizeBitmapOptions,
   type BitmapDescriptor,
 } from '../internal/bitmap-contract.js';
 import { nearestBitmapStrikeIndex } from '../internal/bitmap-strike.js';
@@ -97,7 +98,8 @@ export const bitmap: RasterTechnique<
   version: BITMAP_FORMAT_VERSION,
   runtimeBaker: () => import('../runtime-bakers/bitmap.js'),
   descriptor(options: BitmapTechniqueOptions): BitmapDescriptor {
-    return canonicalizeBitmapDescriptor(options.strikes, options.coverage);
+    const normalized = normalizeBitmapOptions(options);
+    return canonicalizeBitmapDescriptor(normalized.strikes, normalized.coverage);
   },
   async decode(font, raster, signal): Promise<BitmapData> {
     signal?.throwIfAborted();

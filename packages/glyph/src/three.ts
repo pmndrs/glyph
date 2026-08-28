@@ -12,7 +12,7 @@ export type {
   ThreeRasterPlanProgram,
   ThreeRasterPlanVariant,
 } from './three/plan-program-registry.js';
-export type { ThreeFontLoaderOptions, ThreeLoadedFontRequest } from './three/font-loader.js';
+export type { ThreeFontLoaderOptions, ThreeFontLoadRequest } from './three/font-loader.js';
 export { TextFrameError } from './three/frame-error.js';
 export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.js';
 export { Text, TextGroup } from './three/text.js';

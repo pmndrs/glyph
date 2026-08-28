@@ -51,10 +51,7 @@ Font loading is independent from a shaping engine or renderer:
 <pre><code>import { createFontStack, loadFont } from '@pmndrs/glyph';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 
-const inter = await loadFont({
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: msdf },
-});
+const inter = await loadFont({ baked: '/fonts/Inter.font.glb' }, msdf);
 const body = createFontStack(inter);</code></pre>
 
 <code>Font&lt;Technique&gt;</code> owns immutable artifact backing and decoded portable raster data. It may bind into several engines or backends and may outlive any one of them. <code>font.dispose()</code> prevents new bindings; existing counted bindings keep the backing alive until their own disposal.

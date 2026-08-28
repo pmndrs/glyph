@@ -176,7 +176,7 @@ The minimum resident representation is:
 - one renderer realization per `(GPUDevice, authenticated payload identity, variant)`, shared by retained plans through leases;
 - no font-payload copy for a backend, retained plan, canvas, or render pass.
 
-`loadFont({ input: { baked: URL } })` may adopt the `ArrayBuffer` returned by its fetch because Glyph owns that response body.
+`loadFont({ baked: URL }, technique)` may adopt the `ArrayBuffer` returned by its fetch because Glyph owns that response body.
 Caller-supplied bytes need an explicit ownership mode:
 
 ```ts
@@ -202,14 +202,9 @@ Applications load portable assets without constructing an engine:
 import { createFontStack, loadFont } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 
-const inter = await loadFont({
-  input: { baked: new URL('./inter.glb', import.meta.url) },
-  raster: { technique: bitmap, options: { strikes: [32] } },
-});
-const emoji = await loadFont({
-  input: { baked: new URL('./emoji.glb', import.meta.url) },
-  raster: { technique: bitmap, options: { strikes: [32] } },
-});
+const bitmap32 = { technique: bitmap, options: { strikes: [32] } };
+const inter = await loadFont({ baked: new URL('./inter.glb', import.meta.url) }, bitmap32);
+const emoji = await loadFont({ baked: new URL('./emoji.glb', import.meta.url) }, bitmap32);
 const ui = createFontStack(inter, emoji);
 ```
 
@@ -258,23 +253,20 @@ type LoadFontInput =
       readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
     };
 
-interface FontRequest<Technique extends AnyRasterTechnique> {
-  readonly input: LoadFontInput;
-  readonly raster: RasterTechniqueRequest<Technique>;
-}
+type FontRasterInputs = readonly [
+  RasterTechniqueInput<AnyRasterTechnique>,
+  ...RasterTechniqueInput<AnyRasterTechnique>[],
+];
 
-type FontTechniques = readonly [AnyRasterTechnique, ...AnyRasterTechnique[]];
-type FontRasterRequests<Techniques extends FontTechniques> = {
-  readonly [Index in keyof Techniques]: RasterTechniqueRequest<Techniques[Index]>;
-};
-type Fonts<Techniques extends FontTechniques> = {
-  readonly [Index in keyof Techniques]: Font<Techniques[Index]>;
-};
+type TechniqueOfRasterInput<Input> = Input extends AnyRasterTechnique
+  ? Input
+  : Input extends { readonly technique: infer Technique }
+    ? Technique
+    : never;
 
-interface MultiRasterFontRequest<Techniques extends FontTechniques> {
-  readonly input: LoadFontInput;
-  readonly rasters: FontRasterRequests<Techniques>;
-}
+type Fonts<Rasters extends FontRasterInputs> = {
+  readonly [Index in keyof Rasters]: Font<TechniqueOfRasterInput<Rasters[Index]>>;
+};
 ```
 
 `font.dispose()` closes the user lease and prevents new bindings. Existing engine, backend, stack, and device leases remain
@@ -316,27 +308,40 @@ interface FontLoadOptions {
 interface FontLibrary {
   readonly disposed: boolean;
   loadFont<Technique extends AnyRasterTechnique>(
-    request: FontRequest<Technique> | FontToken<Technique>,
+    token: FontToken<Technique>,
     options?: FontLoadOptions,
   ): Promise<Font<Technique>>;
-  loadFont<const Techniques extends FontTechniques>(
-    request: MultiRasterFontRequest<Techniques>,
+  loadFont<Technique extends AnyRasterTechnique>(
+    input: LoadFontInput,
+    raster: RasterTechniqueInput<Technique>,
     options?: FontLoadOptions,
-  ): Promise<Fonts<Techniques>>;
-  clear<Technique extends AnyRasterTechnique>(request: FontRequest<Technique> | FontToken<Technique>): void;
-  clear<const Techniques extends FontTechniques>(request: MultiRasterFontRequest<Techniques>): void;
+  ): Promise<Font<Technique>>;
+  loadFont<const Rasters extends FontRasterInputs>(
+    input: LoadFontInput,
+    rasters: Rasters,
+    options?: FontLoadOptions,
+  ): Promise<Fonts<Rasters>>;
+  clear<Technique extends AnyRasterTechnique>(token: FontToken<Technique>): void;
+  clear<Technique extends AnyRasterTechnique>(input: LoadFontInput, raster: RasterTechniqueInput<Technique>): void;
+  clear(input: LoadFontInput, rasters: FontRasterInputs): void;
   dispose(): void;
 }
 
 declare function createFontLibrary(options?: FontLibraryOptions): FontLibrary;
 declare function loadFont<Technique extends AnyRasterTechnique>(
-  request: FontRequest<Technique> | FontToken<Technique>,
+  token: FontToken<Technique>,
   options?: FontLoadOptions,
 ): Promise<Font<Technique>>;
-declare function loadFont<const Techniques extends FontTechniques>(
-  request: MultiRasterFontRequest<Techniques>,
+declare function loadFont<Technique extends AnyRasterTechnique>(
+  input: LoadFontInput,
+  raster: RasterTechniqueInput<Technique>,
   options?: FontLoadOptions,
-): Promise<Fonts<Techniques>>;
+): Promise<Font<Technique>>;
+declare function loadFont<const Rasters extends FontRasterInputs>(
+  input: LoadFontInput,
+  rasters: Rasters,
+  options?: FontLoadOptions,
+): Promise<Fonts<Rasters>>;
 ```
 
 The top-level `loadFont()` is the no-library convenience path. It coalesces identical in-flight requests and removes that
@@ -345,7 +350,7 @@ normalized input URL or byte-source object/range, technique identity, canonical 
 identity. Callers never author a cache key or numeric ID. `FontLibrary` retains resolved backing explicitly. Every load
 preserves the existing `AbortSignal` boundary.
 
-`FontRequest` preserves both current input modes. A baked request validates an existing GLB. A source request carries the
+`LoadFontInput` preserves both input modes. A baked input validates an existing GLB. A source input carries the
 existing runtime-baker function, Unicode ranges, and all requested raster technique/options. Baking completes one immutable
 artifact before `Font` publication; the source buffer is released after the artifact is owned, and late raster attachment
 is not supported. The existing `FontInput`, `FontToken`, and `defineFont(input, raster)` names and source/baked
@@ -363,24 +368,24 @@ when that name appears in its own public signatures; it does not mirror the root
 
 | Entry                                            | Target contents                                                                                                                                                                                                                        | Migration disposition                                                                                                                                                                |
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@pmndrs/glyph`                                  | `Font`, `FontStack`, `loadFont`, `FontLibrary`, `createFontStack`, `txt`, `span`, formatted-text, paint, layout/measurement, font-feature, raster-technique, raster-resource, and baker contracts plus errors an application can catch | Canonical home. Keep a useful barrel; replace engine-bound loader/registry vocabulary with immutable Font/library vocabulary.                                                       |
-| `@pmndrs/glyph/core`                             | `createGlyphEngine`, `GlyphEngine`, `GlyphBackend`, target/retained plan types, policy authoring, portable compilation, plan readers, and integrator-only errors                                                                           | Engine-driving surface. It imports root types but does not re-export them. Raw frame mutation/acknowledgment compilers and application-invisible dynamic IDs become package-private. |
+| `@pmndrs/glyph`                                  | `Font`, `FontStack`, `loadFont`, `FontLibrary`, `createFontStack`, `txt`, `span`, formatted-text, paint, layout/measurement, font-feature, raster-technique, raster-resource, and baker contracts plus errors an application can catch | Canonical home. Keep a useful barrel; replace engine-bound loader/registry vocabulary with immutable Font/library vocabulary.                                                        |
+| `@pmndrs/glyph/core`                             | `createGlyphEngine`, `GlyphEngine`, `GlyphBackend`, target/retained plan types, policy authoring, portable compilation, plan readers, and integrator-only errors                                                                       | Engine-driving surface. It imports root types but does not re-export them. Raw frame mutation/acknowledgment compilers and application-invisible dynamic IDs become package-private. |
 | `@pmndrs/glyph/three` and `/react`               | Three/R3F objects, materials, loaders, hooks, props, and integration errors                                                                                                                                                            | Re-export only root names actually present in those signatures, such as `Font`/`FontStack` where needed. Root remains their canonical home.                                          |
 | raster, shader, baker, and runtime-bake subpaths | technique-owned side effects, shader-language modules, baker modules, and explicit runtime-bake tooling                                                                                                                                | Remain explicit tree-shakable capability entries; they do not become alternate homes for root application vocabulary.                                                                |
 
 The current and target entry groups have these explicit dispositions:
 
-| API group                                                                                                                                          | Disposition                                                                                                   | Reason                                                                                                                                                                                                                            |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Font`, `FontStack`, `FontMetrics`, `FontInput`, `FontToken`, `defineFont`, `loadFont`, `createFontStack`, `FontLibrary`, and load errors/options  | Keep or replace in place at root                                                                              | These are portable assets, declarative bake inputs, and failures an application encounters. `defineFont` remains the static baker anchor.                                                                                         |
-| Root `txt`, `span`, formatted text, paint, paragraph properties, measurements, layouts, placements, and carets                                     | Keep at root                                                                                                  | Applications author or receive these values without implementing a renderer.                                                                                                                                                      |
-| Current `/core` `Paragraph`, `ParagraphOptions`, and `ParagraphUpdate`                                                                             | Move their application-facing forms to root and add async `createParagraph`; make direct construction private | Detached measurement is application vocabulary even though its engine retained plan remains private.                                                                                                                                    |
-| raster-technique, raster-resource, coverage, feature, and baker contracts                                                                          | Keep at root or their existing explicit capability subpath                                                    | Technique and baker providers author them; they are renderer neutral. Shader-language implementations remain explicit subpaths.                                                                                                   |
-| `FontRegistry`, `RegisteredFont`, `RegisteredRaster`, `LoadedFont`, engine-bound `FontLoader`, and their mutable handles/options                  | Withdraw or replace                                                                                           | They expose mutable registration internals rather than portable application assets.                                                                                                                                               |
-| `GlyphEngine`, `createGlyphEngine`, backend/retained plan/plan/policy types, policy/wire IDs, and portable realization readers                              | Move or remain in `/core`                                                                                     | Only an integration constructs or drives them. Root types may appear in their signatures, but `/core` does not re-export the root barrel.                                                                                         |
+| API group                                                                                                                                          | Disposition                                                                                                   | Reason                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Font`, `FontStack`, `FontMetrics`, `FontInput`, `FontToken`, `defineFont`, `loadFont`, `createFontStack`, `FontLibrary`, and load errors/options  | Keep or replace in place at root                                                                              | These are portable assets, declarative bake inputs, and failures an application encounters. `defineFont` remains the static baker anchor.                                                                                                  |
+| Root `txt`, `span`, formatted text, paint, paragraph properties, measurements, layouts, placements, and carets                                     | Keep at root                                                                                                  | Applications author or receive these values without implementing a renderer.                                                                                                                                                               |
+| Current `/core` `Paragraph`, `ParagraphOptions`, and `ParagraphUpdate`                                                                             | Move their application-facing forms to root and add async `createParagraph`; make direct construction private | Detached measurement is application vocabulary even though its engine retained plan remains private.                                                                                                                                       |
+| raster-technique, raster-resource, coverage, feature, and baker contracts                                                                          | Keep at root or their existing explicit capability subpath                                                    | Technique and baker providers author them; they are renderer neutral. Shader-language implementations remain explicit subpaths.                                                                                                            |
+| `FontRegistry`, `RegisteredFont`, `RegisteredRaster`, `LoadedFont`, engine-bound `FontLoader`, and their mutable handles/options                   | Withdraw or replace                                                                                           | They expose mutable registration internals rather than portable application assets.                                                                                                                                                        |
+| `GlyphEngine`, `createGlyphEngine`, backend/retained plan/plan/policy types, policy/wire IDs, and portable realization readers                     | Move or remain in `/core`                                                                                     | Only an integration constructs or drives them. Root types may appear in their signatures, but `/core` does not re-export the root barrel.                                                                                                  |
 | `textShaperAbi`, raw frame compilers, raw shaper constructors, and dynamic registration layouts                                                    | Withdraw from JavaScript declarations                                                                         | Renderer integrations consume retained backend/retained plan and plan-reader contracts. Alternate-language bindings implement the versioned ABI from its generated schema and Rust contract rather than depending on JavaScript internals. |
-| `/core` `acquireFontSelectionForRuntime`, `assertFontSelectionForRuntime`, `concreteFonts`, `observeLoadedFontDispose`, and `releaseFontSelection` | Withdraw from declarations and make any surviving mechanics package-private                                   | They expose the engine-bound `LoadedFont` model being removed and are not integrator contracts.                                                                                                                                  |
-| `FontHandle`, `RasterHandle`, `FontKey`, and `RasterKey`                                                                                           | Withdraw unless a surviving root output still exposes one                                                     | Dynamic registration identity is package-managed. Output identities such as `FontSlot` or `LocalGlyphId` remain root only when an application-visible layout type names them.                                                     |
+| `/core` `acquireFontSelectionForRuntime`, `assertFontSelectionForRuntime`, `concreteFonts`, `observeLoadedFontDispose`, and `releaseFontSelection` | Withdraw from declarations and make any surviving mechanics package-private                                   | They expose the engine-bound `LoadedFont` model being removed and are not integrator contracts.                                                                                                                                            |
+| `FontHandle`, `RasterHandle`, `FontKey`, and `RasterKey`                                                                                           | Withdraw unless a surviving root output still exposes one                                                     | Dynamic registration identity is package-managed. Output identities such as `FontSlot` or `LocalGlyphId` remain root only when an application-visible layout type names them.                                                              |
 
 The packed declaration test is the authority: root and `/core` export-name sets are disjoint, and an integration may
 re-export a root name only when its own declaration signatures reference that name. This preserves convenient barrel
@@ -410,14 +415,14 @@ RetainedPlan → createText() → RetainedText`. The first two owners use the pa
 retained text lifecycle. A retained plan is not a draw batch or typographic run: one publication may contain many resource,
 storage, primitive, and draw batches.
 
-| Final name | Contract |
-| --- | --- |
-| `GlyphEngine` | Owns one Wasm shaping/layout domain, engine-local font registrations, child backends, and the borrowed-plan gate. |
-| `GlyphBackend` | Owns one renderer integration's policy, font and renderer bindings, IDs, and retained plans. |
-| `RetainedPlan` | Owns desired text, one target, capacities, revisions, publications, and one acceptance frontier. |
-| `RetainedText` | Owns one mutable desired text instance inside a retained plan. |
-| `PlanTransport` | Package-private request/result arena owner used by the retained-plan implementation and direct ABI tests. |
-| policy authoring `scope` | Tracks DSL value provenance; it is not a retained plan and never enters the wire protocol. |
+| Final name               | Contract                                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `GlyphEngine`            | Owns one Wasm shaping/layout domain, engine-local font registrations, child backends, and the borrowed-plan gate. |
+| `GlyphBackend`           | Owns one renderer integration's policy, font and renderer bindings, IDs, and retained plans.                      |
+| `RetainedPlan`           | Owns desired text, one target, capacities, revisions, publications, and one acceptance frontier.                  |
+| `RetainedText`           | Owns one mutable desired text instance inside a retained plan.                                                    |
+| `PlanTransport`          | Package-private request/result arena owner used by the retained-plan implementation and direct ABI tests.         |
+| policy authoring `scope` | Tracks DSL value provenance; it is not a retained plan and never enters the wire protocol.                        |
 
 The pre-alpha Rust/Wasm ABI changes in the same commit. Export keys use `createRetainedPlan`, `reserveRetainedPlan`,
 `disposeRetainedPlan`, and `retainedPlanCount`; frame fields use `retainedPlanId`; status names use
@@ -455,13 +460,28 @@ target/device. Backends do not salt portable IDs: equal semantic identities rema
 identities that collide cannot be installed together. Backend-generated policy, binding, stack, retained-plan, material,
 and transform handles remain automatic and absent from ordinary user input.
 
-#### Queued font-request review
+#### Font-request simplification
 
-Request simplification starts with a read-only inventory, not a speculative rewrite. The audit records every current
-single-raster, multi-raster, `defineFont` token, baked/source/byte, runtime-bake, Three loader, React hook, preload, clear,
-and library-bound form; its cache identity, ownership, cancellation, discovery, and return typing; and every repository
-call pattern. The target request shape is chosen only after that behavior map is reviewed, then all maintained consumers
-migrate atomically.
+The repository inventory found three different authoring shapes for one operation:
+
+| path                   | pre-simplification input                                                  | behavior preserved                                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| root and `FontLibrary` | `{ input, raster }` or `{ input, rasters }`                               | exact technique inference, tuple-preserving multi-raster results, synchronous validation, cancellation, byte ownership, in-flight coalescing, and explicit library caching |
+| static discovery       | `defineFont(input, raster)` followed by `loadFont(token)`                 | build-time discovery and the token's exact input/technique types                                                                                                           |
+| React                  | `useFont(input, technique, options?)` plus matching `preload` and `clear` | R3F cache identity, typed technique options, and deterministic font-lease release                                                                                          |
+| Three `Loader` adapter | one `{ input, raster, signal? }` value                                    | conformance to Three's one-request `Loader.load(request, callbacks)` method                                                                                                |
+
+Root loading adopts the already-established positional shape. `loadFont(input, raster, options?)` returns one typed
+`Font`; `loadFont(input, rasters, options?)` returns a position-preserving tuple when `rasters` is a nonempty tuple.
+`FontLibrary.loadFont()` and `FontLibrary.clear()` use the same input-plus-raster arguments. `loadFont(token)` and the
+matching library operations remain valid for `defineFont()` discovery tokens. The public `FontRequest`,
+`MultiRasterFontRequest`, and request-only raster tuple names are removed; they existed only to wrap arguments that every
+caller immediately unpacked.
+
+The Three override keeps a Three-owned one-object request because that cardinality belongs to `THREE.Loader`, not to the
+portable font API. Its `raster` accepts the same `RasterTechniqueInput` as `defineFont`, while its separate multi-raster
+method uses the root positional form. React's user surface is already canonical and does not change. Internal prepared
+requests may remain structured values, but they are not exported and never make applications author cache keys or IDs.
 
 `GlyphEngine` and `GlyphBackend` are both `/core` integrator vocabulary. Applications load and retain `Font` values
 through the root package or an integration's convenience loader; they never need an engine merely to hold a font:
@@ -974,13 +994,13 @@ acceptance fence advances; the previous accepted publication remains authoritati
 
 The worker transport has one explicit ownership state machine:
 
-| State              | Buffer owner                             | Permitted action                                                                                                  |
-| ------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| candidate created  | source `AsyncPlanTarget`                 | build the manifest from resolved payloads, install abort/response correlation, then transfer                      |
-| request in flight  | receiving endpoint                       | validate bytes and manifest, realize resources, prepare and commit renderer state                                 |
-| response in flight | source endpoint after transfer completes | validate the transaction/result envelope and recover the returned buffer                                          |
-| settled accepted   | retained plan async-copy pool                  | return the buffer and `{ accepted: true }`; retained plan validates both, then advances its cursor and retirement fence |
-| settled rejected   | retained plan async-copy pool when returned    | return `{ accepted: false, error }` and the buffer when available; retained plan keeps its previous cursor              |
+| State              | Buffer owner                                | Permitted action                                                                                                        |
+| ------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| candidate created  | source `AsyncPlanTarget`                    | build the manifest from resolved payloads, install abort/response correlation, then transfer                            |
+| request in flight  | receiving endpoint                          | validate bytes and manifest, realize resources, prepare and commit renderer state                                       |
+| response in flight | source endpoint after transfer completes    | validate the transaction/result envelope and recover the returned buffer                                                |
+| settled accepted   | retained plan async-copy pool               | return the buffer and `{ accepted: true }`; retained plan validates both, then advances its cursor and retirement fence |
+| settled rejected   | retained plan async-copy pool when returned | return `{ accepted: false, error }` and the buffer when available; retained plan keeps its previous cursor              |
 
 The transaction token is renderer-private correlation state created inside the target; it is not a retained plan ID, wire ID,
 or acknowledgment supplied by the application. A malformed response throws as an integration defect. Worker termination,
@@ -1165,17 +1185,17 @@ retained plan cannot block an active one. Portable payload leases survive; physi
 
 ## Cardinality and rules
 
-| Relationship                           | Allowed cardinality    | Rule                                                                                                 |
-| -------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| `Font` → engine                       | many-to-many over time | Each live engine binding holds an independent lease and one Wasm registration.                      |
-| engine → backend                         | one-to-many            | Engine owns and cascades disposal; backend cannot rebind.                                              |
-| backend → retained plan                         | one-to-many            | RetainedPlan cannot move between backends.                                                                   |
-| backend → policy                          | one-to-many            | RetainedPlan chooses one policy at construction.                                                          |
-| render retained plan → target                | exactly one            | Target defines the one acceptance frontier.                                                          |
-| private measurement retained plan → target   | zero                   | It cannot publish draws or acknowledgments and exists only behind root `createParagraph()`.          |
-| target → surface                       | one or lockstep-many   | Independent surfaces require independent retained plans.                                                   |
-| renderer resource domain → realization | one pool per domain    | Pool by package-supplied payload identity and variant; wire reference IDs are never cross-backend keys. |
-| engine → JavaScript realm             | exactly one            | Engine/Wasm memory and borrowed views do not cross realms.                                          |
+| Relationship                               | Allowed cardinality    | Rule                                                                                                    |
+| ------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| `Font` → engine                            | many-to-many over time | Each live engine binding holds an independent lease and one Wasm registration.                          |
+| engine → backend                           | one-to-many            | Engine owns and cascades disposal; backend cannot rebind.                                               |
+| backend → retained plan                    | one-to-many            | RetainedPlan cannot move between backends.                                                              |
+| backend → policy                           | one-to-many            | RetainedPlan chooses one policy at construction.                                                        |
+| render retained plan → target              | exactly one            | Target defines the one acceptance frontier.                                                             |
+| private measurement retained plan → target | zero                   | It cannot publish draws or acknowledgments and exists only behind root `createParagraph()`.             |
+| target → surface                           | one or lockstep-many   | Independent surfaces require independent retained plans.                                                |
+| renderer resource domain → realization     | one pool per domain    | Pool by package-supplied payload identity and variant; wire reference IDs are never cross-backend keys. |
+| engine → JavaScript realm                  | exactly one            | Engine/Wasm memory and borrowed views do not cross realms.                                              |
 
 Use another engine for another realm, Wasm build, hard memory/failure boundary, or independent teardown. Use another backend
 for another renderer integration, policy ownership domain, or plugin trust boundary. Use another retained plan for another
@@ -1205,19 +1225,19 @@ its explicit leases are released.
 
 ### Repository work map
 
-| Area                                 | Primary implementation owners                                                                                                                                 | Required outcome                                                                                                                                                                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| immutable Font and loading           | `packages/glyph/src/loader.ts`, `loaded-font.ts`, `glyph-engine.ts`, and internal registered-font/cache modules                                              | Replace engine-bound `LoadedFont` with one canonical root `Font` backing, explicit library leases, and engine-independent loading.                                                                                              |
-| declarative bake discovery           | `packages/glyph/src/font.ts`, `packages/glyph/src/discovery.ts`, `packages/glyph/src/node/bake.ts`, bake fixtures, and package exports                        | Preserve `defineFont`/`FontToken` as the statically discoverable root contract; reuse the existing `FontInput` name and prove source discovery after migration.                                                                   |
-| engine and backend ownership           | `packages/glyph/src/glyph-engine.ts`, `core/backend.ts`, `core/retention.ts`, and `core/plan-view.ts`                                                           | Engine-owned backend factory, hidden registrations, target-bound retained plans, engine-wide borrow gate, and unforgeable candidate modes.                                                                                               |
+| Area                                 | Primary implementation owners                                                                                                                                 | Required outcome                                                                                                                                                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| immutable Font and loading           | `packages/glyph/src/loader.ts`, `loaded-font.ts`, `glyph-engine.ts`, and internal registered-font/cache modules                                               | Replace engine-bound `LoadedFont` with one canonical root `Font` backing, explicit library leases, and engine-independent loading.                                                                                                      |
+| declarative bake discovery           | `packages/glyph/src/font.ts`, `packages/glyph/src/discovery.ts`, `packages/glyph/src/node/bake.ts`, bake fixtures, and package exports                        | Preserve `defineFont`/`FontToken` as the statically discoverable root contract; reuse the existing `FontInput` name and prove source discovery after migration.                                                                         |
+| engine and backend ownership         | `packages/glyph/src/glyph-engine.ts`, `core/backend.ts`, `core/retention.ts`, and `core/plan-view.ts`                                                         | Engine-owned backend factory, hidden registrations, target-bound retained plans, engine-wide borrow gate, and unforgeable candidate modes.                                                                                              |
 | retained engine and ABI              | `packages/glyph/rust/shaper/src/engine`, generated ABI, TypeScript frame/compiler internals, and `internal/frame-transfer-pool.ts`                            | Keep the numeric wire format and A/B publication; add retained text handles, privatize caller-authored retained plan/acknowledgment inputs, and adapt the existing bounded transfer/return pool rather than creating a second protocol. |
-| renderer-free measurement            | `packages/glyph/src/paragraph.ts` and a package-private per-realm measurement service                                                                         | Replace sync construction with async `createParagraph`, keep later queries synchronous, and use a target-less non-publishing retained plan without exposing engine ownership at root.                                                  |
-| Three reference integration          | `packages/glyph/src/three/engine-coordinator.ts`, `engine-plan-target.ts`, `font-loader.ts`, and `text.ts`                                                   | Consume public root plus `/core`, keep `PlanTarget` zero-copy, pool immutable resources per WebGPU device or WebGL context, and batch compatible font-stack members without reordering.                                           |
-| React integration                    | `packages/glyph/src/react.ts`                                                                                                                                 | Replace module-global loader/promise ownership with provider or application `FontLibrary` leases and prove StrictMode lifecycle safety.                                                                                           |
-| external renderer proof              | `packages/glyph-example-renderer/src` and its tests                                                                                                           | Keep TypeGPU/WebGPU device ownership external, implement ordinary zero-copy `PlanTarget`, and add a real worker-backed `AsyncPlanTarget` round trip.                                                                              |
-| applications, labs, and size entries | every consumer under `apps/`, including module-scope `useFont.preload`, benchmark labs, conformance targets, proof routes, and `apps/benchmarks/size-entries` | Migrate all call sites in the same atomic package change; preserve module-scope preload through an explicit library-bound contract, replace withdrawn export anchors, and keep root checks plus comparable size graphs reachable. |
-| package cleanup                      | package manifests, exports, boundary tests, and obsolete example adapters                                                                                     | Remove engine-bound and renderer-leaking compatibility surfaces; permit Three only in `glyph-example-raster`'s explicit `/tsl` implementation subpath and never in its neutral entry or in `glyph-example-renderer`.             |
-| docs and evidence                    | README, package concepts, renderer guide, this plan, HTML report, benchmark workflows, and size evidence                                                      | Make current APIs, ownership graphs, worker transfer, performance, and deferred work agree at the final source head.                                                                                                              |
+| renderer-free measurement            | `packages/glyph/src/paragraph.ts` and a package-private per-realm measurement service                                                                         | Replace sync construction with async `createParagraph`, keep later queries synchronous, and use a target-less non-publishing retained plan without exposing engine ownership at root.                                                   |
+| Three reference integration          | `packages/glyph/src/three/engine-coordinator.ts`, `engine-plan-target.ts`, `font-loader.ts`, and `text.ts`                                                    | Consume public root plus `/core`, keep `PlanTarget` zero-copy, pool immutable resources per WebGPU device or WebGL context, and batch compatible font-stack members without reordering.                                                 |
+| React integration                    | `packages/glyph/src/react.ts`                                                                                                                                 | Replace module-global loader/promise ownership with provider or application `FontLibrary` leases and prove StrictMode lifecycle safety.                                                                                                 |
+| external renderer proof              | `packages/glyph-example-renderer/src` and its tests                                                                                                           | Keep TypeGPU/WebGPU device ownership external, implement ordinary zero-copy `PlanTarget`, and add a real worker-backed `AsyncPlanTarget` round trip.                                                                                    |
+| applications, labs, and size entries | every consumer under `apps/`, including module-scope `useFont.preload`, benchmark labs, conformance targets, proof routes, and `apps/benchmarks/size-entries` | Migrate all call sites in the same atomic package change; preserve module-scope preload through an explicit library-bound contract, replace withdrawn export anchors, and keep root checks plus comparable size graphs reachable.       |
+| package cleanup                      | package manifests, exports, boundary tests, and obsolete example adapters                                                                                     | Remove engine-bound and renderer-leaking compatibility surfaces; permit Three only in `glyph-example-raster`'s explicit `/tsl` implementation subpath and never in its neutral entry or in `glyph-example-renderer`.                    |
+| docs and evidence                    | README, package concepts, renderer guide, this plan, HTML report, benchmark workflows, and size evidence                                                      | Make current APIs, ownership graphs, worker transfer, performance, and deferred work agree at the final source head.                                                                                                                    |
 
 Each step is one coherent commit and remains green before the next.
 

@@ -72,12 +72,9 @@ export type {
   FontLoadOptions,
   FontLibrary,
   FontLibraryOptions,
-  FontRasterRequests,
-  FontRequest,
+  FontRasterInputs,
   Fonts,
-  FontTechniques,
   LoadFontInput,
-  MultiRasterFontRequest,
   RuntimeFontBake,
   RuntimeFontBakeRequest,
 } from './loader.js';

@@ -1,4 +1,4 @@
-import type { Font, FontRequest } from '@pmndrs/glyph';
+import type { Font, RasterTechniqueInput } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, type ParagraphStyle } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -20,7 +20,7 @@ type BitmapTechnique = typeof bitmap;
 const VIEWPORT_WIDTH = 800;
 const FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
-const bitmapRaster: FontRequest<BitmapTechnique>['raster'] = {
+const bitmapRaster: RasterTechniqueInput<BitmapTechnique> = {
   technique: bitmap,
   options: { strikes: [16] },
 };

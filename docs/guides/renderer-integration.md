@@ -75,10 +75,10 @@ Font loading does not require a Glyph engine or renderer. A `Font` may bind to m
 import { createFontStack, loadFont } from '@pmndrs/glyph';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 
-const font = await loadFont({
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: glyphExample, options: { paletteSeed: 7 } },
-});
+const font = await loadFont(
+  { baked: '/fonts/Inter.font.glb' },
+  { technique: glyphExample, options: { paletteSeed: 7 } },
+);
 const fontStack = createFontStack(font);
 ```
 

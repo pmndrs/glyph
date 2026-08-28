@@ -21,7 +21,7 @@ const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 const raster = { technique: bitmap, options: { strikes: [16] } };
 
 async function fixtureFont() {
-  return loadFont({ input: { baked: { bytes: await readFile(fontUrl) } }, raster });
+  return loadFont({ baked: { bytes: await readFile(fontUrl) } }, raster);
 }
 
 async function fixtureEngine() {

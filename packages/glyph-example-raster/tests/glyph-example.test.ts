@@ -94,10 +94,10 @@ describe('public external raster proof', () => {
       return file === undefined ? new Response(null, { status: 404 }) : new Response(await readFile(file));
     });
     const library = createFontLibrary({ fetch });
-    const font = await library.loadFont({
-      input: { baked: 'https://glyph.invalid/inter.font.glb' },
-      raster: { technique: glyphExample, options: { paletteSeed: 7 } },
-    });
+    const font = await library.loadFont(
+      { baked: 'https://glyph.invalid/inter.font.glb' },
+      { technique: glyphExample, options: { paletteSeed: 7 } },
+    );
 
     try {
       expect(font.technique).toBe(glyphExample);
@@ -123,10 +123,8 @@ describe('public external raster proof', () => {
 
     expect(() =>
       loadFont(
-        {
-          input: { baked: { bytes, ownership: 'copy' } },
-          raster: { technique: glyphExample, options: { paletteSeed: 7 } },
-        },
+        { baked: { bytes, ownership: 'copy' } },
+        { technique: glyphExample, options: { paletteSeed: 7 } },
         { signal: controller.signal },
       ),
     ).toThrowError(expect.objectContaining({ name: 'AbortError' }));

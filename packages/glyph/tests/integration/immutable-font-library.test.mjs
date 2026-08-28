@@ -13,7 +13,7 @@ const raster = { technique: bitmap, options: { strikes: [16] } };
 
 test('copy input creates one private GLB backing and exposes no mutable implementation handles', async () => {
   const source = await readFile(fixtureUrl);
-  const pending = loadFont({ input: { baked: { bytes: source, ownership: 'copy' } }, raster });
+  const pending = loadFont({ baked: { bytes: source, ownership: 'copy' } }, raster);
   source.fill(0);
   const font = await pending;
 
@@ -48,7 +48,7 @@ test('transfer input validates ownership before detaching and adopts a full Arra
   const fixture = await readFile(fixtureUrl);
   const transferable = Uint8Array.from(fixture);
   const originalByteLength = transferable.byteLength;
-  const pending = loadFont({ input: { baked: { bytes: transferable, ownership: 'transfer' } }, raster });
+  const pending = loadFont({ baked: { bytes: transferable, ownership: 'transfer' } }, raster);
 
   assert.equal(transferable.buffer.byteLength, 0);
   const font = await pending;
@@ -56,18 +56,12 @@ test('transfer input validates ownership before detaching and adopts a full Arra
 
   const partialBacking = Uint8Array.from(fixture);
   const partial = partialBacking.subarray(1);
-  assert.throws(
-    () => loadFont({ input: { baked: { bytes: partial, ownership: 'transfer' } }, raster }),
-    /complete ArrayBuffer/,
-  );
+  assert.throws(() => loadFont({ baked: { bytes: partial, ownership: 'transfer' } }, raster), /complete ArrayBuffer/);
   assert.equal(partialBacking.buffer.byteLength, fixture.byteLength);
 
   if (typeof SharedArrayBuffer === 'function') {
     const shared = new Uint8Array(new SharedArrayBuffer(fixture.byteLength));
-    assert.throws(
-      () => loadFont({ input: { baked: { bytes: shared, ownership: 'transfer' } }, raster }),
-      /SharedArrayBuffer/,
-    );
+    assert.throws(() => loadFont({ baked: { bytes: shared, ownership: 'transfer' } }, raster), /SharedArrayBuffer/);
     assert.equal(shared.byteLength, fixture.byteLength);
   }
   font.dispose();
@@ -92,24 +86,27 @@ test('top-level loading coalesces only in flight and returns independent user le
   const library = createFontLibrary({ fetch });
   const request = { input: { baked: 'https://fonts.test/inter.glb' }, raster };
 
-  const [first, second] = await Promise.all([library.loadFont(request), library.loadFont(request)]);
+  const [first, second] = await Promise.all([
+    library.loadFont(request.input, request.raster),
+    library.loadFont(request.input, request.raster),
+  ]);
   assert.notEqual(first, second);
   assert.equal(calls.length, 1);
   first.dispose();
   assert.equal(second.disposed, false);
   assert.equal(second.glyphCount, 2937);
 
-  const third = await library.loadFont(request);
+  const third = await library.loadFont(request.input, request.raster);
   assert.equal(calls.length, 1);
-  library.clear(request);
+  library.clear(request.input, request.raster);
   assert.equal(third.glyphCount, 2937);
-  const fourth = await library.loadFont(request);
+  const fourth = await library.loadFont(request.input, request.raster);
   assert.equal(calls.length, 2);
 
   library.dispose();
   assert.equal(second.glyphCount, 2937);
   assert.equal(fourth.glyphCount, 2937);
-  assert.throws(() => library.loadFont(request), /disposed/);
+  assert.throws(() => library.loadFont(request.input, request.raster), /disposed/);
   second.dispose();
   third.dispose();
   fourth.dispose();
@@ -121,20 +118,26 @@ test('top-level loading coalesces only in flight and returns independent user le
     return new Response(Uint8Array.from(bytes));
   };
   try {
-    const [topA, topB] = await Promise.all([loadFont(request), loadFont(request)]);
+    const [topA, topB] = await Promise.all([
+      loadFont(request.input, request.raster),
+      loadFont(request.input, request.raster),
+    ]);
     assert.equal(topLevelCalls, 1);
     assert.notEqual(topA, topB);
     topA.dispose();
     topB.dispose();
     await Promise.resolve();
-    const topC = await loadFont(request);
+    const topC = await loadFont(request.input, request.raster);
     assert.equal(topLevelCalls, 2);
     topC.dispose();
 
     const byteSource = Uint8Array.from(bytes);
     const byteRequestA = { input: { baked: { bytes: byteSource } }, raster };
     const byteRequestB = { input: { baked: { bytes: byteSource } }, raster };
-    const [byteA, byteB] = await Promise.all([loadFont(byteRequestA), loadFont(byteRequestB)]);
+    const [byteA, byteB] = await Promise.all([
+      loadFont(byteRequestA.input, byteRequestA.raster),
+      loadFont(byteRequestB.input, byteRequestB.raster),
+    ]);
     assert.equal(immutableFontResources(byteA).font, immutableFontResources(byteB).font);
     byteA.dispose();
     byteB.dispose();
@@ -160,15 +163,15 @@ test('clearing a pending library load cannot resurrect its cache entry', async (
     },
   });
   const request = { input: { baked: 'https://fonts.test/pending.glb' }, raster };
-  const pending = library.loadFont(request);
+  const pending = library.loadFont(request.input, request.raster);
   await fetchStarted.promise;
   assert.equal(calls, 1);
-  library.clear(request);
+  library.clear(request.input, request.raster);
   await assert.rejects(pending, /cleared/);
   responses[0].resolve(new Response(Uint8Array.from(bytes)));
   await Promise.resolve();
 
-  const replacement = library.loadFont(request);
+  const replacement = library.loadFont(request.input, request.raster);
   await replacementFetchStarted.promise;
   assert.equal(calls, 2);
   responses[1].resolve(new Response(Uint8Array.from(bytes)));
@@ -181,7 +184,12 @@ test('font library and load options reject malformed values at their calls', asy
   assert.throws(() => createFontLibrary(null), /options must be an object/);
   const library = createFontLibrary();
   const request = { input: { baked: 'https://fonts.test/invalid-options.glb' }, raster };
-  assert.throws(() => library.loadFont(request, null), /load options must be an object/);
+  assert.throws(() => library.loadFont(request.input, request.raster, null), /load options must be an object/);
+  assert.throws(() => loadFont(request.input), /requires a raster technique/);
+  assert.throws(() => loadFont(request.input, []), /at least one raster technique/);
+  assert.throws(() => loadFont(request.input, request.raster, { retry: true }), /only accept signal/);
+  assert.throws(() => loadFont(defineFont(request.input, request.raster), request.raster), /only accept signal/);
+  assert.throws(() => library.clear(request.input), /requires a raster technique/);
   library.dispose();
 });
 
@@ -197,9 +205,9 @@ test('a bounded library evicts deterministically without invalidating returned f
   });
   const firstRequest = { input: { baked: 'https://fonts.test/first.glb' }, raster };
   const secondRequest = { input: { baked: 'https://fonts.test/second.glb' }, raster };
-  const first = await library.loadFont(firstRequest);
-  const second = await library.loadFont(secondRequest);
-  const firstAgain = await library.loadFont(firstRequest);
+  const first = await library.loadFont(firstRequest.input, firstRequest.raster);
+  const second = await library.loadFont(secondRequest.input, secondRequest.raster);
+  const firstAgain = await library.loadFont(firstRequest.input, firstRequest.raster);
 
   assert.equal(calls, 3);
   assert.equal(first.glyphCount, 2937);

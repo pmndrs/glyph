@@ -372,7 +372,7 @@ The full callable engine/backend/retained-plan/target sequence is in
 [Integrate a renderer with Glyph](renderer-integration.md). In abbreviated form:
 
 ```ts
-const font = await loadFont({ input: { baked: bakedUrl }, raster: { technique: exampleTechnique } });
+const font = await loadFont({ baked: bakedUrl }, exampleTechnique);
 const glyphEngine = await createGlyphEngine();
 const backend = glyphEngine.createBackend({ integration: 'studio.renderer' });
 const policy = backend.installPolicy(policyFactory);

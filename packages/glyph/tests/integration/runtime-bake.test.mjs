@@ -325,8 +325,8 @@ test('one portable source load sends its normalized ranges and complete raster t
     requests.push(request);
     return baked;
   };
-  const [bitmapFont, msdfFont, slugFont] = await loadFont({
-    input: {
+  const [bitmapFont, msdfFont, slugFont] = await loadFont(
+    {
       source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
       runtimeBake,
       unicodeRanges: [
@@ -334,8 +334,8 @@ test('one portable source load sends its normalized ranges and complete raster t
         { start: 0x20, end: 0x7e },
       ],
     },
-    rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
-  });
+    [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
+  );
   t.after(() => {
     slugFont.dispose();
     msdfFont.dispose();
@@ -406,13 +406,13 @@ test('external techniques bake through their own declared baker, never the Worke
     return new Uint8Array(artifact.slice(0));
   };
   await assert.rejects(
-    loadFont({
-      input: {
+    loadFont(
+      {
         source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
         runtimeBake,
       },
-      rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: external }],
-    }),
+      [{ technique: bitmap, options: { strikes: [32] } }, { technique: external }],
+    ),
     /external-route-sentinel/,
     'the external technique must reach its own declared baker',
   );

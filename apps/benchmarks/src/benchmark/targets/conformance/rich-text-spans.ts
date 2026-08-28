@@ -1,4 +1,4 @@
-import type { Font, FontRequest, ParagraphLayout } from '@pmndrs/glyph';
+import type { Font, ParagraphLayout, RasterTechniqueInput } from '@pmndrs/glyph';
 import { id as hashId } from '@pmndrs/glyph/core';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
@@ -41,7 +41,7 @@ const DECORATION_PACKED_ATTRIBUTE = policyAttributeName(hashId.buffer('glyph-thr
 const DECORATION_UNDERLINE_FLAG = 0b0001;
 const DECORATION_LINE_THROUGH_FLAG = 0b0100;
 const DECORATION_SOLID_STYLE = 1;
-const bitmapRaster: FontRequest<BitmapTechnique>['raster'] = {
+const bitmapRaster: RasterTechniqueInput<BitmapTechnique> = {
   technique: bitmap,
   options: { strikes: [16] },
 };

@@ -3,15 +3,17 @@ import * as THREE from 'three/webgpu';
 import type { Font } from '../font.js';
 import {
   assertFontLibrary,
+  fontLoadSignal,
+  immutableFontRequestKey,
   loadFont,
   type FontLibrary,
-  type FontRequest,
+  type FontLoadOptions,
+  type FontRasterInputs,
   type Fonts,
-  type FontTechniques,
-  type MultiRasterFontRequest,
+  type LoadFontInput,
   type RuntimeFontBake,
 } from '../loader.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
+import type { AnyRasterTechnique, RasterTechniqueInput } from '../raster-technique.js';
 import { acquireThreeLoaderDomain } from './engine-domain.js';
 
 export interface ThreeFontLoaderOptions {
@@ -21,14 +23,16 @@ export interface ThreeFontLoaderOptions {
 }
 
 /** Font request accepted by the Three LoadingManager adapter, with cancellation. */
-export type ThreeLoadedFontRequest<Technique extends AnyRasterTechnique> = FontRequest<Technique> & {
+export interface ThreeFontLoadRequest<Technique extends AnyRasterTechnique> {
+  readonly input: LoadFontInput;
+  readonly raster: RasterTechniqueInput<Technique>;
   readonly signal?: AbortSignal;
-};
+}
 
 type LoaderDomain = ReturnType<typeof acquireThreeLoaderDomain>;
 
 /** Three loading-manager adapter that returns canonical root-package Font values. */
-export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, FontRequest<AnyRasterTechnique>> {
+export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, ThreeFontLoadRequest<AnyRasterTechnique>> {
   readonly #options: ThreeFontLoaderOptions;
   #domain: LoaderDomain | undefined;
   #disposed = false;
@@ -43,15 +47,19 @@ export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, FontReque
   }
 
   override load<Technique extends AnyRasterTechnique>(
-    request: ThreeLoadedFontRequest<Technique>,
+    request: ThreeFontLoadRequest<Technique>,
     onLoad: (font: Font<Technique>) => void,
     _onProgress?: (event: ProgressEvent) => void,
     onError?: (error: unknown) => void,
   ): void {
     this.#assertActive();
+    assertThreeFontLoadRequest(request);
+    request.signal?.throwIfAborted();
+    const normalizedInput = normalizeInput(request.input, this.#options.runtimeBake);
+    immutableFontRequestKey(normalizedInput, request.raster);
     const item = requestUrl(request);
     this.manager.itemStart(item);
-    void this.#load(request).then(
+    void this.#load({ ...request, input: normalizedInput }).then(
       (font) => {
         this.manager.itemEnd(item);
         onLoad(font);
@@ -65,27 +73,31 @@ export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, FontReque
   }
 
   override loadAsync<Technique extends AnyRasterTechnique>(
-    request: ThreeLoadedFontRequest<Technique>,
+    request: ThreeFontLoadRequest<Technique>,
     onProgress?: (event: ProgressEvent) => void,
   ): Promise<Font<Technique>> {
     return new Promise((resolve, reject) => this.load(request, resolve, onProgress, reject));
   }
 
-  async loadFontsAsync<const Techniques extends FontTechniques>(
-    request: MultiRasterFontRequest<Techniques> & { readonly signal?: AbortSignal },
-  ): Promise<Fonts<Techniques>> {
+  /** Load a nonempty raster tuple and associate every Font with this Three loader domain. */
+  async loadFontsAsync<const Rasters extends FontRasterInputs>(
+    input: LoadFontInput,
+    rasters: Rasters,
+    options: FontLoadOptions = {},
+  ): Promise<Fonts<Rasters>> {
     this.#assertActive();
-    const item = requestInputUrl(request);
+    const signal = fontLoadSignal(options);
+    signal?.throwIfAborted();
+    const normalizedInput = normalizeInput(input, this.#options.runtimeBake);
+    immutableFontRequestKey(normalizedInput, rasters);
+    const item = requestInputUrl(input);
     this.manager.itemStart(item);
-    let fonts: Fonts<Techniques> | undefined;
+    let fonts: Fonts<Rasters> | undefined;
     try {
-      const { signal, ...requested } = request;
-      signal?.throwIfAborted();
       const domain = this.#runtimeDomain();
-      const normalized = normalizeRequests(requested, this.#options.runtimeBake);
       const loaded =
-        this.#options.library?.loadFont(normalized, signal === undefined ? {} : { signal }) ??
-        loadFont(normalized, signal === undefined ? {} : { signal });
+        this.#options.library?.loadFont(normalizedInput, rasters, signal === undefined ? {} : { signal }) ??
+        loadFont(normalizedInput, rasters, signal === undefined ? {} : { signal });
       [fonts] = await Promise.all([loaded, domain.ready]);
       this.#assertActive();
       signal?.throwIfAborted();
@@ -118,15 +130,15 @@ export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, FontReque
   }
 
   async #load<Technique extends AnyRasterTechnique>(
-    request: ThreeLoadedFontRequest<Technique>,
+    request: ThreeFontLoadRequest<Technique>,
   ): Promise<Font<Technique>> {
-    const { signal, ...requested } = request;
+    const { input, raster, signal } = request;
     signal?.throwIfAborted();
     const domain = this.#runtimeDomain();
-    const normalized = normalizeRequest(requested, this.#options.runtimeBake);
+    const normalizedInput = normalizeInput(input, this.#options.runtimeBake);
     const loaded =
-      this.#options.library?.loadFont(normalized, signal === undefined ? {} : { signal }) ??
-      loadFont(normalized, signal === undefined ? {} : { signal });
+      this.#options.library?.loadFont(normalizedInput, raster, signal === undefined ? {} : { signal }) ??
+      loadFont(normalizedInput, raster, signal === undefined ? {} : { signal });
     let font: Font<Technique> | undefined;
     try {
       [font] = await Promise.all([loaded, domain.ready]);
@@ -150,44 +162,31 @@ export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, FontReque
   }
 }
 
-function normalizeRequest<Technique extends AnyRasterTechnique>(
-  request: FontRequest<Technique>,
-  runtimeBake: RuntimeFontBake | undefined,
-): FontRequest<Technique> {
-  if (
-    typeof request.input === 'object' &&
-    request.input !== null &&
-    'source' in request.input &&
-    !('runtimeBake' in request.input)
-  ) {
+function normalizeInput(input: LoadFontInput, runtimeBake: RuntimeFontBake | undefined): LoadFontInput {
+  if (typeof input === 'object' && input !== null && 'source' in input && !('runtimeBake' in input)) {
     if (runtimeBake === undefined) throw new TypeError('source font loading requires a runtime font baker');
-    return { ...request, input: { source: request.input.source, runtimeBake } };
+    return { source: input.source, runtimeBake };
   }
-  return request;
+  return input;
 }
 
-function normalizeRequests<const Techniques extends FontTechniques>(
-  request: MultiRasterFontRequest<Techniques>,
-  runtimeBake: RuntimeFontBake | undefined,
-): MultiRasterFontRequest<Techniques> {
-  if (
-    typeof request.input === 'object' &&
-    request.input !== null &&
-    'source' in request.input &&
-    !('runtimeBake' in request.input)
-  ) {
-    if (runtimeBake === undefined) throw new TypeError('source font loading requires a runtime font baker');
-    return { ...request, input: { source: request.input.source, runtimeBake } };
+function assertThreeFontLoadRequest(value: unknown): asserts value is ThreeFontLoadRequest<AnyRasterTechnique> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError('Three font load request must be an object');
   }
-  return request;
+  if (Object.keys(value).some((key) => key !== 'input' && key !== 'raster' && key !== 'signal')) {
+    throw new TypeError('Three font load request only accepts input, raster, and signal');
+  }
+  const { signal } = value as { readonly signal?: unknown };
+  fontLoadSignal(signal === undefined ? {} : { signal });
 }
 
-function requestUrl<Technique extends AnyRasterTechnique>(request: FontRequest<Technique>): string {
-  return requestInputUrl(request);
+function requestUrl<Technique extends AnyRasterTechnique>(request: ThreeFontLoadRequest<Technique>): string {
+  return requestInputUrl(request.input);
 }
 
-function requestInputUrl(request: { readonly input: FontRequest<AnyRasterTechnique>['input'] }): string {
-  if (typeof request.input === 'string' || request.input instanceof URL) return String(request.input);
-  if ('baked' in request.input && request.input.baked !== null) return String(request.input.baked);
-  return String(request.input.source);
+function requestInputUrl(input: LoadFontInput): string {
+  if (typeof input === 'string' || input instanceof URL) return String(input);
+  if ('baked' in input && input.baked !== null) return String(input.baked);
+  return String(input.source);
 }

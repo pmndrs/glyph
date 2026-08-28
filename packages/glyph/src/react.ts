@@ -15,7 +15,7 @@ import {
 
 import { type GlyphPaintInput, resolveRangesToClusters } from './formatted-text.js';
 import type { Font } from './font.js';
-import { immutableFontRequestKey, type FontRequest, type LoadFontInput } from './loader.js';
+import { immutableFontRequestKey, type LoadFontInput } from './loader.js';
 import { cloneImmutableFont, type FontSelection, type FontStack } from './loaded-font.js';
 import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 import type { AnyRasterTechnique, RasterOptionsOf } from './raster-technique.js';
@@ -26,6 +26,7 @@ import {
   type StandaloneTextProperties,
   type TextGroupOptions,
   type TextSpan as ThreeTextSpanRecord,
+  type ThreeFontLoadRequest,
   type ThreeTextMaterial,
 } from './three.js';
 
@@ -316,7 +317,7 @@ function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | undefined)
 
 interface ReactFontRequest {
   readonly key: string;
-  readonly request: FontRequest<AnyRasterTechnique>;
+  readonly request: ThreeFontLoadRequest<AnyRasterTechnique>;
 }
 
 interface ReactFontLoad {
@@ -329,12 +330,12 @@ class ReactFontLoader extends ThreeFontLoader {
   readonly #loads = new Map<string, ReactFontLoad>();
 
   override load<Technique extends AnyRasterTechnique>(
-    request: FontRequest<Technique>,
+    request: ThreeFontLoadRequest<Technique>,
     onLoad: (font: Font<Technique>) => void,
     onProgress?: (event: ProgressEvent) => void,
     onError?: (error: unknown) => void,
   ): void {
-    const key = immutableFontRequestKey(request);
+    const key = immutableFontRequestKey(request.input, request.raster);
     const load: ReactFontLoad = { cancelled: false, controller: new AbortController(), font: undefined };
     const loader = new ThreeFontLoader(this.manager);
     this.#loads.set(key, load);
@@ -373,19 +374,19 @@ class ReactFontLoader extends ThreeFontLoader {
 interface UseReactFontLoader {
   (
     loader: typeof ReactFontLoader,
-    request: FontRequest<AnyRasterTechnique>,
+    request: ThreeFontLoadRequest<AnyRasterTechnique>,
     extensions: undefined,
     onProgress: undefined,
     cacheKey: string,
   ): Font<AnyRasterTechnique>;
   preload(
     loader: typeof ReactFontLoader,
-    request: FontRequest<AnyRasterTechnique>,
+    request: ThreeFontLoadRequest<AnyRasterTechnique>,
     extensions: undefined,
     onProgress: undefined,
     cacheKey: string,
   ): void;
-  clear(loader: typeof ReactFontLoader, request: FontRequest<AnyRasterTechnique>, cacheKey: string): void;
+  clear(loader: typeof ReactFontLoader, request: ThreeFontLoadRequest<AnyRasterTechnique>, cacheKey: string): void;
 }
 
 const useReactFontLoader = useLoader as unknown as UseReactFontLoader;
@@ -402,8 +403,8 @@ function reactFontRequest(
   const request = {
     input,
     raster: options.length === 0 || options[0] === undefined ? { technique } : { technique, options: options[0] },
-  } as FontRequest<AnyRasterTechnique>;
-  return { key: immutableFontRequestKey(request), request };
+  } as ThreeFontLoadRequest<AnyRasterTechnique>;
+  return { key: immutableFontRequestKey(request.input, request.raster), request };
 }
 
 interface MountedFontStore {

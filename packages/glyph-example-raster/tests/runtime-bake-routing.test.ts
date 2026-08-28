@@ -47,13 +47,13 @@ test('the example technique bakes host-side while the Worker plan stays first-pa
     return new Uint8Array(artifact.buffer.slice(artifact.byteOffset, artifact.byteOffset + artifact.byteLength));
   };
 
-  const [example] = await loadFont({
-    input: {
+  const [example] = await loadFont(
+    {
       source: `data:font/ttf;base64,${source.toString('base64')}`,
       runtimeBake,
     },
-    rasters: [{ technique: glyphExample, options: { paletteSeed: 17, inset: 0.1 } }],
-  });
+    [{ technique: glyphExample, options: { paletteSeed: 17, inset: 0.1 } }],
+  );
 
   assert.equal(requests.length, 1, 'the source load bakes its core through the Worker path once');
   assert.deepEqual(

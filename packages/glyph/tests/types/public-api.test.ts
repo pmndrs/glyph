@@ -111,7 +111,7 @@ const transferredBytes: FontBytesInput = { bytes: fontBytes, ownership: 'transfe
 void copiedBytes;
 void transferredBytes;
 // @ts-expect-error Byte input is explicit; a bare typed array is not a font location.
-loadFont({ input: { baked: fontBytes }, raster: { technique: msdf } });
+loadFont({ baked: fontBytes }, msdf);
 
 const configuredFont = defineFont('/fonts/Inter-Regular.ttf', {
   technique: configurable,

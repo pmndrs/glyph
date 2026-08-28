@@ -160,10 +160,10 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
   const engine = new ExampleTextEngine(glyphEngine, device);
   try {
     const bytes = await readFile(output);
-    const font = await loadFont({
-      input: { baked: `data:model/gltf-binary;base64,${bytes.toString('base64')}` },
-      raster: { technique: glyphExample, options: { paletteSeed: 7 } },
-    });
+    const font = await loadFont(
+      { baked: `data:model/gltf-binary;base64,${bytes.toString('base64')}` },
+      { technique: glyphExample, options: { paletteSeed: 7 } },
+    );
     try {
       const flowBackend = glyphEngine.createBackend({ integration: 'glyph-example-renderer-test/flow-retention' });
       type InstrumentedPlanTransport = { measureParagraph: (...arguments_: unknown[]) => unknown };
