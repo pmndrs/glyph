@@ -1,5 +1,5 @@
-import type { LoadedFont, ParagraphLayout } from '@pmndrs/glyph';
-import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
+import type { Font, ParagraphLayout } from '@pmndrs/glyph';
+import type { msdf as mtsdf, MsdfData } from '@pmndrs/glyph/three/msdf';
 import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -52,7 +52,8 @@ interface FlatMtsdfConformanceResources {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly font: LoadedFont<typeof mtsdf>;
+  readonly font: Font<typeof mtsdf>;
+  readonly data: MsdfData;
   readonly line: Text<typeof mtsdf>;
 }
 
@@ -185,7 +186,7 @@ async function createFlatMtsdfConformanceResources(options: {
       : undefined;
   const renderer = borrowedRenderer ?? ownedRenderer!;
   let target: THREE.RenderTarget | undefined;
-  let font: LoadedFont<typeof mtsdf> | undefined;
+  let font: Font<typeof mtsdf> | undefined;
   let line: Text<typeof mtsdf> | undefined;
   try {
     const loaded = await loadMtsdfFontAsset({
@@ -195,6 +196,7 @@ async function createFlatMtsdfConformanceResources(options: {
       ...(signal === undefined ? {} : { signal }),
     });
     font = loaded.loaded;
+    const data = loaded.data;
     line = new Text({
       text: conformanceText(),
       font,
@@ -236,6 +238,7 @@ async function createFlatMtsdfConformanceResources(options: {
       scene,
       camera,
       font,
+      data,
       line,
     };
   } catch (error) {
@@ -271,7 +274,7 @@ async function captureFlatMtsdfConformance(
     height,
     resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
   );
-  const referenceResult = renderFlatMtsdfCpuReference(resources.font.data, committedLayout(resources.line), {
+  const referenceResult = renderFlatMtsdfCpuReference(resources.data, committedLayout(resources.line), {
     width,
     height,
     dpr: resources.dpr,

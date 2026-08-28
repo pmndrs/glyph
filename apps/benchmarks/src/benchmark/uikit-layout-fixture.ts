@@ -4,8 +4,9 @@ import type {
   ParagraphConstraints,
   ParagraphLayoutInspection,
   ParagraphLayoutPolicy,
+  Paragraph,
+  ParagraphUpdate,
 } from '@pmndrs/glyph';
-import type { Paragraph, ParagraphUpdate } from '@pmndrs/glyph/core';
 
 export const YogaMeasureMode = Object.freeze({ Undefined: 0, Exactly: 1, AtMost: 2 });
 

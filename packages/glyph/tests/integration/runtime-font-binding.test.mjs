@@ -13,7 +13,7 @@ import {
   observeTextRuntimeDispose,
   runtimeFontBindingHandle,
   runtimeFontBindingResources,
-  textRuntimeShaper,
+  textRuntimeShaperForTests,
 } from '../../dist/text-runtime.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -32,8 +32,8 @@ test('one immutable font binds independently into two runtimes', async () => {
   const font = await fixtureFont();
   const firstRuntime = await fixtureRuntime();
   const secondRuntime = await fixtureRuntime();
-  const firstShaper = textRuntimeShaper(firstRuntime);
-  const secondShaper = textRuntimeShaper(secondRuntime);
+  const firstShaper = textRuntimeShaperForTests(firstRuntime);
+  const secondShaper = textRuntimeShaperForTests(secondRuntime);
 
   const first = acquireRuntimeFontBinding(firstRuntime, font);
   const repeated = acquireRuntimeFontBinding(firstRuntime, font);
@@ -60,7 +60,7 @@ test('one immutable font binds independently into two runtimes', async () => {
 test('a disposed Font rejects new binding while an existing runtime lease remains valid', async () => {
   const font = await fixtureFont();
   const runtime = await fixtureRuntime();
-  const shaper = textRuntimeShaper(runtime);
+  const shaper = textRuntimeShaperForTests(runtime);
   const binding = acquireRuntimeFontBinding(runtime, font);
   const handle = runtimeFontBindingHandle(binding);
   const registered = immutableFontResources(font).font;
@@ -84,7 +84,7 @@ test('a disposed Font rejects new binding while an existing runtime lease remain
 test('runtime disposal releases bindings after owner observers and before the shaper', async () => {
   const font = await fixtureFont();
   const runtime = await fixtureRuntime();
-  const shaper = textRuntimeShaper(runtime);
+  const shaper = textRuntimeShaperForTests(runtime);
   const binding = acquireRuntimeFontBinding(runtime, font);
   const observed = [];
   observeTextRuntimeDispose(runtime, () => {
@@ -116,12 +116,12 @@ test('runtime font binding inputs are rejected at their calls', async () => {
 test('a runtime-owned host installs complete policies and deduplicates opaque font bindings', async () => {
   const font = await fixtureFont();
   const runtime = await fixtureRuntime();
-  const shaper = textRuntimeShaper(runtime);
+  const shaper = textRuntimeShaperForTests(runtime);
   const host = runtime.createTextEngineHost({ integration: 'test.host-font-binding' });
 
   assert.throws(() => host.bindFont(font), /no installed policy/);
   assert.equal(shaper.memoryReport().fontCount, 0);
-  const policy = host.installPolicy(threeRenderPolicyDescriptor(host.wireIdentities));
+  const policy = host.installPolicy(threeRenderPolicyDescriptor);
   const first = host.bindFont(font);
   const second = host.bindFont(font);
   assert.equal(first.technique, bitmap);
@@ -142,9 +142,9 @@ test('a runtime-owned host binds immutable font stacks and retains their fonts',
   const font = await fixtureFont();
   const stack = createFontStack(font);
   const runtime = await fixtureRuntime();
-  const shaper = textRuntimeShaper(runtime);
+  const shaper = textRuntimeShaperForTests(runtime);
   const host = runtime.createTextEngineHost({ integration: 'test.host-font-stack-binding' });
-  const policy = host.installPolicy(threeRenderPolicyDescriptor(host.wireIdentities));
+  const policy = host.installPolicy(threeRenderPolicyDescriptor);
 
   assert.throws(() => host.bindFontStack({ fonts: [font] }), /font stack was not created by this package/);
   const first = host.bindFontStack(stack);

@@ -3,15 +3,10 @@ import { readFile } from 'node:fs/promises';
 
 import test from 'node:test';
 
-import {
-  assertOwnedTextEnginePublication,
-  compileTextEngineFrameUpdate,
-  createRuntimeShaper,
-  id,
-  TextEngineHost,
-  TextEnginePublicationExpiredError,
-  TextEngineRenderPlanView,
-} from '../../dist/core.js';
+import { id, TextEngineHost, TextEngineRenderPlanView } from '../../dist/core.js';
+import { assertOwnedTextEnginePublication, TextEnginePublicationExpiredError } from '../../dist/core/retention.js';
+import { compileTextEngineFrameUpdate } from '../../dist/core/frame-wire.js';
+import { createRuntimeShaper } from '../../dist/shaper.js';
 import { threeRenderPolicyBytes } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
@@ -100,7 +95,7 @@ test('a borrowed publication expires at the next call, and an owned copy survive
   );
   assert.throws(
     () => new TextEngineRenderPlanView().bindBytes(transferred.bytes.subarray(0, 8)),
-    /invalid byte length/u,
+    /complete standalone ArrayBuffer/u,
     'cross-realm bytes are validated at the worker-facing call',
   );
   const abiMismatch = transferred.bytes.slice();
@@ -197,7 +192,7 @@ test('the engine verifies acceptance: a generation that goes backwards is a conf
   });
   assert.throws(
     () => session.update(replayed),
-    (error) => error.status === 12,
+    (error) => error.code === 'revision-conflict',
   );
   session.dispose();
 });

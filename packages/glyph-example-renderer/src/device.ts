@@ -4,16 +4,18 @@ import {
   assertPortableResource,
   RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
-  textShaperAbi,
   type PortableGeometryPayload,
+  type PolicyBufferId,
   type RenderProgramId,
   type RenderTechniqueId,
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
   type TextEngineBufferRecord,
+  type TextEngineBufferBinding,
   type TextEnginePatchRecord,
   type TextEngineRetirementRecord,
+  type TextEngineScalarType,
 } from '@pmndrs/glyph/core';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 import {
@@ -26,7 +28,7 @@ import type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResou
 import { EXAMPLE_RENDERER_PROGRAM_NAMESPACE } from './policy.js';
 
 export interface ExampleRendererShaderBuffer {
-  readonly id: number;
+  readonly id: PolicyBufferId;
   readonly scalar: 'f32' | 'u32';
   readonly vectorWidth: number;
 }
@@ -354,7 +356,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     this.#assertMutable('retire a resource');
     const state = this.#resourceState();
     const retired = retireResourceState(state, {
-      kind: textShaperAbi.engine.retirementKinds.resource,
+      kind: 'resource',
       id,
       generation,
       afterPublicationGeneration: 0,
@@ -405,13 +407,14 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     primitive: ExamplePrimitiveRecord,
     state: ExampleBufferState,
   ): ReadonlyMap<string, Uint8Array> {
-    const byPolicyId = new Map<number, RetainedExampleBuffer>();
+    const byPolicyId = new Map<PolicyBufferId, RetainedExampleBuffer>();
     for (const record of records) {
       const retained = currentBuffer(state, record);
-      if (byPolicyId.has(retained.policyBufferId)) {
-        throw new Error(`example renderer draw repeats policy buffer ${retained.policyBufferId}`);
+      if (retained.binding.kind === 'order') continue;
+      if (byPolicyId.has(retained.binding.id)) {
+        throw new Error(`example renderer draw repeats policy buffer ${retained.binding.id}`);
       }
-      byPolicyId.set(retained.policyBufferId, retained);
+      byPolicyId.set(retained.binding.id, retained);
     }
     const buffers = new Map<string, Uint8Array>();
     const recordEnd = checkedAdd(primitive.recordIndex, primitive.recordCount, 'primitive record span');
@@ -518,7 +521,7 @@ export class RecordingExampleRendererDevice implements ExampleRendererDevice {
     if (primitive.techniqueId !== this.#techniqueWireId) {
       throw new Error('example renderer primitive technique does not match its selected shader');
     }
-    if (primitive.kind !== textShaperAbi.engine.primitiveKinds.glyph) {
+    if (primitive.kind !== 'glyph') {
       throw new Error('example renderer selected shader requires a glyph primitive');
     }
     const bufferRecords = recordSpan(drawList.bufferRecords, draw.bufferStart, draw.bufferCount, 'buffer');
@@ -598,8 +601,8 @@ interface RetainedExampleBuffer {
   readonly id: number;
   readonly generation: number;
   readonly programId: number;
-  readonly policyBufferId: number;
-  readonly scalarType: number;
+  readonly binding: TextEngineBufferBinding;
+  readonly scalarType: TextEngineScalarType;
   readonly vectorWidth: number;
   readonly capacityRecords: number;
   readonly bytes: Uint8Array;
@@ -716,7 +719,7 @@ function absorbResourceEntry(state: ExampleResourceState, entry: ExampleResource
 
 function retireResourceState(state: ExampleResourceState, retirement: TextEngineRetirementRecord): boolean {
   assertObject(retirement, 'resource retirement');
-  if (retirement.kind !== textShaperAbi.engine.retirementKinds.resource) return false;
+  if (retirement.kind !== 'resource') return false;
   const id = positiveInteger(retirement.id, 'retired resource id');
   const generation = positiveInteger(retirement.generation, 'retired resource generation');
   if (state.resourceGenerations.get(id) !== generation) return false;
@@ -758,8 +761,7 @@ function preparePlanResourceState(
     if (record.techniqueId !== techniqueWireId) {
       throw new Error('example renderer resource technique does not match its selected shader');
     }
-    const actions = textShaperAbi.engine.resourceActions;
-    if (record.action !== actions.create && record.action !== actions.update && record.action !== actions.retain) {
+    if (record.action !== 'create' && record.action !== 'update' && record.action !== 'retain') {
       throw new Error(`example renderer resource ${id}:${generation} has unsupported action ${record.action}`);
     }
     if (seen.has(id)) throw new Error(`example renderer plan repeats active resource id ${id}`);
@@ -783,9 +785,8 @@ function preparePlanResourceState(
     retained.set(id, { id, generation, techniqueId: techniqueWireId, resourceKind, referenceId });
   }
   const retiredIds: number[] = [];
-  const resourceRetirement = textShaperAbi.engine.retirementKinds.resource;
   for (const retirement of retirements) {
-    if (retirement.kind !== resourceRetirement) continue;
+    if (retirement.kind !== 'resource') continue;
     const current = retained.get(retirement.id);
     if (current?.generation !== retirement.generation) continue;
     retained.delete(retirement.id);
@@ -829,7 +830,7 @@ function validatePrimitiveRecord(
   if (primitive.programId !== programWireId || primitive.programVariant !== programVariant) {
     throw new Error('example renderer primitive program does not match its selected shader');
   }
-  if (primitive.kind !== textShaperAbi.engine.primitiveKinds.glyph) {
+  if (primitive.kind !== 'glyph') {
     throw new Error('example renderer selected shader requires a glyph primitive');
   }
   const count = positiveInteger(primitive.recordCount, 'primitive record count');
@@ -867,7 +868,7 @@ function prepareBufferState(
     const buffer = retained.get(key);
     if (buffer === undefined) continue;
     activeById.set(id, buffer.bytes);
-    const name = declaredBufferName(shader, buffer.policyBufferId);
+    const name = declaredBufferName(shader, buffer.binding);
     if (name !== undefined) activeByName.set(name, buffer.bytes);
   }
   return { retained, activeById, activeByName };
@@ -883,7 +884,7 @@ function currentBuffer(state: ExampleBufferState, record: TextEngineBufferRecord
   }
   if (
     record.programId !== retained.programId ||
-    record.policyBufferId !== retained.policyBufferId ||
+    !sameBufferBinding(record.binding, retained.binding) ||
     record.scalarType !== retained.scalarType ||
     record.vectorWidth !== retained.vectorWidth ||
     record.capacityRecords !== retained.capacityRecords ||
@@ -911,16 +912,16 @@ function retainBufferRecord(
   if (retainedProgramId !== programWireId) {
     throw new Error(`example renderer buffer ${id}:${generation} belongs to a different renderer program`);
   }
-  const policyBufferId = positiveInteger(record.policyBufferId, 'policy buffer id');
+  const binding = validateBufferBinding(record.binding);
   const byteLength = nonnegativeInteger(record.byteLength, 'buffer byte length');
   const capacityRecords = nonnegativeInteger(record.capacityRecords, 'buffer capacity');
-  if (!Number.isSafeInteger(record.scalarType) || record.scalarType < 1 || record.scalarType > 3) {
-    throw new RangeError('example renderer buffer scalar types must be 1, 2, or 3');
+  if (record.scalarType !== 'f32' && record.scalarType !== 'u32' && record.scalarType !== 'u16') {
+    throw new RangeError('example renderer buffer has an unsupported scalar type');
   }
   if (!Number.isSafeInteger(record.vectorWidth) || record.vectorWidth < 1 || record.vectorWidth > 4) {
     throw new RangeError('example renderer buffer vector widths must be between 1 and 4');
   }
-  const scalarBytes = record.scalarType === textShaperAbi.policy.scalarTypes.u16 ? 2 : 4;
+  const scalarBytes = record.scalarType === 'u16' ? 2 : 4;
   const expectedByteLength = capacityRecords * record.vectorWidth * scalarBytes;
   if (!Number.isSafeInteger(expectedByteLength) || byteLength !== expectedByteLength) {
     throw new RangeError('example renderer requires tightly packed physical buffers');
@@ -931,7 +932,7 @@ function retainBufferRecord(
   if (
     existing !== undefined &&
     (existing.programId !== retainedProgramId ||
-      existing.policyBufferId !== policyBufferId ||
+      !sameBufferBinding(existing.binding, binding) ||
       existing.scalarType !== record.scalarType ||
       existing.vectorWidth !== record.vectorWidth ||
       existing.capacityRecords !== capacityRecords ||
@@ -944,7 +945,7 @@ function retainBufferRecord(
       id,
       generation,
       programId: retainedProgramId,
-      policyBufferId,
+      binding,
       scalarType: record.scalarType,
       vectorWidth: record.vectorWidth,
       capacityRecords,
@@ -971,17 +972,16 @@ function applyBufferPatch(
   assertRange(destinationOffset, byteLength, target.bytes.byteLength, 'buffer patch');
   const targetScalarBytes = retainedScalarBytes(target);
   assertAligned(destinationOffset, byteLength, targetScalarBytes, 'buffer patch');
-  const opcodes = textShaperAbi.engine.patchOpcodes;
-  if (patch.opcode === opcodes.allocateOrResize) {
+  if (patch.kind === 'allocate-or-resize') {
     if (destinationOffset !== 0 || byteLength !== target.bytes.byteLength) {
       throw new RangeError(`example renderer allocation patch does not match buffer ${key}`);
     }
     return;
   }
-  if (patch.opcode === opcodes.retire) return;
-  if (patch.opcode === opcodes.write) {
+  if (patch.kind === 'retire') return;
+  if (patch.kind === 'write') {
     if (byteLength === 0) {
-      if (patch.payload !== undefined && patch.payload.byteLength !== 0) {
+      if (patch.payload.byteLength !== 0) {
         throw new RangeError('zero-length write patch has a payload');
       }
       return;
@@ -992,7 +992,7 @@ function applyBufferPatch(
     target.bytes.set(patch.payload, destinationOffset);
     return;
   }
-  if (patch.opcode === opcodes.fill) {
+  if (patch.kind === 'fill') {
     if (byteLength % 4 !== 0) throw new RangeError('fill patch is not u32 aligned');
     const fillValue = nonnegativeInteger(patch.fillValue, 'fill value');
     if (fillValue > 0xffff_ffff) throw new RangeError('fill value exceeds u32');
@@ -1000,7 +1000,7 @@ function applyBufferPatch(
     for (let offset = 0; offset < byteLength; offset += 4) view.setUint32(offset, fillValue, true);
     return;
   }
-  if (patch.opcode === opcodes.copy) {
+  if (patch.kind === 'copy') {
     const sourceId = positiveInteger(patch.sourceBufferId, 'copy source buffer id');
     const sourceKey = active.get(sourceId);
     const source = sourceKey === undefined ? undefined : retained.get(sourceKey);
@@ -1015,7 +1015,7 @@ function applyBufferPatch(
     }
     return;
   }
-  throw new Error(`unsupported text-engine patch opcode ${patch.opcode}`);
+  throw new Error('unsupported text-engine patch kind');
 }
 
 function retireBuffer(
@@ -1024,7 +1024,7 @@ function retireBuffer(
   retirement: TextEngineRetirementRecord,
 ): void {
   assertObject(retirement, 'retirement');
-  if (retirement.kind !== textShaperAbi.engine.retirementKinds.buffer) return;
+  if (retirement.kind !== 'buffer') return;
   const id = positiveInteger(retirement.id, 'retired buffer id');
   const generation = positiveInteger(retirement.generation, 'retired buffer generation');
   const key = bufferKey(id, generation);
@@ -1034,12 +1034,11 @@ function retireBuffer(
 
 function validateRetirement(retirement: TextEngineRetirementRecord): void {
   assertObject(retirement, 'retirement');
-  const kinds = textShaperAbi.engine.retirementKinds;
   if (
-    retirement.kind !== kinds.resource &&
-    retirement.kind !== kinds.buffer &&
-    retirement.kind !== kinds.slotRange &&
-    retirement.kind !== kinds.outputBytes
+    retirement.kind !== 'resource' &&
+    retirement.kind !== 'buffer' &&
+    retirement.kind !== 'slot-range' &&
+    retirement.kind !== 'output-bytes'
   ) {
     throw new Error(`unsupported text-engine retirement kind ${retirement.kind}`);
   }
@@ -1050,8 +1049,22 @@ function validateRetirement(retirement: TextEngineRetirementRecord): void {
   nonnegativeInteger(retirement.byteLength, 'retirement byte length');
 }
 
-function declaredBufferName(shader: ExampleRendererShader, policyBufferId: number): string | undefined {
-  return Object.entries(shader.variant.buffers).find(([, buffer]) => buffer.id === policyBufferId)?.[0];
+function declaredBufferName(shader: ExampleRendererShader, binding: TextEngineBufferBinding): string | undefined {
+  if (binding.kind === 'order') return undefined;
+  return Object.entries(shader.variant.buffers).find(([, buffer]) => buffer.id === binding.id)?.[0];
+}
+
+function validateBufferBinding(binding: TextEngineBufferBinding): TextEngineBufferBinding {
+  if (binding?.kind === 'order') return binding;
+  if (binding?.kind === 'policy') {
+    positiveInteger(binding.id, 'policy buffer id');
+    return binding;
+  }
+  throw new TypeError('example renderer buffer has an invalid binding');
+}
+
+function sameBufferBinding(left: TextEngineBufferBinding, right: TextEngineBufferBinding): boolean {
+  return left.kind === right.kind && (left.kind === 'order' || (right.kind === 'policy' && left.id === right.id));
 }
 
 function bufferKey(id: number, generation: number): string {
@@ -1096,7 +1109,7 @@ function assertAligned(offset: number, length: number, alignment: number, label:
 }
 
 function retainedScalarBytes(buffer: RetainedExampleBuffer): number {
-  return buffer.scalarType === textShaperAbi.policy.scalarTypes.u16 ? 2 : 4;
+  return buffer.scalarType === 'u16' ? 2 : 4;
 }
 
 function syntheticQuadGeometry(instanceCount: number): ExampleGeometry {
@@ -1260,8 +1273,8 @@ function recordSpan<Record>(
   return records.slice(first, end);
 }
 
-function shaderScalarType(scalar: ExampleRendererShaderBuffer['scalar']): number {
-  return scalar === 'f32' ? textShaperAbi.policy.scalarTypes.f32 : textShaperAbi.policy.scalarTypes.u32;
+function shaderScalarType(scalar: ExampleRendererShaderBuffer['scalar']): TextEngineScalarType {
+  return scalar;
 }
 
 function resourceKey(id: number, generation: number): string {

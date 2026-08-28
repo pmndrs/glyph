@@ -1,4 +1,4 @@
-import type { LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { defineTextMaterial, FontLoader, Text } from '@pmndrs/glyph/three';
 import * as TSL from 'three/tsl';
@@ -44,7 +44,7 @@ async function render(): Promise<TargetV1ComposeResult> {
   target.texture.colorSpace = THREE.NoColorSpace;
   let canonicalText: Text<typeof bitmap> | undefined;
   let composedText: Text<typeof bitmap> | undefined;
-  let canonicalFont: LoadedFont<typeof bitmap> | undefined;
+  let canonicalFont: Font<typeof bitmap> | undefined;
   try {
     renderer.setSize(256, 128, false);
     renderer.setPixelRatio(1);

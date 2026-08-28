@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { FontLoader, FontRegistry } from '@pmndrs/glyph';
+import * as glyph from '@pmndrs/glyph';
 
 const manifestUrl = new URL('../../package.json', import.meta.url);
 
@@ -90,9 +90,11 @@ test('the published contract is ESM-only', async () => {
   }
 });
 
-test('the public loader graph exposes registration without eager baker or Node host edges', async () => {
-  assert.equal(typeof FontLoader, 'function');
-  assert.equal(typeof FontRegistry, 'function');
+test('the public loader graph exposes immutable loading without mutable registration handles', async () => {
+  assert.equal(typeof glyph.loadFont, 'function');
+  assert.equal(typeof glyph.createFontLibrary, 'function');
+  assert.equal('FontLoader' in glyph, false);
+  assert.equal('FontRegistry' in glyph, false);
   const [entry, loader, runtimeHost, runtimeWorker, serialWorkerHost] = await Promise.all([
     readFile(new URL('../../dist/index.js', import.meta.url), 'utf8'),
     readFile(new URL('../../dist/loader.js', import.meta.url), 'utf8'),

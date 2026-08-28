@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { FontLoadError, FontRegistry } from '../../dist/index.js';
+import { FontLoadError, FontRegistry } from '../../dist/loader.js';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 
 import { ARTIFACT_FUZZ_SEED, mutateArtifact } from '../support/artifact-mutations.mjs';

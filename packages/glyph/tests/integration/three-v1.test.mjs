@@ -3,15 +3,17 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { createFontStack, FontRegistry } from '@pmndrs/glyph';
-import { createTextRuntime, TextEngineHost, TextEngineSession } from '@pmndrs/glyph/core';
+import { createFontLibrary, createFontStack, loadFont } from '@pmndrs/glyph';
+import { TextEngineHost } from '@pmndrs/glyph/core';
+import { TextEngineSession } from '../../dist/core/host.js';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
-import { defineTextMaterial, Text, TextGroup } from '@pmndrs/glyph/three';
+import { defineTextMaterial, FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { bitmapSchema } from '../../dist/raster/bitmap-technique.js';
 import { slugSchema } from '../../dist/raster/slug-technique.js';
+import { threeRuntimeDomainReport } from '../../dist/three/runtime-domain.js';
 import { threeSystemBuffers } from '../../dist/three/render-policy.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
@@ -31,12 +33,9 @@ const iconSlugFontUrl = new URL(
 const multiTechniqueFontUrl = new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url);
 const glyphAttribute = (bufferId) => `_pmndrsGlyph_${bufferId}`;
 
-test('one runtime request registers one font and returns typed resources for every declared technique', async () => {
-  const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const [bitmapFont, msdfFont, slugFont] = await runtime.loadFont({
-    input: { baked: dataUrl(await readFile(multiTechniqueFontUrl)) },
+test('one portable request returns typed resources for every declared technique', async () => {
+  const [bitmapFont, msdfFont, slugFont] = await loadFont({
+    input: { baked: { bytes: await readFile(multiTechniqueFontUrl) } },
     rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
   });
   assert.equal(bitmapFont.font, msdfFont.font);
@@ -44,16 +43,39 @@ test('one runtime request registers one font and returns typed resources for eve
   assert.equal(bitmapFont.technique, bitmap);
   assert.equal(msdfFont.technique, msdf);
   assert.equal(slugFont.technique, slug);
-  runtime.dispose();
+  bitmapFont.dispose();
+  msdfFont.dispose();
+  slugFont.dispose();
+});
+
+test('Three domain ownership follows immutable variants across loaders and user-font disposal', async () => {
+  const library = createFontLibrary();
+  const firstLoader = new FontLoader(undefined, { library });
+  const secondLoader = new FontLoader(undefined, { library });
+  const request = {
+    input: { baked: { bytes: await readFile(fontUrl) } },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  };
+  const [first, second] = await Promise.all([firstLoader.loadAsync(request), secondLoader.loadAsync(request)]);
+  assert.notEqual(first, second, 'each caller owns an independent Font lease');
+  assert.deepEqual(threeRuntimeDomainReport(), { active: true, loaders: 2, fonts: 1, leases: 0 });
+
+  const label = new Text({ font: second, text: 'retained' });
+  first.dispose();
+  firstLoader.dispose();
+  secondLoader.dispose();
+  second.dispose();
+  assert.ok(label.layout().glyphCount > 0, 'a live Text retains everything needed after loader and Font disposal');
+  assert.deepEqual(threeRuntimeDomainReport(), { active: true, loaders: 0, fonts: 1, leases: 2 });
+
+  label.dispose();
+  library.dispose();
+  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
 
 test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -354,7 +376,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   label.removeFromParent();
   label.dispose();
   font.dispose();
-  runtime.dispose();
+  loader.dispose();
 });
 
 test('renderer rejection waits for explicit invalidation and then checkpoints without copied bytes', async (t) => {
@@ -367,10 +389,9 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   t.after(() => {
     TextEngineSession.prototype.copyPublication = copyPublication;
   });
-  const registry = new FontRegistry();
-  const instrumented = await createInstrumentedRuntime(registry);
-  const runtime = instrumented.runtime;
-  const font = await runtime.loadFont({
+  const instrumented = await createInstrumentedRuntime();
+  const fontDomain = instrumented.fontDomain;
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -401,7 +422,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   assert.ok(label.layout().glyphCount > 0, 'measurement remains independent of material realization');
   assert.equal(instrumented.crossings, 1, 'measurement must not retry or consume renderer publication');
   assert.match(String(group.error), /deliberate material realization failure/u);
-  assert.equal(label.glyphs(), undefined, 'positioned inspection is unavailable while the renderer update is rejected');
+  assert.ok(label.glyphs().glyphCount > 0, 'renderer-free positioned inspection survives renderer rejection');
   assert.equal(
     label.snapshotGlyphs(),
     undefined,
@@ -439,7 +460,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   group.dispose();
   label.dispose();
   font.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
 test('a rejected fixed-capacity candidate releases its provisional font-stack lease', async (t) => {
@@ -460,10 +481,8 @@ test('a rejected fixed-capacity candidate releases its provisional font-stack le
     TextEngineHost.prototype.disposeFontStack = disposeFontStack;
   });
 
-  const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -478,17 +497,13 @@ test('a rejected fixed-capacity candidate releases its provisional font-stack le
   } finally {
     label.dispose();
     font.dispose();
-    runtime.dispose();
+    fontDomain.dispose();
   }
 });
 
 test('TextGroup drops disposed descendants and reuses their committed transform identities', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -525,16 +540,12 @@ test('TextGroup drops disposed descendants and reuses their committed transform 
   group.dispose();
   survivor.dispose();
   font.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
 test('Three retires materials bound to a replaced buffer generation', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -563,21 +574,17 @@ test('Three retires materials bound to a replaced buffer generation', async () =
   group.dispose();
   label.dispose();
   font.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
 test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
+  const fontDomain = createThreeFontDomain();
   const [latin, icon] = await Promise.all([
-    runtime.loadFont({
+    fontDomain.loadFont({
       input: { baked: dataUrl(await readFile(fontUrl)) },
       raster: { technique: bitmap, options: { strikes: [16] } },
     }),
-    runtime.loadFont({
+    fontDomain.loadFont({
       input: { baked: dataUrl(gunzipSync(await readFile(iconSlugFontUrl))) },
       raster: { technique: slug, options: {} },
     }),
@@ -620,14 +627,13 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async () 
   label.dispose();
   latin.dispose();
   icon.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
 test('TextGroup realizes two public Text objects as one indexed Rust draw', async () => {
-  const registry = new FontRegistry();
-  const instrumented = await createInstrumentedRuntime(registry);
-  const runtime = instrumented.runtime;
-  const font = await runtime.loadFont({
+  const instrumented = await createInstrumentedRuntime();
+  const fontDomain = instrumented.fontDomain;
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -662,9 +668,8 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   scene.updateMatrixWorld();
   assert.equal(instrumented.crossings, 0, 'an empty update and cached measurement must not cross into Rust');
 
-  // Assigning `text` is the whole editing surface. Each assignment states the string the paragraph
-  // now holds, and the narrowest scalar-aligned replacement between the two strings is what crosses
-  // into Rust -- a deletion, an insertion, and a substitution all derived the same way.
+  // Assigning `text` states the desired string. Publication derives the narrowest scalar-aligned
+  // replacement from the last published string, coalescing intermediate desired states.
   left.text = 'A';
   scene.updateMatrixWorld();
   assert.deepEqual(instrumented.latestTextMutations(), [{ start: 1, deleteCount: 1, insert: '' }]);
@@ -689,12 +694,8 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   scene.updateMatrixWorld();
   assert.deepEqual(
     instrumented.latestTextMutations(),
-    [
-      { start: 1, deleteCount: 1, insert: 'Z' },
-      { start: 0, deleteCount: 1, insert: '' },
-      { start: 0, deleteCount: 0, insert: 'A' },
-    ],
-    'assignments between two publications must queue as separate narrow edits, not collapse',
+    [{ start: 1, deleteCount: 1, insert: 'Z' }],
+    'retained authoring coalesces desired state into one minimal edit from the published string',
   );
   assert.equal(left.text, 'AZ');
 
@@ -833,11 +834,10 @@ test('TextGroup realizes two public Text objects as one indexed Rust draw', asyn
   left.dispose();
   right.dispose();
   font.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
-async function createInstrumentedRuntime(registry) {
-  const wasm = await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url));
+async function createInstrumentedRuntime() {
   const abi = textShaperAbi;
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
@@ -871,65 +871,72 @@ async function createInstrumentedRuntime(registry) {
     }
     return { exports };
   };
-  try {
-    const runtime = await createTextRuntime({ registry, wasm });
-    return {
-      runtime,
-      get crossings() {
-        return crossings;
-      },
-      get measureCrossings() {
-        return measureCrossings;
-      },
-      get latestUpdateFlags() {
-        return latestUpdateFlags;
-      },
-      get latestUpdateGeneration() {
-        return latestUpdateGeneration;
-      },
-      get latestAcknowledgedGeneration() {
-        assert.ok(latestRequest, 'a text update request must have been captured');
-        const request = abi.layouts.engineUpdateRequest;
-        return new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength).getUint32(
-          request.acknowledgedPublicationGeneration,
-          true,
-        );
-      },
-      reset() {
-        crossings = 0;
-        measureCrossings = 0;
-      },
-      latestTextMutations() {
-        assert.ok(latestRequest, 'a text update request must have been captured');
-        const request = abi.layouts.engineUpdateRequest;
-        const mutation = abi.layouts.engineTextMutation;
-        const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
-        const offset = view.getUint32(request.textMutationsOffset, true);
-        const count = view.getUint32(request.textMutationCount, true);
-        return Array.from({ length: count }, (_recordValue, index) => {
-          const record = offset + index * mutation.size;
-          const insertOffset = view.getUint32(record + mutation.insertOffset, true);
-          const insertCount = view.getUint32(record + mutation.insertCount, true);
-          const insert = String.fromCharCode(
-            ...Array.from({ length: insertCount }, (_unitValue, unit) => view.getUint16(insertOffset + unit * 2, true)),
-          );
-          return {
-            start: view.getUint32(record + mutation.textStart, true),
-            deleteCount: view.getUint32(record + mutation.deleteCount, true),
-            insert,
-          };
-        });
-      },
-    };
-  } finally {
+  let restored = false;
+  const restore = () => {
+    if (restored) return;
+    restored = true;
     WebAssembly.instantiate = originalInstantiate;
-  }
+  };
+  const fontDomain = createThreeFontDomain(async (load) => {
+    try {
+      return await load();
+    } finally {
+      restore();
+    }
+  }, restore);
+  return {
+    fontDomain,
+    get crossings() {
+      return crossings;
+    },
+    get measureCrossings() {
+      return measureCrossings;
+    },
+    get latestUpdateFlags() {
+      return latestUpdateFlags;
+    },
+    get latestUpdateGeneration() {
+      return latestUpdateGeneration;
+    },
+    get latestAcknowledgedGeneration() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      return new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength).getUint32(
+        request.acknowledgedPublicationGeneration,
+        true,
+      );
+    },
+    reset() {
+      crossings = 0;
+      measureCrossings = 0;
+    },
+    latestTextMutations() {
+      assert.ok(latestRequest, 'a text update request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const mutation = abi.layouts.engineTextMutation;
+      const view = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+      const offset = view.getUint32(request.textMutationsOffset, true);
+      const count = view.getUint32(request.textMutationCount, true);
+      return Array.from({ length: count }, (_recordValue, index) => {
+        const record = offset + index * mutation.size;
+        const insertOffset = view.getUint32(record + mutation.insertOffset, true);
+        const insertCount = view.getUint32(record + mutation.insertCount, true);
+        const insert = String.fromCharCode(
+          ...Array.from({ length: insertCount }, (_unitValue, unit) => view.getUint16(insertOffset + unit * 2, true)),
+        );
+        return {
+          start: view.getUint32(record + mutation.textStart, true),
+          deleteCount: view.getUint32(record + mutation.deleteCount, true),
+          insert,
+        };
+      });
+    },
+  };
 }
 
 test('Text.layout measures attached first-frame state without traversing matrices or realizing draws', async () => {
-  const registry = new FontRegistry();
-  const instrumented = await createInstrumentedRuntime(registry);
-  const font = await instrumented.runtime.loadFont({
+  const instrumented = await createInstrumentedRuntime();
+  const font = await instrumented.fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -944,11 +951,8 @@ test('Text.layout measures attached first-frame state without traversing matrice
   first.position.set(12, 34, 0);
   second.position.set(56, 78, 0);
 
-  assert.throws(
-    () => first.layout(),
-    /requires an attached Text; use Paragraph/u,
-    'detached Text has no batch ownership and must direct callers to Paragraph',
-  );
+  assert.ok(first.layout().glyphCount > 0, 'detached Text measurement needs no matrix or render attachment');
+  assert.deepEqual(first.commitState(), { status: 'unbound' });
   group.add(first, second);
   scene.add(group);
   const matricesBefore = [first, second, group, scene].map((object) => Array.from(object.matrix.elements));
@@ -958,6 +962,7 @@ test('Text.layout measures attached first-frame state without traversing matrice
   const secondMeasurement = second.layout();
   assert.ok(firstMeasurement.lineCount > 0);
   assert.ok(secondMeasurement.glyphCount > 0);
+  assert.equal(firstMeasurement.inkBounds, undefined, 'the fast measurement path does not position glyph ink');
   assert.equal(instrumented.crossings, 0, 'measurement must not publish a full engine frame');
   assert.equal(instrumented.measureCrossings, 2, 'each new paragraph uses one scoped query');
   assert.equal(group.gpuBytes, 0, 'measurement must not realize renderer buffers');
@@ -979,18 +984,25 @@ test('Text.layout measures attached first-frame state without traversing matrice
   assert.equal(instrumented.measureCrossings, 2, 'publication must not repeat the host measurement query');
   assert.equal(first.commitState().status, 'committed');
   assert.equal(second.commitState().status, 'committed');
+  assert.equal(first.boundingBox.isEmpty(), false, 'the first positioned publication must install ink bounds');
+  assert.ok(first.boundingBox.max.x > first.boundingBox.min.x);
+  assert.ok(first.boundingBox.max.y > first.boundingBox.min.y);
+  assert.equal(
+    instrumented.measureCrossings,
+    2,
+    'reading first-frame bounds must reuse the measurement published beside the render plan',
+  );
 
   group.dispose();
   first.dispose();
   second.dispose();
   font.dispose();
-  instrumented.runtime.dispose();
+  instrumented.fontDomain.dispose();
 });
 
 test('standalone Text.layout creates only its implicit measurement batch before traversal', async () => {
-  const registry = new FontRegistry();
-  const instrumented = await createInstrumentedRuntime(registry);
-  const font = await instrumented.runtime.loadFont({
+  const instrumented = await createInstrumentedRuntime();
+  const font = await instrumented.fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -1004,6 +1016,11 @@ test('standalone Text.layout creates only its implicit measurement batch before 
   assert.ok(label.layout().glyphCount > 0);
   assert.equal(instrumented.crossings, 0);
   assert.equal(instrumented.measureCrossings, 1);
+  const inspection = label.glyphs();
+  assert.ok(inspection.inkBounds, 'explicit positioned inspection provides pre-frame ink bounds');
+  assert.equal(instrumented.measureCrossings, 2);
+  assert.equal(label.boundingBox.isEmpty(), false);
+  assert.equal(instrumented.measureCrossings, 2, 'the Three box reuses the positioned inspection');
   assert.equal(label.gpuBytes, 0);
   assert.equal(label.children.length, 0);
   for (const [index, object] of [label, scene].entries()) {
@@ -1013,21 +1030,17 @@ test('standalone Text.layout creates only its implicit measurement batch before 
 
   scene.updateMatrixWorld(true);
   assert.equal(instrumented.crossings, 1);
-  assert.equal(instrumented.measureCrossings, 1);
+  assert.equal(instrumented.measureCrossings, 2, 'publication adopts the explicit queries instead of repeating them');
   assert.equal(label.commitState().status, 'committed');
 
   label.dispose();
   font.dispose();
-  instrumented.runtime.dispose();
+  instrumented.fontDomain.dispose();
 });
 
 test('Bitmap strike changes fully initialize a replacement indexed batch', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(densityFontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16, 32] } },
   });
@@ -1072,18 +1085,15 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   group.dispose();
   label.dispose();
   font.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
 test('multi-page Bitmap strikes remain one ordered texture-array draw', async () => {
-  const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(densityFontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16, 32] } },
   });
-  assert.ok(font.data.strikes[1].pages.length > 1, 'the regression fixture must contain a multi-page 32 ppem strike');
   const scene = new THREE.Scene();
   const group = new TextGroup();
   const label = new Text({
@@ -1107,16 +1117,12 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async ()
   group.dispose();
   label.dispose();
   font.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
 test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(amiriFontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -1152,16 +1158,12 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async () =
 
   label.dispose();
   font.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
 test('TextGroup atomically replaces child paragraphs without multiplying retained text capacity', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -1191,16 +1193,12 @@ test('TextGroup atomically replaces child paragraphs without multiplying retaine
   group.dispose();
   for (const text of [...first, ...second, ...third]) text.dispose();
   font.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
 test('TextGroup grows aggregate glyph storage without reserving one aggregate-sized paragraph', async () => {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -1227,7 +1225,7 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
   group.dispose();
   for (const label of labels) label.dispose();
   font.dispose();
-  runtime.dispose();
+  fontDomain.dispose();
 });
 
 /**
@@ -1238,9 +1236,8 @@ test('TextGroup grows aggregate glyph storage without reserving one aggregate-si
  */
 test('repeated layout under changing constraints stays on the paragraph query path', async () => {
   const abi = textShaperAbi;
-  const registry = new FontRegistry();
-  const instrumented = await createInstrumentedRuntime(registry);
-  const font = await instrumented.runtime.loadFont({
+  const instrumented = await createInstrumentedRuntime();
+  const font = await instrumented.fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(fontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -1285,6 +1282,8 @@ test('repeated layout under changing constraints stays on the paragraph query pa
   );
   assert.equal(label.layout().contentWidth <= 240 + 1e-3, true);
   label.dispose();
+  font.dispose();
+  instrumented.fontDomain.dispose();
 });
 
 test('a standard ligature that absorbs a grapheme publishes and keeps typing', async () => {
@@ -1293,11 +1292,8 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
   // still derives a scale for it, so the cluster arena must record the owning font's
   // units-per-em for it as well. Amiri applies `liga` to Latin f-pairs; Inter as baked
   // does not, which is why every existing Latin fixture missed this.
-  const runtime = await createTextRuntime({
-    registry: new FontRegistry(),
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  const font = await runtime.loadFont({
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({
     input: { baked: dataUrl(await readFile(amiriFontUrl)) },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
@@ -1334,8 +1330,26 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
 
   group.dispose();
   text.dispose();
-  runtime.dispose();
+  font.dispose();
+  fontDomain.dispose();
 });
+
+function createThreeFontDomain(firstLoad, onDispose = () => {}) {
+  const loader = new FontLoader();
+  let initial = true;
+  return {
+    loadFont(request) {
+      const load = () => ('rasters' in request ? loader.loadFontsAsync(request) : loader.loadAsync(request));
+      if (!initial || firstLoad === undefined) return load();
+      initial = false;
+      return firstLoad(load);
+    },
+    dispose() {
+      onDispose();
+      loader.dispose();
+    },
+  };
+}
 
 function dataUrl(bytes) {
   return `data:model/gltf-binary;base64,${bytes.toString('base64')}`;

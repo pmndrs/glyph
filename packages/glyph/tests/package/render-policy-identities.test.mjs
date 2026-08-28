@@ -9,17 +9,15 @@ import {
   RenderWireIdentityRegistry,
   selectPolicyCapabilitySet,
   techniqueId,
-  textShaperAbi,
 } from '../../dist/core.js';
 import { assertGlyphId, GlyphIdScope } from '../../dist/core/render-policy.js';
+import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
 const opcodes = textShaperAbi.policy.opcodes;
-const scalarTypes = textShaperAbi.policy.scalarTypes;
-const capabilityFlags = textShaperAbi.policy.capabilityFlags;
 
 function capabilitySet() {
   return {
-    flags: capabilityFlags.storageBuffers | capabilityFlags.orderedDirect | capabilityFlags.stableIndirect,
+    capabilities: ['storage-buffers', 'ordered-direct', 'stable-indirect'],
     maxBufferBytes: 1024 * 1024,
     updateAlignment: 4,
     coalesceGapBytes: 128,
@@ -47,7 +45,7 @@ const body = {
   f32InputCount: 0,
   u32InputCount: 0,
 };
-const buffers = [{ id: BUFFER_ID, scalar: scalarTypes.u32, vectorWidth: 1 }];
+const buffers = [{ id: BUFFER_ID, scalar: 'u32', vectorWidth: 1 }];
 
 test('semantic ID helpers are stable and namespace program variants', () => {
   const MSDF_TECHNIQUE_ID = techniqueId('pmndrs.msdf');

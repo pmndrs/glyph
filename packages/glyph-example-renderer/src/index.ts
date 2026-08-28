@@ -6,9 +6,7 @@
  * stops compiling. See `docs/planning/example-renderer.md`.
  */
 export type { ExampleDraw, ExampleDrawList, ExamplePrimitiveRecord, ExampleResourceRecord } from './draw-list.js';
-export { decodeDraw } from './draw-list.js';
 export { ExampleText, ExampleTextEngine, type ExampleTextOptions, type ExampleTextUpdate } from './engine.js';
-export { readDrawList } from './plan-reader.js';
 export type { ExampleTableSnapshot } from './snapshot.js';
 export {
   exampleRendererShader,

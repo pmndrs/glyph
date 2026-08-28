@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileRenderPolicy, id, programId, techniqueId, textShaperAbi } from '../../dist/core.js';
+import { compileRenderPolicy, id, programId, techniqueId } from '../../dist/core.js';
+import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 
 const layouts = textShaperAbi.layouts;
 const policy = textShaperAbi.policy;
@@ -18,7 +19,7 @@ const UNKNOWN_BUFFER_ID = id('buffer', 'test.policy-preflight/unknown');
 
 function capabilitySet(overrides = {}) {
   return {
-    flags: capabilityFlags.storageBuffers | capabilityFlags.orderedDirect | capabilityFlags.stableIndirect,
+    capabilities: ['storage-buffers', 'ordered-direct', 'stable-indirect'],
     maxBufferBytes: 0xfe_dc_ba_98,
     updateAlignment: 256,
     coalesceGapBytes: 4096,
@@ -65,7 +66,7 @@ function fullDescriptor() {
         techniqueId: PRIMARY_TECHNIQUE_ID,
         programId: PRIMARY_PROGRAM_ID,
         capabilitySet: capabilities,
-        primitiveKind: textShaperAbi.engine.primitiveKinds.decoration,
+        primitiveKind: 'decoration',
         resourceKindMask: 0x13_57_9b_df,
         semanticViewMask: 3,
         storageKeyMask: batchFields.technique | batchFields.resource | batchFields.program,
@@ -85,15 +86,15 @@ function fullDescriptor() {
         buffers: [
           {
             id: F32_BUFFER_ID,
-            scalar: scalarTypes.f32,
+            scalar: 'f32',
             vectorWidth: 4,
             alignment: 16,
             stride: 64,
             usage: 7,
             capacityClass: 3,
           },
-          { id: U16_BUFFER_ID, scalar: scalarTypes.u16, vectorWidth: 2 },
-          { id: U32_BUFFER_ID, scalar: scalarTypes.u32, vectorWidth: 1 },
+          { id: U16_BUFFER_ID, scalar: 'u16', vectorWidth: 2 },
+          { id: U32_BUFFER_ID, scalar: 'u32', vectorWidth: 1 },
         ],
         operations: FULL_OPERATIONS.map((operation) => ({ ...operation })),
       },
@@ -105,7 +106,7 @@ function fullDescriptor() {
         inputs: [{ scope: 'glyph', field: 200 }],
         storageKeyMask: batchFields.technique | batchFields.resource | batchFields.program,
         drawKeyMask: batchFields.technique | batchFields.resource | batchFields.program | batchFields.order,
-        buffers: [{ id: SECONDARY_BUFFER_ID, scalar: scalarTypes.u32, vectorWidth: 1 }],
+        buffers: [{ id: SECONDARY_BUFFER_ID, scalar: 'u32', vectorWidth: 1 }],
         operations: [
           { opcode: opcodes.loadU32, target: 0, operand0: 0 },
           { opcode: opcodes.storeU32, operand0: 0, operand1: 0, immediate0: SECONDARY_BUFFER_ID },
@@ -264,7 +265,7 @@ test('a decoration program may accept zero resource kinds', () => {
 
 test('buffer ids collide only within one program', () => {
   const descriptor = fullDescriptor();
-  descriptor.programs[1].buffers = [{ id: F32_BUFFER_ID, scalar: scalarTypes.u32, vectorWidth: 1 }];
+  descriptor.programs[1].buffers = [{ id: F32_BUFFER_ID, scalar: 'u32', vectorWidth: 1 }];
   descriptor.programs[1].operations[1].immediate0 = F32_BUFFER_ID;
   assert.doesNotThrow(() => compileRenderPolicy(descriptor));
 
@@ -333,7 +334,7 @@ const numericRejections = [
   ['a fractional opcode', (d) => (d.programs[0].operations[0].opcode = 0.5), /operation 0 opcode needs a u8/],
   ['an overflowing target', (d) => (d.programs[0].operations[0].target = 256), /operation 0 target needs a u8/],
   ['an overflowing input field', (d) => (d.programs[0].inputs[0].field = 256), /input 0 field needs a u8/],
-  ['an overflowing buffer scalar', (d) => (d.programs[0].buffers[0].scalar = 300), /buffer 0 scalar needs a u8/],
+  ['an unknown buffer scalar', (d) => (d.programs[0].buffers[0].scalar = 'i32'), /scalar is not f32, u32, or u16/],
   [
     'a negative buffer vectorWidth',
     (d) => (d.programs[0].buffers[0].vectorWidth = -1),
@@ -366,7 +367,11 @@ const numericRejections = [
     (d) => (d.programs[0].allocationStrategy = 65536),
     /allocationStrategy needs a u16/,
   ],
-  ['a negative primitiveKind', (d) => (d.programs[0].primitiveKind = -5), /primitiveKind needs a u16/],
+  [
+    'an unknown primitiveKind',
+    (d) => (d.programs[0].primitiveKind = 'mesh'),
+    /primitiveKind is not glyph or decoration/,
+  ],
   [
     'an overflowing per-program input count',
     (d) => (d.programs[1].inputs = Array.from({ length: 65537 }, () => ({ scope: 'semantic', field: 0 }))),
@@ -437,11 +442,11 @@ test('compiler snapshots each declared capability field once', () => {
   const descriptor = fullDescriptor();
   descriptor.programs[0].capabilitySet = undefined;
   let reads = 0;
-  Object.defineProperty(descriptor.capabilitySets[0], 'flags', {
+  Object.defineProperty(descriptor.capabilitySets[0], 'capabilities', {
     enumerable: true,
     get() {
       reads += 1;
-      return capabilityFlags.storageBuffers | capabilityFlags.orderedDirect | capabilityFlags.stableIndirect;
+      return ['storage-buffers', 'ordered-direct', 'stable-indirect'];
     },
   });
 
@@ -476,14 +481,14 @@ const semanticRejections = [
     /more than 8 capability sets/,
   ],
   [
-    'unknown capability flag bits',
-    (d) => (d.capabilitySets[0].flags |= 1 << 6),
-    /unknown bits or support no allocation strategy/,
+    'unknown capability names',
+    (d) => d.capabilitySets[0].capabilities.push('unbounded-magic'),
+    /not a known policy capability/,
   ],
   [
-    'capability flags with no allocation support',
-    (d) => (d.capabilitySets[0].flags = capabilityFlags.storageBuffers),
-    /unknown bits or support no allocation strategy/,
+    'capabilities with no allocation support',
+    (d) => (d.capabilitySets[0].capabilities = ['storage-buffers']),
+    /supports no allocation strategy/,
   ],
   ['zero max buffer bytes', (d) => (d.capabilitySets[0].maxBufferBytes = 0), /limits need nonzero capacity/],
   [
@@ -512,12 +517,12 @@ const semanticRejections = [
   ],
   ['zero basis points', (d) => (d.capabilitySets[0].wholeBufferThresholdBasisPoints = 0), /upload cost model exceeds/],
   [
-    'the indirect flag without an indirect limit',
-    (d) => ((d.capabilitySets[0].flags |= capabilityFlags.indirectDraws), (d.capabilitySets[0].maxIndirectDraws = 0)),
+    'the indirect capability without an indirect limit',
+    (d) => (d.capabilitySets[0].capabilities.push('indirect-draws'), (d.capabilitySets[0].maxIndirectDraws = 0)),
     /pair the indirect-draw flag/,
   ],
   [
-    'an indirect limit without the indirect flag',
+    'an indirect limit without the indirect capability',
     (d) => (d.capabilitySets[0].maxIndirectDraws = 5),
     /pair the indirect-draw flag/,
   ],
@@ -537,12 +542,10 @@ const semanticRejections = [
   ],
   [
     'glyph records without resource kinds',
-    (d) => (
-      (d.programs[0].resourceKindMask = 0), (d.programs[0].primitiveKind = textShaperAbi.engine.primitiveKinds.glyph)
-    ),
+    (d) => ((d.programs[0].resourceKindMask = 0), (d.programs[0].primitiveKind = 'glyph')),
     /accepts no resource kinds/,
   ],
-  ['an unsupported primitive kind', (d) => (d.programs[0].primitiveKind = 3), /glyph or decoration records/],
+  ['an unsupported primitive kind', (d) => (d.programs[0].primitiveKind = 'mesh'), /not glyph or decoration/],
   [
     'storage keys missing a required batch field',
     (d) => (d.programs[0].storageKeyMask = batchFields.technique | batchFields.program),
@@ -566,7 +569,10 @@ const semanticRejections = [
   ['an unknown allocation strategy', (d) => (d.programs[0].allocationStrategy = 3), /not a known strategy/],
   [
     'stable allocation without stable capability support',
-    (d) => (d.capabilitySets[0].flags &= ~capabilityFlags.stableIndirect),
+    (d) =>
+      (d.capabilitySets[0].capabilities = d.capabilitySets[0].capabilities.filter(
+        (value) => value !== 'stable-indirect',
+      )),
     /lacks the allocation support/,
   ],
   [
@@ -589,7 +595,7 @@ const semanticRejections = [
     (d) =>
       (d.programs[1].buffers = Array.from({ length: 17 }, (_, index) => ({
         id: id('buffer', `test.policy-preflight/many/${index}`),
-        scalar: scalarTypes.u32,
+        scalar: 'u32',
         vectorWidth: 1,
       }))),
     /more than 16 buffers/,
@@ -617,7 +623,7 @@ const semanticRejections = [
   ],
   ['unknown buffer usage bits', (d) => (d.programs[0].buffers[0].usage = 7 + 2 ** 31), /usage needs copyDst/],
   ['a zero capacity class', (d) => (d.programs[1].buffers[0].capacityClass = 0), /capacityClass needs a nonzero class/],
-  ['an unknown scalar type', (d) => (d.programs[1].buffers[0].scalar = 9), /not a known scalar type/],
+  ['an unknown scalar type', (d) => (d.programs[1].buffers[0].scalar = 'i32'), /not f32, u32, or u16/],
   ['a program without operations', (d) => (d.programs[1].operations = []), /declares no operations/],
   [
     'more than one hundred twenty-eight operations',

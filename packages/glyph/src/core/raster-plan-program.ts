@@ -1,6 +1,5 @@
 import type { Font } from '../font.js';
-import { immutableFontResources, immutableFontVariantIdentity, type LoadedFont } from '../loaded-font.js';
-import { textShaperAbi } from '../generated/text-shaper-abi.js';
+import { immutableFontResources, immutableFontVariantIdentity } from '../loaded-font.js';
 import { isRasterTechnique, type AnyRasterTechnique, type RasterResourceId } from '../raster-technique.js';
 import { compileFontBinding, emptyFontBindingTable, fontBindingResources, schemaFieldTable } from './font-binding.js';
 import {
@@ -306,15 +305,6 @@ export function compileRasterFont(
   );
 }
 
-/** Temporary bridge while first-party integrations migrate from runtime-bound fonts. */
-export function compileLoadedRasterFont(
-  font: LoadedFont<AnyRasterTechnique>,
-  identities: RenderWireIdentityRegistry,
-): CompiledRasterFont | undefined {
-  if (font.disposed) throw new TypeError('cannot compile a disposed loaded font');
-  return compileRasterFontSource(font, font.technique, font.font.glyphCount, font.data, identities);
-}
-
 function compileRasterFontSource(
   cacheKey: object,
   technique: AnyRasterTechnique,
@@ -556,12 +546,11 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
 }
 
 function systemPolicyBuffers(system: RasterPolicySystem): PolicyBuffer[] {
-  const u32Scalar = textShaperAbi.policy.scalarTypes.u32;
   return [
-    { id: system.stableGlyphId.id, scalar: u32Scalar, vectorWidth: 1 },
+    { id: system.stableGlyphId.id, scalar: 'u32', vectorWidth: 1 },
     ...(system.transformIndex === undefined
       ? []
-      : [{ id: system.transformIndex.id, scalar: u32Scalar, vectorWidth: 1 }]),
+      : [{ id: system.transformIndex.id, scalar: 'u32' as const, vectorWidth: 1 }]),
   ];
 }
 

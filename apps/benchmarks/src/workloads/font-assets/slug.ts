@@ -19,6 +19,7 @@ import type {
 } from './contracts';
 import {
   createFontDeliveryMetrics,
+  captureRasterTechniqueData,
   loadBakedFont,
   loadSourceFont,
   measuredRuntimeFontBake,
@@ -68,15 +69,16 @@ export async function preloadSlugFontAssets(
 export async function loadSlugFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'slug' }>,
 ): Promise<SlugFontAsset> {
-  const { delivery, fixture, onProgress, registry, signal } = request;
+  const { delivery, fixture, library, onProgress, signal } = request;
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   if (delivery === 'runtime') {
+    const captured = captureRasterTechniqueData(measuredSlugTechnique(metrics, onProgress));
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: measuredSlugTechnique(metrics, onProgress) },
+      raster: { technique: captured.technique },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
-      registry,
+      library,
       ...(signal === undefined ? {} : { signal }),
     });
     return {
@@ -85,15 +87,17 @@ export async function loadSlugFontAsset(
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
       loaded,
+      data: captured.data(),
       metrics,
     };
   }
   const source = request.bakedArtifact ?? fixtureManifestSource(fixture);
   const artifact = await fetchAuthenticatedGzipAsset(source.url, source, 'Slug font fixture', signal);
+  const captured = captureRasterTechniqueData(slugTechnique);
   const loaded = await loadBakedFont({
     artifact,
-    raster: { technique: slugTechnique },
-    registry,
+    raster: { technique: captured.technique },
+    library,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
@@ -102,6 +106,7 @@ export async function loadSlugFontAsset(
     atlasGpuBytes: 0,
     compressedBytes: source.compressed.bytes,
     loaded,
+    data: captured.data(),
     metrics,
   };
 }

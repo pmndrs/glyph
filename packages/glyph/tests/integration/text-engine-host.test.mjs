@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { FontRegistry } from '@pmndrs/glyph';
+import { FontRegistry } from '../../dist/loader.js';
 import { createTextRuntime } from '@pmndrs/glyph/core';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { TextEngineHost } from '../../dist/core/host.js';
@@ -163,12 +163,12 @@ test('font bindings cannot be disposed while an owned stack still references the
     session.update(request);
     assert.throws(
       () => host.disposeFontStack(stackHandle),
-      (error) => error.status === textShaperAbi.status.registrationInUse,
+      (error) => error.code === 'registration-in-use',
       'a committed session must retain the stack named by its styles',
     );
     assert.throws(
       () => host.disposePolicy(policyHandle),
-      (error) => error.status === textShaperAbi.status.registrationInUse,
+      (error) => error.code === 'registration-in-use',
       'a committed session must retain its policy',
     );
     session.dispose();

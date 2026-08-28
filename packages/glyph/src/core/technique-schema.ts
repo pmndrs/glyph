@@ -7,7 +7,6 @@
  * derive from the declaration; none of them restate it.
  */
 
-import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { RasterTechniqueId } from '../raster-technique.js';
 import {
   assertPortableVertexSemantic,
@@ -629,10 +628,9 @@ function isNonArrayObject(value: unknown): value is Record<string, unknown> {
  * order — the schema is the only witness to ids, scalar kinds, and widths.
  */
 export function schemaPolicyBuffers(schema: AnyTechniqueSchema): PolicyBuffer[] {
-  const scalars = textShaperAbi.policy.scalarTypes;
   return Object.values(schema.buffers).map((buffer) => ({
     id: buffer.id,
-    scalar: buffer.scalar === 'f32' ? scalars.f32 : scalars.u32,
+    scalar: buffer.scalar,
     vectorWidth: buffer.lanes.length,
   }));
 }

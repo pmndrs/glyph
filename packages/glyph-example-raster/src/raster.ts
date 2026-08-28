@@ -2,10 +2,10 @@ import type {
   JsonValue,
   RasterResourceId,
   RasterResourceSource,
+  RasterDecodeArtifact,
+  RasterDecodeFont,
   RasterTechnique,
   RasterTechniqueId,
-  RegisteredFont,
-  RegisteredRaster,
   Sha256Hex,
 } from '@pmndrs/glyph';
 import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
@@ -73,8 +73,8 @@ export const glyphExample: RasterTechnique<
 });
 
 function decodeExtension(
-  font: RegisteredFont,
-  raster: RegisteredRaster<typeof GLYPH_EXAMPLE_KIND>,
+  font: RasterDecodeFont,
+  raster: RasterDecodeArtifact<typeof GLYPH_EXAMPLE_KIND>,
 ): GlyphExampleExtension {
   const extension = objectValue(raster.extensionData, 'glyph-example extension');
   if (

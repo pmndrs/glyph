@@ -1,5 +1,22 @@
 # pmndrs/glyph documentation update log
 
+## 2026-08-28
+
+- **Implemented explicit font/runtime/host/session ownership** — Root font assets now outlive renderer runtimes; each
+  runtime creates and owns its hosts, each host installs policies and binds immutable fonts, and each session owns one
+  target, retained text batch, and acceptance frontier. The default target consumes borrowed A/B memory synchronously;
+  the async target performs one bounded exact-size copy and requires the same transfer buffer back.
+
+- **Removed raw ABI authoring and decoding from `/core`** — Policies use semantic capability and scalar names, branded
+  hash-derived numeric identities, and collision-checked registries. Renderers consume resources, buffers, patches,
+  primitives, draws, and retirements through semantic readers instead of generated offsets and enum numbers.
+
+- **Rebuilt the renderer and technique implementation guides** — The durable guides now show every callable lifecycle
+  step, current text mutation and measurement, resource leasing and realization, transactional acceptance, canvas/device
+  topology, worker transfer, shader subpaths, portable geometry, policy assembly, raster decoding, and baking. Public
+  `layout()` and `glyphs()` TSDoc concisely names possible cache-miss lookup costs, and their canonical constraint caches
+  are bounded to three LRU answers so arbitrary resize probes cannot retain glyph arrays forever.
+
 ## 2026-08-27
 
 - **Closed the ownership plan's input, measurement, and entry-point gaps** — Opus High verified the font/runtime ownership

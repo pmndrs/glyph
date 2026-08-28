@@ -1,6 +1,6 @@
 import { KHR_DF_CHANNEL_RGBSDA_RED, VK_FORMAT_R8_UNORM } from 'ktx-parse';
 
-import type { RegisteredFont } from '../font.js';
+import type { RasterDecodeFont } from '../font.js';
 import {
   BITMAP_EXTENSION,
   BITMAP_FORMAT_VERSION,
@@ -22,7 +22,7 @@ import {
 } from '../internal/raster-atlas.js';
 import { decodeRasterCoverage } from '../internal/raster-coverage-artifact.js';
 import type { RasterCoverage } from '../raster-coverage.js';
-import type { RegisteredRaster } from '../raster.js';
+import type { RasterDecodeArtifact } from '../raster.js';
 import {
   defineRasterResourceId,
   defineRasterTechnique,
@@ -108,9 +108,8 @@ export const bitmap: RasterTechnique<
   dispose() {},
 });
 
-async function decodeBitmapData(font: RegisteredFont, raster: RegisteredRaster): Promise<BitmapData> {
+async function decodeBitmapData(font: RasterDecodeFont, raster: RasterDecodeArtifact): Promise<BitmapData> {
   if (
-    raster.font !== font.handle ||
     raster.kind !== BITMAP_KIND ||
     raster.extension !== BITMAP_EXTENSION ||
     raster.version !== BITMAP_FORMAT_VERSION

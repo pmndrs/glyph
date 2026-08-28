@@ -1,10 +1,12 @@
 import { extend, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber/webgpu';
 import {
   createElement,
+  createContext,
   forwardRef,
   isValidElement,
   use,
   useLayoutEffect,
+  useContext,
   useMemo,
   useRef,
   useState,
@@ -15,12 +17,21 @@ import {
 } from 'react';
 
 import { type GlyphPaintInput, resolveRangesToClusters } from './formatted-text.js';
-import type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
+import type { Font } from './font.js';
+import {
+  assertFontLibrary,
+  fontLibraryOwnedResource,
+  type FontLibrary,
+  type FontRequest,
+  type FontTechniques,
+  type Fonts,
+  type MultiRasterFontRequest,
+} from './loader.js';
+import { cloneImmutableFont, type FontSelection, type FontStack } from './loaded-font.js';
 import type { ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
-import type { LoadedFontRequest, LoadedFontTechniques, LoadedFonts, LoadedFontsRequest } from './text-runtime.js';
 import {
-  FontLoader,
+  FontLoader as ThreeFontLoader,
   Text as ThreeText,
   TextGroup as ThreeTextGroup,
   type StandaloneTextProperties,
@@ -71,12 +82,10 @@ export type R3fTextSpanProps<Technique extends AnyRasterTechnique> = {
  */
 type BoxOnlyPropKey = Exclude<keyof R3fTextProps<AnyRasterTechnique>, keyof InlineProperties<never> | 'children'>;
 
-type R3fFontSelection<Technique extends AnyRasterTechnique> =
-  | FontSelection<Technique>
-  | (Technique extends AnyRasterTechnique ? FontSelection<Technique> : never);
+type R3fFontSelection<Technique extends AnyRasterTechnique> = FontSelection<Technique>;
 
 type FontSelectionTechnique<Selection> =
-  Selection extends LoadedFont<infer Technique>
+  Selection extends Font<infer Technique>
     ? Technique
     : Selection extends FontStack<infer Technique>
       ? Technique
@@ -121,23 +130,61 @@ type DesiredR3fTextProperties<Technique extends AnyRasterTechnique> = Partial<St
 };
 
 interface UseFont {
-  <Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): LoadedFont<Technique>;
-  <const Techniques extends LoadedFontTechniques>(request: LoadedFontsRequest<Techniques>): LoadedFonts<Techniques>;
-  preload<Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): Promise<LoadedFont<Technique>>;
-  preload<const Techniques extends LoadedFontTechniques>(
-    request: LoadedFontsRequest<Techniques>,
-  ): Promise<LoadedFonts<Techniques>>;
-  clear<Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): void;
-  clear<const Techniques extends LoadedFontTechniques>(request: LoadedFontsRequest<Techniques>): void;
+  <Technique extends AnyRasterTechnique>(request: FontRequest<Technique>): Font<Technique>;
+  <const Techniques extends FontTechniques>(request: MultiRasterFontRequest<Techniques>): Fonts<Techniques>;
 }
 
-const fontLoader = new FontLoader();
-type AnyLoadedFontResult = LoadedFont<AnyRasterTechnique> | readonly LoadedFont<AnyRasterTechnique>[];
-const fontPromises = new Map<string, Promise<AnyLoadedFontResult>>();
+/** A FontLibrary-bound Suspense hook with explicit preload and cache-release operations. */
+export interface BoundUseFont extends UseFont {
+  preload<Technique extends AnyRasterTechnique>(request: FontRequest<Technique>): Promise<void>;
+  preload<const Techniques extends FontTechniques>(request: MultiRasterFontRequest<Techniques>): Promise<void>;
+  clear<Technique extends AnyRasterTechnique>(request: FontRequest<Technique>): void;
+  clear<const Techniques extends FontTechniques>(request: MultiRasterFontRequest<Techniques>): void;
+}
+
+type AnyFontResult = Font<AnyRasterTechnique> | readonly Font<AnyRasterTechnique>[];
 const techniqueIds = new WeakMap<object, number>();
+const inputIds = new WeakMap<object, number>();
 let nextTechniqueId = 1;
+let nextInputId = 1;
 const ThreeTextElement = extend(ThreeText);
 const ThreeTextGroupElement = extend(ThreeTextGroup);
+const FontScopeContext = createContext<ReactFontScope | undefined>(undefined);
+const reactFontScopeResource = Object.freeze({});
+
+/** Props for publishing one application-owned FontLibrary to descendant glyph hooks. */
+export interface GlyphProviderProps {
+  readonly children?: ReactNode;
+  readonly library: FontLibrary;
+}
+
+/** Publish one explicit FontLibrary's stable Suspense scope to descendant hooks. */
+export function GlyphProvider({ children, library }: GlyphProviderProps): ReactElement {
+  assertFontLibrary(library, 'GlyphProvider');
+  const scope = fontScope(library);
+  return createElement(FontScopeContext.Provider, { value: scope }, children);
+}
+
+/** Bind a hook and module-scope preload/clear lifecycle to one explicit FontLibrary. */
+export function createUseFont(library: FontLibrary): BoundUseFont {
+  assertFontLibrary(library, 'createUseFont');
+  const scope = fontScope(library);
+  const bound = ((request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>) =>
+    useScopedFont(scope, request)) as BoundUseFont;
+  bound.preload = (request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>) =>
+    scope.load(request).then(() => undefined);
+  bound.clear = (request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>) => {
+    scope.clear(request);
+  };
+  return bound;
+}
+
+function fontScope(library: FontLibrary): ReactFontScope {
+  return fontLibraryOwnedResource(library, reactFontScopeResource, () => {
+    const scope = new ReactFontScope(library);
+    return { value: scope, dispose: () => scope.dispose() };
+  });
+}
 
 interface TextComponent {
   <const Selection, Technique extends AnyRasterTechnique = FontSelectionTechnique<Selection>>(
@@ -148,6 +195,7 @@ interface TextComponent {
   <Technique extends AnyRasterTechnique>(input: R3fTextProps<Technique>): ReactElement | null;
 }
 
+/** R3F paragraph component backed by one retained Three text instance. */
 export const Text = forwardRef(function Text<Technique extends AnyRasterTechnique>(
   properties: Omit<R3fTextProps<Technique>, 'ref'>,
   forwardedRef: Ref<ThreeText<Technique>>,
@@ -238,6 +286,7 @@ function TextObject({
   });
 }
 
+/** R3F retained batching boundary for descendant Text components. */
 export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forwardRef(function TextGroup(
   properties: Omit<R3fTextGroupProps, 'ref'>,
   forwardedRef: Ref<ThreeTextGroup>,
@@ -300,18 +349,14 @@ function TextGroupObject({
   );
 }
 
-const useFontImplementation = ((
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): AnyLoadedFontResult => use(preloadFontInternal(request))) as UseFont;
-
-useFontImplementation.preload = preloadFont;
-useFontImplementation.clear = (
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): void => {
-  fontPromises.delete(fontRequestKey(request));
-};
-
-export const useFont: UseFont = useFontImplementation;
+/** Reads a Font through the nearest GlyphProvider Suspense scope. */
+export const useFont = ((
+  request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>,
+): AnyFontResult => {
+  const scope = useContext(FontScopeContext);
+  if (scope === undefined) throw new Error('useFont requires a GlyphProvider or createUseFont(FontLibrary)');
+  return useScopedFont(scope, request);
+}) as UseFont;
 
 interface ObjectStore<Value> {
   readonly subscribe: (listener: () => void) => () => void;
@@ -346,41 +391,155 @@ function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | undefined)
   };
 }
 
-function preloadFont<Technique extends AnyRasterTechnique>(
-  request: LoadedFontRequest<Technique>,
-): Promise<LoadedFont<Technique>>;
-function preloadFont<const Techniques extends LoadedFontTechniques>(
-  request: LoadedFontsRequest<Techniques>,
-): Promise<LoadedFonts<Techniques>>;
-function preloadFont(
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): Promise<AnyLoadedFontResult> {
-  return preloadFontInternal(request);
+class ReactFontScope {
+  readonly #library: FontLibrary;
+  readonly #loader: ThreeFontLoader;
+  readonly #resources = new Map<string, ReactFontResource>();
+  #disposed = false;
+
+  constructor(library: FontLibrary) {
+    this.#library = library;
+    this.#loader = new ThreeFontLoader(undefined, { library });
+  }
+
+  load(request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>): Promise<AnyFontResult> {
+    if (this.#disposed) throw new Error('React font scope has been disposed');
+    const key = fontRequestKey(request);
+    const cached = this.#resources.get(key);
+    if (cached !== undefined) return cached.promise;
+    const loading = 'rasters' in request ? this.#loader.loadFontsAsync(request) : this.#loader.loadAsync(request);
+    const resource: ReactFontResource = { promise: undefined as never, value: undefined };
+    resource.promise = loading.then(
+      (font) => {
+        if (!this.#disposed && this.#resources.get(key) === resource) {
+          resource.value = font;
+          return font;
+        }
+        disposeFontResult(font);
+        throw new DOMException('React font scope was disposed while loading', 'AbortError');
+      },
+      (error: unknown) => {
+        if (this.#resources.get(key) === resource) this.#resources.delete(key);
+        throw error;
+      },
+    );
+    this.#resources.set(key, resource);
+    return resource.promise;
+  }
+
+  clear(request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>): void {
+    if (this.#disposed) throw new Error('React font scope has been disposed');
+    const key = fontRequestKey(request);
+    const resource = this.#resources.get(key);
+    this.#resources.delete(key);
+    releaseReactFontResource(resource);
+    if ('rasters' in request) this.#library.clear(request);
+    else this.#library.clear(request);
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    const resources = [...this.#resources.values()];
+    this.#resources.clear();
+    for (const resource of resources) releaseReactFontResource(resource);
+    this.#loader.dispose();
+  }
 }
 
-function preloadFontInternal(
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): Promise<AnyLoadedFontResult> {
-  const key = fontRequestKey(request);
-  let promise = fontPromises.get(key);
-  if (promise !== undefined) return promise;
-  const loaded = 'rasters' in request ? fontLoader.loadFontsAsync(request) : fontLoader.loadAsync(request);
-  promise = loaded.catch((error: unknown) => {
-    if (fontPromises.get(key) === promise) fontPromises.delete(key);
-    throw error;
-  });
-  fontPromises.set(key, promise);
-  return promise;
+interface ReactFontResource {
+  promise: Promise<AnyFontResult>;
+  value: AnyFontResult | undefined;
 }
 
-function fontRequestKey(
-  request: LoadedFontRequest<AnyRasterTechnique> | LoadedFontsRequest<LoadedFontTechniques>,
-): string {
+function releaseReactFontResource(resource: ReactFontResource | undefined): void {
+  if (resource?.value !== undefined) disposeFontResult(resource.value);
+  else
+    void resource?.promise.then(
+      () => undefined,
+      () => undefined,
+    );
+}
+
+function useScopedFont(
+  scope: ReactFontScope,
+  request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>,
+): AnyFontResult {
+  const retained = use(scope.load(request));
+  const store = useMemo(() => createMountedFontStore(retained), [retained]);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+}
+
+interface MountedFontStore {
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly getSnapshot: () => AnyFontResult;
+}
+
+function createMountedFontStore(source: AnyFontResult): MountedFontStore {
+  let current = source;
+  let mounted: AnyFontResult | undefined;
+  const listeners = new Set<() => void>();
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      if (mounted === undefined) {
+        mounted = cloneFontResult(source);
+        current = mounted;
+        for (const subscriber of listeners) subscriber();
+      }
+      return () => {
+        if (!listeners.delete(listener) || listeners.size !== 0 || mounted === undefined) return;
+        const released = mounted;
+        mounted = undefined;
+        current = source;
+        disposeFontResult(released);
+      };
+    },
+    getSnapshot: () => current,
+  };
+}
+
+function fontRequestKey(request: FontRequest<AnyRasterTechnique> | MultiRasterFontRequest<FontTechniques>): string {
   const rasters = 'rasters' in request ? request.rasters : [request.raster];
   const rasterKeys = rasters.map((raster) => [techniqueKey(raster.technique), raster.options ?? null]);
-  const input =
-    'baked' in request.input ? ['baked', String(request.input.baked)] : ['source', String(request.input.source)];
+  const input = fontInputKey(request.input);
   return JSON.stringify([input, rasterKeys]);
+}
+
+function fontInputKey(input: FontRequest<AnyRasterTechnique>['input']): readonly [string, string | number] {
+  if (typeof input === 'string' || input instanceof URL) return ['location', String(input)];
+  if ('bytes' in input) return ['bytes', inputIdentity(input)];
+  if ('baked' in input && input.baked !== null) {
+    return typeof input.baked === 'object' && !(input.baked instanceof URL)
+      ? ['baked-bytes', inputIdentity(input.baked)]
+      : ['baked', String(input.baked)];
+  }
+  return typeof input.source === 'object' && !(input.source instanceof URL)
+    ? ['source-bytes', inputIdentity(input.source)]
+    : ['source', String(input.source)];
+}
+
+function inputIdentity(value: object): number {
+  let identity = inputIds.get(value);
+  if (identity !== undefined) return identity;
+  identity = nextInputId;
+  nextInputId += 1;
+  inputIds.set(value, identity);
+  return identity;
+}
+
+function cloneFontResult(result: AnyFontResult): AnyFontResult {
+  return 'dispose' in result
+    ? cloneImmutableFont(result)
+    : Object.freeze(result.map((font) => cloneImmutableFont(font)));
+}
+
+function disposeFontResult(result: AnyFontResult): void {
+  if ('dispose' in result) {
+    result.dispose();
+  } else {
+    for (const font of result) font.dispose();
+  }
 }
 
 function techniqueKey(technique: AnyRasterTechnique): number {

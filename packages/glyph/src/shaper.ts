@@ -6,8 +6,14 @@ import { FontRegistry } from './loader.js';
 
 export type TextShaperWasmSource = BufferSource | WebAssembly.Module;
 
+/** @internal Minimal registry contract required by the Wasm shaper. */
+export interface RuntimeShaperFontRegistry {
+  getByHandle(handle: FontHandle): RegisteredFont | undefined;
+  _onFontDispose(listener: (font: RegisteredFont) => void): () => void;
+}
+
 export interface RuntimeShaperOptions {
-  readonly registry?: FontRegistry;
+  readonly registry?: RuntimeShaperFontRegistry;
   readonly wasm?: TextShaperWasmSource;
 }
 
@@ -19,7 +25,7 @@ export interface RuntimeShaperMemoryReport {
 }
 
 export interface RuntimeShaper {
-  readonly registry: FontRegistry;
+  readonly registry: RuntimeShaperFontRegistry;
   registerFont(font: RegisteredFont): void;
   disposeFont(font: RegisteredFont): void;
   memoryReport(): RuntimeShaperMemoryReport;
@@ -96,13 +102,13 @@ export async function createRuntimeShaper(options: RuntimeShaperOptions = {}): P
 }
 
 class RuntimeShaperImpl implements RuntimeShaper {
-  readonly registry: FontRegistry;
+  readonly registry: RuntimeShaperFontRegistry;
   readonly #exports: ShaperExports;
   readonly #registered = new Map<FontHandle, RegisteredFont | undefined>();
   readonly #unsubscribe: () => void;
   #disposed = false;
 
-  constructor(registry: FontRegistry, module: ShaperModule) {
+  constructor(registry: RuntimeShaperFontRegistry, module: ShaperModule) {
     this.registry = registry;
     this.#exports = module.exports;
     this.#unsubscribe = registry._onFontDispose((font) => this.#disposeHandle(font.handle));
@@ -207,7 +213,13 @@ class RuntimeShaperImpl implements RuntimeShaper {
 }
 
 async function fetchDefaultWasm(): Promise<ArrayBuffer> {
-  const response = await fetch(new URL('./text-shaper.wasm', import.meta.url));
+  const url = new URL('./text-shaper.wasm', import.meta.url);
+  if (url.protocol === 'file:' && typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
+    const fileSystem = process.getBuiltinModule('node:fs') as typeof import('node:fs');
+    const bytes = fileSystem.readFileSync(url);
+    return Uint8Array.from(bytes).buffer;
+  }
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`text shaper Wasm request failed with HTTP ${response.status}`);
   }

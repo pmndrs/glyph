@@ -1,4 +1,4 @@
-import { span, txt, type AnyRasterTechnique, type LoadedFont, type TextLiteral } from '@pmndrs/glyph';
+import { span, txt, type AnyRasterTechnique, type Font, type TextLiteral } from '@pmndrs/glyph';
 import { Text } from '@pmndrs/glyph/three';
 
 import type { RasterTechnique } from '../../benchmark/url-state';
@@ -47,8 +47,8 @@ export const RICH_TEXT_SMALL_CAPS_FEATURE = 'smcp';
  * fallback: no Latin fixture can shape Devanagari at all.
  */
 export interface RichTextCompanionFonts {
-  readonly emphasis: LoadedFont<AnyRasterTechnique>;
-  readonly foreign: LoadedFont<AnyRasterTechnique>;
+  readonly emphasis: Font<AnyRasterTechnique>;
+  readonly foreign: Font<AnyRasterTechnique>;
 }
 
 export interface RichTextComposition {

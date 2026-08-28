@@ -4,7 +4,7 @@ import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
-import { compileRasterFont, type CompiledRasterFont } from './raster-plan-program.js';
+import { compileRasterFont, resolveRasterPlanProgram, type CompiledRasterFont } from './raster-plan-program.js';
 import { portableResourceIdentity, type PortableResource } from './portable-resources.js';
 import {
   createRetainedTextEngineSession,
@@ -46,17 +46,23 @@ export interface RawTextEngineSessionOptions {
 /** @internal Compatibility name removed with the raw JavaScript session. */
 export type TextEngineSessionOptions = RawTextEngineSessionOptions;
 
+/** Names the renderer integration that owns a host. */
 export interface TextEngineHostOptions {
   /** Stable diagnostic namespace; never a wire ID or lookup key. */
   readonly integration: string;
 }
 
+/** A counted host-local render-policy installation. */
 export interface HostPolicy {
   readonly [hostPolicyBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
+/** Builds one policy descriptor using the host's collision-checked wire identities. */
+export type HostPolicyFactory = (identities: RenderWireIdentityRegistry) => PolicyDescriptor;
+
+/** A counted host-local binding of one immutable font. */
 export interface HostFontBinding<Technique extends AnyRasterTechnique = AnyRasterTechnique> {
   readonly [hostFontBindingBrand]: true;
   readonly technique: Technique;
@@ -64,24 +70,28 @@ export interface HostFontBinding<Technique extends AnyRasterTechnique = AnyRaste
   dispose(): void;
 }
 
+/** A counted host-local ordered font-stack binding. */
 export interface HostFontStackBinding {
   readonly [hostFontStackBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
+/** A host-local renderer material identity. */
 export interface HostMaterialBinding {
   readonly [hostMaterialBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
+/** A host-local renderer resource identity. */
 export interface HostResourceBinding {
   readonly [hostResourceBindingBrand]: true;
   readonly disposed: boolean;
   dispose(): void;
 }
 
+/** A host-local renderer transform identity. */
 export interface HostTransformBinding {
   readonly [hostTransformBindingBrand]: true;
   readonly disposed: boolean;
@@ -139,6 +149,7 @@ export interface TextEnginePublication {
  * Zero means the status names none: an engine-internal invariant, a capacity watermark, or a
  * session-level conflict attributes nothing.
  */
+/** Request identities used by an integration to map a rejected frame back to authored state. */
 export interface TextEngineFault {
   readonly paragraphId: ParagraphId | 0;
   readonly styleId: StyleId | 0;
@@ -169,33 +180,106 @@ function ownersFor(exports: object): EngineRegistrationOwners {
   return owners;
 }
 
+/** Stable semantic classification of a text-engine status. */
+export type TextEngineStatusCode =
+  | 'invalid-handle'
+  | 'invalid-font'
+  | 'invalid-extents'
+  | 'handle-conflict'
+  | 'font-missing'
+  | 'invalid-request'
+  | 'result-too-large'
+  | 'policy-conflict'
+  | 'policy-missing'
+  | 'session-conflict'
+  | 'session-missing'
+  | 'revision-conflict'
+  | 'font-stack-missing'
+  | 'font-in-use'
+  | 'style-range-invalid'
+  | 'style-splits-cluster'
+  | 'style-nesting-invalid'
+  | 'style-root-invalid'
+  | 'font-metrics-missing'
+  | 'registration-in-use'
+  | 'unknown';
+
+const TEXT_ENGINE_STATUS_CODES: ReadonlyMap<number, TextEngineStatusCode> = new Map<number, TextEngineStatusCode>([
+  [textShaperAbi.status.invalidHandle, 'invalid-handle'],
+  [textShaperAbi.status.invalidFont, 'invalid-font'],
+  [textShaperAbi.status.invalidExtents, 'invalid-extents'],
+  [textShaperAbi.status.handleConflict, 'handle-conflict'],
+  [textShaperAbi.status.fontMissing, 'font-missing'],
+  [textShaperAbi.status.invalidRequest, 'invalid-request'],
+  [textShaperAbi.status.resultTooLarge, 'result-too-large'],
+  [textShaperAbi.status.policyConflict, 'policy-conflict'],
+  [textShaperAbi.status.policyMissing, 'policy-missing'],
+  [textShaperAbi.status.sessionConflict, 'session-conflict'],
+  [textShaperAbi.status.sessionMissing, 'session-missing'],
+  [textShaperAbi.status.revisionConflict, 'revision-conflict'],
+  [textShaperAbi.status.fontStackMissing, 'font-stack-missing'],
+  [textShaperAbi.status.fontInUse, 'font-in-use'],
+  [textShaperAbi.status.styleRangeInvalid, 'style-range-invalid'],
+  [textShaperAbi.status.styleSplitsCluster, 'style-splits-cluster'],
+  [textShaperAbi.status.styleNestingInvalid, 'style-nesting-invalid'],
+  [textShaperAbi.status.styleRootInvalid, 'style-root-invalid'],
+  [textShaperAbi.status.fontMetricsMissing, 'font-metrics-missing'],
+  [textShaperAbi.status.registrationInUse, 'registration-in-use'],
+]);
+
+/** A synchronous engine call rejected with a stable code and its raw diagnostic status. */
 export class TextEngineStatusError extends Error {
+  readonly code: TextEngineStatusCode;
   readonly status: number;
+
+  constructor(operation: string, status: number) {
+    super(`${operation} failed with text-engine status ${status}`);
+    this.name = 'TextEngineStatusError';
+    this.code = textEngineStatusCode(status);
+    this.status = status;
+  }
+}
+
+function textEngineStatusCode(status: number): TextEngineStatusCode {
+  return TEXT_ENGINE_STATUS_CODES.get(status) ?? 'unknown';
+}
+
+/** Stable diagnostic details associated with a {@link TextEngineStatusError}. */
+export interface TextEngineStatusDetails {
   readonly requiredRequestCapacity: number;
   readonly requiredResultCapacity: number;
   readonly fault: TextEngineFault;
+}
 
-  constructor(
-    operation: string,
-    status: number,
-    requiredRequestCapacity = 0,
-    requiredResultCapacity = 0,
-    fault: TextEngineFault = NO_FAULT,
-  ) {
-    super(
-      `${operation} failed with text-engine status ${status}` +
-        (fault.paragraphId === 0 ? '' : ` (paragraph ${fault.paragraphId}`) +
-        (fault.paragraphId === 0 ? '' : fault.styleId === 0 ? ')' : `, style ${fault.styleId})`) +
-        (requiredRequestCapacity === 0 && requiredResultCapacity === 0
-          ? ''
-          : ` (required request=${requiredRequestCapacity}, result=${requiredResultCapacity})`),
-    );
-    this.name = 'TextEngineStatusError';
-    this.status = status;
-    this.requiredRequestCapacity = requiredRequestCapacity;
-    this.requiredResultCapacity = requiredResultCapacity;
-    this.fault = fault;
-  }
+const textEngineStatusDetails = new WeakMap<TextEngineStatusError, TextEngineStatusDetails>();
+
+/** Reads semantic diagnostic details retained on an engine status error. */
+export function textEngineStatusErrorDetails(error: TextEngineStatusError): TextEngineStatusDetails {
+  return (
+    textEngineStatusDetails.get(error) ?? {
+      requiredRequestCapacity: 0,
+      requiredResultCapacity: 0,
+      fault: NO_FAULT,
+    }
+  );
+}
+
+function engineStatusError(
+  operation: string,
+  status: number,
+  requiredRequestCapacity = 0,
+  requiredResultCapacity = 0,
+  fault: TextEngineFault = NO_FAULT,
+): TextEngineStatusError {
+  const error = new TextEngineStatusError(operation, status);
+  error.message +=
+    (fault.paragraphId === 0 ? '' : ` (paragraph ${fault.paragraphId}`) +
+    (fault.paragraphId === 0 ? '' : fault.styleId === 0 ? ')' : `, style ${fault.styleId})`) +
+    (requiredRequestCapacity === 0 && requiredResultCapacity === 0
+      ? ''
+      : ` (required request=${requiredRequestCapacity}, result=${requiredResultCapacity})`);
+  textEngineStatusDetails.set(error, { requiredRequestCapacity, requiredResultCapacity, fault });
+  return error;
 }
 
 function headerFault(header: DataView): TextEngineFault {
@@ -220,13 +304,20 @@ interface RetainedHostFontBinding {
   readonly technique: AnyRasterTechnique;
   readonly handle: FontBindingHandle;
   readonly runtime: HostRuntimeFontBinding;
-  readonly compiled: CompiledRasterFont;
-  readonly payloads: ReadonlyMap<
-    number,
-    Readonly<{ identity: object; techniqueId: string; resourceName: string; payload: PortableResource }>
-  >;
+  readonly payloads: ReadonlyMap<number, RetainedHostPortablePayload>;
   leases: number;
   disposed: boolean;
+}
+
+interface RetainedHostPortablePayload {
+  readonly referenceId: number;
+  readonly identity: object;
+  readonly techniqueId: string;
+  readonly resourceName: string;
+  readonly payload: PortableResource;
+  group: readonly RetainedHostPortablePayload[] | undefined;
+  owners: number;
+  leases: number;
 }
 
 interface RetainedHostFontStackBinding {
@@ -245,6 +336,7 @@ interface RetainedHostOpaqueBinding {
   disposed: boolean;
 }
 
+/** Counted lease over one host-local renderer binding. */
 export interface HostOpaqueBindingLease {
   readonly handle: number;
   readonly binding: HostMaterialBinding | HostResourceBinding | HostTransformBinding;
@@ -258,7 +350,8 @@ const hostOpaqueBindings = new WeakMap<object, Readonly<{ host: TextEngineHost; 
 /** Lifecycle owner for retained policies, font bindings, font stacks, and sessions in one RuntimeShaper. */
 export class TextEngineHost {
   readonly integration: string;
-  readonly wireIdentities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry();
+  readonly #identityNamespace: string;
+  readonly #wireIdentities = new RenderWireIdentityRegistry();
   readonly #ids = new GlyphIdScope();
   readonly #exports;
   readonly #owners: EngineRegistrationOwners;
@@ -272,6 +365,7 @@ export class TextEngineHost {
   readonly #liveRetainedFontBindings = new Set<RetainedHostFontBinding>();
   readonly #retainedFontStacks = new WeakMap<object, RetainedHostFontStackBinding>();
   readonly #liveRetainedFontStacks = new Set<RetainedHostFontStackBinding>();
+  readonly #portablePayloads = new Map<number, RetainedHostPortablePayload>();
   readonly #opaqueBindings = new Set<RetainedHostOpaqueBinding>();
   readonly #onDispose: (() => void) | undefined;
   readonly #bindRuntimeFont: HostRuntimeFontBinder | undefined;
@@ -283,6 +377,7 @@ export class TextEngineHost {
   #nextMaterialOrdinal = 1;
   #nextResourceOrdinal = 1;
   #nextTransformOrdinal = 1;
+  readonly #freeTransformOrdinals: number[] = [];
   #nextRetainedSessionOrdinal = 1;
   #disposed = false;
 
@@ -294,6 +389,7 @@ export class TextEngineHost {
     bindRuntimeFont?: HostRuntimeFontBinder,
     assertRuntimeAvailable?: () => void,
     enterRuntimeBorrow?: () => () => void,
+    identityNamespace?: string,
   ) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new TypeError('text engine host options need an object');
@@ -302,6 +398,7 @@ export class TextEngineHost {
       throw new TypeError('text engine host integration must be a nonempty string');
     }
     this.integration = options.integration;
+    this.#identityNamespace = identityNamespace ?? options.integration;
     this.#exports = runtimeShaperEngineExports(shaper);
     this.#owners = ownersFor(this.#exports);
     this.#onDispose = onDispose;
@@ -310,18 +407,20 @@ export class TextEngineHost {
     this.#enterRuntimeBorrow = enterRuntimeBorrow;
   }
 
-  /** Derive one branded ID retained until its registration or this host is disposed. */
+  /** @internal Derive one branded ID retained until its registration or this host is disposed. */
   readonly id = <const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> => {
     this.#assertActive();
     return this.#ids.id(kind, name);
   };
 
-  installPolicy(descriptor: PolicyDescriptor): HostPolicy {
+  /** Installs one renderer policy for this host and returns its counted lease. */
+  installPolicy(factory: HostPolicyFactory): HostPolicy {
     this.#assertActive();
-    const snapshot = snapshotPolicyDescriptor(descriptor);
+    if (typeof factory !== 'function') throw new TypeError('text engine policy must be a factory');
+    const snapshot = snapshotPolicyDescriptor(factory(this.#wireIdentities));
     const bytes = compileRenderPolicy(snapshot);
     const ordinal = this.#nextPolicyOrdinal;
-    const handle = this.id('policy', `${this.integration}/policy/${ordinal}`);
+    const handle = this.id('policy', `${this.#identityNamespace}/policy/${ordinal}`);
     this.registerPolicy(handle, bytes);
     this.#nextPolicyOrdinal = ordinal + 1;
     const state: InstalledHostPolicy = {
@@ -337,6 +436,7 @@ export class TextEngineHost {
     return policy;
   }
 
+  /** Binds one immutable font's shaping and portable raster resources to this host. */
   bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): HostFontBinding<Technique> {
     this.#assertActive();
     if (this.#bindRuntimeFont === undefined) {
@@ -344,7 +444,7 @@ export class TextEngineHost {
     }
     const runtime = this.#bindRuntimeFont(font);
     try {
-      const techniqueId = this.wireIdentities.techniqueId(font.technique);
+      const techniqueId = this.#wireIdentities.techniqueId(font.technique);
       if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
         throw new TypeError(`text engine host has no installed policy for "${font.technique.id}"`);
       }
@@ -355,41 +455,25 @@ export class TextEngineHost {
         existing.leases += 1;
         return new HostFontBindingImpl(this, existing) as unknown as HostFontBinding<Technique>;
       }
-      const compiled = compileRasterFont(font, this.wireIdentities);
+      const compiled = compileRasterFont(font, this.#wireIdentities);
       if (compiled === undefined) {
         throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
       }
       const ordinal = this.#nextFontBindingOrdinal;
-      const handle = this.id('font-binding', `${this.integration}/font/${ordinal}`);
-      const resourceNames = new Map<string, string>();
-      for (const [name, keys] of compiled.declaredResources) {
-        for (const key of keys) resourceNames.set(key, name);
+      const handle = this.id('font-binding', `${this.#identityNamespace}/font/${ordinal}`);
+      const payloads = this.#retainPortablePayloads(font.technique, compiled);
+      try {
+        this.registerFontBinding(handle, runtime.handle, compiled.binding);
+      } catch (error) {
+        this.#releasePortablePayloadOwners(payloads);
+        throw error;
       }
-      const payloads = new Map<
-        number,
-        Readonly<{ identity: object; techniqueId: string; resourceName: string; payload: PortableResource }>
-      >();
-      for (const [key, payload] of compiled.resources) {
-        const resourceName = resourceNames.get(key);
-        if (resourceName === undefined) throw new Error(`compiled font retained an unnamed resource "${key}"`);
-        payloads.set(
-          this.wireIdentities.resourceId(key),
-          Object.freeze({
-            identity: portableResourceIdentity(payload),
-            techniqueId: font.technique.id,
-            resourceName,
-            payload,
-          }),
-        );
-      }
-      this.registerFontBinding(handle, runtime.handle, compiled.binding);
       this.#nextFontBindingOrdinal = ordinal + 1;
       const state: RetainedHostFontBinding = {
         identity: runtime.identity,
         technique: font.technique,
         handle,
         runtime,
-        compiled,
         payloads,
         leases: 1,
         disposed: false,
@@ -403,13 +487,14 @@ export class TextEngineHost {
     }
   }
 
+  /** Binds an ordered immutable font stack to this host. */
   bindFontStack<Technique extends AnyRasterTechnique>(
     stack: FontStack<Technique, Font<Technique>>,
   ): HostFontStackBinding {
     this.#assertActive();
     const fonts = immutableFontStackFonts(stack as FontStack<AnyRasterTechnique, Font<AnyRasterTechnique>>);
     for (const font of fonts) {
-      const techniqueId = this.wireIdentities.techniqueId(font.technique);
+      const techniqueId = this.#wireIdentities.techniqueId(font.technique);
       if (![...this.#installedPolicies].some((policy) => !policy.disposed && policy.techniqueIds.has(techniqueId))) {
         throw new TypeError(`text engine host has no installed policy for "${font.technique.id}"`);
       }
@@ -427,7 +512,7 @@ export class TextEngineHost {
         bindings.push(this.bindFont(font) as unknown as HostFontBindingImpl);
       }
       const ordinal = this.#nextFontStackOrdinal;
-      const handle = this.id('font-stack', `${this.integration}/font-stack/${ordinal}`);
+      const handle = this.id('font-stack', `${this.#identityNamespace}/font-stack/${ordinal}`);
       this.registerFontStack(
         handle,
         bindings.map((binding) => binding._state().handle),
@@ -500,14 +585,17 @@ export class TextEngineHost {
     });
   }
 
+  /** Allocates a host-local identity for renderer-owned material state. */
   createMaterialBinding(): HostMaterialBinding {
     return this.#createOpaqueBinding('material') as HostMaterialBinding;
   }
 
+  /** Allocates a host-local identity for renderer-owned resource state. */
   createResourceBinding(): HostResourceBinding {
     return this.#createOpaqueBinding('resource') as HostResourceBinding;
   }
 
+  /** Allocates a host-local identity for renderer-owned transform state. */
   createTransformBinding(): HostTransformBinding {
     return this.#createOpaqueBinding('transform') as HostTransformBinding;
   }
@@ -546,35 +634,42 @@ export class TextEngineHost {
     techniqueId: string;
     resourceName: string;
     payload: PortableResource;
+    resources: readonly Readonly<{
+      referenceId: number;
+      identity: object;
+      resourceName: string;
+      payload: PortableResource;
+    }>[];
     dispose(): void;
   }> {
     if (this.#disposed) throw new Error('text engine host is disposed');
     uint32Handle(referenceId, 'portable payload reference');
-    let owner: RetainedHostFontBinding | undefined;
-    let resolved:
-      | Readonly<{ identity: object; techniqueId: string; resourceName: string; payload: PortableResource }>
-      | undefined;
-    for (const binding of this.#liveRetainedFontBindings) {
-      if (binding.disposed) continue;
-      const candidate = binding.payloads.get(referenceId);
-      if (candidate === undefined) continue;
-      if (resolved !== undefined && candidate.payload !== resolved.payload) {
-        throw new TypeError(`portable payload reference ${referenceId} has more than one live owner`);
-      }
-      owner = binding;
-      resolved = candidate;
-    }
-    if (owner === undefined || resolved === undefined) {
+    const resolved = this.#portablePayloads.get(referenceId);
+    if (resolved === undefined || resolved.owners === 0 || resolved.group === undefined) {
       throw new Error(`text render plan references unknown portable payload ${referenceId}`);
     }
-    owner.leases += 1;
+    const resources = resolved.group;
+    for (const resource of resources) resource.leases += 1;
     let disposed = false;
     return Object.freeze({
-      ...resolved,
+      identity: resolved.identity,
+      techniqueId: resolved.techniqueId,
+      resourceName: resolved.resourceName,
+      payload: resolved.payload,
+      resources: Object.freeze(
+        resources.map((resource) =>
+          Object.freeze({
+            referenceId: resource.referenceId,
+            identity: resource.identity,
+            resourceName: resource.resourceName,
+            payload: resource.payload,
+          }),
+        ),
+      ),
       dispose: () => {
         if (disposed) return;
         disposed = true;
-        this._disposeRetainedFontBinding(owner);
+        for (const resource of resources) this.#releasePortablePayloadLease(resource);
       },
     });
   }
@@ -614,6 +709,7 @@ export class TextEngineHost {
     this.#disposeRetainedFontStack(state);
   }
 
+  /** @internal */
   registerFontBinding(bindingHandle: FontBindingHandle, shapingFontHandle: FontHandle, bytes: Uint8Array): void {
     this.#assertActive();
     bindingHandle = assertGlyphId(bindingHandle, 'font-binding', 'font binding handle');
@@ -636,6 +732,7 @@ export class TextEngineHost {
     }
   }
 
+  /** @internal */
   disposeFontBinding(bindingHandle: FontBindingHandle): void {
     this.#assertActive();
     assertGlyphId(bindingHandle, 'font-binding', 'font binding handle');
@@ -653,6 +750,7 @@ export class TextEngineHost {
     this.#ids.release(bindingHandle, 'font-binding');
   }
 
+  /** @internal */
   registerFontStack(handle: FontStackHandle, fontHandles: readonly FontBindingHandle[]): void {
     this.#assertActive();
     handle = assertGlyphId(handle, 'font-stack', 'font stack handle');
@@ -681,6 +779,7 @@ export class TextEngineHost {
     }
   }
 
+  /** @internal */
   disposeFontStack(handle: FontStackHandle): void {
     this.#assertActive();
     assertGlyphId(handle, 'font-stack', 'font stack handle');
@@ -691,6 +790,7 @@ export class TextEngineHost {
     this.#ids.release(handle, 'font-stack');
   }
 
+  /** @internal */
   registerPolicy(handle: PolicyHandle, bytes: Uint8Array): void {
     this.#assertActive();
     handle = assertGlyphId(handle, 'policy', 'policy handle');
@@ -709,6 +809,7 @@ export class TextEngineHost {
     }
   }
 
+  /** @internal */
   disposePolicy(handle: PolicyHandle): void {
     this.#assertActive();
     handle = assertGlyphId(handle, 'policy', 'policy handle');
@@ -719,6 +820,7 @@ export class TextEngineHost {
     this.#ids.release(handle, 'policy');
   }
 
+  /** Creates a retained text session whose delivery mode is selected by its plan target. */
   createSession<Target extends TextPlanTarget>(options: RetainedTextEngineSessionOptions<Target>): SessionFor<Target>;
   /** @internal Raw compatibility overload removed with caller-authored wire updates. */
   createSession(options: RawTextEngineSessionOptions): TextEngineSession;
@@ -784,7 +886,7 @@ export class TextEngineHost {
       throw new RangeError('retained text session handles are exhausted');
     }
     this.#nextRetainedSessionOrdinal = ordinal + 1;
-    return this.id('session', `${this.integration}/retained-session/${ordinal}`);
+    return this.id('session', `${this.#identityNamespace}/retained-session/${ordinal}`);
   }
 
   /** @internal */
@@ -798,6 +900,7 @@ export class TextEngineHost {
     this.#assertActive();
   }
 
+  /** Disposes this host and every policy, binding, and session it still owns. */
   dispose(): void {
     if (this.#disposed) return;
     this.#assertRuntimeAvailable?.();
@@ -831,9 +934,10 @@ export class TextEngineHost {
       this.#sessions.size !== 0 ||
       this.#fontStacks.size !== 0 ||
       this.#fontBindings.size !== 0 ||
-      this.#policies.size !== 0
+      this.#policies.size !== 0 ||
+      this.#portablePayloads.size !== 0
     ) {
-      failure ??= new Error('text engine host disposal left live registrations');
+      failure ??= new Error('text engine host disposal left live registrations or payload leases');
     } else {
       try {
         this.#ids.dispose();
@@ -869,7 +973,103 @@ export class TextEngineHost {
     state.disposed = true;
     this.#retainedFontBindings.delete(state.identity);
     this.#liveRetainedFontBindings.delete(state);
+    this.#releasePortablePayloadOwners(state.payloads);
     state.runtime.dispose();
+  }
+
+  #retainPortablePayloads(
+    technique: AnyRasterTechnique,
+    compiled: CompiledRasterFont,
+  ): ReadonlyMap<number, RetainedHostPortablePayload> {
+    const resourceNames = new Map<string, string>();
+    for (const [name, keys] of compiled.declaredResources) {
+      for (const key of keys) resourceNames.set(key, name);
+    }
+    const payloads = new Map<number, RetainedHostPortablePayload>();
+    try {
+      for (const [key, payload] of compiled.resources) {
+        const resourceName = resourceNames.get(key);
+        if (resourceName === undefined) throw new Error(`compiled font retained an unnamed resource "${key}"`);
+        const referenceId = this.#wireIdentities.resourceId(key);
+        let retained = this.#portablePayloads.get(referenceId);
+        if (retained === undefined) {
+          retained = {
+            referenceId,
+            identity: portableResourceIdentity(payload),
+            techniqueId: technique.id,
+            resourceName,
+            payload,
+            group: undefined,
+            owners: 0,
+            leases: 0,
+          };
+          this.#portablePayloads.set(referenceId, retained);
+        } else if (
+          retained.techniqueId !== technique.id ||
+          retained.resourceName !== resourceName ||
+          !samePortableResource(retained.payload, payload)
+        ) {
+          throw new TypeError(`portable payload reference ${referenceId} resolves to different content`);
+        }
+        retained.owners += 1;
+        payloads.set(referenceId, retained);
+      }
+      this.#bindPortablePayloadGroups(technique, compiled, payloads);
+      return payloads;
+    } catch (error) {
+      this.#releasePortablePayloadOwners(payloads);
+      throw error;
+    }
+  }
+
+  #bindPortablePayloadGroups(
+    technique: AnyRasterTechnique,
+    compiled: CompiledRasterFont,
+    payloads: ReadonlyMap<number, RetainedHostPortablePayload>,
+  ): void {
+    const program = resolveRasterPlanProgram(technique.id);
+    if (program === undefined) throw new Error(`portable plan program "${technique.id}" is no longer registered`);
+    const selectedName = program.schema.render.resource;
+    if (selectedName === undefined) throw new Error(`portable plan program "${technique.id}" has no render resource`);
+    const companions: RetainedHostPortablePayload[] = [];
+    for (const [name, keys] of compiled.declaredResources) {
+      if (name === selectedName || program.schema.resources[name]?.cardinality === 'many') continue;
+      if (keys.length !== 1) throw new Error(`singleton resource "${name}" does not have exactly one payload`);
+      const companion = payloads.get(this.#wireIdentities.resourceId(keys[0]!));
+      if (companion === undefined) throw new Error(`compiled font does not own companion resource "${name}"`);
+      companions.push(companion);
+    }
+    for (const key of compiled.declaredResources.get(selectedName) ?? []) {
+      const selected = payloads.get(this.#wireIdentities.resourceId(key));
+      if (selected === undefined) throw new Error(`compiled font does not own selected resource "${key}"`);
+      const group = Object.freeze([selected, ...companions]);
+      if (selected.group !== undefined && !samePortablePayloadGroup(selected.group, group)) {
+        throw new TypeError(
+          `portable payload reference ${selected.referenceId} resolves to different companion resources`,
+        );
+      }
+      selected.group ??= group;
+    }
+  }
+
+  #releasePortablePayloadOwners(payloads: ReadonlyMap<number, RetainedHostPortablePayload>): void {
+    for (const payload of payloads.values()) {
+      if (payload.owners <= 0) throw new Error('portable payload owner underflow');
+      payload.owners -= 1;
+      this.#deletePortablePayloadIfUnused(payload);
+    }
+  }
+
+  #releasePortablePayloadLease(payload: RetainedHostPortablePayload): void {
+    if (payload.leases <= 0) throw new Error('portable payload lease underflow');
+    payload.leases -= 1;
+    this.#deletePortablePayloadIfUnused(payload);
+  }
+
+  #deletePortablePayloadIfUnused(payload: RetainedHostPortablePayload): void {
+    if (payload.owners === 0 && payload.leases === 0 && this.#portablePayloads.get(payload.referenceId) === payload) {
+      this.#portablePayloads.delete(payload.referenceId);
+    }
   }
 
   #disposeInstalledPolicy(state: InstalledHostPolicy): void {
@@ -882,14 +1082,16 @@ export class TextEngineHost {
 
   #createOpaqueBinding(kind: RetainedHostOpaqueBinding['kind']): HostOpaqueBindingImpl {
     this.#assertActive();
+    const recycledTransformOrdinal = kind === 'transform' ? this.#freeTransformOrdinals.pop() : undefined;
     const ordinal =
-      kind === 'material'
+      recycledTransformOrdinal ??
+      (kind === 'material'
         ? this.#nextMaterialOrdinal
         : kind === 'resource'
           ? this.#nextResourceOrdinal
-          : this.#nextTransformOrdinal;
-    const next = nextHostOrdinal(ordinal, `${kind} binding`);
-    const handle = kind === 'transform' ? ordinal : this.id(kind, `${this.integration}/${kind}/${ordinal}`);
+          : this.#nextTransformOrdinal);
+    const next = recycledTransformOrdinal === undefined ? nextHostOrdinal(ordinal, `${kind} binding`) : undefined;
+    const handle = kind === 'transform' ? ordinal : this.id(kind, `${this.#identityNamespace}/${kind}/${ordinal}`);
     const state: RetainedHostOpaqueBinding = {
       kind,
       handle,
@@ -901,9 +1103,9 @@ export class TextEngineHost {
     state.binding = binding;
     this.#opaqueBindings.add(state);
     hostOpaqueBindings.set(binding, { host: this, state });
-    if (kind === 'material') this.#nextMaterialOrdinal = next;
-    else if (kind === 'resource') this.#nextResourceOrdinal = next;
-    else this.#nextTransformOrdinal = next;
+    if (kind === 'material') this.#nextMaterialOrdinal = next!;
+    else if (kind === 'resource') this.#nextResourceOrdinal = next!;
+    else if (next !== undefined) this.#nextTransformOrdinal = next;
     return binding;
   }
 
@@ -914,6 +1116,7 @@ export class TextEngineHost {
     if (state.leases !== 0) return;
     state.disposed = true;
     this.#opaqueBindings.delete(state);
+    if (state.kind === 'transform') this.#freeTransformOrdinals.push(state.handle);
   }
 
   #forceDisposeOpaqueBinding(state: RetainedHostOpaqueBinding): void {
@@ -971,8 +1174,7 @@ export class TextEngineHost {
     }
     const length = uint32(bytes.byteLength, 'registration byte length');
     const pointer = this.#exports.allocate(length);
-    if (pointer === 0)
-      throw new TextEngineStatusError('allocate registration bytes', textShaperAbi.status.resultTooLarge);
+    if (pointer === 0) throw engineStatusError('allocate registration bytes', textShaperAbi.status.resultTooLarge);
     try {
       new Uint8Array(this.#exports.memory.buffer, pointer, length).set(bytes);
       call(pointer, length);
@@ -985,6 +1187,67 @@ export class TextEngineHost {
     if (this.#disposed) throw new Error('text engine host is disposed');
     this.#assertRuntimeAvailable?.();
   }
+}
+
+function samePortablePayloadGroup(
+  left: readonly RetainedHostPortablePayload[],
+  right: readonly RetainedHostPortablePayload[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((resource, index) => right[index] === resource);
+}
+
+function samePortableResource(left: PortableResource, right: PortableResource): boolean {
+  if (left === right) return true;
+  if (left.kind !== right.kind) return false;
+  if (left.kind === 'group' && right.kind === 'group') {
+    const leftNames = Object.keys(left.members).sort();
+    const rightNames = Object.keys(right.members).sort();
+    return (
+      leftNames.length === rightNames.length &&
+      leftNames.every((name, index) => {
+        const leftMember = left.members[name];
+        const rightMember = right.members[rightNames[index]!];
+        return (
+          name === rightNames[index] &&
+          leftMember !== undefined &&
+          rightMember !== undefined &&
+          samePortableResource(leftMember, rightMember)
+        );
+      })
+    );
+  }
+  if (left.kind === 'group' || right.kind === 'group') return false;
+  if (!sameBytes(left.bytes, right.bytes)) return false;
+  if (left.kind === 'buffer' && right.kind === 'buffer') return left.stride === right.stride;
+  if (left.kind === 'texture' && right.kind === 'texture') {
+    return left.format === right.format && left.width === right.width && left.height === right.height;
+  }
+  if (left.kind === 'texture-array' && right.kind === 'texture-array') {
+    return (
+      left.format === right.format &&
+      left.width === right.width &&
+      left.height === right.height &&
+      left.layers === right.layers
+    );
+  }
+  if (left.kind !== 'geometry' || right.kind !== 'geometry') return false;
+  return (
+    left.topology === right.topology &&
+    JSON.stringify(left.views) === JSON.stringify(right.views) &&
+    JSON.stringify(left.accessors) === JSON.stringify(right.accessors) &&
+    JSON.stringify(left.attributes) === JSON.stringify(right.attributes) &&
+    JSON.stringify(left.indices) === JSON.stringify(right.indices) &&
+    JSON.stringify(left.drawRange) === JSON.stringify(right.drawRange)
+  );
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }
 
 class HostPolicyImpl implements HostPolicy {
@@ -1200,6 +1463,11 @@ export class TextEngineSession {
     this.#textCapacity = Math.max(this.#textCapacity, textCapacity);
   }
 
+  /** @internal Reserve one paragraph's retained text scratch without changing transport capacities. */
+  _reserveText(textCapacity: number): void {
+    this.reserve(this.#requestCapacity, this.#resultCapacity, textCapacity);
+  }
+
   update(request: Uint8Array): TextEnginePublication {
     this.#assertActive();
     if (!(request instanceof Uint8Array) || request.byteLength === 0) {
@@ -1216,13 +1484,12 @@ export class TextEngineSession {
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0)
-        throw new TextEngineStatusError('resolve text request arena', textShaperAbi.status.sessionMissing);
+        throw engineStatusError('resolve text request arena', textShaperAbi.status.sessionMissing);
       const pinnedMemoryBuffer = this.#exports.memory.buffer;
       new Uint8Array(pinnedMemoryBuffer, requestPointer, requestLength).set(request);
       const resultPointer = this.#exports.textUpdate(this.#handle, requestPointer, requestLength);
       const memoryBuffer = this.#exports.memory.buffer;
-      if (resultPointer === 0)
-        throw new TextEngineStatusError('publish text update', textShaperAbi.status.resultTooLarge);
+      if (resultPointer === 0) throw engineStatusError('publish text update', textShaperAbi.status.resultTooLarge);
       const layout = textShaperAbi.layouts.engineResult;
       if (resultPointer + layout.size > memoryBuffer.byteLength) {
         throw new RangeError('text engine returned an out-of-bounds result header');
@@ -1241,7 +1508,7 @@ export class TextEngineSession {
         continue;
       }
       if (status !== textShaperAbi.status.ok) {
-        throw new TextEngineStatusError(
+        throw engineStatusError(
           'publish text update',
           status,
           requiredRequestCapacity,
@@ -1277,12 +1544,11 @@ export class TextEngineSession {
     for (;;) {
       const requestPointer = this.#exports.requestPointer(this.#handle);
       if (requestPointer === 0)
-        throw new TextEngineStatusError('resolve text request arena', textShaperAbi.status.sessionMissing);
+        throw engineStatusError('resolve text request arena', textShaperAbi.status.sessionMissing);
       new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength).set(request);
       const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
       const memoryBuffer = this.#exports.memory.buffer;
-      if (resultPointer === 0)
-        throw new TextEngineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
+      if (resultPointer === 0) throw engineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
       const layout = textShaperAbi.layouts.engineResult;
       if (resultPointer + layout.size > memoryBuffer.byteLength) {
         throw new RangeError('text engine returned an out-of-bounds result header');
@@ -1300,7 +1566,7 @@ export class TextEngineSession {
         continue;
       }
       if (status !== textShaperAbi.status.ok) {
-        throw new TextEngineStatusError(
+        throw engineStatusError(
           'measure paragraph',
           status,
           header.getUint32(layout.requiredRequestCapacity, true),
@@ -1413,7 +1679,7 @@ function checkedTableEnd(offset: number, count: number, stride: number, capacity
 }
 
 function requireStatus(status: number, operation: string): void {
-  if (status !== textShaperAbi.status.ok) throw new TextEngineStatusError(operation, status);
+  if (status !== textShaperAbi.status.ok) throw engineStatusError(operation, status);
 }
 
 function uint32(value: number, label: string): number {

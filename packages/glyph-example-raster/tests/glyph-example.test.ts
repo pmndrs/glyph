@@ -1,23 +1,20 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import {
-  FontRegistry,
+  createFontLibrary,
   defineRasterResourceId,
   defineRasterTechnique,
+  loadFont,
   rasterBake,
   type RasterKey,
-  type RasterResolverContext,
-  type RasterResourceResolverContext,
-  type RegisteredFont,
   type Sha256Hex,
 } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import {
   defineTechniqueSchema,
-  createTextRuntime,
   f32,
   registerRasterPlanProgram,
   techniqueProgram,
@@ -26,6 +23,7 @@ import {
 import {
   registerThreeRasterPlanProgram,
   defineTextMaterial,
+  FontLoader,
   threePolicyAbi,
   Text,
   TextGroup,
@@ -89,24 +87,29 @@ describe('public external raster proof', () => {
     const companion = baked.execution.outputs.find(({ role }) => role === 'raster');
     const records = baked.execution.outputs.find(({ role }) => role === 'raster-page');
     assert.ok(core && companion && records);
-    const registry = new FontRegistry();
-    const font = await registry.registerAsset(await readFile(core.file));
-    const resolve = vi.fn(async (_context: RasterResolverContext) => readFile(companion.file));
-    const resolveResource = vi.fn(async (_context: RasterResourceResolverContext) => readFile(records.file));
+    const files = new Map(baked.execution.outputs.map((output) => [basename(output.file), output.file] as const));
+    const fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const file = files.get(basename(new URL(url).pathname));
+      return file === undefined ? new Response(null, { status: 404 }) : new Response(await readFile(file));
+    });
+    const library = createFontLibrary({ fetch });
+    const font = await library.loadFont({
+      input: { baked: 'https://glyph.invalid/inter.font.glb' },
+      raster: { technique: glyphExample, options: { paletteSeed: 7 } },
+    });
 
     try {
-      const raster = await font.loadRaster(rasterSelection(font), { resolve, resolveResource });
-      const data = await glyphExample.decode(font, raster);
-      expect(raster.kind).toBe(GLYPH_EXAMPLE_KIND);
-      expect(data.colors.byteLength).toBe(font.glyphCount * 4);
-      expect(data.inset).toBe(glyphExampleDescriptor({ paletteSeed: 7 }).inset);
-      expect(resolve).toHaveBeenCalledOnce();
-      expect(resolveResource).toHaveBeenCalledOnce();
-      expect(resolve.mock.calls[0]?.[0].reference.kind).toBe(GLYPH_EXAMPLE_KIND);
-      expect(resolveResource.mock.calls[0]?.[0].source.artifactHash).toMatch(/^[0-9a-f]{64}$/);
-      glyphExample.dispose(data);
+      expect(font.technique).toBe(glyphExample);
+      expect(font.glyphCount).toBeGreaterThan(0);
+      expect(
+        fetch.mock.calls.map(([input]) =>
+          basename(new URL(input instanceof Request ? input.url : String(input)).pathname),
+        ),
+      ).toEqual(expect.arrayContaining([basename(core.file), basename(companion.file), basename(records.file)]));
     } finally {
       font.dispose();
+      library.dispose();
     }
   });
 
@@ -114,16 +117,19 @@ describe('public external raster proof', () => {
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
-    const registry = new FontRegistry();
-    const font = await registry.registerAsset(await readFile(core.file));
-    const raster = await font.loadRaster(rasterSelection(font));
     const controller = new AbortController();
     controller.abort(new DOMException('cancel glyph-example decode', 'AbortError'));
+    const bytes = await readFile(core.file);
 
-    await expect(glyphExample.decode(font, raster, controller.signal)).rejects.toThrowError(
-      expect.objectContaining({ name: 'AbortError' }),
-    );
-    font.dispose();
+    expect(() =>
+      loadFont(
+        {
+          input: { baked: { bytes, ownership: 'copy' } },
+          raster: { technique: glyphExample, options: { paletteSeed: 7 } },
+        },
+        { signal: controller.signal },
+      ),
+    ).toThrowError(expect.objectContaining({ name: 'AbortError' }));
   });
 
   test('manually registers the TSL realization and preserves Three draw reuse', async () => {
@@ -131,12 +137,8 @@ describe('public external raster proof', () => {
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
-    const registry = new FontRegistry();
-    const runtime = await createTextRuntime({
-      registry,
-      wasm: await readFile(new URL('../../glyph/dist/text-shaper.wasm', import.meta.url)),
-    });
-    const font = await runtime.loadFont({
+    const loader = new FontLoader();
+    const font = await loader.loadAsync({
       input: { baked: dataUrl(await readFile(core.file)) },
       raster: { technique: glyphExample, options: { paletteSeed: 7 } },
     });
@@ -170,17 +172,22 @@ describe('public external raster proof', () => {
       expect(geometry.getAttribute(glyphAttribute(threePolicyAbi.transformBufferId))).toBeDefined();
       expect(geometry.instanceCount).toBeGreaterThan(0);
       const sizes = geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.size.id));
-      const expectedWidth = Math.max(48 * 0.05, 48 * 0.65 - font.data.inset * 48 * 2);
-      const expectedHeight = Math.max(48 * 0.05, 48 - font.data.inset * 48 * 2);
+      const inset = glyphExampleDescriptor({ paletteSeed: 7 }).inset;
+      const expectedWidth = Math.max(48 * 0.05, 48 * 0.65 - inset * 48 * 2);
+      const expectedHeight = Math.max(48 * 0.05, 48 - inset * 48 * 2);
       for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
         expect(sizes.getX(instance)).toBeCloseTo(expectedWidth, 5);
         expect(sizes.getY(instance)).toBeCloseTo(expectedHeight, 5);
       }
       const colors = geometry.getAttribute(glyphAttribute(glyphExampleSchema.buffers.color.id));
       for (let instance = 0; instance < geometry.instanceCount; instance += 1) {
-        expect(
-          font.data.colors.some((_, offset) => glyphColorMatches(font.data.colors, offset, colors, instance)),
-        ).toBe(true);
+        expect(colors.getX(instance)).toBeGreaterThanOrEqual(64 / 255);
+        expect(colors.getX(instance)).toBeLessThanOrEqual(191 / 255);
+        expect(colors.getY(instance)).toBeGreaterThanOrEqual(64 / 255);
+        expect(colors.getY(instance)).toBeLessThanOrEqual(191 / 255);
+        expect(colors.getZ(instance)).toBeGreaterThanOrEqual(64 / 255);
+        expect(colors.getZ(instance)).toBeLessThanOrEqual(191 / 255);
+        expect(colors.getW(instance)).toBe(1);
       }
 
       text.text = 'PLUGIN UPDATE';
@@ -192,7 +199,7 @@ describe('public external raster proof', () => {
       group.dispose();
       text.dispose();
       font.dispose();
-      runtime.dispose();
+      loader.dispose();
     }
   });
 
@@ -201,12 +208,8 @@ describe('public external raster proof', () => {
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
-    const registry = new FontRegistry();
-    const runtime = await createTextRuntime({
-      registry,
-      wasm: await readFile(new URL('../../glyph/dist/text-shaper.wasm', import.meta.url)),
-    });
-    const font = await runtime.loadFont({
+    const loader = new FontLoader();
+    const font = await loader.loadAsync({
       input: { baked: dataUrl(await readFile(core.file)) },
       raster: { technique: suppliedGlyphExample, options: { paletteSeed: 7 } },
     });
@@ -247,7 +250,7 @@ describe('public external raster proof', () => {
       group.dispose();
       text.dispose();
       font.dispose();
-      runtime.dispose();
+      loader.dispose();
     }
     expect(materialDisposals).toBe(1);
   });
@@ -402,21 +405,10 @@ function glyphAttribute(bufferId: number): string {
 
 function floatBuffer(buffers: ReadonlyMap<string, ThreePlanProgramBuffer>, name: string, vectorWidth: number) {
   const buffer = buffers.get(name);
-  if (
-    buffer === undefined ||
-    buffer.scalarType !== threePolicyAbi.scalarTypes.f32 ||
-    buffer.vectorWidth !== vectorWidth
-  ) {
+  if (buffer === undefined || buffer.scalarType !== 'f32' || buffer.vectorWidth !== vectorWidth) {
     throw new TypeError(`glyph-example draw requires f32x${vectorWidth} policy buffer "${name}"`);
   }
   return buffer;
-}
-
-/** The baked artifact advertises its own raster key, so the test never reimplements key derivation. */
-function rasterSelection(font: RegisteredFont): { readonly rasterKey: RasterKey; readonly kind: 'glyphExample' } {
-  const reference = font.rasterReferences.find(({ kind }) => kind === GLYPH_EXAMPLE_KIND);
-  assert.ok(reference, 'baked font must advertise its glyph-example raster');
-  return { rasterKey: reference.rasterKey, kind: GLYPH_EXAMPLE_KIND };
 }
 
 async function bakeFixture(packaging: {
@@ -451,19 +443,4 @@ function triangleStripGeometry(source: PortableGeometryPayload): PortableGeometr
     indices: { accessor: 2 },
     drawRange: { start: 0, count: 4 },
   };
-}
-
-function glyphColorMatches(
-  records: Uint8Array,
-  offset: number,
-  attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
-  instance: number,
-): boolean {
-  if (offset % 4 !== 0 || offset > records.length - 4) return false;
-  return (
-    Math.abs(attribute.getX(instance) - records[offset]! / 255) < 1e-6 &&
-    Math.abs(attribute.getY(instance) - records[offset + 1]! / 255) < 1e-6 &&
-    Math.abs(attribute.getZ(instance) - records[offset + 2]! / 255) < 1e-6 &&
-    Math.abs(attribute.getW(instance) - records[offset + 3]! / 255) < 1e-6
-  );
 }

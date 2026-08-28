@@ -10,32 +10,30 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 
-import { FontRegistry, glyphFlags } from '@pmndrs/glyph';
-import { createTextRuntime } from '@pmndrs/glyph/core';
+import { glyphFlags } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 
-let runtime;
+let loader;
 let loaded;
 
 async function loadFont() {
   if (loaded !== undefined) return loaded;
-  runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  loaded = await runtime.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
+  loader = new FontLoader();
+  loaded = await loader.loadAsync({
+    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
     raster: { technique: bitmap, options: { strikes: [16, 32] } },
   });
   return loaded;
 }
 
 after(() => {
-  runtime?.dispose();
-  runtime = undefined;
+  loaded?.dispose();
+  loader?.dispose();
+  loader = undefined;
   loaded = undefined;
 });
 

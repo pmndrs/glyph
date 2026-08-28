@@ -7,7 +7,7 @@ import {
 } from '../layout.js';
 import type { ParagraphContentBox, ParagraphStyle } from '../text-properties.js';
 import { createExactFrameBufferPool, type ExactFrameBufferPool } from '../internal/frame-transfer-pool.js';
-import { compileEngineGeometry, engineStyleId, engineStyleValue } from '../engine-encoding.js';
+import { compileEngineGeometry, engineStyleId, engineStyleValue, minimalTextMutation } from '../engine-encoding.js';
 import {
   compileValidatedTextEngineFrameUpdate,
   MAX_TEXT_ENGINE_OUTPUT_BYTES,
@@ -15,6 +15,7 @@ import {
   type TextEngineExclusion,
   type TextEngineFrameLimits,
   type TextEngineInlineObject,
+  type TextEngineParagraphMutation,
   type TextEngineRegion,
   type TextEngineStyleMutation,
   validateTextEngineFrameRecords,
@@ -30,7 +31,12 @@ import type {
   TextEnginePublication,
   TextEngineSession,
 } from './host.js';
-import { TextEngineRenderPlanView, type RenderPlanTable, readTextEngineResource } from './plan-view.js';
+import {
+  TextEngineRenderPlanView,
+  readTextEngineResource,
+  type RenderPlanTable,
+  type RenderPlanTransformId,
+} from './plan-view.js';
 import { readTextEngineLayouts, readTextEngineMeasurements } from './layout-query-view.js';
 import type { PortableResource } from './portable-resources.js';
 import {
@@ -45,15 +51,18 @@ const MAX_U32 = 0xffff_ffff;
 const claimedTargets = new WeakSet<object>();
 
 declare const planOriginBrand: unique symbol;
+/** Unforgeable identity of the session that produced a plan candidate. */
 export interface PlanOrigin {
   readonly [planOriginBrand]: true;
 }
 
 declare const payloadIdentityBrand: unique symbol;
+/** Unforgeable identity of one retained portable payload. */
 export interface PortablePayloadIdentity {
   readonly [payloadIdentityBrand]: true;
 }
 
+/** A table carried by every renderer-neutral plan publication. */
 export type RenderPlanTableName =
   | 'resources'
   | 'buffers'
@@ -63,6 +72,7 @@ export type RenderPlanTableName =
   | 'retirements'
   | 'diagnostics';
 
+/** Bounds-checked scalar and byte access over one validated render plan. */
 export interface TextEngineRenderPlanReader {
   table(name: RenderPlanTableName): RenderPlanTable;
   record(table: RenderPlanTable, index: number): number;
@@ -73,75 +83,95 @@ export interface TextEngineRenderPlanReader {
   bytes(offset: number, byteLength: number): Uint8Array;
 }
 
+/** A synchronous view into runtime-owned A/B memory. */
 export interface BorrowedTextEngineRenderPlan extends TextEngineRenderPlanReader {
   readonly delivery: 'borrowed';
 }
 
+/** A self-owned render-plan view that may cross an asynchronous boundary. */
 export interface OwnedTextEngineRenderPlan extends TextEngineRenderPlanReader {
   readonly delivery: 'owned';
 }
 
-export interface PortablePayloadLease {
+/** One renderer-neutral payload resolved from a plan resource reference. */
+export interface ResolvedPortablePayload {
+  readonly referenceId: ResourceHandle;
   readonly identity: PortablePayloadIdentity;
-  readonly techniqueId: string;
   readonly resourceName: string;
   readonly payload: PortableResource;
+}
+
+/** A counted claim on a portable payload and its singleton companions. */
+export interface PortablePayloadLease extends ResolvedPortablePayload {
+  readonly techniqueId: string;
+  /** Selected payload plus every singleton companion declared by the same compiled font. */
+  readonly resources: readonly ResolvedPortablePayload[];
   readonly disposed: boolean;
   dispose(): void;
 }
 
-export interface ResolvedPlanPayload {
-  readonly referenceId: ResourceHandle;
-  readonly identity: PortablePayloadIdentity;
+/** One self-owned payload delivered with an asynchronous plan candidate. */
+export interface ResolvedPlanPayload extends ResolvedPortablePayload {
   readonly techniqueId: string;
-  readonly resourceName: string;
-  readonly payload: PortableResource;
+  readonly resources: readonly ResolvedPortablePayload[];
 }
 
+/** A plan transform resolved to its host-owned binding. */
 export interface ResolvedPlanTransform {
-  readonly transformIndex: number;
+  readonly transformIndex: RenderPlanTransformId;
   readonly binding: HostTransformBinding;
 }
 
+/** A synchronous candidate whose borrowed plan must be consumed during `accept`. */
 export interface PlanCandidate {
   readonly origin: PlanOrigin;
   readonly plan: BorrowedTextEngineRenderPlan;
   readonly engineRevision: number;
   readonly planRevision: number;
   readonly publicationGeneration: number;
+  /** Whether this publication is a complete renderer checkpoint rather than an incremental update. */
+  readonly checkpoint: boolean;
+  readonly transforms: readonly ResolvedPlanTransform[];
   acquirePayload(referenceId: ResourceHandle): PortablePayloadLease;
   resolveMaterial(materialId: MaterialHandle): HostMaterialBinding;
   resolveResource(resourceId: ResourceHandle): HostResourceBinding;
-  resolveTransform(transformIndex: number): HostTransformBinding;
 }
 
+/** A self-owned candidate suitable for a worker or deferred renderer. */
 export interface AsyncPlanCandidate {
   readonly origin: PlanOrigin;
   readonly plan: OwnedTextEngineRenderPlan;
   readonly engineRevision: number;
   readonly planRevision: number;
   readonly publicationGeneration: number;
+  /** Whether this publication is a complete renderer checkpoint rather than an incremental update. */
+  readonly checkpoint: boolean;
   readonly bytes: Uint8Array<ArrayBuffer>;
   readonly payloads: readonly ResolvedPlanPayload[];
   readonly transforms: readonly ResolvedPlanTransform[];
 }
 
+/** The renderer's transactional decision for one candidate. */
 export type PlanAcceptance = Readonly<{ accepted: true }> | Readonly<{ accepted: false; error: unknown }>;
 
+/** An asynchronous target decision that returns ownership of the transfer buffer. */
 export type AsyncPlanTargetResult =
   | Readonly<{ accepted: true; returnedBytes: Uint8Array<ArrayBuffer> }>
   | Readonly<{ accepted: false; error: unknown; returnedBytes?: Uint8Array<ArrayBuffer> }>;
 
+/** Renderer-to-session control channel for requesting a complete checkpoint. */
 export interface PlanTargetControl {
   requestCheckpoint(): void;
 }
 
+/** Synchronous zero-copy render-plan target; this is the normal same-realm path. */
 export interface PlanTarget {
   readonly delivery: 'borrowed';
   accept(candidate: PlanCandidate, signal: AbortSignal): PlanAcceptance;
   dispose(): void;
 }
 
+/** Asynchronous one-copy target for worker or deferred consumption. */
 export interface AsyncPlanTarget {
   readonly delivery: 'owned';
   readonly maximumPlanBytes: number;
@@ -149,8 +179,10 @@ export interface AsyncPlanTarget {
   dispose(): void;
 }
 
+/** Either supported plan-delivery contract. */
 export type TextPlanTarget = PlanTarget | AsyncPlanTarget;
 
+/** One formatted-text span using host-bound renderer and font values. */
 export interface TextEngineSpan {
   readonly start: number;
   readonly end: number;
@@ -160,13 +192,16 @@ export interface TextEngineSpan {
   readonly paint?: GlyphPaintInput;
 }
 
+/** Styled text accepted by a retained text instance. */
 export interface TextEngineFormattedText {
   readonly text: string;
   readonly spans: readonly TextEngineSpan[];
 }
 
+/** Plain or formatted input accepted by a retained text instance. */
 export type TextEngineTextInput = string | TextEngineFormattedText;
 
+/** A flow region whose transform is already bound to the host. */
 export type TextEngineRegionInput = Omit<
   TextEngineRegion,
   'id' | 'geometryRevision' | 'transformIndex' | 'exclusionStart' | 'exclusionCount'
@@ -174,17 +209,21 @@ export type TextEngineRegionInput = Omit<
   readonly transform: HostTransformBinding;
 };
 
+/** An exclusion authored relative to its containing flow region. */
 export type TextEngineExclusionInput = Omit<TextEngineExclusion, 'id' | 'regionId' | 'geometryRevision'>;
 
+/** One flow region and its exclusions. */
 export interface TextEngineFlowRegionInput {
   readonly region: TextEngineRegionInput;
   readonly exclusions?: readonly TextEngineExclusionInput[];
 }
 
+/** Ordered regions through which one retained text instance flows. */
 export interface TextEngineFlowInput {
   readonly regions: readonly TextEngineFlowRegionInput[];
 }
 
+/** Inline-object input using host-bound material and resource values. */
 export type TextEngineInlineObjectInput = Omit<
   TextEngineInlineObject,
   'paragraphId' | 'id' | 'contentRevision' | 'materialId' | 'resourceId' | 'resourceGeneration'
@@ -193,8 +232,10 @@ export type TextEngineInlineObjectInput = Omit<
   readonly resource: HostResourceBinding;
 };
 
+/** Fixed safety and capacity limits for one retained session. */
 export interface TextEngineLimits extends TextEngineFrameLimits {}
 
+/** Initial desired state for one retained text instance. */
 export interface TextEngineTextOptions {
   readonly font: HostFontStackBinding;
   readonly text: TextEngineTextInput;
@@ -209,18 +250,23 @@ export interface TextEngineTextOptions {
   readonly inlineObjects?: readonly TextEngineInlineObjectInput[];
 }
 
+/** Partial desired-state replacement for one retained text instance. */
 export type TextEngineTextUpdate = Partial<Omit<TextEngineTextOptions, 'font'>> & {
   readonly font?: HostFontStackBinding;
 };
 
+/** One session-owned retained text instance. */
 export interface TextEngineText {
   readonly disposed: boolean;
   update(update: TextEngineTextUpdate): void;
+  /** Returns aggregate metrics; a cache miss may synchronously incur font and layout lookup work. */
   layout(): ParagraphLayoutSummary;
+  /** Returns caller-owned columns; a cache miss may synchronously incur glyph lookup and positioning work. */
   glyphs(): ParagraphLayoutInspection;
   dispose(): void;
 }
 
+/** Optional semantic views to cache while compiling the next publication. */
 export interface TextEnginePublishOptions {
   readonly semanticViews?: 'none' | 'measurement' | 'layout-inspection' | 'all';
   readonly compositing?: 'ordered' | 'independent';
@@ -228,22 +274,30 @@ export interface TextEnginePublishOptions {
 
 interface RetainedSessionBase {
   readonly disposed: boolean;
+  /** Creates one retained text instance in this session. */
   createText(options: TextEngineTextOptions): TextEngineText;
+  /** Disposes every retained text instance and releases this session. */
   dispose(): void;
 }
 
+/** A synchronous retained session selected from a synchronous target. */
 export interface SynchronousTextEngineSession extends RetainedSessionBase {
+  /** Compiles and synchronously offers current desired state to the plan target. */
   publish(options?: TextEnginePublishOptions): PlanAcceptance;
 }
 
+/** An asynchronous retained session selected from an asynchronous target. */
 export interface AsyncTextEngineSession extends RetainedSessionBase {
+  /** Copies, transfers, and asynchronously offers current desired state to the plan target. */
   publish(options?: TextEnginePublishOptions): Promise<PlanAcceptance>;
 }
 
+/** Resolves the session surface from its target's delivery contract. */
 export type SessionFor<Target extends TextPlanTarget> = Target extends AsyncPlanTarget
   ? AsyncTextEngineSession
   : SynchronousTextEngineSession;
 
+/** Construction options for one retained text batch and render target. */
 export interface TextEngineSessionOptions<Target extends TextPlanTarget> {
   readonly policy: HostPolicy;
   readonly capabilitySet?: PolicyCapabilitySet;
@@ -254,6 +308,23 @@ export interface TextEngineSessionOptions<Target extends TextPlanTarget> {
   readonly textCapacity: number;
 }
 
+/** @internal A retained session that can query authored text but cannot publish a render plan. */
+export interface MeasurementTextEngineSession {
+  readonly disposed: boolean;
+  createText(options: TextEngineTextOptions): TextEngineText;
+  dispose(): void;
+}
+
+/** @internal Renderer-free session construction used by the root Paragraph service. */
+export interface MeasurementTextEngineSessionOptions {
+  readonly policy: HostPolicy;
+  readonly limits: TextEngineLimits;
+  readonly requestCapacity: number;
+  readonly resultCapacity: number;
+  readonly textCapacity: number;
+}
+
+/** Thrown when a retained session is used after disposal. */
 export class TextEngineSessionDisposedError extends Error {
   constructor() {
     super('text engine session has been disposed');
@@ -261,8 +332,11 @@ export class TextEngineSessionDisposedError extends Error {
   }
 }
 
+/** Thrown when a pending asynchronous acceptance prevents another session call. */
 export class TextEngineBackpressureError extends Error {}
+/** Thrown when fixed transport capacity cannot encode the requested work. */
 export class TextEngineTransportCapacityError extends Error {}
+/** Thrown when an asynchronous target violates the transfer contract. */
 export class TextEngineTransportError extends Error {}
 
 interface ResolvedSpan {
@@ -297,6 +371,8 @@ interface RetainedTextState {
   dirty: boolean;
   removed: boolean;
   disposed: boolean;
+  desiredReleased: boolean;
+  committed: ResolvedTextOptions | undefined;
   measurement: ParagraphLayoutSummary | undefined;
   inspection: ParagraphLayoutInspection | undefined;
 }
@@ -316,18 +392,27 @@ export function createRetainedTextEngineSession<Target extends TextPlanTarget>(
   return new RetainedTextEngineSession(host, options) as SessionFor<Target>;
 }
 
+/** @internal Construct a retained query session without a renderer acceptance target. */
+export function createMeasurementTextEngineSession(
+  host: TextEngineHost,
+  options: MeasurementTextEngineSessionOptions,
+): MeasurementTextEngineSession {
+  return new RetainedTextEngineSession(host, options, true);
+}
+
 class RetainedTextEngineSession {
   readonly #host: TextEngineHost;
   readonly #raw: TextEngineSession;
   readonly #policy: ReturnType<TextEngineHost['_retainInstalledPolicy']>;
   readonly #capabilitySet: ReturnType<typeof selectPolicyCapabilitySet> | undefined;
-  readonly #target: TextPlanTarget;
-  readonly #control: TargetControlState;
+  readonly #target: TextPlanTarget | undefined;
+  readonly #control: TargetControlState | undefined;
   readonly #targetController = new AbortController();
   readonly #origin = Object.freeze({}) as PlanOrigin;
   readonly #limits: TextEngineLimits;
   readonly #texts = new Set<RetainedTextState>();
   readonly #removed = new Set<RetainedTextState>();
+  readonly #measured = new Map<RetainedTextState, ResolvedTextOptions>();
   readonly #returnedBuffers: ExactFrameBufferPool | undefined;
   #nextTextOrdinal = 1;
   #engineRevision = 0;
@@ -335,14 +420,44 @@ class RetainedTextEngineSession {
   #acknowledgedGeneration = 0;
   #checkpointGeneration = 0;
   #acceptedCheckpointGeneration = 0;
+  #structureRevision = 0;
+  #measuredStructureRevision = -1;
+  #textCapacity: number;
   #pending = false;
   #disposed = false;
 
-  constructor(host: TextEngineHost, options: TextEngineSessionOptions<TextPlanTarget>) {
+  constructor(
+    host: TextEngineHost,
+    options: TextEngineSessionOptions<TextPlanTarget> | MeasurementTextEngineSessionOptions,
+    measurementOnly = false,
+  ) {
     this.#host = host;
-    assertSessionOptions(options);
+    if (measurementOnly) assertMeasurementSessionOptions(options);
+    else assertSessionOptions(options);
     this.#limits = snapshotLimits(options.limits);
+    this.#textCapacity = options.textCapacity;
     const policy = host._retainInstalledPolicy(options.policy);
+    if (measurementOnly) {
+      try {
+        const handle = host._allocateRetainedSessionHandle();
+        this.#raw = host._createRawSession({
+          handle,
+          requestCapacity: options.requestCapacity,
+          resultCapacity: options.resultCapacity,
+          textCapacity: options.textCapacity,
+        });
+        this.#policy = policy;
+        this.#capabilitySet = undefined;
+        this.#target = undefined;
+        this.#control = undefined;
+        this.#returnedBuffers = undefined;
+        return;
+      } catch (error) {
+        policy.dispose();
+        throw error;
+      }
+    }
+    const renderOptions = options as TextEngineSessionOptions<TextPlanTarget>;
     let target: TextPlanTarget | undefined;
     let claimed = false;
     const control = new TargetControlState(() => {
@@ -351,10 +466,10 @@ class RetainedTextEngineSession {
     });
     try {
       const capabilitySet =
-        options.capabilitySet === undefined
+        renderOptions.capabilitySet === undefined
           ? undefined
-          : selectPolicyCapabilitySet(policy.handle, policy.descriptor, options.capabilitySet);
-      target = options.target(control);
+          : selectPolicyCapabilitySet(policy.handle, policy.descriptor, renderOptions.capabilitySet);
+      target = renderOptions.target(control);
       assertTarget(target, this.#limits.maxOutputBytes);
       if (claimedTargets.has(target)) throw new TypeError('plan target is already attached to another session');
       claimedTargets.add(target);
@@ -412,6 +527,8 @@ class RetainedTextEngineSession {
       dirty: true,
       removed: false,
       disposed: false,
+      desiredReleased: false,
+      committed: undefined,
       measurement: undefined,
       inspection: undefined,
     };
@@ -424,12 +541,14 @@ class RetainedTextEngineSession {
     const text = new TextEngineTextImpl(this, state);
     textStates.set(text, { session: this, state });
     this.#texts.add(state);
+    this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
     this.#nextTextOrdinal = nextOrdinal;
     return text;
   }
 
   publish(options?: TextEnginePublishOptions): PlanAcceptance | Promise<PlanAcceptance> {
     this.#assertMutable();
+    if (this.#target === undefined) throw new Error('measurement-only text sessions cannot publish render plans');
     const normalized = normalizePublishOptions(options);
     return this.#target.delivery === 'borrowed' ? this.#publishBorrowed(normalized) : this.#publishOwned(normalized);
   }
@@ -448,11 +567,16 @@ class RetainedTextEngineSession {
       releaseResolvedText(desired);
       throw error;
     }
+    const previousOrder = state.desired.source.order ?? state.ordinal - 1;
+    const nextOrder = desired.source.order ?? state.ordinal - 1;
     releaseResolvedText(state.desired);
     state.desired = desired;
     state.dirty = true;
     state.measurement = undefined;
     state.inspection = undefined;
+    if (previousOrder !== nextOrder) {
+      this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
+    }
   }
 
   /** @internal */
@@ -476,9 +600,11 @@ class RetainedTextEngineSession {
     if (state.disposed) return;
     this.#assertMutable();
     state.disposed = true;
-    if (!state.published) {
+    releaseResolvedText(state.desired);
+    state.desiredReleased = true;
+    this.#structureRevision = checkedNextStructureRevision(this.#structureRevision);
+    if (state.committed === undefined && !this.#measured.has(state)) {
       this.#texts.delete(state);
-      releaseResolvedText(state.desired);
       return;
     }
     state.removed = true;
@@ -491,7 +617,7 @@ class RetainedTextEngineSession {
     this.#host._assertRuntimeMutationAllowed();
     this.#disposed = true;
     this.#targetController.abort(new TextEngineSessionDisposedError());
-    this.#control.dispose();
+    this.#control?.dispose();
     let failure: unknown;
     const attempt = (dispose: () => void): void => {
       try {
@@ -500,11 +626,15 @@ class RetainedTextEngineSession {
         failure ??= error;
       }
     };
-    attempt(() => this.#target.dispose());
+    if (this.#target !== undefined) attempt(() => this.#target!.dispose());
     attempt(() => this.#raw.dispose());
+    attempt(() => this.#clearMeasuredBindings());
     for (const state of this.#texts) {
       state.disposed = true;
-      attempt(() => releaseResolvedText(state.desired));
+      if (!state.desiredReleased) attempt(() => releaseResolvedText(state.desired));
+      state.desiredReleased = true;
+      if (state.committed !== undefined) attempt(() => releaseResolvedText(state.committed!));
+      state.committed = undefined;
     }
     this.#texts.clear();
     this.#removed.clear();
@@ -545,6 +675,7 @@ class RetainedTextEngineSession {
       engineRevision: publication.engineRevision,
       planRevision: publication.planRevision,
       publicationGeneration: publication.publicationGeneration,
+      checkpoint: publicationIsCheckpoint(publication),
       bytes,
       payloads: Object.freeze(
         payloadLeases.map(({ referenceId, lease }) => ({
@@ -553,27 +684,66 @@ class RetainedTextEngineSession {
           techniqueId: lease.techniqueId,
           resourceName: lease.resourceName,
           payload: lease.payload,
+          resources: lease.resources,
         })),
       ),
       transforms: Object.freeze(this.#resolvedTransforms()),
     });
     this.#pending = true;
+    let allocationSettled = false;
+    const reclaimAttachedSource = (): void => {
+      if (allocationSettled || bytes.buffer.byteLength === 0) return;
+      this.#returnPlanBuffer(bytes);
+      allocationSettled = true;
+    };
+    let outcome!: PlanAcceptance;
+    let primaryFailure: unknown;
     try {
       const result = await abortableTargetAcceptance(
         (this.#target as AsyncPlanTarget).accept(candidate, this.#targetController.signal),
         this.#targetController.signal,
       );
       const accepted = assertAsyncAcceptance(result, publication);
-      if (accepted.returnedBytes !== undefined) this.#returnPlanBuffer(accepted.returnedBytes);
+      if (accepted.returnedBytes !== undefined) {
+        if (bytes.buffer.byteLength !== 0 && accepted.returnedBytes.buffer !== bytes.buffer) {
+          throw new TextEngineTransportError('async target copied the plan instead of transferring it');
+        }
+        this.#returnPlanBuffer(accepted.returnedBytes);
+        allocationSettled = true;
+      }
       if (accepted.accepted) this.#accept(pending);
-      return accepted.accepted ? { accepted: true } : { accepted: false, error: accepted.error };
-    } finally {
-      this.#pending = false;
-      for (const { lease } of payloadLeases) lease.dispose();
+      outcome = accepted.accepted ? { accepted: true } : { accepted: false, error: accepted.error };
+    } catch (error) {
+      primaryFailure = error;
     }
+    this.#pending = false;
+    let cleanupFailure: unknown;
+    try {
+      reclaimAttachedSource();
+    } catch (error) {
+      cleanupFailure = error;
+    }
+    for (const { lease } of payloadLeases) {
+      try {
+        lease.dispose();
+      } catch (error) {
+        cleanupFailure ??= error;
+      }
+    }
+    if (primaryFailure !== undefined) {
+      if (cleanupFailure !== undefined) {
+        throw new AggregateError([primaryFailure, cleanupFailure], 'plan acceptance and cleanup both failed', {
+          cause: primaryFailure,
+        });
+      }
+      throw primaryFailure;
+    }
+    if (cleanupFailure !== undefined) throw cleanupFailure;
+    return outcome;
   }
 
   #publishEngine(options: NormalizedPublishOptions): PendingPublication {
+    this.#ensureTextCapacity();
     const checkpointGeneration = this.#checkpointGeneration;
     const frame = this.#compileFrame(options, checkpointGeneration);
     const publication = this.#raw.update(frame);
@@ -607,6 +777,7 @@ class RetainedTextEngineSession {
   #queryText(state: RetainedTextState, inspection: true): ParagraphLayoutInspection;
   #queryText(state: RetainedTextState, inspection: boolean): ParagraphLayoutSummary | ParagraphLayoutInspection {
     this.#assertTextQueryable(state);
+    this.#ensureTextCapacity();
     const styles = compileStyles(this.#host, state);
     const styleMutations: TextEngineStyleMutation[] = [...styles];
     for (let index = styles.length + 1; index <= state.publishedStyleCount; index += 1) {
@@ -629,13 +800,7 @@ class RetainedTextEngineSession {
         ? textShaperAbi.engine.semanticViewMasks.layoutInspection
         : textShaperAbi.engine.semanticViewMasks.measurement,
       limits: this.#limits,
-      paragraphMutations: [
-        {
-          opcode: 'upsert',
-          paragraphId: state.paragraphId,
-          order: state.desired.source.order ?? state.ordinal - 1,
-        },
-      ],
+      paragraphMutations: this.#measurementParagraphMutations(),
       textMutations: textChanged
         ? [
             {
@@ -656,12 +821,14 @@ class RetainedTextEngineSession {
     if (inspection) {
       const layout = readTextEngineLayouts(publication).get(state.paragraphId);
       if (layout === undefined) throw new Error('text engine returned no layout inspection for retained text');
+      this.#adoptMeasuredBindings(state);
       state.measurement = layout;
       state.inspection = layout;
       return layout;
     }
     const measurement = readTextEngineMeasurements(publication).get(state.paragraphId);
     if (measurement === undefined) throw new Error('text engine returned no measurement for retained text');
+    this.#adoptMeasuredBindings(state);
     state.measurement = measurement;
     return measurement;
   }
@@ -677,14 +844,11 @@ class RetainedTextEngineSession {
           order: state.desired.source.order ?? state.ordinal - 1,
         })),
     ];
-    const textMutations = [...this.#texts]
-      .filter((state) => !state.removed && state.dirty)
-      .map((state) => ({
-        paragraphId: state.paragraphId,
-        start: 0,
-        deleteCount: state.publishedText.length,
-        insert: state.desired.text,
-      }));
+    const textMutations = [...this.#texts].flatMap((state) => {
+      if (state.removed || !state.dirty) return [];
+      const mutation = minimalTextMutation(state.publishedText, state.desired.text);
+      return mutation === undefined ? [] : [{ paragraphId: state.paragraphId, ...mutation }];
+    });
     const styleMutations: TextEngineStyleMutation[] = [];
     const constraints: TextEngineConstraint[] = [];
     const regions: TextEngineRegion[] = [];
@@ -805,13 +969,22 @@ class RetainedTextEngineSession {
   }
 
   #commitDesiredState(): void {
+    this.#clearMeasuredBindings();
     for (const state of this.#removed) {
       this.#texts.delete(state);
-      releaseResolvedText(state.desired);
+      if (!state.desiredReleased) releaseResolvedText(state.desired);
+      state.desiredReleased = true;
+      if (state.committed !== undefined) releaseResolvedText(state.committed);
+      state.committed = undefined;
     }
     this.#removed.clear();
     for (const state of this.#texts) {
       if (!state.dirty) continue;
+      if (state.committed !== state.desired) {
+        retainResolvedText(state.desired);
+        if (state.committed !== undefined) releaseResolvedText(state.committed);
+        state.committed = state.desired;
+      }
       state.published = true;
       state.publishedText = state.desired.text;
       state.publishedStyleCount = compiledStyleCount(state);
@@ -827,6 +1000,8 @@ class RetainedTextEngineSession {
       engineRevision: lease.publication.engineRevision,
       planRevision: lease.publication.planRevision,
       publicationGeneration: lease.publication.publicationGeneration,
+      checkpoint: publicationIsCheckpoint(lease.publication),
+      transforms: Object.freeze(this.#resolvedTransforms()),
       acquirePayload: (referenceId: ResourceHandle) => {
         lease.assertActive();
         return this.#portablePayload(referenceId);
@@ -839,10 +1014,6 @@ class RetainedTextEngineSession {
         lease.assertActive();
         return this.#host._resolveOpaqueBinding('resource', resourceId) as HostResourceBinding;
       },
-      resolveTransform: (transformIndex: number) => {
-        lease.assertActive();
-        return this.#host._resolveOpaqueBinding('transform', transformIndex) as HostTransformBinding;
-      },
     });
   }
 
@@ -850,10 +1021,21 @@ class RetainedTextEngineSession {
     const lease = this.#host._acquirePortablePayload(referenceId);
     let disposed = false;
     return Object.freeze({
+      referenceId,
       identity: lease.identity as PortablePayloadIdentity,
       techniqueId: lease.techniqueId,
       resourceName: lease.resourceName,
       payload: lease.payload,
+      resources: Object.freeze(
+        lease.resources.map((resource) =>
+          Object.freeze({
+            referenceId: resource.referenceId as ResourceHandle,
+            identity: resource.identity as PortablePayloadIdentity,
+            resourceName: resource.resourceName,
+            payload: resource.payload,
+          }),
+        ),
+      ),
       get disposed() {
         return disposed;
       },
@@ -889,12 +1071,67 @@ class RetainedTextEngineSession {
   #resolvedTransforms(): readonly ResolvedPlanTransform[] {
     const transforms = new Map<number, HostTransformBinding>();
     for (const state of this.#texts) {
-      transforms.set(state.desired.transform.handle, state.desired.transform.binding as HostTransformBinding);
+      if (state.removed) continue;
+      transforms.set(
+        state.desired.transform.handle,
+        this.#host._resolveOpaqueBinding('transform', state.desired.transform.handle) as HostTransformBinding,
+      );
       for (const transform of state.desired.flowTransforms) {
-        transforms.set(transform.handle, transform.binding as HostTransformBinding);
+        transforms.set(
+          transform.handle,
+          this.#host._resolveOpaqueBinding('transform', transform.handle) as HostTransformBinding,
+        );
       }
     }
-    return [...transforms].map(([transformIndex, binding]) => ({ transformIndex, binding }));
+    return [...transforms].map(([transformIndex, binding]) => ({
+      transformIndex: transformIndex as RenderPlanTransformId,
+      binding,
+    }));
+  }
+
+  #measurementParagraphMutations(): TextEngineParagraphMutation[] {
+    return [
+      ...[...this.#removed]
+        .filter((state) => state.published)
+        .map((state) => ({ opcode: 'remove' as const, paragraphId: state.paragraphId })),
+      ...[...this.#texts]
+        .filter((state) => !state.removed)
+        .map((state) => ({
+          opcode: 'upsert' as const,
+          paragraphId: state.paragraphId,
+          order: state.desired.source.order ?? state.ordinal - 1,
+        })),
+    ];
+  }
+
+  #adoptMeasuredBindings(state: RetainedTextState): void {
+    if (this.#measuredStructureRevision !== this.#structureRevision) this.#clearMeasuredBindings();
+    const previous = this.#measured.get(state);
+    if (previous !== state.desired) {
+      retainResolvedText(state.desired);
+      this.#measured.set(state, state.desired);
+      if (previous !== undefined) releaseResolvedText(previous);
+    }
+    this.#measuredStructureRevision = this.#structureRevision;
+    for (const removed of [...this.#removed]) {
+      if (removed.committed !== undefined || this.#measured.has(removed)) continue;
+      this.#removed.delete(removed);
+      this.#texts.delete(removed);
+    }
+  }
+
+  #clearMeasuredBindings(): void {
+    let failure: unknown;
+    for (const bindings of this.#measured.values()) {
+      try {
+        releaseResolvedText(bindings);
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    this.#measured.clear();
+    this.#measuredStructureRevision = -1;
+    if (failure !== undefined) throw failure;
   }
 
   #copyPlan(source: Uint8Array): Uint8Array<ArrayBuffer> {
@@ -928,6 +1165,16 @@ class RetainedTextEngineSession {
   #assertTextQueryable(state: RetainedTextState): void {
     this.#assertMutable();
     if (state.disposed) throw new Error('text engine text has been disposed');
+  }
+
+  #ensureTextCapacity(): void {
+    let required = 1;
+    for (const state of this.#texts) {
+      if (!state.removed) required = Math.max(required, state.desired.text.length);
+    }
+    if (required <= this.#textCapacity) return;
+    this.#raw._reserveText(required);
+    this.#textCapacity = required;
   }
 
   #assertActive(): void {
@@ -1137,7 +1384,7 @@ function resolveTextOptions(host: TextEngineHost, value: TextEngineTextOptions, 
       leases.push(retainedResource);
       inlineResources.push(retainedResource);
     }
-    return {
+    return ownResolvedText({
       source: snapshotTextOptions(
         value,
         formattedText,
@@ -1157,7 +1404,7 @@ function resolveTextOptions(host: TextEngineHost, value: TextEngineTextOptions, 
       flowTransforms: Object.freeze(flowTransforms),
       inlineMaterials: Object.freeze(inlineMaterials),
       inlineResources: Object.freeze(inlineResources),
-    };
+    });
   } catch (error) {
     for (const lease of leases.reverse()) lease.dispose();
     throw error;
@@ -1419,7 +1666,30 @@ function compileInlineObjects(host: TextEngineHost, state: RetainedTextState): r
   }));
 }
 
+const resolvedTextReferences = new WeakMap<ResolvedTextOptions, { references: number }>();
+
+function ownResolvedText(value: ResolvedTextOptions): ResolvedTextOptions {
+  if (resolvedTextReferences.has(value)) throw new Error('resolved text options are already owned');
+  resolvedTextReferences.set(value, { references: 1 });
+  return value;
+}
+
+function retainResolvedText(value: ResolvedTextOptions): void {
+  const retained = resolvedTextReferences.get(value);
+  if (retained === undefined || retained.references <= 0) {
+    throw new Error('resolved text options are no longer retained');
+  }
+  retained.references += 1;
+}
+
 function releaseResolvedText(value: ResolvedTextOptions): void {
+  const retained = resolvedTextReferences.get(value);
+  if (retained === undefined || retained.references <= 0) {
+    throw new Error('resolved text options are no longer retained');
+  }
+  retained.references -= 1;
+  if (retained.references !== 0) return;
+  resolvedTextReferences.delete(value);
   const leases: Array<{ dispose(): void }> = [
     value.font,
     ...(value.material === undefined ? [] : [value.material]),
@@ -1446,6 +1716,15 @@ function releaseResolvedText(value: ResolvedTextOptions): void {
 function assertSessionOptions(value: unknown): asserts value is TextEngineSessionOptions<TextPlanTarget> {
   if (!isNonArrayObject(value)) throw new TypeError('text engine session options must be an object');
   if (typeof value.target !== 'function') throw new TypeError('text engine session target must be a factory');
+  assertSessionCapacities(value);
+}
+
+function assertMeasurementSessionOptions(value: unknown): asserts value is MeasurementTextEngineSessionOptions {
+  if (!isNonArrayObject(value)) throw new TypeError('measurement text engine session options must be an object');
+  assertSessionCapacities(value);
+}
+
+function assertSessionCapacities(value: Record<PropertyKey, unknown>): void {
   positiveU32(value.requestCapacity, 'requestCapacity');
   positiveU32(value.resultCapacity, 'resultCapacity');
   positiveU32(value.textCapacity, 'textCapacity');
@@ -1525,6 +1804,7 @@ function assertAsyncAcceptance(
   if (returnedBytes !== undefined) {
     if (
       !(returnedBytes instanceof Uint8Array) ||
+      !(returnedBytes.buffer instanceof ArrayBuffer) ||
       returnedBytes.byteOffset !== 0 ||
       returnedBytes.byteLength !== publication.bytes.byteLength ||
       returnedBytes.buffer.byteLength !== publication.bytes.byteLength
@@ -1533,7 +1813,7 @@ function assertAsyncAcceptance(
     }
     let returnedPlan: TextEngineRenderPlanView;
     try {
-      returnedPlan = new TextEngineRenderPlanView().bindBytes(returnedBytes);
+      returnedPlan = new TextEngineRenderPlanView().bindBytes(returnedBytes as Uint8Array<ArrayBuffer>);
     } catch (cause) {
       throw new TextEngineTransportError('async target returned malformed plan bytes', { cause });
     }
@@ -1578,6 +1858,17 @@ function checkedNextOrdinal(value: number): number {
 
 function checkedNextCheckpointGeneration(value: number): number {
   if (value >= MAX_U32) throw new RangeError('plan target checkpoint generation is exhausted');
+  return value + 1;
+}
+
+function publicationIsCheckpoint(publication: TextEnginePublication): boolean {
+  return (publication.flags & textShaperAbi.engine.resultFlags.checkpoint) !== 0;
+}
+
+function checkedNextStructureRevision(value: number): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value >= Number.MAX_SAFE_INTEGER) {
+    throw new RangeError('retained text structure revision is exhausted');
+  }
   return value + 1;
 }
 

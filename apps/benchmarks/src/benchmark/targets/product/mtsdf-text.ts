@@ -1,4 +1,4 @@
-import type { LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import type { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
 import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -23,7 +23,7 @@ interface MtsdfProductTargetResources {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly font: LoadedFont<typeof mtsdf>;
+  readonly font: Font<typeof mtsdf>;
   readonly lines: readonly Text<typeof mtsdf>[];
   readonly artifactBytes: number;
   readonly compressedBytes: number;
@@ -66,7 +66,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
   const canvas = document.createElement('canvas');
   const renderer = await createConfiguredRenderer({ canvas, width: WIDTH, height: HEIGHT, backend, dpr });
   let target: THREE.RenderTarget | undefined;
-  let font: LoadedFont<typeof mtsdf> | undefined;
+  let font: Font<typeof mtsdf> | undefined;
   const lines: Text<typeof mtsdf>[] = [];
   try {
     const fontStarted = performance.now();

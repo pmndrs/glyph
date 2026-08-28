@@ -1,4 +1,4 @@
-import { FontRegistry, type ParagraphLayoutSummary, type RegisteredFont } from '@pmndrs/glyph';
+import { createFontLibrary, type FontLibrary, type ParagraphLayoutSummary } from '@pmndrs/glyph';
 import { TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/glyph/three/bitmap';
@@ -40,8 +40,8 @@ import {
   type WorkloadFont,
   type WorkloadText,
 } from '../../../workloads/shared/scene-entry';
-import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../../../techniques/bitmap/metadata';
-import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration } from '../../../techniques/mtsdf/metadata';
+import { bitmapAtlasConfiguration, type BitmapAtlasPageStats } from '../../../techniques/bitmap/metadata';
+import { mtsdfDataConfiguration, type MtsdfRasterConfiguration } from '../../../techniques/mtsdf/metadata';
 import { slugDataConfiguration, type SlugRasterConfiguration } from '../../../techniques/slug/metadata';
 import { createCanvasSurface } from '../../../renderer/canvas-surface';
 import type { LiveFrameTelemetrySnapshot } from '../../../renderer/live-frame-telemetry';
@@ -229,8 +229,7 @@ interface LoadedTechniqueFont {
   readonly atlasGpuBytes: number;
   readonly atlasPages: readonly BitmapAtlasPageStats[];
   readonly bitmapStrikes: readonly { readonly ppem: number }[];
-  /** The registered font `loaded` owns; the technique metadata readers still key their reports off it. */
-  readonly font: RegisteredFont;
+  readonly font: WorkloadFont;
   readonly fontLoadMs: number;
   /** The target-v1 handle every workload Text binds to. It carries the technique, its decoded raster, and the runtime. */
   readonly loaded: WorkloadFont;
@@ -409,7 +408,7 @@ async function createComparisonWorkloadRuntime(
   let persistentSnapshot: LiveFrameTelemetrySnapshot | undefined;
 
   try {
-    const sharedRegistry = new FontRegistry({ maxArtifactBytes: 64 * 1024 * 1024 });
+    const sharedLibrary = createFontLibrary({ maxArtifactBytes: 64 * 1024 * 1024 });
     font = await loadTechniqueFont(
       technique,
       configuration.fontFixture,
@@ -417,7 +416,7 @@ async function createComparisonWorkloadRuntime(
       signal,
       options.onBakeProgress,
       options.slugBakedArtifact,
-      sharedRegistry,
+      sharedLibrary,
     );
     const companionFixtures = (workload: ComparisonWorkloadId): readonly BenchmarkFontFixture[] =>
       workloadCompanionFontFixtures(benchmarkWorkloadDefinition(workload).fontPolicy);
@@ -436,7 +435,7 @@ async function createComparisonWorkloadRuntime(
           signal,
           options.onBakeProgress,
           undefined,
-          sharedRegistry,
+          sharedLibrary,
         );
         companionFonts.set(fixture, companion);
         loaded.push(companion);
@@ -449,7 +448,7 @@ async function createComparisonWorkloadRuntime(
     };
     await ensureCompanionFonts(configuration.workload);
     selectedFontController = createRetainedFontFixtureController(
-      sharedRegistry,
+      sharedLibrary,
       { fixture: configuration.fontFixture, asset: font },
       {
         // The selected fixture and a companion fixture can deduplicate to one loaded font. In that case the companion
@@ -551,7 +550,7 @@ async function createComparisonWorkloadRuntime(
       try {
         // Only the bytes are awaited. Once they are decoded the swap itself commits in this turn, so the scene never
         // renders a generation the caller has already replaced.
-        await activeSelectedFont.load(nextFixture, (fixture, registry) =>
+        await activeSelectedFont.load(nextFixture, (fixture, library) =>
           loadTechniqueFont(
             technique,
             fixture,
@@ -559,7 +558,7 @@ async function createComparisonWorkloadRuntime(
             signal,
             options.onBakeProgress,
             options.slugBakedArtifact,
-            registry,
+            library,
           ),
         );
         if (closing || disposed) {
@@ -1260,7 +1259,7 @@ export function comparisonWorkloadRequiresIconWindowSuspension(
 /**
  * Swaps the font fixture behind every retained Text and commits the whole set in one publication.
  *
- * The replacement `LoadedFont` is already resolved, so there is no readiness window to roll back: either the single
+ * The replacement `Font` is already resolved, so there is no readiness window to roll back: either the single
  * `updateMatrixWorld` commits every Text onto the new fixture or it throws with none of them published, and the caller
  * releases the candidate owner.
  */
@@ -1459,7 +1458,7 @@ async function loadTechniqueFont(
   signal?: AbortSignal,
   onBakeProgress?: import('@pmndrs/glyph').BakeProgressListener,
   slugBakedArtifact?: BakedSlugArtifactSource,
-  registry?: FontRegistry,
+  library?: FontLibrary,
 ): Promise<LoadedTechniqueFont> {
   const startedAt = performance.now();
   if (technique === 'bitmap') {
@@ -1468,17 +1467,18 @@ async function loadTechniqueFont(
       fixture: fontFixture,
       delivery,
       bitmapDensity: 'live',
-      ...(registry === undefined ? {} : { registry }),
+      ...(library === undefined ? {} : { library }),
       signal,
       onProgress: onBakeProgress,
     });
-    const atlas = await registeredBitmapAtlas(loaded.loaded.font, 'live');
+    if (loaded.technique !== 'bitmap') throw new TypeError('Bitmap comparison workload loaded a different technique');
+    const atlas = bitmapAtlasConfiguration(loaded.data);
     return {
       artifactBytes: loaded.artifactBytes,
       atlasGpuBytes: atlas.gpuBytes,
       atlasPages: atlas.pages,
       bitmapStrikes: atlas.strikes,
-      font: loaded.loaded.font,
+      font: loaded.loaded,
       fontLoadMs: performance.now() - startedAt,
       loaded: loaded.loaded,
       metrics: loaded.metrics,
@@ -1489,17 +1489,18 @@ async function loadTechniqueFont(
       technique,
       fixture: fontFixture,
       delivery,
-      ...(registry === undefined ? {} : { registry }),
+      ...(library === undefined ? {} : { library }),
       signal,
       onProgress: onBakeProgress,
     });
-    const mtsdfConfiguration = await registeredMtsdfConfiguration(loaded.loaded.font, signal);
+    if (loaded.technique !== 'mtsdf') throw new TypeError('MTSDF comparison workload loaded a different technique');
+    const mtsdfConfiguration = mtsdfDataConfiguration(loaded.data);
     return {
       artifactBytes: loaded.compressedBytes,
       atlasGpuBytes: loaded.atlasGpuBytes,
       atlasPages: [],
       bitmapStrikes: [],
-      font: loaded.loaded.font,
+      font: loaded.loaded,
       fontLoadMs: performance.now() - startedAt,
       loaded: loaded.loaded,
       metrics: loaded.metrics,
@@ -1512,7 +1513,7 @@ async function loadTechniqueFont(
           technique,
           fixture: fontFixture,
           delivery,
-          ...(registry === undefined ? {} : { registry }),
+          ...(library === undefined ? {} : { library }),
           signal,
           onProgress: onBakeProgress,
         }
@@ -1521,19 +1522,19 @@ async function loadTechniqueFont(
           fixture: fontFixture,
           delivery,
           ...(slugBakedArtifact === undefined ? {} : { bakedArtifact: slugBakedArtifact }),
-          ...(registry === undefined ? {} : { registry }),
+          ...(library === undefined ? {} : { library }),
           signal,
           onProgress: onBakeProgress,
         },
   );
   if (loaded.technique !== 'slug') throw new TypeError('Slug comparison workload loaded a different technique');
-  const slugConfiguration = slugDataConfiguration(loaded.loaded.data);
+  const slugConfiguration = slugDataConfiguration(loaded.data);
   return {
     artifactBytes: loaded.compressedBytes,
     atlasGpuBytes: slugConfiguration.resourceBytes,
     atlasPages: [],
     bitmapStrikes: [],
-    font: loaded.loaded.font,
+    font: loaded.loaded,
     fontLoadMs: performance.now() - startedAt,
     loaded: loaded.loaded,
     metrics: loaded.metrics,

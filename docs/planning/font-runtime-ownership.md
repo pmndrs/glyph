@@ -1088,13 +1088,15 @@ hosts therefore cannot alias; two hosts bound to the same backing may deliberate
 ### React and Suspense ownership
 
 `/react` is part of the migration. It no longer owns a module-scope `FontLoader` or resolved-font promise map. A Glyph
-provider owns or receives a root `FontLibrary`; `useFont` keys its Suspense resource inside that library. Module-scope
-preload uses an explicitly created library-bound helper, for example `const useAppFont = createUseFont(fontLibrary)` then
-`useAppFont.preload(request)`; a no-owner global `useFont.preload(request)` is withdrawn. The library keeps
-the promise stable through suspension and retains resolved backing until `clear()` or provider/library disposal. Each
-mounted consumer receives its own Font lease, and StrictMode mount/unmount/remount cannot dispose a sibling consumer's
-lease or attempt to bind a disposed wrapper. Applications may pass one FontLibrary to several canvases when they want
-portable backing deduplication; renderer runtimes remain per realm/integration as otherwise specified.
+provider requires an explicit root `FontLibrary`; `useFont` keys its stable Suspense and Three-initialization resource
+inside that library. A provider cannot safely create this resource during its own first render: if a child suspends before
+the provider commits, React retries with new hook state and a new promise indefinitely. Module-scope preload uses an
+explicitly created library-bound helper, for example `const useAppFont = createUseFont(fontLibrary)` then
+`useAppFont.preload(request)`; a no-owner global `useFont.preload(request)` is withdrawn. The library retains resolved
+backing and owns the adapter scope until `clear()` or library disposal; the bound helper therefore has no second disposal
+lifetime. Each mounted consumer receives its own Font lease, and StrictMode mount/unmount/remount cannot dispose a sibling
+consumer's lease or attempt to bind a disposed wrapper. Applications may pass one FontLibrary to several canvases when
+they want portable backing deduplication; renderer runtimes remain per realm/integration as otherwise specified.
 
 ### Device-loss fan-out
 

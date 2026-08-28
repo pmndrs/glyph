@@ -157,7 +157,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   }
 
   prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources {
-    this.#assertLive();
+    this.#assertActive();
     const pending = this.#recording.prepareResources(resources);
     const prepared = new Map<unknown, PreparedGeometry>();
     try {
@@ -202,7 +202,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
   }
 
   prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission {
-    this.#assertLive();
+    this.#assertActive();
     const pending = this.#recording.prepareSubmission(drawList);
     if (!pending.replacesRenderState) {
       let active = true;
@@ -210,7 +210,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         commit: () => {
           if (!active) return false;
           active = false;
-          this.#assertLive();
+          this.#assertActive();
           return pending.publish(() => {});
         },
         discard: () => {
@@ -232,7 +232,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
         if (!active) return false;
         active = false;
         try {
-          this.#assertLive();
+          this.#assertActive();
           const accepted = pending.publish(() => this.#submitValidated(pending.realizedDraws, buffers));
           if (!accepted) {
             destroyInstanceBuffers(buffers);
@@ -258,7 +258,7 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
 
   /** Copies the most recently submitted offscreen target into tightly packed RGBA bytes. */
   async readPixels(): Promise<Uint8Array> {
-    this.#assertLive();
+    this.#assertActive();
     const bytesPerRow = this.width * 4;
     const paddedBytesPerRow = Math.ceil(bytesPerRow / 256) * 256;
     let readback: GPUBuffer | undefined;
@@ -467,11 +467,11 @@ export class TypeGpuExampleRendererDevice implements ExampleRendererDevice {
     const command = this.#encodeAcceptedState(realizedDraws, buffers);
     this.#device.queue.submit([command]);
     // CPU submission acceptance commits the candidate; later WebGPU faults enter device-loss recovery.
-    this.#assertLive();
+    this.#assertActive();
     this.#submittedPasses += 1;
   }
 
-  #assertLive(): void {
+  #assertActive(): void {
     if (this.#disposed) throw new Error('TypeGPU example renderer is disposed');
     if (this.#lost) throw new Error('TypeGPU example renderer device is lost');
   }

@@ -1,4 +1,4 @@
-import type { RegisteredFont } from './font.js';
+import type { RasterDecodeFont, RegisteredFont } from './font.js';
 import type { FontHandle, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
 import type { BakeProgressListener, RasterBakeArtifact } from './bake.js';
 
@@ -47,10 +47,9 @@ export interface RasterSelection<Kind extends string = string> {
   readonly kind?: Kind;
 }
 
-export interface RegisteredRaster<Kind extends string = string> {
+/** Immutable artifact reader exposed to a raster technique during decode. */
+export interface RasterDecodeArtifact<Kind extends string = string> {
   readonly rasterKey: RasterKey;
-  readonly handle: RasterHandle;
-  readonly font: FontHandle;
   readonly kind: Kind;
   readonly extension: string;
   readonly version: number;
@@ -60,6 +59,11 @@ export interface RegisteredRaster<Kind extends string = string> {
   view(bufferView: number): Uint8Array;
   /** Resolve an embedded or authenticated external extension resource. */
   resource(source: RasterResourceSource, signal?: AbortSignal): Promise<Uint8Array>;
+}
+
+export interface RegisteredRaster<Kind extends string = string> extends RasterDecodeArtifact<Kind> {
+  readonly handle: RasterHandle;
+  readonly font: FontHandle;
   dispose(): void;
 }
 
@@ -88,7 +92,7 @@ export type RasterResourceResolver = (context: RasterResourceResolverContext) =>
 
 interface RuntimeRasterBakeRequestBase {
   readonly source: Uint8Array;
-  readonly font: RegisteredFont;
+  readonly font: RasterDecodeFont;
   readonly fontFaceIndex: number;
   readonly rasterKey: RasterKey | string;
   readonly signal?: AbortSignal;

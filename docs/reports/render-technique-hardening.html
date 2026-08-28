@@ -1,1374 +1,739 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Glyph render-technique hardening</title>
-  <style>
-    :root { color-scheme: light dark; --bg: light-dark(#f7f6f2, #111315); --panel: light-dark(#fff, #1a1d20); --text: light-dark(#202326, #eef1f3); --muted: light-dark(#666d72, #aab1b7); --line: light-dark(#d9d6ce, #343a40); --accent: light-dark(#125f75, #63c6df); --accent2: light-dark(#7b4b18, #e7aa68); --good: light-dark(#1d6b43, #72d39f); --code: light-dark(#f0eee8, #0d0f11); }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    main { max-width: 1180px; margin: 0 auto; padding: 42px 24px 80px; }
-    h1, h2, h3 { line-height: 1.18; font-weight: 650; letter-spacing: -0.02em; }
-    h1 { font-size: clamp(2rem, 5vw, 4.2rem); max-width: 900px; margin: 0 0 12px; }
-    h2 { margin: 54px 0 18px; font-size: 1.75rem; }
-    h3 { margin: 30px 0 10px; font-size: 1.15rem; }
-    p { max-width: 880px; }
-    a { color: var(--accent); }
-    code { font: .92em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    pre { background: var(--code); border: 1px solid var(--line); padding: 18px; overflow: auto; border-radius: 10px; }
-    pre code { white-space: pre; }
-    .eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: .12em; font-size: .76rem; font-weight: 700; }
-    .lede { font-size: 1.18rem; color: var(--muted); max-width: 850px; }
-    .meta, .grid { display: grid; gap: 14px; }
-    .meta { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 28px 0; }
-    .grid.two { grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
-    .metric { font-size: 1.55rem; font-weight: 650; display: block; }
-    .small, .caption { color: var(--muted); font-size: .88rem; }
-    .status { color: var(--good); font-weight: 700; }
-    nav { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 14px 0 20px; border-bottom: 1px solid var(--line); }
-    nav a { text-decoration: none; }
-    .flow { display: grid; grid-template-columns: repeat(6, minmax(135px, 1fr)); gap: 20px; align-items: stretch; overflow-x: auto; padding: 8px 0 16px; }
-    .flow .node { min-width: 135px; position: relative; background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 10px; padding: 14px; }
-    .flow .node:not(:last-child)::after { content: "→"; position: absolute; right: -17px; top: 42%; color: var(--muted); }
-    .node strong { display: block; margin-bottom: 6px; }
-    .node span { color: var(--muted); font-size: .82rem; }
-    table { width: 100%; border-collapse: collapse; background: var(--panel); }
-    th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); padding: 11px 12px; }
-    th { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; }
-    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
-    .step { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 15px; margin: 28px 0; }
-    .step-no { width: 40px; height: 40px; display: grid; place-items: center; background: var(--accent); color: var(--bg); border-radius: 50%; font-weight: 750; }
-    .step h3 { margin-top: 7px; }
-    .callout { border-left: 4px solid var(--accent2); padding: 3px 0 3px 16px; margin: 22px 0; max-width: 900px; }
-    .sequence { display: grid; grid-template-columns: 1fr 58px 1fr 58px 1fr; align-items: center; gap: 8px; margin: 20px 0; }
-    .sequence .arrow { text-align: center; color: var(--muted); font-size: 1.4rem; }
-    .lane { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-height: 110px; }
-    .lane em { display: block; color: var(--muted); font-style: normal; font-size: .84rem; margin-top: 6px; }
-    .bars { display: grid; gap: 8px; }
-    .bar-row { display: grid; grid-template-columns: 130px minmax(180px, 1fr) 82px; gap: 12px; align-items: center; }
-    .track { height: 12px; background: color-mix(in srgb, var(--muted) 18%, transparent); border-radius: 8px; overflow: hidden; }
-    .bar { height: 100%; background: var(--accent); }
-    .bar.base { background: var(--accent2); opacity: .8; }
-    .legend { display: flex; gap: 18px; margin: 10px 0 18px; color: var(--muted); font-size: .85rem; }
-    .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: -1px; background: var(--accent); }
-    .legend i.base { background: var(--accent2); }
-    .checklist { columns: 2; column-gap: 36px; padding-left: 20px; }
-    .checklist li { break-inside: avoid; margin-bottom: 8px; }
-    .swimlanes { display: grid; gap: 12px; margin: 22px 0; }
-    .swimlane-row { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; align-items: stretch; }
-    .lane-title { display: grid; align-content: center; padding: 12px; color: var(--muted); font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; border-right: 3px solid var(--line); }
-    .mini-flow { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 18px; overflow-x: auto; padding: 2px 0 8px; }
-    .topo-node { min-width: 130px; position: relative; background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 10px; padding: 12px; }
-    .topo-node:not(:last-child)::after { content: "→"; position: absolute; right: -15px; top: 40%; color: var(--muted); }
-    .topo-node strong { display: block; margin-bottom: 5px; }
-    .topo-node span { display: block; color: var(--muted); font-size: .8rem; }
-    .topo-node.host { border-top-color: var(--accent2); }
-    .topo-node.session { border-top-color: var(--good); }
-    .topo-node.target { border-top-color: color-mix(in srgb, var(--accent) 55%, var(--accent2)); }
-    .tree { display: grid; grid-template-columns: repeat(4, minmax(190px, 1fr)); gap: 22px; margin: 20px 0; align-items: start; }
-    .tree-col { display: grid; gap: 10px; }
-    .tree-col:not(:last-child) { position: relative; }
-    .tree-col:not(:last-child)::after { content: "→"; position: absolute; right: -17px; top: 28px; color: var(--muted); }
-    .tree-title { color: var(--muted); font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-    .tree-node { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 13px; }
-    .tree-node small { display: block; color: var(--muted); margin-top: 4px; }
-    .verdict { font-weight: 700; }
-    .verdict.yes { color: var(--good); }
-    .verdict.conditional { color: var(--accent2); }
-    .verdict.no { color: light-dark(#9b2c2c, #ff9b9b); }
-    .finding-high td:first-child { border-left: 4px solid light-dark(#9b2c2c, #ff9b9b); }
-    .finding-medium td:first-child { border-left: 4px solid var(--accent2); }
-    .finding-clean td:first-child { border-left: 4px solid var(--good); }
-    .diagram-scroll { overflow-x: auto; margin: 20px 0; }
-    .ownership-svg { display: block; width: 100%; min-width: 980px; height: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-    .ownership-svg .zone { fill: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%); stroke: var(--line); stroke-width: 1.5; }
-    .ownership-svg .zone.renderer { fill: color-mix(in srgb, var(--panel) 88%, var(--accent2) 12%); }
-    .ownership-svg .node-box { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; rx: 9; }
-    .ownership-svg .runtime-box { stroke: var(--accent); stroke-width: 3; }
-    .ownership-svg .host-box { stroke: var(--accent2); stroke-width: 3; }
-    .ownership-svg .session-box { stroke: var(--good); stroke-width: 3; }
-    .ownership-svg .target-box { stroke: color-mix(in srgb, var(--accent) 55%, var(--accent2)); stroke-width: 3; }
-    .ownership-svg text { fill: var(--text); font-family: ui-sans-serif, system-ui, sans-serif; }
-    .ownership-svg .zone-label { font-size: 15px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; fill: var(--muted); }
-    .ownership-svg .node-title { font-size: 16px; font-weight: 700; }
-    .ownership-svg .node-copy { font-size: 12px; fill: var(--muted); }
-    .ownership-svg .edge { fill: none; stroke: var(--muted); stroke-width: 1.8; marker-end: url(#ownership-arrow); }
-    .ownership-svg .edge.accept { stroke: var(--good); stroke-dasharray: 7 5; marker-end: url(#ownership-arrow-accept); }
-    .ownership-svg .edge.resources { stroke: var(--accent2); stroke-dasharray: 4 4; marker-end: url(#ownership-arrow-resource); }
-    .ownership-svg .edge-label { font-size: 12px; fill: var(--muted); }
-    .scenario-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; margin: 20px 0; }
-    .scenario-diagram { width: 100%; height: auto; display: block; margin: 12px 0; }
-    .scenario-diagram .node { fill: var(--bg); stroke: var(--line); stroke-width: 1.4; rx: 7; }
-    .scenario-diagram .core { stroke: var(--accent); stroke-width: 2.5; }
-    .scenario-diagram .render { stroke: var(--accent2); stroke-width: 2.5; }
-    .scenario-diagram .target { stroke: var(--good); stroke-width: 2.5; }
-    .scenario-diagram text { fill: var(--text); font: 12px ui-sans-serif, system-ui, sans-serif; }
-    .scenario-diagram .minor { fill: var(--muted); font-size: 10px; }
-    .scenario-diagram .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
-    .scenario-diagram .accept { stroke: var(--good); stroke-dasharray: 5 4; }
-    footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); }
-    @media (max-width: 760px) { main { padding: 26px 16px 56px; } .flow { grid-template-columns: 1fr; overflow: visible; } .flow .node:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -21px; } .sequence { grid-template-columns: 1fr; } .sequence .arrow { transform: rotate(90deg); } .bar-row { grid-template-columns: 100px 1fr 68px; } .checklist { columns: 1; } .swimlane-row { grid-template-columns: 1fr; } .lane-title { border-right: 0; border-bottom: 3px solid var(--line); padding: 8px 0; } .mini-flow { grid-template-columns: 1fr; overflow: visible; gap: 20px; } .topo-node:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -20px; } .tree { grid-template-columns: 1fr; } .tree-col:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -20px; } .scenario-grid { grid-template-columns: 1fr; } }
-  </style>
-</head>
-<body>
-<main>
-  <div class="eyebrow">pmndrs/glyph · implementation report</div>
-  <h1>One portable technique, many renderer choices</h1>
-  <p class="lede">The hardened contract makes a raster technique reusable without putting Three.js, TypeGPU, TSL, WGSL, or GPU objects into core. The technique owns data and a portable policy body. Each engine owns its numbered policy, shader selection, resources, geometry, material or pipeline, and submission.</p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glyph renderer integration and technique report</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: light-dark(#f6f4ee, #111416);
+        --surface: light-dark(#fff, #1a1e21);
+        --text: light-dark(#202426, #edf1f3);
+        --muted: light-dark(#667077, #aab3b9);
+        --line: light-dark(#d8d5cc, #364047);
+        --core: light-dark(#17657a, #63c6df);
+        --render: light-dark(#855219, #e7ac6a);
+        --good: light-dark(#1b6b43, #72d39f);
+        --code: light-dark(#eeece5, #0d1012);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.55 ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 40px 24px 72px;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.16;
+        letter-spacing: -0.02em;
+      }
+      h1 {
+        max-width: 880px;
+        margin: 0;
+        font-size: clamp(2.2rem, 5vw, 4rem);
+      }
+      h2 {
+        margin: 52px 0 16px;
+        font-size: 1.7rem;
+      }
+      h3 {
+        margin: 28px 0 10px;
+        font-size: 1.1rem;
+      }
+      p,
+      li {
+        max-width: 900px;
+      }
+      a {
+        color: var(--core);
+      }
+      code {
+        font:
+          0.92em/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      pre {
+        overflow: auto;
+        padding: 17px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--code);
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        margin: 24px 0;
+        padding: 14px 0;
+        border-block: 1px solid var(--line);
+      }
+      nav a {
+        text-decoration: none;
+      }
+      .eyebrow {
+        color: var(--core);
+        font-size: 0.75rem;
+        font-weight: 750;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .lede {
+        max-width: 860px;
+        color: var(--muted);
+        font-size: 1.16rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        padding: 17px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+      }
+      .card h3 {
+        margin-top: 0;
+      }
+      .callout {
+        max-width: 920px;
+        margin: 20px 0;
+        padding: 4px 0 4px 16px;
+        border-left: 4px solid var(--render);
+      }
+      .diagram {
+        overflow-x: auto;
+        margin: 20px 0;
+      }
+      svg {
+        display: block;
+        width: 100%;
+        min-width: 900px;
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+      }
+      svg text {
+        fill: var(--text);
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      svg .minor {
+        fill: var(--muted);
+        font-size: 12px;
+      }
+      svg .title {
+        font-size: 15px;
+        font-weight: 700;
+      }
+      svg .box {
+        fill: var(--bg);
+        stroke: var(--line);
+        stroke-width: 1.5;
+        rx: 8;
+      }
+      svg .core {
+        stroke: var(--core);
+        stroke-width: 3;
+      }
+      svg .render {
+        stroke: var(--render);
+        stroke-width: 3;
+      }
+      svg .accept {
+        stroke: var(--good);
+        stroke-width: 3;
+      }
+      svg .edge {
+        fill: none;
+        stroke: var(--muted);
+        stroke-width: 1.7;
+        marker-end: url(#arrow);
+      }
+      svg .dashed {
+        stroke-dasharray: 6 5;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--surface);
+      }
+      th,
+      td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-size: 0.78rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .table {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 40px minmax(0, 1fr);
+        gap: 14px;
+        margin: 26px 0;
+      }
+      .step > b {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--core);
+        color: var(--bg);
+      }
+      .step h3 {
+        margin-top: 5px;
+      }
+      .status {
+        color: var(--good);
+        font-weight: 700;
+      }
+      footer {
+        margin-top: 56px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+      }
+      @media (max-width: 680px) {
+        main {
+          padding: 26px 15px 52px;
+        }
+        .step {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">pmndrs/glyph · durable implementation report</div>
+      <h1>From immutable font to accepted GPU draw</h1>
+      <p class="lede">
+        This is the current renderer-neutral contract. A runtime owns shaping memory, a host owns one renderer
+        integration, a session owns one retained batch and acceptance frontier, and a plan target joins that core
+        hierarchy to a renderer device or context.
+      </p>
 
-  <div class="meta">
-    <div class="card"><span class="small">Committed API head</span><span class="metric">3d2e11eb</span><span class="small">portable rendering, branded IDs, publication ownership, pre-frame measurement, and lifetime hardening · <a href="https://github.com/pmndrs/glyph/pull/120">draft PR #120</a></span></div>
-    <div class="card"><span class="small">Stack base</span><span class="metric">f08a90cf6</span><span class="small">merged retention lineage from #110 and #112</span></div>
-    <div class="card"><span class="small">Wasm shaper</span><span class="metric">1,138,492 B</span><span class="small">442,402 gzip · 351,369 brotli · final timing gate passed</span></div>
-    <div class="card"><span class="small">Three runtime</span><span class="metric">97,163 gzip</span><span class="small">80,862 brotli · below reviewed cross-host ceilings</span></div>
-  </div>
+      <nav>
+        <a href="#flow">Complete flow</a>
+        <a href="#ownership">Ownership</a>
+        <a href="#integration">Integration API</a>
+        <a href="#resources">Resources</a>
+        <a href="#technique">Technique API</a>
+        <a href="#topologies">Topologies</a>
+        <a href="#evidence">Evidence</a>
+      </nav>
 
-  <nav aria-label="Report sections">
-    <a href="#outcome">Outcome</a><a href="#architecture">Architecture</a><a href="#topology">Ownership topology</a><a href="#renderer-api">Custom renderer API</a><a href="#walkthrough">Technique implementation</a><a href="#three">Three integration</a><a href="#failure">Failure model</a><a href="#performance">Performance</a><a href="#verification">Verification</a>
-  </nav>
+      <section id="flow">
+        <h2>Complete application and rendering flow</h2>
+        <div class="diagram">
+          <svg viewBox="0 0 1080 540" role="img" aria-label="Application, core, and renderer lifecycle">
+            <defs>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L9,3 z" fill="currentColor" />
+              </marker>
+            </defs>
+            <text x="25" y="34" class="title">APPLICATION ASSETS</text>
+            <rect x="25" y="50" width="190" height="66" class="box" />
+            <text x="42" y="77" class="title">loadFont()</text>
+            <text x="42" y="98" class="minor">immutable GLB-backed Font</text>
+            <rect x="245" y="50" width="190" height="66" class="box" />
+            <text x="262" y="77" class="title">createFontStack()</text>
+            <text x="262" y="98" class="minor">application fallback order</text>
+            <path d="M215 83 H245" class="edge" />
 
-  <section id="outcome">
-    <h2>Outcome</h2>
-    <div class="grid two">
-      <div class="card"><h3>What is portable</h3><p>Technique identity, schema, named bindings, constrained immutable resources, geometry declaration, policy-body factory, compiled binding bytes, and optional shader-language subpaths.</p></div>
-      <div class="card"><h3>What stays engine-owned</h3><p>System-buffer names, capability sets, policy-handle names, program namespace, shader selection, GPU realization, material/pipeline construction, transforms, upload and retirement rules, and submission. Numeric IDs are derived by the shared branded hash helper.</p></div>
-      <div class="card"><h3>Current acceptance evidence</h3><p>The external example runtime-bakes Inter, compiles and registers its portable binding, realizes named geometry and policy buffers with TypeGPU, submits indexed instanced WebGPU draws, reads RGBA pixels, updates retained text, and proves that the pixels change. The recording device remains a deterministic CPU oracle.</p></div>
-      <div class="card"><h3>First-party parity</h3><p>Bitmap repeated strikes, the MSDF atlas/range pair, and Slug repeated page groups now compile through the same portable resource contract as an external technique. Three retains only shader/material and GPU realization.</p></div>
-    </div>
-  </section>
+            <text x="25" y="166" class="title">CORE OWNERSHIP</text>
+            <rect x="25" y="182" width="190" height="72" class="box core" />
+            <text x="42" y="210" class="title">TextRuntime</text>
+            <text x="42" y="231" class="minor">Wasm + font registry + hosts</text>
+            <rect x="245" y="182" width="190" height="72" class="box core" />
+            <text x="262" y="210" class="title">TextEngineHost</text>
+            <text x="262" y="231" class="minor">policy + bindings + sessions</text>
+            <rect x="465" y="182" width="190" height="72" class="box core" />
+            <text x="482" y="210" class="title">Session</text>
+            <text x="482" y="231" class="minor">batch + target + revisions</text>
+            <rect x="685" y="182" width="170" height="72" class="box core" />
+            <text x="702" y="210" class="title">Text instances</text>
+            <text x="702" y="231" class="minor">desired retained state</text>
+            <path d="M215 218 H245" class="edge" />
+            <path d="M435 218 H465" class="edge" />
+            <path d="M655 218 H685" class="edge" />
+            <path d="M340 116 V182" class="edge dashed" />
 
-  <section id="architecture">
-    <h2>The complete flow</h2>
-    <div class="flow" role="img" aria-label="Portable technique through engine policy and renderer submission">
-      <div class="node"><strong>Technique package</strong><span>schema · policy body · compiler · baker · data</span></div>
-      <div class="node"><strong>Engine policy</strong><span>host IDs · system lanes · capabilities · allocation</span></div>
-      <div class="node"><strong>Font registration</strong><span>binding bytes · retained portable resources</span></div>
-      <div class="node"><strong>Rust engine</strong><span>shape · layout · gather · retain · plan</span></div>
-      <div class="node"><strong>Renderer device</strong><span>named buffers · resources · geometry · shader</span></div>
-      <div class="node"><strong>Submission</strong><span>draw spans · instances · transforms · retirement</span></div>
-    </div>
-    <p class="callout"><strong>The plan is renderer-neutral data, not a renderer.</strong> It says which program, buffers, resources, record spans, transforms, and primitive commands exist. The renderer knows how its selected shader consumes those named inputs. It does not need technique-specific policy knowledge.</p>
+            <rect x="685" y="292" width="170" height="72" class="box core" />
+            <text x="702" y="320" class="title">layout() / glyphs()</text>
+            <text x="702" y="341" class="minor">on-demand cached query</text>
+            <path d="M770 254 V292" class="edge" />
 
-    <h3>Ownership map</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Concern</th><th>Technique</th><th>Core / engine</th><th>Renderer</th></tr></thead>
-      <tbody>
-        <tr><td>Identity</td><td>Defines stable names at module construction</td><td>Hashes them to branded numeric IDs and collision-checks them</td><td>Stores and looks up numeric wire IDs; shader attribute names remain strings</td></tr>
-        <tr><td>Per-glyph values</td><td>Authors typed policy body</td><td>Executes body in Wasm</td><td>Uploads named plan buffers</td></tr>
-        <tr><td>Raster data</td><td>Bakes/decodes immutable bytes</td><td>Validates and retains payload</td><td>Realizes GPU resource</td></tr>
-        <tr><td>Shader</td><td>May publish TypeGPU, TSL, WGSL, GLSL subpaths</td><td>Never imports it</td><td>Selects one compatible variant</td></tr>
-        <tr><td>Geometry</td><td>Declares synthetic or supplied geometry</td><td>Validates GLB-like payload</td><td>Creates vertex/index buffers; plan owns instance count</td></tr>
-        <tr><td>Material / pipeline</td><td>May provide renderer-language helper</td><td>Never owns GPU objects</td><td>Constructs and disposes it</td></tr>
-      </tbody>
-    </table></div>
-  </section>
+            <rect x="465" y="292" width="190" height="72" class="box core" />
+            <text x="482" y="320" class="title">publish()</text>
+            <text x="482" y="341" class="minor">shape → layout → plan</text>
+            <path d="M685 235 C620 260 590 270 560 292" class="edge" />
 
-  <section id="topology">
-    <h2>Runtime, host, session, renderer, and canvas topology</h2>
-    <p><strong>The core hierarchy ends at an abstract plan target.</strong> Canvas, texture, renderer, render pass, and GPU device objects remain renderer-owned. The target tells one session whether its candidate actually committed, so the session—not application revision arithmetic—owns one acceptance frontier.</p>
-
-    <h3>Every step, including resource realization and pixels</h3>
-    <div class="swimlanes" role="img" aria-label="Complete Glyph lifecycle from runtime creation through canvas submission and resource retirement">
-      <div class="swimlane-row">
-        <div class="lane-title">Runtime and font</div>
-        <div class="mini-flow">
-          <div class="topo-node"><strong>1 · Load portable font</strong><span>Root <code>loadFont()</code> validates one immutable GLB backing without creating a runtime.</span></div>
-          <div class="topo-node"><strong>2 · Compose font stack</strong><span><code>createFontStack()</code> records fallback order as application data.</span></div>
-          <div class="topo-node"><strong>3 · Create runtime</strong><span><code>@pmndrs/glyph/core</code> creates one private registration domain and Wasm shaper.</span></div>
-          <div class="topo-node"><strong>4 · Keep font lease</strong><span>The font may outlive this runtime and bind to another one later.</span></div>
+            <text x="25" y="414" class="title">RENDERER OWNERSHIP</text>
+            <rect x="245" y="430" width="190" height="74" class="box render" />
+            <text x="262" y="458" class="title">PlanTarget.accept()</text>
+            <text x="262" y="479" class="minor">decode + stage transaction</text>
+            <rect x="465" y="430" width="190" height="74" class="box render" />
+            <text x="482" y="458" class="title">Device / context</text>
+            <text x="482" y="479" class="minor">buffers + resources + pipeline</text>
+            <rect x="685" y="430" width="170" height="74" class="box render" />
+            <text x="702" y="458" class="title">Pass / canvas</text>
+            <text x="702" y="479" class="minor">submit ordered draws</text>
+            <rect x="885" y="430" width="170" height="74" class="box accept" />
+            <text x="902" y="458" class="title">Acceptance</text>
+            <text x="902" y="479" class="minor">commit or reject</text>
+            <path d="M520 364 C475 395 410 405 375 430" class="edge" />
+            <path d="M435 467 H465" class="edge" />
+            <path d="M655 467 H685" class="edge" />
+            <path d="M855 467 H885" class="edge" />
+            <path d="M970 430 C970 385 705 390 625 364" class="edge dashed" />
+          </svg>
         </div>
-      </div>
-      <div class="swimlane-row">
-        <div class="lane-title">Host registration</div>
-        <div class="mini-flow">
-          <div class="topo-node host"><strong>5 · Create host</strong><span><code>runtime.createTextEngineHost()</code> constructs and records its permanent child.</span></div>
-          <div class="topo-node host"><strong>6 · Install policy</strong><span>The host wraps portable technique bodies with renderer lanes and capabilities.</span></div>
-          <div class="topo-node host"><strong>7 · Bind font</strong><span><code>host.bindFont(font)</code> deduplicates runtime shaping and host portable binding state.</span></div>
-          <div class="topo-node host"><strong>8 · Bind stack</strong><span><code>host.bindFontStack(stack)</code> returns one opaque host-owned fallback token.</span></div>
-          <div class="topo-node host"><strong>9 · Initialize lazily</strong><span>The renderer reuses or allocates immutable GPU resources when a plan first references them.</span></div>
+        <p class="callout">
+          <strong>Mutation is lazy.</strong> <code>update()</code> changes desired state. <code>layout()</code> and
+          <code>glyphs()</code> synchronously pay shaping/lookup cost only on a cache miss.
+          <code>publish()</code> performs the retained batch update and does not advance its accepted revision until the
+          target commits.
+        </p>
+      </section>
+
+      <section id="ownership">
+        <h2>Ownership and cardinality</h2>
+        <div class="table">
+          <table>
+            <thead>
+              <tr>
+                <th>Object</th>
+                <th>Created by</th>
+                <th>Owns</th>
+                <th>Use more than one when</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Font</code></td>
+                <td><code>loadFont()</code></td>
+                <td>Immutable artifact backing and decoded portable raster data</td>
+                <td>Source, face, subset, or raster variant differs</td>
+              </tr>
+              <tr>
+                <td><code>TextRuntime</code></td>
+                <td><code>createTextRuntime()</code></td>
+                <td>One Wasm domain, runtime-local shaping registrations, all child hosts</td>
+                <td>Worker/memory/teardown isolation is required</td>
+              </tr>
+              <tr>
+                <td><code>TextEngineHost</code></td>
+                <td><code>runtime.createTextEngineHost()</code></td>
+                <td>One integration’s policy, bindings, identities, and sessions</td>
+                <td>Renderer policy, physical device domain, or integration lifetime differs</td>
+              </tr>
+              <tr>
+                <td><code>Session</code></td>
+                <td><code>host.createSession()</code></td>
+                <td>One retained batch, target, capacity budget, and acceptance frontier</td>
+                <td>Scene, viewport, target, worker, or independent commit boundary differs</td>
+              </tr>
+              <tr>
+                <td><code>TextEngineText</code></td>
+                <td><code>session.createText()</code></td>
+                <td>One desired text state inside the session batch</td>
+                <td>Application text instances differ</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
-      <div class="swimlane-row">
-        <div class="lane-title">Session and text</div>
-        <div class="mini-flow">
-          <div class="topo-node session"><strong>10 · Create target + session</strong><span>Bind one policy and one borrowed or owned acceptance target.</span></div>
-          <div class="topo-node session"><strong>11 · Author text</strong><span>Stable paragraph/style/flow/region IDs identify creates, edits, and removals.</span></div>
-          <div class="topo-node session"><strong>12 · Publish changes</strong><span>The session compiler hides internal IDs and carries its opaque accepted cursor.</span></div>
-          <div class="topo-node session"><strong>13 · Shape and plan</strong><span>Wasm validates, shapes, lays out, gathers, and packs into A/B memory.</span></div>
-          <div class="topo-node session"><strong>14 · Deliver by mode</strong><span>Borrowed targets run inline; owned targets receive one package-created copy.</span></div>
-        </div>
-      </div>
-      <div class="swimlane-row">
-        <div class="lane-title">Renderer and target</div>
-        <div class="mini-flow">
-          <div class="topo-node target"><strong>15 · Validate tables</strong><span>Read buffers, patches, resources, primitives, draws, semantics, and retirements.</span></div>
-          <div class="topo-node target"><strong>16 · Join identities</strong><span>Resolve session storage and host resource references into a device pool.</span></div>
-          <div class="topo-node target"><strong>17 · Prepare candidate</strong><span>Build uploads, geometry, materials or pipelines, and draw state off to the side.</span></div>
-          <div class="topo-node target"><strong>18 · Submit GPU work</strong><span>Encode a render pass and submit it to the renderer's queue.</span></div>
-          <div class="topo-node target"><strong>19 · Canvas or texture</strong><span>The target attachment receives pixels; core never owns or names this surface.</span></div>
-        </div>
-      </div>
-      <div class="swimlane-row">
-        <div class="lane-title">Acceptance and release</div>
-        <div class="mini-flow">
-          <div class="topo-node session"><strong>20 · Commit candidate</strong><span>Only a successful renderer transaction replaces the prior accepted state.</span></div>
-          <div class="topo-node session"><strong>21 · Advance cursor</strong><span>The session records an opaque accepted revision/generation only after commit.</span></div>
-          <div class="topo-node session"><strong>22 · Next update</strong><span>The session supplies its cursor internally; copying alone never advances it.</span></div>
-          <div class="topo-node session"><strong>23 · Retire leases</strong><span>The plan emits safe session-local buffer/resource retirements after acknowledgment.</span></div>
-          <div class="topo-node target"><strong>24 · Release GPU object</strong><span>Drop the session lease; destroy pooled device data only after its final lease ends.</span></div>
-        </div>
-      </div>
-    </div>
+        <p>
+          A runtime permanently owns its hosts; a disposed runtime disposes them first. A host cannot rebind. Fonts are
+          different: they are immutable application assets and may bind into several hosts or runtimes. Bindings are
+          host-local, counted leases.
+        </p>
+      </section>
 
-    <h3>The cardinality graph</h3>
-    <div class="diagram-scroll">
-      <svg class="ownership-svg" viewBox="0 0 1160 650" role="img" aria-labelledby="ownership-title ownership-desc">
-        <title id="ownership-title">Font, runtime, host, session, target, device, and canvas ownership</title>
-        <desc id="ownership-desc">Portable font assets bind into runtime-owned host domains. Each host owns sessions, each session publishes to exactly one acceptance target, and renderer-owned device pools draw to canvases or textures.</desc>
-        <defs>
-          <marker id="ownership-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)"/></marker>
-          <marker id="ownership-arrow-accept" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--good)"/></marker>
-          <marker id="ownership-arrow-resource" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent2)"/></marker>
-        </defs>
-        <rect class="zone" x="20" y="38" width="260" height="574" rx="14"/>
-        <rect class="zone" x="300" y="38" width="500" height="574" rx="14"/>
-        <rect class="zone renderer" x="820" y="38" width="320" height="574" rx="14"/>
-        <text class="zone-label" x="42" y="70">Application assets</text>
-        <text class="zone-label" x="322" y="70">Glyph engine ownership</text>
-        <text class="zone-label" x="842" y="70">Renderer ownership</text>
+      <section id="integration">
+        <h2>Complete custom-renderer setup</h2>
 
-        <rect class="node-box" x="54" y="106" width="192" height="82"/>
-        <text class="node-title" x="74" y="137">Font</text><text class="node-copy" x="74" y="158">one immutable GLB backing</text><text class="node-copy" x="74" y="176">may outlive every runtime</text>
-        <rect class="node-box" x="54" y="246" width="192" height="76"/>
-        <text class="node-title" x="74" y="276">FontStack</text><text class="node-copy" x="74" y="297">ordered portable Font values</text>
-        <rect class="node-box" x="54" y="442" width="192" height="92"/>
-        <text class="node-title" x="74" y="472">Authored text</text><text class="node-copy" x="74" y="493">desired string, spans, box</text><text class="node-copy" x="74" y="511">create · update · remove</text>
+        <div class="step">
+          <b>1</b>
+          <div>
+            <h3>Load a font before creating renderer state</h3>
+            <pre><code>import { createFontStack, loadFont } from '@pmndrs/glyph';
+import { glyphExample } from '@pmndrs/glyph-example-raster';
 
-        <rect class="node-box runtime-box" x="336" y="100" width="202" height="92"/>
-        <text class="node-title" x="356" y="132">TextRuntime</text><text class="node-copy" x="356" y="153">one private Wasm shaper</text><text class="node-copy" x="356" y="171">deduped shaping registrations</text>
-        <rect class="node-box host-box" x="574" y="100" width="192" height="92"/>
-        <text class="node-title" x="594" y="132">TextEngineHost</text><text class="node-copy" x="594" y="153">policy + portable bindings</text><text class="node-copy" x="594" y="171">permanent runtime child</text>
-        <rect class="node-box" x="336" y="246" width="202" height="84"/>
-        <text class="node-title" x="356" y="277">RuntimeFontBinding</text><text class="node-copy" x="356" y="298">one Wasm copy per runtime</text><text class="node-copy" x="356" y="316">shared by attached hosts</text>
-        <rect class="node-box host-box" x="574" y="246" width="192" height="84"/>
-        <text class="node-title" x="594" y="277">HostFontBinding</text><text class="node-copy" x="594" y="298">binding bytes + payload lease</text><text class="node-copy" x="594" y="316">idempotent state, leased handles</text>
-        <rect class="node-box session-box" x="574" y="430" width="192" height="102"/>
-        <text class="node-title" x="594" y="462">TextEngineSession</text><text class="node-copy" x="594" y="483">one retained batch + policy</text><text class="node-copy" x="594" y="501">one target + acceptance cursor</text><text class="node-copy" x="594" y="519">A/B plan storage</text>
-
-        <rect class="node-box target-box" x="854" y="112" width="252" height="92"/>
-        <text class="node-title" x="874" y="144">PlanTarget</text><text class="node-copy" x="874" y="165">borrowed sync · async target copies</text><text class="node-copy" x="874" y="183">prepare → commit → accept</text>
-        <rect class="node-box" x="854" y="278" width="252" height="92"/>
-        <text class="node-title" x="874" y="310">GPUDevice realization pool</text><text class="node-copy" x="874" y="331">textures · geometry · pipelines</text><text class="node-copy" x="874" y="349">one immutable payload realization</text>
-        <rect class="node-box" x="854" y="446" width="252" height="84"/>
-        <text class="node-title" x="874" y="478">Canvas / texture / group</text><text class="node-copy" x="874" y="499">one surface or lockstep set</text><text class="node-copy" x="874" y="517">never a core-owned object</text>
-
-        <path class="edge" d="M 246 146 L 336 146"/><text class="edge-label" x="265" y="134">bind</text>
-        <path class="edge" d="M 437 192 L 437 246"/><text class="edge-label" x="447" y="224">register</text>
-        <path class="edge" d="M 538 146 L 574 146"/><text class="edge-label" x="543" y="134">owns</text>
-        <path class="edge" d="M 538 288 L 574 288"/><text class="edge-label" x="543" y="276">feeds</text>
-        <path class="edge resources" d="M 246 284 C 420 356, 658 350, 854 324"/><text class="edge-label" x="455" y="374">portable backing lease</text>
-        <path class="edge" d="M 670 192 L 670 246"/><text class="edge-label" x="680" y="224">bind</text>
-        <path class="edge" d="M 670 330 L 670 430"/><text class="edge-label" x="680" y="386">stack</text>
-        <path class="edge" d="M 246 488 L 574 488"/><text class="edge-label" x="356" y="476">mutations</text>
-        <path class="edge" d="M 766 468 C 804 438, 806 210, 854 170"/><text class="edge-label" x="774" y="326">publish</text>
-        <path class="edge resources" d="M 766 288 L 854 316"/><text class="edge-label" x="780" y="282">realize</text>
-        <path class="edge" d="M 980 204 L 980 278"/><text class="edge-label" x="991" y="244">prepare</text>
-        <path class="edge" d="M 980 370 L 980 446"/><text class="edge-label" x="991" y="410">draw</text>
-        <path class="edge accept" d="M 854 158 C 808 164, 810 490, 766 490"/><text class="edge-label" x="776" y="188">accept after commit</text>
-      </svg>
-    </div>
-    <p class="callout"><strong>Canvas rule:</strong> one session has exactly one target. That target may own several canvases only as a lockstep group: prepare every member before any accepted-state commit. A post-prepare partial backend failure marks the whole group lost and requires a session checkpoint. If canvas A may advance while canvas B remains on an older plan, use separate sessions.</p>
-
-    <h3>Concrete deployment maps</h3>
-    <div class="scenario-grid">
-      <div class="card">
-        <h3>Single canvas</h3>
-        <svg class="scenario-diagram" viewBox="0 0 420 150" role="img" aria-label="One runtime, host, session, target, device and canvas">
-          <defs><marker id="scenario-arrow-single" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="var(--muted)"/></marker></defs>
-          <rect class="node core" x="8" y="48" width="70" height="44"/><text x="22" y="74">Runtime</text>
-          <rect class="node core" x="92" y="48" width="62" height="44"/><text x="108" y="74">Host</text>
-          <rect class="node core" x="168" y="48" width="72" height="44"/><text x="180" y="74">Session</text>
-          <rect class="node target" x="254" y="48" width="64" height="44"/><text x="268" y="74">Target</text>
-          <rect class="node render" x="332" y="48" width="78" height="44"/><text x="345" y="74">Canvas</text>
-          <path class="edge" style="marker-end:url(#scenario-arrow-single)" d="M78 70H92M154 70H168M240 70H254M318 70H332"/>
-        </svg>
-        <p><strong>Recommended:</strong> one of each. Share ordering, batching, capacity, and acceptance.</p>
-      </div>
-      <div class="card">
-        <h3>Two independent canvases</h3>
-        <svg class="scenario-diagram" viewBox="0 0 420 190" role="img" aria-label="One runtime and host with separate sessions and targets for two independent canvases">
-          <defs><marker id="scenario-arrow-independent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="var(--muted)"/></marker></defs>
-          <rect class="node core" x="8" y="72" width="72" height="44"/><text x="22" y="98">Runtime</text>
-          <rect class="node core" x="96" y="72" width="62" height="44"/><text x="112" y="98">Host</text>
-          <rect class="node core" x="188" y="28" width="76" height="42"/><text x="200" y="53">Session A</text>
-          <rect class="node core" x="188" y="120" width="76" height="42"/><text x="200" y="145">Session B</text>
-          <rect class="node target" x="286" y="28" width="68" height="42"/><text x="299" y="53">Target A</text>
-          <rect class="node target" x="286" y="120" width="68" height="42"/><text x="299" y="145">Target B</text>
-          <text class="minor" x="363" y="53">Canvas A</text><text class="minor" x="363" y="145">Canvas B</text>
-          <path class="edge" style="marker-end:url(#scenario-arrow-independent)" d="M80 94H96M158 94C174 94 174 49 188 49M158 94C174 94 174 141 188 141M264 49H286M264 141H286M354 49H405M354 141H405"/>
-        </svg>
-        <p>Share font bindings and a device pool; split sessions because acceptance can advance independently.</p>
-      </div>
-      <div class="card">
-        <h3>Mirrored lockstep output</h3>
-        <svg class="scenario-diagram" viewBox="0 0 420 190" role="img" aria-label="One session and composite target committing to two canvases through a barrier">
-          <defs><marker id="scenario-arrow-lockstep" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="var(--muted)"/></marker></defs>
-          <rect class="node core" x="18" y="72" width="82" height="44"/><text x="32" y="98">Session</text>
-          <rect class="node target" x="130" y="65" width="110" height="58"/><text x="147" y="91">Composite</text><text class="minor" x="154" y="108">target/barrier</text>
-          <rect class="node render" x="278" y="28" width="100" height="42"/><text x="298" y="53">Canvas A</text>
-          <rect class="node render" x="278" y="120" width="100" height="42"/><text x="298" y="145">Canvas B</text>
-          <path class="edge" style="marker-end:url(#scenario-arrow-lockstep)" d="M100 94H130M240 82C256 82 256 49 278 49M240 106C256 106 256 141 278 141"/>
-          <path class="edge accept" style="marker-end:url(#scenario-arrow-lockstep)" d="M378 49C408 49 408 94 240 94M378 141C408 141 408 103 240 103"/>
-        </svg>
-        <p>Prepare both before committing either. If a physical commit partially fails, mark both lost and request a complete session checkpoint.</p>
-      </div>
-      <div class="card">
-        <h3>Transferred OffscreenCanvas</h3>
-        <svg class="scenario-diagram" viewBox="0 0 420 170" role="img" aria-label="Main thread state sent to worker-owned runtime, host, session and OffscreenCanvas">
-          <defs><marker id="scenario-arrow-offscreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="var(--muted)"/></marker></defs>
-          <rect class="node" x="8" y="62" width="90" height="48"/><text x="20" y="83">UI state</text><text class="minor" x="20" y="99">main thread</text>
-          <rect class="node core" x="128" y="34" width="90" height="104"/><text x="145" y="61">Runtime</text><text x="151" y="84">Host</text><text x="143" y="107">Session</text><text class="minor" x="146" y="126">worker</text>
-          <rect class="node target" x="250" y="62" width="70" height="48"/><text x="263" y="90">Target</text>
-          <rect class="node render" x="342" y="50" width="70" height="72"/><text x="351" y="79">Offscreen</text><text x="352" y="96">Canvas</text>
-          <path class="edge" style="marker-end:url(#scenario-arrow-offscreen)" d="M98 86H128M218 86H250M320 86H342"/>
-        </svg>
-        <p>Move the whole engine and renderer into the worker; messages carry authored state, so the borrowed path remains available.</p>
-      </div>
-      <div class="card">
-        <h3>Worker shaping, main-thread rendering</h3>
-        <svg class="scenario-diagram" viewBox="0 0 420 170" role="img" aria-label="Worker session transfers owned publication bytes to a main-thread target, which returns the buffer with acceptance">
-          <defs><marker id="scenario-arrow-transfer" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="var(--muted)"/></marker></defs>
-          <rect class="node core" x="14" y="48" width="112" height="64"/><text x="34" y="75">Worker session</text><text class="minor" x="34" y="94">owned delivery</text>
-          <rect class="node" x="154" y="48" width="104" height="64"/><text x="173" y="75">Transferred</text><text class="minor" x="165" y="94">plan + manifest</text>
-          <rect class="node target" x="286" y="48" width="118" height="64"/><text x="304" y="75">Main target</text><text class="minor" x="304" y="94">bindBytes + Canvas</text>
-          <path class="edge" style="marker-end:url(#scenario-arrow-transfer)" d="M126 80H154M258 80H286"/>
-          <path class="edge accept" style="marker-end:url(#scenario-arrow-transfer)" d="M286 106C270 146 144 146 126 106"/>
-          <text class="minor" x="158" y="158">commit + buffer return</text>
-        </svg>
-        <p>The source endpoint resolves every referenced resource, then transfers owned plan bytes plus an authenticated digest/descriptor manifest. The receiving endpoint validates both, realizes and commits the renderer transaction, and transfers the plan buffer back with its correlated result. Only then does the target resolve acceptance and advance the session fence.</p>
-      </div>
-      <div class="card">
-        <h3>Two renderer integrations</h3>
-        <svg class="scenario-diagram" viewBox="0 0 420 190" role="img" aria-label="One runtime with separate Three and WebGPU hosts and sessions">
-          <defs><marker id="scenario-arrow-hosts" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" fill="var(--muted)"/></marker></defs>
-          <rect class="node core" x="12" y="72" width="78" height="44"/><text x="27" y="98">Runtime</text>
-          <rect class="node core" x="126" y="28" width="88" height="42"/><text x="141" y="53">Three host</text>
-          <rect class="node core" x="126" y="120" width="88" height="42"/><text x="139" y="145">WebGPU host</text>
-          <rect class="node target" x="250" y="28" width="82" height="42"/><text x="264" y="53">Session A</text>
-          <rect class="node target" x="250" y="120" width="82" height="42"/><text x="264" y="145">Session B</text>
-          <text class="minor" x="348" y="53">Three target</text><text class="minor" x="348" y="145">WebGPU target</text>
-          <path class="edge" style="marker-end:url(#scenario-arrow-hosts)" d="M90 94C108 94 108 49 126 49M90 94C108 94 108 141 126 141M214 49H250M214 141H250M332 49H407M332 141H407"/>
-        </svg>
-        <p>Split hosts for policy and teardown ownership, not per canvas. The runtime deduplicates each font's Wasm registration.</p>
-      </div>
-    </div>
-
-    <h3>What the target API permits</h3>
-    <p class="callout"><strong>There is no core Device class.</strong> Core exposes a host and a renderer-implemented target contract. The host owns portable policy/font registrations and sessions; the target reports renderer commit. Canvas, <code>GPUDevice</code>, <code>GPUCanvasContext</code>, WebGL context, textures, bind groups, materials, pipelines, and realization pools remain renderer-private.</p>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Combination</th><th>Current verdict</th><th>Why or when to use it</th><th>Required rule</th></tr></thead>
-      <tbody>
-        <tr><td>1 runtime → 1 host → 1 session → 1 target</td><td><span class="verdict yes">Canonical</span></td><td>Small renderer or one retained text batch.</td><td>Runtime disposal cascades session and host before Wasm.</td></tr>
-        <tr><td>1 runtime → 1 host → many sessions</td><td><span class="verdict yes">Supported</span></td><td>Independent documents, text groups, capacities, update schedules, or acceptance frontiers.</td><td>Namespace mutable renderer state by session; there is no cross-session draw order or batching.</td></tr>
-        <tr><td>1 runtime → many hosts</td><td><span class="verdict yes">Supported</span></td><td>Different renderer integrations, policy ownership, plugin tenants, or teardown lifetimes sharing one shaper.</td><td>Every host is attached permanently to the runtime; runtime-private shaping registration is shared.</td></tr>
-        <tr><td>1 host → many policies</td><td><span class="verdict yes">Supported</span></td><td>One integration can install several policy configurations.</td><td>Each session chooses one host-owned policy at construction.</td></tr>
-        <tr><td>1 host → many renderer resource domains</td><td><span class="verdict conditional">Renderer-defined</span></td><td>One portable text integration feeding several devices or contexts.</td><td>Realize separately per GPUDevice/WebGL context; physical GPU objects never enter the host.</td></tr>
-        <tr><td>many sessions → 1 canvas</td><td><span class="verdict conditional">Renderer-defined</span></td><td>Layer or compose independent documents into one render pass.</td><td>The renderer owns cross-session ordering, batching, clipping, and transactional commit.</td></tr>
-        <tr><td>1 session → 1 composite target → many canvases</td><td><span class="verdict conditional">Sound in lockstep</span></td><td>Mirrored output where every surface accepts the same publication together.</td><td>Prepare all members before any commit; partial backend commit makes the group lost.</td></tr>
-        <tr><td>1 session → independently advancing canvases</td><td><span class="verdict no">Not sound as one frontier</span></td><td>The targets can retain different resource generations.</td><td>Use one session per independent acceptance domain.</td></tr>
-        <tr><td>many hosts → 1 canvas</td><td><span class="verdict conditional">Renderer-defined</span></td><td>Compose plans from independent policy domains.</td><td>Carry host and session domains into cache keys and define global draw order outside core.</td></tr>
-        <tr><td>many runtimes binding one <code>Font</code></td><td><span class="verdict yes">Supported</span></td><td>Different Wasm builds or independent lifetime domains in one realm.</td><td>Share one canonical GLB backing; allocate one shaping copy per live Wasm runtime.</td></tr>
-        <tr><td>many runtimes sharing mutable registrations</td><td><span class="verdict no">Unrepresentable</span></td><td>Mutable registry handles do not have one safe disposal owner.</td><td>The target API has no public runtime registry and exposes only portable Font assets.</td></tr>
-        <tr><td>1 host spanning many runtimes</td><td><span class="verdict no">Not supported</span></td><td>A host captures one shaper's exports and registration domain.</td><td>Create one host per runtime.</td></tr>
-        <tr><td>1 session shared by many hosts</td><td><span class="verdict no">Rejected</span></td><td>A session is created and owned by exactly one host.</td><td>Cross-host policy and stack references throw before the current borrow expires.</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3>Canvas and GPU resource sharing</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Topology</th><th>Host/session choice</th><th>Renderer-owned resources</th></tr></thead>
-      <tbody>
-        <tr><td>Two WebGPU canvases, one <code>GPUDevice</code></td><td>One host; normally one session per independently advancing canvas.</td><td>One device pool may share buffers, textures, bind groups, and pipelines. Each canvas contributes only its current presentation texture.</td></tr>
-        <tr><td>Two WebGPU canvases, different devices</td><td>The same host remains valid when both use the same portable policy ABI; targets/sessions stay independent.</td><td>Two pools. No GPU object crosses devices, even when portable host bindings are shared.</td></tr>
-        <tr><td>Two WebGL canvases</td><td>The same host remains valid when policy ownership is shared.</td><td>Two context-local pools. WebGL resources cannot cross contexts.</td></tr>
-        <tr><td>Separate policy or teardown owner</td><td>Create another host, whether or not there is another canvas.</td><td>Renderer pools still follow device/context ownership, not host identity.</td></tr>
-      </tbody>
-    </table></div>
-    <p>The overloaded word “binding” is the source of confusion: <code>host.bindFont()</code> creates a portable engine binding and resolver, not a WebGPU bind group. Two canvas targets can consume that same portable binding while their renderer either shares one same-device realization or creates two context/device-local realizations. Numeric wire keys are host-scoped; physical caches are separately scoped by renderer resource domain, authenticated payload identity, and variant, so equal numbers cannot alias across contexts.</p>
-
-    <h3>When should you split each owner?</h3>
-    <div class="grid two">
-      <div class="card"><h3>Use another runtime</h3><p>Split for another JavaScript realm or worker, another Wasm build, a hard memory/failure boundary, or truly independent teardown. Do not add a runtime merely for another canvas, policy, or document; it duplicates Wasm and registered shaping bytes.</p></div>
-      <div class="card"><h3>Use another host</h3><p>Split when policy registrations, renderer integration ownership, plugin trust, or teardown must be independent. A second canvas alone does not require it because the host owns no physical GPU objects.</p></div>
-      <div class="card"><h3>Use another session</h3><p>Split when text sets need independent revision/acceptance frontiers, resource retirements, capacities, scheduling, or failure isolation. Keep text together when cross-text ordering and batching matter; the engine cannot batch or order across sessions.</p></div>
-      <div class="card"><h3>Use another device pool or target</h3><p>Split GPU realizations per GPUDevice or WebGL context. Split acceptance per independently advancing canvas or texture. WebGPU canvases configured with one device may share a pool; lockstep surfaces may share one composite target and session frontier.</p></div>
-    </div>
-
-    <h3>Synchronous, asynchronous, and worker execution</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>What you mean by “async”</th><th>Can one integration do both?</th><th>Actual mechanism</th></tr></thead>
-      <tbody>
-        <tr><td>Synchronous shaping and immediate same-thread rendering</td><td><span class="verdict yes">Yes</span></td><td>Create a borrowed target. Its callback must commit and answer inline while the host blocks sibling calls that could grow Wasm.</td></tr>
-        <tr><td>Synchronous shaping followed by async GPU/device submission</td><td><span class="verdict yes">Yes</span></td><td>Create an owned target. The session makes the one required copy before invoking the async target.</td></tr>
-        <tr><td>Some sessions submit synchronously while others submit asynchronously</td><td><span class="verdict yes">Yes</span></td><td>One host may own both delivery modes. The host coordinates borrowed access; the renderer synchronizes its shared device pool.</td></tr>
-        <tr><td>Several candidates in flight from one session</td><td><span class="verdict no">Rejected by default</span></td><td>One session serializes publication and acceptance so its next request always carries one unambiguous accepted cursor.</td></tr>
-        <tr><td>Actual off-main-thread shaping</td><td><span class="verdict conditional">Worker runtime required</span></td><td>Create runtime/host/session in the worker. Transfer owned publication bytes with the resolved resource manifest and call <code>bindBytes()</code> in the receiving realm, or move the renderer target and OffscreenCanvas into the worker.</td></tr>
-        <tr><td>Wrapping <code>session.update()</code> in a Promise</td><td><span class="verdict no">Not asynchronous shaping</span></td><td>It still runs synchronously in that realm; a Worker is the concurrency boundary.</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3>Resource and storage keys across every owner</h3>
-    <div class="flow" role="img" aria-label="Portable font resource mapped through host identity, session lease, device pool, shader, and canvas">
-      <div class="node"><strong>Portable payload</strong><span>authenticated identity + GLB view<br>Font backing lifetime</span></div>
-      <div class="node"><strong>Host binding</strong><span>opaque host token + numeric wire ID<br>resolves role → payload</span></div>
-      <div class="node"><strong>Renderer pool</strong><span><code>(resource domain, payload identity, variant)</code><br>texture / geometry / buffer</span></div>
-      <div class="node"><strong>Session lease</strong><span><code>(session, id, generation)</code><br>plan-local live reference</span></div>
-      <div class="node"><strong>Named shader binding</strong><span>program + resource role<br>bind realized object</span></div>
-      <div class="node"><strong>Draw and target</strong><span>record span + instances<br>canvas / texture pixels</span></div>
-    </div>
-    <p>Mutable plan buffers use <code>(session origin, bufferId, generation)</code>. Resource rows use <code>(session origin, resourceId, generation)</code> as the live lease and the host binding to resolve an authenticated immutable payload. Numeric wire IDs remain compact protocol values, never global renderer cache keys. Payload identity is a package-validated collision-resistant digest over technique, descriptor/format metadata, and bytes, so compatible hosts or realms may share a device realization only when that identity and renderer variant match.</p>
-    <p class="callout"><strong>Retention rule:</strong> a session retirement releases that session's lease. It does not necessarily destroy the device object. The renderer destroys a pooled realization only after the final session/host lease for that device-local object ends. Device loss discards the physical pool and requests a complete checkpoint; the retained portable payload remains the source for realization.</p>
-
-    <h3>API ownership audit</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Severity</th><th>Observed API condition</th><th>Concrete failure mode</th><th>Smallest credible correction</th><th>Regression evidence to add</th></tr></thead>
-      <tbody>
-        <tr class="finding-high"><td><strong>High</strong></td><td><code>TextRuntimeOptions.registry</code> lets two runtimes own mutable <code>RegisteredFont</code> and raster handles without per-runtime leases.</td><td>Disposing one runtime-bound font can drop shaping state while another <code>LoadedFont</code> still reports live.</td><td>Remove the public mutable runtime registry. Root <code>loadFont()</code> returns an immutable refcounted Font; each runtime privately registers it.</td><td>One Font binds to two runtimes and survives either disposal order; each runtime has exactly one shaping registration.</td></tr>
-        <tr class="finding-high"><td><strong>High</strong></td><td><code>new TextEngineHost(textRuntimeShaper(runtime))</code> captures raw exports but loses the public runtime-lifetime edge.</td><td>After <code>runtime.dispose()</code>, an external host can continue against orphaned exports because only first-party integrations install private observers.</td><td>Move runtime construction to <code>/core</code> and expose only <code>runtime.createTextEngineHost()</code>; attach before return, cascade teardown, and provide no raw or rebind constructor.</td><td>Runtime disposal closes every host/session before Wasm; all later calls fail as disposed.</td></tr>
-        <tr class="finding-high"><td><strong>High</strong></td><td>A session exposes acknowledgment numbers but does not own the renderer endpoint whose commit gives those numbers meaning.</td><td>One session can acknowledge a fast canvas while a slower canvas still uses retired storage.</td><td>Require exactly one abstract borrowed-or-owned target at session creation. A renderer may implement one lockstep composite target.</td><td>Independent canvases require separate sessions; a composite target cannot accept before every member commits.</td></tr>
-        <tr class="finding-high"><td><strong>High</strong></td><td>A content-keyed runtime registration map can become a lifetime owner instead of a lookup index.</td><td>A long-lived runtime can retain every once-bound font's Wasm copy and backing after its final host lease ends.</td><td>Retain the runtime entry only through counted host-binding leases and dispose the Wasm registration at lease zero.</td><td>Hundreds of bind/release cycles return counters to baseline without disposing the runtime.</td></tr>
-        <tr class="finding-high"><td><strong>High</strong></td><td>One lost device may serve many sessions, but a target method cannot signal the session that owns it.</td><td>Only one session checkpoints; sibling sessions submit deltas against resources discarded with the old device.</td><td>Session creation passes an opaque checkpoint control into the target factory; the device pool tracks every attached control and fans loss out to all.</td><td>Each session rejects its own deltas until its checkpoint commits; an idle sibling cannot block it.</td></tr>
-        <tr class="finding-medium"><td><strong>Medium</strong></td><td>Mutable plan IDs are session-local, but the common path exposes numbers instead of a proven session origin.</td><td>A shared renderer cache can alias session A's buffer 1/generation 1 with session B's equal numbers.</td><td>Carry an opaque origin with target candidates and key mutable storage by it; hide session IDs in convenience APIs.</td><td>Equal wire IDs from two sessions remain isolated through upload, retirement, and disposal.</td></tr>
-        <tr class="finding-medium"><td><strong>Medium</strong></td><td><code>referenceId</code> is compact protocol identity, not globally authenticated payload identity.</td><td>A cross-host device pool keyed only by the number can alias unrelated resources or miss valid sharing.</td><td>Resolve through the host binding, then pool by authenticated payload identity plus device and renderer variant.</td><td>Equal wire IDs never alias unrelated data; identical authenticated payloads share one realization across sessions.</td></tr>
-        <tr class="finding-medium"><td><strong>Medium</strong></td><td>Wasm memory growth is runtime-wide even though a borrow appears session-local.</td><td>A session under host B can grow memory and expire host A's view while A is consuming it.</td><td>Deliver borrows only inside a runtime-coordinated callback that blocks every attached host from re-entering Wasm; owned targets receive a copy before yielding.</td><td>A borrowed callback cannot overlap any call on the same runtime; owned delivery remains valid across later calls.</td></tr>
-        <tr class="finding-medium"><td><strong>Medium</strong></td><td>The raw frame type repeats session, policy, revision, and acceptance numbers that the session already owns.</td><td>A worker can acknowledge a copied-but-rejected generation and let Rust retire storage the device still uses.</td><td>Remove public raw session updates. A worker uses an owned target transport and returns commit acceptance to the same target-bound session.</td><td>Target-bound sessions have no caller-authored acknowledgment API; only a committed target answer advances the cursor.</td></tr>
-        <tr class="finding-medium"><td><strong>Medium</strong></td><td><code>/react</code> currently owns a module-scope loader and settled promise map.</td><td>The target no-global-cache rule would break Suspense stability or retain every resolved Font indefinitely.</td><td>Move Suspense resources into an explicit provider-owned <code>FontLibrary</code>; each mounted consumer receives an independent lease.</td><td>StrictMode remount, clear, provider disposal, and two-canvas sharing cannot bind a disposed sibling lease.</td></tr>
-        <tr class="finding-clean"><td><strong>Clean</strong></td><td>Multiple hosts over one shaper already share a module-level ownership table.</td><td>Double ownership and cross-host policy/stack use are rejected before the current publication is invalidated.</td><td>Preserve this call-time boundary while adding stronger host-bound convenience tokens.</td><td>The existing cross-host ownership integration test remains the oracle.</td></tr>
-        <tr class="finding-clean"><td><strong>Clean</strong></td><td>Every Rust session has its own retained semantic state, plan compiler, request arena, and A/B output transport.</td><td>Ordinary calls on another session do not overwrite its slots; only shared-memory growth changes the buffer object.</td><td>Preserve session-local arenas and make their origin explicit to renderer caches.</td><td>Add a multi-session publication/storage isolation fixture.</td></tr>
-        <tr class="finding-clean"><td><strong>Clean</strong></td><td>Owned publications and worker-bound <code>bindBytes()</code> correctly separate ownership from device acceptance.</td><td>Forged same-realm ownership is rejected; worker bytes are fully revalidated; copying never advances retirement fences.</td><td>Preserve this model.</td><td>Existing retention and malformed-table tests remain authoritative.</td></tr>
-        <tr class="finding-clean"><td><strong>Clean</strong></td><td>Core does not name Canvas, Three, TypeGPU, <code>GPUDevice</code>, or render passes.</td><td>No renderer dependency leaks into technique or plan contracts.</td><td>Keep targets renderer-owned; strengthen only the abstract acceptance and identity domains that core already depends on.</td><td>Entry-point and package-boundary tests continue to enforce neutrality.</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3>Opus High review: validated disposition</h3>
-    <p>Opus reviewed commit <code>7cd3f250</code> and the frozen pre-review report, then the findings were checked against this checkout. The review found five blocking contract defects and ten secondary gaps; the updated target below closes the validated issues before implementation.</p>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Finding</th><th>Disposition</th><th>Plan correction</th></tr></thead>
-      <tbody>
-        <tr><td>Runtime cache retained once-bound fonts</td><td><span class="verdict yes">Accepted</span></td><td>Weak lookup; Wasm registration dies at final binding lease.</td></tr>
-        <tr><td>React module cache was omitted</td><td><span class="verdict yes">Accepted</span></td><td>Provider-owned FontLibrary and independent mounted leases.</td></tr>
-        <tr><td>Checkpoint method pointed from target to itself</td><td><span class="verdict yes">Accepted</span></td><td>Session factory supplies one opaque checkpoint control to its target.</td></tr>
-        <tr><td>Device loss did not fan out</td><td><span class="verdict yes">Accepted</span></td><td>Pool signals every attached session; each independently resumes after its own checkpoint.</td></tr>
-        <tr><td>Raw session update preserved forged acceptance</td><td><span class="verdict yes">Accepted, strengthened</span></td><td>Remove the public raw path; worker delivery remains target-bound.</td></tr>
-        <tr><td>Borrow gate was host-local</td><td><span class="verdict yes">Accepted</span></td><td>Runtime gate covers calls through every host.</td></tr>
-        <tr><td>Cross-host pool key was undefined</td><td><span class="verdict yes">Accepted</span></td><td>Package-supplied payload identity; never pool by wire ID.</td></tr>
-        <tr><td>Lockstep target could partially commit</td><td><span class="verdict yes">Accepted in substance</span></td><td>Prepare all before any commit; partial backend commit loses the group. Boolean acceptance remains sufficient.</td></tr>
-        <tr><td>Raster/baker contract was incomplete</td><td><span class="verdict yes">Accepted, narrowed</span></td><td>Singular typed Font handles, tuple loads, complete immutable source bake, no late raster mutation.</td></tr>
-        <tr><td>No-library loads lost coalescing</td><td><span class="verdict yes">Accepted</span></td><td>Coalesce pending requests only; drop entry on settle.</td></tr>
-        <tr><td>Dispose during owned acceptance was undefined</td><td><span class="verdict yes">Accepted</span></td><td>Abort and ignore late answers.</td></tr>
-        <tr><td>Transfer input lost subview bounds</td><td><span class="verdict yes">Accepted</span></td><td>Require a full non-shared view before detaching.</td></tr>
-        <tr><td>Normative candidate/library types were incomplete</td><td><span class="verdict yes">Accepted</span></td><td>Define origin, payload identity/lease, target control, FontLibrary, errors, and text capacity.</td></tr>
-        <tr><td>Draft plan versus accepted decision</td><td><span class="verdict conditional">Rejected as defect</span></td><td>OKF draft is document lifecycle; D-286 is the accepted architectural decision pending implementation.</td></tr>
-        <tr><td>Report provenance was ambiguous</td><td><span class="verdict yes">Accepted as presentation</span></td><td>Footer separates the portability head and ownership review commit; the final handoff records the report hash.</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3>Opus follow-up: target-control closure</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Verified gap</th><th>Closed contract</th><th>Required evidence</th></tr></thead>
-      <tbody>
-        <tr><td>Session disposal could leave a stale checkpoint control in the device pool.</td><td>Every plan target is idempotently disposable; session teardown aborts acceptance, disposes the target, detaches and invalidates its control, then releases session state.</td><td>A disposed shared-pool session receives no loss callback and cannot block a live sibling.</td></tr>
-        <tr><td>A pool-wide replacement barrier deadlocked an idle session.</td><td>Loss fans out to all live controls, but checkpoint-required state and acceptance barriers are per session.</td><td>An active canvas recovers while an idle sibling publishes nothing.</td></tr>
-        <tr><td>Plan bytes crossed a worker boundary without a resource resolver.</td><td>The worker endpoint resolves referenced resources into an authenticated content-digest/descriptor manifest and transfers missing payload bytes; the receiver validates both plan and payloads.</td><td>Worker shaping/main rendering realizes a real font, reuses a cached digest, and rejects a forged manifest.</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3>Opus High ownership-plan review: implementability closure</h3>
-    <p>Opus reviewed committed target <code>ff4cbea0</code> against the complete source tree. It agreed with the ownership thesis but found the plan could not yet be implemented because it had hidden the text-input protocol, omitted renderer-free Paragraph measurement, bake discovery, applications, and target-construction cleanup, and left several transport lifetimes unenforced. The source-validated correction now requires:</p>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Gap</th><th>Closed shape</th></tr></thead>
-      <tbody>
-        <tr><td>Text input disappeared with the raw compiler.</td><td>Session-owned retained <code>createText</code>/<code>update</code>/<code>dispose</code>; core authors all IDs, revisions, and cursors.</td></tr>
-        <tr><td>Paragraph had no place in the exactly-one-target rule.</td><td>Only render sessions require a target. Async root <code>createParagraph()</code> acquires a private target-less measurement service; later queries remain synchronous.</td></tr>
-        <tr><td><code>defineFont</code> AOT discovery and <code>FontInput</code> were omitted.</td><td>Preserve the existing names and discovery anchor; <code>loadFont(defineFont(...))</code> is supported and bake fixtures are a merge gate.</td></tr>
-        <tr><td>Worker transfer could detach canonical payload backing.</td><td>Canonical views never transfer. A receiving-cache miss receives one dedicated payload-range copy; the plan still has exactly one plan-byte copy.</td></tr>
-        <tr><td>Borrow expiry, payload release, delivery mismatch, and factory failure were only implied.</td><td>Lease-bound reader checks every access; explicit payload disposal; runtime delivery validation; newly claimed targets are disposed on construction failure without touching reused live targets.</td></tr>
-        <tr><td>Worker termination and WebGPU asynchronous errors lacked a bound response.</td><td>Core disposal settles pending publication; worker lifecycle events reject deterministically; later WebGPU errors enter lost/checkpoint recovery rather than retroactively changing acceptance.</td></tr>
-        <tr><td>App migration and current transfer machinery were absent.</td><td>Every <code>apps/</code> consumer is in scope, React preload is library-bound, and the existing bounded frame-transfer pool is adapted rather than replaced.</td></tr>
-      </tbody>
-    </table></div>
-
-    <p class="callout"><strong>Follow-up contract corrections.</strong> The worker pool now reuses only exact-byte-length returned allocations, preserves both a full-span candidate and one plan copy, and evicts least-recently-returned sizes within count/byte bounds. Async target capacity must cover the session output limit. <code>host.installPolicy()</code> consumes a complete multi-program <code>PolicyDescriptor</code>; session construction selects one descriptor-owned capability object and validated limits, while core owns numeric selection IDs. Renderer-owned transform slots use opaque host bindings and resolve at the target; semantic views include the combined <code>all</code> choice. Supplied font bytes always retain an explicit <code>baked</code> or <code>source</code> discriminant. Size gates compare stable feature graphs and a combined root/core graph, so moving exports cannot reset the baseline.</p>
-    <p><strong>Final review:</strong> Opus High verified exact contract commit <code>c94f3093</code> against source and reported no actionable blocker; the plan is implementable.</p>
-
-    <h3>Recommended public ownership shape</h3>
-    <p>Load the portable font before a runtime exists. Attach the integrator-only host to a runtime owner, bind the font through leases, and bind one renderer-owned target to each session. Canvas and GPU objects stay behind the target.</p>
-    <p class="callout"><strong>Root remains the useful application barrel.</strong> Portable names such as <code>Font</code>, <code>FontStack</code>, <code>defineFont</code>, <code>loadFont</code>, <code>txt</code>, <code>span</code>, paint, layout, measurement, technique, and baker contracts remain available from <code>@pmndrs/glyph</code>. Runtime, host, session, policy, plan-reader, and renderer-implementation types live in <code>/core</code>. An integration may re-export a root type only when its own signatures use it; it does not mirror the barrel. Mutable <code>FontRegistry</code>, <code>RegisteredFont</code>/<code>RegisteredRaster</code>, runtime-bound <code>LoadedFont</code>, and raw dynamic handles leave the application surface.</p>
-<pre><code>// Proposed high-level shape — illustrative, not current API.
 const font = await loadFont({
-  input: { baked: fontUrl },
+  input: { baked: '/fonts/Inter.font.glb' },
   raster: { technique: glyphExample, options: { paletteSeed: 7 } },
 });
-const fontStack = createFontStack(font);
-// Runtime and host construction are integrator-only /core APIs.
+const fontStack = createFontStack(font);</code></pre>
+            <p>Loading validates immutable CPU data. It does not create a runtime or GPU object.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <b>2</b>
+          <div>
+            <h3>Create a runtime, host, and policy</h3>
+            <pre><code>import { createTextRuntime } from '@pmndrs/glyph/core';
+
 const runtime = await createTextRuntime();
 const host = runtime.createTextEngineHost({
-  integration: 'my-renderer',
+  integration: 'studio.webgpu-text',
 });
+const policy = host.installPolicy(rendererPolicy);</code></pre>
+            <p>
+              The renderer builds <code>rendererPolicy</code> from its capabilities and system lanes plus each
+              technique’s portable policy program. Capability ordinals are automatic; stable protocol IDs are branded
+              numeric hashes, never user-authored numbers.
+            </p>
+          </div>
+        </div>
 
-const rendererPolicy = {
-  capabilitySets: [rendererCapabilities],
-  programs: rendererPrograms,
-};
-const policy = host.installPolicy(rendererPolicy);
-const stack = host.bindFontStack(fontStack); // binds every Font and owns those leases
-const pool = renderer.devicePool(device);
-const session = host.createSession({
+        <div class="step">
+          <b>3</b>
+          <div>
+            <h3>Bind the stack and create one plan target</h3>
+            <pre><code>const stack = host.bindFontStack(fontStack);
+
+const target = {
+  delivery: 'borrowed',
+  accept(candidate, signal) {
+    signal.throwIfAborted();
+    const transaction = device.beginCandidate(candidate.planRevision);
+    try {
+      decodeAndStage(candidate, transaction);
+      transaction.commit();
+      return { accepted: true };
+    } catch (error) {
+      transaction.discard();
+      return { accepted: false, error };
+    }
+  },
+  dispose() {
+    device.disposeTarget();
+  },
+} satisfies PlanTarget;</code></pre>
+            <p>
+              The default path borrows Wasm A/B memory only during synchronous <code>accept()</code>. The CPU copies
+              needed bytes into renderer-owned GPU/upload storage before returning; GPU execution may continue
+              afterward.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <b>4</b>
+          <div>
+            <h3>Create a retained session and text</h3>
+            <pre><code>const session = host.createSession({
   policy,
-  capabilitySet: rendererCapabilities,
-  target: (control) =&gt; renderer.createPlanTarget({
-    control,              // session-owned checkpoint signal
-    pool,
-    canvas,
-    delivery: 'borrowed',
-  }),
-  limits: rendererLimits,
-  requestCapacity: SESSION_REQUEST_BYTES,
-  resultCapacity: SESSION_RESULT_BYTES,
-  textCapacity: SESSION_TEXT_BYTES,
+  capabilitySet,
+  target: () =&gt; target,
+  limits,
+  requestCapacity: 64 * 1024,
+  resultCapacity: 256 * 1024,
+  textCapacity: 16 * 1024,
 });
 
-const text = session.createText({ font: stack, text: 'Hello' });
-session.publish();
+const title = session.createText({
+  font: stack,
+  text: 'Hello',
+  style: { fontSize: 48 },
+  contentBox: { width: { mode: 'at-most', size: 800 } },
+});</code></pre>
+          </div>
+        </div>
 
-text.update({ value: 'Hello, world' });
-session.publish(); // target commit advances the cursor internally
+        <div class="step">
+          <b>5</b>
+          <div>
+            <h3>Update, query on demand, then publish</h3>
+            <pre><code>title.update({ text: 'Hello, Glyph' });
 
-text.dispose();
-session.publish(); // emits removal before recycling internal IDs
+const metrics = title.layout();
+const positioned = title.glyphs();
+
+const result = session.publish({ semanticViews: 'measurement' });
+if (!result.accepted) reportRendererError(result.error);</code></pre>
+            <p>
+              <code>layout()</code> returns aggregate metrics. <code>glyphs()</code> returns caller-owned positioned
+              columns and ink boxes. Both may synchronously incur lookup work on a cache miss;
+              <code>glyphs()</code> also copies its returned columns. Their canonical constraint caches are bounded
+              three-entry LRUs. Neither publishes a draw.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <b>6</b>
+          <div>
+            <h3>Dispose from leaf to root</h3>
+            <pre><code>title.dispose();
 session.dispose();
 stack.dispose();
 policy.dispose();
 host.dispose();
-runtime.dispose();</code></pre>
-    <p>This removes runtime ownership from Font, and removes IDs and revision arithmetic from the public integration path without changing the compact numeric wire format. The raw frame compiler becomes package-internal test/fuzz infrastructure; a worker uses <code>AsyncPlanTarget</code> and returns its plan buffer with the commit answer to the same target-bound session.</p>
-    <p class="callout"><strong>Zero-copy is the default.</strong> <code>PlanTarget</code> consumes the borrowed A/B publication and makes <code>publish()</code> synchronous. Only <code>AsyncPlanTarget</code> receives one exact-range standalone copy and returns a Promise. The bounded transfer pool reuses only exact-byte-length returned allocations, so the candidate always spans its complete backing and no oversized subview helper can create a second copy. That buffer is transferred—not cloned—to the worker and returned with acceptance. Before the async call, the session resolves every referenced portable payload; canonical Font backing is never detached. The host infers the session return type from the target factory and rejects target reuse before allocating Wasm state.</p>
-
-    <h3>What the renderer's target actually does</h3>
-<pre><code>// Renderer-owned target; illustrative target API.
-function createPlanTarget({ control, pool, canvas }) {
-  const device = pool.device;
-  pool.attach(control); // one device pool tracks every attached session
-
-  return {
-    delivery: 'borrowed',
-
-    accept(candidate, signal) {
-      // candidate.origin namespaces mutable session buffers.
-      // Font payload identity pools immutable resources across sessions.
-      const pending = pool.prepare(candidate, {
-        acquirePayload: (referenceId) =&gt; candidate.acquirePayload(referenceId),
-      });
-
-      try {
-        const pass = device.beginCanvasPass(canvas);
-        pending.encode(pass); // uploads, resources, geometry, pipelines, draws
-        device.submit(pass);  // synchronous enqueue/transaction boundary
-        signal.throwIfAborted();
-        pending.commit();     // swaps live state only after complete success
-        return { accepted: true };
-      } catch (error) {
-        pending.discard();    // destroys only uncommitted candidate objects
-        return { accepted: false, error };
-      }
-    },
-
-    dispose() {
-      pool.detach(control);
-    },
-  };
-}
-
-// Device replacement is one pool event fanned out to every live session.
-pool.onDeviceLost(() =&gt; {
-  pool.stopAccepting();
-  pool.rebuildPhysicalObjects();
-  pool.resumeCheckpointRequired(); // required state is tracked per control
-  for (const control of pool.controls) control.requestCheckpoint();
-});</code></pre>
-    <p>A plan resource retirement releases the session's lease. The pool destroys a texture, supplied geometry buffer, or other immutable realization only after its final device-local lease ends. This ordinary target reads a lease-bound borrowed publication whose methods throw after <code>accept()</code>, prepares and submits renderer work, commits renderer state, and answers before returning. GPU execution may finish later; that does not require copying the plan or awaiting <code>popErrorScope()</code>; later WebGPU validation/device faults enter the renderer's lost/checkpoint path. A worker round trip instead uses <code>AsyncPlanTarget</code>: core copies only the exact Wasm publication range, the target transfers that standalone buffer and its pre-resolved resource manifest without another clone, the receiver validates and commits, and then transfers the same allocation back with the correlated result. A missing payload uses a separate exact-range transfer copy; a canonical Font backing view is never detached. The returned acceptance advances the session fence; a lost worker leaves it unchanged. For a lockstep target, every surface prepares before any accepted-state commit; partial backend commit makes the whole group lost.</p>
-
-    <h3>Disposal without finalizers</h3>
-    <p>Runtime disposal deterministically cascades sessions and hosts; stack and binding leases protect Font backing and renderer resources. An unused Font needs no finalizer: when its wrapper becomes unreachable, its backing is unreachable too and ordinary GC collects both. Runtime lookup maps are weak and release Wasm registration at lease zero; a strong cache exists only inside an explicit application-owned <code>FontLibrary</code>. <code>font.dispose()</code> provides deterministic early release while the wrapper remains reachable and rejects new bindings.</p>
-  </section>
-
-  <section id="renderer-api">
-    <h2>Build a custom renderer: target API walkthrough</h2>
-    <p>This section describes the accepted target surface; it is not implemented yet. Load fonts as portable assets, create one runtime per realm, attach one host per renderer integration, install policy once, bind each font through leases, and keep one target-bound session alive across every frame for one independently accepted text scene.</p>
-
-    <div class="flow" role="img" aria-label="Renderer integration lifecycle from process setup through teardown">
-      <div class="node"><strong>1 · Portable font</strong><span><code>loadFont()</code><br>one immutable GLB backing</span></div>
-      <div class="node"><strong>2 · Runtime + host</strong><span><code>@pmndrs/glyph/core</code><br><code>runtime.createTextEngineHost()</code></span></div>
-      <div class="node"><strong>3 · Policy + binding</strong><span><code>installPolicy()</code><br><code>bindFont()</code> + stack lease</span></div>
-      <div class="node"><strong>4 · Target + session</strong><span><code>createPlanTarget()</code><br><code>host.createSession()</code></span></div>
-      <div class="node"><strong>5 · Text instance</strong><span><code>session.createText()</code><br>IDs remain internal</span></div>
-      <div class="node"><strong>6 · Every update</strong><span><code>text.update()</code><br><code>session.publish()</code> → target</span></div>
-      <div class="node"><strong>7 · Teardown</strong><span>text → session → leases<br>host → runtime; Font independent</span></div>
-    </div>
-
-    <div class="table-wrap"><table>
-      <thead><tr><th>Object</th><th>Create it when</th><th>Keep it for</th><th>Why it exists</th></tr></thead>
-      <tbody>
-        <tr><td><code>Font&lt;Technique&gt;</code></td><td>When the application requests one portable raster selection, before or after a runtime exists</td><td>Across runtime/device replacement while any user or engine lease exists</td><td>Owns one immutable GLB backing lease, technique witness, metrics, and hidden internal payload views; root exposes no mutable <code>data</code></td></tr>
-        <tr><td><code>TextRuntime</code></td><td>Renderer integration or worker initialization through <code>/core</code></td><td>Usually the integration/worker lifetime</td><td>Owns one Wasm shaper, lease-counted font registration lookup, every attached host, and the runtime-wide borrow gate</td></tr>
-        <tr><td>Renderer device</td><td>Renderer/backend initialization</td><td>The GPU device/context lifetime</td><td>Owns shaders, pipelines/materials, GPU resources, uploads, and submission</td></tr>
-        <tr><td><code>TextEngineHost</code></td><td>Through <code>runtime.createTextEngineHost()</code></td><td>The integration lifetime; runtime disposal closes it</td><td>Owns policy, host bindings, stack leases, identity, and sessions; it delegates Wasm borrowing to the runtime gate</td></tr>
-        <tr><td>Policy</td><td>During host construction, before the first frame</td><td>Register once per host capability/program configuration</td><td>Combines renderer-owned capabilities/system lanes with portable technique bodies</td></tr>
-        <tr><td>Font binding lease</td><td>When this integration first needs the portable Font</td><td>Until the final host stack/device lease releases it</td><td>Deduplicates one runtime shaping registration and one host portable binding without exposing IDs</td></tr>
-        <tr><td>Bound font stack</td><td>After its portable Font values exist</td><td>Until that fallback order is unused</td><td>Retains ordered host bindings and gives styles one opaque host-owned token</td></tr>
-        <tr><td>Plan target</td><td>After a renderer device/surface exists</td><td>One acceptance domain lifetime</td><td>Consumes the borrowed publication synchronously; only <code>AsyncPlanTarget</code> copies for deferred acceptance</td></tr>
-        <tr><td><code>TextEngineSession</code></td><td>After policy, target, and required bindings exist</td><td>Across all frames for that independently revisioned scene</td><td>Retains paragraphs, plan state, one target, and its opaque accepted cursor</td></tr>
-        <tr><td>Root <code>Paragraph</code></td><td><code>await createParagraph(options)</code> when renderer-free measurement is needed</td><td>Across synchronous measure/layout calls until disposal</td><td>Hides a package-private per-realm measurement runtime and target-less session; the final Paragraph releases the service</td></tr>
-        <tr><td>Application text instance</td><td>When text enters the retained scene</td><td>Until removal is published</td><td>Owns desired content/style/layout; internal IDs and minimal mutations belong to the session façade</td></tr>
-        <tr><td>Plan candidate</td><td>On <code>session.publish()</code></td><td>Borrowed callback only, or one copied pending async transaction</td><td>Applies changes; only target commit advances the session's cursor</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3>Current runnable proof, before migration</h3>
-    <p>The following <code>ExampleTextEngine</code> code is the current implementation baseline that the migration must preserve. It intentionally still shows <code>runtime.loadFont()</code>, <code>textRuntimeShaper()</code>, and manual wrapper setup; those calls are replaced by the target flow above, not retained as a second integration mode.</p>
-
-<pre><code>import { createTextRuntime, FontRegistry } from '@pmndrs/glyph';
-import { textRuntimeShaper } from '@pmndrs/glyph/core';
-import { glyphExample } from '@pmndrs/glyph-example-raster';
-import { ExampleTextEngine, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
-
-const runtime = await createTextRuntime({ registry: new FontRegistry() });
-const adapter = await navigator.gpu.requestAdapter();
-if (!adapter) throw new Error('WebGPU is unavailable');
-const gpuDevice = await adapter.requestDevice();
-const device = new TypeGpuExampleRendererDevice({
-  device: gpuDevice,
-  width: 768,
-  height: 192,
-});
-// Constructor: TextEngineHost + compileRenderPolicy + host.registerPolicy.
-const engine = new ExampleTextEngine(textRuntimeShaper(runtime), device);
-
-// Per font: load shaping/raster data, compile its portable binding, realize resources.
-const font = await runtime.loadFont({
-  input: { baked: bakedFontUrl },
-  raster: { technique: glyphExample, options: { paletteSeed: 7 } },
-});
-const binding = engine.registerFont(font);
-
-// Per fallback list, then once per independently revisioned text scene.
-// The wrapper allocates IDs callers never need to invent.
-const stack = engine.registerFontStack([binding]);
-engine.openSession();
-
-// Per text instance: the wrapper owns paragraph/style/flow/region IDs.
-const title = engine.createText({
-  fontStack: stack,
-  text: 'Hello Glyph',
-  fontSize: 48,
-  width: 768,
-  height: 192,
-});
-
-const first = await title.render();
-const firstPixels = await device.readPixels();
-if (first.draws.length === 0 || !firstPixels.some((value, index) =&gt; index % 4 === 3 &amp;&amp; value !== 0)) {
-  throw new Error('expected a visible GPU frame');
-}
-
-// A later edit updates the same retained instance and session.
-title.update({ text: 'Hello retained Glyph', foregroundRgba: 0xff40_a0ff });
-const second = await title.render();
-const secondPixels = await device.readPixels();
-if (second.draws.length === 0 || !firstPixels.some((value, index) =&gt; value !== secondPixels[index])) {
-  throw new Error('expected the retained update to change GPU pixels');
-}
-
-// Teardown: the wrapper disposes its session and host; runtime is the outer owner.
-await title.dispose();
-engine.dispose();
-font.dispose();
-device.dispose();
 runtime.dispose();
-gpuDevice.destroy();</code></pre>
+font.dispose();</code></pre>
+            <p>
+              Parent disposal is a safety net and cascades through children. Explicit leaf disposal makes resource
+              release timing predictable.
+            </p>
+          </div>
+        </div>
+      </section>
 
-    <p><code>ExampleText</code> is the application text object and the source of mutations; the session is the retained compiled state. The wrapper creates its branded paragraph/style/flow/region identities, emits the complete initial mutation batch on the first <code>render()</code>, diffs later <code>update()</code> calls, and publishes a paragraph removal from <code>dispose()</code>. This is the current baseline only; the target API replaces its raw session bookkeeping with the target-bound lifecycle above.</p>
+      <section id="resources">
+        <h2>What the renderer does with resources</h2>
+        <div class="table">
+          <table>
+            <thead>
+              <tr>
+                <th>Plan table</th>
+                <th>Renderer action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>resources</code></td>
+                <td>
+                  Acquire a counted portable payload and create/update/retain its texture, buffer, geometry, or group
+                  realization.
+                </td>
+              </tr>
+              <tr>
+                <td><code>buffers</code></td>
+                <td>Declare renderer storage shape and map semantic policy-buffer IDs to shader bindings.</td>
+              </tr>
+              <tr>
+                <td><code>patches</code></td>
+                <td>Allocate/resize, write, fill, copy, or retire exact byte ranges.</td>
+              </tr>
+              <tr>
+                <td><code>primitives</code></td>
+                <td>Map record spans to technique, resource generation, geometry meaning, and logical order.</td>
+              </tr>
+              <tr>
+                <td><code>draws</code></td>
+                <td>Submit ordered program/material/transform spans.</td>
+              </tr>
+              <tr>
+                <td><code>retirements</code></td>
+                <td>Release exact resource or buffer generations after the acknowledged fence.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <pre><code>const resources = candidate.plan.table('resources');
+for (let i = 0; i &lt; resources.count; i += 1) {
+  const record = readTextEngineResource(candidate.plan, resources, i);
+  if (record.referenceId === 0) throw new TypeError('missing payload reference');
 
-    <div class="callout"><strong>Three wraps this bookkeeping in <code>Text</code>.</strong> <code>new Text({ font, text, style })</code> creates the application instance; adding it to a <code>TextGroup</code> establishes batch ownership. Assigning <code>text.text</code>, <code>text.style</code>, <code>text.contentBox</code>, or calling <code>text.set(...)</code> queues the corresponding minimal mutations. An attached <code>text.layout()</code> can shape and measure that desired state immediately without traversing matrices or realizing draws. Three's normal render traversal later publishes the full plan and transform table.</div>
-
-    <p class="callout"><strong>Policy timing:</strong> a policy describes what this renderer/device can consume, so it belongs to host initialization—not font loading and not the frame loop. A font contributes a portable policy body, but the renderer assembles that body into its own policy program. If the renderer supports several technique programs, it installs them together in the same host policy before opening sessions that use them.</p>
-
-    <h3>Call-by-call map</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Stage</th><th>Call</th><th>Input</th><th>Result or state change</th></tr></thead>
-      <tbody>
-        <tr><td>Runtime</td><td><code>createTextRuntime()</code></td><td>text-shaper Wasm</td><td><code>TextRuntime</code></td></tr>
-        <tr><td>Host</td><td><code>new TextEngineHost(textRuntimeShaper(runtime))</code></td><td>Synchronous shaper bridge</td><td>Registries, sessions, wire identities</td></tr>
-        <tr><td>Policy</td><td><code>host.registerPolicy(handle, compileRenderPolicy(...))</code></td><td>Host capabilities plus portable program body</td><td>Validated policy installed in Rust</td></tr>
-        <tr><td>Font load</td><td><code>runtime.loadFont(request)</code></td><td>Baked/source font and raster technique</td><td>Typed <code>LoadedFont</code></td></tr>
-        <tr><td>Font compile</td><td><code>compileRasterFont(font, host.wireIdentities)</code></td><td>Loaded font</td><td>Binding bytes plus named portable resources</td></tr>
-        <tr><td>Resources (example device)</td><td><code>device.prepareResources(inputs)</code></td><td>One compiled portable payload for each key listed by <code>compiled.declaredResources</code></td><td>Validated TypeGPU vertex/index resources waiting for <code>commit()</code></td></tr>
-        <tr><td>Binding</td><td><code>host.registerFontBinding(...)</code></td><td>Binding ID, shaping-font handle, bytes</td><td>Raster binding installed</td></tr>
-        <tr><td>Stack</td><td><code>host.registerFontStack(id, bindings)</code></td><td>Ordered binding IDs</td><td>Style-selectable font stack</td></tr>
-        <tr><td>Session</td><td><code>host.createSession(options)</code></td><td>Session ID and capacities</td><td><code>TextEngineSession</code></td></tr>
-        <tr><td>Text create</td><td><code>engine.createText(options)</code></td><td>Font stack, content, style, and layout box</td><td>Retained text façade with automatically managed branded paragraph/style/flow/region IDs</td></tr>
-        <tr><td>Text update</td><td><code>text.update(changes)</code></td><td>Content, color, font size, or layout-box changes</td><td>Marks the same retained text dirty; shaping waits for an explicit measure or render call</td></tr>
-        <tr><td>Three measure</td><td><code>attachedText.layout()</code></td><td>Current desired state and its owning batch</td><td>Synchronous local metrics; no matrix traversal, render plan publication, GPU allocation, or draw objects</td></tr>
-        <tr><td>Text render</td><td><code>text.render()</code></td><td>Current desired state</td><td>Initial or changed mutation batch compiled and submitted through the session</td></tr>
-        <tr><td>Same-thread ownership</td><td><code>session.isExpired(borrowed)</code></td><td>A publication issued by this session</td><td>Optional diagnostic before immediate decoding; the next same-session call expires it, and another session can expire it by growing the shared shaper memory.</td></tr>
-        <tr><td>Async ownership</td><td><code>session.copyPublication(borrowed)</code></td><td>Current borrowed publication</td><td>One self-contained owned copy safe across later calls, shared-shaper memory growth, and promises</td></tr>
-        <tr><td>Worker boundary</td><td><code>new TextEngineRenderPlanView().bindBytes(receivedBytes)</code></td><td>Transferred copied bytes</td><td>ABI, status, and every table span validated before the reader rebinds</td></tr>
-        <tr><td>Decode</td><td><code>readDrawList(owned)</code></td><td>Owned publication for this asynchronous example</td><td>Draws, primitives, buffers, resources, patches, retirements</td></tr>
-        <tr><td>Submit</td><td><code>device.prepareSubmission(list).commit()</code></td><td>Complete candidate plan</td><td>TypeGPU buffers and an indexed instanced WebGPU pass submitted atomically</td></tr>
-        <tr><td>Pixel proof</td><td><code>await device.readPixels()</code></td><td>Latest accepted offscreen target</td><td>Tightly packed RGBA bytes</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3>The application update loop: author, measure, then render</h3>
-    <p>Late binding keeps construction and scene edits cheap: creating or editing a <code>Text</code> does not shape. The call that needs an answer performs the work. For an attached Three object, <code>layout()</code> runs the paragraph-scoped measurement query immediately; a later normal Three render traversal publishes the renderer plan. The measurement candidate is retained by the same batch/session, so the first render does not need a second measurement query.</p>
-
-    <div class="flow" role="img" aria-label="Three text update and first-frame measurement lifecycle">
-      <div class="node"><strong>1 · Construct</strong><span><code>new Text(...)</code><br>desired state only</span></div>
-      <div class="node"><strong>2 · Attach</strong><span><code>group.add(text)</code><br>establish batch owner</span></div>
-      <div class="node"><strong>3 · Author</strong><span><code>text.set(...)</code><br>queue minimal semantic diff</span></div>
-      <div class="node"><strong>4 · Optional measure</strong><span><code>text.layout()</code><br>shape + local metrics now</span></div>
-      <div class="node"><strong>5 · Render traversal</strong><span><code>renderer.render(...)</code><br>publish plan + transforms</span></div>
-      <div class="node"><strong>6 · Submit</strong><span>realize candidates<br>commit accepted draws</span></div>
-    </div>
-
-<pre><code>import { createTextRuntime } from '@pmndrs/glyph';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
-import { bitmap } from '@pmndrs/glyph/three/bitmap';
-
-const runtime = await createTextRuntime();
-const font = await runtime.loadFont({
-  input: { baked: '/fonts/Inter.font.glb' },
-  raster: { technique: bitmap, options: { strikes: [32] } },
-});
-
-const labels = new TextGroup();
-const title = new Text({
-  font,
-  text: 'Measured before frame one',
-  contentBox: { width: { mode: 'at-most', size: 480 } },
-  style: { fontSize: 32 },
-});
-labels.add(title);       // Establishes ownership; it does not shape.
-scene.add(labels);
-
-const firstMetrics = title.layout();
-// Synchronous paragraph-local metrics. No scene.updateMatrixWorld(), GPU
-// buffer, material, draw object, or render-plan publication happened.
-positionPanelFrom(firstMetrics);
-
-title.set({ text: 'Updated before the next frame' });
-const nextMetrics = title.layout(); // Shapes the new desired state now.
-
-renderer.render(scene, camera);
-// Three's ordinary traversal publishes the full frame, realizes renderer
-// resources transactionally, and commits the draw. No explicit matrix call
-// is required by the application.</code></pre>
-
-    <div class="grid two">
-      <div class="card"><h3>Attached <code>Text</code></h3><p>Use <code>text.layout()</code> after adding the text to any parent. Parenthood provides ownership; the parent need not already be in a rendered scene. The result describes local layout and <code>commitState()</code> remains <code>pending</code> until render traversal accepts the full plan.</p></div>
-      <div class="card"><h3>Detached measurement</h3><p>Use <code>new Paragraph(...).layout(constraints)</code> when no scene object or batch owner exists. A completely parentless <code>Text.layout()</code> throws at that call boundary instead of inventing a hidden renderer lifetime.</p></div>
-    </div>
-
-    <p class="callout"><strong>What late binding preserves:</strong> construction, edits, and graph reparenting remain inert until an answer is requested. Measurement can run before frame one because it needs only local paragraph state and batch ownership; transforms remain renderer-owned and are consumed only when the full render plan is published.</p>
-
-    <h3>Desired layout and accepted rendering are separate answers</h3>
-    <p><code>layout()</code> always measures the current desired paragraph. <code>commitState()</code> reports whether that desired revision has entered an accepted render plan. This distinction is visible when a caller deliberately chooses a fixed glyph budget: content beyond the budget is valid text, so measurement answers for it, while the renderer keeps the last complete draw until the desired content fits.</p>
-<pre><code>const label = new Text({
-  font,
-  text: 'abc',
-  capacity: { size: 8, policy: 'fixed' },
-});
-scene.add(label);
-renderer.render(scene, camera);
-
-label.set({ text: 'abcdefghijklmnopqrstuvwxyz' });
-renderer.render(scene, camera); // controlled refusal: the scene traversal continues
-
-label.layout().glyphCount;      // 26: current desired local layout
-label.commitState();            // { status: 'pending' }
-label.error;                    // undefined: the fixed budget is not an engine defect
-// The previously accepted three-glyph draw remains visible.
-
-label.set({ text: 'ab' });
-renderer.render(scene, camera);
-label.commitState().status;     // 'committed': recovery is recomputed, never latched</code></pre>
-    <p>The fixed budget is checked from the desired text-length upper bound before shaping the render candidate. Malformed authored inputs still throw at <code>new Text(...)</code> or <code>text.set(...)</code>; the budget path does not turn bad schema or plan data into a runtime fallback.</p>
-
-    <h3>1. Assemble the host policy</h3>
-<pre><code>const host = new TextEngineHost(textRuntimeShaper(runtime));
-const POLICY_HANDLE = id('policy', 'my-renderer/default');
-const STABLE_GLYPH_BUFFER_ID = id('buffer', 'my-renderer/stable-glyph');
-const system = definePolicyBuffers({
-  stableGlyphId: {
-    id: STABLE_GLYPH_BUFFER_ID,
-    scalar: 'u32',
-    lanes: ['stableGlyphId'],
-  },
-});
-const flags = textShaperAbi.policy.capabilityFlags;
-const capabilities = {
-  flags: flags.storageBuffers | flags.aliasVec2 |
-         flags.aliasVec4 | flags.orderedDirect,
-  maxBufferBytes: 16 * 1024 * 1024,
-  updateAlignment: 4,
-  coalesceGapBytes: 128,
-  rangeCallPenaltyBytes: 256,
-  maxBuffersPerDraw: 8,
-  maxResourcesPerDraw: 4,
-  maxIndirectDraws: 0,
-  fragmentationBudget: 8,
-  wholeBufferThresholdBasisPoints: 7_500,
-};
-
-const program = createRasterPolicyProgram(glyphExamplePlanProgram, {
-  namespace: 'my-renderer',
-  system,
-  capabilitySet: capabilities,
-  transformMode: 'direct',
-  allocationMode: 'ordered',
-  identityRegistry: host.wireIdentities,
-});
-host.registerPolicy(POLICY_HANDLE, compileRenderPolicy({
-  capabilitySets: [capabilities],
-  programs: [program],
-}));</code></pre>
-    <p>Capability objects contain capabilities, not IDs. <code>compileRenderPolicy()</code> assigns their ABI identities by descriptor order; a one-profile frame omits capability selection. Authored module-lifetime policy and buffer constants use <code>id(kind, stableName)</code>. Runtime-created binding, stack, and session handles use <code>host.id(kind, stableName)</code>. The string exists only at ID construction; both helpers return a branded number, register its provenance, and reject a hash collision. Wire records and lookups carry the number. A renderer may cache the one string attribute name that maps a numeric policy-buffer ID to its shader input, but it does not concatenate protocol identities per frame.</p>
-
-    <h3>2. Compile the loaded font and realize resources</h3>
-<pre><code>const compiled = compileRasterFont(font, host.wireIdentities);
-if (!compiled) throw new TypeError(`no portable program for ${font.technique.id}`);
-
-const INITIAL_RESOURCE_GENERATION = 1;
-const resources = [];
-for (const [name, keys] of compiled.declaredResources) {
-  for (const key of keys) {
-    const resource = compiled.resources.get(key);
-    if (!resource) throw new Error(`compiled font omitted ${name}`);
-    resources.push({
-      id: host.wireIdentities.resourceId(key),
-      generation: INITIAL_RESOURCE_GENERATION,
-      name,
-      resource,
-    });
-  }
-}
-
-const bindingId = host.id('font-binding', `my-renderer/${font.font.handle}`);
-const stackId = host.id('font-stack', 'my-renderer/body');
-const pendingResources = device.prepareResources(resources);
-try {
-  host.registerFontBinding(bindingId, font.font.handle, compiled.binding);
-  try {
-    pendingResources.commit();
-  } catch (commitError) {
-    try {
-      host.disposeFontBinding(bindingId);
-    } catch (rollbackError) {
-      throw new AggregateError([commitError, rollbackError],
-        'resource commit and binding rollback failed', { cause: commitError });
-    }
-    throw commitError;
-  }
-} catch (error) {
-  pendingResources.discard();
-  throw error;
-}
-host.registerFontStack(stackId, [bindingId]);</code></pre>
-    <p><code>compileRasterFont()</code> is cached cold work per <code>LoadedFont</code>. Its <code>declaredResources</code> map answers “which concrete keys satisfy each schema role?” and its <code>resources</code> map answers “what portable payload does each key name?” A Bitmap font can therefore list several atlas-page keys for one <code>many</code> role; a Slug font can list several page keys whose values are fixed-member groups. “Key” is only the stable identity joining the binding, plan, and renderer cache—it is not another object the user creates.</p>
-    <p><code>prepareResources()</code> belongs only to <code>glyph-example-renderer</code>. It checks each id/name/generation and payload against the selected shader schema, creates TypeGPU vertex and index buffers for the supplied geometry, and returns a one-shot <code>commit()</code>. Validation cannot partially mutate the live device. If another candidate commits first, the generation guard rejects the older candidate and destroys its unowned GPU objects.</p>
-
-    <div class="callout"><strong>Three does the equivalent work without this method name.</strong> <code>ThreeTextEngineCoordinator</code> calls <code>compileRasterFont()</code>, validates each portable payload and Three shader/material registration, and retains the resource-to-program association. When a publication arrives, <code>ThreeTextRenderPlanExecutor</code> prepares textures, geometry, buffers, materials, draws, and retirements in candidate maps, then commits the complete publication. The portable contract requires validation and realization; it does not prescribe a renderer API named <code>prepareResources()</code>.</div>
-
-    <h4>The concrete Three realization</h4>
-    <p>Three deliberately has two layers of storage. The coordinator retains immutable portable payloads by wire reference. The plan executor owns separate caches of Three GPU-facing objects. A draw's resource record contains the reference that joins those layers.</p>
-<pre><code>// Font registration: retain portable data and its renderer program.
-const compiled = compileRasterFont(font, host.wireIdentities);
-for (const [key, payload] of compiled.resources) {
-  const referenceId = host.wireIdentities.resourceId(key);
-  retainedResources.set(referenceId, {
-    technique: font.technique.id,
-    resources: namedPortablePayloads,
-    resourceReferences: namedReferenceIds,
-    program: registeredThreeProgram,
+  const lease = candidate.acquirePayload(record.referenceId);
+  transaction.realize(record.id, record.generation, {
+    name: lease.resourceName,
+    payload: lease.payload,
+    release: () =&gt; lease.dispose(),
   });
-}
+}</code></pre>
+        <p>
+          The map is a device cache keyed by branded numeric <code>(id, generation)</code>, not the endpoint. The cached
+          value is the physical texture/buffer/geometry plus its payload lease and destruction logic. Acceptance swaps a
+          complete candidate cache into live state. Rejection destroys only provisional objects; it never restores stale
+          content.
+        </p>
+        <p>
+          <code>AsyncPlanTarget</code> exists only when CPU consumption crosses an asynchronous boundary such as a
+          Worker. It receives one owned transferable copy and must return the same buffer identity when done. The normal
+          same-thread GPU path uses <code>PlanTarget</code> and makes no extra plan copy.
+        </p>
+      </section>
 
-// Draw realization: resolve the portable payload selected by the plan.
-const resolved = coordinator.resolveResource(resourceRecord.referenceId);
-const atlas = textureArrayResource(resolved, 'atlas', 'r8unorm', 'Bitmap');
-
-// Realize once into a Three object and cache it by that same reference.
-let texture = candidate.bitmapTextures.get(resourceRecord.referenceId);
-if (!texture) {
-  texture = new THREE.DataArrayTexture(
-    atlas.bytes, atlas.width, atlas.height, atlas.layers,
-  );
-  texture.format = THREE.RedFormat;
-  texture.type = THREE.UnsignedByteType;
-  texture.colorSpace = THREE.NoColorSpace;
-  texture.magFilter = THREE.LinearFilter;
-  texture.minFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
-  texture.flipY = false;
-  texture.needsUpdate = true;
-  candidate.bitmapTextures.set(resourceRecord.referenceId, texture);
-}
-
-// The renderer's shader/material binds the realized resource.
-const shader = bitmapShader(namedPolicyBufferNodes, { page: texture }, options);
-const material = createMaterial(materialId, shader);</code></pre>
-    <p>The real implementation performs this inside <code>ThreeTextRenderPlanExecutor</code>. Bitmap and MSDF become cached <code>THREE.DataArrayTexture</code> objects. A Slug resource group becomes three cached <code>THREE.DataTexture</code> objects. Supplied geometry becomes a <code>THREE.InstancedBufferGeometry</code> whose attributes, index, topology conversion, and draw range come from the portable geometry payload. Synthetic quads use Three's shared unit-quad construction instead.</p>
-<pre><code>// Supplied geometry follows the same payload-to-renderer-object rule.
-const geometry = new THREE.InstancedBufferGeometry();
-for (const attribute of payload.attributes) {
-  const accessor = payload.accessors[attribute.accessor];
-  const view = payload.views[accessor.view];
-  geometry.setAttribute(
-    attribute.semantic,
-    new THREE.BufferAttribute(typedGeometryArray(payload, accessor, view), accessor.components),
-  );
-}
-geometry.setIndex(realizeIndex(payload));
-geometry.setDrawRange(drawStart(payload), drawCount(payload));
-geometry.instanceCount = primitive.recordCount;</code></pre>
-    <p>All of those objects are built against candidate maps first. Only after resources, policy buffers, geometry, materials, transforms, draws, and retirements validate together does Three replace its live maps. If preparation throws, newly created candidate objects are disposed and the previously accepted frame remains intact. Retirement later removes and disposes objects no longer referenced by an accepted plan.</p>
-
-    <div class="callout"><strong>Font disposal follows those owners.</strong> Calling <code>font.dispose()</code> prevents new use and requests retirement, but it does not free bytes that a live <code>Text</code> or registered stack still addresses. Three retains the exact binding used by each stack. The final stack release disposes that Wasm binding first and only then releases its decoded renderer resources; runtime teardown force-closes any remaining leases. A Wasm <code>FONT_IN_USE</code> response preserves JavaScript ownership so the same disposal can be retried safely.</div>
-
-    <h3>3. Open a session, publish, own when needed, and submit</h3>
-<pre><code>const sessionId = host.id('session', 'my-renderer/main-text');
-const SESSION_REQUEST_BYTES = 4 * 1024;
-const SESSION_RESULT_BYTES = 128 * 1024;
-const session = host.createSession({
-  handle: sessionId,
-  requestCapacity: SESSION_REQUEST_BYTES,
-  resultCapacity: SESSION_RESULT_BYTES,
-});
-const request = compileTextEngineFrameUpdate({
-  sessionId: session.handle,
-  policyHandle: POLICY_HANDLE,
-  expectedEngineRevision,
-  consumedPlanRevision,
-  acknowledgedPublicationGeneration,
-  limits,
-  paragraphMutations,
-  textMutations,
-  styleMutations,
-  constraints,
-  regions,
-});
-const borrowed = session.update(request);
-expectedEngineRevision = borrowed.engineRevision;
-// This example crosses an async device boundary, so copy before awaiting.
-const owned = session.copyPublication(borrowed);
-const drawList = readDrawList(owned);
-await device.prepareSubmission(drawList).commit();
-consumedPlanRevision = drawList.planRevision;
-acknowledgedPublicationGeneration = drawList.publicationGeneration;</code></pre>
-    <p><code>readDrawList()</code> is example code built from <code>TextEngineRenderPlanView</code> and the core record readers. A synchronous same-thread renderer such as Three reads the borrowed A/B Wasm publication immediately, before any intervening call that can grow the same shaper's memory. The asynchronous example calls <code>copyPublication()</code> once. A worker receiver treats transferred bytes as untrusted and calls <code>bindBytes()</code>; ownership provenance is deliberately realm-local. That current primitive validates plan bytes only—a renderer must separately transport referenced payloads. The target migration above makes that missing resource manifest explicit. Submission validates generations, patches, primitive spans, named bindings, geometry, program identity, draw order, and retirements into candidate state. Only a successful commit advances renderer fences.</p>
-
-    <h3>Choose one publication path at the boundary</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Boundary</th><th>API</th><th>Copy</th><th>Rule</th></tr></thead>
-      <tbody>
-        <tr><td>Synchronous renderer on the engine thread</td><td><code>view.bind(borrowed)</code></td><td>None</td><td>Finish every read before a same-session call or any same-shaper call that can grow memory</td></tr>
-        <tr><td>Promise, queue, or stored candidate in the same realm</td><td><code>session.copyPublication(borrowed)</code></td><td>One contiguous result copy</td><td>Copy before yielding or issuing another call into the same shaper</td></tr>
-        <tr><td>Worker or other JavaScript realm</td><td>Sender copies and transfers <code>owned.bytes</code>; receiver calls <code>view.bindBytes(bytes)</code></td><td>One plan copy; referenced payload transport is renderer-owned today</td><td>The receiver validates ABI, status, and every table; the target migration also supplies and authenticates the resource manifest</td></tr>
-      </tbody>
-    </table></div>
-<pre><code>// Same-thread, synchronous: Three's zero-copy shape.
-const borrowed = session.update(request);
-const view = new TextEngineRenderPlanView().bind(borrowed);
-consumeSynchronously(view); // no await and no later session call yet
-
-// Worker boundary: copy once, transfer, validate in the receiving realm.
-const owned = session.copyPublication(borrowed);
-worker.postMessage(owned.bytes, [owned.bytes.buffer]);
-
-// worker.ts
-onmessage = ({ data: bytes }) =&gt; {
-  const received = new TextEngineRenderPlanView().bindBytes(bytes);
-  consumeSynchronously(received);
-};</code></pre>
-  </section>
-
-  <section id="walkthrough">
-    <h2>Implement a complete technique and engine</h2>
-
-    <div class="step"><div class="step-no">1</div><div><h3>Define the portable schema and policy body</h3><p>Names are the shader-facing contract. Buffer IDs are local to this policy program; host system IDs are supplied later by the engine.</p></div></div>
-<pre><code>import { defineTechniqueSchema, f32, techniqueProgram } from '@pmndrs/glyph/core';
-
-export const schema = defineTechniqueSchema({
-  technique: technique.id,
-  scope: 'glyph',
-  binding: { f32: ['inset', 'red', 'green', 'blue', 'alpha'] },
-  buffers: {
-    origin: { id: id('buffer', 'studio.example/origin'), scalar: 'f32', lanes: ['left', 'top'] },
-    size:   { id: id('buffer', 'studio.example/size'), scalar: 'f32', lanes: ['widthX', 'heightY'] },
-    color:  { id: id('buffer', 'studio.example/color'), scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
-  },
-  resources: {
-    glyphGeometry: {
-      kind: 'geometry',
-      attributes: [
-        { semantic: 'position', componentType: 'f32', components: 3 },
-        { semantic: 'uv', componentType: 'f32', components: 2 },
-      ],
-    },
-  },
-  render: { resource: 'glyphGeometry', geometry: suppliedIndexedQuad },
-  glyphOrigin: { buffer: 'origin' },
-});
-
-const GLYPH_EXAMPLE_PROGRAM_VARIANT = 0;
-
-export const definition = {
+      <section id="technique">
+        <h2>What a portable raster technique provides</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Raster decoder</h3>
+            <p>Validates its GLB extension and returns immutable typed data plus stable resource identities.</p>
+          </div>
+          <div class="card">
+            <h3>Technique schema</h3>
+            <p>Names policy buffers, lanes, retained resources, geometry meaning, and shader-facing semantics.</p>
+          </div>
+          <div class="card">
+            <h3>Policy-body factory</h3>
+            <p>
+              Computes per-glyph values from semantic inputs while the renderer supplies system lanes and capabilities.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Font compiler</h3>
+            <p>
+              Runs on first host binding, producing binding bytes and constrained portable payloads—not per frame or
+              glyph.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Baker</h3>
+            <p>
+              Produces the authenticated artifact. Discovery already follows <code>runtimeBaker</code>; no renderer
+              dependency is involved.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Optional shader subpaths</h3>
+            <p>
+              TypeGPU, TSL, WGSL, or GLSL variants may ship explicitly. Core imports none of them; an engine selects or
+              authors one.
+            </p>
+          </div>
+        </div>
+        <pre><code>export const plan = {
   technique,
   schema,
-  programVariant: GLYPH_EXAMPLE_PROGRAM_VARIANT,
+  programVariant: 0,
   policyBody(system) {
     const p = techniqueProgram(schema, { system });
-    const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
-    const { inset, red, green, blue, alpha } = p.binding;
-    const insetPx = f32.mul(inset, fontSize);
     return p.compile({
-      origin: [f32.add(inlineOrigin, insetPx), f32.sub(blockOrigin, insetPx)],
-      size: [f32.sub(f32.mul(fontSize, f32.const(0.65)), f32.mul(insetPx, f32.const(2))),
-             f32.sub(fontSize, f32.mul(insetPx, f32.const(2)))],
-      color: [f32.mul(color.red, red), f32.mul(color.green, green),
-              f32.mul(color.blue, blue), f32.mul(color.alpha, alpha)],
+      origin: [
+        f32.add(p.semantics.inlineOrigin, p.binding.inset),
+        f32.sub(p.semantics.blockOrigin, p.binding.inset),
+      ],
+      color: [
+        f32.mul(p.semantics.color.red, p.binding.red),
+        f32.mul(p.semantics.color.green, p.binding.green),
+        f32.mul(p.semantics.color.blue, p.binding.blue),
+        f32.mul(p.semantics.color.alpha, p.binding.alpha),
+      ],
     });
   },
-  // compileFont follows in step 2.
-};</code></pre>
-
-    <div class="step"><div class="step-no">2</div><div><h3>Compile one loaded font</h3><p><code>compileFont</code> runs when an engine first registers a loaded font for this technique—not once per glyph or frame. It emits field-major binding bytes and retained, constrained portable resources.</p></div></div>
-<pre><code>compileFont(compiler) {
-  const data = compiler.font.data;
-  compiler.retain('glyphGeometry', data.resource, indexedUnitQuadGeometry);
-  return compiler.compile({
-    strikes: [0],
-    resource: (_glyphIndex, _strikeIndex) =&gt; data.resource,
-    f32: {
-      inset: () =&gt; data.inset,
-      red:   row =&gt; data.colors[row * 4] / 255,
-      green: row =&gt; data.colors[row * 4 + 1] / 255,
-      blue:  row =&gt; data.colors[row * 4 + 2] / 255,
-      alpha: row =&gt; data.colors[row * 4 + 3] / 255,
-    },
-  });
-}</code></pre>
-
-    <div class="step"><div class="step-no">3</div><div><h3>Register only the portable half on root import</h3><p>The root package side effect registers renderer-neutral plan composition. Shader subpaths stay explicit and do not install engine code.</p></div></div>
-<pre><code>// register.ts
-export const planProgram = registerRasterPlanProgram(definition);
-
-// index.ts
-import './register.js';
-export { planProgram } from './register.js';
-export { schema } from './portable.js';
-
-// package.json (abridged)
-"sideEffects": ["./dist/index.js", "./dist/register.js"]
-"exports": {
-  ".": "./dist/index.js",
-  "./typegpu": "./dist/typegpu.js",
-  "./tsl": "./dist/tsl.js"
-}</code></pre>
-
-    <div class="step"><div class="step-no">4</div><div><h3>Publish optional shader realizations against the same metadata</h3><p>A TypeGPU, TSL, WGSL, or GLSL implementation consumes the same geometry, buffer, resource, and output names. Adding a language does not rewrite the plan or binding.</p></div></div>
-<pre><code>export const typeGpuVariant = Object.freeze({
-  language: 'typegpu',
-  techniqueId: shaderContract.techniqueId,
-  geometry: shaderContract.geometry,
-  buffers: shaderContract.buffers,
-  resources: shaderContract.resources,
-  outputs: shaderContract.outputs,
-});
-
-export const vertex = tgpu.fn([VertexInput], VertexOutput)((input) =&gt; {
-  'use gpu';
-  const p = input.instance.origin + input.quadPosition * input.instance.size;
-  return VertexOutput({ position: d.vec3f(p.x, -p.y, 0),
-                        color: input.instance.color, quadUv: input.quadUv });
-});</code></pre>
-
-    <div class="step"><div class="step-no">5</div><div><h3>Assemble the engine's policy</h3><p>The engine chooses named, branded IDs for its own system lanes and handles, plus a capability profile, namespace, transform strategy, and allocation strategy. Capability ABI IDs are compiler-managed.</p></div></div>
-<pre><code>const POLICY_HANDLE = id('policy', 'my-renderer/default');
-const STABLE_GLYPH_BUFFER_ID = id('buffer', 'my-renderer/stable-glyph');
-const system = definePolicyBuffers({
-  stableGlyphId: {
-    id: STABLE_GLYPH_BUFFER_ID,
-    scalar: 'u32',
-    lanes: ['stableGlyphId'],
+  compileFont(compiler) {
+    compiler.retain('glyphGeometry', compiler.font.data.resource, geometry);
+    return compiler.compile({
+      strikes: [0],
+      resource: () =&gt; compiler.font.data.resource,
+      f32: { inset: row =&gt; compiler.font.data.insets[row] },
+    });
   },
-});
+} satisfies RasterPlanProgram;</code></pre>
+        <p>
+          The main technique import performs only renderer-neutral plan registration. Shader variants remain explicit
+          subpath imports. Three, TypeGPU, and another engine all consume the same schema, payloads, and plan records
+          without technique-specific core adapters.
+        </p>
+      </section>
 
-const capabilitySet = rendererCapabilitySet();
-const policy = createRasterPolicyProgram(planProgram, {
-  namespace: 'my-renderer',
-  system,
-  capabilitySet,
-  transformMode: 'direct',
-  allocationMode: 'ordered',
-  identityRegistry: host.wireIdentities,
-});
-host.registerPolicy(POLICY_HANDLE,
-  compileRenderPolicy({ capabilitySets: [capabilitySet], programs: [policy] }));</code></pre>
+      <section id="topologies">
+        <h2>Valid renderer topologies</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>One WebGL canvas</h3>
+            <p>
+              Usually one runtime → one host → one or more sessions → one WebGL context. A second canvas means another
+              non-sharing WebGL context and normally another host/device cache.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Two WebGPU canvases</h3>
+            <p>
+              One <code>GPUDevice</code> may configure both canvas contexts. One host may serve sessions for both when
+              policy and device cache domain are shared; each session keeps its own target and acceptance frontier.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Onscreen + Offscreen WebGPU</h3>
+            <p>
+              A shared device can serve both contexts. Use separate sessions; use an async target only where plan
+              consumption crosses the Worker boundary.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Onscreen + Offscreen WebGL</h3>
+            <p>
+              The contexts do not share GPU objects. Treat them as separate device/cache domains, generally separate
+              hosts, and optionally separate runtimes if worker isolation is desired.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Sync and async together</h3>
+            <p>
+              Yes. Separate sessions under one host may use borrowed synchronous and owned asynchronous targets. The
+              runtime-wide borrow gate prevents reentry while a synchronous candidate is active.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Several runtimes</h3>
+            <p>
+              Valid for independent workers or teardown domains. Immutable fonts may bind into each; shaping
+              registrations and Wasm memory are intentionally not shared across runtimes.
+            </p>
+          </div>
+        </div>
+      </section>
 
-    <div class="step"><div class="step-no">6</div><div><h3>Compile and register a loaded font</h3><p>The host's identity registry is shared by policy, program, resource, and binding compilation. A collision throws before registration.</p></div></div>
-<pre><code>const compiled = compileRasterFont(font, host.wireIdentities);
-if (!compiled) throw new TypeError(`No portable program for ${font.technique.id}`);
+      <section id="evidence">
+        <h2>Verification and remaining work</h2>
+        <p class="status">Current package gate: green.</p>
+        <ul>
+          <li>
+            914 package tests passed, including cache behavior, branded plan identities, root/Three measurement parity,
+            caller-owned glyph columns, first-frame bounds, render-plan ownership, and React lifecycle.
+          </li>
+          <li>225 shaper tests plus Unicode 17 bidi and line-break conformance passed.</li>
+          <li>
+            All baker, artifact, mutation-fuzz, type, lint, format, and Rust checks in
+            <code>@pmndrs/glyph check</code> passed.
+          </li>
+          <li>
+            The external example renderer has deterministic recording-device tests and a concrete TypeGPU/WebGPU
+            pixel-readback gate.
+          </li>
+          <li>
+            Hardware TypeGPU/WebGPU and Three labs each produced a non-empty draw before and after retained updates;
+            median submission was 0.14 ms for TypeGPU and 0.11–0.14 ms for Three.
+          </li>
+          <li>
+            Rust retained-layout benchmarks found no CPU regression against the authenticated baseline; changed cases
+            ranged from noise-level +0.5% to 68% faster. Package-size checks passed.
+          </li>
+        </ul>
+        <p>
+          <strong>Final merge evidence still to be recorded here:</strong> workspace-wide checks, external Opus High
+          review, stack CI, and final commit/PR identity. This section is updated only from actual final runs.
+        </p>
+      </section>
 
-const INITIAL_RESOURCE_GENERATION = 1;
-const pendingResources = device.prepareResources(
-  [...compiled.declaredResources].flatMap(([name, keys]) =&gt;
-    keys.map(key =&gt; ({
-      id: host.wireIdentities.resourceId(key),
-      generation: INITIAL_RESOURCE_GENERATION,
-      name,
-      resource: compiled.resources.get(key),
-    })),
-  ),
-);
-const bindingHandle = host.id('font-binding', `my-renderer/${font.font.handle}`);
-try {
-  host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
-  try {
-    await pendingResources.commit();
-  } catch (commitError) {
-    try {
-      host.disposeFontBinding(bindingHandle);
-    } catch (rollbackError) {
-      throw new AggregateError([commitError, rollbackError],
-        'resource commit and binding rollback failed', { cause: commitError });
-    }
-    throw commitError;
-  }
-} catch (error) {
-  pendingResources.discard();
-  throw error;
-}</code></pre>
-
-    <div class="step"><div class="step-no">7</div><div><h3>Drive a retained frame and submit it</h3><p>Publications are borrowed Wasm views. Track engine acceptance separately from device acceptance so rejection cannot acknowledge GPU work that never committed.</p></div></div>
-<pre><code>let engineRevision = 0;
-let consumedPlanRevision = 0;
-let acceptedPublicationGeneration = 0;
-
-const request = compileTextEngineFrameUpdate({
-  ...frame,
-  expectedEngineRevision: engineRevision,
-  consumedPlanRevision,
-  acknowledgedPublicationGeneration: acceptedPublicationGeneration,
-});
-const borrowed = session.update(request);
-engineRevision = borrowed.engineRevision; // Wasm accepted the authored update.
-const owned = session.copyPublication(borrowed); // required before this async boundary
-const drawList = readDrawList(owned);
-
-const pending = device.prepareSubmission(drawList); // validate everything
-await pending.commit();                            // validate GPU work, then publish once
-consumedPlanRevision = drawList.planRevision;
-acceptedPublicationGeneration = drawList.publicationGeneration;
-
-if (drawList.draws.length === 0) {
-  throw new Error('Acceptance requires a non-empty draw list');
-}</code></pre>
-    <p class="caption">If device preparation or commit throws, do not advance the last two fences. The renderer keeps its already accepted scene; the next update is compiled from the current engine revision and the last plan revision the device actually accepted. No failed or older candidate is substituted. Do not use <code>session.acknowledgedGeneration</code> for this transactional fence.</p>
-  </section>
-
-  <section id="three">
-    <h2>Using the same technique from Three</h2>
-    <p>Three remains a fully external consumer of the portable contract. The application selects the TSL variant and registers a Three-owned material realization. No Three file lives in the raster package root, and the TSL subpath does not auto-register.</p>
-<pre><code>import { registerThreeRasterPlanProgram, threePolicyAbi } from '@pmndrs/glyph/three';
-import { planProgram } from 'my-technique';
-import { tslShader, tslVariant } from 'my-technique/tsl';
-
-registerThreeRasterPlanProgram({
-  technique: planProgram.technique,
-  schema: planProgram.schema,
-  variant: {
-    id: 'tsl',
-    language: 'tsl',
-    buffers: tslVariant.buffers,
-    resources: tslVariant.resources,
-    outputs: tslVariant.outputs,
-    geometry: tslVariant.geometry,
-    createMaterial(context) {
-      const origin = context.namedBuffers.get('origin');
-      const size = context.namedBuffers.get('size');
-      const color = context.namedBuffers.get('color');
-      if (origin?.scalarType !== threePolicyAbi.scalarTypes.f32 ||
-          origin.vectorWidth !== 2 || size?.vectorWidth !== 2 || color?.vectorWidth !== 4) {
-        throw new TypeError('Incompatible named buffers');
-      }
-      const shader = tslShader({
-        origin: storage(origin.attribute, 'vec2', origin.attribute.count).element(context.instance),
-        size: storage(size.attribute, 'vec2', size.attribute.count).element(context.instance),
-        color: storage(color.attribute, 'vec4', color.attribute.count).element(context.instance),
-        quadPosition: positionLocal,
-        quadUv: uv(),
-        transformPosition: context.transformPosition,
-      });
-      const material = new THREE.MeshBasicNodeMaterial({ transparent: true });
-      material.positionNode = shader.position;
-      material.colorNode = shader.color;
-      material.opacityNode = shader.opacity;
-      return material;
-    },
-  },
-});</code></pre>
-    <p class="callout"><strong>Why a renderer registration still exists:</strong> it selects a renderer-language implementation and constructs renderer-owned material/pipeline objects. It does not reinterpret technique policy. Named metadata is the glue; the portable plan remains the source of record spans, buffer/resource identities, geometry, and draws.</p>
-
-    <h3>Geometry choices</h3>
-    <div class="grid two">
-      <div class="card"><strong>Synthetic quad</strong><p>The plan declares no geometry resource. The renderer generates one unit quad per draw and uses <code>recordCount</code> as instance count.</p></div>
-      <div class="card"><strong>Supplied geometry</strong><p>The technique retains immutable bytes, views, accessors, vertex semantics, optional indices, topology, and draw range. Geometry never declares instance count; the plan still owns it.</p></div>
-    </div>
-<pre><code>const geometry = {
-  kind: 'geometry',
-  topology: 'triangle-list',
-  bytes, // GLB-style immutable vertex/index storage
-  views: [{ offset: 0, length: 80 }, { offset: 80, length: 12 }],
-  accessors: [
-    { componentType: 'f32', components: 3, view: 0, offset: 0,  count: 4 },
-    { componentType: 'f32', components: 2, view: 0, offset: 48, count: 4 },
-    { componentType: 'u16', components: 1, view: 1, offset: 0,  count: 6 },
-  ],
-  attributes: [
-    { semantic: 'position', accessor: 0 },
-    { semantic: 'uv', accessor: 1 },
-  ],
-  indices: { accessor: 2 },
-};
-
-// Three checks its reserved widths twice: declarations when the renderer
-// variant registers, and actual payload attributes when the font is bound.
-compiler.retain('glyphGeometry', data.geometryResource, geometry);</code></pre>
-  </section>
-
-  <section id="failure">
-    <h2>Failure and lifecycle model</h2>
-    <div class="sequence" role="img" aria-label="Prepare validate and commit lifecycle">
-      <div class="lane"><strong>1 · Prepare</strong><em>Clone or journal candidate metadata; realize new resources and draws off to the side.</em></div>
-      <div class="arrow">→</div>
-      <div class="lane"><strong>2 · Validate</strong><em>Authenticate generations, identities, shapes, spans, geometry, named bindings, and all references.</em></div>
-      <div class="arrow">→</div>
-      <div class="lane"><strong>3 · Commit</strong><em>Apply validated patches, swap owned maps/draws, then dispose retired objects.</em></div>
-    </div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Failure</th><th>Where it is caught</th><th>Runtime result</th></tr></thead>
-      <tbody>
-        <tr><td>Malformed schema, resource, policy, or variant</td><td>Authoring/registration call</td><td>Throws before output allocation or device mutation</td></tr>
-        <tr><td>Device resource commit fails after binding registration</td><td>Font-registration transaction</td><td>Disposes the provisional Wasm binding, discards candidate resources, and preserves the original failure</td></tr>
-        <tr><td>Stack names a foreign binding or binding disposal would break a stack</td><td><code>TextEngineHost</code> call boundary</td><td>Throws before Wasm mutation; teardown still disposes stacks before bindings</td></tr>
-        <tr><td>Invalid copied plan framing</td><td><code>TextEngineRenderPlanView.bindBytes()</code></td><td>Throws transactionally before the reader or device changes; malformed engine output is an implementation defect</td></tr>
-        <tr><td>Third-party material factory throws</td><td>Renderer preparation</td><td>Accepted scene remains live; unchanged input is not retried</td></tr>
-        <tr><td>Renderer-relevant invalidation follows a rejected candidate</td><td>Frame coordinator</td><td>Requests a fresh checkpoint from the last device-consumed plan revision</td></tr>
-        <tr><td>Retired-object cleanup throws after commit</td><td>Commit cleanup</td><td>First cleanup failure is reported; accepted state remains current and future frames continue</td></tr>
-      </tbody>
-    </table></div>
-    <p class="callout">There is no stale-material restoration, unchanged-frame retry, or permanent renderer latch. Correctness comes from “live state is untouched until the candidate is valid,” not from rolling back to an older picture after partial mutation.</p>
-  </section>
-
-  <section id="performance">
-    <h2>Performance evidence</h2>
-    <p>The final committed head and exact stack base <code>f08a90cf6</code> were built in isolated worktrees and measured sequentially on the same host. The complete Rust matrix covers Bitmap, MTSDF, and Slug under ordered and stable allocation plus CJK Bitmap in both modes: eight configurations × eight update classes, each with 8 warmups and 31 measured repetitions over approximately 22,000 glyphs. Glyph counts, patches, and writes match in every pair.</p>
-    <p class="callout"><strong>No material plan-edit regression was demonstrated.</strong> Across the 35 rows where both processes stayed at or below 10% RSD, the median head-to-base change is +0.29%; per-configuration medians range from −0.32% to +1.64%. Apparent outliers were repeated at 101 or 301 samples in reverse order: stable no-op +0.08%, MTSDF suffix edit −0.49%, CJK suffix edit −0.52%, MTSDF cold +0.31%, public 45,198-glyph text +0.64%, and public 29,889-glyph font-size +1.39%. Those deltas are inside observed process variance.</p>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Lane</th><th>Samples</th><th>Final comparison</th><th>Correctness evidence</th></tr></thead>
-      <tbody>
-        <tr><td>Complete Rust/Wasm update + plan</td><td>64 rows × 31; targeted rows × 101/301</td><td>+0.29% median over 35 low-variance rows</td><td>Exact glyphs, patches, and writes in every pair</td></tr>
-        <tr><td>Public Three layout path</td><td>16 rows × 31; two rows × 101</td><td>+0.64% text · +1.39% font-size confirmations</td><td>Same glyph scales and invalidation classes</td></tr>
-        <tr><td>Wasm no-op</td><td>101-sample confirmation</td><td>1.213 vs 1.212 ms (+0.08%) for Slug/stable</td><td>Zero patches and zero writes</td></tr>
-        <tr><td>Browser submission</td><td>Three 101 samples; TypeGPU changed frame</td><td>0.090 ms Three warm · 0.320 ms TypeGPU submit</td><td>Non-empty draws, changed pixels, zero idle submissions</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3>Artifact identity</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Artifact</th><th>SHA-256</th><th>Comparison</th></tr></thead>
-      <tbody>
-        <tr><td>Current worktree shaper Wasm</td><td><code>25c6fd55f1a34826d68fb4abc233191a85849dd44306c27317cf58553932f5e4</code></td><td>1,138,492 B</td></tr>
-        <tr><td>Exact stack-base shaper Wasm</td><td><code>4ece39eb9f35a95d7d347fff167f8fe3db5777932bcc74776e1f9fc6882ab3e5</code></td><td>1,136,263 B</td></tr>
-        <tr><td>Current intentional delta</td><td>portable plans, ownership, and paragraph-scoped measurement</td><td>+2,229 raw vs exact stack base · timing gate passed</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3>Three browser lab</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Path</th><th>Font load</th><th>First frame</th><th>Warm median / p95</th><th>Retained result</th></tr></thead>
-      <tbody>
-        <tr><td>Portable generic technique</td><td>285.28 ms</td><td>5.66 ms</td><td>0.090 / 0.215 ms</td><td>1 draw · 12 instances · supplied geometry retained</td></tr>
-        <tr><td>First-party Bitmap</td><td>347.73 ms</td><td>4.44 ms</td><td>0.075 / 0.170 ms</td><td>1 draw · 12 instances · synthetic quad retained</td></tr>
-      </tbody>
-    </table></div>
-    <p class="caption">101 samples after 20 warmups. The external raster visible proof also passes WebGPU and forced WebGL2 with matching RGBA SHA-256 <code>0231a1849628dbe5ceba9a0539020624dbfbbc825ff3908b10c80567a00d022d</code>.</p>
-
-    <h3>TypeGPU changed-frame submission</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Acceptance path</th><th>Median</th><th>P95</th><th>Disposition</th></tr></thead>
-      <tbody>
-        <tr><td>Rejected per-frame queue-completion fence</td><td>0.760 ms</td><td>1.585 ms</td><td>Serialized CPU/GPU work</td></tr>
-        <tr><td>Current validation-accepted, pipelined queue</td><td>0.300 ms</td><td>0.645 ms</td><td>−60.5% median · −59.3% p95</td></tr>
-        <tr><td>Latest complete hardware acceptance run</td><td>0.320 ms</td><td>0.680 ms</td><td>1 initial + 1 updated draw · 0 idle submissions</td></tr>
-      </tbody>
-    </table></div>
-    <p class="caption">Paired same-host A/B on an Apple M2 Pro with a 16-core GPU on macOS arm64: 101 measured text-changing frames after 20 warmups, with the exact old <code>onSubmittedWorkDone()</code> fence temporarily restored for the control. This measures CPU-visible <code>render()</code> acceptance, not GPU execution time. Readback still uses <code>mapAsync()</code> where completion evidence is required.</p>
-
-    <h3>Package size</h3>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Artifact</th><th>Raw</th><th>Gzip</th><th>Brotli</th></tr></thead>
-      <tbody>
-        <tr><td>Renderer-neutral core JS</td><td>348,638</td><td>57,898</td><td>48,378</td></tr>
-        <tr><td>TypeGPU shader subpath</td><td>21,922</td><td>2,768</td><td>2,425</td></tr>
-        <tr><td>TSL shader subpath</td><td>25,772</td><td>3,940</td><td>3,506</td></tr>
-        <tr><td>Three adapter JS</td><td>600,633</td><td>97,163</td><td>80,862</td></tr>
-        <tr><td>Shaper Wasm</td><td>1,138,492</td><td>442,402</td><td>351,369</td></tr>
-      </tbody>
-    </table></div>
-  </section>
-
-  <section id="verification">
-    <h2>Verification map</h2>
-    <ul class="checklist">
-      <li>Focused attached-first-frame measurement test: two new grouped paragraphs, zero full-frame crossings before traversal, zero GPU bytes, zero draw objects, unchanged matrices</li>
-      <li>Paragraph shared-stack retirement test: disposed font bytes survive until the final paragraph lease and then retire</li>
-      <li>Full Glyph package check: 889 JavaScript tests and 223 Rust shaper tests, plus conformance, declarations, lint, formatting, rustfmt, and Clippy</li>
-      <li>Rust unit, conformance, fuzz-smoke, clippy lanes</li>
-      <li>Example raster: 4 files / 13 tests</li>
-      <li>Production bundle side-effect registration smoke</li>
-      <li>Example renderer: 4 files / 17 tests</li>
-      <li>TypeGPU/WebGPU lab: 1 initial draw, 1 updated draw, 7,740 → 6,588 visible pixels, 10,287 changed pixels, 0 idle submissions, 1 clear-only disposal submission, 0 pixels after clear</li>
-      <li>External raster WebGPU and WebGL2 visible proof</li>
-      <li>Non-empty draw and retained-geometry assertions</li>
-      <li>Type-level negative tests for schema and renderer variants</li>
-      <li>Package boundary checks include source, tests, and build scripts; no Three leakage</li>
-      <li>Tree-shaking manifest preserves neutral registration leaves and Three compatibility barrels</li>
-      <li>Docs/OKF: 0 errors, 0 warnings</li>
-      <li>Generated package sizes independently regenerated and checked; Three is below its 603,000 raw / 379,000 minified / 98,500 gzip / 82,000 brotli ceilings</li>
-      <li>Final Wasm ordered, stable, and CJK matrices passed against exact stack base; targeted 101/301-sample confirmations found no material regression</li>
-      <li>Same-session Opus High final review found no merge blockers and independently verified size ceilings, plan-view transactionality, side-effect exports, and package digests</li>
-      <li>Current loaded-font disposal defers bytes through the final stack lease; the target migration replaces retry-oriented ownership with deterministic binding leases and immediate Wasm release at lease zero</li>
-    </ul>
-  </section>
-
-  <footer>
-    <p><strong>Primary sources:</strong> <code>docs/planning/technique-implementability.md</code> and <code>docs/planning/font-runtime-ownership.md</code>. Runnable current implementations live in <code>packages/glyph-example-raster</code>, <code>packages/glyph-example-renderer</code>, and <code>packages/glyph/src/three</code>.</p>
-    <p>Portability evidence remains based on committed head <code>3d2e11eb</code> and <a href="https://github.com/pmndrs/glyph/pull/120">draft PR #120</a>. Opus High reviewed the ownership plan at <code>7cd3f250</code>, found the three target-control follow-ups at <code>457e0495</code>, and verified their closure at <code>ffbe1664</code> with no remaining actionable blocker. The ownership migration is an accepted, not-yet-implemented breaking plan: immutable Font assets, runtime-owned hosts, target-bound sessions, deterministic leases, and renderer-owned Canvas/GPU lifetimes replace the representable ownership gaps without preserving two public integration modes.</p>
-  </footer>
-</main>
-</body>
+      <footer>
+        Canonical prose: <a href="../guides/renderer-integration.md">renderer integration guide</a>,
+        <a href="../guides/technique-implementation-report.md">technique explanation</a>, and
+        <a href="../planning/decision-register.md">decision register</a>.
+      </footer>
+    </main>
+  </body>
 </html>

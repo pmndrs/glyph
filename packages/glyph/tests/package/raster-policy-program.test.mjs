@@ -11,7 +11,6 @@ import {
   registerRasterPlanProgram,
   techniqueId,
   techniqueProgram,
-  textShaperAbi,
 } from '../../dist/core.js';
 
 const TEST_PROGRAM_VARIANT = 3;
@@ -58,7 +57,7 @@ const otherSystem = definePolicyBuffers({
   stableGlyphId: { id: OTHER_SYSTEM_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 const capabilitySet = {
-  flags: textShaperAbi.policy.capabilityFlags.orderedDirect,
+  capabilities: ['ordered-direct'],
   maxBufferBytes: 1024,
   updateAlignment: 4,
   coalesceGapBytes: 0,
@@ -119,7 +118,7 @@ test('portable policy assembly rejects host inputs before invoking technique cod
     [{ ...valid, transformMode: 'sideways' }, /transform mode/],
     [{ ...valid, allocationMode: 'recycling' }, /allocation mode/],
     [{ ...valid, system: {} }, /stableGlyphId system buffer/],
-    [{ ...valid, capabilitySet: { ...capabilitySet, flags: 0 } }, /support no allocation strategy/],
+    [{ ...valid, capabilitySet: { ...capabilitySet, capabilities: [] } }, /supports no allocation strategy/],
     [{ ...valid, identityRegistry: {} }, /identityRegistry/],
   ];
   for (const [options, message] of invalid) {

@@ -2,10 +2,10 @@ import { createRoot, flushSync, type RootStore } from '@react-three/fiber/webgpu
 import React, { createRef, StrictMode } from 'react';
 import * as THREE from 'three/webgpu';
 
-import type { LoadedFont, ParagraphLayout } from '@pmndrs/glyph';
+import { createFontLibrary, type FontRequest, type ParagraphLayout } from '@pmndrs/glyph';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
-import { Text, TextSpan, useFont } from '@pmndrs/glyph/react';
-import type { LoadedFontRequest, ParagraphContentBox, Text as CoreText } from '@pmndrs/glyph/three';
+import { createUseFont, Text, TextSpan, type BoundUseFont } from '@pmndrs/glyph/react';
+import type { ParagraphContentBox, Text as CoreText } from '@pmndrs/glyph/three';
 
 import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json' with { type: 'json' };
 import bitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
@@ -33,7 +33,7 @@ const BITMAP_COLOR_ATTRIBUTE = policyAttributeName(bitmapSchema.buffers.color.id
  * constraint instead of restoring the natural measurement. The unconstrained axis has to be stated.
  */
 const NATURAL_CONTENT_BOX: ParagraphContentBox = { width: { mode: 'unconstrained' } };
-const fontRequest: LoadedFontRequest<BitmapTechnique> = {
+const fontRequest: FontRequest<BitmapTechnique> = {
   input: { baked: bitmapFontUrl },
   raster: { technique: bitmap, options: { strikes: [16] } },
 };
@@ -49,7 +49,8 @@ interface ReactTextFailures {
 interface ReactTextResources {
   readonly canvas: HTMLCanvasElement;
   readonly failures: ReactTextFailures;
-  readonly font: LoadedFont<BitmapTechnique>;
+  readonly fontHook: BoundUseFont;
+  readonly library: ReturnType<typeof createFontLibrary>;
   readonly reference: React.RefObject<BitmapTextObject | null>;
   readonly renderer: THREE.WebGPURenderer;
   readonly root: ReturnType<typeof createRoot>;
@@ -83,8 +84,7 @@ export function createReactTextTarget(): BenchmarkTarget {
       // font so teardown remains deterministic; the later host disposal is intentionally idempotent.
       resources.reference.current?.dispose();
       flushSync(() => resources.root.unmount());
-      resources.font.dispose();
-      useFont.clear(fontRequest);
+      resources.library.dispose();
       await disposeConfiguredRenderer(resources.renderer);
     },
   };
@@ -101,7 +101,8 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
   });
   const root = createRoot(canvas);
   const failures: ReactTextFailures = { error: undefined };
-  let font: LoadedFont<BitmapTechnique> | undefined;
+  const library = createFontLibrary();
+  const fontHook = createUseFont(library);
   try {
     await root.configure({
       camera: {
@@ -119,14 +120,13 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
       renderer,
       size: { height: FRAME_HEIGHT, left: 0, top: 0, width: FRAME_WIDTH },
     });
-    font = await useFont.preload(fontRequest);
+    await fontHook.preload(fontRequest);
     const reference = createRef<BitmapTextObject>();
-    const initial = await renderCommittedText(root, reference, failures);
-    return { canvas, failures, font, reference, renderer, root, store: initial.store };
+    const initial = await renderCommittedText(root, reference, failures, fontHook);
+    return { canvas, failures, fontHook, library, reference, renderer, root, store: initial.store };
   } catch (error) {
     flushSync(() => root.unmount());
-    font?.dispose();
-    useFont.clear(fontRequest);
+    library.dispose();
     await disposeConfiguredRenderer(renderer);
     throw error;
   }
@@ -141,6 +141,7 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
     resources.root,
     resources.reference,
     resources.failures,
+    resources.fontHook,
     NARROW_WIDTH,
     '#31d7c5',
   );
@@ -150,7 +151,12 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
     throw new Error('React Text did not retain its core object across width reflow');
   }
 
-  const restored = await renderCommittedText(resources.root, resources.reference, resources.failures);
+  const restored = await renderCommittedText(
+    resources.root,
+    resources.reference,
+    resources.failures,
+    resources.fontHook,
+  );
   const restoredLayout = requiredLayout(core);
   assertOracleLayout(restoredLayout, 'natural');
   if (restored.core !== core) throw new Error('React Text replaced its core object during restore');
@@ -195,6 +201,7 @@ async function renderCommittedText(
   root: ReturnType<typeof createRoot>,
   reference: React.RefObject<BitmapTextObject | null>,
   failures: ReactTextFailures,
+  fontHook: BoundUseFont,
   width?: number,
   accent = '#ff8a00',
 ): Promise<{ readonly core: BitmapTextObject; readonly store: RootStore }> {
@@ -207,7 +214,7 @@ async function renderCommittedText(
   };
   let store: RootStore | undefined;
   flushSync(() => {
-    store = root.render(renderText(publish, failures, width, accent));
+    store = root.render(renderText(publish, failures, fontHook, width, accent));
   });
   // StrictMode may remount after the first host ref callback, so always read the retained object back from the ref.
   await committed.promise;
@@ -222,28 +229,35 @@ async function renderCommittedText(
 function renderText(
   textRef: React.RefCallback<BitmapTextObject>,
   failures: ReactTextFailures,
+  fontHook: BoundUseFont,
   width?: number,
   accent = '#ff8a00',
 ): React.ReactElement {
   return React.createElement(
     StrictMode,
     null,
-    React.createElement(CommittedText, { accent, failures, textRef, ...(width === undefined ? {} : { width }) }, null),
+    React.createElement(
+      CommittedText,
+      { accent, failures, fontHook, textRef, ...(width === undefined ? {} : { width }) },
+      null,
+    ),
   );
 }
 
 function CommittedText({
   accent,
   failures,
+  fontHook,
   textRef,
   width,
 }: {
   readonly accent: string;
   readonly failures: ReactTextFailures;
+  readonly fontHook: BoundUseFont;
   readonly textRef: React.RefCallback<BitmapTextObject>;
   readonly width?: number;
 }): React.ReactElement {
-  const font = useFont(fontRequest);
+  const font = fontHook(fontRequest);
   return React.createElement(
     BitmapText,
     {

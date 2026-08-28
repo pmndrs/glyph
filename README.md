@@ -24,8 +24,8 @@ portable plan; shader subpaths carry no renderer registration, so each engine or
 variant it supports.
 
 The rule, if you are deciding where something belongs: **a type an application can encounter lives at the root; a
-thing only an integrator constructs lives in `/core`.** That is why `ParagraphMeasurement` is at the root and
-`Paragraph` is not.
+thing only an integrator constructs lives in `/core`.** That is why `Paragraph`, `Font`, and their measurement types
+are at the root, while runtime, host, session, policy, and plan-target construction stays in `/core`.
 
 ## Render text with React Three Fiber
 
@@ -128,10 +128,9 @@ matrix, or committed frame — which is also what a flexbox engine needs from in
 `Text.layout()` while the text is detached throws and points to this API.
 
 ```ts
-import { txt } from '@pmndrs/glyph';
-import { Paragraph } from '@pmndrs/glyph/core';
+import { createParagraph, txt } from '@pmndrs/glyph';
 
-const paragraph = new Paragraph({ font: inter, text: txt`Hello world`, policy: { wrap: 'word' } });
+const paragraph = await createParagraph({ font: inter, text: txt`Hello world`, policy: { wrap: 'word' } });
 const measured = paragraph.layout({ width: { mode: 'at-most', size: 360 } });
 
 measured.contentWidth; // advance extent
@@ -143,11 +142,12 @@ measured.minContentWidth; // longest unbreakable run, from the same pass
 Every value is paragraph-local: the origin is the box's top-left corner, positive X is right, positive Y is down.
 Scale and placement are yours to apply afterwards.
 
-`layout()` is one cheap engine query: sizes, baselines, counts, and intrinsic widths — no per-glyph records, no
-array copies. When you need the positioned output (`x`, `y`, `glyphIds`, ink boxes), call `glyphs()` for it; that is
-a second query because it is a second piece of work. A host that probes many widths for sizes alone never pays for
-arrays it never touches. A query answers or throws: a constraint that is not finite and nonnegative throws from the
-call, naming the axis.
+`layout()` returns sizes, baselines, counts, and intrinsic widths without per-glyph array copies. A cache miss may
+synchronously incur font and layout lookup work. When you need positioned output (`x`, `y`, `glyphIds`, ink boxes),
+call `glyphs()`; its cache miss may synchronously incur glyph lookup and positioning, and every call returns
+caller-owned column copies. Both canonical caches are three-entry LRUs covering the normal unconstrained, at-most, and
+exact negotiation cycle. A host that probes sizes alone never pays for arrays it never touches. A query answers or throws:
+a constraint that is not finite and nonnegative throws from the call, naming the axis.
 
 ## Font Stacks - fallback fonts for missing glyphs
 
@@ -240,164 +240,87 @@ Fonts without authored glyph names still report exact glyph IDs.
 
 ## Core API
 
-Every Three primitive above is built on the same renderer-neutral lifecycle: create a runtime and host, register a validated
-policy, load and compile each font into portable resources plus binding bytes, register stacks and a session, then create or
-update text by submitting serialized frames and consuming their revisioned render plans. The engine never calls back into
-JavaScript during shaping, layout, or packing.
+Every Three primitive above uses the same renderer-neutral lifecycle. The application loads immutable fonts from the root
+package. An integration creates one Wasm runtime, creates its host through that runtime, installs its renderer policy,
+binds fonts, and creates a retained session with a plan target. Neither runtime, host, nor session is a canvas or GPU
+device; the target connects one session's publications to renderer-owned resources and submission.
 
-The host owns cold Wasm registrations; each session owns one hot revisioned paragraph batch. Neither is a scene, render
-pass, or GPU device. Portable compiled payloads stay immutable, while the renderer realizes and pools their textures,
-buffers, and geometry per device by the plan's stable resource identity.
-
-Load a font and own the engine lifecycle once:
+The complete public sequence is:
 
 ```ts
+import { createFontStack, loadFont } from '@pmndrs/glyph';
 import { msdf } from '@pmndrs/glyph/raster/msdf';
 import {
-  compileRasterFont,
-  compileRenderPolicy,
   createTextRuntime,
-  id,
-  TextEngineHost,
-  textRuntimeShaper,
+  readTextEngineDraw,
+  readTextEnginePatch,
+  type PlanCandidate,
+  type PlanTarget,
 } from '@pmndrs/glyph/core';
 
-const POLICY_HANDLE = id('policy', 'my-renderer/default');
-
+// Integration lifetime: one Wasm shaping domain, then one renderer-owned host.
 const runtime = await createTextRuntime();
-const inter = await runtime.loadFont({
+const host = runtime.createTextEngineHost({ integration: 'my-renderer' });
+const policy = host.installPolicy(myRendererPolicy);
+
+// Application assets are renderer-neutral and may outlive this runtime.
+const inter = await loadFont({
   input: { baked: '/fonts/Inter.font.glb' },
   raster: { technique: msdf },
 });
+const font = host.bindFontStack(createFontStack(inter));
 
-// Styles reference fonts through stack handles, so bind and stack the loaded font once.
-const host = new TextEngineHost(textRuntimeShaper(runtime));
-const bindingHandle = host.id('font-binding', 'my-renderer/inter');
-const fontStackHandle = host.id('font-stack', 'my-renderer/body');
-host.registerPolicy(POLICY_HANDLE, compileRenderPolicy(myPolicy));
-const compiled = compileRasterFont(inter, host.wireIdentities);
-if (compiled === undefined) throw new Error(`no portable plan is registered for ${inter.technique.id}`);
-const resources = [];
-for (const [name, keys] of compiled.declaredResources) {
-  for (const key of keys) {
-    const resource = compiled.resources.get(key);
-    if (resource === undefined) throw new Error(`compiled font omitted ${name}`);
-    resources.push({ id: host.wireIdentities.resourceId(key), generation: 1, name, resource });
-  }
-}
-// Renderer-owned prepare/commit seam; glyph-example-renderer provides one complete implementation.
-const pendingResources = myRenderer.prepareResources(resources);
-try {
-  host.registerFontBinding(bindingHandle, inter.font.handle, compiled.binding);
-  try {
-    pendingResources.commit();
-  } catch (commitError) {
-    try {
-      host.disposeFontBinding(bindingHandle);
-    } catch (rollbackError) {
-      throw new AggregateError([commitError, rollbackError], 'resource commit and binding rollback failed', {
-        cause: commitError,
-      });
+const target: PlanTarget = {
+  delivery: 'borrowed',
+  accept(candidate: PlanCandidate) {
+    // This callback is synchronous: decode, stage, and commit before it returns.
+    const patches = candidate.plan.table('patches');
+    for (let index = 0; index < patches.count; index += 1) {
+      myRenderer.stagePatch(readTextEnginePatch(candidate.plan, patches, index));
     }
-    throw commitError;
-  }
-} catch (error) {
-  pendingResources.discard();
-  throw error;
-}
-host.registerFontStack(fontStackHandle, [bindingHandle]);
+    const draws = candidate.plan.table('draws');
+    for (let index = 0; index < draws.count; index += 1) {
+      myRenderer.stageDraw(readTextEngineDraw(candidate.plan, draws, index));
+    }
+    return myRenderer.commit(candidate) ? { accepted: true } : { accepted: false, error: myRenderer.error };
+  },
+  dispose() {
+    myRenderer.disposeTarget();
+  },
+};
+
+// Session lifetime: one independently revisioned retained batch and one target.
+const session = host.createSession({
+  policy,
+  target: () => target,
+  limits,
+  requestCapacity: 64 * 1024,
+  resultCapacity: 256 * 1024,
+  textCapacity: 16 * 1024,
+});
+const title = session.createText({
+  font,
+  text: 'Hello',
+  style: { fontSize: 48 },
+  contentBox: { width: { mode: 'at-most', size: 800 } },
+});
+
+// Queries are explicit. A cache miss can synchronously perform layout or glyph lookup.
+const metrics = title.layout();
+const positionedGlyphs = title.glyphs();
+
+// Mutations stay cheap until a query or publication needs current shaped state.
+title.update({ text: 'Hello, Glyph' });
+const acceptance = session.publish();
+if (!acceptance.accepted) throw acceptance.error;
 ```
 
-The policy is your own declaration — `@pmndrs/glyph/core` exports the authoring toolkit (`compileRenderPolicy`, `programContext`, the wire-identity registry) that Three's first-party policy is itself built with. Its handle is an authored
-module constant from `id()`; bindings, stacks, sessions, and text identities come from `host.id()` because their collision
-provenance ends with that host.
-Registrations are claimed per Wasm instance. Multiple hosts may use one shaper with distinct handles, but a cross-host
-policy or stack reference throws before the session invalidates its last accepted publication.
-
-Shape text — a session update is one serialized frame of mutations, constraints, and the revision handshake:
-
-```ts
-import { compileTextEngineFrameUpdate } from '@pmndrs/glyph/core';
-
-const sessionHandle = host.id('session', 'my-renderer/main-view');
-const paragraphId = host.id('paragraph', 'my-renderer/title');
-const session = host.createSession({ handle: sessionHandle, requestCapacity: 4096, resultCapacity: 65536 });
-const publication = session.update(
-  compileTextEngineFrameUpdate({
-    sessionId: sessionHandle,
-    policyHandle: POLICY_HANDLE,
-    expectedEngineRevision: 0,
-    consumedPlanRevision: 0,
-    acknowledgedPublicationGeneration: 0,
-    limits,
-    paragraphMutations: [{ opcode: 'upsert', paragraphId, order: 0 }],
-    textMutations: [{ paragraphId, start: 0, deleteCount: 0, insert: 'Hello' }],
-    styleMutations: [rootStyle],
-    constraints: [paragraphConstraint],
-    regions: [paragraphRegion],
-  }),
-);
-```
-
-Consume the plan. A publication is borrowed A/B memory — its bytes stay readable only until the next call on that session
-or a Wasm-memory growth, so a synchronous renderer walks it before touching the engine again. An asynchronous renderer
-calls `session.copyPublication()` once; APIs that store the result use `assertOwnedTextEnginePublication()` to verify
-package-private provenance that a visible-field copy cannot forge. The static path applies buffer patches, then issues one
-draw per packet:
-
-```ts
-import { TextEngineRenderPlanView, textShaperAbi } from '@pmndrs/glyph/core';
-
-const plan = new TextEngineRenderPlanView().bind(publication);
-
-const patches = plan.table('patches');
-const patchLayout = textShaperAbi.layouts.enginePatch;
-for (let index = 0; index < patches.count; index += 1) {
-  const patch = plan.record(patches, index);
-  // Dispatch on plan.u8(patch + patchLayout.opcode): allocate and retire manage buffer
-  // lifetimes, write copies plan.u32(patch + patchLayout.byteLength) payload bytes into
-  // the buffer named by patchLayout.bufferId at patchLayout.destinationOffset, and
-  // fill/copy move data without a payload.
-}
-
-const draws = plan.table('draws');
-const drawLayout = textShaperAbi.layouts.engineDraw;
-for (let index = 0; index < draws.count; index += 1) {
-  const draw = plan.record(draws, index);
-  // One instanced draw: program, material, buffer, and ordering identities are all
-  // explicit fields — plan.u32(draw + drawLayout.programId), materialId, clipId, depthKey.
-}
-```
-
-The frame loop echoes what it consumed. Adjacent revisions publish minimal policy-costed patches; a consumer that fell behind the required base revision receives a complete checkpoint instead of an unsafe delta:
-
-```ts
-let engineRevision = publication.engineRevision;
-let acceptedPlanRevision = publication.planRevision;
-let acceptedPublicationGeneration = publication.publicationGeneration;
-function frame(edits) {
-  const next = session.update(
-    compileTextEngineFrameUpdate({
-      sessionId: sessionHandle,
-      policyHandle: POLICY_HANDLE,
-      expectedEngineRevision: engineRevision,
-      consumedPlanRevision: acceptedPlanRevision,
-      acknowledgedPublicationGeneration: acceptedPublicationGeneration,
-      limits,
-      textMutations: edits,
-    }),
-  );
-  engineRevision = next.engineRevision;
-  plan.bind(next);
-  applyPlanAndSubmit(plan); // returns only after the renderer commits the publication
-  acceptedPlanRevision = next.planRevision;
-  acceptedPublicationGeneration = next.publicationGeneration;
-}
-```
-
-Record layouts come from `textShaperAbi`; the next section describes what policies and plans mean. `host.dispose()`
-releases sessions, font stacks, font bindings, policies, and runtime ID provenance in dependency order. Explicit policy
-or stack disposal rejects `registrationInUse` while a live session names it, and failed disposal remains retryable.
+The semantic record readers are the public decoding surface; raw ABI offsets are package-private. `PlanTarget` is the
+normal zero-copy path because CPU-side GPU encoding is synchronous. Use `AsyncPlanTarget` only when the candidate crosses
+an asynchronous boundary such as a Worker; it receives one self-owned copy and must return that same transfer buffer.
+`host.dispose()` closes its sessions and bindings, while `runtime.dispose()` first closes every host and then releases
+Wasm. See the [renderer integration guide](docs/guides/renderer-integration.md) for resource realization, checkpoints,
+retirements, async transfer, and complete topology diagrams.
 
 ## Render policy and render plan
 

@@ -1,4 +1,4 @@
-import type { LoadedFont, LoadedFontRequest } from '@pmndrs/glyph';
+import type { Font, FontRequest } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, type ParagraphStyle } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -20,7 +20,7 @@ type BitmapTechnique = typeof bitmap;
 const VIEWPORT_WIDTH = 800;
 const FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
-const bitmapRaster: LoadedFontRequest<BitmapTechnique>['raster'] = {
+const bitmapRaster: FontRequest<BitmapTechnique>['raster'] = {
   technique: bitmap,
   options: { strikes: [16] },
 };
@@ -36,7 +36,7 @@ type AdvancedShapingConformanceState =
   | {
       readonly kind: 'ready';
       readonly loader: FontLoader;
-      readonly fonts: ReadonlyMap<AdvancedShapingFontFixture, LoadedFont<BitmapTechnique>>;
+      readonly fonts: ReadonlyMap<AdvancedShapingFontFixture, Font<BitmapTechnique>>;
     };
 
 export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
@@ -53,7 +53,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
       // A loading manager this target owns keeps its text runtime, and the fonts registered in it, isolated from the
       // shared manager every other benchmark surface loads through.
       const loader = new FontLoader(new THREE.LoadingManager());
-      const fonts = new Map<AdvancedShapingFontFixture, LoadedFont<BitmapTechnique>>();
+      const fonts = new Map<AdvancedShapingFontFixture, Font<BitmapTechnique>>();
       try {
         const fixtures = [...new Set(ADVANCED_SHAPING_CASES.map((definition) => definition.fontFixture))];
         const results = await Promise.allSettled(

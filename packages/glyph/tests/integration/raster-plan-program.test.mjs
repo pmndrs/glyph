@@ -7,8 +7,8 @@ import {
   defineTechniqueSchema,
   registerRasterPlanProgram,
   resolveRasterPlanProgram,
-  textShaperAbi,
 } from '../../dist/core.js';
+import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { RenderWireIdentityRegistry } from '../../dist/core/render-policy.js';
 import { createImmutableFontLease, immutableFontVariantIdentity } from '../../dist/loaded-font.js';
 import { indexedQuadGeometry } from '../support/portable-geometry.mjs';

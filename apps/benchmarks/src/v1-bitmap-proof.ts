@@ -1,5 +1,5 @@
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import type { LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import { FontLoader, Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -30,7 +30,7 @@ async function render(): Promise<TargetV1BitmapResult> {
   const target = new THREE.RenderTarget(256, 128, { format: THREE.RGBAFormat, type: THREE.UnsignedByteType });
   target.texture.colorSpace = THREE.NoColorSpace;
   let text: Text<typeof bitmap> | undefined;
-  let font: LoadedFont<typeof bitmap> | undefined;
+  let font: Font<typeof bitmap> | undefined;
   try {
     renderer.setSize(256, 128, false);
     renderer.setPixelRatio(1);

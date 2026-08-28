@@ -6,7 +6,7 @@ import {
   VK_FORMAT_R16G16B16A16_SFLOAT,
 } from 'ktx-parse';
 
-import type { RegisteredFont } from '../font.js';
+import type { RasterDecodeFont } from '../font.js';
 import type { Sha256Hex } from '../identity.js';
 import { jsonArray, jsonObject, nonnegativeSafeInteger, positiveSafeInteger } from '../internal/raster-atlas.js';
 import { validateNativeKtx2 } from '../internal/raster-ktx.js';
@@ -19,7 +19,7 @@ import {
   slugDescriptor,
   type SlugDescriptor,
 } from '../internal/slug-contract.js';
-import type { JsonValue, RasterResourceSource, RegisteredRaster } from '../raster.js';
+import type { JsonValue, RasterDecodeArtifact, RasterResourceSource } from '../raster.js';
 import {
   defineRasterResourceId,
   defineRasterTechnique,
@@ -91,13 +91,12 @@ export const slug: RasterTechnique<
   dispose() {},
 });
 
-async function decodeSlugData(font: RegisteredFont, raster: RegisteredRaster, signal?: AbortSignal): Promise<SlugData> {
-  if (
-    raster.font !== font.handle ||
-    raster.kind !== SLUG_KIND ||
-    raster.extension !== SLUG_EXTENSION ||
-    raster.version !== SLUG_FORMAT_VERSION
-  ) {
+async function decodeSlugData(
+  font: RasterDecodeFont,
+  raster: RasterDecodeArtifact,
+  signal?: AbortSignal,
+): Promise<SlugData> {
+  if (raster.kind !== SLUG_KIND || raster.extension !== SLUG_EXTENSION || raster.version !== SLUG_FORMAT_VERSION) {
     throw new TypeError('Slug raster is not bound to the supplied font');
   }
   const extension = jsonObject(raster.extensionData, 'Slug extension');
@@ -135,8 +134,8 @@ async function decodeSlugData(font: RegisteredFont, raster: RegisteredRaster, si
 }
 
 async function decodeSlugPage(
-  font: RegisteredFont,
-  raster: RegisteredRaster,
+  font: RasterDecodeFont,
+  raster: RasterDecodeArtifact,
   value: JsonValue,
   pageIndex: number,
   signal?: AbortSignal,
@@ -215,7 +214,7 @@ async function decodeSlugPage(
 }
 
 async function rasterResourceBytes(
-  raster: RegisteredRaster,
+  raster: RasterDecodeArtifact,
   value: JsonValue | undefined,
   path: string,
   signal?: AbortSignal,

@@ -1,4 +1,9 @@
-import { textShaperAbi, TextEngineStatusError, type TextEngineFault } from '../core.js';
+import {
+  TextEngineStatusError,
+  textEngineStatusErrorDetails,
+  type TextEngineFault,
+  type TextEngineStatusCode,
+} from '../core.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { Text, TextSpan } from './text.js';
 
@@ -59,14 +64,14 @@ export class TextFrameError extends Error {
 /** Resolves an engine fault onto authored objects. `paragraphs` maps the engine's paragraph handle. */
 export type TextFrameSubjectResolver = (fault: TextEngineFault) => TextFrameSubject;
 
-const CAUSE_BY_STATUS: ReadonlyMap<number, TextFrameRejection['cause']> = new Map([
-  [textShaperAbi.status.styleRangeInvalid, 'span-range' as const],
-  [textShaperAbi.status.styleSplitsCluster, 'cluster-boundary' as const],
-  [textShaperAbi.status.styleNestingInvalid, 'span-overlap' as const],
-  [textShaperAbi.status.styleRootInvalid, 'paragraph-root' as const],
-  [textShaperAbi.status.fontStackMissing, 'font-stack-missing' as const],
-  [textShaperAbi.status.fontMetricsMissing, 'font-metrics-missing' as const],
-  [textShaperAbi.status.resultTooLarge, 'capacity' as const],
+const CAUSE_BY_CODE: ReadonlyMap<TextEngineStatusCode, TextFrameRejection['cause']> = new Map([
+  ['style-range-invalid', 'span-range' as const],
+  ['style-splits-cluster', 'cluster-boundary' as const],
+  ['style-nesting-invalid', 'span-overlap' as const],
+  ['style-root-invalid', 'paragraph-root' as const],
+  ['font-stack-missing', 'font-stack-missing' as const],
+  ['font-metrics-missing', 'font-metrics-missing' as const],
+  ['result-too-large', 'capacity' as const],
 ]);
 
 /**
@@ -77,17 +82,18 @@ const CAUSE_BY_STATUS: ReadonlyMap<number, TextFrameRejection['cause']> = new Ma
  */
 export function textFrameError(error: unknown, resolve: TextFrameSubjectResolver): unknown {
   if (!(error instanceof TextEngineStatusError)) return error;
-  const cause = CAUSE_BY_STATUS.get(error.status) ?? 'engine';
+  const details = textEngineStatusErrorDetails(error);
+  const cause = CAUSE_BY_CODE.get(error.code) ?? 'engine';
   const rejection: TextFrameRejection =
     cause === 'capacity'
       ? {
           cause,
-          requiredRequestBytes: error.requiredRequestCapacity,
-          requiredResultBytes: error.requiredResultCapacity,
+          requiredRequestBytes: details.requiredRequestCapacity,
+          requiredResultBytes: details.requiredResultCapacity,
         }
       : cause === 'engine'
         ? { cause }
-        : { cause, subject: resolve(error.fault) };
+        : { cause, subject: resolve(details.fault) };
   return new TextFrameError(rejection, error.status, rejectionMessage(rejection, error), { cause: error });
 }
 

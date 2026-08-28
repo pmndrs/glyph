@@ -19,7 +19,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import '../support/browser-globals.mjs';
-import { defineRasterTechnique, FontRegistry } from '@pmndrs/glyph';
+import { defineRasterTechnique } from '@pmndrs/glyph';
 import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
 import {
   defineTechniqueGeometryKind,
@@ -29,18 +29,23 @@ import {
   id,
   registerRasterPlanProgram,
   techniqueProgram,
-  textRuntimeShaper,
   u32,
 } from '@pmndrs/glyph/core';
+import {
+  createImmutableFontBacking,
+  createImmutableFontLease,
+  createImmutableFontVariant,
+} from '../../dist/loaded-font.js';
+import { FontRegistry } from '../../dist/loader.js';
 
-import { shaperWasmUrl } from '../support/text-mutation-lanes.mjs';
+const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
 const RECT_BUFFER_ID = id('buffer', 'test.three-plan-program/rect');
 const STABLE_GLYPH_BUFFER_ID = id('buffer', 'test.three-plan-program/system/stable-glyph-id');
 const TRANSFORM_BUFFER_ID = id('buffer', 'test.three-plan-program/system/transform-index');
 // The coordinator is what takes the snapshot, so the lifecycle is asserted against it directly
 // rather than through a mounted scene that would only reach it incidentally.
-import { ThreeTextEngineCoordinator, threeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
+import { ThreeTextEngineCoordinator } from '../../dist/three/engine-runtime.js';
 
 const portablePrograms = new Map();
 const planProgram = (techniqueIdentity, declaration = {}) => {
@@ -244,19 +249,21 @@ test('registration selects one renderer variant per technique before runtime con
     () => registerThreeRasterPlanProgram(secondary),
     /already selected raster variant "test" for technique "test-variant-selection"/,
   );
-  const runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  const coordinator = new ThreeTextEngineCoordinator(textRuntimeShaper(runtime));
+  const runtime = await createTextRuntime({ wasm: await readFile(shaperWasmUrl) });
+  const coordinator = new ThreeTextEngineCoordinator(runtime);
+  const font = await fontForTechnique(unsupported);
   assert.throws(
-    () => coordinator.acquireFontStack([{ disposed: false, technique: unsupported, font: {} }]),
+    () => coordinator.bindFontStack(font),
     /no registered renderer variant for portable technique "test-portable-without-three"/,
   );
+  font.dispose();
   coordinator.dispose();
   runtime.dispose();
 });
 
 test('a technique registered after a runtime exists is refused, not silently dropped', async () => {
-  const runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  threeTextEngineCoordinator(runtime);
+  const runtime = await createTextRuntime({ wasm: await readFile(shaperWasmUrl) });
+  const coordinator = new ThreeTextEngineCoordinator(runtime);
 
   const late = planProgram('test-late-technique');
   assert.throws(
@@ -270,6 +277,7 @@ test('a technique registered after a runtime exists is refused, not silently dro
 
   // Once nothing holds a snapshot there is nothing a registration could miss, so it is legal again.
   // Without this, one disposed runtime would poison the module-global registry for the process.
+  coordinator.dispose();
   runtime.dispose();
   assert.doesNotThrow(() => registerThreeRasterPlanProgram(late));
   // Re-registering the IDENTICAL program stays a no-op, so a module evaluated twice is not an error.
@@ -332,10 +340,21 @@ test('runtime construction rejects a portable body compiled for different system
     },
   });
 
-  const runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  assert.throws(
-    () => new ThreeTextEngineCoordinator(textRuntimeShaper(runtime)),
-    /policy body does not use the requested system buffers/,
-  );
+  const runtime = await createTextRuntime({ wasm: await readFile(shaperWasmUrl) });
+  assert.throws(() => new ThreeTextEngineCoordinator(runtime), /policy body does not use the requested system buffers/);
   runtime.dispose();
 });
+
+async function fontForTechnique(technique) {
+  const registry = new FontRegistry();
+  const registered = await registry.registerAsset(
+    await readFile(new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+  );
+  const variant = createImmutableFontVariant({
+    backing: createImmutableFontBacking(registered),
+    technique,
+    raster: { dispose() {} },
+    data: {},
+  });
+  return createImmutableFontLease(variant);
+}

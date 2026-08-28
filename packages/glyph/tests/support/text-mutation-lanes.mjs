@@ -19,52 +19,50 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 
-import { FontRegistry } from '@pmndrs/glyph';
-import { createTextRuntime } from '@pmndrs/glyph/core';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 // The identity lane is named by the policy contract that packs it, not by a literal here.
-import { STABLE_GLYPH_BUFFER_ID } from '../../dist/three/render-policy.js';
+import { STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from '../../dist/three/render-policy.js';
 
 export const IDENTITY_LANE = `_pmndrsGlyph_${STABLE_GLYPH_BUFFER_ID}`;
+const TRANSFORM_INDEX_LANE = `_pmndrsGlyph_${TRANSFORM_BUFFER_ID}`;
+const TRANSFORM_TABLE = '_pmndrsGlyphTransforms';
 
 export const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
-export const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
 /** Node's default 30s per-test budget cannot cover baking a font plus a full edit sequence. */
 export const timeout = 5 * 60 * 1_000;
 
-const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
-
 /**
- * One Wasm runtime and one baked font per fixture, for the lifetime of a test file.
+ * One immutable font per fixture, for the lifetime of a test file.
  *
  * Every mount is a scene built on top of them, so loading per test would retain dozens of runtimes
  * and re-bake identical rasters for no additional coverage.
  */
 export function createFontCache(specs) {
   const loaded = new Map();
-  let runtime;
+  const loader = new FontLoader();
   return {
     async load(name) {
       const cached = loaded.get(name);
       if (cached !== undefined) return cached;
       const spec = specs[name];
       if (spec === undefined) throw new Error(`no fixture named ${name}`);
-      runtime ??= await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
       const bytes = await readFile(new URL(spec.file, fixtures));
-      const font = await runtime.loadFont({
-        input: { baked: dataUrl(spec.file.endsWith('.gz') ? gunzipSync(bytes) : bytes) },
+      const font = await loader.loadAsync({
+        input: {
+          baked: { bytes: spec.file.endsWith('.gz') ? gunzipSync(bytes) : bytes, ownership: 'copy' },
+        },
         raster: spec.raster,
       });
       loaded.set(name, font);
       return font;
     },
     dispose() {
-      runtime?.dispose();
-      runtime = undefined;
+      for (const font of loaded.values()) font.dispose();
       loaded.clear();
+      loader.dispose();
     },
   };
 }
@@ -117,29 +115,45 @@ export function lanes(mounted) {
     for (const [name, attribute] of Object.entries(geometry.attributes ?? {})) {
       // Per-vertex attributes describe the unit quad, not the run, so they carry no edit state.
       if (!(attribute instanceof THREE.InstancedBufferAttribute)) continue;
+      if (name === TRANSFORM_TABLE) continue;
       const width = attribute.itemSize ?? 1;
       attributes[name] = [...attribute.array].slice(start * width, (start + instances) * width);
     }
-    draws.push({ attributes, instances, start });
+    const transformAttribute = geometry.getAttribute(TRANSFORM_TABLE);
+    draws.push({
+      attributes,
+      instances,
+      start,
+      transformTable: transformAttribute === undefined ? undefined : [...transformAttribute.array],
+    });
   });
   draws.sort((left, right) => left.start - right.start);
+  const rootInverse = new THREE.Matrix4().copy(mounted.group.matrixWorld).invert();
+  const relative = new THREE.Matrix4();
   const paragraphs = mounted.nodes.map((node) => {
     const layout = node.glyphs();
     const measured = node.layout();
+    relative.multiplyMatrices(rootInverse, node.matrixWorld);
     return {
       glyphCount: measured?.glyphCount,
       glyphIds: [...(layout?.glyphIds ?? [])],
       glyphStableIds: [...(layout?.glyphStableIds ?? [])],
       lineCount: measured?.lineCount,
+      matrix: [...new Float32Array(relative.elements)],
       x: [...(layout?.x ?? [])],
       y: [...(layout?.y ?? [])],
     };
   });
+  const identityOwners = new Map();
+  for (const [paragraph, entry] of paragraphs.entries()) {
+    for (const identity of entry.glyphStableIds) identityOwners.set(identity, paragraph);
+  }
   return {
     draws,
     // Record slots are allocated across the whole group in paragraph order, so the identity a
     // draw's slot must carry is read out of this concatenation by `pmndrsGlyphRunStart`.
     identities: paragraphs.flatMap((entry) => entry.glyphStableIds),
+    identityOwners,
     paragraphs,
   };
 }
@@ -190,12 +204,39 @@ export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
           );
           continue;
         }
+        if (name === TRANSFORM_INDEX_LANE) {
+          assertTransformBindings(got, draw, `${context}: draw ${index} edited`);
+          assertTransformBindings(want, expected, `${context}: draw ${index} fresh`);
+          continue;
+        }
         // The packed lane. This is what the GPU samples, and the only lane that caught the defect.
         assert.deepEqual(draw.attributes[name], expected.attributes[name], `${context}: draw ${index} packed ${name}`);
       }
     }
   } finally {
     unmount(fresh);
+  }
+}
+
+/** Resolve renderer-local transform ids through each scene's own matrix table. */
+function assertTransformBindings(scene, draw, where) {
+  const transformIds = draw.attributes[TRANSFORM_INDEX_LANE];
+  const identities = draw.attributes[IDENTITY_LANE];
+  const table = draw.transformTable;
+  assert.ok(transformIds !== undefined, `${where}: missing packed ${TRANSFORM_INDEX_LANE}`);
+  assert.ok(identities !== undefined, `${where}: missing packed ${IDENTITY_LANE}`);
+  assert.ok(table !== undefined, `${where}: missing ${TRANSFORM_TABLE}`);
+  assert.equal(transformIds.length, identities.length, `${where}: transform and identity lane length`);
+  for (const [record, transformId] of transformIds.entries()) {
+    const owner = scene.identityOwners.get(identities[record]);
+    assert.notEqual(owner, undefined, `${where}: record ${record} has no committed text owner`);
+    const offset = transformId * 16;
+    assert.ok(offset <= table.length - 16, `${where}: transform ${transformId} is outside its retained table`);
+    assert.deepEqual(
+      table.slice(offset, offset + 16),
+      scene.paragraphs[owner].matrix,
+      `${where}: packed ${TRANSFORM_INDEX_LANE} record ${record} resolves to its text transform`,
+    );
   }
 }
 

@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:2820658e2b9019c8df43939d8f7ee855105d6c7e41109d23b57592ea417d50ee'
+source_digest: 'sha256:812d8db8fe69193fe05250a9176d1f8dfba88190ad97d1d4af91cd78929ad243'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -204,7 +204,7 @@ keep its identity registry alive or permanently poison later registration after 
 `ParagraphLayout`, `ParagraphMeasurement`, and `FontFeature`, so a `/three` importer can name what
 `Text.layout()`, `Text.glyphs()`, and `ParagraphStyle.features` give it.
 
-One baked GLB may expose several raster techniques without repeating its input identity. `TextRuntime.loadFont()` and
+One baked GLB may expose several raster techniques without repeating its input identity. Root `loadFont()` and
 R3F `useFont()` accept a nonempty `rasters` tuple and return a position-preserving tuple of `LoadedFont` values. The
 artifact is fetched, validated, registered with the shaper, and retained once; each requested technique still derives
 its exact descriptor, resolves and decodes its own raster resource, and retains its associated data type. A mapped tuple
@@ -407,8 +407,8 @@ There are no instance-ignoring runtime ABI readers. Package builds isolate the d
 `artifact-baker` feature sets from kernel-only test targets and reject an optimized module missing any contract-declared
 artifact export, preventing Cargo's shared top-level artifact path from silently publishing a smaller test variant.
 
-The renderer-neutral core publishes as `@pmndrs/glyph/core` (D-249): runtime shaper creation, the engine host and sessions, frame-wire
-serialization, render-plan and layout views, font-binding compilation, the versioned ABI, and the policy-authoring
+The renderer-neutral core publishes as `@pmndrs/glyph/core` (D-249): runtime creation, runtime-owned hosts and sessions,
+semantic render-plan and layout readers, portable font compilation, and the policy-authoring
 toolkit. The four technique TSL node graphs publish as `@pmndrs/glyph/tsl` under Tsl-prefixed names, including the Slug shader tree that
 previously lived in core internals. Three's first-party policy is authored with the same public toolkit in
 `three/render-policy.ts`, and a scoped import lint denies the three, tsl, and react surfaces any import from `internal/`
@@ -416,22 +416,22 @@ or `generated/`, so the first-party integrations consume exactly the layering a 
 
 Both layers publish as npm subpaths. They are how a renderer integrates without our `Object3D`s, and
 `@pmndrs/glyph/three` is itself built on `/core`. `packages/glyph-example-renderer` is the standing second-engine proof:
-borrowed publications expire loudly, `retain` makes one contiguous owned copy, renderer fences advance only after device
-commit, and storage generations retire by exact identity. Public wire identities are branded numeric hashes; runtime IDs
-come from `TextEngineHost.id()` and expire with that host. The host owns bindings, stacks, policies, and sessions, rejects
-foreign or dependency-breaking disposal, and tears them down in dependency order. Portable font compilation retains only
-validated buffer, texture, grouped-resource, and GLB-like geometry payloads, never renderer objects.
+borrowed targets consume Wasm A/B memory synchronously, async targets receive exactly one bounded self-owned copy,
+renderer fences advance only after device commit, and storage generations retire by exact identity. Public wire
+identities are branded numeric hashes; host-created registrations are automatic and expire with that host. The runtime
+owns hosts, the host owns bindings, policies, and sessions, and the session owns text plus one target and acceptance
+frontier. Portable font compilation retains only validated buffer, texture, grouped-resource, and GLB-like geometry
+payloads, never renderer objects.
 
-The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. The ABI subpaths existed to publish struct
-offsets for pointer arithmetic, which is an internal representation handed to a caller who then owns keeping it valid;
-`textShaperAbi` reaches its one legitimate consumer through core. The validator subpaths had no consumer outside this
-package. Both sets of modules remain, reached by relative path from the package's own tests and scripts.
+The same reasoning withdrew the `*-abi` and `bakers/*/validate` subpaths. Raw struct offsets and enum numbers remain
+package-private implementation data; `/core` exposes validated semantic policy values and record readers instead. The
+validator subpaths likewise had no consumer outside this package. Both sets of modules remain reachable by relative path
+from package-owned tests and scripts where wire-level verification is legitimate.
 
-The renderer-neutral core owns the completed asynchronous Worker transfer contract: it copies opaque frame bytes once
-into a bounded worker-owned transferable pool, applies explicit backpressure, and requires root to transfer each retired
-buffer back so reuse or final collection occurs in the owning realm. Adopting that mode in the Three host is deferred;
-the synchronous Three path does not restore the deleted TypeScript shaping Worker. TypeGPU is likewise a later adapter
-slice built directly against the Rust render plan.
+The renderer-neutral core owns the completed asynchronous Worker transfer contract: it copies opaque plan bytes once into
+a bounded exact-size transferable pool, applies explicit backpressure, and requires the target to return the same
+unmodified full-span buffer. Three uses the default synchronous borrowed target. The example renderer proves TypeGPU and
+WebGPU realization directly against the same Rust render plan.
 
 ## Current correctness evidence
 

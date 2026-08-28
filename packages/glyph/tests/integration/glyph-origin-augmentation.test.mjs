@@ -32,15 +32,11 @@ import { readFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { FontRegistry } from '@pmndrs/glyph';
-import { createTextRuntime } from '@pmndrs/glyph/core';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import { slug } from '@pmndrs/glyph/three/slug';
 import * as THREE from 'three/webgpu';
 
 const fixtures = new URL('../../../../apps/benchmarks/fixtures/rendering/', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 
 const contentBox = {
   align: 'center',
@@ -53,22 +49,28 @@ const style = { fontSize: 6, lineHeight: 1 };
 const paint = { color: '#ffffff' };
 
 // One Wasm runtime and one baked font for the whole file; each test mounts its own scene on them.
-let runtime;
+let loader;
 let loaded;
 
 async function loadFont() {
   if (loaded !== undefined) return loaded;
-  runtime = await createTextRuntime({ registry: new FontRegistry(), wasm: await readFile(shaperWasmUrl) });
-  loaded = await runtime.loadFont({
-    input: { baked: dataUrl(gunzipSync(await readFile(new URL('inter-slug.font.glb.gz', fixtures)))) },
+  loader = new FontLoader();
+  loaded = await loader.loadAsync({
+    input: {
+      baked: {
+        bytes: gunzipSync(await readFile(new URL('inter-slug.font.glb.gz', fixtures))),
+        ownership: 'copy',
+      },
+    },
     raster: { technique: slug },
   });
   return loaded;
 }
 
 after(() => {
-  runtime?.dispose();
-  runtime = undefined;
+  loaded?.dispose();
+  loader?.dispose();
+  loader = undefined;
   loaded = undefined;
 });
 

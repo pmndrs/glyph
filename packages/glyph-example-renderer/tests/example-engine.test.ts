@@ -56,9 +56,8 @@ describe('a retained engine driven through the published core surface', () => {
   test('expires borrowed plans and prevents sibling Wasm re-entry', async () => {
     const runtime = await createTextRuntime({ wasm: await wasmBytes() });
     const host = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/borrow' });
-    const policy = host.installPolicy(exampleRenderPolicyDescriptor(host.wireIdentities));
+    const policy = host.installPolicy(exampleRenderPolicyDescriptor);
     let retainedReader: TextEngineRenderPlanReader | undefined;
-    let retainedTransformResolver: ((transformIndex: number) => unknown) | undefined;
     let sibling: SynchronousTextEngineSession;
     const siblingTarget: PlanTarget = {
       delivery: 'borrowed',
@@ -75,7 +74,6 @@ describe('a retained engine driven through the published core surface', () => {
       delivery: 'borrowed',
       accept(candidate) {
         retainedReader = candidate.plan;
-        retainedTransformResolver = candidate.resolveTransform;
         expect(() => sibling.publish()).toThrow(/borrowed render plan/i);
         return { accepted: true };
       },
@@ -90,7 +88,6 @@ describe('a retained engine driven through the published core surface', () => {
     try {
       expect(session.publish()).toEqual({ accepted: true });
       expect(() => retainedReader!.table('draws')).toThrow(/expired/);
-      expect(() => retainedTransformResolver!(1)).toThrow(/expired/);
     } finally {
       host.dispose();
       runtime.dispose();
@@ -102,7 +99,7 @@ describe('a retained engine driven through the published core surface', () => {
   test('claims one target for exactly one session and cascades disposal', async () => {
     const runtime = await createTextRuntime({ wasm: await wasmBytes() });
     const host = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/ownership' });
-    const policy = host.installPolicy(exampleRenderPolicyDescriptor(host.wireIdentities));
+    const policy = host.installPolicy(exampleRenderPolicyDescriptor);
     let disposals = 0;
     const target: PlanTarget = {
       delivery: 'borrowed',
@@ -135,7 +132,7 @@ describe('a retained engine driven through the published core surface', () => {
   test('rejects impossible output limits before constructing a target', async () => {
     const runtime = await createTextRuntime({ wasm: await wasmBytes() });
     const host = runtime.createTextEngineHost({ integration: 'glyph-example-renderer-test/limits' });
-    const policy = host.installPolicy(exampleRenderPolicyDescriptor(host.wireIdentities));
+    const policy = host.installPolicy(exampleRenderPolicyDescriptor);
     let targetConstructions = 0;
     const target: PlanTarget = {
       delivery: 'borrowed',

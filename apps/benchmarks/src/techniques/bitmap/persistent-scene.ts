@@ -1,11 +1,11 @@
 import {
-  FontRegistry,
+  createFontLibrary,
   type FontFeature,
-  type LoadedFont,
+  type Font,
+  type FontLibrary,
   type ParagraphContentBox,
   type ParagraphLayoutSummary,
   type ParagraphStyle,
-  type RegisteredFont,
 } from '@pmndrs/glyph';
 import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
@@ -48,7 +48,7 @@ import {
   type GlyphOriginTransition,
   type ShapedTextIdentity,
 } from '../shared/glyph-origin-transition';
-import { registeredBitmapAtlas, type BitmapAtlasPageStats } from './metadata';
+import { bitmapAtlasConfiguration, type BitmapAtlasPageStats } from './metadata';
 
 export interface BitmapTextLiveStats {
   readonly technique: 'bitmap';
@@ -196,7 +196,7 @@ export interface BitmapTextPersistentScene extends PersistentRenderScene {
 
 /** The shaping and box inputs one committed generation of the live paragraph was built from. */
 interface BitmapTextState {
-  readonly font: LoadedFont<typeof bitmap>;
+  readonly font: Font<typeof bitmap>;
   readonly text: string;
   readonly contentBox: ParagraphContentBox;
   readonly style: ParagraphStyle;
@@ -279,12 +279,11 @@ interface ActiveBitmapTextPersistentScene {
 }
 
 interface BitmapPersistentFontFixture {
-  readonly atlas: Awaited<ReturnType<typeof registeredBitmapAtlas>>;
-  /** The registry-scoped font the atlas metadata is read from; the controller keys ownership on it. */
-  readonly font: RegisteredFont;
+  readonly atlas: ReturnType<typeof bitmapAtlasConfiguration>;
+  readonly font: Font<typeof bitmap>;
   readonly fontLoadMs: number;
   readonly loaded: BitmapFontAsset;
-  readonly loadedFont: LoadedFont<typeof bitmap>;
+  readonly loadedFont: Font<typeof bitmap>;
 }
 
 export function createBitmapTextPersistentScene(options: BitmapTextPersistentSceneOptions): BitmapTextPersistentScene {
@@ -391,8 +390,8 @@ async function activateBitmapTextPersistentScene(
   const renderer = context.renderer as THREE.WebGPURenderer;
   const canvasSurface = createCanvasSurface(renderer, width, viewportHeight, gridVisible);
   const textUpdateTelemetry = createTextUpdateTelemetry();
-  const registry = new FontRegistry();
-  let loadedFont: LoadedFont<typeof bitmap> | undefined;
+  const library = createFontLibrary();
+  let loadedFont: Font<typeof bitmap> | undefined;
   let fontFixtureController: RetainedFontFixtureController<BitmapPersistentFontFixture> | undefined;
   let line: Text<typeof bitmap> | undefined;
   try {
@@ -402,7 +401,7 @@ async function activateBitmapTextPersistentScene(
       fixture: fontFixture,
       delivery,
       bitmapDensity: 'live',
-      registry,
+      library,
       signal: context.signal,
       ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
     });
@@ -444,12 +443,12 @@ async function activateBitmapTextPersistentScene(
     }
     const textReadyMs = performance.now() - textStarted;
     updateBitmapDrawVisibility(activeText);
-    const atlas = await registeredBitmapAtlas(loadedAsset.loaded.font, 'live');
+    const atlas = bitmapAtlasConfiguration(loadedAsset.data);
     fontFixtureController = createRetainedFontFixtureController(
-      registry,
+      library,
       {
         fixture: fontFixture,
-        asset: { atlas, font: loadedAsset.loaded.font, fontLoadMs, loaded: loadedAsset, loadedFont },
+        asset: { atlas, font: loadedAsset.loaded, fontLoadMs, loaded: loadedAsset, loadedFont },
       },
       // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
       // registered font would strand the raster this technique still holds.
@@ -554,7 +553,7 @@ async function activateBitmapTextPersistentScene(
     };
     const loadFixtureAsset = async (
       fixture: BenchmarkFontFixture,
-      fixtureRegistry: FontRegistry,
+      fixtureLibrary: FontLibrary,
     ): Promise<BitmapPersistentFontFixture> => {
       const fontStartedAt = performance.now();
       const loaded = await loadBitmapFontAsset({
@@ -562,15 +561,15 @@ async function activateBitmapTextPersistentScene(
         fixture,
         delivery,
         bitmapDensity: 'live',
-        registry: fixtureRegistry,
+        library: fixtureLibrary,
         signal: context.signal,
         ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
       });
       try {
-        const nextAtlas = await registeredBitmapAtlas(loaded.loaded.font, 'live');
+        const nextAtlas = bitmapAtlasConfiguration(loaded.data);
         return {
           atlas: nextAtlas,
-          font: loaded.loaded.font,
+          font: loaded.loaded,
           fontLoadMs: performance.now() - fontStartedAt,
           loaded,
           loadedFont: loaded.loaded,
@@ -704,7 +703,7 @@ async function activateBitmapTextPersistentScene(
         const currentFontFixture = activeFontFixture.current.asset;
         const layout = committedLayout();
         const strikePpem = selectBitmapStrikePpem(
-          currentFontFixture.loadedFont.data.strikes,
+          currentFontFixture.loaded.data.strikes,
           currentFontSize,
           viewport.dpr,
         );

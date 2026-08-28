@@ -10,11 +10,9 @@ import {
   definePolicyBuffers,
   id,
   RenderWireIdentityRegistry,
-  textShaperAbi,
   type PolicyBufferId,
   type PolicyCapabilitySet,
   type PolicyDescriptor,
-  type PolicyHandle,
 } from '@pmndrs/glyph/core';
 import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
 
@@ -31,7 +29,6 @@ export const exampleSystemBuffers: {
   stableGlyphId: { id: EXAMPLE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
 });
 
-export const EXAMPLE_POLICY_HANDLE: PolicyHandle = id('policy', 'glyph-example-renderer');
 export const EXAMPLE_RENDERER_PROGRAM_NAMESPACE = 'example-renderer';
 
 /** Assemble the portable glyph-example body with this engine's own policy numbers. */
@@ -61,11 +58,7 @@ export function exampleRenderPolicyDescriptor(
 }
 
 export const exampleCapabilitySet: PolicyCapabilitySet = Object.freeze({
-  flags:
-    textShaperAbi.policy.capabilityFlags.storageBuffers |
-    textShaperAbi.policy.capabilityFlags.aliasVec2 |
-    textShaperAbi.policy.capabilityFlags.aliasVec4 |
-    textShaperAbi.policy.capabilityFlags.orderedDirect,
+  capabilities: Object.freeze(['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'] as const),
   maxBufferBytes: 16 * 1024 * 1024,
   updateAlignment: 4,
   coalesceGapBytes: 128,

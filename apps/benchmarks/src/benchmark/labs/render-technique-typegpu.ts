@@ -1,4 +1,4 @@
-import { FontRegistry } from '@pmndrs/glyph';
+import { createFontStack, loadFont } from '@pmndrs/glyph';
 import { createTextRuntime } from '@pmndrs/glyph/core';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import { ExampleTextEngine, TypeGpuExampleRendererDevice } from '@pmndrs/glyph-example-renderer';
@@ -31,23 +31,23 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
   const adapter = await navigator.gpu.requestAdapter();
   if (adapter === null) throw new Error('the TypeGPU renderer lab could not acquire a WebGPU adapter');
   const gpuDevice = await adapter.requestDevice();
-  const runtime = await createTextRuntime({ registry: new FontRegistry() });
+  const runtime = await createTextRuntime();
   const renderer = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
   const engine = new ExampleTextEngine(runtime, renderer);
   let font;
   try {
-    font = await runtime.loadFont({
+    font = await loadFont({
       input: {
         source: sourceUrlForFixture('inter'),
         runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       },
       raster: { technique: glyphExample, options: { paletteSeed: 17, inset: 0.08 } },
     });
-    const binding = engine.registerFont(font);
-    const stack = engine.registerFontStack([binding]);
+    const binding = engine.bindFont(font);
+    const stack = engine.bindFontStack(createFontStack(font));
     engine.openSession();
     const text = engine.createText({
-      fontStack: stack,
+      font: stack,
       text: 'Portable TypeGPU',
       fontSize: 64,
       width: 768,
@@ -55,16 +55,16 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
     });
     let textDisposed = false;
     try {
-      const initial = await text.render();
+      const initial = text.publish();
       const initialPixels = await renderer.readPixels();
-      text.update({ text: 'Updated WebGPU', foregroundRgba: 0xff40_a0ff });
-      const updated = await text.render();
+      text.update({ text: 'Updated WebGPU', color: '#ff40a0' });
+      const updated = text.publish();
       const updatedPixels = await renderer.readPixels();
       const submissionSamples: number[] = [];
       for (let index = 0; index < SUBMISSION_WARMUP + SUBMISSION_SAMPLES; index += 1) {
         text.update({ text: index % 2 === 0 ? 'Pipeline WebGPU' : 'Updated WebGPU' });
         const started = performance.now();
-        const sampled = await text.render();
+        const sampled = text.publish();
         const duration = performance.now() - started;
         if (sampled.draws.length === 0) throw new Error('the TypeGPU submission benchmark produced no draw');
         if (index >= SUBMISSION_WARMUP) submissionSamples.push(duration);
@@ -74,10 +74,11 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       if (submissionsBeforeIdle !== 2 + SUBMISSION_WARMUP + SUBMISSION_SAMPLES) {
         throw new Error('the TypeGPU renderer lab did not submit every measured frame');
       }
-      await text.render();
+      text.publish();
       const idleGpuSubmissions = renderer.submittedPasses - submissionsBeforeIdle;
       const submissionsBeforeDispose = renderer.submittedPasses;
-      await text.dispose();
+      text.dispose();
+      engine.publish();
       textDisposed = true;
       const clearedPixels = await renderer.readPixels();
       const report = Object.freeze({
@@ -111,7 +112,9 @@ export async function runRenderTechniqueTypeGpuLab(): Promise<RenderTechniqueTyp
       }
       return report;
     } finally {
-      if (!textDisposed) await text.dispose();
+      if (!textDisposed) text.dispose();
+      stack.dispose();
+      binding.dispose();
     }
   } finally {
     engine.dispose();

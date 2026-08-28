@@ -1,5 +1,5 @@
-import { type LoadedFont } from '@pmndrs/glyph';
-import { Text, TextGroup, TextSpan, useFont } from '@pmndrs/glyph/react';
+import { createFontLibrary, type Font } from '@pmndrs/glyph';
+import { createUseFont, Text, TextGroup, TextSpan } from '@pmndrs/glyph/react';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { msdf } from '@pmndrs/glyph/three/msdf';
 import { slug } from '@pmndrs/glyph/three/slug';
@@ -28,17 +28,20 @@ const iconFontRequest = {
   rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
 } as const;
 
+const fontLibrary = createFontLibrary();
+const useAppFont = createUseFont(fontLibrary);
+
 // You can preload font assets to reduce loading waterfalls.
 // This is especially useful for fonts that are used in the initial scene.
-useFont.preload(latinFontRequest);
-useFont.preload(iconFontRequest);
+void useAppFont.preload(latinFontRequest);
+void useAppFont.preload(iconFontRequest);
 
 export function App() {
   const viewport = useThree((state) => state.viewport);
   const [activeTechnique, setActiveTechnique] = useState<Technique>('msdf');
 
-  const [bitmapLatin, msdfLatin, slugLatin] = useFont(latinFontRequest);
-  const [bitmapIcons, msdfIcons, slugIcons] = useFont(iconFontRequest);
+  const [bitmapLatin, msdfLatin, slugLatin] = useAppFont(latinFontRequest);
+  const [bitmapIcons, msdfIcons, slugIcons] = useAppFont(iconFontRequest);
 
   const fonts = [
     { font: bitmapLatin, icon: bitmapIcons, technique: 'bitmap' },
@@ -80,7 +83,7 @@ export function App() {
 
 interface ButtonGroupProps {
   active: Technique;
-  font: LoadedFont<typeof bitmap | typeof msdf | typeof slug>;
+  font: Font<typeof bitmap | typeof msdf | typeof slug>;
   onSelect: (technique: Technique) => void;
   gap?: number;
   padding?: number;
@@ -111,7 +114,7 @@ function ButtonGroup({ active, font, onSelect, gap = 128, padding = 48 }: Button
 
 interface ButtonProps {
   active: boolean;
-  font: LoadedFont<typeof bitmap | typeof msdf | typeof slug>;
+  font: Font<typeof bitmap | typeof msdf | typeof slug>;
   onClick: () => void;
   position: [number, number, number];
   technique: Technique;

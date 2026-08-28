@@ -1,348 +1,235 @@
 ---
 type: API Specification
 title: Core text API
-description: Reference for renderer-neutral font loading, raster selection, mixed-technique fallback, paragraph inputs, and explicit layout-query values.
+description: Current root application vocabulary and renderer-neutral runtime, host, session, policy, plan-target, and semantic record contracts.
 documentation_type: reference
-tags: [api, fonts, shaping, paragraphs, layout, rendering]
+tags: [api, fonts, shaping, paragraphs, layout, rendering, ownership]
 status: stable
 sources:
   - id: decision-register
     resource: decision-register.md
     title: Accepted architectural decisions
-  - id: rust-engine
-    resource: rust-layout-engine.md
-    title: Rust text engine and render-plan ABI
-  - id: current-runtime
+  - id: ownership
+    resource: font-runtime-ownership.md
+    title: Font, runtime, host, session, and target ownership
+  - id: root-entry
+    resource: ../../packages/glyph/src/index.ts
+    title: Root application entry point
+  - id: core-entry
+    resource: ../../packages/glyph/src/core.ts
+    title: Renderer-neutral integration entry point
+  - id: runtime
     resource: ../../packages/glyph/src/text-runtime.ts
     title: Current text runtime
-  - id: current-font-selection
-    resource: ../../packages/glyph/src/loaded-font.ts
-    title: Loaded-font ownership and fallback
-  - id: current-properties
-    resource: ../../packages/glyph/src/text-properties.ts
-    title: Current paragraph properties
-  - id: current-layout-query
-    resource: ../../packages/glyph/src/layout.ts
-    title: Current layout-query values
-  - id: current-three-api
-    resource: ../../packages/glyph/src/three.ts
-    title: Current Three.js exports
-  - id: core-host
+  - id: host
     resource: ../../packages/glyph/src/core/host.ts
-    title: Renderer-neutral host and session lifecycle
-  - id: example-renderer
-    resource: ../../packages/glyph-example-renderer/src/engine.ts
-    title: Complete external renderer integration
+    title: Current host lifecycle
+  - id: retained-session
+    resource: ../../packages/glyph/src/core/retained-session.ts
+    title: Current session and target lifecycle
+  - id: guide
+    resource: ../guides/renderer-integration.md
+    title: Renderer integration guide
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-26T18:18:53Z'
+  at: '2026-08-28T00:00:00Z'
 ---
 
 # Core text API
 
-`@pmndrs/glyph` owns portable font loading, raster-technique selection, font fallback, paragraph input types, and layout
-query result types. Rust owns shaping, bidi, line composition, positioning, instance packing, and the renderer-directed
-command buffer. A renderer integration owns synchronization and GPU realization.
+Glyph has two additive public surfaces:
 
-Applications using Three.js normally import scene objects from `@pmndrs/glyph/three` or React components from
-`@pmndrs/glyph/react`; they do not drive the Rust engine directly.
+- <code>@pmndrs/glyph</code> is application vocabulary: immutable fonts, font stacks, formatted text, Paragraph, layout values, technique definition, loading, and baking;
+- <code>@pmndrs/glyph/core</code> is integration machinery: runtime, host, policy, bindings, sessions, plan targets, portable resource contracts, and semantic plan readers.
 
-> **Accepted ownership migration:** this reference describes the currently implemented API. The next breaking migration
-> is specified in [Font, runtime, host, session, and render-target ownership](font-runtime-ownership.md): root font loading
-> becomes runtime-independent, `/core` attaches hosts to runtime owners, sessions bind one abstract acceptance target, and
-> explicit leases remain the correctness mechanism. Finalizers are unnecessary: unused fonts are not strongly cached,
-> while deterministic owners retain and release backing state directly.
+Three and React are integrations over those surfaces. Canvas, scene, GPU device, material, pipeline, and render pass remain renderer-owned.
 
-## Runtime and font loading
+## Application-owned fonts
 
-```ts
-interface TextRuntimeOptions {
-  readonly registry?: FontRegistry;
-  readonly wasm?: BufferSource | WebAssembly.Module;
-}
+Font loading is independent from a shaping runtime or renderer:
 
-interface TextRuntime {
-  readonly registry: FontRegistry;
-  readonly disposed: boolean;
+<pre><code>import { createFontStack, loadFont } from '@pmndrs/glyph';
+import { msdf } from '@pmndrs/glyph/raster/msdf';
 
-  loadFont<Technique extends AnyRasterTechnique>(
-    request: LoadedFontRequest<Technique>,
-    options?: { readonly signal?: AbortSignal },
-  ): Promise<LoadedFont<Technique>>;
-
-  dispose(): void;
-}
-
-declare function createTextRuntime(options?: TextRuntimeOptions): Promise<TextRuntime>;
-```
-
-The default runtime instantiates the packaged `text-shaper.wasm`. Supplying `wasm` is intended for controlled builds,
-tests, and compile-time SIMD variants. A runtime owns its Rust registration domain and all fonts loaded through it.
-
-```ts
-type LoadedFontInput =
-  | { readonly baked: string | URL }
-  | { readonly source: string | URL; readonly runtimeBake: RuntimeFontBake };
-
-interface LoadedFontRequest<Technique extends AnyRasterTechnique> {
-  readonly input: LoadedFontInput;
-  readonly raster: {
-    readonly technique: Technique;
-    readonly options: RasterOptionsOf<Technique>;
-  };
-}
-```
-
-`baked` loads a portable GLB artifact. `source` requires an explicit runtime baker and never silently adds a baker to the
-consumer graph. The request selects Bitmap, MSDF, Slug, or a third-party raster technique independently for each loaded
-font.
-
-## Loaded fonts and fallback
-
-```ts
-interface LoadedFont<Technique extends AnyRasterTechnique> {
-  readonly runtime: TextRuntime;
-  readonly font: RegisteredFont;
-  readonly technique: Technique;
-  readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
-  readonly data: RasterDataOf<Technique>;
-  readonly disposed: boolean;
-  dispose(): void;
-}
-
-interface FontStack<Technique extends AnyRasterTechnique> {
-  readonly fonts: readonly [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
-}
-
-declare function createFontStack<Primary, Fallback extends readonly LoadedFont<AnyRasterTechnique>[]>(
-  primary: LoadedFont<Primary>,
-  ...fallback: Fallback
-): FontStack<Primary | TechniqueOf<Fallback>>;
-```
-
-Fallback order is explicit. Every member must belong to the same runtime, but members may use different raster
-techniques. This permits, for example, an MSDF prose font followed by a Slug color-emoji font. The active renderer must
-have a policy program and material implementation for every selected technique; the maintained Three integration ships
-Bitmap, MSDF, and Slug support.
-
-A loaded font retains its registered font, raster resource, and runtime until disposed. Live `Text` objects lease their
-fonts; disposing a leased font is a no-op that warns in development builds instead of invalidating retained Rust state (D-255).
-
-## Paragraph input
-
-```ts
-type ParagraphAxisConstraint =
-  | { readonly mode: 'unconstrained' }
-  | { readonly mode: 'at-most'; readonly size: number }
-  | { readonly mode: 'exact'; readonly size: number };
-
-interface ParagraphContentBox {
-  readonly width?: ParagraphAxisConstraint;
-  readonly height?: ParagraphAxisConstraint;
-  readonly maxLines?: number;
-  readonly wrap?: 'none' | 'word' | 'character';
-  readonly align?: 'start' | 'center' | 'end' | 'justify';
-  readonly overflow?: 'visible' | 'clip' | 'ellipsis';
-}
-
-interface ParagraphStyle {
-  readonly fontSize?: number;
-  readonly lineHeight?: number;
-  readonly letterSpacing?: number;
-  readonly language?: string;
-  readonly direction?: 'auto' | 'ltr' | 'rtl';
-  readonly features?: readonly FontFeature[];
-}
-```
-
-`ParagraphContentBox` is layout-system-neutral. Omitted axes are unconstrained. `exact` fixes the resolved box dimension;
-`at-most` clamps it. `contentWidth` and `contentHeight` in query results still report the intrinsic laid-out requirement.
-
-Text may be a string plus explicit spans, or a `FormattedText` value created with `txt` and `span`. Styles cascade at
-extended-grapheme boundaries. Paint and `material` are rendering values; they do not alter shaping or line composition.
-
-The foundation stack currently implements horizontal text, font size, line height, letter spacing, language, direction,
-OpenType features, wrapping, alignment, clipping policy, line limits, and ellipsis. The publishing-feature stages in the
-[Rust engine plan](rust-layout-engine.md) own vertical writing, decorations, editorial regions/exclusions, and the
-remaining admitted typography features; this reference does not claim those future inputs as shipped.
-
-## Layout query values
-
-Rendering does not carry layout arrays in every command buffer. An integration may expose explicit, demand-driven Rust
-queries using these public result types.
-
-```ts
-interface ParagraphMeasurement {
-  readonly width: number;
-  readonly height: number;
-  readonly contentWidth: number;
-  readonly contentHeight: number;
-  readonly firstBaseline: number;
-  readonly lastBaseline: number;
-  readonly overflowed: boolean;
-}
-
-interface ParagraphLayoutSummary extends ParagraphMeasurement {
-  readonly glyphCount: number;
-  readonly lineCount: number;
-  readonly missingGlyphCount: number;
-}
-```
-
-`width` and `height` are the resolved paragraph box. `contentWidth` and `contentHeight` are the intrinsic extents required
-by the complete paragraph before box clamping. Viewport clipping does not destroy layout outside the viewport. `maxLines`
-and ellipsis are semantic truncation: positioned output contains the retained visible result, while intrinsic extents and
-`overflowed` continue to report that additional content existed.
-
-Baselines are distances from the paragraph box's top edge. Summary counts include retained non-rendering glyphs such as
-spaces; `missingGlyphCount` counts positioned `.notdef` glyphs.
-
-```ts
-interface ParagraphLayoutInspection extends ParagraphLayoutSummary {
-  readonly fontHandles: Uint32Array;
-  readonly glyphFontSlots: Uint16Array;
-  readonly glyphIds: Uint16Array;
-  readonly glyphStableIds: Uint32Array;
-  readonly clusters: Uint32Array;
-  readonly glyphFontSizes: Float32Array;
-  readonly x: Float32Array;
-  readonly y: Float32Array;
-  readonly glyphFlags: Uint16Array;
-  readonly lineTextStarts: Uint32Array;
-  readonly lineTextEnds: Uint32Array;
-  readonly lineGlyphStarts: Uint32Array;
-  readonly lineGlyphCounts: Uint32Array;
-  readonly lineBaselines: Float32Array;
-  readonly lineAdvances: Float32Array;
-}
-```
-
-Inspection preserves font fallback identity, glyph IDs, UTF-16 cluster offsets, stable glyph identities, line membership,
-and positioned geometry. It is a copied semantic view for measurement, hit testing, selection, and directed presentation
-augmentation—not GPU instance storage. Repeated unchanged queries may reuse the same result object.
-
-## Renderer integration lifecycle
-
-`@pmndrs/glyph/core` is the published integration surface. A custom renderer imports the root package for font loading
-and `/core` for engine driving. Four owners participate:
-
-| Owner                | Lifetime                                       | Holds                                                                                             |
-| -------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `TextRuntime`        | application or font-library lifetime           | loaded fonts and one `RuntimeShaper`                                                              |
-| `TextEngineHost`     | one renderer integration over that shaper      | policies, compiled font bindings, font stacks, sessions, and ID provenance                        |
-| `TextEngineSession`  | one independently revisioned paragraph batch   | hot paragraph state, A/B publications, physical buffer generations, and engine resource residency |
-| renderer device pool | renderer-defined, normally one device lifetime | realized textures, buffers, geometry, pipelines, and reference counts                             |
-
-A session is not a scene, render pass, or GPU device. One host may create many sessions, and multiple hosts may share one
-`RuntimeShaper`, but each numeric registration is claimed by exactly one host. A frame naming another host's policy or
-font stack is rejected before the session invalidates its last accepted publication. Separate Wasm instances have
-independent registration domains.
-
-### Cold registration
-
-Policy IDs are stable authored constants. Runtime-created binding, stack, and session IDs come from the host:
-
-```ts
-const shaper = textRuntimeShaper(runtime);
-const host = new TextEngineHost(shaper);
-
-const POLICY = id('policy', 'my-renderer/default');
-host.registerPolicy(POLICY, rendererPolicyBytes(host.wireIdentities));
-
-const compiled = compileRasterFont(loadedFont, host.wireIdentities);
-if (compiled === undefined) throw new Error(`unsupported technique: ${loadedFont.technique.id}`);
-
-const binding = host.id('font-binding', 'my-renderer/font/1');
-host.registerFontBinding(binding, loadedFont.font.handle, compiled.binding);
-
-const stack = host.id('font-stack', 'my-renderer/stack/1');
-host.registerFontStack(stack, [binding]);
-
-const session = host.createSession({
-  handle: host.id('session', 'my-renderer/main'),
-  requestCapacity: 4096,
-  resultCapacity: 128 * 1024,
+const inter = await loadFont({
+  input: { baked: '/fonts/Inter.font.glb' },
+  raster: { technique: msdf },
 });
-```
+const body = createFontStack(inter);</code></pre>
 
-`compiled.resources` contains immutable portable payloads and `compiled.declaredResources` maps shader-facing names to
-their retained keys. Glyph does not turn those payloads into GPU objects. The renderer realizes each payload for its
-device, normally pooling by `(device, referenceId, generation)`, and leases that realization to every session that uses
-it. A plan resource row names the same stable `referenceId`; the renderer joins the row to its pool and binds the named
-payload to the selected shader. Releasing a session releases its lease, not an atlas still used by another session.
+<code>Font&lt;Technique&gt;</code> owns immutable artifact backing and decoded portable raster data. It may bind into several runtimes or hosts and may outlive any one of them. <code>font.dispose()</code> prevents new bindings; existing counted bindings keep the backing alive until their own disposal.
 
-The example renderer's `device.prepareResources()` is one concrete renderer-owned transaction, not another core API. It
-validates and prepares portable payloads before `registerFontBinding`, commits them only after binding registration
-succeeds, and discards the candidate on failure. Three owns an equivalent device-local realization layer.
+<code>FontLibrary</code> is an optional application cache with explicit leases. Top-level <code>loadFont()</code> coalesces only in-flight work and does not make an unbounded global cache.
 
-### Hot frame updates
+## Renderer-free Paragraph
 
-The integration owns text-instance state and converts its changes into one frame request:
+Detached measurement is root application vocabulary:
 
-```ts
-const request = compileTextEngineFrameUpdate({
-  sessionId: session.handle,
-  policyHandle: POLICY,
-  expectedEngineRevision,
-  consumedPlanRevision,
-  acknowledgedPublicationGeneration,
+<pre><code>import { createParagraph } from '@pmndrs/glyph';
+
+const paragraph = await createParagraph({
+  font: body,
+  text: 'Measure before rendering',
+  style: { fontSize: 32 },
+  policy: { wrap: 'word' },
+});
+
+const metrics = paragraph.layout({
+  width: { mode: 'at-most', size: 480 },
+});
+const positioned = paragraph.glyphs({
+  width: { mode: 'exactly', size: metrics.contentWidth },
+});</code></pre>
+
+<code>createParagraph()</code> asynchronously acquires a private per-realm measurement runtime. Once returned, <code>layout()</code>, <code>glyphs()</code>, and <code>update()</code> are synchronous.
+
+- <code>layout()</code> returns aggregate dimensions, intrinsic widths, line metrics, baselines, and glyph count. A cache miss may synchronously incur font and layout lookup work.
+- <code>glyphs()</code> returns caller-owned positioned glyph and line columns plus ink boxes. A cache miss may synchronously incur glyph lookup and positioning; every call copies the returned columns.
+- neither query publishes a renderer plan, creates GPU resources, needs a scene matrix, or changes renderer acceptance;
+- invalid constraints throw at the call that supplied them.
+
+## Runtime and host
+
+<pre><code>import { createTextRuntime } from '@pmndrs/glyph/core';
+
+const runtime = await createTextRuntime();
+const host = runtime.createTextEngineHost({
+  integration: 'studio.webgpu-text',
+});</code></pre>
+
+<code>TextRuntime</code> owns one Wasm shaping domain, its runtime-local font registrations, a runtime-wide borrowed-plan gate, and every host it creates. <code>runtime.dispose()</code> disposes child hosts before releasing Wasm. A host cannot detach or rebind.
+
+<code>TextEngineHost</code> owns one integration's installed policies, font and stack bindings, renderer-owned material/resource/transform identities, sessions, and collision-checked wire identities.
+
+Several hosts may share one runtime when their policy or device lifetimes differ but shared Wasm registration is useful. Use separate runtimes for worker, memory, or teardown isolation.
+
+## Policy installation and font binding
+
+A renderer combines technique-owned portable policy bodies with renderer-owned system lanes and capabilities:
+
+<pre><code>const policy = host.installPolicy((identities) =&gt; ({
+  capabilitySets: [capabilitySet],
+  programs: [
+    createRasterPolicyProgram(examplePlan, {
+      namespace: 'studio.webgpu-text',
+      system: rendererSystemBuffers,
+      capabilitySet,
+      transformMode: 'direct',
+      allocationMode: 'ordered',
+      identityRegistry: identities,
+    }),
+  ],
+}));
+
+const stack = host.bindFontStack(body);</code></pre>
+
+Policy authors use semantic capability/scalar names and branded hash helpers. They never type raw ABI ordinals or caller-chosen numeric IDs. Compilation assigns capability-set ordinals and rejects collisions or malformed descriptors before registration.
+
+<code>bindFont()</code> and <code>bindFontStack()</code> are host-local, idempotent in underlying registration, and return independent counted leases. Binding requires a compatible policy, deduplicates shaping registration in the runtime, runs the technique's cold <code>compileFont()</code> path, registers binding bytes, and retains constrained immutable payloads. Cross-host, disposed, or incompatible bindings throw at the call boundary.
+
+## Session and retained text
+
+One session owns one retained batch, target, policy selection, capacity budget, and acceptance frontier:
+
+<pre><code>const session = host.createSession({
+  policy,
+  capabilitySet,
+  target: () =&gt; target,
   limits,
-  paragraphMutations,
-  textMutations,
-  styleMutations,
-  constraints,
-  regions,
+  requestCapacity: 64 * 1024,
+  resultCapacity: 256 * 1024,
+  textCapacity: 16 * 1024,
 });
 
-const borrowed = session.update(request);
-```
+const title = session.createText({
+  font: stack,
+  text: 'Hello',
+  style: { fontSize: 48 },
+  contentBox: { width: { mode: 'at-most', size: 800 } },
+});
 
-Paragraph, style, flow, and region handles are host-scoped IDs. Creating a text instance emits its initial paragraph,
-text, style, constraint, and region mutations; later application updates emit only changed sections. Disposing the text
-emits a paragraph removal before its IDs are recycled. `packages/glyph-example-renderer/src/engine.ts` is the complete
-reference for this loop.
+title.update({ text: 'Hello, Glyph' });
+const acceptance = session.publish();
+if (!acceptance.accepted) reportRendererError(acceptance.error);</code></pre>
 
-The returned publication borrows Wasm A/B memory. A synchronous renderer applies the plan before its next session call
-without copying. A renderer that crosses an async submission, later engine call, or retained same-realm scene handoff uses
-`session.copyPublication(publication)` once and passes the returned `OwnedTextEnginePublication`; package-private provenance
-prevents JavaScript from forging that ownership by copying fields. `assertOwnedTextEnginePublication()` is the runtime gate
-for a same-realm API that stores the publication. For a worker boundary, copy before posting and transfer the self-owned
-buffer; the receiving realm validates the untrusted bytes with `TextEngineRenderPlanView.bindBytes()` because the runtime
-ownership witness is deliberately realm-local. Binding is transactional and rejects an ABI mismatch, a non-success status,
-and malformed render or semantic table framing before replacing the reader's prior valid publication.
+<code>update()</code> validates and records desired state. Shaping is deferred until <code>layout()</code>, <code>glyphs()</code>, or <code>publish()</code> needs a current answer. <code>publish()</code> compiles a candidate, calls the target, and advances the accepted revision and retirement fence only after target commit.
 
-A renderer carries its last device-accepted `consumedPlanRevision` and `acknowledgedPublicationGeneration` in the next
-frame request; copying a candidate is not the same event as committing it to the device. If realization fails, those values
-stay unchanged. A device-owning renderer requests a checkpoint after it has rebuilt its resource pool. Three waits for an
-explicit material or other renderer-relevant invalidation before requesting that checkpoint; it neither retains the failed
-publication nor retries unchanged frames.
+Use another session for an independently accepted scene, viewport, render target, or worker. Sessions may share their host's policies and font bindings but never share revision cursors.
 
-### Disposal and failed calls
+## PlanTarget: normal borrowed delivery
 
-Explicit incremental teardown runs in dependency order: session, font stack, font binding, renderer resource lease, and
-policy. `host.dispose()` performs the host-owned steps automatically. A policy or stack still named by committed session
-state fails with `registrationInUse`; a binding still named by a stack also fails. Failed disposal keeps host bookkeeping
-and ID provenance intact so the owner can release the dependency and retry. Successful individual disposal releases its
-registration ID provenance; repeated host and session disposal is a no-op.
+<code>PlanTarget</code> is the default same-thread renderer contract:
 
-Malformed or foreign frame input throws at the TypeScript call before the previous publication expires. Rust performs the
-complete wire and semantic validation before committing state. A malformed emitted plan is an engine defect, not a
-recoverable renderer condition. A renderer-realization failure advances engine state but not device acceptance; an explicit
-renderer-state update uses the last accepted plan revision and generation to request a complete checkpoint.
+<pre><code>const target: PlanTarget = {
+  delivery: 'borrowed',
+  accept(candidate, signal) {
+    signal.throwIfAborted();
+    const transaction = device.beginCandidate(candidate.planRevision);
+    try {
+      decodeAndStage(candidate, transaction);
+      transaction.commit();
+      return { accepted: true };
+    } catch (error) {
+      transaction.discard();
+      return { accepted: false, error };
+    }
+  },
+  dispose() {
+    device.disposeTarget();
+  },
+};</code></pre>
 
-The [Rust engine plan](rust-layout-engine.md) remains the authority for the ABI, memory-growth discipline, SIMD layout,
-and render-plan transaction.
+The candidate borrows Wasm A/B memory only for synchronous <code>accept()</code>. A renderer copies patch bytes into its own upload/GPU storage and encodes commands before returning; later GPU execution does not retain plan memory.
 
-## Removed pre-cutover surfaces
+Acceptance is transactional. A rejected candidate releases provisional objects, does not substitute stale resources, does not advance acceptance, and is not retried unchanged. Explicit renderer invalidation may request a checkpoint after device/resource recovery.
 
-The following experimental V0 surfaces are not part of the current API:
+## AsyncPlanTarget: actual asynchronous boundaries
 
-- `createParagraphEngine` and standalone JavaScript paragraph layout;
-- `TextRuntime.createParagraphBatch`, `runtime.update`, and `runtime.updateAsync`;
-- `analyzeBidi`, `shapeBatch`, and `reshapeRanges` exports;
-- the text-preparation Worker protocol;
-- the pre-Rust `@pmndrs/glyph/typegpu` batch executor.
+Use <code>AsyncPlanTarget</code> only when CPU consumption crosses an asynchronous boundary, usually a Worker. The session makes exactly one full-span standalone copy after checking the target's declared maximum. The sender transfers that allocation without another clone; the result returns the same buffer identity for bounded pool reuse.
 
-The current `/typegpu` subpath is a shader library consumed through the Rust render plan; it is not the removed duplicate
-layout and batching engine. Use the [Three.js API](three-api.md) for the maintained renderer and
-`@pmndrs/glyph/react` for React.
+Referenced payloads and transforms cross with validated manifests. Canonical font backing is never detached. The receiver treats transferred plan bytes as untrusted and binds them through <code>TextEngineRenderPlanView.bindBytes()</code>.
+
+Synchronous and asynchronous sessions may coexist under one host. The runtime-wide borrow gate prevents any host from re-entering shared Wasm while a synchronous candidate is active.
+
+## Semantic render-plan surface
+
+<code>TextEngineRenderPlanView</code> validates publication framing. Integrations consume records through semantic readers:
+
+| Table | Reader | Meaning |
+| --- | --- | --- |
+| resources | <code>readTextEngineResource()</code> | Create, update, or retain a portable resource realization. |
+| buffers | <code>readTextEngineBuffer()</code> | Declare renderer storage and semantic policy binding. |
+| patches | <code>readTextEnginePatch()</code> | Allocate/resize, write, fill, copy, or retire byte ranges. |
+| primitives | <code>readTextEnginePrimitive()</code> | Map record spans to technique, resource, geometry, and order. |
+| draws | <code>readTextEngineDraw()</code> | Submit ordered program/material/transform spans. |
+| retirements | <code>readTextEngineRetirement()</code> | Release exact generations after the acknowledged fence. |
+| diagnostics | table access only | Optional telemetry; it does not define renderer behavior. |
+
+Readers return semantic discriminated unions and branded numeric identities. Raw shaper ABI layouts, offsets, enum ordinals, and internal handles are package-private.
+
+<code>candidate.acquirePayload(referenceId)</code> returns a counted lease over one immutable portable payload and its declared companions. A renderer realizes it per physical device/context and keeps the lease while cached GPU state references it. Plan <code>(id, generation)</code> values key the renderer cache; <code>resourceName</code> is the schema name expected by the selected shader.
+
+## Failure and disposal
+
+Public inputs are checked at their call. Invalid policy, font, stack, text, capacities, plan framing, record relationships, or cross-owner values do not become deferred renderer failures.
+
+A valid emitted plan that contradicts its own metadata is an engine defect, not recoverable user input. The target rejects the candidate transaction predictably and preserves the last accepted renderer state without replaying it as new content.
+
+Dispose leaf objects when their lifetime ends:
+
+<pre><code>title.dispose();
+session.dispose();
+stack.dispose();
+policy.dispose();
+host.dispose();
+runtime.dispose();
+inter.dispose();</code></pre>
+
+Parent disposal cascades as a safety net. Explicit disposal remains the correctness mechanism; finalization is not used to guess ordering among runtime, host, device, session, and resource lifetimes.
+
+## Related current documentation
+
+- [Integrate a renderer with Glyph](../guides/renderer-integration.md)
+- [Portable raster-technique implementation report](../guides/technique-implementation-report.md)
+- [Font, runtime, host, session, and render-target ownership](font-runtime-ownership.md)
+- [Current Glyph package reference](../packages/glyph.md)

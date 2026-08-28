@@ -271,7 +271,7 @@ export interface EngineTextMutation {
   readonly insert: string;
 }
 
-/** Derives the smallest cluster-aligned replace that turns `previous` into `next`. */
+/** Derives the smallest Unicode-scalar-aligned replace that turns `previous` into `next`. */
 export function minimalTextMutation(previous: string, next: string): EngineTextMutation | undefined {
   if (previous === next) return undefined;
   const shared = Math.min(previous.length, next.length);

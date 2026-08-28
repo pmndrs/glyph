@@ -1,11 +1,12 @@
-import type {
-  LoadedFont,
-  ParagraphContentBox,
-  ParagraphLayoutInspection,
-  ParagraphLayoutPolicy,
-  ParagraphStyle,
+import {
+  createParagraph,
+  type Font,
+  type Paragraph,
+  type ParagraphContentBox,
+  type ParagraphLayoutInspection,
+  type ParagraphLayoutPolicy,
+  type ParagraphStyle,
 } from '@pmndrs/glyph';
-import { Paragraph } from '@pmndrs/glyph/core';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -21,7 +22,7 @@ import { paragraphCjkCoverageText } from '../../paragraph-contract-corpus';
 import { hashParagraphLayouts, paragraphLayoutBytes, paragraphLayoutContract } from '../../paragraph-layout-digest';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../../uikit-layout-fixture';
 
-type BitmapFont = LoadedFont<typeof bitmap>;
+type BitmapFont = Font<typeof bitmap>;
 
 interface LegacyAxis {
   readonly mode: 'unconstrained' | 'at-most' | 'exactly';
@@ -160,7 +161,7 @@ export function createParagraphContractsConformanceTarget(): BenchmarkTarget {
   };
 }
 
-function runContracts(state: Extract<State, { readonly kind: 'ready' }>, signal: AbortSignal | undefined) {
+async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, signal: AbortSignal | undefined) {
   const group = new TextGroup({ capacity: { size: 4_096, policy: 'grow' } });
   const texts: Text<typeof bitmap>[] = [];
   const expected: Array<{ readonly id: string; readonly golden: LayoutGolden; readonly full: boolean }> = [];
@@ -218,7 +219,7 @@ function runContracts(state: Extract<State, { readonly kind: 'ready' }>, signal:
     // The uikit seam is exercised through the real framework-neutral Paragraph: no scene
     // graph, no adapter. Identical retained goldens prove the Paragraph route agrees with
     // the Text route the contract was generated through.
-    uikitParagraph = new Paragraph({
+    uikitParagraph = await createParagraph({
       font: state.inter,
       text: bidiContract.uikit.input.text,
       style: bidiContract.uikit.input.style,

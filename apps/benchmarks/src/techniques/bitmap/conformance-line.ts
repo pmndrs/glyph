@@ -1,5 +1,5 @@
-import type { LoadedFont, ParagraphLayout } from '@pmndrs/glyph';
-import { selectBitmapStrikePpem, type bitmap } from '@pmndrs/glyph/three/bitmap';
+import type { Font, ParagraphLayout } from '@pmndrs/glyph';
+import { selectBitmapStrikePpem, type bitmap, type BitmapData } from '@pmndrs/glyph/three/bitmap';
 import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -31,7 +31,8 @@ export interface BitmapConformanceLine {
  */
 export function createBitmapConformanceLine(
   parent: THREE.Object3D,
-  font: LoadedFont<typeof bitmap>,
+  font: Font<typeof bitmap>,
+  data: BitmapData,
   text: string,
   cssFontSize: number,
   rasterPixelRatio: number,
@@ -64,7 +65,7 @@ export function createBitmapConformanceLine(
       glyphCount: countRenderedGlyphs(object),
       missingGlyphCount,
       drawCount: countDraws(object),
-      strikePpem: selectBitmapStrikePpem(font.data.strikes, cssFontSize, rasterPixelRatio),
+      strikePpem: selectBitmapStrikePpem(data.strikes, cssFontSize, rasterPixelRatio),
     };
   } catch (error) {
     disposeText(object);

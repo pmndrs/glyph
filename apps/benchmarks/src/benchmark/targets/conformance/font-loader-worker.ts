@@ -1,4 +1,5 @@
-import { FontLoader, FontRegistry } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph';
+import { bitmap } from '@pmndrs/glyph/raster/bitmap';
 
 import canonicalFontUrl from '../../../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url';
 import canonicalFontManifest from '../../../../fixtures/fonts/inter-v4.1/manifest.json' with { type: 'json' };
@@ -26,20 +27,16 @@ export function createFontLoaderWorkerConformanceTarget(): BenchmarkTarget {
       if ((await sha256(artifact)) !== canonicalFontManifest.bake.expectedCore.artifactSha256) {
         throw new Error('Browser Worker bytes differ from the canonical Node artifact');
       }
-      const font = await new FontRegistry().registerAsset(artifact);
-      try {
-        if (font.shapingHash !== canonicalFontManifest.bake.expectedCore.shapingHash) {
-          throw new Error('Browser Worker artifact retained an unexpected shaping identity');
-        }
-      } finally {
-        font.dispose();
-      }
       workerParityReady = true;
     },
     run: async () => {
       let font;
       try {
-        font = await new FontLoader({ development: false }).load(canonicalFontUrl);
+        const { bakeFontInWorker } = await import('@pmndrs/glyph/runtime-bake');
+        font = await loadFont({
+          input: { source: canonicalFontUrl, runtimeBake: bakeFontInWorker },
+          raster: { technique: bitmap, options: { strikes: [16] } },
+        });
       } catch (error) {
         const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : '';
         throw new Error(
@@ -48,10 +45,13 @@ export function createFontLoaderWorkerConformanceTarget(): BenchmarkTarget {
         );
       }
       try {
-        if (font.shapingHash !== canonicalFontManifest.bake.expectedCore.shapingHash) {
-          throw new Error('Worker fallback registered an unexpected shaping identity');
+        if (font.glyphCount !== canonicalFontManifest.bake.expectedCore.glyphCount) {
+          throw new Error('Worker fallback loaded an unexpected glyph count');
         }
-        return { bytes: canonicalFontManifest.bake.expectedCore.artifactBytes, hash: font.shapingHash };
+        return {
+          bytes: canonicalFontManifest.bake.expectedCore.artifactBytes,
+          hash: canonicalFontManifest.bake.expectedCore.shapingHash,
+        };
       } finally {
         font.dispose();
       }

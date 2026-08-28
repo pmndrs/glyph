@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { FontRegistry } from '@pmndrs/glyph';
+import { FontRegistry } from '../../dist/loader.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';

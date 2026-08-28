@@ -23,7 +23,6 @@ import {
 import { bitmapPlanProgram } from '../raster/bitmap-technique.js';
 import { msdfPlanProgram } from '../raster/msdf.js';
 import { slugPlanProgram } from '../raster/slug-technique.js';
-import { textShaperAbi } from '../core.js';
 
 const THREE_STABLE_GLYPH_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/stable-glyph');
 const THREE_TRANSFORM_INDEX_BUFFER_ID: PolicyBufferId = id('buffer', 'glyph-three/transform-index');
@@ -161,9 +160,8 @@ export function threeRenderPolicyDescriptor(
 }
 
 export function threePolicyCapabilitySet(): PolicyCapabilitySet {
-  const flags = textShaperAbi.policy.capabilityFlags;
   return {
-    flags: flags.storageBuffers | flags.aliasVec2 | flags.aliasVec4 | flags.orderedDirect | flags.stableIndirect,
+    capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct', 'stable-indirect'],
     maxBufferBytes: 64 * 1024 * 1024,
     updateAlignment: 4,
     coalesceGapBytes: 128,
@@ -203,7 +201,7 @@ function decorationProgram(
       transformMode,
       allocationMode,
     ),
-    primitiveKind: textShaperAbi.engine.primitiveKinds.decoration,
+    primitiveKind: 'decoration',
     resourceKindMask: 0,
   };
 }
@@ -224,7 +222,7 @@ function programBuffers(schema: AnyTechniqueSchema, transformMode: ThreeTransfor
 function transformIndexBuffer(): PolicyBuffer {
   return {
     id: TRANSFORM_BUFFER_ID,
-    scalar: textShaperAbi.policy.scalarTypes.u32,
+    scalar: 'u32',
     vectorWidth: 1,
   };
 }
@@ -232,7 +230,7 @@ function transformIndexBuffer(): PolicyBuffer {
 function stableGlyphIdBuffer(): PolicyBuffer {
   return {
     id: STABLE_GLYPH_BUFFER_ID,
-    scalar: textShaperAbi.policy.scalarTypes.u32,
+    scalar: 'u32',
     vectorWidth: 1,
   };
 }

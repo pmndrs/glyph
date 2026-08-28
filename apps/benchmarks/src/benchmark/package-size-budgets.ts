@@ -1,17 +1,18 @@
 export const packageSizeBudgets = {
   'browser-core': {
-    rawBytes: 388_000,
+    // Root Paragraph now ships its real private measurement engine instead of a detached constructor sketch.
+    rawBytes: 430_000,
     minifiedBytes: 284_000,
     gzipBytes: 82_400,
     brotliBytes: 63_500,
   },
-  // Renderer-neutral plans, host ownership, and transactional call-time validation.
-  // These ceilings include reviewed cross-host compression margin.
+  // Runtime-owned hosts, retained target sessions, semantic plan readers, portable resources,
+  // and transactional call-time validation. Includes reviewed cross-host compression margin.
   'core-subpath-js': {
-    rawBytes: 351_000,
-    minifiedBytes: 224_000,
-    gzipBytes: 59_000,
-    brotliBytes: 49_500,
+    rawBytes: 405_000,
+    minifiedBytes: 268_000,
+    gzipBytes: 68_000,
+    brotliBytes: 57_000,
   },
   'tsl-subpath-js': {
     rawBytes: 27_000,
@@ -76,13 +77,13 @@ export const packageSizeBudgets = {
     gzipBytes: 454_500,
     brotliBytes: 361_500,
   },
-  // Three realization, ownership, pre-frame recovery, and bounded candidate leases.
-  // These ceilings include reviewed cross-host compression margin.
+  // Three realization, runtime-owned host/session mapping, first-frame measurement and bounds,
+  // exact-generation resource transactions, and bounded candidate leases.
   'three-runtime-js': {
-    rawBytes: 603_000,
-    minifiedBytes: 379_000,
-    gzipBytes: 98_500,
-    brotliBytes: 82_000,
+    rawBytes: 690_000,
+    minifiedBytes: 448_000,
+    gzipBytes: 114_000,
+    brotliBytes: 95_000,
   },
   'font-inter-bitmap-16-32': {
     rawBytes: 3_200_000,

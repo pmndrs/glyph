@@ -196,9 +196,13 @@ export interface PolicyInput {
   readonly field: number;
 }
 
+/** Scalar representation of one policy output buffer. */
+export type PolicyScalarType = 'f32' | 'u32' | 'u16';
+
+/** One physical output buffer declared by a renderer policy program. */
 export interface PolicyBuffer {
   readonly id: PolicyBufferId;
-  readonly scalar: number;
+  readonly scalar: PolicyScalarType;
   readonly vectorWidth: number;
   readonly alignment?: number;
   readonly stride?: number;
@@ -206,6 +210,7 @@ export interface PolicyBuffer {
   readonly capacityClass?: number;
 }
 
+/** Compiled straight-line operation emitted by the policy DSL. */
 export interface PolicyOperation {
   readonly opcode: number;
   readonly target?: number;
@@ -216,11 +221,12 @@ export interface PolicyOperation {
   readonly immediate2?: number;
 }
 
+/** One renderer-owned executable policy assembled from a portable technique body. */
 export interface PolicyProgram {
   readonly techniqueId: RenderTechniqueId;
   readonly programId: RenderProgramId;
   /** Plan primitive kind this program's records publish as; glyph when omitted. */
-  readonly primitiveKind?: number;
+  readonly primitiveKind?: 'glyph' | 'decoration';
   /** Capability profile this program targets; omitted programs apply to every profile. */
   readonly capabilitySet?: PolicyCapabilitySet;
   readonly resourceKindMask?: number;
@@ -238,8 +244,19 @@ export interface PolicyProgram {
   readonly operations: readonly PolicyOperation[];
 }
 
+/** A renderer feature the policy compiler may target. */
+export type PolicyCapability =
+  | 'storage-buffers'
+  | 'indirect-draws'
+  | 'alias-vec2'
+  | 'alias-vec4'
+  | 'ordered-direct'
+  | 'stable-indirect';
+
+/** Renderer limits and named GPU features available to one policy profile. */
 export interface PolicyCapabilitySet {
-  readonly flags: number;
+  /** Semantic capabilities lowered to wire flags only by `compileRenderPolicy()`. */
+  readonly capabilities: readonly PolicyCapability[];
   readonly maxBufferBytes: number;
   readonly updateAlignment: number;
   readonly coalesceGapBytes: number;
@@ -251,6 +268,7 @@ export interface PolicyCapabilitySet {
   readonly wholeBufferThresholdBasisPoints: number;
 }
 
+/** Complete renderer-owned policy installed into one text-engine host. */
 export interface PolicyDescriptor {
   readonly capabilitySets: readonly PolicyCapabilitySet[];
   readonly programs: readonly PolicyProgram[];
@@ -629,7 +647,8 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     if (program.allocationStrategy !== undefined) {
       u16(program.allocationStrategy, `${programLabel} allocationStrategy`);
     }
-    if (program.primitiveKind !== undefined) u16(program.primitiveKind, `${programLabel} primitiveKind`);
+    if (program.primitiveKind !== undefined)
+      policyPrimitiveKind(program.primitiveKind, `${programLabel} primitiveKind`);
     const variant = u16(program.variant ?? 0, 'policy program variant');
     u8(program.f32InputCount, `${programLabel} f32 input count`);
     u8(program.u32InputCount, `${programLabel} u32 input count`);
@@ -641,7 +660,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
       const bufferId = u16(assertGlyphId(buffer.id, 'buffer', `${bufferLabel} id`), `${bufferLabel} id`);
       if (bufferIds.has(bufferId)) throw new TypeError(`policy repeats buffer id ${bufferId} within a program`);
       bufferIds.add(bufferId);
-      u8(buffer.scalar, `${bufferLabel} scalar`);
+      policyScalarType(buffer.scalar, `${bufferLabel} scalar`);
       u8(buffer.vectorWidth, `${bufferLabel} vectorWidth`);
       if (buffer.alignment !== undefined) u16(buffer.alignment, `${bufferLabel} alignment`);
       if (buffer.stride !== undefined) u16(buffer.stride, `${bufferLabel} stride`);
@@ -772,7 +791,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   for (const [index, value] of capabilitySets.entries()) {
     const offset = capabilitiesOffset + index * capability.size;
     view.setUint32(offset + capability.id, index + 1, true);
-    view.setUint32(offset + capability.flags, value.flags, true);
+    view.setUint32(offset + capability.flags, policyCapabilityFlags(value), true);
     view.setUint32(offset + capability.maxBufferBytes, value.maxBufferBytes, true);
     view.setUint32(offset + capability.updateAlignment, value.updateAlignment, true);
     view.setUint32(offset + capability.coalesceGapBytes, value.coalesceGapBytes, true);
@@ -808,7 +827,7 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
     );
     view.setUint16(
       offset + programLayout.primitiveKind,
-      value.primitiveKind ?? textShaperAbi.engine.primitiveKinds.glyph,
+      policyPrimitiveKind(value.primitiveKind ?? 'glyph', `policy program ${value.programId} primitiveKind`),
       true,
     );
     view.setUint8(offset + programLayout.f32InputCount, value.f32InputCount);
@@ -823,9 +842,9 @@ export function compileRenderPolicy(descriptor: PolicyDescriptor): Uint8Array {
   for (const value of programs) {
     for (const buffer of value.buffers) {
       const offset = buffersOffset + bufferIndex * bufferLayout.size;
-      const scalarBytes = buffer.scalar === textShaperAbi.policy.scalarTypes.u16 ? 2 : 4;
+      const scalarBytes = buffer.scalar === 'u16' ? 2 : 4;
       view.setUint16(offset + bufferLayout.id, buffer.id, true);
-      view.setUint8(offset + bufferLayout.scalar, buffer.scalar);
+      view.setUint8(offset + bufferLayout.scalar, policyScalarType(buffer.scalar, `policy buffer ${buffer.id} scalar`));
       view.setUint8(offset + bufferLayout.vectorWidth, buffer.vectorWidth);
       view.setUint16(offset + bufferLayout.alignment, buffer.alignment ?? scalarBytes, true);
       view.setUint16(offset + bufferLayout.stride, buffer.stride ?? scalarBytes * buffer.vectorWidth, true);
@@ -899,8 +918,14 @@ function nonzeroU32(value: number, label: string): number {
 /** @internal Validate and snapshot one host capability set before invoking technique code. */
 export function normalizePolicyCapabilitySet(value: unknown, label = 'policy capability set'): PolicyCapabilitySet {
   if (!isNonArrayObject(value)) throw new TypeError(`${label} needs an object`);
+  const sourceCapabilities = value.capabilities;
+  if (!Array.isArray(sourceCapabilities)) throw new TypeError(`${label} capabilities needs an array`);
+  const capabilities = sourceCapabilities.map((capability, index) =>
+    policyCapability(capability, `${label} capability ${index}`),
+  );
+  if (new Set(capabilities).size !== capabilities.length) throw new TypeError(`${label} repeats a capability`);
   const snapshot: PolicyCapabilitySet = Object.freeze({
-    flags: value.flags,
+    capabilities: Object.freeze(capabilities),
     maxBufferBytes: value.maxBufferBytes,
     updateAlignment: value.updateAlignment,
     coalesceGapBytes: value.coalesceGapBytes,
@@ -917,7 +942,6 @@ export function normalizePolicyCapabilitySet(value: unknown, label = 'policy cap
 
 /** Capability-set contract mirrored from validate_capability_sets. */
 function preflightCapabilitySet(set: PolicyCapabilitySet, label: string): void {
-  u32(set.flags, `${label} flags`);
   u32(set.maxBufferBytes, `${label} maxBufferBytes`);
   u32(set.updateAlignment, `${label} updateAlignment`);
   u32(set.coalesceGapBytes, `${label} coalesceGapBytes`);
@@ -928,17 +952,8 @@ function preflightCapabilitySet(set: PolicyCapabilitySet, label: string): void {
   u16(set.fragmentationBudget, `${label} fragmentationBudget`);
   u16(set.wholeBufferThresholdBasisPoints, `${label} wholeBufferThresholdBasisPoints`);
 
-  const { capabilityFlags } = textShaperAbi.policy;
-  const knownFlags =
-    capabilityFlags.storageBuffers |
-    capabilityFlags.indirectDraws |
-    capabilityFlags.aliasVec2 |
-    capabilityFlags.aliasVec4 |
-    capabilityFlags.orderedDirect |
-    capabilityFlags.stableIndirect;
-  const allocationSupport = capabilityFlags.orderedDirect | capabilityFlags.stableIndirect;
-  if ((set.flags & ~knownFlags) !== 0 || (set.flags & allocationSupport) === 0) {
-    throw new RangeError(`${label} flags use unknown bits or support no allocation strategy`);
+  if (!set.capabilities.includes('ordered-direct') && !set.capabilities.includes('stable-indirect')) {
+    throw new RangeError(`${label} supports no allocation strategy`);
   }
   if (
     set.maxBufferBytes === 0 ||
@@ -962,7 +977,7 @@ function preflightCapabilitySet(set: PolicyCapabilitySet, label: string): void {
   ) {
     throw new RangeError(`${label} upload cost model exceeds its own buffer budget`);
   }
-  if (((set.flags & capabilityFlags.indirectDraws) === 0) !== (set.maxIndirectDraws === 0)) {
+  if (set.capabilities.includes('indirect-draws') !== set.maxIndirectDraws > 0) {
     throw new RangeError(`${label} must pair the indirect-draw flag with its indirect draw limit`);
   }
 }
@@ -974,14 +989,11 @@ function preflightProgramSemantics(
   effectiveCapabilitySetId: number,
 ): void {
   const label = `policy program ${program.programId}`;
-  const { batchFields, capabilityFlags, allocationStrategies } = textShaperAbi.policy;
-  const { primitiveKinds } = textShaperAbi.engine;
-  const primitiveKind = program.primitiveKind ?? primitiveKinds.glyph;
-  if (primitiveKind !== primitiveKinds.glyph && primitiveKind !== primitiveKinds.decoration) {
-    throw new RangeError(`${label} primitiveKind must publish glyph or decoration records`);
-  }
+  const { batchFields, allocationStrategies } = textShaperAbi.policy;
+  const primitiveKind = program.primitiveKind ?? 'glyph';
+  policyPrimitiveKind(primitiveKind, `${label} primitiveKind`);
   // Decoration programs draw without raster resources; every other kind must accept some.
-  if ((program.resourceKindMask ?? 1) === 0 && primitiveKind !== primitiveKinds.decoration) {
+  if ((program.resourceKindMask ?? 1) === 0 && primitiveKind !== 'decoration') {
     throw new RangeError(`${label} accepts no resource kinds but does not publish decoration records`);
   }
 
@@ -1012,15 +1024,15 @@ function preflightProgramSemantics(
   if (strategy !== allocationStrategies.orderedDirect && strategy !== allocationStrategies.stableIndirect) {
     throw new RangeError(`${label} allocationStrategy is not a known strategy`);
   }
-  const requiredCapability =
-    strategy === allocationStrategies.orderedDirect ? capabilityFlags.orderedDirect : capabilityFlags.stableIndirect;
+  const requiredCapability: PolicyCapability =
+    strategy === allocationStrategies.orderedDirect ? 'ordered-direct' : 'stable-indirect';
 
   preflightProgramBody(program);
 
   for (const [index, set] of capabilitySets.entries()) {
     if (
       (effectiveCapabilitySetId === 0 || effectiveCapabilitySetId === index + 1) &&
-      (set.flags & requiredCapability) === 0
+      !set.capabilities.includes(requiredCapability)
     ) {
       throw new RangeError(`policy capability set ${index} lacks the allocation support ${label} needs`);
     }
@@ -1041,7 +1053,7 @@ function resolveCapabilitySetId(
 
 function capabilitySetKey(set: PolicyCapabilitySet): string {
   return [
-    set.flags,
+    [...set.capabilities].sort().join(','),
     set.maxBufferBytes,
     set.updateAlignment,
     set.coalesceGapBytes,
@@ -1068,17 +1080,13 @@ function preflightProgramBody(program: PolicyProgram): void {
   if (program.buffers.length > MAX_BUFFERS_PER_POLICY_PROGRAM) {
     throw new RangeError(`${label} declares more than ${MAX_BUFFERS_PER_POLICY_PROGRAM} buffers`);
   }
-  const { scalarTypes, bufferUsage } = textShaperAbi.policy;
+  const { bufferUsage } = textShaperAbi.policy;
   const knownUsages = bufferUsage.vertex | bufferUsage.storage | bufferUsage.copyDst;
-  const byteWidths: ReadonlyMap<number, number> = new Map([
-    [scalarTypes.f32, 4],
-    [scalarTypes.u32, 4],
-    [scalarTypes.u16, 2],
-  ]);
+  const byteWidths: Readonly<Record<PolicyScalarType, number>> = { f32: 4, u32: 4, u16: 2 };
   for (const [index, buffer] of program.buffers.entries()) {
     const bufferLabel = `${label} buffer ${index}`;
-    const byteWidth = byteWidths.get(buffer.scalar);
-    if (byteWidth === undefined) throw new RangeError(`${bufferLabel} scalar is not a known scalar type`);
+    policyScalarType(buffer.scalar, `${bufferLabel} scalar`);
+    const byteWidth = byteWidths[buffer.scalar];
     if (buffer.id === 0) throw new TypeError(`${bufferLabel} uses the reserved zero id`);
     if (buffer.vectorWidth < 1 || buffer.vectorWidth > MAX_POLICY_VECTOR_WIDTH) {
       throw new RangeError(`${bufferLabel} vectorWidth needs 1..${MAX_POLICY_VECTOR_WIDTH}`);
@@ -1190,16 +1198,12 @@ function validateStore(
   storedLanes: Map<number, number>,
 ): void {
   const label = `policy program ${program.programId} operation ${index}`;
-  const { opcodes, scalarTypes } = textShaperAbi.policy;
+  const { opcodes } = textShaperAbi.policy;
   const bufferId = operation.immediate0 ?? 0;
   const schema = program.buffers.find((candidate) => candidate.id === bufferId);
   if (schema === undefined) throw new TypeError(`${label} stores into undeclared buffer ${bufferId}`);
-  const expectedScalar =
-    operation.opcode === opcodes.storeF32
-      ? scalarTypes.f32
-      : operation.opcode === opcodes.storeU32
-        ? scalarTypes.u32
-        : scalarTypes.u16;
+  const expectedScalar: PolicyScalarType =
+    operation.opcode === opcodes.storeF32 ? 'f32' : operation.opcode === opcodes.storeU32 ? 'u32' : 'u16';
   if (schema.scalar !== expectedScalar) {
     throw new TypeError(`${label} stores ${expectedScalar} lanes into a ${schema.scalar} buffer`);
   }
@@ -1210,6 +1214,47 @@ function validateStore(
     throw new TypeError(`${label} writes buffer ${bufferId} lane ${lane} twice`);
   }
   storedLanes.set(bufferId, (storedLanes.get(bufferId) ?? 0) | mask);
+}
+
+function policyCapability(value: unknown, label: string): PolicyCapability {
+  if (
+    value !== 'storage-buffers' &&
+    value !== 'indirect-draws' &&
+    value !== 'alias-vec2' &&
+    value !== 'alias-vec4' &&
+    value !== 'ordered-direct' &&
+    value !== 'stable-indirect'
+  ) {
+    throw new TypeError(`${label} is not a known policy capability`);
+  }
+  return value;
+}
+
+function policyCapabilityFlags(set: PolicyCapabilitySet): number {
+  const flags = textShaperAbi.policy.capabilityFlags;
+  const values: Readonly<Record<PolicyCapability, number>> = {
+    'storage-buffers': flags.storageBuffers,
+    'indirect-draws': flags.indirectDraws,
+    'alias-vec2': flags.aliasVec2,
+    'alias-vec4': flags.aliasVec4,
+    'ordered-direct': flags.orderedDirect,
+    'stable-indirect': flags.stableIndirect,
+  };
+  return set.capabilities.reduce((combined, capability) => combined | values[capability], 0);
+}
+
+function policyScalarType(value: unknown, label: string): number {
+  const scalarTypes = textShaperAbi.policy.scalarTypes;
+  if (value === 'f32') return scalarTypes.f32;
+  if (value === 'u32') return scalarTypes.u32;
+  if (value === 'u16') return scalarTypes.u16;
+  throw new TypeError(`${label} is not f32, u32, or u16`);
+}
+
+function policyPrimitiveKind(value: unknown, label: string): number {
+  if (value === 'glyph') return textShaperAbi.engine.primitiveKinds.glyph;
+  if (value === 'decoration') return textShaperAbi.engine.primitiveKinds.decoration;
+  throw new TypeError(`${label} is not glyph or decoration`);
 }
 
 function initializeRegister(registers: Uint8Array, target: number, type: number, label: string): void {

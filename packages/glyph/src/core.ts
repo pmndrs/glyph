@@ -1,37 +1,20 @@
-/**
- * The renderer-neutral text engine: everything a custom renderer integration needs to
- * load fonts into one Wasm shaper, serialize frame updates, and consume revisioned
- * render plans. `@pmndrs/glyph/three` is implemented on exactly this surface.
- */
-export {
-  createRuntimeShaper,
-  type RuntimeShaper,
-  type RuntimeShaperMemoryReport,
-  type RuntimeShaperOptions,
-  type TextShaperWasmSource,
-} from './shaper.js';
-export { textRuntimeShaper } from './text-runtime.js';
+/** Renderer-neutral engine construction and integration contracts. */
 export { createTextRuntime, type TextRuntime, type TextRuntimeOptions } from './text-runtime.js';
 export {
-  acquireFontSelectionForRuntime,
-  assertFontSelectionForRuntime,
-  concreteFonts,
-  observeLoadedFontDispose,
-  releaseFontSelection,
-} from './loaded-font.js';
-export {
   TextEngineHost,
-  TextEngineSession,
   TextEngineStatusError,
-  type TextEngineFault,
+  textEngineStatusErrorDetails,
   type HostFontBinding,
   type HostFontStackBinding,
   type HostMaterialBinding,
   type HostPolicy,
+  type HostPolicyFactory,
   type HostResourceBinding,
   type HostTransformBinding,
   type TextEngineHostOptions,
-  type TextEnginePublication,
+  type TextEngineFault,
+  type TextEngineStatusCode,
+  type TextEngineStatusDetails,
 } from './core/host.js';
 export {
   TextEngineBackpressureError,
@@ -51,6 +34,7 @@ export {
   type PlanTargetControl,
   type PortablePayloadIdentity,
   type PortablePayloadLease,
+  type ResolvedPortablePayload,
   type RenderPlanTableName,
   type ResolvedPlanPayload,
   type ResolvedPlanTransform,
@@ -73,39 +57,38 @@ export {
   type TextEngineTextUpdate,
   type TextPlanTarget,
 } from './core/retained-session.js';
-export {
-  compileTextEngineFrameUpdate,
-  type TextEngineConstraint,
-  type TextEngineDecoration,
-  type TextEngineExclusion,
-  type TextEngineFeature,
-  type TextEngineFrameLimits,
-  type TextEngineFlowVertex,
-  type TextEngineFrameUpdate,
-  type TextEngineInlineObject,
-  type TextEngineParagraphMutation,
-  type TextEngineRegion,
-  type TextEngineStyleMutation,
-  type TextEngineStyleValue,
-  type TextEngineTextMutation,
-} from './core/frame-wire.js';
 export { TextEngineRenderPlanView, type RenderPlanTable } from './core/plan-view.js';
 export {
   readTextEngineBuffer,
+  readTextEngineDraw,
   readTextEnginePatch,
+  readTextEnginePrimitive,
   readTextEngineResource,
   readTextEngineRetirement,
+  type RenderPlanBufferId,
+  type RenderPlanClipId,
+  type RenderPlanDrawId,
+  type RenderPlanPrimitiveId,
+  type RenderPlanResourceId,
+  type RenderPlanSemanticId,
+  type RenderPlanTransformId,
+  type TextEngineAllocatePatch,
+  type TextEngineBufferBinding,
   type TextEngineBufferRecord,
+  type TextEngineCopyPatch,
+  type TextEngineDrawRecord,
+  type TextEngineFillPatch,
   type TextEnginePatchRecord,
+  type TextEnginePrimitiveKind,
+  type TextEnginePrimitiveRecord,
+  type TextEngineResourceAction,
   type TextEngineResourceRecord,
+  type TextEngineRetirePatch,
+  type TextEngineRetirementKind,
   type TextEngineRetirementRecord,
+  type TextEngineScalarType,
+  type TextEngineWritePatch,
 } from './core/plan-view.js';
-export {
-  assertOwnedTextEnginePublication,
-  TextEnginePublicationExpiredError,
-  type OwnedTextEnginePublication,
-} from './core/retention.js';
-export { readTextEngineLayouts, readTextEngineMeasurements } from './core/layout-query-view.js';
 export {
   compileFontBinding,
   schemaFieldTable,
@@ -129,7 +112,6 @@ export {
   type RasterPolicyProgramOptions,
   type RasterPolicySystem,
 } from './core/raster-plan-program.js';
-export { compileLoadedRasterFont } from './core/raster-plan-program.js';
 export {
   compileRenderPolicy,
   createProgram,
@@ -145,6 +127,7 @@ export {
   type PolicyAllocationMode,
   type PolicyBuffer,
   type PolicyBufferId,
+  type PolicyCapability,
   type PolicyCapabilitySet,
   type PolicyCapabilitySetSelection,
   type PolicyDescriptor,
@@ -152,25 +135,12 @@ export {
   type PolicyInputScope,
   type PolicyOperation,
   type PolicyProgram,
+  type PolicyScalarType,
   type PolicyTransformMode,
   type ProgramContext,
   type RenderProgramId,
   type RenderResourceId,
   type RenderTechniqueId,
-  type FontBindingHandle,
-  type ExclusionId,
-  type FlowThreadId,
-  type FontStackHandle,
-  type GlyphId,
-  type GlyphIdKind,
-  type InlineObjectId,
-  type MaterialHandle,
-  type ParagraphId,
-  type PolicyHandle,
-  type RegionId,
-  type ResourceHandle,
-  type StyleId,
-  type TextEngineSessionHandle,
 } from './core/render-policy.js';
 export {
   definePolicyBuffers,
@@ -244,6 +214,3 @@ export {
   type TechniquePolicyProgramBuilder,
   type TechniquePolicyStores,
 } from './core/policy-program.js';
-export { textShaperAbi } from './generated/text-shaper-abi.js';
-export type { ParagraphOptions, ParagraphUpdate } from './paragraph.js';
-export { Paragraph } from './paragraph.js';

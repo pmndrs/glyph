@@ -4,9 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { FontLoader } from '@pmndrs/glyph';
+import { loadFont } from '@pmndrs/glyph';
 import { bakeFont } from '@pmndrs/glyph/bake';
-import { createTextRuntime } from '@pmndrs/glyph/core';
 import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
 import { createFontBaker } from '@pmndrs/glyph/bake';
 import { fontBakerWasmUrl } from '@pmndrs/glyph/bake';
@@ -17,6 +16,8 @@ import bitmapBaker from '../../dist/bakers/bitmap.js';
 import msdfBaker from '../../dist/bakers/msdf.js';
 import slugBaker from '../../dist/bakers/slug.js';
 import { resolveRasterBakePlan } from '../../dist/internal/raster-bake-plan.js';
+import { immutableFontResources } from '../../dist/loaded-font.js';
+import { FontLoader } from '../../dist/loader.js';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
 const fixturePromise = Promise.all([
@@ -145,6 +146,7 @@ test('the runtime host transfers source and accepts one authoritative font artif
       return new Response(source);
     },
   }).load('Inter-Regular.ttf');
+  t.after(() => font.dispose());
   assert.equal(font.glyphCount, 2937);
   assert.equal(terminations, 4);
   assert.deepEqual(requests, ['https://assets.test/Inter-Regular.font.glb', 'https://assets.test/Inter-Regular.ttf']);
@@ -313,21 +315,17 @@ test('the Worker prepares once and matches the Node canonical GLB for every buil
   assert.deepEqual(transfer, [value.artifacts[0].bytes]);
 });
 
-test('one TextRuntime source load sends its normalized ranges and complete raster tuple once', async (t) => {
+test('one portable source load sends its normalized ranges and complete raster tuple once', async (t) => {
   const { source } = await fixturePromise;
   const baked = await readFile(
     new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
   );
   const requests = [];
-  const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  t.after(() => runtime.dispose());
   const runtimeBake = async (request) => {
     requests.push(request);
     return baked;
   };
-  const [bitmapFont, msdfFont, slugFont] = await runtime.loadFont({
+  const [bitmapFont, msdfFont, slugFont] = await loadFont({
     input: {
       source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
       runtimeBake,
@@ -338,6 +336,11 @@ test('one TextRuntime source load sends its normalized ranges and complete raste
     },
     rasters: [{ technique: bitmap, options: { strikes: [32] } }, { technique: msdf }, { technique: slug }],
   });
+  t.after(() => {
+    slugFont.dispose();
+    msdfFont.dispose();
+    bitmapFont.dispose();
+  });
 
   assert.equal(requests.length, 1);
   assert.deepEqual(requests[0].unicodeRanges, [{ start: 0x20, end: 0x7e }]);
@@ -345,8 +348,8 @@ test('one TextRuntime source load sends its normalized ranges and complete raste
     requests[0].rasters.map(({ kind }) => kind),
     ['bitmap', 'msdf', 'slug'],
   );
-  assert.equal(bitmapFont.font, msdfFont.font);
-  assert.equal(msdfFont.font, slugFont.font);
+  assert.equal(immutableFontResources(bitmapFont).font, immutableFontResources(msdfFont).font);
+  assert.equal(immutableFontResources(msdfFont).font, immutableFontResources(slugFont).font);
 });
 
 test('external techniques bake through their own declared baker, never the Worker plan', async (t) => {
@@ -393,10 +396,6 @@ test('external techniques bake through their own declared baker, never the Worke
     dispose() {},
   });
   const requests = [];
-  const runtime = await createTextRuntime({
-    wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)),
-  });
-  t.after(() => runtime.dispose());
   const runtimeBake = async (request) => {
     for (const raster of request.rasters ?? []) {
       if (!workerRasterKinds.includes(raster.kind)) {
@@ -407,7 +406,7 @@ test('external techniques bake through their own declared baker, never the Worke
     return new Uint8Array(artifact.slice(0));
   };
   await assert.rejects(
-    runtime.loadFont({
+    loadFont({
       input: {
         source: `data:font/ttf;base64,${Buffer.from(source).toString('base64')}`,
         runtimeBake,

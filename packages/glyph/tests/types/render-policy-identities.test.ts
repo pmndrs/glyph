@@ -1,18 +1,17 @@
 import {
-  compileTextEngineFrameUpdate,
   createProgram,
   id,
   programId,
   resourceId,
   selectPolicyCapabilitySet,
   techniqueId,
-  textShaperAbi,
-  type ParagraphId,
   type PolicyCapabilitySet,
   type PolicyDescriptor,
-  type TextEngineFrameUpdate,
-} from '../../dist/core.js';
-import { defineRasterResourceId } from '../../dist/index.js';
+} from '../../src/core/render-policy.js';
+import { compileTextEngineFrameUpdate, type TextEngineFrameUpdate } from '../../src/core/frame-wire.js';
+import type { ParagraphId, TextEngineSessionHandle } from '../../src/core/render-policy.js';
+import { textShaperAbi } from '../../src/generated/text-shaper-abi.js';
+import { defineRasterResourceId } from '../../src/raster-technique.js';
 
 const technique = techniqueId('vendor.example');
 const program = programId('vendor.example', 'renderer');
@@ -27,9 +26,27 @@ const body = {
   f32InputCount: 0,
   u32InputCount: 0,
 };
-const buffers = [{ id: buffer, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 }];
+const buffers = [{ id: buffer, scalar: 'u32' as const, vectorWidth: 1 }];
+const semanticCapabilities = {
+  capabilities: ['storage-buffers', 'ordered-direct'] as const,
+  maxBufferBytes: 4096,
+  updateAlignment: 4,
+  coalesceGapBytes: 0,
+  rangeCallPenaltyBytes: 0,
+  maxBuffersPerDraw: 1,
+  maxResourcesPerDraw: 1,
+  maxIndirectDraws: 0,
+  fragmentationBudget: 1,
+  wholeBufferThresholdBasisPoints: 10_000,
+} satisfies PolicyCapabilitySet;
+void semanticCapabilities;
 
 createProgram(technique, program, body, buffers, 'direct', 'ordered');
+// @ts-expect-error Policy buffers name their scalar type; callers never author its ABI ordinal.
+createProgram(technique, program, body, [{ id: buffer, scalar: 2, vectorWidth: 1 }], 'direct', 'ordered');
+// @ts-expect-error Capability profiles name features; callers never author a raw flag mask.
+const rawCapabilities: PolicyCapabilitySet = { ...semanticCapabilities, flags: 1 };
+void rawCapabilities;
 
 // @ts-expect-error Authored wire identities must come from the semantic helpers.
 createProgram(1, program, body, buffers, 'direct', 'ordered');
@@ -38,7 +55,7 @@ createProgram(program, technique, body, buffers, 'direct', 'ordered');
 // @ts-expect-error Resource identities cannot stand in for technique identities.
 createProgram(resource, program, body, buffers, 'direct', 'ordered');
 // @ts-expect-error Policy buffer IDs cannot stand in for session handles.
-const session: import('../../dist/core.js').TextEngineSessionHandle = buffer;
+const session: TextEngineSessionHandle = buffer;
 void session;
 
 const paragraph = id('paragraph', 'vendor.example/body');

@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  defineTechniqueGeometryKind,
-  defineTechniqueSchema,
-  id,
-  schemaPolicyBuffers,
-  textShaperAbi,
-} from '../../dist/core.js';
+import { defineTechniqueGeometryKind, defineTechniqueSchema, id, schemaPolicyBuffers } from '../../dist/core.js';
+import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
 import { bitmapSchema } from '@pmndrs/glyph/raster/bitmap';
 import { msdfSchema } from '@pmndrs/glyph/raster/msdf';
 import { slugSchema } from '@pmndrs/glyph/raster/slug';
@@ -174,15 +169,15 @@ test('schemaPolicyBuffers derives the wire buffer list from each authoritative s
       schemaPolicyBuffers(schema),
       Object.values(schema.buffers).map((buffer) => ({
         id: buffer.id,
-        scalar: textShaperAbi.policy.scalarTypes[buffer.scalar],
+        scalar: buffer.scalar,
         vectorWidth: buffer.lanes.length,
       })),
     );
   }
   const derived = schemaPolicyBuffers(defineTechniqueSchema(declaration()));
   assert.deepEqual(derived, [
-    { id: ORIGIN_BUFFER_ID, scalar: textShaperAbi.policy.scalarTypes.f32, vectorWidth: 2 },
-    { id: FLAGS_BUFFER_ID, scalar: textShaperAbi.policy.scalarTypes.u32, vectorWidth: 1 },
+    { id: ORIGIN_BUFFER_ID, scalar: 'f32', vectorWidth: 2 },
+    { id: FLAGS_BUFFER_ID, scalar: 'u32', vectorWidth: 1 },
   ]);
 });
 

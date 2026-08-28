@@ -64,7 +64,7 @@ try {
   } as const satisfies Record<string, { readonly text: string; readonly style: ParagraphStyle }>;
   const cases: Record<string, unknown> = {};
   for (const [id, input] of Object.entries(inputs)) {
-    const paragraph = createContractText(font, input.text, input.style);
+    const paragraph = createContractText(font.font, input.text, input.style);
     const layouts: Record<string, unknown> = {};
     try {
       for (const [constraintId, value] of Object.entries(constraints)) {
@@ -82,7 +82,7 @@ try {
       fixture: 'noto-sans-cjk-jp-regular-v0',
       sourceSha256: createHash('sha256').update(source).digest('hex'),
       artifactSha256: artifact.sha256,
-      shapingHash: font.font.shapingHash,
+      shapingHash: font.shapingHash,
       sourceOracle: '../shaping/noto-sans-cjk/harfrust.json',
       independentOracle: '../shaping/noto-sans-cjk/harfbuzz.json',
     },

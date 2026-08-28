@@ -1,9 +1,8 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type { Font } from '../font.js';
-import type { LoadedFont } from '../loaded-font.js';
 import type { AnyRasterTechnique, RasterResourceId } from '../raster-technique.js';
 import { RenderWireIdentityRegistry, type RenderResourceId, type RenderTechniqueId } from './render-policy.js';
-import { compileLoadedRasterFont, compileRasterFont } from './raster-plan-program.js';
+import { compileRasterFont } from './raster-plan-program.js';
 
 const MAX_U32 = 0xffff_ffff;
 const MAX_U16 = 0xffff;
@@ -59,16 +58,6 @@ export function fontBindingBytes(
   identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
 ): Uint8Array {
   const compiled = compileRasterFont(font, identities);
-  if (compiled !== undefined) return compiled.binding;
-  throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
-}
-
-/** @internal Temporary bridge while first-party integrations migrate from runtime-bound fonts. */
-export function loadedFontBindingBytes(
-  font: LoadedFont<AnyRasterTechnique>,
-  identities: RenderWireIdentityRegistry = new RenderWireIdentityRegistry(),
-): Uint8Array {
-  const compiled = compileLoadedRasterFont(font, identities);
   if (compiled !== undefined) return compiled.binding;
   throw new TypeError(`no portable raster plan program is registered for "${font.technique.id}"`);
 }

@@ -1,422 +1,98 @@
 ---
-type: How-to guide
-title: Implement a reusable raster technique
-description: Shows how a portable raster plan, engine-owned policy, raster decoder, and baker compose into a renderer with real draws.
+type: Explanation
+title: Portable raster-technique implementation report
+description: Explains the ownership, API, and evidence for reusable technique plans, renderer policies, raster decoders, shader variants, and bakers.
 tags: [technique, raster, policy, baker, renderer, core]
 sources:
   - id: technique-plan
     resource: ../planning/technique-implementability.md
     title: Technique implementability plan
+  - id: ownership-plan
+    resource: ../planning/font-runtime-ownership.md
+    title: Font/runtime ownership plan
   - id: portable-plan
-    resource: ../../packages/glyph/src/core/raster-plan-program.ts
-    title: Portable raster plan registry
-  - id: technique-schema
-    resource: ../../packages/glyph/src/core/technique-schema.ts
-    title: Technique schema API
-  - id: policy-program
-    resource: ../../packages/glyph/src/core/policy-program.ts
-    title: Policy program DSL
-  - id: example-raster
+    resource: ../../packages/glyph-example-raster/src/portable.ts
+    title: External portable technique plan
+  - id: raster
+    resource: ../../packages/glyph-example-raster/src/raster.ts
+    title: External raster decoder
+  - id: shaders
     resource: ../../packages/glyph-example-raster/src
-    title: Example raster implementation
-  - id: example-renderer
+    title: External TypeGPU and TSL shader variants
+  - id: baker
+    resource: ../../packages/glyph-example-raster/src/baker.ts
+    title: External baker
+  - id: renderer
     resource: ../../packages/glyph-example-renderer/src
-    title: Example renderer implementation
-  - id: example-acceptance
+    title: External renderer implementation
+  - id: acceptance
     resource: ../../packages/glyph-example-renderer/tests/example-render.test.ts
-    title: Example renderer acceptance test
+    title: End-to-end renderer acceptance
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-24T00:00:00Z'
+  at: '2026-08-28T00:00:00Z'
 ---
 
-# Technique implementation report
+# Portable raster-technique implementation report
 
-This report describes the four layers involved in adding a raster technique to glyph:
+Glyph now separates reusable technique data from renderer implementation without weakening either side. A technique
+package owns its raster decoder, physical schema, portable policy body, immutable resource payloads, baker, and optional
+shader-language subpaths. A renderer owns system lanes, policy assembly, shader selection, GPU realization, materials or
+pipelines, targets, and submission.
 
-1. the portable technique plan;
-2. the renderer-specific policy;
-3. the raster decoder and runtime data;
-4. the offline/runtime baker.
+The proof is not a build-only fixture. `glyph-example-renderer` loads and runtime-bakes Inter, binds
+`glyph-example-raster`, realizes supplied indexed geometry and named policy buffers on a concrete WebGPU device, submits
+non-empty draws, and observes changed non-empty pixels.
 
-The examples use `glyph-example-raster`, the portable core API, and the example renderer added by the technique implementability work.
-
-## The system in one picture
+## Complete flow
 
 ```mermaid
 flowchart LR
-  Source[Font source\nTTF / OTF] --> Discover[Node discovery\npackage.json pmndrs.glyph]
-  Discover --> Baker[Raster baker\ndefineRasterBaker]
-  Baker --> Artifact[GLB raster artifact\nportable bytes]
-  Artifact --> Load[TextRuntime.loadFont]
-  Load --> Raster[RasterTechnique.decode\nLoadedFont.data]
-  Raster --> Plan[Portable RasterPlanProgram\nschema + policyBody + compileFont]
-  Plan --> Binding[CompiledRasterFont\nbinding bytes + resources]
-  Binding --> Host[TextEngineHost\nfont binding + policy bytes]
-  Host --> Frame[Wasm text update\nretained render plan]
-  Frame --> Device[Renderer device\nbuffers/resources/submission]
-  Device --> Draw[Non-empty draws]
+  Source[TTF / OTF] --> Baker[RasterBakerModule]
+  Baker --> Artifact[Validated GLB artifact]
+  Artifact --> Load[loadFont]
+  Load --> Raster[RasterTechnique.decode]
+  Raster --> Font[Immutable Font + typed raster data]
+  Font --> Bind[host.bindFont / bindFontStack]
+  Plan[Registered RasterPlanProgram] --> Bind
+  Bind --> Wasm[Shaping + layout + policy execution]
+  Policy[Renderer-owned PolicyDescriptor] --> Wasm
+  Wasm --> Candidate[Revisioned plan candidate]
+  Candidate --> Payloads[Portable resource leases]
+  Candidate --> Records[Semantic plan records]
+  Shader[Renderer-selected shader subpath] --> Device[Renderer device/context]
+  Payloads --> Device
+  Records --> Device
+  Device --> Draw[Accepted non-empty draws]
 ```
 
-The important boundary is between the portable plan and the renderer integration. A plan describes the physical buffers and how semantic values become those buffers. The engine supplies its own wire identities, system lanes, capability set, allocation mode, and renderer realization.
+The plan is enough to tell an implementor what data exists, what geometry meaning applies, what resource identities are
+live, which named buffers the selected shader consumes, and which ordered draws to issue. It is not a shader or GPU API.
+The renderer selects a compatible shader variant or writes its own against the same named contract.
 
-## Complete custom-renderer setup
+## Ownership map
 
-The shortest complete integration is the public TypeGPU wrapper in `glyph-example-renderer`:
+| Concern           | Technique package                               | Core/Wasm                                   | Renderer integration                      |
+| ----------------- | ----------------------------------------------- | ------------------------------------------- | ----------------------------------------- |
+| Stable identity   | Technique and resource names                    | Branded numeric hashes and collision checks | Program namespace and device cache keys   |
+| Per-glyph data    | Schema and policy body                          | Executes constrained policy expressions     | Uploads named buffers                     |
+| Raster payload    | Decodes immutable bytes                         | Validates, groups, retains, and leases      | Creates textures, buffers, or geometry    |
+| Geometry          | Declares synthetic or supplied meaning          | Validates GLB-like payload                  | Creates vertex/index state and instances  |
+| Shader            | Optional explicit TypeGPU/TSL/WGSL/GLSL subpath | Never imports shader code                   | Selects or authors one compatible variant |
+| Material/pipeline | May provide language-level helper               | Never owns GPU objects                      | Creates and caches physical program state |
+| Submission        | None                                            | Emits ordered records and retirement fences | Stages, commits, draws, and disposes      |
+
+There is no Three.js code in `glyph-example-raster`. Its `/tsl` subpath contains TSL nodes because TSL is one optional
+shader language, not because the portable plan depends on Three. Its `/typegpu` subpath contains the equivalent TypeGPU
+contract. Importing the main technique path registers only the renderer-neutral plan; shader subpaths remain explicit and
+tree-shake independently.
+
+## 1. Implement the raster decoder
+
+The raster layer validates one artifact extension and returns typed immutable data plus stable resource identities.
 
 ```ts
-const runtime = await createTextRuntime({ wasm: textShaperWasmBytes });
-const adapter = await navigator.gpu.requestAdapter();
-if (adapter === null) throw new Error('WebGPU is unavailable');
-const gpuDevice = await adapter.requestDevice();
-const device = new TypeGpuExampleRendererDevice({ device: gpuDevice, width: 768, height: 192 });
-const engine = new ExampleTextEngine(textRuntimeShaper(runtime), device);
-
-const font = await runtime.loadFont({
-  input: { baked: bakedFontUrl },
-  raster: { technique: glyphExample, options: { paletteSeed: 7 } },
-});
-const binding = engine.registerFont(font);
-const stack = engine.registerFontStack([binding]);
-engine.openSession();
-const text = engine.createText({
-  fontStack: stack,
-  text: 'Portable TypeGPU',
-  fontSize: 64,
-  width: 768,
-  height: 192,
-});
-const drawList = await text.render();
-const pixels = await device.readPixels();
-
-if (drawList.draws.length === 0) throw new Error('expected visible glyph draws');
-if (!pixels.some((value, index) => index % 4 === 3 && value !== 0)) {
-  throw new Error('expected visible pixels');
-}
-
-text.update({ text: 'Updated WebGPU', foregroundRgba: 0xff40_a0ff });
-await text.render();
-await text.dispose();
-engine.dispose();
-font.dispose();
-device.dispose();
-runtime.dispose();
-gpuDevice.destroy();
-```
-
-That wrapper is deliberately small. The rest of this section expands every call it makes so an engine implementor can
-replace the TypeGPU device with WebGL, Canvas, a native GPU API, or another backend. `RecordingExampleRendererDevice` is
-the deterministic CPU oracle used by tests; it is not the rendering acceptance path.
-
-### Call map
-
-```mermaid
-sequenceDiagram
-  participant App
-  participant Runtime as TextRuntime
-  participant Host as TextEngineHost
-  participant Plan as portable plan registry
-  participant Device as TypeGPU/WebGPU device
-  participant Session as TextEngineSession
-  participant Text as ExampleText
-
-  App->>Runtime: createTextRuntime()
-  App->>Host: new TextEngineHost(textRuntimeShaper(runtime))
-  App->>Host: registerPolicy(handle, compileRenderPolicy(...))
-  App->>Runtime: loadFont({ input, raster })
-  App->>Plan: compileRasterFont(font, host.wireIdentities)
-  App->>Device: prepareResources(resources)
-  App->>Host: registerFontBinding(handle, font.handle, binding)
-  App->>Device: pendingResources.commit()
-  App->>Host: registerFontStack(handle, [bindingHandle])
-  App->>Host: createSession(options)
-  App->>Text: createText(authored state)
-  Text->>Session: update(compileTextEngineFrameUpdate(mutations))
-  App->>Session: copyPublication(borrowed)
-  App->>Device: prepareSubmission(readDrawList(owned))
-  App->>Device: pendingSubmission.commit()
-  App->>Device: readPixels()
-  App->>Text: update(...) then render()
-```
-
-| Step             | Call                                             | What enters                                           | What comes back / changes                                                         |
-| ---------------- | ------------------------------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Runtime          | `createTextRuntime()`                            | text-shaper Wasm                                      | `TextRuntime`                                                                     |
-| Host             | `new TextEngineHost(textRuntimeShaper(runtime))` | synchronous shaper bridge                             | host registries and wire identities                                               |
-| Policy           | `host.registerPolicy(handle, bytes)`             | host-owned handle and compiled policy                 | policy installed in the shaper                                                    |
-| Font load        | `runtime.loadFont(request)`                      | baked/source font and raster technique                | typed `LoadedFont`                                                                |
-| Font compile     | `compileRasterFont(font, identities)`            | loaded font and host identity registry                | binding bytes plus immutable portable resources                                   |
-| Resource prepare | `device.prepareResources(inputs)`                | named portable resources                              | validated candidate with `commit()`                                               |
-| Binding          | `host.registerFontBinding(...)`                  | host binding handle, shaping-font handle, bytes       | font binding installed                                                            |
-| Stack            | `host.registerFontStack(handle, bindings)`       | host stack handle and binding handles                 | selectable shaping/raster stack                                                   |
-| Session          | `host.createSession(options)`                    | session handle and capacities                         | `TextEngineSession`                                                               |
-| Text create      | `engine.createText(options)`                     | font stack, text, style, and layout box               | retained application text with compiler-managed paragraph/style/region identities |
-| Text update      | `text.update(changes)`                           | changed content, style, or dimensions                 | desired state marked dirty; no shaping occurs yet                                 |
-| Text render      | `text.render()`                                  | current desired state                                 | minimal frame mutations sent through the existing session                         |
-| Frame            | `session.update(requestBytes)`                   | validated mutations, constraints, and revision fences | borrowed render-plan publication                                                  |
-| Ownership        | `session.copyPublication()`                      | borrowed publication                                  | owned publication safe across later calls                                         |
-| Decode           | `readDrawList(owned)`                            | owned plan bytes                                      | draws, primitives, buffers, resources, patches, retirements                       |
-| Submit           | `device.prepareSubmission(list).commit()`        | complete candidate plan                               | staged GPU buffers and commands become one accepted renderer state                |
-| Pixel proof      | `await device.readPixels()`                      | accepted offscreen WebGPU target                      | tightly packed RGBA bytes                                                         |
-
-### 1. Assemble and register the host policy
-
-```ts
-import {
-  compileRenderPolicy,
-  compileTextEngineFrameUpdate,
-  createRasterPolicyProgram,
-  definePolicyBuffers,
-  id,
-  TextEngineHost,
-  textRuntimeShaper,
-  textShaperAbi,
-} from '@pmndrs/glyph/core';
-import { glyphExamplePlanProgram } from '@pmndrs/glyph-example-raster';
-
-const POLICY_HANDLE = id('policy', 'my-renderer/default');
-const STABLE_GLYPH_BUFFER_ID = id('buffer', 'my-renderer/stable-glyph');
-const system = definePolicyBuffers({
-  stableGlyphId: {
-    id: STABLE_GLYPH_BUFFER_ID,
-    scalar: 'u32',
-    lanes: ['stableGlyphId'],
-  },
-});
-const flags = textShaperAbi.policy.capabilityFlags;
-const capabilities = {
-  flags: flags.storageBuffers | flags.aliasVec2 | flags.aliasVec4 | flags.orderedDirect,
-  maxBufferBytes: 16 * 1024 * 1024,
-  updateAlignment: 4,
-  coalesceGapBytes: 128,
-  rangeCallPenaltyBytes: 256,
-  maxBuffersPerDraw: 8,
-  maxResourcesPerDraw: 4,
-  maxIndirectDraws: 0,
-  fragmentationBudget: 8,
-  wholeBufferThresholdBasisPoints: 7_500,
-};
-
-const host = new TextEngineHost(textRuntimeShaper(runtime));
-const program = createRasterPolicyProgram(glyphExamplePlanProgram, {
-  namespace: 'my-renderer',
-  system,
-  capabilitySet: capabilities,
-  transformMode: 'direct',
-  allocationMode: 'ordered',
-  identityRegistry: host.wireIdentities,
-});
-host.registerPolicy(POLICY_HANDLE, compileRenderPolicy({ capabilitySets: [capabilities], programs: [program] }));
-```
-
-`compileRenderPolicy()` validates the entire descriptor before allocating output and assigns capability-set wire IDs by
-descriptor order. A frame omits capability selection for the first or only profile. `STABLE_GLYPH_BUFFER_ID` is different:
-the policy program stores a value into that slot, so the engine and its shader/device contract genuinely reference it.
-
-### 2. Compile one loaded font and realize every declared resource
-
-```ts
-const bindingHandle = host.id('font-binding', `my-renderer/${font.font.handle}`);
-const fontStackHandle = host.id('font-stack', 'my-renderer/body');
-const compiled = compileRasterFont(font, host.wireIdentities);
-if (compiled === undefined) {
-  throw new TypeError(`no portable raster plan program for ${font.technique.id}`);
-}
-
-const resources = [];
-for (const [name, keys] of compiled.declaredResources) {
-  for (const key of keys) {
-    const resource = compiled.resources.get(key);
-    if (resource === undefined) throw new Error(`compiled font omitted ${name}`);
-    resources.push({
-      id: host.wireIdentities.resourceId(key),
-      generation: 1,
-      name,
-      resource,
-    });
-  }
-}
-
-const pendingResources = device.prepareResources(resources);
-try {
-  host.registerFontBinding(bindingHandle, font.font.handle, compiled.binding);
-  try {
-    pendingResources.commit();
-  } catch (commitError) {
-    try {
-      host.disposeFontBinding(bindingHandle);
-    } catch (rollbackError) {
-      throw new AggregateError([commitError, rollbackError], 'resource commit and binding rollback failed', {
-        cause: commitError,
-      });
-    }
-    throw commitError;
-  }
-} catch (error) {
-  pendingResources.discard();
-  throw error;
-}
-host.registerFontStack(fontStackHandle, [bindingHandle]);
-```
-
-`compileRasterFont()` is cold work: the same `LoadedFont` is compiled and copied once, then cached. A resource role with
-`cardinality: 'many'` yields several keys; a `group` payload keeps synchronized texture/buffer members under one key.
-The renderer maps each constrained payload onto its own GPU objects during `prepareResources()`. `host.id()` derives
-runtime-owned wire IDs whose provenance is released with the host: its domain brand prevents passing a stack ID as a
-session ID at typecheck, while call-time validation rejects empty names, unsupported domains, forged numbers, and
-observed hash collisions. Top-level `id()` is reserved for authored module-lifetime constants such as policy handles and
-policy buffer slots.
-
-### 3. Open a session and publish a frame
-
-```ts
-const sessionHandle = host.id('session', 'my-renderer/main-view');
-const paragraphId = host.id('paragraph', 'my-renderer/title');
-const styleId = host.id('style', 'my-renderer/title/root');
-const flowThreadId = host.id('flow-thread', 'my-renderer/main-flow');
-const regionId = host.id('region', 'my-renderer/main-region');
-const session = host.createSession({
-  handle: sessionHandle,
-  requestCapacity: 4 * 1024,
-  resultCapacity: 128 * 1024,
-});
-const text = 'Hello Glyph';
-const request = compileTextEngineFrameUpdate({
-  sessionId: session.handle,
-  policyHandle: POLICY_HANDLE,
-  expectedEngineRevision: 0,
-  consumedPlanRevision: 0,
-  acknowledgedPublicationGeneration: 0,
-  limits: {
-    maxParagraphs: 8,
-    maxClusters: 256,
-    maxLines: 32,
-    maxRegions: 4,
-    maxExclusions: 4,
-    maxInlineObjects: 4,
-    maxSlotsPerBand: 4,
-    maxOutputBytes: 128 * 1024,
-  },
-  paragraphMutations: [{ opcode: 'upsert', paragraphId, order: 0 }],
-  textMutations: [{ paragraphId, start: 0, deleteCount: 0, insert: text }],
-  styleMutations: [
-    {
-      opcode: 'upsert',
-      paragraphId,
-      styleId,
-      cascadeOrder: 0,
-      start: 0,
-      end: text.length,
-      root: true,
-      value: { fontStackHandle, fontSize: 48, rasterPixelRatio: 1, foregroundRgba: 0xffff_ffff },
-    },
-  ],
-  constraints: [
-    {
-      paragraphId,
-      flowThreadId,
-      geometryRevision: 1,
-      width: 800,
-      height: 200,
-      viewportBlockStart: 0,
-      viewportBlockEnd: 200,
-      resumeBlockOffset: 0,
-      maxLines: 32,
-      regionStart: 0,
-      resumeCluster: 0,
-      regionCount: 1,
-      resumeRegion: 0,
-      widthMode: 'at-most',
-      heightMode: 'at-most',
-      wrap: 'word',
-      align: 'start',
-      overflow: 'visible',
-      blockAlign: 'start',
-    },
-  ],
-  regions: [
-    {
-      id: regionId,
-      geometryRevision: 1,
-      transformIndex: 1,
-      shape: 'rectangle',
-      exclusionStart: 0,
-      exclusionCount: 0,
-      writingMode: 'horizontal-tb',
-      textOrientation: 'mixed',
-      inlineStart: 0,
-      blockStart: 0,
-      inlineEnd: 800,
-      blockEnd: 200,
-      clipInlineStart: 0,
-      clipBlockStart: 0,
-      clipInlineEnd: 800,
-      clipBlockEnd: 200,
-    },
-  ],
-});
-const borrowed = session.update(request);
-const owned = session.copyPublication(borrowed);
-```
-
-The frame omits `capabilitySet`; the first compiled profile is selected. `session.update()` returns a borrow into Wasm
-memory. A synchronous renderer decodes and applies it before the next session call. Copy before an `await`, a later
-session call, or a retained same-realm scene handoff. Before a worker transfer, copy and transfer the self-owned bytes;
-the receiving realm treats the bytes as untrusted boundary data and calls
-`new TextEngineRenderPlanView().bindBytes(bytes)`. The call rejects ABI, status, and complete render/semantic table framing
-before rebinding the reader. The `OwnedTextEnginePublication` runtime witness is realm-local. Copying does not advance
-renderer acceptance. An
-application-facing text object owns these five records: `update()` changes desired text or geometry, the next frame
-replaces the prior text range and advances `geometryRevision` when dimensions change, and disposal publishes
-`{ opcode: 'remove', paragraphId }`. `ExampleText` is the complete reference for that owned asynchronous update loop.
-
-### 4. Decode, validate, and atomically submit
-
-```ts
-const drawList = readDrawList(owned);
-const pendingSubmission = device.prepareSubmission(drawList);
-await pendingSubmission.commit();
-
-consumedPlanRevision = drawList.planRevision;
-acknowledgedPublicationGeneration = drawList.publicationGeneration;
-```
-
-`readDrawList()` is example-renderer code built from `TextEngineRenderPlanView`, `readTextEngineBuffer()`,
-`readTextEngineResource()`, `readTextEnginePatch()`, and `readTextEngineRetirement()`. A production renderer can use that
-helper as a model or decode directly from those `/core` readers.
-
-The device validates into candidate owned state before `commit()`: buffer generations and dirty patches, resource
-generations, primitive record spans, program/technique identity, required named bindings, geometry, draw order, and exact
-retirements. The TypeGPU commit awaits its WebGPU validation scope before publishing the CPU oracle state, but it does not
-wait for queue completion on every frame. Only a successful commit advances the consumed-plan and
-publication-generation fences. A rejected candidate releases its staged objects and leaves the last accepted renderer
-state intact.
-
-### Which numeric identities remain
-
-| Identity                            | Who chooses it               | Why it remains visible                                                    |
-| ----------------------------------- | ---------------------------- | ------------------------------------------------------------------------- |
-| Capability-set wire ID              | `compileRenderPolicy()`      | Pure ABI bookkeeping; omitted from authored capability objects            |
-| Technique/program/resource wire IDs | `RenderWireIdentityRegistry` | Derived from stable string identities and collision-checked               |
-| Policy buffer slot                  | policy/technique author      | `id('buffer', name)` is referenced by policy stores and renderer bindings |
-| Policy handle                       | policy module                | A static `id()` is reused by registration and every authored frame        |
-| Binding, stack, session handles     | engine                       | `host.id()` results are reused across the corresponding host calls        |
-| Resource generation                 | engine/device                | Distinguishes replacement and exact retirement lifetimes                  |
-
-Top-level `id()` retains authored module constants for the module lifetime. `host.id()` retains dynamic provenance only
-until `host.dispose()`, so runtime-created entities do not grow a process-global registry. `ExampleTextEngine` goes one
-step further: it allocates binding, stack, session, paragraph, style, flow, and region IDs internally, exposing only the
-returned stack handle that `createText()` must reference.
-
-## 1. Implementing a portable technique plan
-
-The portable technique owns identity, artifact decoding, data ownership, its physical schema, and the cold font compiler. It must not import Three or put a material factory in `/core`.
-
-### Technique identity and decoded data
-
-```ts
-import { defineRasterResourceId, defineRasterTechnique } from '@pmndrs/glyph';
-import type { RasterTechnique } from '@pmndrs/glyph';
+import { defineRasterResourceId, defineRasterTechnique, type RasterResourceId } from '@pmndrs/glyph';
 
 interface ExampleData {
   readonly resource: RasterResourceId;
@@ -425,24 +101,23 @@ interface ExampleData {
   readonly glyphCount: number;
 }
 
-export const exampleTechnique: RasterTechnique<
-  RasterTechniqueId & 'studio.example',
-  'STUDIO_example',
-  ExampleOptions | undefined,
-  ExampleDescriptor,
-  ExampleData
-> = defineRasterTechnique({
+export const exampleTechnique = defineRasterTechnique({
   id: 'studio.example',
   kind: 'STUDIO_example',
   extension: 'STUDIO_example',
   version: 0,
   runtimeBaker: () => import('./runtime-baker.js'),
-  descriptor: makeDescriptor,
-  async decode(font, raster, signal) {
-    const colors = Uint8Array.from(await raster.resource(recordsSource(raster), signal));
+  descriptor: normalizeOptions,
+  async decode(font, raster, signal): Promise<ExampleData> {
+    signal?.throwIfAborted();
+    const extension = validateExtension(font, raster);
+    const colors = Uint8Array.from(await raster.resource(extension.records, signal));
+    if (colors.byteLength !== font.glyphCount * 4) {
+      throw new RangeError('example record payload does not match the font glyph count');
+    }
     return {
       resource: defineRasterResourceId(`studio.example/${font.shapingHash}/${raster.rasterKey}`),
-      inset: readInset(raster),
+      inset: extension.inset,
       colors,
       glyphCount: font.glyphCount,
     };
@@ -453,9 +128,12 @@ export const exampleTechnique: RasterTechnique<
 });
 ```
 
-`RasterTechnique` has no resource generic. The decoded `Data` type carries the data needed by the portable compiler, while the resource payload type is inferred at `registerRasterPlanProgram` from the compiler's `retain(declaredName, key, resource)` call shape.
+`RasterTechnique` does not carry a resource generic or renderer object. Resource type is inferred where the portable font
+compiler calls `retain()`. Decoder inputs are validated before returning; malformed artifacts never become plan data.
 
-### Schema: one physical source of truth
+## 2. Define one physical schema
+
+The schema is the source of truth shared by policy authoring and shader variants.
 
 ```ts
 import { defineTechniqueSchema, id } from '@pmndrs/glyph/core';
@@ -465,9 +143,21 @@ export const exampleSchema = defineTechniqueSchema({
   scope: 'glyph',
   binding: { f32: ['inset', 'red', 'green', 'blue', 'alpha'] },
   buffers: {
-    origin: { id: id('buffer', 'studio.example/origin'), scalar: 'f32', lanes: ['left', 'top'] },
-    size: { id: id('buffer', 'studio.example/size'), scalar: 'f32', lanes: ['widthX', 'heightY'] },
-    color: { id: id('buffer', 'studio.example/color'), scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+    origin: {
+      id: id('buffer', 'studio.example/origin'),
+      scalar: 'f32',
+      lanes: ['left', 'top'],
+    },
+    size: {
+      id: id('buffer', 'studio.example/size'),
+      scalar: 'f32',
+      lanes: ['widthX', 'heightY'],
+    },
+    color: {
+      id: id('buffer', 'studio.example/color'),
+      scalar: 'f32',
+      lanes: ['red', 'green', 'blue', 'alpha'],
+    },
   },
   resources: {
     glyphGeometry: {
@@ -486,214 +176,163 @@ export const exampleSchema = defineTechniqueSchema({
 });
 ```
 
-`defineTechniqueSchema` validates and freezes buffer ids, scalar kinds, lane counts, binding names, resource declarations, and optional glyph-origin metadata. `schemaPolicyBuffers(schema)` later lowers the same declaration into the engine's physical policy-buffer list.
+IDs are branded numbers produced from stable names. Authors do not choose numeric values. Buffer IDs matter because policy
+stores and renderer shader bindings reference the same slot. Capability-set IDs and runtime binding IDs are automatic.
 
-### Portable policy body and font compiler
+Geometry has two valid meanings:
 
-```ts
-import { f32, registerRasterPlanProgram, techniqueProgram, type RasterPlanProgram } from '@pmndrs/glyph/core';
+- synthetic geometry tells the renderer to generate the declared primitive, such as the canonical quad;
+- supplied geometry carries validated GLB-like vertex views, accessors, attributes, optional indices, topology, and draw
+  range as immutable portable data.
 
-export const examplePlanProgram: RasterPlanProgram<typeof exampleTechnique, typeof exampleSchema> =
-  registerRasterPlanProgram({
-    technique: exampleTechnique,
-    schema: exampleSchema,
-    programVariant: 0,
+Quad and synthetic quad remain distinct because a technique may either provide concrete quad geometry or ask the renderer
+to synthesize it. Hull-based Slug geometry and repeated/grouped Bitmap, MTSDF, and Slug resources use the same portable
+resource union; they do not depend on a Three fallback.
 
-    policyBody(system, _capabilities) {
-      const p = techniqueProgram(exampleSchema, { system });
-      const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
-      const { inset, red, green, blue, alpha } = p.binding;
-      const insetPixels = f32.mul(inset, fontSize);
-      const twiceInsetPixels = f32.mul(insetPixels, f32.const(2));
-      return p.compile({
-        origin: [f32.add(inlineOrigin, insetPixels), f32.sub(blockOrigin, insetPixels)],
-        size: [f32.sub(f32.mul(fontSize, f32.const(0.65)), twiceInsetPixels), f32.sub(fontSize, twiceInsetPixels)],
-        color: [
-          f32.mul(color.red, red),
-          f32.mul(color.green, green),
-          f32.mul(color.blue, blue),
-          f32.mul(color.alpha, alpha),
-        ],
-      });
-    },
+## 3. Implement the portable plan
 
-    compileFont(compiler) {
-      const data = compiler.font.data;
-      compiler.retain('glyphGeometry', data.resource, indexedUnitQuadGeometry);
-      return compiler.compile({
-        strikes: [0],
-        resource: () => data.resource,
-        f32: {
-          inset: () => data.inset,
-          red: (row) => data.colors[row * 4]! / 255,
-          green: (row) => data.colors[row * 4 + 1]! / 255,
-          blue: (row) => data.colors[row * 4 + 2]! / 255,
-          alpha: (row) => data.colors[row * 4 + 3]! / 255,
-        },
-      });
-    },
-  });
-```
-
-The compiler produces a core result:
+The plan combines a constrained policy-body factory with cold per-font compilation.
 
 ```ts
-interface CompiledRasterFont {
-  readonly binding: Uint8Array;
-  readonly resources: ReadonlyMap<RasterResourceId, PortableResource>;
-  readonly declaredResources: ReadonlyMap<string, readonly RasterResourceId[]>;
-}
-```
+import { f32, techniqueProgram, type RasterPlanProgram } from '@pmndrs/glyph/core';
 
-No `NodeMaterial`, GPU texture, Three program, or device object crosses this result. `loadedFontBindingBytes(font, identities)` is the byte-only projection used by both `Paragraph` and the Three runtime path, so custom techniques do not have two binding implementations.
-
-The closed `buffer`, `texture`, `texture-array`, `geometry`, and fixed-member `group` payload union is copied and validated at the `retain` call before the compiled result is returned. The schema's cardinality, required render resource, geometry resource, group members, and declared texture formats are checked in the same cold path; an opaque technique-private payload cannot cross this boundary.
-
-A registered raster plan currently declares at least one resource. The font-binding wire assigns a retained resource to each raster record; resource-free decoration remains an engine-owned primitive rather than a `RasterPlanProgram`.
-
-## 2. Implementing a policy
-
-The portable plan returns a `CompiledPolicyProgramBody`, not a complete `PolicyProgram`. A host finishes it with its own ids and capabilities.
-
-### Three policy assembly
-
-Three owns and names its system lanes with `id('buffer', ...)`; portable techniques never depend on their resulting wire
-numbers. The renderer integration exposes the transform contract through `threePolicyAbi` and consumes both declarations
-from `threeSystemBuffers` internally.
-
-```ts
-import { registerThreeRasterPlanProgram } from '@pmndrs/glyph/three';
-import { exampleTechnique, examplePlanProgram, exampleSchema } from 'studio-example-raster';
-import { exampleTslVariant } from 'studio-example-raster/tsl';
-
-registerThreeRasterPlanProgram({
+export const examplePlan: RasterPlanProgram<typeof exampleTechnique, typeof exampleSchema> = {
   technique: exampleTechnique,
   schema: exampleSchema,
-  variant: {
-    ...exampleTslVariant,
-    createMaterial(context) {
-      return createExampleMaterial(context);
-    },
+  programVariant: 0,
+  policyBody(system) {
+    const p = techniqueProgram(exampleSchema, { system });
+    const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+    const { inset, red, green, blue, alpha } = p.binding;
+    const insetPixels = f32.mul(inset, fontSize);
+    const twiceInset = f32.mul(insetPixels, f32.const(2));
+
+    return p.compile({
+      origin: [f32.add(inlineOrigin, insetPixels), f32.sub(blockOrigin, insetPixels)],
+      size: [f32.sub(f32.mul(fontSize, f32.const(0.65)), twiceInset), f32.sub(fontSize, twiceInset)],
+      color: [
+        f32.mul(color.red, red),
+        f32.mul(color.green, green),
+        f32.mul(color.blue, blue),
+        f32.mul(color.alpha, alpha),
+      ],
+    });
   },
+  compileFont(compiler) {
+    const data = compiler.font.data;
+    compiler.retain('glyphGeometry', data.resource, indexedUnitQuadGeometry);
+    return compiler.compile({
+      strikes: [0],
+      resource: () => data.resource,
+      f32: {
+        inset: () => data.inset,
+        red: (row) => data.colors[row * 4]! / 255,
+        green: (row) => data.colors[row * 4 + 1]! / 255,
+        blue: (row) => data.colors[row * 4 + 2]! / 255,
+        alpha: (row) => data.colors[row * 4 + 3]! / 255,
+      },
+    });
+  },
+};
+```
+
+`compileFont()` runs when a font is first bound for a runtime/host path, not once per frame or glyph. Its result is binding
+bytes plus constrained portable payloads. The runtime deduplicates shaping registration, while each renderer may realize
+the same payload separately for each physical device/context.
+
+The plan uses canonical pen origins. Historical ink-box-start placement was implementation cruft, not a second supported
+integration mode; renderer-neutral findings are applied back to Three rather than preserved as opt-in divergence.
+
+## 4. Register the portable half
+
+The technique package registers the plan without importing a renderer:
+
+```ts
+import { registerRasterPlanProgram } from '@pmndrs/glyph/core';
+import { examplePlan } from './portable.js';
+
+registerRasterPlanProgram(examplePlan);
+```
+
+The package marks `register.js` and its main entry as side effects. Importing the technique therefore installs the neutral
+plan. TypeGPU and TSL shader code remains behind explicit subpaths and is not pulled into that registration graph.
+
+## 5. Publish shader variants
+
+A shader variant restates the same named schema contract in one language. It does not assemble the host policy.
+
+```ts
+export const exampleTypeGpuVariant = Object.freeze({
+  language: 'typegpu',
+  techniqueId: exampleSchema.technique,
+  geometry: exampleSchema.render.geometry,
+  buffers: exampleSchema.buffers,
+  resources: exampleSchema.resources,
+  outputs: { color: 'rgba' },
 });
 ```
 
-The actual public package adapts this through `registerThreeRasterPlanProgram({ technique, variant })`. The application selects one compatible Three realization by registering it before the first runtime snapshot; the registry resolves the portable program by technique id, authenticates the variant's exact named buffers, resource formats, outputs, and geometry meaning, creates the host-owned Three `PolicyProgram`, and keeps the resource-to-program association in `/three`. The selected variant's `createMaterial(context)` receives named policy buffers and named portable resources; it does not own policy assembly or resource retention.
+The actual package exports equivalent implementations from:
 
-### A non-Three policy assembly
+- `@pmndrs/glyph-example-raster/typegpu` — typed TypeGPU vertex and fragment functions;
+- `@pmndrs/glyph-example-raster/tsl` — TSL node inputs and outputs for Three;
+- the main path — raster, schema, geometry, and registered portable plan only.
 
-The example renderer owns its system buffer names and creates its own capability set and `PolicyProgram`:
+A future WGSL or GLSL variant can be added without changing the raster, schema, plan, binding bytes, resource payloads, or
+render-plan protocol. An engine may consume any supplied variant or author its own against the named contract.
+
+## 6. Assemble an engine-owned policy
+
+The renderer parameterizes the portable body with its system lanes and supported capabilities.
 
 ```ts
-const EXAMPLE_STABLE_GLYPH_BUFFER_ID = id('buffer', 'glyph-example-renderer/stable-glyph');
-const EXAMPLE_RENDERER_PROGRAM_NAMESPACE = 'example-renderer';
-
-const exampleSystemBuffers = definePolicyBuffers({
-  stableGlyphId: { id: EXAMPLE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
+const system = definePolicyBuffers({
+  stableGlyphId: {
+    id: id('buffer', 'studio.renderer/stable-glyph'),
+    scalar: 'u32',
+    lanes: ['stableGlyphId'],
+  },
 });
 
-const capabilitySet = exampleCapabilitySet();
-const policyBytes = compileRenderPolicy({
+const capabilitySet = {
+  capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'],
+  maxBufferBytes: 16 * 1024 * 1024,
+  updateAlignment: 4,
+  coalesceGapBytes: 128,
+  rangeCallPenaltyBytes: 256,
+  maxBuffersPerDraw: 8,
+  maxResourcesPerDraw: 4,
+  maxIndirectDraws: 0,
+  fragmentationBudget: 8,
+  wholeBufferThresholdBasisPoints: 7_500,
+} as const;
+
+const policyFactory = (identities: RenderWireIdentityRegistry) => ({
   capabilitySets: [capabilitySet],
   programs: [
-    createRasterPolicyProgram(examplePlanProgram, {
-      namespace: EXAMPLE_RENDERER_PROGRAM_NAMESPACE,
-      system: exampleSystemBuffers,
+    createRasterPolicyProgram(examplePlan, {
+      namespace: 'studio.renderer',
+      system,
       capabilitySet,
       transformMode: 'direct',
       allocationMode: 'ordered',
+      identityRegistry: identities,
     }),
   ],
 });
+
+const policy = host.installPolicy(policyFactory);
 ```
 
-The portable body is reused; the policy numbers, capabilities, transform mode, and program identity are not.
+Three performs the same assembly in `/three`. It may expose a `createMaterial(context)` helper because material creation
+is a legitimate renderer responsibility. What it must not duplicate is portable schema, font compilation, policy body,
+or resource meaning. Three-specific system lanes remain described by `threePolicyAbi`; those host-owned values are not a
+portable core ABI.
 
-### What is a useful Three divergence?
+## 7. Implement the baker
 
-Three is allowed to diverge where the host has a real integration concern:
-
-- its policy reserves a transform-index lane and a stable-glyph-id lane;
-- its capability set and allocation mode reflect the Three/WebGPU submission path;
-- its retained resources become Three-side resources, and its material factory builds TSL/`NodeMaterial` objects from the realized buffers;
-- its runtime keeps the resource-to-program association needed to create and cache those materials.
-
-Those are host responsibilities, so keeping them in `/three` prevents the portable plan from importing Three concepts. A second engine may choose different system ids, capabilities, transform mode, or resource realization while consuming the same schema and policy body.
-
-The old example did not diverge for one of those reasons. It bundled a Three policy descriptor, a Three-shaped font compiler, and material creation because Three was the only completed host at the time. That made the first implementation convenient, but it also made the reusable part look renderer-owned. The old example's use of `inlineStart`/`blockStart` was another historical artifact: those are ink-box corners, while the first-party Three techniques use `inlineOrigin`/`blockOrigin` plus technique-specific bearings. The portable example now uses the canonical pen-origin model; there is no second opt-in placement DSL.
-
-The cleanup rule is therefore: discover a renderer-neutral invariant once in `/core`, then make Three consume it. Three should retain only policy assembly, resource realization, material creation, and its host registry; duplicated binding compilation, portable schemas, and portable policy bodies should disappear from `/three`.
-
-## 3. Implementing a raster
-
-The raster layer is the runtime, renderer-neutral side of the technique. It turns a validated registered artifact into typed data and stable resource identities.
-
-```mermaid
-sequenceDiagram
-  participant Font as Loaded font
-  participant Runtime as TextRuntime
-  participant Technique as RasterTechnique
-  participant Loader as Raster resource loader
-  participant Plan as RasterPlanProgram
-  participant Host as TextEngineHost
-
-  Font->>Runtime: loadFont({ raster: { technique, options } })
-  Runtime->>Technique: descriptor(options)
-  Runtime->>Technique: decode(registered font, registered raster)
-  Technique->>Loader: resource(bufferView or external URI)
-  Loader-->>Technique: validated bytes
-  Technique-->>Runtime: LoadedFont< technique, data >
-  Runtime->>Plan: compileFont(compiler)
-  Plan->>Host: compile binding bytes
-  Plan-->>Host: retain(resource id, portable data)
-```
-
-The resource id is a technique-owned identity, for example:
-
-```ts
-const resource = defineRasterResourceId(`studio.example/${font.shapingHash}/${raster.rasterKey}`);
-```
-
-At renderer realization time, the engine resolves that identity to its wire resource id and either uploads/materializes the retained payload or passes it to a renderer-specific resource factory. The example renderer demonstrates the seam with `ExampleRendererDevice`:
-
-```ts
-interface ExampleRendererDevice {
-  readonly shader: ExampleRendererShader;
-  prepareResources(resources: readonly ExampleRendererResourceInput[]): ExamplePendingResources;
-  prepareSubmission(drawList: ExampleDrawList): ExamplePendingSubmission;
-}
-```
-
-`RecordingExampleRendererDevice` is the deterministic CPU oracle. It keys buffers by `(id, generation)`, validates every
-resource, buffer, patch, primitive, and draw against the selected technique/program/variant, and releases only
-exact-generation retirements. `TypeGpuExampleRendererDevice` composes that validation with real TypeGPU resources: it
-uploads the supplied position, UV, and index accessors; stages policy-record buffers; creates the render pipeline; encodes
-an indexed instanced pass; and submits it to a real `GPUDevice`. `prepare*()` does not mutate accepted state, and
-`commit()` publishes the candidate only when the GPU command is accepted. A failed candidate is rejected; no earlier
-resource or command is substituted for it.
-
-### Executable evidence
-
-The example-renderer browser lab runtime-bakes Inter, compiles the portable binding, realizes the supplied indexed
-geometry and policy buffers, renders an initial `ExampleText`, updates its content and color, renders again, and reads the
-offscreen RGBA target after each submission. The reviewed run produced one draw in each frame, 7,740 then 6,588 visible
-pixels, 10,287 changed pixels, zero additional GPU submissions for the following idle frame, and one clear-only submission
-when the text was disposed. A final ordered readback observes zero visible pixels after that clear. Submission commit waits
-for validation acceptance but does not stall every frame on queue completion. The recording device remains a second CPU oracle for malformed-plan and transactional
-failure tests; it is not counted as pixel acceptance. The Three browser proof renders the same external technique on
-WebGPU and forced WebGL2 and rejects within- or cross-backend hash divergence.
-
-`pnpm scripts run benchmark:render-technique-lab` compares the generic Three path with Bitmap through one public
-`TextRuntime`. On the reviewed equal-12-instance Chromium run, generic host realization measured 4.38 ms cold and
-0.085/0.285 ms median/p95 retained; Bitmap measured 3.92 ms cold and 0.060/0.130 ms retained. Both retained one draw and
-its geometry. This lab measures CPU-side plan realization and publication, not renderer submission; timings are host
-observations, while equal nonzero instance count, draw count, and identity retention are enforced invariants.
-
-## 4. Implementing a baker
-
-The baker is an offline or runtime artifact producer. It should emit the extension data and resource bytes expected by the raster decoder; it does not create a policy or material.
-
-### Baker module
+The baker emits the extension metadata and bytes expected by the decoder. Discovery already follows the package manifest;
+no renderer adapter participates.
 
 ```ts
 import { defineRasterBaker, type RasterBakerModule } from '@pmndrs/glyph';
@@ -702,111 +341,94 @@ const exampleBaker: RasterBakerModule<'STUDIO_example', ExampleOptions, ExampleD
   kind: 'STUDIO_example',
   extension: 'STUDIO_example',
   version: 0,
-  descriptor: makeDescriptor,
+  descriptor: normalizeOptions,
   bake: bakeExampleArtifact,
 });
 
 export default exampleBaker;
 ```
 
-The bake implementation can be a Rust/Wasm core, a Node implementation, or another host implementation as long as it returns the validated artifact contract.
-
-### Direct bake
+Direct baking composes the module with the common artifact writer:
 
 ```ts
-import { bakeFont, rasterBake } from '@pmndrs/glyph/bake';
-import exampleBaker from '@pmndrs/glyph-example-raster/baker';
+import { rasterBake } from '@pmndrs/glyph';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import exampleBaker from 'studio-example-raster/baker';
 
 await bakeFont({
-  input: new URL('./Inter-Regular.ttf', import.meta.url),
-  output: './inter.font.glb',
-  font: { fontFaceIndex: 0 },
-  rasters: [
-    rasterBake(exampleBaker, {
-      packaging: { artifact: 'embedded', pages: 'embedded' },
-      options: { paletteSeed: 7 },
-    }),
-  ],
+  input: 'Inter-Regular.ttf',
+  output: 'Inter.font.glb',
+  rasters: [rasterBake(exampleBaker, { packaging: { artifact: 'embedded', pages: 'embedded' } })],
 });
 ```
 
-### Project discovery
+## 8. Integrate and render
 
-For project builds, discovery finds `defineFont()` declarations, reads each package's `package.json` `pmndrs.glyph` mapping, imports the declared baker, validates its kind/extension/version, and then hands the resolved plans to the same bake pipeline. No additional baker registry is needed for this technique-implementability path.
+The full callable runtime/host/session/target sequence is in
+[Integrate a renderer with Glyph](renderer-integration.md). In abbreviated form:
 
-```mermaid
-flowchart TD
-  Entry[Project entry] --> AST[Source discovery]
-  AST --> Definition[defineFont + raster request]
-  Definition --> Manifest[package.json\npmndrs.glyph mapping]
-  Manifest --> Import[Import baker module]
-  Import --> Validate[Validate kind / extension / version]
-  Validate --> Bake[Run RasterBakerModule.bake]
-  Bake --> Package[Package GLB + embedded/external resources]
+```ts
+const font = await loadFont({ input: { baked: bakedUrl }, raster: { technique: exampleTechnique } });
+const runtime = await createTextRuntime();
+const host = runtime.createTextEngineHost({ integration: 'studio.renderer' });
+const policy = host.installPolicy(policyFactory);
+const stack = host.bindFontStack(createFontStack(font));
+const session = host.createSession({ policy, target: () => planTarget, capabilitySet, limits, ...capacities });
+const text = session.createText({ font: stack, text: 'Portable', style: { fontSize: 64 } });
+
+text.update({ text: 'Portable renderer' });
+const metrics = text.layout();
+const glyphs = text.glyphs();
+const acceptance = session.publish();
 ```
 
-Runtime baking is a separate loader path: `RasterTechnique.runtimeBaker` is lazy-loaded by `TextRuntime` when a compatible baked artifact is unavailable or a source request explicitly asks for runtime baking.
+`layout()` may incur font/layout lookup on a cache miss. `glyphs()` may incur glyph lookup/positioning on a cache miss and
+always returns caller-owned columns. Their canonical constraint caches are bounded three-entry LRUs. Neither query
+renders. `publish()` calls the target with a borrowed plan by default; the target resolves resources, applies patches,
+realizes primitives, submits draws, and reports one atomic acceptance.
 
-## End-to-end ownership map
+## Renderer-resource flow
 
 ```mermaid
-flowchart TB
-  subgraph Portable[Portable package boundary]
-    Technique[RasterTechnique\nidentity + decode + dispose]
-    Schema[TechniqueSchema\nphysical buffers + lanes]
-    Body[policyBody(system, capabilities)]
-    Compiler[compileFont(compiler)]
-    Result[CompiledRasterFont\nbinding + portable resources]
-    Baker[RasterBakerModule\nartifact production]
-  end
+sequenceDiagram
+  participant Session
+  participant Target
+  participant Plan
+  participant Host
+  participant Device
 
-  subgraph Engine[Engine boundary]
-    Capabilities[PolicyCapabilitySet]
-    Policy[PolicyProgram\nengine ids + buffers + mode]
-    Host[TextEngineHost\narbitrary policy/binding bytes]
-    Device[Device\nresource realization + buffer writes + submit]
-  end
-
-  Schema --> Body
-  Body --> Policy
-  Compiler --> Result
-  Result --> Host
-  Capabilities --> Body
-  Capabilities --> Policy
-  Technique --> Compiler
-  Baker --> Technique
-  Policy --> Host
-  Host --> Device
+  Session->>Target: accept(candidate)
+  Target->>Plan: read resources/buffers/patches/primitives/draws
+  Target->>Host: candidate.acquirePayload(referenceId)
+  Host-->>Target: counted portable payload lease
+  Target->>Device: validate and stage physical resources
+  Target->>Device: encode patches and draws
+  Target->>Device: commit candidate
+  Device-->>Target: committed
+  Target-->>Session: accepted: true
+  Session->>Session: advance plan and publication fences
 ```
 
-### Practical checklist
+Resources are not “just put in a map.” The map is a renderer-owned cache keyed by the plan's numeric `(id, generation)`.
+Its value is the concrete texture, buffer, geometry, bind group, material, or pipeline created from the leased portable
+payload. Draw and primitive records reference those keys. Exact-generation retirements release the GPU value and payload
+lease; target disposal releases everything that remains.
 
-- Define the technique with `defineRasterTechnique`; keep decoder data renderer-neutral.
-- Give the technique one `defineTechniqueSchema`; do not repeat buffer ids or lane meanings in each engine.
-- Put shared math in `policyBody(system, capabilities)` and return a body, not a host-numbered `PolicyProgram`.
-- Put cold binding/resource composition in `compileFont`; call `retain()` for portable payloads only.
-- Register the portable plan with `registerRasterPlanProgram`.
-- In each engine, compose the body into that engine's `PolicyProgram` and add its own system buffers/capabilities.
-- Keep resource realization and material creation in the renderer integration.
-- Define a baker with `defineRasterBaker`; use `rasterBake()` for direct plans or `pmndrs.glyph` discovery for project builds.
-- Prove the complete path with a real loaded font, binding registration, resource realization, GPU submission, non-empty
-  draws, non-empty pixels, and a pixel-changing text update.
+## Evidence and deliberate boundaries
 
-## Relevant repository entry points
+The current implementation proves:
 
-| Concern                         | Entry point                                                    |
-| ------------------------------- | -------------------------------------------------------------- |
-| Portable technique contract     | `packages/glyph/src/raster-technique.ts`                       |
-| Technique schema                | `packages/glyph/src/core/technique-schema.ts`                  |
-| Policy DSL                      | `packages/glyph/src/core/policy-program.ts`                    |
-| Policy assembly                 | `packages/glyph/src/core/render-policy.ts`                     |
-| Portable plan registry/compiler | `packages/glyph/src/core/raster-plan-program.ts`               |
-| Shared font binding projection  | `packages/glyph/src/core/font-binding.ts`                      |
-| Three resource/material path    | `packages/glyph/src/three/plan-program-registry.ts`            |
-| Example portable technique      | `packages/glyph-example-raster/src/portable.ts`                |
-| Example TypeGPU shader          | `packages/glyph-example-raster/src/typegpu.ts`                 |
-| Example TSL shader              | `packages/glyph-example-raster/src/tsl.ts`                     |
-| Example TypeGPU device          | `packages/glyph-example-renderer/src/device.ts`                |
-| Baker API                       | `packages/glyph/src/bake.ts`                                   |
-| Project discovery               | `packages/glyph/src/discovery.ts`                              |
-| Acceptance path                 | `packages/glyph-example-renderer/tests/example-render.test.ts` |
+- a third-party package contains no Three integration code in its portable path;
+- TypeGPU and TSL variants consume the same named buffers, geometry, resources, and edge behavior;
+- Three manually registers the TSL realization through its public renderer registry;
+- the example renderer composes its own policy from the portable body;
+- a real `GPUDevice` receives supplied indexed geometry, instance buffers, and non-empty draws;
+- initial, updated, idle, rejected, disposed, checkpoint, and asynchronous-transfer paths have direct tests;
+- malformed schema, policy, plan framing, resource, geometry, identity, and lifecycle inputs fail at their call boundary;
+- renderer rejection preserves accepted state without stale substitution or automatic retry;
+- raw shaper offsets and enum numbers are not part of `/core` authoring or plan consumption;
+- Bitmap, MTSDF, Slug, and the external example use the same portable resource model.
+
+Renderer choices remain intentionally open. TypeGPU is the current portable shader proof, not a protocol lock-in. Canvas,
+WebGL, native GPU APIs, TSL, WGSL, GLSL, or another shader system can implement the same semantic plan and resource
+contract without changing the technique's portable half.

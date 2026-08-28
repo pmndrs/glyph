@@ -1,55 +1,50 @@
 import * as THREE from 'three/webgpu';
 
-import type { LoadedFont } from '../loaded-font.js';
-import { observeLoadedFontDispose } from '../loaded-font.js';
-import type { AnyRasterTechnique } from '../raster-technique.js';
+import type { Font } from '../font.js';
 import {
-  createTextRuntime,
-  type LoadedFontRequest,
-  type LoadedFontTechniques,
-  type LoadedFonts,
-  type LoadedFontsRequest,
-  type TextRuntime,
-} from '../text-runtime.js';
-import type { FontRegistry, RuntimeFontBake } from '../loader.js';
+  assertFontLibrary,
+  loadFont,
+  type FontLibrary,
+  type FontRequest,
+  type Fonts,
+  type FontTechniques,
+  type MultiRasterFontRequest,
+  type RuntimeFontBake,
+} from '../loader.js';
+import type { AnyRasterTechnique } from '../raster-technique.js';
+import { acquireThreeLoaderDomain } from './runtime-domain.js';
 
 export interface ThreeFontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;
-  /**
-   * Registers loaded fonts in a registry the application already owns. Without one the runtime creates its own, and a
-   * caller holding registry-scoped state cannot reach the fonts this loader produces.
-   */
-  readonly registry?: FontRegistry;
+  /** Optional application-owned immutable cache. The loader never disposes it. */
+  readonly library?: FontLibrary;
 }
 
-/** A font request that an application can cancel, matching the signal the core runtime already accepts. */
-export type ThreeLoadedFontRequest<Technique extends AnyRasterTechnique> = LoadedFontRequest<Technique> & {
+/** Font request accepted by the Three LoadingManager adapter, with cancellation. */
+export type ThreeLoadedFontRequest<Technique extends AnyRasterTechnique> = FontRequest<Technique> & {
   readonly signal?: AbortSignal;
 };
 
-interface RuntimeDomain {
-  readonly manager: THREE.LoadingManager;
-  readonly runtime: Promise<TextRuntime>;
-  readonly fonts: Set<LoadedFont<AnyRasterTechnique>>;
-  loaderCount: number;
-  disposed: boolean;
-}
+type LoaderDomain = ReturnType<typeof acquireThreeLoaderDomain>;
 
-const domains = new WeakMap<THREE.LoadingManager, RuntimeDomain>();
-
-export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, LoadedFontRequest<AnyRasterTechnique>> {
+/** Three loading-manager adapter that returns canonical root-package Font values. */
+export class FontLoader extends THREE.Loader<Font<AnyRasterTechnique>, FontRequest<AnyRasterTechnique>> {
   readonly #options: ThreeFontLoaderOptions;
-  #domain: RuntimeDomain | undefined;
+  #domain: LoaderDomain | undefined;
   #disposed = false;
 
   constructor(manager?: THREE.LoadingManager, options: ThreeFontLoaderOptions = {}) {
     super(manager);
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new TypeError('Three FontLoader options must be an object');
+    }
+    if (options.library !== undefined) assertFontLibrary(options.library, 'Three FontLoader library option');
     this.#options = options;
   }
 
   override load<Technique extends AnyRasterTechnique>(
     request: ThreeLoadedFontRequest<Technique>,
-    onLoad: (font: LoadedFont<Technique>) => void,
+    onLoad: (font: Font<Technique>) => void,
     _onProgress?: (event: ProgressEvent) => void,
     onError?: (error: unknown) => void,
   ): void {
@@ -72,28 +67,32 @@ export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Loa
   override loadAsync<Technique extends AnyRasterTechnique>(
     request: ThreeLoadedFontRequest<Technique>,
     onProgress?: (event: ProgressEvent) => void,
-  ): Promise<LoadedFont<Technique>> {
+  ): Promise<Font<Technique>> {
     return new Promise((resolve, reject) => this.load(request, resolve, onProgress, reject));
   }
 
-  async loadFontsAsync<const Techniques extends LoadedFontTechniques>(
-    request: LoadedFontsRequest<Techniques> & { readonly signal?: AbortSignal },
-  ): Promise<LoadedFonts<Techniques>> {
+  async loadFontsAsync<const Techniques extends FontTechniques>(
+    request: MultiRasterFontRequest<Techniques> & { readonly signal?: AbortSignal },
+  ): Promise<Fonts<Techniques>> {
     this.#assertActive();
     const item = requestInputUrl(request);
     this.manager.itemStart(item);
+    let fonts: Fonts<Techniques> | undefined;
     try {
       const { signal, ...requested } = request;
+      signal?.throwIfAborted();
       const domain = this.#runtimeDomain();
-      const runtime = await domain.runtime;
+      const normalized = normalizeRequests(requested, this.#options.runtimeBake);
+      const loaded =
+        this.#options.library?.loadFont(normalized, signal === undefined ? {} : { signal }) ??
+        loadFont(normalized, signal === undefined ? {} : { signal });
+      [fonts] = await Promise.all([loaded, domain.ready]);
       this.#assertActive();
       signal?.throwIfAborted();
-      const normalized = normalizeRequests(requested, this.#options.runtimeBake);
-      const fonts = await runtime.loadFont(normalized, signal === undefined ? {} : { signal });
-      this.#assertActive();
-      for (const font of fonts) trackFont(domain, font);
+      for (const font of fonts) domain.associate(font);
       return fonts;
     } catch (error) {
+      if (fonts !== undefined) for (const font of fonts) font.dispose();
       this.manager.itemError(item);
       throw error;
     } finally {
@@ -101,102 +100,94 @@ export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Loa
     }
   }
 
+  /** Associate an independently loaded root Font with this loader's ready Three domain. */
+  async initFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): Promise<Font<Technique>> {
+    this.#assertActive();
+    const domain = this.#runtimeDomain();
+    await domain.ready;
+    this.#assertActive();
+    domain.associate(font);
+    return font;
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    const domain = this.#domain;
+    this.#domain?.dispose();
     this.#domain = undefined;
-    if (domain !== undefined) {
-      domain.loaderCount -= 1;
-      maybeDisposeDomain(domain);
-    }
   }
 
   async #load<Technique extends AnyRasterTechnique>(
     request: ThreeLoadedFontRequest<Technique>,
-  ): Promise<LoadedFont<Technique>> {
+  ): Promise<Font<Technique>> {
     const { signal, ...requested } = request;
-    const domain = this.#runtimeDomain();
-    const runtime = await domain.runtime;
-    this.#assertActive();
     signal?.throwIfAborted();
-    const normalized = normalizeRequest(requested as LoadedFontRequest<Technique>, this.#options.runtimeBake);
-    const font = await runtime.loadFont(normalized, signal === undefined ? {} : { signal });
-    this.#assertActive();
-    trackFont(domain, font);
-    return font;
+    const domain = this.#runtimeDomain();
+    const normalized = normalizeRequest(requested, this.#options.runtimeBake);
+    const loaded =
+      this.#options.library?.loadFont(normalized, signal === undefined ? {} : { signal }) ??
+      loadFont(normalized, signal === undefined ? {} : { signal });
+    let font: Font<Technique> | undefined;
+    try {
+      [font] = await Promise.all([loaded, domain.ready]);
+      this.#assertActive();
+      signal?.throwIfAborted();
+      domain.associate(font);
+      return font;
+    } catch (error) {
+      font?.dispose();
+      throw error;
+    }
   }
 
-  #runtimeDomain(): RuntimeDomain {
-    if (this.#domain !== undefined) return this.#domain;
-    let domain = domains.get(this.manager);
-    if (domain === undefined || domain.disposed) {
-      domain = {
-        manager: this.manager,
-        runtime: createTextRuntime({
-          ...(this.#options.registry === undefined ? {} : { registry: this.#options.registry }),
-        }),
-        fonts: new Set(),
-        loaderCount: 0,
-        disposed: false,
-      };
-      domains.set(this.manager, domain);
-      void domain.runtime.catch(() => {
-        if (domains.get(this.manager) === domain) domains.delete(this.manager);
-      });
-    }
-    domain.loaderCount += 1;
-    this.#domain = domain;
-    return domain;
+  #runtimeDomain(): LoaderDomain {
+    this.#domain ??= acquireThreeLoaderDomain(this.manager);
+    return this.#domain;
   }
 
   #assertActive(): void {
-    if (this.#disposed) throw new Error('Three font loader has been disposed');
+    if (this.#disposed) throw new Error('Three FontLoader has been disposed');
   }
 }
 
 function normalizeRequest<Technique extends AnyRasterTechnique>(
-  request: LoadedFontRequest<Technique>,
+  request: FontRequest<Technique>,
   runtimeBake: RuntimeFontBake | undefined,
-): LoadedFontRequest<Technique> {
-  if ('source' in request.input && request.input.runtimeBake === undefined) {
+): FontRequest<Technique> {
+  if (
+    typeof request.input === 'object' &&
+    request.input !== null &&
+    'source' in request.input &&
+    !('runtimeBake' in request.input)
+  ) {
     if (runtimeBake === undefined) throw new TypeError('source font loading requires a runtime font baker');
-    return { ...request, input: { ...request.input, runtimeBake } };
+    return { ...request, input: { source: request.input.source, runtimeBake } };
   }
   return request;
 }
 
-function normalizeRequests<const Techniques extends LoadedFontTechniques>(
-  request: LoadedFontsRequest<Techniques>,
+function normalizeRequests<const Techniques extends FontTechniques>(
+  request: MultiRasterFontRequest<Techniques>,
   runtimeBake: RuntimeFontBake | undefined,
-): LoadedFontsRequest<Techniques> {
-  if ('source' in request.input && request.input.runtimeBake === undefined) {
+): MultiRasterFontRequest<Techniques> {
+  if (
+    typeof request.input === 'object' &&
+    request.input !== null &&
+    'source' in request.input &&
+    !('runtimeBake' in request.input)
+  ) {
     if (runtimeBake === undefined) throw new TypeError('source font loading requires a runtime font baker');
-    return { ...request, input: { ...request.input, runtimeBake } };
+    return { ...request, input: { source: request.input.source, runtimeBake } };
   }
   return request;
 }
 
-function requestUrl<Technique extends AnyRasterTechnique>(request: LoadedFontRequest<Technique>): string {
+function requestUrl<Technique extends AnyRasterTechnique>(request: FontRequest<Technique>): string {
   return requestInputUrl(request);
 }
 
-function requestInputUrl(request: { readonly input: LoadedFontRequest<AnyRasterTechnique>['input'] }): string {
-  return String('baked' in request.input ? request.input.baked : request.input.source);
-}
-
-function trackFont(domain: RuntimeDomain, font: LoadedFont<AnyRasterTechnique>): void {
-  if (domain.fonts.has(font)) return;
-  domain.fonts.add(font);
-  observeLoadedFontDispose(font, () => {
-    domain.fonts.delete(font);
-    maybeDisposeDomain(domain);
-  });
-}
-
-function maybeDisposeDomain(domain: RuntimeDomain): void {
-  if (domain.disposed || domain.loaderCount !== 0 || domain.fonts.size !== 0) return;
-  domain.disposed = true;
-  if (domains.get(domain.manager) === domain) domains.delete(domain.manager);
-  void domain.runtime.then((runtime) => runtime.dispose());
+function requestInputUrl(request: { readonly input: FontRequest<AnyRasterTechnique>['input'] }): string {
+  if (typeof request.input === 'string' || request.input instanceof URL) return String(request.input);
+  if ('baked' in request.input && request.input.baked !== null) return String(request.input.baked);
+  return String(request.input.source);
 }

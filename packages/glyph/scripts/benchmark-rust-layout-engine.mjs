@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "glyph:rust-layout-benchmark",
   "summary": "Measures the complete retained Rust text_update path with real font data and render-plan publication.",
-  "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, --corpus (latin|cjk), --allocation, --wasm, and --json.",
+  "requirements": "Built @pmndrs/glyph and @pmndrs/glyph/bake packages. Accepts --glyphs, --reps, --warmup, --case, --technique, --corpus, --allocation, --wasm, --json, and --samples.",
   "writes": "stdout and the optional JSON report path"
 } */
 import { createHash } from 'node:crypto';
@@ -411,7 +411,9 @@ function printReport(caseReports) {
   console.log(
     'suffix-edit matches the TypeScript text benchmark; localized-edit replaces one code unit; localized-splice alternates one middle insertion/deletion.',
   );
-  console.log(`Wasm memory after retained high-water mark: ${(memory.buffer.byteLength / 1024 / 1024).toFixed(2)} MiB`);
+  console.log(
+    `Wasm linear-memory high-water (not live heap): ${(memory.buffer.byteLength / 1024 / 1024).toFixed(2)} MiB`,
+  );
 }
 
 function formatBytes(value) {

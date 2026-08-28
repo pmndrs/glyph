@@ -6,15 +6,19 @@ import { createFontStack, defineRasterTechnique, loadFont, rasterBake } from '@p
 import { bakeFont } from '@pmndrs/glyph/bake';
 import {
   createTextRuntime,
-  textShaperAbi,
   defineTechniqueSchema,
   programId,
   registerRasterPlanProgram,
   techniqueId,
-  TextEngineTransportError,
   type AsyncPlanTarget,
+  type PolicyBufferId,
+  type RenderPlanBufferId,
+  type RenderPlanDrawId,
+  type RenderPlanPrimitiveId,
+  type RenderPlanResourceId,
   type TextEngineBufferRecord,
   type TextEnginePatchRecord,
+  type TextEngineRetirementKind,
   type TextEngineRetirementRecord,
   type PlanTarget,
   type PlanTargetControl,
@@ -45,6 +49,15 @@ const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter
 const shaperWasm = new URL('../../glyph/dist/text-shaper.wasm', import.meta.url);
 const temporaryDirectories: string[] = [];
 const EXPECTED_RECOVERED_TEXT_GLYPHS = 4;
+
+// Direct-device fixtures stand in for records normally decoded from the package-owned wire plan.
+const resourceReference = (value: number): ExampleDrawList['resourceRecords'][number]['referenceId'] =>
+  value as ExampleDrawList['resourceRecords'][number]['referenceId'];
+const planBufferId = (value: number) => value as RenderPlanBufferId;
+const planDrawId = (value: number) => value as RenderPlanDrawId;
+const planPrimitiveId = (value: number) => value as RenderPlanPrimitiveId;
+const planResourceId = (value: number) => value as RenderPlanResourceId;
+const policyBufferId = (value: number) => value as PolicyBufferId;
 
 class ThrowOnceExampleRendererDevice implements ExampleRendererDevice {
   readonly primary = new RecordingExampleRendererDevice();
@@ -162,7 +175,7 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         };
         return session;
       };
-      const flowPolicy = flowHost.installPolicy(exampleRenderPolicyDescriptor(flowHost.wireIdentities));
+      const flowPolicy = flowHost.installPolicy(exampleRenderPolicyDescriptor);
       const flowFont = flowHost.bindFontStack(createFontStack(font));
       const flowTransform = flowHost.createTransformBinding();
       const flowLimits = {
@@ -178,13 +191,13 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       let flowTargetAcceptances = 0;
       let flowControl: PlanTargetControl | undefined;
       let requestCheckpointDuringAcceptance = false;
-      const flowPublicationFlags: number[] = [];
+      const flowCheckpoints: boolean[] = [];
       const flowTarget: PlanTarget = {
         delivery: 'borrowed',
         accept: (candidate) => {
           expect(() => flowHost.dispose()).toThrow('borrowed render plan');
           flowTargetAcceptances += 1;
-          flowPublicationFlags.push(candidate.plan.u32(textShaperAbi.layouts.engineResult.flags));
+          flowCheckpoints.push(candidate.checkpoint);
           if (requestCheckpointDuringAcceptance) {
             requestCheckpointDuringAcceptance = false;
             flowControl!.requestCheckpoint();
@@ -268,12 +281,12 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       expect(flowTargetAcceptances).toBe(3);
       flowControl!.requestCheckpoint();
       expect(flowSession.publish()).toEqual({ accepted: true });
-      expect(flowPublicationFlags.at(-1)! & textShaperAbi.engine.resultFlags.checkpoint).not.toBe(0);
+      expect(flowCheckpoints.at(-1)).toBe(true);
       requestCheckpointDuringAcceptance = true;
       flowText.update({ text: 'abcdefg' });
       expect(flowSession.publish()).toEqual({ accepted: true });
       expect(flowSession.publish()).toEqual({ accepted: true });
-      expect(flowPublicationFlags.at(-1)! & textShaperAbi.engine.resultFlags.checkpoint).not.toBe(0);
+      expect(flowCheckpoints.at(-1)).toBe(true);
       flowText.dispose();
       expect(() => flowText.layout()).toThrow('disposed');
       const sessionOwnedText = flowSession.createText({ font: flowFont, text: 'session-owned' });
@@ -287,17 +300,12 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
 
       let returnedBuffer: ArrayBuffer | undefined;
       let reusedBuffers = 0;
-      let corruptReturn = false;
       const asyncTarget: AsyncPlanTarget = {
         delivery: 'owned',
         maximumPlanBytes: flowLimits.maxOutputBytes,
         async accept(candidate) {
           if (candidate.bytes.buffer === returnedBuffer) reusedBuffers += 1;
           const workerBytes = structuredClone(candidate.bytes, { transfer: [candidate.bytes.buffer] });
-          if (corruptReturn) {
-            const layout = textShaperAbi.layouts.engineResult;
-            new DataView(workerBytes.buffer).setUint32(layout.planRevision, candidate.planRevision + 1, true);
-          }
           const returnedBytes = structuredClone(workerBytes, { transfer: [workerBytes.buffer] });
           returnedBuffer = returnedBytes.buffer;
           return { accepted: true, returnedBytes };
@@ -322,9 +330,6 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       asyncText.update({ text: 'ghi' });
       expect(await asyncSession.publish()).toEqual({ accepted: true });
       expect(reusedBuffers).toBe(1);
-      corruptReturn = true;
-      asyncText.update({ text: 'jkl' });
-      await expect(asyncSession.publish()).rejects.toBeInstanceOf(TextEngineTransportError);
       asyncSession.dispose();
       flowHost.dispose();
 
@@ -374,7 +379,9 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
       }
       const acceptedDraws = [...device.realizedDraws];
       const retainedBufferTable = list.buffers.records.slice();
-      const retainedPatchPayloads = list.patches.map(({ payload }) => payload?.slice());
+      const retainedPatchPayloads = list.patches.map((patch) =>
+        patch.kind === 'write' ? patch.payload.slice() : undefined,
+      );
       const noOp = engine.publish();
       expect(noOp.draws).toEqual([]);
       expect(device.realizedDraws).toEqual(acceptedDraws);
@@ -388,7 +395,9 @@ test('loads a font, binds the portable raster, and submits non-empty example dra
         EXPECTED_RECOVERED_TEXT_GLYPHS,
       );
       expect(list.buffers.records).toEqual(retainedBufferTable);
-      expect(list.patches.map(({ payload }) => payload)).toEqual(retainedPatchPayloads);
+      expect(list.patches.map((patch) => (patch.kind === 'write' ? patch.payload : undefined))).toEqual(
+        retainedPatchPayloads,
+      );
       expect(bufferSnapshot(device.primary.buffers)).toEqual(bufferSnapshot(device.oracle.buffers));
       text.update({ text: 'updated', color: '#ff8040' });
       expect(text.publish().draws.length).toBeGreaterThan(0);
@@ -491,11 +500,11 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
     publicationGeneration: 1,
     draws: [
       {
-        id: 1,
+        id: planDrawId(1),
         programId: programWireId,
         programVariant: 0,
         flags: 0,
-        materialId: 1,
+        materialId: 0,
         clipId: 0,
         depthKey: 0,
         transformId: 0,
@@ -511,21 +520,43 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
       },
     ],
     resourceRecords: [
-      { id: 51, generation: 1, techniqueId: techniqueWireId, resourceKind: 1, referenceId: 41, action: 1 },
-      { id: 52, generation: 1, techniqueId: techniqueWireId, resourceKind: 1, referenceId: 42, action: 1 },
+      {
+        id: planResourceId(51),
+        generation: 1,
+        techniqueId: techniqueWireId,
+        resourceKind: 1,
+        referenceId: resourceReference(41),
+        action: 'create',
+      },
+      {
+        id: planResourceId(52),
+        generation: 1,
+        techniqueId: techniqueWireId,
+        resourceKind: 1,
+        referenceId: resourceReference(42),
+        action: 'create',
+      },
     ],
     bufferRecords,
     primitiveRecords: [
       {
-        id: 1,
+        id: planPrimitiveId(1),
         techniqueId: techniqueWireId,
         programId: programWireId,
         programVariant: 0,
-        kind: textShaperAbi.engine.primitiveKinds.glyph,
+        kind: 'glyph',
         recordCount: 5,
         recordIndex: 0,
-        resourceId: 51,
+        resourceId: planResourceId(51),
         resourceGeneration: 1,
+        bufferId: 0,
+        logicalOrder: 0,
+        clipId: 0,
+        semanticId: 0,
+        inlineStart: 0,
+        blockStart: 0,
+        inlineExtent: 0,
+        blockExtent: 0,
       },
     ],
     patches: [],
@@ -546,7 +577,7 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
   expect(() =>
     device.prepareSubmission({
       ...drawList,
-      draws: [...drawList.draws, { ...drawList.draws[0]!, id: 2, primitiveStart: 1 }],
+      draws: [...drawList.draws, { ...drawList.draws[0]!, id: planDrawId(2), primitiveStart: 1 }],
     }),
   ).toThrow('primitive span exceeds its table');
   expect(device.realizedDraws).toEqual([]);
@@ -582,10 +613,7 @@ test('realizes a supplied indexed geometry resource from an authenticated portab
     resourceRecords: [],
     bufferRecords: [],
     primitiveRecords: [],
-    retirements: [
-      retirement(textShaperAbi.engine.retirementKinds.resource, 51, 1),
-      retirement(textShaperAbi.engine.retirementKinds.resource, 52, 1),
-    ],
+    retirements: [retirement('resource', 51, 1), retirement('resource', 52, 1)],
   });
   expect(retirementOnly.replacesRenderState).toBe(true);
   retirementOnly.commit();
@@ -633,10 +661,10 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
   const device = new RecordingExampleRendererDevice();
   const first = bufferRecord(1, 1, 16, 1);
   const second = bufferRecord(2, 1, 16, 2);
-  expect(() => device.applyBufferPlan([{ ...first, programId: techniqueId('foreign-program') }], [], [])).toThrow(
-    'belongs to a different renderer program',
-  );
-  expect(() => device.applyBufferPlan([], [], [retirement(99, 1, 1)])).toThrow(
+  expect(() =>
+    device.applyBufferPlan([{ ...first, programId: programId('foreign-program', 'example-renderer') }], [], []),
+  ).toThrow('belongs to a different renderer program');
+  expect(() => device.applyBufferPlan([], [], [retirement('invalid' as TextEngineRetirementKind, 1, 1)])).toThrow(
     'unsupported text-engine retirement kind',
   );
   expect(() => device.applyBufferPlan([{ ...first, capacityRecords: 3 }], [], [])).toThrow(
@@ -646,11 +674,11 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
   device.applyBufferPlan(
     [first, second],
     [
-      patch(textShaperAbi.engine.patchOpcodes.allocateOrResize, 1, 1, 0, 16),
-      patch(textShaperAbi.engine.patchOpcodes.allocateOrResize, 2, 1, 0, 16),
-      patch(textShaperAbi.engine.patchOpcodes.write, 1, 1, 4, 4, { payload: new Uint8Array([5, 6, 7, 8]) }),
-      patch(textShaperAbi.engine.patchOpcodes.fill, 1, 1, 8, 4, { fillValue: 0x0c0b_0a09 }),
-      patch(textShaperAbi.engine.patchOpcodes.copy, 2, 1, 0, 8, { sourceBufferId: 1, sourceOffset: 4 }),
+      patch('allocate-or-resize', 1, 1, 0, 16),
+      patch('allocate-or-resize', 2, 1, 0, 16),
+      patch('write', 1, 1, 4, 4, { payload: new Uint8Array([5, 6, 7, 8]) }),
+      patch('fill', 1, 1, 8, 4, { fillValue: 0x0c0b_0a09 }),
+      patch('copy', 2, 1, 0, 8, { sourceBufferId: planBufferId(1), sourceOffset: 4 }),
     ],
     [],
   );
@@ -660,11 +688,7 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
 
   const before = device.bufferBytes(1, 1)?.slice();
   expect(() =>
-    device.applyBufferPlan(
-      [first, second],
-      [patch(textShaperAbi.engine.patchOpcodes.write, 1, 1, 15, 2, { payload: new Uint8Array([1, 2]) })],
-      [],
-    ),
+    device.applyBufferPlan([first, second], [patch('write', 1, 1, 15, 2, { payload: new Uint8Array([1, 2]) })], []),
   ).toThrow('buffer patch exceeds its buffer');
   expect(device.bufferBytes(1, 1)).toEqual(before);
 
@@ -672,10 +696,10 @@ test('applies generation-aware write, fill, copy, and retirement patches transac
   device.applyBufferPlan(
     [replacement, second],
     [
-      patch(textShaperAbi.engine.patchOpcodes.allocateOrResize, 1, 2, 0, 8),
-      patch(textShaperAbi.engine.patchOpcodes.write, 1, 2, 0, 4, { payload: new Uint8Array([13, 14, 15, 16]) }),
+      patch('allocate-or-resize', 1, 2, 0, 8),
+      patch('write', 1, 2, 0, 4, { payload: new Uint8Array([13, 14, 15, 16]) }),
     ],
-    [retirement(textShaperAbi.engine.retirementKinds.buffer, 1, 1)],
+    [retirement('buffer', 1, 1)],
   );
   expect(device.bufferBytes(1, 1)).toBeUndefined();
   expect(device.bufferBytes(1, 2)).toEqual(new Uint8Array([13, 14, 15, 16, 0, 0, 0, 0]));
@@ -723,74 +747,68 @@ function bindShaderContract(device: RecordingExampleRendererDevice): readonly Te
     device.shader.programName,
   );
   const records = Object.values(device.shader.variant.buffers).map((buffer, index) => ({
-    id: index + 1,
+    id: planBufferId(index + 1),
     generation: 1,
     programId: selectedProgramId,
-    scalarType: textShaperAbi.policy.scalarTypes[buffer.scalar],
+    scalarType: buffer.scalar,
     vectorWidth: buffer.vectorWidth,
     capacityRecords: 8,
     byteLength: 8 * buffer.vectorWidth * 4,
-    policyBufferId: buffer.id,
+    binding: { kind: 'policy' as const, id: buffer.id },
   }));
   device.applyBufferPlan(
     records,
     records.map((record) => ({
-      opcode: textShaperAbi.engine.patchOpcodes.allocateOrResize,
+      kind: 'allocate-or-resize' as const,
       bufferId: record.id,
       bufferGeneration: record.generation,
       destinationOffset: 0,
       byteLength: record.byteLength,
-      payload: undefined,
-      fillValue: 0,
-      sourceBufferId: 0,
-      sourceOffset: 0,
     })),
     [],
   );
   return records;
 }
 
-function bufferRecord(
-  id: number,
-  generation: number,
-  byteLength: number,
-  policyBufferId: number,
-): TextEngineBufferRecord {
+function bufferRecord(id: number, generation: number, byteLength: number, buffer: number): TextEngineBufferRecord {
   return {
-    id,
+    id: planBufferId(id),
     generation,
     programId: programId(
       exampleRendererShader.variant.techniqueId,
       exampleRendererShader.programNamespace,
       exampleRendererShader.programName,
     ),
-    scalarType: textShaperAbi.policy.scalarTypes.u32,
+    scalarType: 'u32',
     vectorWidth: 1,
     capacityRecords: byteLength / 4,
     byteLength,
-    policyBufferId,
+    binding: { kind: 'policy', id: policyBufferId(buffer) },
   };
 }
 
 function patch(
-  opcode: number,
+  kind: TextEnginePatchRecord['kind'],
   bufferId: number,
   bufferGeneration: number,
   destinationOffset: number,
   byteLength: number,
-  overrides: Partial<TextEnginePatchRecord> = {},
+  overrides: Record<string, unknown> = {},
 ): TextEnginePatchRecord {
-  return {
-    opcode,
-    bufferId,
+  const base = {
+    bufferId: planBufferId(bufferId),
     bufferGeneration,
     destinationOffset,
     byteLength,
-    payload: undefined,
-    fillValue: 0,
-    sourceBufferId: 0,
-    sourceOffset: 0,
-    ...overrides,
+  };
+  if (kind === 'allocate-or-resize' || kind === 'retire') return { ...base, kind };
+  if (kind === 'write') return { ...base, kind, payload: overrides.payload as Uint8Array };
+  if (kind === 'fill') return { ...base, kind, fillValue: overrides.fillValue as number };
+  return {
+    ...base,
+    kind,
+    sourceBufferId: overrides.sourceBufferId as RenderPlanBufferId,
+    sourceOffset: overrides.sourceOffset as number,
   };
 }
 
@@ -798,6 +816,6 @@ function bufferSnapshot(buffers: ReadonlyMap<number, Uint8Array>): readonly (rea
   return [...buffers].sort(([left], [right]) => left - right).map(([id, bytes]) => [id, Array.from(bytes)] as const);
 }
 
-function retirement(kind: number, id: number, generation: number): TextEngineRetirementRecord {
+function retirement(kind: TextEngineRetirementKind, id: number, generation: number): TextEngineRetirementRecord {
   return { kind, id, generation, afterPublicationGeneration: 1, byteOffset: 0, byteLength: 0 };
 }

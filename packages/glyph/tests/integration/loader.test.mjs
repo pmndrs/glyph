@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { after, before } from 'node:test';
 
-import { FontLoader, FontLoadError, FontRegistry } from '@pmndrs/glyph';
+import { FontLoader, FontLoadError, FontRegistry } from '../../dist/loader.js';
 import { bakeFont } from '@pmndrs/glyph/bake';
 import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';

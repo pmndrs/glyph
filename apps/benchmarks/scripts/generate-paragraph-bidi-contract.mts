@@ -1,7 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
-import { Paragraph } from '@pmndrs/glyph/core';
-import type { ParagraphStyle } from '@pmndrs/glyph';
+import { createParagraph, type ParagraphStyle } from '@pmndrs/glyph';
 
 import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts';
@@ -49,7 +48,7 @@ try {
     ['ltr', 'ABC مرحبا 123 DEF'],
     ['rtl', 'مرحبا ABC 123 عالم'],
   ] as const) {
-    const paragraph = createContractText(amiri, value, bidiStyle);
+    const paragraph = createContractText(amiri.font, value, bidiStyle);
     try {
       bidi[id] = {
         text: value,
@@ -88,7 +87,7 @@ try {
       overflow: 'ellipsis',
     },
   } as const satisfies Record<string, LegacyConstraints>;
-  const policyParagraph = createContractText(inter, policyText, policyStyle);
+  const policyParagraph = createContractText(inter.font, policyText, policyStyle);
   const policyCases: Record<string, unknown> = {};
   try {
     for (const [id, constraints] of Object.entries(policyInputs)) {
@@ -104,8 +103,8 @@ try {
   } as const satisfies { readonly text: string; readonly style: ParagraphStyle };
   const uikitPolicy = { wrap: 'word', overflow: 'clip' } as const satisfies LegacyConstraints;
   const uikitPolicyOnly = policyOnly(uikitPolicy);
-  const uikitParagraph = new Paragraph({
-    font: inter,
+  const uikitParagraph = await createParagraph({
+    font: inter.font,
     text: uikitInput.text,
     style: uikitInput.style,
     policy: uikitPolicyOnly,
@@ -136,14 +135,14 @@ try {
         amiri: {
           fixture: 'amiri-regular-v0',
           sourceSha256: 'ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7',
-          shapingHash: amiri.font.shapingHash,
+          shapingHash: amiri.shapingHash,
           sourceOracle: '../shaping/amiri-regular/harfrust.json',
           independentOracle: '../shaping/amiri-regular/harfbuzz.json',
         },
         inter: {
           fixture: 'inter-regular-v0',
           sourceSha256: '40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82',
-          shapingHash: inter.font.shapingHash,
+          shapingHash: inter.shapingHash,
         },
       },
       bidi,

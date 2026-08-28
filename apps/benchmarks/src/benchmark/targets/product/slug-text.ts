@@ -1,4 +1,4 @@
-import type { LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import type { slug } from '@pmndrs/glyph/three/slug';
 import { Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -24,7 +24,7 @@ interface SlugProductTargetResources {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly font: LoadedFont<typeof slug>;
+  readonly font: Font<typeof slug>;
   readonly lines: readonly Text<typeof slug>[];
   readonly configuration: SlugRasterConfiguration;
   readonly artifactBytes: number;
@@ -68,7 +68,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
   const canvas = document.createElement('canvas');
   const renderer = await createConfiguredRenderer({ canvas, width: WIDTH, height: HEIGHT, backend, dpr });
   let target: THREE.RenderTarget | undefined;
-  let font: LoadedFont<typeof slug> | undefined;
+  let font: Font<typeof slug> | undefined;
   const lines: Text<typeof slug>[] = [];
   try {
     const fontStarted = performance.now();
@@ -126,7 +126,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     scene.updateMatrixWorld(true);
     for (const line of lines) assertCommitted(line);
 
-    const configuration = slugDataConfiguration(font.data);
+    const configuration = slugDataConfiguration(loaded.data);
     const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 1_000);
     camera.position.z = 500;
     camera.updateProjectionMatrix();

@@ -1,13 +1,10 @@
 import type { Node, NodeMaterial, StorageInstancedBufferAttribute } from 'three/webgpu';
 
-import { textShaperAbi } from '../core.js';
 import {
-  compileLoadedRasterFont,
   createRasterPolicyProgram,
   RenderWireIdentityRegistry,
   resolveRasterPlanProgram,
   type AnyTechniqueSchema,
-  type CompiledRasterFont,
   type PolicyBufferDeclarations,
   type PolicyScalarKind,
   type PortableResource,
@@ -15,14 +12,14 @@ import {
   type TechniqueGeometryDeclaration,
   type TechniqueResourceDeclaration,
   type TechniqueResourceDeclarations,
+  type TextEngineScalarType,
 } from '../core.js';
-import type { LoadedFont } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import type { ThreeTextMaterial } from './material.js';
 import { threePolicyCapabilitySet, threeSystemBuffers } from './render-policy.js';
 
 export interface ThreePlanProgramBuffer {
-  readonly scalarType: number;
+  readonly scalarType: TextEngineScalarType;
   readonly vectorWidth: number;
   readonly attribute: StorageInstancedBufferAttribute;
 }
@@ -110,7 +107,6 @@ export interface CompiledThreeRasterPlanProgram {
   readonly techniqueId: number;
   readonly programId: number;
   readonly policy: import('../core.js').PolicyProgram;
-  compileFont(font: LoadedFont<AnyRasterTechnique>, identities: RenderWireIdentityRegistry): CompiledRasterFont;
   createMaterial(context: ThreePlanProgramMaterialContext): NodeMaterial;
 }
 
@@ -278,25 +274,15 @@ function liveSnapshotCount(): number {
   return count;
 }
 
+/** Three-owned semantic values used by renderer-specific shader adapters. */
 export interface ThreePolicyAbi {
-  readonly opcodes: typeof textShaperAbi.policy.opcodes;
-  readonly scalarTypes: typeof textShaperAbi.policy.scalarTypes;
-  readonly bufferUsage: typeof textShaperAbi.policy.bufferUsage;
-  readonly allocationStrategies: typeof textShaperAbi.policy.allocationStrategies;
-  readonly batchFields: typeof textShaperAbi.policy.batchFields;
-  readonly semanticF32Fields: typeof textShaperAbi.engine.semanticF32Fields;
-  readonly semanticU32Fields: typeof textShaperAbi.engine.semanticU32Fields;
+  readonly scalarTypes: Readonly<{ readonly f32: 'f32'; readonly u32: 'u32'; readonly u16: 'u16' }>;
   readonly transformBufferId: typeof threeSystemBuffers.transformIndex.id;
 }
 
+/** Three-owned policy metadata; raw shaper opcodes and layouts remain package-private. */
 export const threePolicyAbi: ThreePolicyAbi = Object.freeze({
-  opcodes: textShaperAbi.policy.opcodes,
-  scalarTypes: textShaperAbi.policy.scalarTypes,
-  bufferUsage: textShaperAbi.policy.bufferUsage,
-  allocationStrategies: textShaperAbi.policy.allocationStrategies,
-  batchFields: textShaperAbi.policy.batchFields,
-  semanticF32Fields: textShaperAbi.engine.semanticF32Fields,
-  semanticU32Fields: textShaperAbi.engine.semanticU32Fields,
+  scalarTypes: Object.freeze({ f32: 'f32', u32: 'u32', u16: 'u16' }),
   transformBufferId: threeSystemBuffers.transformIndex.id,
 });
 
@@ -324,15 +310,6 @@ function compileProgram(
     techniqueId: policy.techniqueId,
     programId: policy.programId,
     policy,
-    compileFont(font, bindingIdentities) {
-      if (font.technique.id !== program.technique.id) {
-        throw new TypeError('Three raster plan program received an incompatible loaded font');
-      }
-      const compiled = compileLoadedRasterFont(font, bindingIdentities);
-      if (compiled === undefined)
-        throw new Error(`no portable raster plan program is registered for "${font.technique.id}"`);
-      return compiled;
-    },
     createMaterial: (context) => program.variant.createMaterial(context),
   };
 }

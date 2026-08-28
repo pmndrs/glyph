@@ -17,19 +17,17 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { StrictMode, createElement } from 'react';
+import { StrictMode, createElement, useLayoutEffect } from 'react';
 
-import { FontRegistry } from '@pmndrs/glyph';
-import { createTextRuntime } from '@pmndrs/glyph/core';
+import { createFontLibrary } from '@pmndrs/glyph';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
+import { FontLoader } from '@pmndrs/glyph/three';
 import '../support/browser-globals.mjs';
 
-import { Text } from '@pmndrs/glyph/react';
+import { createUseFont, GlyphProvider, Text, useFont } from '@pmndrs/glyph/react';
+import { threeRuntimeDomainReport } from '../../dist/three/runtime-domain.js';
 
 const fontUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
-const shaperWasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
-
-const dataUrl = (bytes) => `data:model/gltf-binary;base64,${bytes.toString('base64')}`;
 
 // Three's WebGPU renderer drives its animation loop through a host context that node does
 // not provide. These tests assert lifecycle accounting, never rendering, so a minimal
@@ -40,33 +38,25 @@ globalThis.self ??= globalThis;
 globalThis.requestAnimationFrame ??= () => 0;
 globalThis.cancelAnimationFrame ??= () => undefined;
 
-/** Disposal reports outstanding leases through a warning; silence is the assertion. */
-function captureWarnings(run) {
-  const warnings = [];
-  const original = console.warn;
-  console.warn = (...args) => void warnings.push(args.join(' '));
-  try {
-    return { result: run(), warnings };
-  } finally {
-    console.warn = original;
-  }
-}
-
-async function loadRuntime() {
-  const runtime = await createTextRuntime({
-    registry: new FontRegistry(),
-    wasm: await readFile(shaperWasmUrl),
-  });
-  const font = await runtime.loadFont({
-    input: { baked: dataUrl(await readFile(fontUrl)) },
+async function loadFixture() {
+  const loader = new FontLoader();
+  const font = await loader.loadAsync({
+    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
     raster: { technique: bitmap, options: { strikes: [16] } },
   });
-  return { runtime, font };
+  return {
+    font,
+    dispose() {
+      font.dispose();
+      loader.dispose();
+    },
+  };
 }
 
 test('mounting and unmounting a React Text returns every paragraph lease', async () => {
   const { create } = (await import('@react-three/test-renderer/webgpu')).default;
-  const { runtime, font } = await loadRuntime();
+  const fixture = await loadFixture();
+  const { font } = fixture;
   try {
     const renderer = await create(
       createElement(
@@ -81,22 +71,17 @@ test('mounting and unmounting a React Text returns every paragraph lease', async
     );
     await renderer.unmount();
 
-    // If the reconciler released the lease, teardown has nothing to force-release and
-    // says nothing. A warning here means the adapter leaked a paragraph lease.
-    const { warnings } = captureWarnings(() => runtime.dispose());
-    assert.deepEqual(
-      warnings.filter((line) => line.includes('live paragraph lease')),
-      [],
-      'unmounting must return the paragraph lease before the runtime is torn down',
-    );
+    fixture.dispose();
+    assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
   } finally {
-    if (!font.disposed) runtime.dispose();
+    fixture.dispose();
   }
 });
 
 test('StrictMode remount cycles balance their paragraph leases', async () => {
   const { create } = (await import('@react-three/test-renderer/webgpu')).default;
-  const { runtime, font } = await loadRuntime();
+  const fixture = await loadFixture();
+  const { font } = fixture;
   try {
     // StrictMode double-invokes and, in development, mounts/unmounts/remounts. Repeating
     // the whole cycle several times would compound any per-mount imbalance into a warning
@@ -121,25 +106,17 @@ test('StrictMode remount cycles balance their paragraph leases', async () => {
       await renderer.unmount();
     }
 
-    const { warnings } = captureWarnings(() => runtime.dispose());
-    assert.deepEqual(
-      warnings.filter((line) => line.includes('live paragraph lease')),
-      [],
-      'three StrictMode mount/unmount cycles must leave no outstanding lease',
-    );
+    fixture.dispose();
+    assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
   } finally {
-    if (!font.disposed) runtime.dispose();
+    fixture.dispose();
   }
 });
 
-test('a runtime torn down before its paragraphs unmount stays quiet on the second pass', async () => {
-  // The deferred-disposal ordering, driven through React rather than by hand: the
-  // application tears the runtime down while the tree is still mounted, and the
-  // reconciler disposes afterwards. Teardown force-releases and says so once; the
-  // unmount that follows must not throw, because r3f would swallow the error and the
-  // same code path is fatal in plain Three.
+test('user font and loader handles may dispose before React releases its Text lease', async () => {
   const { create } = (await import('@react-three/test-renderer/webgpu')).default;
-  const { runtime, font } = await loadRuntime();
+  const fixture = await loadFixture();
+  const { font } = fixture;
   const renderer = await create(
     createElement(
       Text,
@@ -152,11 +129,139 @@ test('a runtime torn down before its paragraphs unmount stays quiet on the secon
     ),
   );
 
-  const { warnings } = captureWarnings(() => runtime.dispose());
-  assert.ok(
-    warnings.some((line) => line.includes('live paragraph lease')),
-    'tearing down under a live tree must report the force-release',
-  );
-  await renderer.unmount();
+  fixture.dispose();
   assert.equal(font.disposed, true);
+  assert.equal(threeRuntimeDomainReport().active, true, 'the mounted Text keeps its renderer domain alive');
+  await renderer.unmount();
+  fixture.dispose();
+  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
 });
+
+test('library-bound React consumers receive independent Font leases under StrictMode', async () => {
+  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const library = createFontLibrary();
+  const fontHook = createUseFont(library);
+  const request = {
+    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  };
+  const observed = new Map();
+  await fontHook.preload(request);
+  const renderer = await create(hookFontTree(fontHook, request, observed, ['first', 'second']));
+  try {
+    await waitFor(() => observed.size === 2 && observed.get('first') !== observed.get('second'));
+    const first = observed.get('first');
+    const second = observed.get('second');
+    assert.ok(first !== undefined && second !== undefined);
+    assert.equal(first.disposed, false);
+    assert.equal(second.disposed, false);
+
+    await renderer.update(hookFontTree(fontHook, request, observed, ['second']));
+    await waitFor(() => first.disposed && observed.get('second') === second);
+    assert.equal(second.disposed, false, 'unmounting one consumer must not dispose its sibling lease');
+  } finally {
+    await renderer.unmount();
+    library.dispose();
+  }
+  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+});
+
+test('clearing a React font resource leaves its mounted consumer lease live', async () => {
+  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const library = createFontLibrary();
+  const fontHook = createUseFont(library);
+  const request = {
+    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  };
+  const observed = new Map();
+  await fontHook.preload(request);
+  const renderer = await create(hookFontTree(fontHook, request, observed, ['mounted']));
+  try {
+    await waitFor(() => observed.has('mounted'));
+    const mounted = observed.get('mounted');
+    assert.ok(mounted !== undefined);
+    fontHook.clear(request);
+    await Promise.resolve();
+    assert.equal(mounted.disposed, false, 'clear releases the Suspense owner, not mounted leases');
+  } finally {
+    await renderer.unmount();
+    library.dispose();
+  }
+  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+});
+
+test('a provider-scoped library survives StrictMode replay and releases its runtime domain', async () => {
+  const { create, waitFor } = await import('@react-three/test-renderer/webgpu');
+  const library = createFontLibrary();
+  const request = {
+    input: { baked: { bytes: await readFile(fontUrl), ownership: 'copy' } },
+    raster: { technique: bitmap, options: { strikes: [16] } },
+  };
+  const observed = new Map();
+  await createUseFont(library).preload(request);
+  const renderer = await create(
+    createElement(
+      StrictMode,
+      null,
+      createElement(
+        GlyphProvider,
+        { library },
+        createElement(ProviderFontText, { name: 'provider', observed, request }),
+      ),
+    ),
+  );
+  await waitFor(() => observed.has('provider'));
+  assert.equal(observed.get('provider')?.disposed, false);
+  await renderer.unmount();
+  library.dispose();
+  assert.deepEqual(threeRuntimeDomainReport(), { active: false, loaders: 0, fonts: 0, leases: 0 });
+});
+
+function hookFontTree(fontHook, request, observed, names) {
+  return createElement(
+    StrictMode,
+    null,
+    names.map((name) => createElement(HookFontText, { fontHook, key: name, name, observed, request })),
+  );
+}
+
+function HookFontText({ fontHook, name, observed, request }) {
+  const font = fontHook(request);
+  useLayoutEffect(() => {
+    observed.set(name, font);
+    return () => {
+      if (observed.get(name) === font) observed.delete(name);
+    };
+  }, [font, name, observed]);
+  return createElement(
+    Text,
+    {
+      font,
+      name,
+      style: { fontSize: 20, lineHeight: 1.25 },
+      contentBox: { width: { mode: 'exact', size: 300 }, wrap: 'word' },
+    },
+    name,
+  );
+}
+
+function ProviderFontText({ name, observed, request }) {
+  const font = useFont(request);
+  useLayoutEffect(() => {
+    observed.set(name, font);
+    return () => {
+      if (observed.get(name) === font) observed.delete(name);
+    };
+  }, [font, name, observed]);
+  return createElement(
+    Text,
+    {
+      font,
+      name,
+      style: { fontSize: 20, lineHeight: 1.25 },
+      contentBox: { width: { mode: 'exact', size: 300 }, wrap: 'word' },
+    },
+    name,
+  );
+}

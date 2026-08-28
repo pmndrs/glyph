@@ -28,14 +28,14 @@ export type {
   FontInput,
   FontInputOf,
   FontMetrics,
+  RasterDecodeFont,
   FontRasterTechniqueOf,
   FontSourceOverride,
   FontToken,
-  RegisteredFont,
 } from './font.js';
 export { defineFont } from './font.js';
 
-export type { FontHandle, FontKey, FontSlot, LocalGlyphId, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
+export type { FontSlot, LocalGlyphId, RasterKey, Sha256Hex } from './identity.js';
 
 export { glyphFlags } from './layout.js';
 export type {
@@ -52,6 +52,8 @@ export type {
 } from './layout.js';
 
 export type { ParagraphLayoutPolicy, ParagraphConstraints } from './text-properties.js';
+export type { ParagraphOptions, ParagraphUpdate } from './paragraph.js';
+export { createParagraph, Paragraph } from './paragraph.js';
 
 export type {
   GlyphAdoption,
@@ -70,21 +72,18 @@ export type {
   FontLoadOptions,
   FontLibrary,
   FontLibraryOptions,
-  FontLoaderOptions,
   FontRasterRequests,
   FontRequest,
   Fonts,
   FontTechniques,
   LoadFontInput,
   MultiRasterFontRequest,
-  FontRegistryOptions,
-  RasterAttachOptions,
   RuntimeFontBake,
   RuntimeFontBakeRequest,
 } from './loader.js';
-export { createFontLibrary, FontLoader, FontLoadError, FontRegistry, loadFont } from './loader.js';
+export { createFontLibrary, FontLoadError, loadFont } from './loader.js';
 
-export type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
+export type { FontSelection, FontStack } from './loaded-font.js';
 export { createFontStack } from './loaded-font.js';
 
 export type {
@@ -119,18 +118,12 @@ export type {
   JsonValue,
   RasterKind,
   RasterKindOf,
-  RasterLoadOptions,
   RasterReference,
-  RasterResolver,
-  RasterResolverContext,
-  RasterResourceResolver,
-  RasterResourceResolverContext,
+  RasterDecodeArtifact,
   RasterResourceSource,
   RasterOptionsArgument,
-  RasterSelection,
   RasterSource,
   StaticNumberTuple,
-  RegisteredRaster,
   RuntimeRasterBakeRequest,
   RuntimeRasterBakerLoader,
   RuntimeRasterBakerModule,
@@ -154,12 +147,3 @@ export { defineRasterResourceId, defineRasterTechnique } from './raster-techniqu
 export type { RasterCoverage, RasterUnicodeRange } from './raster-coverage.js';
 
 export type { FontFeature, ResolvedFontFeature } from './font-feature.js';
-
-export type {
-  LoadedFontInput,
-  LoadedFontRasterRequests,
-  LoadedFontRequest,
-  LoadedFontTechniques,
-  LoadedFonts,
-  LoadedFontsRequest,
-} from './text-runtime.js';

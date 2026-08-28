@@ -21,6 +21,7 @@ import { preloadFontAssetUrls } from './authenticated-gzip';
 import type { BenchmarkFontAsset, BenchmarkFontAssetRequest, BitmapFixtureDensity } from './contracts';
 import {
   createFontDeliveryMetrics,
+  captureRasterTechniqueData,
   loadBakedFont,
   loadSourceFont,
   measuredRuntimeFontBake,
@@ -73,16 +74,17 @@ export async function preloadBitmapFontAssets(
 export async function loadBitmapFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'bitmap' }>,
 ): Promise<BitmapFontAsset> {
-  const { bitmapDensity, delivery, fixture, onProgress, registry, signal } = request;
+  const { bitmapDensity, delivery, fixture, library, onProgress, signal } = request;
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   const strikes = bitmapDensity === 'live' ? liveStrikes : conformanceStrikes;
   if (delivery === 'runtime') {
+    const captured = captureRasterTechniqueData(measuredBitmapTechnique(metrics, onProgress));
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: measuredBitmapTechnique(metrics, onProgress), options: { strikes } },
+      raster: { technique: captured.technique, options: { strikes } },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
-      registry,
+      library,
       ...(signal === undefined ? {} : { signal }),
     });
     return {
@@ -91,6 +93,7 @@ export async function loadBitmapFontAsset(
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
       loaded,
+      data: captured.data(),
       metrics,
     };
   }
@@ -99,10 +102,11 @@ export async function loadBitmapFontAsset(
   if (!response.ok) throw new Error(`Unable to load bitmap font fixture (${response.status})`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   signal?.throwIfAborted();
+  const captured = captureRasterTechniqueData(bitmapTechnique);
   const loaded = await loadBakedFont({
     artifact: bytes,
-    raster: { technique: bitmapTechnique, options: { strikes } },
-    registry,
+    raster: { technique: captured.technique, options: { strikes } },
+    library,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
@@ -111,6 +115,7 @@ export async function loadBitmapFontAsset(
     atlasGpuBytes: 0,
     compressedBytes: bytes.byteLength,
     loaded,
+    data: captured.data(),
     metrics,
   };
 }

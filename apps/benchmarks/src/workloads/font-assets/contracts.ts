@@ -1,7 +1,7 @@
-import type { BakeProgressListener, FontRegistry, LoadedFont } from '@pmndrs/glyph';
-import type { bitmap as bitmapTechnique } from '@pmndrs/glyph/raster/bitmap';
-import type { msdf as mtsdfTechnique } from '@pmndrs/glyph/raster/msdf';
-import type { slug as slugTechnique } from '@pmndrs/glyph/raster/slug';
+import type { BakeProgressListener, FontLibrary, Font } from '@pmndrs/glyph';
+import type { bitmap as bitmapTechnique, BitmapData } from '@pmndrs/glyph/raster/bitmap';
+import type { msdf as mtsdfTechnique, MsdfData } from '@pmndrs/glyph/raster/msdf';
+import type { slug as slugTechnique, SlugData } from '@pmndrs/glyph/raster/slug';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { FontDelivery, RasterTechnique } from '../../benchmark/url-state';
@@ -33,7 +33,7 @@ export interface FontDeliveryMetrics {
 
 interface CommonBenchmarkFontAssetRequest {
   readonly fixture: BenchmarkFontFixture;
-  readonly registry?: FontRegistry | undefined;
+  readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
   readonly onProgress?: BakeProgressListener | undefined;
 }
@@ -73,15 +73,18 @@ interface CommonBenchmarkFontAsset {
 export type BenchmarkFontAsset =
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'bitmap';
-      readonly loaded: LoadedFont<typeof bitmapTechnique>;
+      readonly loaded: Font<typeof bitmapTechnique>;
+      readonly data: BitmapData;
     })
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'mtsdf';
-      readonly loaded: LoadedFont<typeof mtsdfTechnique>;
+      readonly loaded: Font<typeof mtsdfTechnique>;
+      readonly data: MsdfData;
     })
   | (CommonBenchmarkFontAsset & {
       readonly technique: 'slug';
-      readonly loaded: LoadedFont<typeof slugTechnique>;
+      readonly loaded: Font<typeof slugTechnique>;
+      readonly data: SlugData;
     });
 
 export interface BenchmarkFontAssetPreloadRequest {

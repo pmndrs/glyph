@@ -1,5 +1,5 @@
 export type { FormattedText, GlyphPaintInput, TextInput } from './formatted-text.js';
-export type { FontSelection, LoadedFont } from './loaded-font.js';
+export type { FontSelection } from './loaded-font.js';
 export type { GlyphBufferCapacity, ParagraphContentBox, ParagraphStyle } from './text-properties.js';
 export { FontLoader } from './three/font-loader.js';
 export { defineTextMaterial } from './three/material.js';
@@ -12,7 +12,7 @@ export type {
   ThreeRasterPlanProgram,
   ThreeRasterPlanVariant,
 } from './three/plan-program-registry.js';
-export type { ThreeFontLoaderOptions, ThreeLoadedFontRequest as LoadedFontRequest } from './three/font-loader.js';
+export type { ThreeFontLoaderOptions, ThreeLoadedFontRequest } from './three/font-loader.js';
 export { TextFrameError } from './three/frame-error.js';
 export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.js';
 export { Text, TextGroup } from './three/text.js';

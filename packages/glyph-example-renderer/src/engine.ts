@@ -5,7 +5,6 @@ import {
   type HostPolicy,
   type PlanCandidate,
   type PlanTarget,
-  type ResourceHandle,
   type SynchronousTextEngineSession,
   type TextEngineText,
   type TextRuntime,
@@ -27,6 +26,7 @@ const EXAMPLE_LIMITS = Object.freeze({
   maxOutputBytes: 16 * 1024 * 1024,
 });
 
+/** Initial state for one retained example-renderer text instance. */
 export interface ExampleTextOptions {
   readonly font: HostFontStackBinding;
   readonly text: string;
@@ -38,6 +38,7 @@ export interface ExampleTextOptions {
   readonly opacity?: number;
 }
 
+/** Desired-state changes accepted by an example-renderer text instance. */
 export interface ExampleTextUpdate {
   readonly font?: HostFontStackBinding;
   readonly text?: string;
@@ -61,13 +62,14 @@ export class ExampleTextEngine {
     this.#host = runtime.createTextEngineHost({ integration: '@pmndrs/glyph-example-renderer' });
     this.#target = new ExamplePlanTarget(device);
     try {
-      this.#policy = this.#host.installPolicy(exampleRenderPolicyDescriptor(this.#host.wireIdentities));
+      this.#policy = this.#host.installPolicy(exampleRenderPolicyDescriptor);
     } catch (error) {
       this.#host.dispose();
       throw error;
     }
   }
 
+  /** Binds one immutable font to this renderer host. */
   bindFont<Technique extends AnyRasterTechnique>(font: Font<Technique>): HostFontBinding<Technique> {
     this.#assertActive();
     const shader = this.#target.shader;
@@ -79,6 +81,7 @@ export class ExampleTextEngine {
     return this.#host.bindFont(font);
   }
 
+  /** Binds an ordered immutable font stack to this renderer host. */
   bindFontStack<Technique extends AnyRasterTechnique>(
     stack: FontStack<Technique, Font<Technique>>,
   ): HostFontStackBinding {
@@ -96,6 +99,7 @@ export class ExampleTextEngine {
     return this.#host.bindFontStack(stack);
   }
 
+  /** Opens the engine's single retained example session. */
   openSession(): SynchronousTextEngineSession {
     this.#assertActive();
     if (this.#session !== undefined) throw new Error('example engine already has an open text session');
@@ -111,17 +115,20 @@ export class ExampleTextEngine {
     return this.#session;
   }
 
+  /** Creates one retained text instance in the open session. */
   createText(options: ExampleTextOptions): ExampleText {
     const session = this.#requireSession();
     return new ExampleText(session, () => this.publish(), options);
   }
 
+  /** Publishes current desired state and returns the accepted decoded draw list. */
   publish(): ExampleDrawList {
     const result = this.#requireSession().publish();
     if (!result.accepted) throw result.error;
     return this.#target.lastDrawList;
   }
 
+  /** Disposes the host, session, target, and retained payload leases. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -139,6 +146,7 @@ export class ExampleTextEngine {
   }
 }
 
+/** One retained text instance owned by an {@link ExampleTextEngine} session. */
 export class ExampleText {
   readonly #text: TextEngineText;
   readonly #publish: () => ExampleDrawList;
@@ -151,12 +159,14 @@ export class ExampleText {
     this.#text = session.createText(coreTextOptions(this.#state));
   }
 
+  /** Current desired text content. */
   get text(): string {
     return this.#state.text;
   }
 
+  /** Replaces part of the desired text state without publishing. */
   update(update: ExampleTextUpdate): void {
-    this.#assertLive();
+    this.#assertActive();
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('example text updates must be objects');
     }
@@ -165,18 +175,20 @@ export class ExampleText {
     this.#state = state;
   }
 
+  /** Publishes the owning session and returns its accepted draw list. */
   publish(): ExampleDrawList {
-    this.#assertLive();
+    this.#assertActive();
     return this.#publish();
   }
 
+  /** Removes this retained text instance from its session. */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#text.dispose();
   }
 
-  #assertLive(): void {
+  #assertActive(): void {
     if (this.#disposed) throw new Error('example text is disposed');
   }
 }
@@ -216,7 +228,7 @@ class ExamplePlanTarget implements PlanTarget {
     try {
       for (const record of list.resourceRecords) {
         if (record.referenceId === 0 || this.#payloads.has(record.referenceId)) continue;
-        const payload = candidate.acquirePayload(record.referenceId as ResourceHandle);
+        const payload = candidate.acquirePayload(record.referenceId);
         if (payload.techniqueId !== device.shader.variant.techniqueId) {
           payload.dispose();
           throw new TypeError(`plan payload technique "${payload.techniqueId}" does not match the selected shader`);

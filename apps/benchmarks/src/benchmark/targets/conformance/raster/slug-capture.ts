@@ -1,5 +1,5 @@
-import { FontRegistry, type LoadedFont, type ParagraphLayout } from '@pmndrs/glyph';
-import { slug } from '@pmndrs/glyph/three/slug';
+import type { Font, ParagraphLayout } from '@pmndrs/glyph';
+import { slug, type SlugData } from '@pmndrs/glyph/three/slug';
 import { FontLoader, Text, type TextSpan } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -12,6 +12,7 @@ import { sha256 } from '../../shared';
 import type { FontDelivery } from '../../../url-state';
 import type { BakedSlugArtifactSource as SlugBakedArtifactSource } from '../../../../workloads/font-assets';
 import { loadSlugFontAsset } from '../../../../workloads/font-assets/slug';
+import { captureRasterTechniqueData } from '../../../../workloads/font-assets/runtime';
 import type { PersistentRenderSceneRenderer } from '../../../../renderer/persistent-render-host';
 import { withRendererStateRestored } from '../../../../renderer/renderer-state-transaction';
 import type {
@@ -143,7 +144,8 @@ interface FlatSlugConformanceResources {
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
   /** Owns the decoded Slug data the CPU reference reads, so no scene decodes the raster a second time. */
-  readonly font: LoadedFont<typeof slug>;
+  readonly font: Font<typeof slug>;
+  readonly data: SlugData;
   readonly line: Text<typeof slug>;
   readonly sourceTypes?: SlugRasterSourceTypes;
 }
@@ -492,7 +494,7 @@ export async function captureSlugProjectionZoomRoleScene(options: {
   });
   try {
     const layout = committedLayout(resources.line);
-    const zeroOriginReference = renderFlatSlugCpuReference(resources.font.data, layout, {
+    const zeroOriginReference = renderFlatSlugCpuReference(resources.data, layout, {
       width: scene.physicalWidth,
       height: scene.physicalHeight,
       dpr,
@@ -562,8 +564,14 @@ interface CreateFlatSlugConformanceResourcesOptions {
   readonly delivery?: FontDelivery;
   readonly bakedArtifact?: SlugBakedArtifactSource;
   readonly sceneOptions?: FlatSlugSceneOptions;
-  readonly loadFont?: (signal?: AbortSignal) => Promise<LoadedFont<typeof slug>>;
+  readonly loadFont?: (signal?: AbortSignal) => Promise<LoadedSlugConformanceFont>;
   readonly renderer?: PersistentRenderSceneRenderer;
+}
+
+interface LoadedSlugConformanceFont {
+  readonly font: Font<typeof slug>;
+  readonly data: SlugData;
+  readonly sourceTypes?: SlugRasterSourceTypes;
 }
 
 async function createFlatSlugConformanceResources({
@@ -590,13 +598,15 @@ async function createFlatSlugConformanceResources({
       : undefined;
   const renderer = borrowedRenderer ?? ownedRenderer!;
   let target: THREE.RenderTarget | undefined;
-  let font: LoadedFont<typeof slug> | undefined;
+  let font: Font<typeof slug> | undefined;
   let line: Text<typeof slug> | undefined;
   try {
-    font =
+    const loaded =
       loadFont === undefined
         ? await loadConformanceSlugFont(fontFixture, delivery, bakedArtifact, signal)
         : await loadFont(signal);
+    font = loaded.font;
+    const data = loaded.data;
     const specimen = sceneOptions ?? rasterConformanceSpecimen(fontFixture);
     line = new Text({
       text: specimen.text,
@@ -621,7 +631,7 @@ async function createFlatSlugConformanceResources({
     if (missingGlyphs !== 0) {
       throw new Error(`${fontFixture} Slug conformance specimen contains ${String(missingGlyphs)} missing glyphs`);
     }
-    const sourceTypes = loadFont === undefined ? undefined : slugRasterSourceTypes(font);
+    const sourceTypes = loaded.sourceTypes;
     signal?.throwIfAborted();
     const logicalWidth = sceneOptions?.width ?? WIDTH;
     const logicalHeight = sceneOptions?.height ?? FLAT_CONFORMANCE_HEIGHT;
@@ -648,6 +658,7 @@ async function createFlatSlugConformanceResources({
       scene,
       camera,
       font,
+      data,
       line,
       ...(sourceTypes === undefined ? {} : { sourceTypes }),
     };
@@ -665,26 +676,24 @@ async function loadConformanceSlugFont(
   delivery: FontDelivery,
   bakedArtifact: SlugBakedArtifactSource | undefined,
   signal: AbortSignal | undefined,
-): Promise<LoadedFont<typeof slug>> {
+): Promise<LoadedSlugConformanceFont> {
   const loaded = await loadSlugFontAsset(
     delivery === 'runtime'
       ? {
           technique: 'slug',
           fixture,
           delivery,
-          registry: new FontRegistry(),
           ...(signal === undefined ? {} : { signal }),
         }
       : {
           technique: 'slug',
           fixture,
           delivery,
-          registry: new FontRegistry(),
           ...(bakedArtifact === undefined ? {} : { bakedArtifact }),
           ...(signal === undefined ? {} : { signal }),
         },
   );
-  return loaded.loaded;
+  return { font: loaded.loaded, data: loaded.data };
 }
 
 /**
@@ -696,27 +705,31 @@ async function loadExternalSlugFont(
   artifactUrl: string,
   fetcher: typeof fetch,
   signal?: AbortSignal,
-): Promise<LoadedFont<typeof slug>> {
+): Promise<LoadedSlugConformanceFont> {
   signal?.throwIfAborted();
   const loader = new FontLoader();
+  let sourceTypes: SlugRasterSourceTypes | undefined;
+  const captured = captureRasterTechniqueData(slug, (_font, raster) => {
+    sourceTypes = slugRasterSourceTypes(raster);
+  });
   const installedFetch = globalThis.fetch;
   globalThis.fetch = fetcher;
   try {
-    return await loader.loadAsync({
+    const font = await loader.loadAsync({
       input: { baked: artifactUrl },
-      raster: { technique: slug },
+      raster: { technique: captured.technique },
       ...(signal === undefined ? {} : { signal }),
     });
+    if (sourceTypes === undefined) throw new Error('Slug external source types were not captured during decoding');
+    return { font, data: captured.data(), sourceTypes };
   } finally {
     globalThis.fetch = installedFetch;
     loader.dispose();
   }
 }
 
-function slugRasterSourceTypes(font: LoadedFont<typeof slug>): SlugRasterSourceTypes {
-  const reference = font.font.rasterReferences.find((candidate) => candidate.rasterKey === font.raster.rasterKey);
-  if (reference === undefined) throw new Error('Slug raster reference disappeared after loading');
-  const extension = nonArrayObject(font.raster.extensionData, 'Slug extension');
+function slugRasterSourceTypes(raster: Parameters<typeof slug.decode>[1]): SlugRasterSourceTypes {
+  const extension = nonArrayObject(raster.extensionData, 'Slug extension');
   if (!Array.isArray(extension.pages) || extension.pages.length !== 1) {
     throw new TypeError('Slug external parity requires exactly one Inter page');
   }
@@ -729,7 +742,7 @@ function slugRasterSourceTypes(font: LoadedFont<typeof slug>): SlugRasterSourceT
   const headerResource = nonArrayObject(page.headerResource, 'Slug header resource');
   const referenceResource = nonArrayObject(page.referenceResource, 'Slug reference resource');
   return {
-    raster: reference.source.type,
+    raster: 'external',
     curve: resourceSourceType(curveVariant.source, 'Slug curve source'),
     headers: resourceSourceType(headerResource.source, 'Slug header source'),
     references: resourceSourceType(referenceResource.source, 'Slug reference source'),
@@ -765,7 +778,7 @@ async function captureFlatSlugConformance(
   resources: FlatSlugConformanceResources,
 ): Promise<SlugTextConformanceCapture> {
   const { candidate, width, height, renderSubmitMs } = await captureFlatSlugCandidate(resources);
-  const referenceResult = renderFlatSlugCpuReference(resources.font.data, committedLayout(resources.line), {
+  const referenceResult = renderFlatSlugCpuReference(resources.data, committedLayout(resources.line), {
     width,
     height,
     dpr: resources.dpr,

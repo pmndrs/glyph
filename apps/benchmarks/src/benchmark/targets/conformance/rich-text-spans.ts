@@ -1,4 +1,4 @@
-import type { LoadedFont, LoadedFontRequest, ParagraphLayout } from '@pmndrs/glyph';
+import type { Font, FontRequest, ParagraphLayout } from '@pmndrs/glyph';
 import { id as hashId } from '@pmndrs/glyph/core';
 import { bitmap, bitmapSchema } from '@pmndrs/glyph/three/bitmap';
 import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
@@ -41,7 +41,7 @@ const DECORATION_PACKED_ATTRIBUTE = policyAttributeName(hashId('buffer', 'glyph-
 const DECORATION_UNDERLINE_FLAG = 0b0001;
 const DECORATION_LINE_THROUGH_FLAG = 0b0100;
 const DECORATION_SOLID_STYLE = 1;
-const bitmapRaster: LoadedFontRequest<BitmapTechnique>['raster'] = {
+const bitmapRaster: FontRequest<BitmapTechnique>['raster'] = {
   technique: bitmap,
   options: { strikes: [16] },
 };
@@ -92,7 +92,7 @@ type RichTextSpansState =
   | {
       readonly kind: 'ready';
       readonly loader: FontLoader;
-      readonly body: LoadedFont<BitmapTechnique>;
+      readonly body: Font<BitmapTechnique>;
       readonly companions: RichTextCompanionFonts;
     };
 
@@ -110,7 +110,7 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
       // A loading manager this target owns keeps its text runtime, and the fonts registered in it, isolated from the
       // shared manager every other benchmark surface loads through.
       const loader = new FontLoader(new THREE.LoadingManager());
-      const loaded: LoadedFont<BitmapTechnique>[] = [];
+      const loaded: Font<BitmapTechnique>[] = [];
       try {
         const [body, foreign, emphasis] = await Promise.all(
           [interBitmapFontUrl, devanagariBitmapFontUrl, sourceSerifBitmapFontUrl].map(async (url) => {
@@ -130,11 +130,11 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
         // underline and strikeout values the artifact bakes from `post` and `OS/2`, so a
         // regression in the bake or decode path fails this lane before any renderer work.
         for (const loadedFont of [body, foreign, emphasis]) {
-          const { underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize } = loadedFont.font.metrics;
+          const { underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize } = loadedFont.metrics;
           const values = [underlinePosition, underlineThickness, strikeoutPosition, strikeoutSize];
           if (!values.every(Number.isFinite) || underlineThickness <= 0 || strikeoutSize <= 0) {
             throw new Error(
-              `baked decoration metrics are missing or degenerate for ${loadedFont.font.key}: ` +
+              `baked decoration metrics are missing or degenerate for ${loadedFont.technique.id}: ` +
                 `underline ${underlinePosition}/${underlineThickness}, strikeout ${strikeoutPosition}/${strikeoutSize}`,
             );
           }
@@ -301,7 +301,7 @@ export function createRichTextSpansConformanceTarget(): BenchmarkTarget {
 
 function measureCase(
   group: TextGroup,
-  body: LoadedFont<BitmapTechnique>,
+  body: Font<BitmapTechnique>,
   companions: RichTextCompanionFonts,
   caseId: RichTextCaseId,
 ): CaseEvidence {

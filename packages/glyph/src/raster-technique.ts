@@ -1,5 +1,5 @@
-import type { RegisteredFont } from './font.js';
-import type { JsonValue, RasterOptionsArgument, RegisteredRaster, RuntimeRasterBakerLoader } from './raster.js';
+import type { RasterDecodeFont } from './font.js';
+import type { JsonValue, RasterDecodeArtifact, RasterOptionsArgument, RuntimeRasterBakerLoader } from './raster.js';
 
 declare const rasterTechniqueIdBrand: unique symbol;
 declare const rasterResourceIdBrand: unique symbol;
@@ -44,7 +44,7 @@ export interface RasterTechnique<
   readonly runtimeBaker?: RuntimeRasterBakerLoader<Kind, Options>;
 
   descriptor(options: RasterOptionsArgument<Options>): Descriptor;
-  decode(font: RegisteredFont, raster: RegisteredRaster<Kind>, signal?: AbortSignal): Promise<Data>;
+  decode(font: RasterDecodeFont, raster: RasterDecodeArtifact<Kind>, signal?: AbortSignal): Promise<Data>;
   dispose(data: Data): void;
 }
 

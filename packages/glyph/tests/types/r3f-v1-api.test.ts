@@ -1,18 +1,25 @@
 import { createElement, type ReactElement } from 'react';
 
-import type { FontStack, LoadedFont } from '../../src/index.js';
-import { Text, TextGroup, TextSpan, useFont } from '../../src/react.js';
+import { createFontLibrary, type Font, type FontStack } from '../../src/index.js';
+import { createUseFont, GlyphProvider, Text, TextGroup, TextSpan, useFont } from '../../src/react.js';
 import type { R3fTextChild, R3fTextProps, R3fTextSpanProps } from '../../src/react.js';
 import type { ThreeTextMaterial } from '../../src/three.js';
 import { bitmap } from '../../src/raster/bitmap-technique.js';
 import { msdf } from '../../src/raster/msdf.js';
 import { slug } from '../../src/raster/slug-technique.js';
 
-declare const bitmapFont: LoadedFont<typeof bitmap>;
-declare const mtsdfFont: LoadedFont<typeof msdf>;
-declare const slugFont: LoadedFont<typeof slug>;
+declare const bitmapFont: Font<typeof bitmap>;
+declare const mtsdfFont: Font<typeof msdf>;
+declare const slugFont: Font<typeof slug>;
 declare const selectedStack: FontStack<typeof bitmap> | FontStack<typeof msdf> | FontStack<typeof slug>;
 declare const material: ThreeTextMaterial;
+
+const fontLibrary = createFontLibrary();
+const useAppFont = createUseFont(fontLibrary);
+const bitmapRequest = {
+  input: { baked: '/fonts/Inter.font.glb' },
+  raster: { technique: bitmap, options: { strikes: [16] } },
+} as const;
 
 const inline = createElement(TextSpan, { paint: { color: '#ff00ff' } }, 'span');
 const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material, pixelSnapping: true }, 'Typed ', inline);
@@ -20,20 +27,27 @@ const labels = createElement(TextGroup, { compositing: 'independent', material, 
 const selected = createElement(Text, { font: selectedStack }, 'Selected at runtime');
 
 function FontConsumer(): null {
-  const loaded: LoadedFont<typeof bitmap> = useFont({
-    input: { baked: '/fonts/Inter.font.glb' },
-    raster: { technique: bitmap, options: { strikes: [16] } },
-  });
+  const loaded: Font<typeof bitmap> = useFont(bitmapRequest);
   void loaded;
   const [loadedBitmap, loadedMsdf, loadedSlug] = useFont({
     input: { baked: '/fonts/Inter.font.glb' },
     rasters: [{ technique: bitmap, options: { strikes: [16] } }, { technique: msdf }, { technique: slug }],
   });
-  loadedBitmap satisfies LoadedFont<typeof bitmap>;
-  loadedMsdf satisfies LoadedFont<typeof msdf>;
-  loadedSlug satisfies LoadedFont<typeof slug>;
+  loadedBitmap satisfies Font<typeof bitmap>;
+  loadedMsdf satisfies Font<typeof msdf>;
+  loadedSlug satisfies Font<typeof slug>;
   return null;
 }
+
+function BoundFontConsumer(): null {
+  const loaded: Font<typeof bitmap> = useAppFont(bitmapRequest);
+  void loaded;
+  return null;
+}
+
+const provider = createElement(GlyphProvider, { library: fontLibrary }, createElement(FontConsumer));
+const preloaded: Promise<void> = useAppFont.preload(bitmapRequest);
+useAppFont.clear(bitmapRequest);
 
 // @ts-expect-error The selected font technique must match the Text technique.
 createElement(Text<typeof bitmap>, { font: mtsdfFont }, 'wrong technique');
@@ -71,3 +85,6 @@ void labels;
 void selected;
 void slugFont;
 void FontConsumer;
+void BoundFontConsumer;
+void provider;
+void preloaded;

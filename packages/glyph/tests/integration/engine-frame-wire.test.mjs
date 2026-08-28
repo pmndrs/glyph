@@ -45,7 +45,7 @@ test('frame compiler rejects raw and cross-domain numeric identities before allo
     /must come from selectPolicyCapabilitySet/,
   );
   const capability = {
-    flags: textShaperAbi.policy.capabilityFlags.storageBuffers | textShaperAbi.policy.capabilityFlags.orderedDirect,
+    capabilities: ['storage-buffers', 'ordered-direct'],
     maxBufferBytes: 1024,
     updateAlignment: 4,
     coalesceGapBytes: 16,

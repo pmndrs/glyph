@@ -1,4 +1,4 @@
-import type { LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import { slug } from '@pmndrs/glyph/three/slug';
 import { FontLoader, Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -33,7 +33,7 @@ async function render(): Promise<TargetV1SlugResult> {
   const target = new THREE.RenderTarget(256, 128, { format: THREE.RGBAFormat, type: THREE.UnsignedByteType });
   target.texture.colorSpace = THREE.NoColorSpace;
   let text: Text<typeof slug> | undefined;
-  let font: LoadedFont<typeof slug> | undefined;
+  let font: Font<typeof slug> | undefined;
   let fontUrl: string | undefined;
   try {
     renderer.setSize(256, 128, false);

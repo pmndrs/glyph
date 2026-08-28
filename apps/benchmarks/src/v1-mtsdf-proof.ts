@@ -1,4 +1,4 @@
-import type { LoadedFont } from '@pmndrs/glyph';
+import type { Font } from '@pmndrs/glyph';
 import { msdf as mtsdf } from '@pmndrs/glyph/three/msdf';
 import { FontLoader, Text } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -33,7 +33,7 @@ async function render(): Promise<TargetV1MtsdfResult> {
   const target = new THREE.RenderTarget(256, 128, { format: THREE.RGBAFormat, type: THREE.UnsignedByteType });
   target.texture.colorSpace = THREE.NoColorSpace;
   let text: Text<typeof mtsdf> | undefined;
-  let font: LoadedFont<typeof mtsdf> | undefined;
+  let font: Font<typeof mtsdf> | undefined;
   let fontUrl: string | undefined;
   try {
     renderer.setSize(256, 128, false);

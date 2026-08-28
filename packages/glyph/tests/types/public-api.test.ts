@@ -3,8 +3,6 @@ import {
   defineFont,
   defineRasterBaker,
   defineRasterTechnique,
-  FontLoader,
-  FontRegistry,
   loadFont,
   rasterBake,
   type AnyRasterTechnique,
@@ -16,13 +14,12 @@ import {
   type RasterBakeRequest,
   type RasterCoverage,
   type RasterDataOf,
-  type RasterKey,
+  type RasterDecodeArtifact,
+  type RasterDecodeFont,
   type RasterKindOf,
   type RasterOptionsOf,
   type RasterResourceSource,
   type RasterSource,
-  type RegisteredFont,
-  type RegisteredRaster,
   type Sha256Hex,
 } from '../../src/index.js';
 
@@ -43,15 +40,6 @@ const externalRasterResource: RasterResourceSource = {
   artifactHash: pageHash,
 };
 void externalRasterResource;
-
-const fontRegistry = new FontRegistry({ maxArtifactBytes: 64 * 1024 * 1024 });
-const fontLoader = new FontLoader({
-  registry: fontRegistry,
-  baseUrl: 'https://assets.example/app/',
-  development: false,
-});
-const registeredPromise: Promise<RegisteredFont> = fontLoader.load('/fonts/Inter.ttf');
-void registeredPromise;
 
 interface MsdfResource {
   readonly texture: unknown;
@@ -92,14 +80,18 @@ type _ConfigurableOptions = Expect<Equal<RasterOptionsOf<typeof configurable>, {
 const acceptsExternal: AnyRasterTechnique = configurable;
 void acceptsExternal;
 
-declare const font: RegisteredFont;
-declare const slugArtifact: RegisteredRaster<'slug'>;
+declare const decodeFont: RasterDecodeFont;
+declare const slugArtifact: RasterDecodeArtifact<'slug'>;
 void slugArtifact.extensionData;
 const slugBytes: Uint8Array = slugArtifact.view(0);
 void slugBytes;
+// @ts-expect-error Technique decoders receive metadata, not mutable registry handles.
+void decodeFont.handle;
+// @ts-expect-error Technique decoders do not own registered raster disposal.
+slugArtifact.dispose();
 
 // @ts-expect-error An MSDF decoder cannot consume a Slug artifact.
-msdf.decode(font, slugArtifact);
+msdf.decode(decodeFont, slugArtifact);
 
 const titleFont = defineFont('/fonts/Inter-Regular.ttf', msdf);
 type _TitleInput = Expect<Equal<FontInputOf<typeof titleFont>, '/fonts/Inter-Regular.ttf'>>;
@@ -158,21 +150,6 @@ void defineFont(sourceUrl, msdf);
 defineFont({}, msdf);
 // @ts-expect-error An optional forbidden source cannot be supplied as undefined.
 defineFont({ baked: '/fonts/Inter.font.glb', source: undefined }, msdf);
-
-declare const rasterKey: RasterKey;
-void font.loadRaster({ rasterKey, kind: 'msdf' });
-void font.loadRaster(
-  { rasterKey, kind: 'msdf' },
-  {
-    async resolveResource({ source }) {
-      return source.uri === 'page.ktx2' ? new Uint8Array(source.byteLength) : undefined;
-    },
-  },
-);
-declare const registeredRaster: RegisteredRaster;
-void registeredRaster.resource(externalRasterResource);
-// @ts-expect-error A kind is not a stable raster selection when options can differ.
-font.loadRaster({ kind: 'msdf' });
 
 const msdfBaker = defineRasterBaker({
   kind: 'msdf',

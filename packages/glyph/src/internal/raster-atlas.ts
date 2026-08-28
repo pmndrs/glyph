@@ -1,6 +1,6 @@
 import { RasterKtxValidationError, validateNativeKtx2, type NativeKtx2Format } from './raster-ktx.js';
 import { DENSE_GLYPH_RECORD_STRIDE, DenseGlyphRecordError, validateDenseGlyphRecordTable } from './raster-records.js';
-import type { JsonValue, RegisteredRaster } from '../raster.js';
+import type { JsonValue, RasterDecodeArtifact } from '../raster.js';
 
 export { ABSENT_GLYPH_PAGE, DENSE_GLYPH_RECORD_STRIDE } from './raster-records.js';
 
@@ -15,7 +15,7 @@ export interface LosslessAtlasFormat extends NativeKtx2Format {
 }
 
 export function decodeEmbeddedLosslessAtlasPage(
-  raster: RegisteredRaster,
+  raster: RasterDecodeArtifact,
   value: JsonValue,
   path: string,
   format: LosslessAtlasFormat,

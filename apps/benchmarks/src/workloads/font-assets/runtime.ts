@@ -1,9 +1,14 @@
 import {
   type AnyRasterTechnique,
   type BakeProgressListener,
-  type FontRegistry,
-  type LoadedFont,
-  type LoadedFontRequest,
+  defineRasterTechnique,
+  type FontLibrary,
+  type Font,
+  type FontRequest,
+  type JsonValue,
+  type RasterTechnique,
+  type RasterTechniqueId,
+  type RasterOptionsArgument,
   type RasterBakeArtifact,
   type RuntimeFontBake,
   type RuntimeFontBakeRequest,
@@ -76,11 +81,10 @@ export function measuredRuntimeFontBake(
 
 /**
  * The Three font loader keys one text runtime per loading manager, and every `Text` in a paragraph batch must share a
- * runtime, so loads that do not name a registry share one manager. A caller-supplied registry is how a benchmark
- * surface isolates font ownership today; each such registry therefore keeps its own manager, runtime, and loader.
+ * runtime. A caller-supplied immutable library gives an isolated benchmark surface one manager and loader domain.
  */
 const sharedLoadingManager = new THREE.LoadingManager();
-const isolatedLoadingManagers = new WeakMap<FontRegistry, THREE.LoadingManager>();
+const isolatedLoadingManagers = new WeakMap<FontLibrary, THREE.LoadingManager>();
 const fontLoaders = new WeakMap<THREE.LoadingManager, FontLoader>();
 
 /**
@@ -90,17 +94,17 @@ const fontLoaders = new WeakMap<THREE.LoadingManager, FontLoader>();
 export async function loadBakedFont<Technique extends AnyRasterTechnique>({
   artifact,
   raster,
-  registry,
+  library,
   signal,
 }: {
   readonly artifact: Uint8Array<ArrayBuffer>;
-  readonly raster: LoadedFontRequest<Technique>['raster'];
-  readonly registry?: FontRegistry | undefined;
+  readonly raster: FontRequest<Technique>['raster'];
+  readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
-}): Promise<LoadedFont<Technique>> {
+}): Promise<Font<Technique>> {
   const url = URL.createObjectURL(new Blob([artifact], { type: 'model/gltf-binary' }));
   try {
-    return await fontLoader(registry).loadAsync({
+    return await fontLoader(library).loadAsync({
       input: { baked: url },
       raster,
       ...(signal === undefined ? {} : { signal }),
@@ -115,41 +119,79 @@ export function loadSourceFont<Technique extends AnyRasterTechnique>({
   source,
   raster,
   runtimeBake,
-  registry,
+  library,
   signal,
 }: {
   readonly source: string;
-  readonly raster: LoadedFontRequest<Technique>['raster'];
+  readonly raster: FontRequest<Technique>['raster'];
   readonly runtimeBake: RuntimeFontBake;
-  readonly registry?: FontRegistry | undefined;
+  readonly library?: FontLibrary | undefined;
   readonly signal?: AbortSignal | undefined;
-}): Promise<LoadedFont<Technique>> {
-  return fontLoader(registry).loadAsync({
+}): Promise<Font<Technique>> {
+  return fontLoader(library).loadAsync({
     input: { source, runtimeBake },
     raster,
     ...(signal === undefined ? {} : { signal }),
   });
 }
 
-function fontLoader(registry: FontRegistry | undefined): FontLoader {
-  const manager = loadingManager(registry);
+function fontLoader(library: FontLibrary | undefined): FontLoader {
+  const manager = loadingManager(library);
   let loader = fontLoaders.get(manager);
   if (loader === undefined) {
-    // Naming the caller's registry keeps `LoadedFont.font` reachable through the registry the surface already owns.
-    loader = new FontLoader(manager, registry === undefined ? {} : { registry });
+    loader = new FontLoader(manager, library === undefined ? {} : { library });
     fontLoaders.set(manager, loader);
   }
   return loader;
 }
 
-function loadingManager(registry: FontRegistry | undefined): THREE.LoadingManager {
-  if (registry === undefined) return sharedLoadingManager;
-  let manager = isolatedLoadingManagers.get(registry);
+function loadingManager(library: FontLibrary | undefined): THREE.LoadingManager {
+  if (library === undefined) return sharedLoadingManager;
+  let manager = isolatedLoadingManagers.get(library);
   if (manager === undefined) {
     manager = new THREE.LoadingManager();
-    isolatedLoadingManagers.set(registry, manager);
+    isolatedLoadingManagers.set(library, manager);
   }
   return manager;
+}
+
+/** Capture data decoded by a benchmark-owned technique wrapper without exposing it through Font. */
+export function captureRasterTechniqueData<
+  Id extends RasterTechniqueId,
+  Kind extends string,
+  Options,
+  Descriptor extends JsonValue,
+  Data,
+>(
+  technique: RasterTechnique<Id, Kind, Options, Descriptor, Data>,
+  beforeDecode?: (
+    font: Parameters<RasterTechnique<Id, Kind, Options, Descriptor, Data>['decode']>[0],
+    raster: Parameters<RasterTechnique<Id, Kind, Options, Descriptor, Data>['decode']>[1],
+  ) => void,
+) {
+  let decoded: Data | undefined;
+  const captured = defineRasterTechnique({
+    id: technique.id,
+    kind: technique.kind,
+    extension: technique.extension,
+    version: technique.version,
+    ...(technique.runtimeBaker === undefined ? {} : { runtimeBaker: technique.runtimeBaker }),
+    descriptor: (options: RasterOptionsArgument<Options>) => technique.descriptor(options),
+    async decode(font, raster, signal) {
+      beforeDecode?.(font, raster);
+      const data = await technique.decode(font, raster, signal);
+      decoded = data;
+      return data;
+    },
+    dispose: (data: Data) => technique.dispose(data),
+  });
+  return Object.freeze({
+    technique: captured,
+    data(): Data {
+      if (decoded === undefined) throw new Error('benchmark raster technique has not decoded a font');
+      return decoded;
+    },
+  });
 }
 
 export function measuredRuntimeRaster<Kind extends string, Options>(

@@ -14,6 +14,7 @@ import { fetchAuthenticatedGzipAsset, preloadFontAssetUrls } from './authenticat
 import type { AuthenticatedArtifactSize, BenchmarkFontAsset, BenchmarkFontAssetRequest } from './contracts';
 import {
   createFontDeliveryMetrics,
+  captureRasterTechniqueData,
   loadBakedFont,
   loadSourceFont,
   measuredRuntimeFontBake,
@@ -68,17 +69,18 @@ export async function preloadMtsdfFontAssets(
 export async function loadMtsdfFontAsset(
   request: Extract<BenchmarkFontAssetRequest, { readonly technique: 'mtsdf' }>,
 ): Promise<MtsdfFontAsset> {
-  const { delivery, fixture, onProgress, registry, signal } = request;
+  const { delivery, fixture, library, onProgress, signal } = request;
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
   const manifest = fixtureManifests.get(fixture);
   if (manifest === undefined) throw new RangeError(`Unknown MTSDF font fixture: ${fixture}`);
   if (delivery === 'runtime') {
+    const captured = captureRasterTechniqueData(measuredMtsdfTechnique(metrics, onProgress));
     const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      raster: { technique: measuredMtsdfTechnique(metrics, onProgress) },
+      raster: { technique: captured.technique },
       runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
-      registry,
+      library,
       ...(signal === undefined ? {} : { signal }),
     });
     return {
@@ -87,6 +89,7 @@ export async function loadMtsdfFontAsset(
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
       loaded,
+      data: captured.data(),
       metrics,
     };
   }
@@ -96,10 +99,11 @@ export async function loadMtsdfFontAsset(
     'MTSDF font fixture',
     signal,
   );
+  const captured = captureRasterTechniqueData(mtsdfTechnique);
   const loaded = await loadBakedFont({
     artifact,
-    raster: { technique: mtsdfTechnique },
-    registry,
+    raster: { technique: captured.technique },
+    library,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
@@ -108,6 +112,7 @@ export async function loadMtsdfFontAsset(
     atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
     compressedBytes: manifest.compressed.bytes,
     loaded,
+    data: captured.data(),
     metrics,
   };
 }

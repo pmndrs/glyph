@@ -107,9 +107,9 @@ There is no `YogaAdapter` in `@pmndrs/glyph`, no Preact signal type in its API, 
 The paragraph surface ships on `@pmndrs/glyph/core`:
 
 ```ts
-import { Paragraph } from '@pmndrs/glyph/core';
+import { createParagraph } from '@pmndrs/glyph';
 
-const paragraph = new Paragraph({ font, text, style?, paint?, policy? });
+const paragraph = await createParagraph({ font, text, style?, paint?, policy? });
 
 paragraph.layout(constraints?): ParagraphMetrics;
 paragraph.glyphs(constraints?): ParagraphLayoutInspection;
@@ -117,7 +117,7 @@ paragraph.update(input: ParagraphUpdate): void;
 paragraph.dispose(): void;
 ```
 
-`Paragraph` owns one engine session on its runtime's shaper. `measure` and `layout` are synchronous, need no scene, renderer, or committed frame, and leave authored state untouched, so they are safe to call from inside a Yoga layout pass.
+`createParagraph()` asynchronously acquires the private measurement service. Its returned Paragraph then answers `layout()` and `glyphs()` synchronously, needs no scene, renderer, or committed frame, and leaves authored state untouched, so it is safe to call from inside a Yoga layout pass.
 
 Per-call constraints are split from stable policy. `ParagraphConstraints` carries only the axes (`width`, `height`) that a host varies while probing one node; wrap, alignment, `maxLines`, overflow, justification bounds, columns, and indents live in the paragraph's `policy` and change only through `update()`. A host probe never re-states the whole flow configuration.
 
@@ -227,7 +227,7 @@ Delete the BMFont-specific `Font`, wrappers, positioned character entries, and M
 
 ## Paragraph-boundary fixture status
 
-The repository carries a current-uikit-shaped fixture at the paragraph boundary, and it runs on the real framework-neutral `Paragraph` from `@pmndrs/glyph/core` -- no scene graph and no adapter. It deliberately implements only the reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it does not pretend to be the production uikit adapter.
+The repository carries a current-uikit-shaped fixture at the paragraph boundary, and it runs on the real framework-neutral root `createParagraph()`/`Paragraph` API -- no scene graph and no renderer adapter. It deliberately implements only the reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it does not pretend to be the production uikit adapter.
 
 | Paragraph-boundary proof                        | Status | Evidence                                                                                                                                            |
 | ----------------------------------------------- | :----: | --------------------------------------------------------------------------------------------------------------------------------------------------- |

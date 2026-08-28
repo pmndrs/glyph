@@ -39,7 +39,17 @@ const DEFAULT_REPETITIONS = 31;
 /** Glyph counts to sweep. The largest is past four columns of six thousand, which is the stated worst case. */
 const DEFAULT_SCALES = [5_500, 11_000, 22_000, 33_000] as const;
 
-type CaseName = 'cold' | 'font-size' | 'layout-width' | 'text';
+type CaseName =
+  | 'cold'
+  | 'measure-cached'
+  | 'measure-dirty'
+  | 'measure-then-publish'
+  | 'inspect-cached'
+  | 'inspect-dirty'
+  | 'inspect-then-publish'
+  | 'font-size'
+  | 'layout-width'
+  | 'text';
 
 interface UpdateProfile {
   readonly wallMs: number;
@@ -82,7 +92,7 @@ if (options.jsonPath !== undefined) {
 }
 
 font.loaded.dispose();
-font.runtime.dispose();
+font.loader.dispose();
 
 async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
   const total = options.warmup + options.repetitions;
@@ -99,18 +109,32 @@ async function measureCase(name: CaseName, text: string): Promise<CaseReport> {
   if (warm !== undefined) {
     warm.group.updateMatrixWorld(true);
     if (warm.group.error !== undefined) throw warm.group.error;
+    if (name === 'measure-cached') warm.paragraph.layout();
+    else if (name === 'inspect-cached') warm.paragraph.glyphs();
   }
 
   for (let repetition = 0; repetition < total; repetition += 1) {
     const recording = repetition >= options.warmup;
 
     const created = name === 'cold' ? createBenchmarkParagraph(font, text, 600) : undefined;
-    if (warm !== undefined) applyChange(name, warm.paragraph, repetition, text);
+    if (warm !== undefined && name !== 'measure-cached' && name !== 'inspect-cached') {
+      applyChange(name, warm.paragraph, repetition, text);
+    }
 
     collectGarbage();
     const heapBefore = process.memoryUsage().heapUsed;
     const updated = created ?? warm!;
-    const profile = profileUpdate(() => updated.group.updateMatrixWorld(true));
+    const profile = profileUpdate(() => {
+      if (name === 'measure-cached' || name === 'measure-dirty') updated.paragraph.layout();
+      else if (name === 'inspect-cached' || name === 'inspect-dirty') updated.paragraph.glyphs();
+      else if (name === 'measure-then-publish') {
+        updated.paragraph.layout();
+        updated.group.updateMatrixWorld(true);
+      } else if (name === 'inspect-then-publish') {
+        updated.paragraph.glyphs();
+        updated.group.updateMatrixWorld(true);
+      } else updated.group.updateMatrixWorld(true);
+    });
     const heapAfter = process.memoryUsage().heapUsed;
 
     if (updated.group.error !== undefined) throw updated.group.error;
@@ -159,7 +183,13 @@ function applyChange(name: CaseName, paragraph: ParagraphHandle, repetition: num
   // measured update. A repeating cycle would let the cache serve part of the run and report a median that no drag,
   // resize, or edit ever experiences.
   if (name === 'font-size') paragraph.style = { fontSize: 12 + repetition * 0.5 };
-  else if (name === 'layout-width') {
+  else if (
+    name === 'layout-width' ||
+    name === 'measure-dirty' ||
+    name === 'measure-then-publish' ||
+    name === 'inspect-dirty' ||
+    name === 'inspect-then-publish'
+  ) {
     paragraph.contentBox = { width: { mode: 'exact', size: 420 + repetition * 7 }, wrap: 'word' };
   } else paragraph.text = `${text.slice(0, text.length - repetition)}`;
 }
@@ -192,7 +222,20 @@ function parseArguments(argv: readonly string[]) {
   const cases = read('--case');
   return {
     scales: scales === undefined ? DEFAULT_SCALES : scales.split(',').map((value) => Number.parseInt(value, 10)),
-    cases: (cases === undefined ? ['cold', 'font-size', 'layout-width', 'text'] : cases.split(',')) as CaseName[],
+    cases: (cases === undefined
+      ? [
+          'cold',
+          'measure-cached',
+          'measure-dirty',
+          'measure-then-publish',
+          'inspect-cached',
+          'inspect-dirty',
+          'inspect-then-publish',
+          'font-size',
+          'layout-width',
+          'text',
+        ]
+      : cases.split(',')) as CaseName[],
     warmup: Number.parseInt(read('--warmup') ?? String(DEFAULT_WARMUP), 10),
     repetitions: Number.parseInt(read('--reps') ?? String(DEFAULT_REPETITIONS), 10),
     jsonPath: read('--json'),

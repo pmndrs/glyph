@@ -1,18 +1,24 @@
 import { readFile } from 'node:fs/promises';
 
 import {
-  FontRegistry,
-  type LoadedFont,
+  type Font,
   type ParagraphContentBox,
   type ParagraphLayoutInspection,
   type ParagraphLayoutPolicy,
   type ParagraphStyle,
 } from '@pmndrs/glyph';
-import { createTextRuntime } from '@pmndrs/glyph/core';
+import { validateFontArtifact } from '@pmndrs/glyph/bake';
 import { bitmap } from '@pmndrs/glyph/three/bitmap';
-import { Text, TextGroup } from '@pmndrs/glyph/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/glyph/three';
 
-export type ContractFont = LoadedFont<typeof bitmap>;
+export type ContractFont = Font<typeof bitmap>;
+
+/** Fixture-owned font plus authenticated shaping identity retained outside the public Font API. */
+export interface ContractFontFixture {
+  readonly font: ContractFont;
+  readonly shapingHash: string;
+  dispose(): void;
+}
 
 export interface LegacyAxis {
   readonly mode: 'unconstrained' | 'at-most' | 'exactly';
@@ -29,23 +35,24 @@ export interface LegacyConstraints {
 }
 
 export async function createParagraphContractRuntime() {
-  const registry = new FontRegistry();
-  const runtime = await createTextRuntime({
-    registry,
-    wasm: await readFile(new URL('../../../../packages/glyph/dist/text-shaper.wasm', import.meta.url)),
-  });
+  const loader = new FontLoader();
   return {
     async loadFont(url: URL, coverage?: string) {
-      return runtime.loadFont({
-        input: { baked: dataUrl(await readFile(url)) },
-        raster: {
-          technique: bitmap,
-          options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
-        },
-      });
+      const bytes = await readFile(url);
+      const [font, artifact] = await Promise.all([
+        loader.loadAsync({
+          input: { baked: { bytes, ownership: 'copy' } },
+          raster: {
+            technique: bitmap,
+            options: { strikes: [16], ...(coverage === undefined ? {} : { coverage: { text: coverage } }) },
+          },
+        }),
+        validateFontArtifact(bytes),
+      ]);
+      return { font, shapingHash: artifact.shapingHash, dispose: () => font.dispose() } satisfies ContractFontFixture;
     },
     dispose() {
-      runtime.dispose();
+      loader.dispose();
     },
   };
 }
@@ -112,10 +119,6 @@ function axis(value: LegacyAxis) {
   if (value.mode === 'unconstrained') return { mode: 'unconstrained' as const };
   if (value.size === undefined) throw new Error(`${value.mode} constraint omitted its size`);
   return { mode: value.mode === 'exactly' ? ('exact' as const) : ('at-most' as const), size: value.size };
-}
-
-function dataUrl(bytes: Uint8Array): string {
-  return `data:application/octet-stream;base64,${Buffer.from(bytes).toString('base64')}`;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

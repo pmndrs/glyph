@@ -6,7 +6,7 @@ import {
   VK_FORMAT_R8G8B8A8_UNORM,
 } from 'ktx-parse';
 
-import type { RegisteredFont } from '../font.js';
+import type { RasterDecodeFont } from '../font.js';
 import {
   MSDF_EXTENSION,
   MSDF_FORMAT_VERSION,
@@ -28,7 +28,7 @@ import {
   type RasterAtlasPage,
 } from '../internal/raster-atlas.js';
 import { decodeRasterCoverage } from '../internal/raster-coverage-artifact.js';
-import type { JsonValue, RegisteredRaster } from '../raster.js';
+import type { JsonValue, RasterDecodeArtifact } from '../raster.js';
 import {
   defineRasterResourceId,
   defineRasterTechnique,
@@ -106,13 +106,8 @@ export const msdf: RasterTechnique<
   dispose() {},
 });
 
-async function decodeMsdfData(font: RegisteredFont, raster: RegisteredRaster): Promise<MsdfData> {
-  if (
-    raster.font !== font.handle ||
-    raster.kind !== MSDF_KIND ||
-    raster.extension !== MSDF_EXTENSION ||
-    raster.version !== MSDF_FORMAT_VERSION
-  ) {
+async function decodeMsdfData(font: RasterDecodeFont, raster: RasterDecodeArtifact): Promise<MsdfData> {
+  if (raster.kind !== MSDF_KIND || raster.extension !== MSDF_EXTENSION || raster.version !== MSDF_FORMAT_VERSION) {
     throw new TypeError('MSDF raster is not bound to the supplied font');
   }
   const extension = jsonObject(raster.extensionData, 'MSDF extension');

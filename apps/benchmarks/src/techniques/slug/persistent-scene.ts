@@ -1,12 +1,11 @@
 import {
-  FontRegistry,
+  createFontLibrary,
   type BakeProgressListener,
   type FontFeature,
-  type LoadedFont,
+  type Font,
   type ParagraphContentBox,
   type ParagraphLayoutSummary,
   type ParagraphStyle,
-  type RegisteredFont,
 } from '@pmndrs/glyph';
 import type { slug } from '@pmndrs/glyph/three/slug';
 import { Text } from '@pmndrs/glyph/three';
@@ -150,17 +149,16 @@ export interface SlugTextPersistentSceneOptions {
 }
 
 interface SlugPersistentFontFixture {
-  /** The registry-scoped font the fixture controller keys ownership on. */
-  readonly font: RegisteredFont;
+  readonly font: Font<typeof slug>;
   readonly fontLoadMs: number;
   readonly loaded: Awaited<ReturnType<typeof loadSlugFontAsset>>;
-  readonly loadedFont: LoadedFont<typeof slug>;
+  readonly loadedFont: Font<typeof slug>;
   readonly rasterConfiguration: SlugRasterConfiguration;
 }
 
 /** The inputs one committed generation of the live paragraph was built from. */
 interface SlugTextState {
-  readonly font: LoadedFont<typeof slug>;
+  readonly font: Font<typeof slug>;
   /** The shaped-run inputs this generation committed, kept beside the style so a rollback restores both together. */
   readonly identity: ShapedTextIdentity;
   readonly contentBox: ParagraphContentBox;
@@ -224,13 +222,13 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   let startupMs = 0;
   let firstDrawMs = 0;
   let firstDrawRecorded = false;
-  const registry = new FontRegistry();
+  const library = createFontLibrary();
   let fontFixture: RetainedFontFixtureController<SlugPersistentFontFixture> | undefined;
   let activationSignal: AbortSignal | undefined;
   let canvasSurface: ReturnType<typeof createCanvasSurface> | undefined;
   let scene: THREE.Scene | undefined;
   let camera: THREE.OrthographicCamera | undefined;
-  let loadedFont: LoadedFont<typeof slug> | undefined;
+  let loadedFont: Font<typeof slug> | undefined;
   let line: Text<typeof slug> | undefined;
   let committedState: SlugTextState | undefined;
   let presentation: SlugPresentation | undefined;
@@ -398,19 +396,19 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         technique: 'slug',
         fixture: initialFontFixture,
         delivery,
-        registry,
+        library,
         signal: context.signal,
         ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
       });
       loadedFont = loaded.loaded;
       const fontLoadMs = performance.now() - fontStarted;
       context.signal.throwIfAborted();
-      const rasterConfiguration = slugDataConfiguration(loaded.loaded.data);
+      const rasterConfiguration = slugDataConfiguration(loaded.data);
       fontFixture = createRetainedFontFixtureController(
-        registry,
+        library,
         {
           fixture: initialFontFixture,
-          asset: { font: loaded.loaded.font, fontLoadMs, loaded, loadedFont, rasterConfiguration },
+          asset: { font: loaded.loaded, fontLoadMs, loaded, loadedFont, rasterConfiguration },
         },
         // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
         // registered font would strand the raster this technique still holds.
@@ -540,20 +538,20 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       if (activeFontFixture === undefined || signal === undefined) {
         throw new DOMException('The Slug scene is not active', 'InvalidStateError');
       }
-      await activeFontFixture.load(fixture, async (requested, fixtureRegistry) => {
+      await activeFontFixture.load(fixture, async (requested, fixtureLibrary) => {
         const fontStartedAt = performance.now();
         const loaded = await loadSlugFontAsset({
           technique: 'slug',
           fixture: requested,
           delivery,
-          registry: fixtureRegistry,
+          library: fixtureLibrary,
           signal,
           ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
         });
         try {
-          const rasterConfiguration = slugDataConfiguration(loaded.loaded.data);
+          const rasterConfiguration = slugDataConfiguration(loaded.data);
           return {
-            font: loaded.loaded.font,
+            font: loaded.loaded,
             fontLoadMs: performance.now() - fontStartedAt,
             loaded,
             loadedFont: loaded.loaded,

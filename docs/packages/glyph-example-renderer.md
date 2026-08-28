@@ -5,7 +5,7 @@ description: Proves the published core engine surface through a real TypeGPU/Web
 resource: ../../packages/glyph-example-renderer
 workspace_package: '@pmndrs/glyph-example-renderer'
 documentation_type: reference
-source_digest: 'sha256:474bfe7bc754b19cccb01b6de42523592c4addcf6fe2bd2cd562df9a806287b7'
+source_digest: 'sha256:7aa3993337fcb896e0329a6809b5baa9fb6f5dc24c231d382e04c8666f7d39f3'
 tags: [package, core, engine, integration-proof, typegpu]
 sources:
   - id: manifest
@@ -41,9 +41,6 @@ sources:
   - id: acceptance-tests
     resource: ../../packages/glyph-example-renderer/tests/example-render.test.ts
     title: Real font, resource, geometry, and non-empty draw acceptance
-  - id: reader-tests
-    resource: ../../packages/glyph-example-renderer/tests/plan-reader.test.ts
-    title: Publication-lifetime, patch-range, and decode proof
 generated:
   by: anthropic/claude-opus-5
   at: '2026-08-23T09:15:00Z'
@@ -51,64 +48,40 @@ generated:
 
 # Package reference: `@pmndrs/glyph-example-renderer`
 
-Status: Active external-engine proof. It drives a real loaded font through the publication ownership protocol, portable raster
-registration, resource realization, and a concrete submission seam without importing Three.js.
+Status: Active external-engine proof. It drives a real immutable font through the retained public `/core` contract,
+portable raster registration, resource realization, and concrete TypeGPU/WebGPU submission without Three.js.
 
-This private workspace package is a consumer proof for `@pmndrs/glyph/core` and the example technique's `/typegpu`
-shader realization, the way
-`@pmndrs/glyph-example-raster` is a consumer proof for the raster and baker boundary. It imports the
-published core and shader entry points — no `internal/`, no `generated/`, no `/three`, and no
-Three dependency — so a second renderer that cannot be written against the published
-surface turns the build red instead of turning into a planning argument. The boundary test scans every
-file under `src/` _and_ `tests/`; only the acceptance fixture may import the root loader and `/bake` to create its
-temporary font, while all other files remain limited to `/core` and the published Wasm artifact.
+The package is a standing consumer proof. Source imports only published root assets, `/core`, and the example raster's
+public main and `/typegpu` subpaths—never `internal/`, `generated/`, `/three`, or Three itself. Its policy supplies its own
+system lane, semantic capability set, allocation mode, transform mode, and program namespace while reusing the technique's
+portable policy body. Capability wire IDs are automatic; stable author-owned identities are branded numeric hashes.
 
-It imports the portable example schema, plan, and `/typegpu` shader from `@pmndrs/glyph-example-raster`, and authors its own host render
-policy with `/core`'s compilers (`src/policy.ts`). Capability objects carry only actual limits and flags;
-`compileRenderPolicy()` assigns the ABI identity, and the single-profile frame omits any capability number. Its asynchronous
-`ExampleTextEngine.render` path calls `update()` for the borrow, `copyPublication()` for one contiguous host-owned copy,
-and then decodes views over owned bytes only — dirty
-patch ranges and retirements included. The frame driver carries a separate device-accepted generation and plan revision;
-copying bytes never advances that wire fence before `prepareSubmission(...).commit()` succeeds. The engine revision
-still advances when Wasm accepts the update, so a rejected device candidate is superseded by the next frame and the old
-consumed-plan fence forces a safe checkpoint instead of a retry latch. A throw-once acceptance test pins all three wire
-values and compares the recovered buffers byte-for-byte with an oracle that observed the rejected candidate.
-`readDrawList` demands the branded `OwnedTextEnginePublication`, so passing a live-but-doomed borrow
-is a compile error. The tests drive a real `TextEngineHost` over the published Wasm artifact: owned
-plans survive three frames plus capacity growth, stale borrows throw
-`TextEnginePublicationExpiredError`, and a backwards accepted generation is refused at the wire as a revision
-conflict. `RecordingExampleRendererDevice` is the deterministic CPU oracle: it validates the complete resource, buffer,
-patch, primitive, draw, and retirement publication against the selected technique/program/variant before accepted state can
-change. Allocation, offset write, u32 fill, copy, replacement generation, exact retirement, stale candidates, and a throwing
-backend publication callback have direct negative coverage.
-Font registration is transactional across the host and device: if resource commit fails, the just-registered Wasm binding
-is disposed before the pending resource batch is discarded, so a retry cannot observe an orphaned binding or stale resource.
+`ExampleTextEngine` receives a `TextRuntime`, creates its host through `runtime.createTextEngineHost()`, installs its policy,
+binds immutable fonts/stacks, opens one retained synchronous session, and exposes `createText()`, `update()`, `publish()`,
+and disposal. The session owns every paragraph/style/flow identity and one `PlanTarget`; callers do not author raw IDs,
+revisions, acknowledgments, request bytes, or ABI numbers. `layout()` and `glyphs()` remain available on the retained core
+text when an integration needs current desired metrics or positioned glyphs before publication.
 
-`TypeGpuExampleRendererDevice` is the concrete acceptance backend. It realizes the retained GLB-like geometry as TypeGPU
-vertex/index buffers, stages the per-draw policy instance buffers, and commits through an awaited WebGPU validation scope.
-Only a successfully submitted indexed pass publishes the same candidate to the CPU oracle and advances engine device
-fences. A rejected stage releases its unowned buffers and cannot restore or expose older bytes because live state was never
-changed. Commit awaits validation acceptance while queue completion remains pipelined. The offscreen `rgba8unorm` target supports padded asynchronous readback; an all-empty delta skips GPU allocation
-and submission, while an accepted removal still encodes the clear pass.
-The browser lab runtime-bakes Inter, creates one retained `ExampleText`, proves one initial and one updated draw, and observes
-7,740 then 6,588 non-transparent pixels with 10,287 changed pixels, zero GPU submissions for the following idle frame, and
-one clear-only submission on disposal. Ordered readback observes zero visible pixels after the clear. Disposal publishes an
-empty scene without retaining retired instance buffers. A same-host 101-sample A/B measured changed-frame `render()` at
-0.300 ms median / 0.645 ms p95 when pipelined versus 0.760 / 1.585 ms with the rejected per-frame queue-completion fence.
+The plan target consumes the borrowed A/B publication synchronously. `plan-reader.ts` decodes resources, buffers, patches,
+primitives, draws, and retirements through semantic `/core` readers and copies only borrowed patch/table bytes that its
+accepted draw list retains. Resource records resolve through `candidate.acquirePayload()`, producing counted leases over
+validated portable geometry and companion resources. The target keeps those leases until target disposal and never
+substitutes stale payloads after failure.
 
-`ExampleTextEngine.createText()` supplies the application lifecycle that raw frame fixtures intentionally expose but do not
-recommend as the ordinary path. `ExampleText.render()` emits the initial paragraph/text/style/constraint/region state,
-`update()` changes desired content/style/layout and advances geometry revisions when dimensions change, and `dispose()`
-publishes paragraph removal and returns its identity slot for later reuse. Live texts remain unique while process-wide ID
-collision tracking grows with peak concurrent slots rather than create/dispose churn. The engine still exposes its session
-and raw `render(frame)` method for integrators implementing their own retained object model.
-The raw frame surface and managed `ExampleText` façade are alternative paragraph owners; callers do not interleave both
-ownership models inside one session.
+`RecordingExampleRendererDevice` is the deterministic CPU oracle. It validates complete candidate state against the
+selected technique, program, variant, named buffers, geometry, resource and storage generations, patch ranges, primitive
+spans, order, and exact retirements before one commit changes accepted state. Rejected candidates discard staging and
+leave accepted state untouched.
 
-Runtime construction comes from `/core`; portable font acquisition remains root vocabulary. The example still uses the
-temporary runtime-bound loader to obtain a `LoadedFont`, then hands that value to the core-facing engine registration
-method. This keeps font acquisition and engine execution separate while proving that a non-Three host can render a real
-text frame during the immutable-font migration.
+`TypeGpuExampleRendererDevice` is the concrete backend. It realizes GLB-like position, UV, and index accessors; creates
+TypeGPU/WebGPU vertex, index, and instance buffers; builds the selected pipeline; encodes an indexed instanced pass; and
+submits to an offscreen `rgba8unorm` target. Validation acceptance is awaited without stalling every frame on queue
+completion. Empty idle deltas produce no submission, while accepted removal clears the target.
+
+The acceptance fixture bakes Inter, loads it through root `loadFont()`, creates a core runtime, binds the external
+technique, publishes initial and updated retained text, and asserts non-empty draws, required named buffers and geometry,
+changed visible pixels, idle submission suppression, failure atomicity, checkpoint behavior, exact retirement, and
+disposal. A separate async-target fixture transfers and returns the same one-copy plan buffer under backpressure.
 
 See [Example renderer](../planning/example-renderer.md) for why the package exists and how it divides
 work with the technique-owned `/typegpu` shader subpath.

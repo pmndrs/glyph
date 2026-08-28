@@ -36,6 +36,7 @@ import { normalizeUnicodeRanges } from './internal/font-selection.js';
 import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
 import type { RuntimeBakeRaster, RuntimeBakeUnicodeRange } from './internal/runtime-bake-protocol.js';
 import { workerRasterKinds } from './internal/runtime-bake-protocol.js';
+import { DEV } from './internal/dev.js';
 import {
   isRasterTechnique,
   type AnyRasterTechnique,
@@ -764,6 +765,11 @@ interface FontLibraryEntry {
   readonly variants: readonly ImmutableFontVariant<AnyRasterTechnique>[];
 }
 
+interface FontLibraryOwnedResource<Value> {
+  readonly value: Value;
+  readonly dispose: () => void;
+}
+
 const topLevelFontLoads = new Map<string, SharedImmutableLoad>();
 
 export function loadFont<Technique extends AnyRasterTechnique>(
@@ -807,6 +813,7 @@ class FontLibraryImpl implements FontLibrary {
   readonly #maximumEntries: number;
   readonly #entries = new Map<string, FontLibraryEntry>();
   readonly #pending = new Map<string, SharedImmutableLoad>();
+  readonly #resources = new Map<object, FontLibraryOwnedResource<unknown>>();
   #disposed = false;
 
   constructor(options: FontLibraryOptions) {
@@ -896,6 +903,14 @@ class FontLibraryImpl implements FontLibrary {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    for (const resource of this.#resources.values()) {
+      try {
+        resource.dispose();
+      } catch (error) {
+        if (DEV) console.warn(`font library teardown continued after an adapter resource failed: ${String(error)}`);
+      }
+    }
+    this.#resources.clear();
     for (const pending of this.#pending.values()) {
       pending.controller.abort(new FontLoadError('FONT_LIBRARY_DISPOSED', 'font library was disposed'));
     }
@@ -916,6 +931,30 @@ class FontLibraryImpl implements FontLibrary {
   #assertActive(): void {
     if (this.#disposed) throw new FontLoadError('FONT_LIBRARY_DISPOSED', 'font library has been disposed');
   }
+
+  resource<Value>(key: object, create: () => FontLibraryOwnedResource<Value>): Value {
+    this.#assertActive();
+    const existing = this.#resources.get(key) as FontLibraryOwnedResource<Value> | undefined;
+    if (existing !== undefined) return existing.value;
+    const resource = create();
+    this.#resources.set(key, resource);
+    return resource.value;
+  }
+}
+
+/** @internal Assert that a value is a FontLibrary created by this package instance. */
+export function assertFontLibrary(value: unknown, owner: string): asserts value is FontLibrary {
+  if (!(value instanceof FontLibraryImpl)) throw new TypeError(`${owner} requires a FontLibrary`);
+}
+
+/** @internal Own one adapter resource under an authentic FontLibrary lifetime. */
+export function fontLibraryOwnedResource<Value>(
+  library: FontLibrary,
+  key: object,
+  create: () => FontLibraryOwnedResource<Value>,
+): Value {
+  assertFontLibrary(library, 'font library resource');
+  return (library as FontLibraryImpl).resource(key, create);
 }
 
 function createSharedImmutableLoad(
@@ -1049,6 +1088,7 @@ async function loadImmutableVariants(
     ...(config.baseUrl === undefined ? {} : { baseUrl: config.baseUrl }),
     ...(config.development === undefined ? {} : { development: config.development }),
     runtimeBake,
+    ...(prepared.unicodeRanges === undefined ? {} : { runtimeSourceIdentity: 'transformed' }),
     ...(config.onDiagnostic === undefined ? {} : { onDiagnostic: config.onDiagnostic }),
     ...(config.onWarning === undefined ? {} : { onWarning: config.onWarning }),
   });
