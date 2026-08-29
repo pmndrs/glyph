@@ -15,7 +15,7 @@ const THREE_PROGRAM_IDS = new Map([
 ]);
 
 test('Three rejects counterfeit render ID factories at policy assembly', () => {
-  assert.throws(() => threeRenderPolicyDescriptor({}), /Three render policy ids must be/);
+  assert.throws(() => threeRenderPolicyDescriptor({}), /raster policy ids must be/);
 });
 
 /**
