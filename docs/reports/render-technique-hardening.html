@@ -825,7 +825,7 @@ const recovered = planner.publish();</code></pre>
 
       <section id="evidence">
         <h2>Verification and deliberate follow-up</h2>
-        <p class="status">Focused implementation and performance gates: green. Final root gauntlet, review, and remote CI: pending.</p>
+        <p class="status">Package, renderer, live, size, and performance gates: green. Final root gauntlet, review, and remote CI: pending.</p>
         <ul>
           <li>
             929 Glyph package tests passed in the latest package run, including cache behavior, branded plan identities, root/Three measurement
@@ -847,7 +847,13 @@ const recovered = planner.publish();</code></pre>
           <li>
             Hardware TypeGPU/WebGPU and Three labs each produced a non-empty draw before and after retained updates;
             TypeGPU also recovered one draw and 6,588 visible pixels after replacing the destroyed WebGPU device without
-            mutating text. Median submission was 0.140 ms for TypeGPU and 0.130 ms for the generic Three path.
+            mutating text. Median submission was 0.140 ms for TypeGPU and 0.125 ms for the generic Three path.
+          </li>
+          <li>
+            The hardware WebGPU presentation sweep held 120 FPS with zero slow frames across all 27 Bitmap, MTSDF,
+            and Slug workload cells. CPU submission medians stayed between 0.205 and 0.585 ms; measured GPU work stayed
+            between 0.577 and 1.979 ms. WebGPU and WebGL2 live-update probes made every text, font-size, and width change
+            visible within one or two frames with no idle submissions.
           </li>
           <li>
             A same-machine run against checkpoint <code>689958d3</code> found no Rust planner regression. Current cold,
@@ -893,13 +899,19 @@ const recovered = planner.publish();</code></pre>
           </li>
           <li>
             Current measured sizes are 427,771 raw / 69,579 gzip / 58,310 Brotli bytes for <code>/core</code>, 447,734 /
-            73,453 / 61,214 for the browser root, and 711,999 / 115,866 / 95,612 for Three. Against the prior evidence,
+            73,453 / 61,214 for the browser root, and 712,007 / 115,862 / 95,598 for Three. Against the prior evidence,
             core shrank by 445 raw bytes, the browser root moved by +54 raw / +1 gzip, and Three by +348 raw / +44 gzip.
             The complete shaper and planner Wasm is 1,173,078 raw / 457,524 gzip / 360,900 Brotli bytes after compact
             effect lanes and exact selected-resource provenance.
             The optional corrected MTSDF baker is 556,619 raw / 218,279 gzip / 171,376 Brotli bytes, +8,698 raw / +4,034
             gzip. Its fresh zero-import feature-minimal admission module is 69,731 optimized / 30,131 gzip / 25,327
             Brotli bytes; the reviewed size gate passes.
+          </li>
+          <li>
+            Deterministic bake verification covers every checked Bitmap, MTSDF, Slug, and paragraph fixture. Slug
+            fixture bytes changed only in generator provenance from <code>@pmndrs/text</code> to
+            <code>@pmndrs/glyph</code>; their GLB binary payloads remained byte-identical. HarfBuzz 13.0.0 provisioning
+            now replaces an incomplete cache only after all three authenticated utilities have been assembled.
           </li>
         </ul>
         <p>

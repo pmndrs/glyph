@@ -5,7 +5,7 @@ description: Implements portable font loading, retained Rust shaping and layout,
 resource: ../../packages/glyph
 workspace_package: '@pmndrs/glyph'
 documentation_type: reference
-source_digest: 'sha256:e66c104dc96855de80c1f3b4a0f30db1034e7ef41c0ff2766fd3274112e07f58'
+source_digest: 'sha256:ffe4b8bc38b4929b7cd6eedc378ea1290a64945a266061b1f622b5adcabf99c0'
 tags: [package, public-api, rust, wasm, threejs, typography]
 sources:
   - id: manifest
@@ -564,9 +564,10 @@ exports, calls, branches, and clock reads are now absent from the package source
 workload markers and the direct Wasm timer remain outside the shipped library.
 
 After the final plan-application lifecycle audit, Three sizes indexed transforms from live paragraph IDs instead of
-scanning every glyph record in JavaScript. A renderer failure retains an unconsumed owned plan for zero-crossing retry;
-dirty upload ranges accumulate across presentation restoration and Rust patches; buffer/resource generations dispose
-only their exact dependent materials; and direct materials survive indexed transform-table growth. A loaded font owns one
+scanning every glyph record in JavaScript. A renderer preparation failure discards its candidate, retains the last
+accepted plan fence and error, and waits for explicit renderer-relevant invalidation to request a checkpoint. Dirty upload
+ranges accumulate across presentation restoration and Rust patches; buffer/resource generations dispose only their exact
+dependent materials; and direct materials survive indexed transform-table growth. A loaded font owns one
 cached Three binding and decoded resource set: disposal marks them for retirement, while the final registered-stack lease
 keeps them valid and then disposes the Wasm binding before removing renderer resources. The unchanged
 eight-warmup/31-sample public 25,515-glyph lane measures
@@ -691,15 +692,14 @@ and 8.281 ms middle-splice medians. The adjacent prior medians were 6.178, 2.817
 show no regression and suggest a small scan reduction, but do not establish a latency win. The same change preserves
 whole-buffer update alignment after dirty-range promotion and costs 182 raw / 42 gzip / 233 Brotli bytes.
 
-Three retains pending attribute upload ranges until its renderer consumes them. Consecutive Rust publications,
-presentation-origin restoration, and a retry before rendering coalesce overlapping or adjacent ranges instead of
-clearing earlier writes. Paragraph transform identities return to a binding-local free list only after the Rust removal
+Three retains pending attribute upload ranges until its renderer consumes them. Consecutive Rust publications and
+presentation-origin restoration before rendering coalesce overlapping or adjacent ranges instead of clearing earlier
+writes. Paragraph transform identities return to a binding-local free list only after the Rust removal
 transaction commits, bounding the indexed transform table under create/dispose churn. A disposed `Text` may remain in
 the Three scene graph until its host detaches it without poisoning the surviving batch, and batch-wide runtime validation
-runs inside the group error boundary before reconciliation mutates ownership. An internal semantic-query contract failure
-advances the observed engine revision and retains unexpected render work for the ordinary zero-crossing retry path rather
-than leaving the Wasm render planner permanently revision-conflicted. The focused public integration exercises all four
-lifecycles, and the complete package gate passes 158 Rust and 165 Node tests. The canonical direct benchmark now defaults
+runs inside the group error boundary before reconciliation mutates ownership. Semantic queries use the nonpublishing
+paragraph-measure call; an internal query contract failure leaves the engine revision and renderer fence untouched and
+throws from the query. Focused public integration exercises all four lifecycles. The canonical direct benchmark defaults
 to eight warmups and 31 measured samples so its reported p95 is not the maximum of an 11-sample run.
 
 The Wasm boundary also retains fixed-seed mutation coverage for the two replacement parsers. Sixty-four policy and frame

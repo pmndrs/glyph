@@ -392,7 +392,7 @@ const glyphs = text.glyphs();
 const acceptance = planner.publish();
 ```
 
-`layout()` may incur font/layout lookup on a cache miss. `glyphs()` may incur glyph lookup/positioning on a cache miss and
+`measure()` may incur font/layout lookup on a cache miss. `glyphs()` may incur glyph lookup/positioning on a cache miss and
 always returns caller-owned columns. Their canonical constraint caches are bounded three-entry LRUs. Neither query
 renders. `publish()` calls the target with a borrowed plan by default; the target resolves resources, applies patches,
 realizes primitives, submits draws, and reports one atomic acceptance.

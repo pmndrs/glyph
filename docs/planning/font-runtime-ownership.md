@@ -815,11 +815,11 @@ const planner = backend.createPlanner({
 
 const title = planner.createText({
   font: stackBinding,
-  text: txt`Hello ${span({ paint: '#f80' })`Glyph`}`,
-  contentBox: { width: 480 },
+  text: txt`Hello ${span({ color: '#f80' })`Glyph`}`,
+  constraints: { width: { mode: 'at-most', size: 480 } },
 });
-title.update({ contentBox: { width: 360 } });
-const metrics = title.layout();
+title.update({ constraints: { width: { mode: 'at-most', size: 360 } } });
+const metrics = title.measure();
 const positionedGlyphs = title.glyphs();
 planner.publish();
 
@@ -832,7 +832,7 @@ glyphEngine.dispose();
 ```
 
 `createText()` and `text.update()` snapshot bindings and reject malformed authored values at those calls, but do not
-shape, measure, or serialize a trial frame. `layout()` and `glyphs()` are explicit synchronous queries: asking before a
+shape, measure, or serialize a trial frame. `measure()` and `glyphs()` are explicit synchronous queries: asking before a
 publish pays for the paragraph-scoped Wasm query once and caches its copied result until the next semantic mutation.
 `publish()` remains the ordinary coalescing boundary and performs one frame encode for every dirty text together.
 `PolicyDescriptor` is complete at installation; publish accepts no untyped policy-parameter bytes because the current
@@ -1040,12 +1040,12 @@ owns stable text handles and offers operations such as `createText()`, `text.upd
 update desired state. The next render planner publication emits only changed paragraph, text, style, constraint, flow, and region
 sections. Removing a text emits its paragraph removal before recycling any internal ID.
 
-`text.layout()` and `text.glyphs()` synchronously answer from the current desired state, including mutations not yet
+`text.measure()` and `text.glyphs()` synchronously answer from the current desired state, including mutations not yet
 published. They require only the engine, backend bindings, policy, and authored text inputs already retained by the render planner.
 They never call the plan target, realize renderer resources, inspect a Canvas/device, traverse a scene, or read a world
 matrix. The query does not commit desired state or advance the render-plan acceptance cursor; the next `publish()` still
-submits the same authored mutation. `layout()` returns allocation-light metrics, while `glyphs()` explicitly pays for and
-returns a caller-owned positioned inspection. Integrations such as Three delegate detached `Text.layout()` to this path;
+submits the same authored mutation. `measure()` returns allocation-light metrics, while `glyphs()` explicitly pays for and
+returns a caller-owned positioned inspection. Integrations such as Three delegate detached `Text.measure()` to this path;
 scene attachment and matrices affect later placement only.
 
 ### Measurement-only Paragraph path
@@ -1069,7 +1069,7 @@ sequenceDiagram
   Factory->>Service: acquire realm service + bind Font
   Service->>Wasm: create target-less measurement planner
   Factory-->>App: ready Paragraph
-  App->>Service: paragraph.measure/layout(constraints)
+  App->>Service: paragraph.measure(constraints) or glyphs(constraints)
   Service->>Wasm: validated retained update + measureParagraph
   Wasm-->>App: owned metrics/layout value
   App->>Service: paragraph.dispose()
@@ -1292,7 +1292,7 @@ Each step is one coherent commit and remains green before the next.
   descriptor-member capability set, validated limits, and one target;
 - a render planner exposes retained `createText`/`update`/`dispose` input handles but no raw planner, policy, numeric-ID,
   revision, acknowledgment, or frame-byte fields;
-- retained text exposes synchronous `layout()` and `glyphs()` over current desired state without exposing a target,
+- retained text exposes synchronous `measure()` and `glyphs()` over current desired state without exposing a target,
   renderer, scene, matrix, or publication cursor;
 - root `createParagraph()` returns a ready Paragraph without exposing `/core`; no public target-less render planner is nameable;
 - every target is idempotently disposable, and its factory delivery discriminant infers the matching render planner return type;
