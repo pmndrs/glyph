@@ -3,7 +3,7 @@ import type { Font } from './font.js';
 import { createFontStack, immutableFontSelectionFonts, type FontSelection, type FontStack } from './loaded-font.js';
 import { copyGlyphLayoutInspection, type GlyphLayoutInspection, type ParagraphMetrics } from './layout.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
-import { mergePropertyList } from './internal/property-list.js';
+import { mergePropertyList } from './property-list.js';
 import type {
   ParagraphContentProperties,
   Constraints,

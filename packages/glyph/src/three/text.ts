@@ -15,7 +15,7 @@ import {
 } from '../layout.js';
 import { immutableFontSelectionFonts, type FontSelection } from '../loaded-font.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
-import { mergePropertyList } from '../internal/property-list.js';
+import { mergePropertyList } from '../property-list.js';
 import type {
   GlyphBufferCapacity,
   ParagraphBaseProperties,

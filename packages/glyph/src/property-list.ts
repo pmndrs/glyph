@@ -1,4 +1,4 @@
-import type { PropertyList } from '../text-properties.js';
+import type { PropertyList } from './text-properties.js';
 
 /** @internal Resolve React Native-style property arrays from left to right. */
 export function mergePropertyList<Value extends object>(value: PropertyList<Value>, name: string): Value {

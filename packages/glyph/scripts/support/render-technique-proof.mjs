@@ -174,14 +174,16 @@ function mtsdfProgram(abi) {
     semantic.inverseFontSize,
   ];
   const operations = [];
-  const loadF32 = (target, field) => operations.push({ opcode: abi.policy.opcodes.loadF32, target, operand0: field });
-  const loadU32 = (target, field) => operations.push({ opcode: abi.policy.opcodes.loadU32, target, operand0: field });
+  const loadF32 = (target, inputField) =>
+    operations.push({ opcode: abi.policy.opcodes.loadF32, target, operand0: inputField });
+  const loadU32 = (target, inputField) =>
+    operations.push({ opcode: abi.policy.opcodes.loadU32, target, operand0: inputField });
   const binary = (name, target, left, right) =>
     operations.push({ opcode: abi.policy.opcodes[name], target, operand0: left, operand1: right });
   const storeF32 = (buffer, lane, register) =>
     operations.push({ opcode: abi.policy.opcodes.storeF32, operand0: register, operand1: lane, immediate0: buffer });
-  const copyF32 = (buffer, lane, field) => {
-    loadF32(0, field);
+  const copyF32 = (buffer, lane, inputField) => {
+    loadF32(0, inputField);
     storeF32(buffer, lane, 0);
   };
   const scaled = (buffer, lane, left, right) => {
@@ -228,8 +230,8 @@ function mtsdfProgram(abi) {
   storeF32(7, 3, 1);
   const context = {
     inputs: [
-      ...semanticFields.map((field) => ({ scope: 'semantic', field })),
-      ...Array.from({ length: 13 }, (_, field) => ({ scope: 'glyph', field })),
+      ...semanticFields.map((inputField) => ({ scope: 'semantic', field: inputField })),
+      ...Array.from({ length: 13 }, (_, fieldIndex) => ({ scope: 'glyph', field: fieldIndex })),
       { scope: 'glyph', field: 0 },
     ],
     operations,

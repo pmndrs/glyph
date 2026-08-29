@@ -1,7 +1,7 @@
 import type { FontFeature } from './font-feature.js';
 import type { FormattedText, ParagraphSpan } from './formatted-text.js';
-import { mergePropertyList } from './internal/property-list.js';
 import type { FontSelection } from './loaded-font.js';
+import { mergePropertyList } from './property-list.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
 
 export interface GlyphBufferCapacity {
